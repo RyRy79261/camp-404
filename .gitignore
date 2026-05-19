@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js
+.next/
+out/
+.turbo/
+dist/
+build/
+
+# capacitor
+apps/mobile/ios/App/App/public/
+apps/mobile/android/app/src/main/assets/public/
+apps/mobile/ios/Pods/
+apps/mobile/ios/build/
+apps/mobile/android/.gradle/
+apps/mobile/android/build/
+apps/mobile/android/app/build/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editors / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# test artefacts
+coverage/
+playwright-report/
+test-results/
+
+# TypeScript incremental build info
+*.tsbuildinfo
