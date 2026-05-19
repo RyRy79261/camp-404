@@ -1,7 +1,0 @@
-{
-  "extends": "@camp404/typescript-config/node.json",
-  "include": ["src/**/*.ts"],
-  "compilerOptions": {
-    "outDir": "dist"
-  }
-}
