@@ -1,10 +1,10 @@
-import { auth } from "@/lib/auth";
+import { stackServerApp } from "@/stack";
 import { QuadrantNav } from "@camp404/ui/components/quadrant-nav";
 
 export default async function HomePage() {
-  const session = await auth();
+  const user = await stackServerApp.getUser();
 
-  if (!session?.user) {
+  if (!user) {
     return (
       <main className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 p-6">
         <div className="text-center">
@@ -14,7 +14,7 @@ export default async function HomePage() {
           </p>
         </div>
         <a
-          href="/signin"
+          href="/handler/sign-in"
           className="rounded-md bg-[color:var(--color-primary)] px-6 py-3 text-sm font-medium text-[color:var(--color-primary-foreground)]"
         >
           Sign in
