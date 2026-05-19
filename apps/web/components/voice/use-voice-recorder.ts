@@ -45,9 +45,10 @@ function pickMimeType(): string | undefined {
 /**
  * Cross-browser MediaRecorder wrapper. Records on `start()`, transcribes
  * via `/api/voice/transcribe` on `stop()`, and calls `onTranscript` with
- * the result. On native Capacitor builds the start/stop calls will route
- * through `@capgo/capacitor-voice-recorder` instead — see the //TODO
- * inside start().
+ * the result. While recording, exposes an `AnalyserNode` consumers can
+ * read to draw a live waveform. On native Capacitor builds the start/stop
+ * calls should route through `@capgo/capacitor-voice-recorder` instead —
+ * see the //TODO inside start().
  */
 export function useVoiceRecorder({
   onTranscript,
@@ -56,10 +57,12 @@ export function useVoiceRecorder({
 }: UseVoiceRecorderOptions) {
   const [state, setState] = React.useState<RecorderState>("idle");
   const [error, setError] = React.useState<string | null>(null);
+  const [analyser, setAnalyser] = React.useState<AnalyserNode | null>(null);
 
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const chunksRef = React.useRef<Blob[]>([]);
   const streamRef = React.useRef<MediaStream | null>(null);
+  const audioCtxRef = React.useRef<AudioContext | null>(null);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = React.useRef(true);
 
@@ -76,12 +79,22 @@ export function useVoiceRecorder({
         if (rec.state !== "inactive") rec.stop();
       }
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      void audioCtxRef.current?.close();
+      audioCtxRef.current = null;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
 
   function safeSet<T>(setter: (v: T) => void, value: T) {
     if (mountedRef.current) setter(value);
+  }
+
+  function teardownAudio() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    void audioCtxRef.current?.close();
+    audioCtxRef.current = null;
+    safeSet(setAnalyser, null);
   }
 
   async function start() {
@@ -101,6 +114,22 @@ export function useVoiceRecorder({
         },
       });
       streamRef.current = stream;
+
+      // Analyser for the live waveform UI. fftSize 1024 per the voice
+      // brief — large enough for a smooth wave, small enough that the
+      // RAF loop stays cheap.
+      const AudioCtx =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      const ctx = new AudioCtx();
+      const source = ctx.createMediaStreamSource(stream);
+      const node = ctx.createAnalyser();
+      node.fftSize = 1024;
+      source.connect(node);
+      audioCtxRef.current = ctx;
+      safeSet(setAnalyser, node);
+
       const mimeType = pickMimeType();
       const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       recorderRef.current = rec;
@@ -112,6 +141,7 @@ export function useVoiceRecorder({
       rec.onerror = () => {
         safeSet(setError, "Recording failed");
         safeSet(setState, "error");
+        teardownAudio();
       };
       rec.onstop = () => {
         void handleStop(mimeType ?? rec.mimeType);
@@ -130,7 +160,7 @@ export function useVoiceRecorder({
             : "Couldn't access microphone";
       safeSet(setError, message);
       safeSet(setState, "error");
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      teardownAudio();
     }
   }
 
@@ -148,8 +178,7 @@ export function useVoiceRecorder({
     safeSet(setState, "processing");
     try {
       const blob = new Blob(chunksRef.current, { type: mimeType });
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+      teardownAudio();
       recorderRef.current = null;
 
       if (blob.size === 0) {
@@ -191,5 +220,5 @@ export function useVoiceRecorder({
     safeSet(setState, "idle");
   }
 
-  return { state, error, start, stop, reset };
+  return { state, error, start, stop, reset, analyser };
 }

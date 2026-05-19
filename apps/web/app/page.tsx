@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { stackServerApp } from "@/stack";
+import { Button } from "@camp404/ui/components/button";
 import { QuadrantNav } from "@camp404/ui/components/quadrant-nav";
 import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
 
@@ -16,18 +17,12 @@ export default async function HomePage() {
           </p>
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:flex-row">
-          <a
-            href="/signup"
-            className="rounded-md bg-[color:var(--color-primary)] px-6 py-3 text-center text-sm font-medium text-[color:var(--color-primary-foreground)]"
-          >
-            Sign up
-          </a>
-          <a
-            href="/handler/sign-in"
-            className="rounded-md border border-[color:var(--color-border)] px-6 py-3 text-center text-sm font-medium"
-          >
-            Sign in
-          </a>
+          <Button asChild size="lg">
+            <a href="/signup">Sign up</a>
+          </Button>
+          <Button asChild size="lg" variant="outline">
+            <a href="/handler/sign-in">Sign in</a>
+          </Button>
         </div>
       </main>
     );

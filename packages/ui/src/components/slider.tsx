@@ -1,51 +1,25 @@
 "use client";
 
 import * as React from "react";
+import * as SliderPrimitive from "@radix-ui/react-slider";
 import { cn } from "../lib/utils";
 
-export interface SliderProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange"> {
-  value: number;
-  onValueChange: (v: number) => void;
-  min: number;
-  max: number;
-  step?: number;
-  minLabel?: string;
-  maxLabel?: string;
-}
-
-export function Slider({
-  value,
-  onValueChange,
-  min,
-  max,
-  step = 1,
-  minLabel,
-  maxLabel,
-  className,
-  id,
-  ...rest
-}: SliderProps) {
-  return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <input
-        id={id}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onValueChange(Number(e.currentTarget.value))}
-        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[color:var(--color-muted)] accent-[color:var(--color-primary)]"
-        {...rest}
-      />
-      <div className="flex justify-between text-xs text-[color:var(--color-muted-foreground)]">
-        <span>{minLabel ?? min}</span>
-        <span aria-live="polite" className="font-medium text-[color:var(--color-foreground)]">
-          {value}
-        </span>
-        <span>{maxLabel ?? max}</span>
-      </div>
-    </div>
-  );
-}
+export const Slider = React.forwardRef<
+  React.ElementRef<typeof SliderPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <SliderPrimitive.Root
+    ref={ref}
+    className={cn(
+      "relative flex w-full touch-none select-none items-center",
+      className,
+    )}
+    {...props}
+  >
+    <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-[color:var(--color-muted)]">
+      <SliderPrimitive.Range className="absolute h-full bg-[color:var(--color-primary)]" />
+    </SliderPrimitive.Track>
+    <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border border-[color:var(--color-primary)] bg-[color:var(--color-background)] shadow transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)] disabled:pointer-events-none disabled:opacity-50" />
+  </SliderPrimitive.Root>
+));
+Slider.displayName = SliderPrimitive.Root.displayName;

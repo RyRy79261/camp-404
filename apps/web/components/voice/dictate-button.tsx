@@ -1,62 +1,34 @@
 "use client";
 
 import * as React from "react";
+import { Loader2, Mic, Square } from "lucide-react";
+import { Button } from "@camp404/ui/components/button";
 import { cn } from "@camp404/ui/lib/utils";
 import { useVoiceRecorder } from "./use-voice-recorder";
-
-function MicIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="9" y="3" width="6" height="11" rx="3" />
-      <path d="M5 11a7 7 0 0 0 14 0" />
-      <path d="M12 18v3" />
-    </svg>
-  );
-}
-
-function StopIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <rect x="6" y="6" width="12" height="12" rx="1" />
-    </svg>
-  );
-}
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg className={cn("animate-spin", className)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
-  );
-}
+import { Waveform } from "./waveform";
 
 interface DictateButtonProps {
-  /** Called with the transcript once Whisper returns. */
+  /** Called with the transcript once Whisper has returned. */
   onTranscript: (text: string) => void;
   /** Server-known prompt domain key (e.g. "questionnaire"). */
   promptKey?: string;
   className?: string;
 }
 
-const STATE_LABEL: Record<string, string> = {
-  idle: "Dictate",
-  requesting: "Allow mic…",
-  recording: "Stop",
-  processing: "Transcribing…",
-  error: "Try again",
-};
-
 /**
- * Tap-to-toggle dictation button. Calls `onTranscript(text)` once Whisper
- * has returned. The caller decides where to insert the text — typically
- * spliced at the textarea's cursor position.
+ * Vertical dictation column: a small shadcn Button with a live waveform
+ * beneath it. Intended to sit to the right of a textarea or input.
+ *
+ * - Tap to start recording; tap again to stop and transcribe.
+ * - Tap once after an error to reset.
+ * - Waveform only animates while actively recording.
  */
 export function DictateButton({
   onTranscript,
   promptKey,
   className,
 }: DictateButtonProps) {
-  const { state, error, start, stop, reset } = useVoiceRecorder({
+  const { state, error, start, stop, reset, analyser } = useVoiceRecorder({
     onTranscript,
     promptKey,
   });
@@ -73,32 +45,43 @@ export function DictateButton({
     else if (!isBusy) void start();
   }
 
+  const label =
+    state === "requesting"
+      ? "Allow mic"
+      : state === "processing"
+        ? "Transcribing"
+        : isRecording
+          ? "Stop"
+          : state === "error"
+            ? "Try again"
+            : "Dictate";
+
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
-      <button
+    <div
+      className={cn("flex w-24 flex-col items-stretch gap-1.5", className)}
+    >
+      <Button
         type="button"
+        size="sm"
+        variant={isRecording ? "destructive" : "outline"}
         onClick={handleClick}
         disabled={isBusy}
         aria-pressed={isRecording}
-        className={cn(
-          "inline-flex h-8 items-center gap-1.5 self-end rounded-full border px-3 text-xs font-medium transition-colors",
-          isRecording
-            ? "border-red-600 bg-red-600 text-white"
-            : "border-[color:var(--color-border)] bg-transparent hover:bg-[color:var(--color-muted)]",
-          isBusy && "opacity-60",
-        )}
+        aria-label={label}
+        className="justify-center"
       >
         {isBusy ? (
-          <SpinnerIcon className="h-3.5 w-3.5" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : isRecording ? (
-          <StopIcon className="h-3 w-3" />
+          <Square className="h-3 w-3 fill-current" />
         ) : (
-          <MicIcon className="h-3.5 w-3.5" />
+          <Mic className="h-3.5 w-3.5" />
         )}
-        <span>{STATE_LABEL[state] ?? "Dictate"}</span>
-      </button>
+        <span>{label}</span>
+      </Button>
+      <Waveform analyser={analyser} active={isRecording} />
       {error && (
-        <p className="self-end text-xs text-red-600" role="alert">
+        <p className="text-[10px] leading-tight text-red-600" role="alert">
           {error}
         </p>
       )}

@@ -3,6 +3,8 @@
 import * as React from "react";
 import { useActionState } from "react";
 import { Button } from "@camp404/ui/components/button";
+import { Input } from "@camp404/ui/components/input";
+import { Label } from "@camp404/ui/components/label";
 import { redeemInviteCode, type RedeemInviteResult } from "./actions";
 
 interface InviteCodeFormProps {
@@ -23,20 +25,14 @@ export function InviteCodeForm({
   return (
     <form action={formAction} className="flex flex-col gap-3">
       <input type="hidden" name="next" value={next} />
-      <label
-        htmlFor="invite-code"
-        className="text-sm font-medium text-[color:var(--color-foreground)]"
-      >
-        Invite code
-      </label>
-      <input
+      <Label htmlFor="invite-code">Invite code</Label>
+      <Input
         id="invite-code"
         name="code"
-        type="text"
         autoComplete="off"
         spellCheck={false}
         autoCapitalize="characters"
-        className="h-10 rounded-md border border-[color:var(--color-border)] bg-transparent px-3 text-sm tracking-widest"
+        className="tracking-widest"
         required
       />
       {state && !state.ok && (

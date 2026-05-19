@@ -6,7 +6,18 @@ import type {
   Question,
   QuestionnaireResponseValue,
 } from "@camp404/types";
+import { Checkbox } from "@camp404/ui/components/checkbox";
+import { Input } from "@camp404/ui/components/input";
+import { Label } from "@camp404/ui/components/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@camp404/ui/components/select";
 import { Slider } from "@camp404/ui/components/slider";
+import { Textarea } from "@camp404/ui/components/textarea";
 import { DictateButton } from "../voice/dictate-button";
 
 interface QuestionFieldProps {
@@ -26,15 +37,12 @@ export function QuestionField({
 
   return (
     <div className="flex flex-col gap-2">
-      <label
-        htmlFor={fieldId}
-        className="text-sm font-medium text-[color:var(--color-foreground)]"
-      >
+      <Label htmlFor={fieldId}>
         {question.prompt}
         {"required" in question && question.required && (
           <span className="ml-1 text-[color:var(--color-primary)]">*</span>
         )}
-      </label>
+      </Label>
       {question.helper && (
         <p className="text-xs text-[color:var(--color-muted-foreground)]">
           {question.helper}
@@ -73,67 +81,82 @@ function FieldInput({
           ? value
           : Math.round((question.min + question.max) / 2);
       return (
-        <Slider
-          id={id}
-          value={current}
-          onValueChange={onChange}
-          min={question.min}
-          max={question.max}
-          step={question.step}
-          minLabel={question.minLabel}
-          maxLabel={question.maxLabel}
-        />
+        <div className="flex flex-col gap-2">
+          <Slider
+            id={id}
+            value={[current]}
+            onValueChange={(v) => onChange(v[0] ?? current)}
+            min={question.min}
+            max={question.max}
+            step={question.step}
+          />
+          <div className="flex justify-between text-xs text-[color:var(--color-muted-foreground)]">
+            <span>{question.minLabel ?? question.min}</span>
+            <span
+              aria-live="polite"
+              className="font-medium text-[color:var(--color-foreground)]"
+            >
+              {current}
+            </span>
+            <span>{question.maxLabel ?? question.max}</span>
+          </div>
+        </div>
       );
     }
     case "single_select":
       return (
-        <select
-          id={id}
-          value={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.currentTarget.value)}
-          className="h-9 rounded-md border border-[color:var(--color-border)] bg-transparent px-3 text-sm"
+        <Select
+          value={typeof value === "string" ? value : undefined}
+          onValueChange={onChange}
         >
-          <option value="" disabled>
-            Choose one…
-          </option>
-          {question.options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id={id}>
+            <SelectValue placeholder="Choose one…" />
+          </SelectTrigger>
+          <SelectContent>
+            {question.options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       );
     case "multi_select": {
-      const selected = Array.isArray(value) ? new Set(value as string[]) : new Set<string>();
+      const selected = Array.isArray(value)
+        ? new Set(value as string[])
+        : new Set<string>();
       return (
-        <div className="flex flex-col gap-1.5">
-          {question.options.map((o) => (
-            <label key={o.value} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={selected.has(o.value)}
-                onChange={(e) => {
-                  const next = new Set(selected);
-                  if (e.currentTarget.checked) next.add(o.value);
-                  else next.delete(o.value);
-                  onChange(Array.from(next));
-                }}
-              />
-              {o.label}
-            </label>
-          ))}
+        <div className="flex flex-col gap-2">
+          {question.options.map((o) => {
+            const checkboxId = `${id}-${o.value}`;
+            return (
+              <div key={o.value} className="flex items-center gap-2">
+                <Checkbox
+                  id={checkboxId}
+                  checked={selected.has(o.value)}
+                  onCheckedChange={(checked) => {
+                    const next = new Set(selected);
+                    if (checked === true) next.add(o.value);
+                    else next.delete(o.value);
+                    onChange(Array.from(next));
+                  }}
+                />
+                <Label htmlFor={checkboxId} className="text-sm font-normal">
+                  {o.label}
+                </Label>
+              </div>
+            );
+          })}
         </div>
       );
     }
     case "short_text":
       return (
-        <input
+        <Input
           id={id}
-          type="text"
           maxLength={question.maxLength}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.currentTarget.value)}
-          className="h-9 rounded-md border border-[color:var(--color-border)] bg-transparent px-3 text-sm"
         />
       );
     case "long_text":
@@ -149,9 +172,10 @@ function FieldInput({
 }
 
 /**
- * Long-form textarea with an inline dictation button. Transcript is
- * spliced at the current cursor position (or appended with a leading
- * space if the textarea is unfocused).
+ * Long-form textarea with a sibling dictation column on the right. Lays
+ * out as a row: textarea on the left (grows), shadcn Button + waveform
+ * stacked on the right. Transcript splices in at the textarea's current
+ * cursor position; the user is free to keep typing too.
  */
 function LongTextField({
   id,
@@ -183,7 +207,6 @@ function LongTextField({
       question.maxLength,
     );
     onChange(next);
-    // Restore cursor after the inserted text.
     const caret = (before + joiner + text).length;
     requestAnimationFrame(() => {
       ta.focus();
@@ -192,20 +215,17 @@ function LongTextField({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <textarea
+    <div className="flex items-start gap-2">
+      <Textarea
         id={id}
         ref={ref}
         maxLength={question.maxLength}
         value={value}
         onChange={(e) => onChange(e.currentTarget.value)}
         rows={4}
-        className="rounded-md border border-[color:var(--color-border)] bg-transparent p-2 text-sm"
+        className="flex-1"
       />
-      <DictateButton
-        onTranscript={insertAtCursor}
-        promptKey="questionnaire"
-      />
+      <DictateButton onTranscript={insertAtCursor} promptKey="questionnaire" />
     </div>
   );
 }
