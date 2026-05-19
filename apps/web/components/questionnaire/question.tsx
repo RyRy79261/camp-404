@@ -1,10 +1,13 @@
 "use client";
 
+import * as React from "react";
 import type {
+  LongTextQuestion,
   Question,
   QuestionnaireResponseValue,
 } from "@camp404/types";
 import { Slider } from "@camp404/ui/components/slider";
+import { DictateButton } from "../voice/dictate-button";
 
 interface QuestionFieldProps {
   question: Question;
@@ -135,14 +138,74 @@ function FieldInput({
       );
     case "long_text":
       return (
-        <textarea
+        <LongTextField
           id={id}
-          maxLength={question.maxLength}
+          question={question}
           value={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.currentTarget.value)}
-          rows={4}
-          className="rounded-md border border-[color:var(--color-border)] bg-transparent p-2 text-sm"
+          onChange={(v) => onChange(v)}
         />
       );
   }
+}
+
+/**
+ * Long-form textarea with an inline dictation button. Transcript is
+ * spliced at the current cursor position (or appended with a leading
+ * space if the textarea is unfocused).
+ */
+function LongTextField({
+  id,
+  question,
+  value,
+  onChange,
+}: {
+  id: string;
+  question: LongTextQuestion;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const ref = React.useRef<HTMLTextAreaElement | null>(null);
+
+  function insertAtCursor(text: string) {
+    const ta = ref.current;
+    if (!ta) {
+      onChange(value ? `${value} ${text}` : text);
+      return;
+    }
+    const start = ta.selectionStart ?? value.length;
+    const end = ta.selectionEnd ?? value.length;
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    const joiner = before && !/\s$/.test(before) ? " " : "";
+    const trailing = after && !/^\s/.test(after) ? " " : "";
+    const next = `${before}${joiner}${text}${trailing}${after}`.slice(
+      0,
+      question.maxLength,
+    );
+    onChange(next);
+    // Restore cursor after the inserted text.
+    const caret = (before + joiner + text).length;
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(caret, caret);
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <textarea
+        id={id}
+        ref={ref}
+        maxLength={question.maxLength}
+        value={value}
+        onChange={(e) => onChange(e.currentTarget.value)}
+        rows={4}
+        className="rounded-md border border-[color:var(--color-border)] bg-transparent p-2 text-sm"
+      />
+      <DictateButton
+        onTranscript={insertAtCursor}
+        promptKey="questionnaire"
+      />
+    </div>
+  );
 }
