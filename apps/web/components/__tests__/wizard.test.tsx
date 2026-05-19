@@ -108,8 +108,19 @@ describe("QuestionnaireWizard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await waitFor(() => expect(screen.getByText("Page Two")).toBeDefined());
 
+    // The useTransition started by Next may still report isPending for a
+    // tick after Page Two has rendered — which disables the Back button.
+    // Wait until it's actually clickable.
+    await waitFor(() => {
+      const back = screen.getByRole("button", {
+        name: "Back",
+      }) as HTMLButtonElement;
+      if (back.disabled) throw new Error("Back still disabled");
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(screen.getByText("Page One")).toBeDefined();
+    await waitFor(() => expect(screen.getByText("Page One")).toBeDefined());
+
     // One Next-driven save; Back doesn't re-call the action.
     expect(action).toHaveBeenCalledTimes(1);
   });
@@ -126,6 +137,15 @@ describe("QuestionnaireWizard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await waitFor(() => expect(screen.getByText("Page Two")).toBeDefined());
+
+    // Wait for the Next-triggered transition to fully settle so Finish is
+    // clickable.
+    await waitFor(() => {
+      const finish = screen.getByRole("button", {
+        name: "Finish",
+      }) as HTMLButtonElement;
+      if (finish.disabled) throw new Error("Finish still disabled");
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
     await waitFor(() =>
