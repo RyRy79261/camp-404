@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS "users" (
 	"previous_burning_mans" integer DEFAULT 0,
 	"first_time" boolean DEFAULT false,
 	"emergency_contacts" jsonb,
+	"invite_code" text,
 	"terms_version" text,
 	"terms_consented_at" timestamp,
 	"sanitised" boolean DEFAULT false NOT NULL,

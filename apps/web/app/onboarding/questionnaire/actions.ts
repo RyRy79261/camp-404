@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { upsertBurnerProfile } from "@camp404/db/burner-profile";
 import { validateResponses } from "@camp404/types";
 import { stackServerApp } from "@/stack";
-import { ensureCampUser } from "@/lib/users";
+import { ensureCampUser, hasCampAccess } from "@/lib/users";
 import { QUESTIONNAIRE } from "@/lib/questionnaire";
 
 export type SaveResult =
@@ -22,6 +22,9 @@ export async function saveBurnerProfile(
 ): Promise<SaveResult> {
   const stackUser = await stackServerApp.getUser({ or: "redirect" });
   const campUser = await ensureCampUser(stackUser);
+  if (!hasCampAccess(campUser, stackUser.primaryEmail ?? null)) {
+    redirect("/signup/required");
+  }
 
   // For non-final saves we tolerate missing required answers (the user is
   // still working through pages); for final submission we enforce everything.

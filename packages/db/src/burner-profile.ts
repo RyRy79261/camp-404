@@ -15,6 +15,7 @@ export async function findUserByStackId(stackUserId: string) {
 export async function createUserFromStack(input: {
   stackUserId: string;
   displayName: string | null;
+  inviteCode: string | null;
 }) {
   const db = createHttpDb();
   const [created] = await db
@@ -22,10 +23,19 @@ export async function createUserFromStack(input: {
     .values({
       stackUserId: input.stackUserId,
       displayName: input.displayName,
+      inviteCode: input.inviteCode,
     })
     .returning();
   if (!created) throw new Error("Failed to insert camp user row");
   return created;
+}
+
+export async function setUserInviteCode(userId: string, code: string) {
+  const db = createHttpDb();
+  await db
+    .update(schema.users)
+    .set({ inviteCode: code, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
 }
 
 export async function getBurnerProfileByUserId(userId: string) {

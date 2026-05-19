@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { stackServerApp } from "@/stack";
 import { QuadrantNav } from "@camp404/ui/components/quadrant-nav";
-import { ensureCampUser, getBurnerProfile } from "@/lib/users";
+import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
 
 export default async function HomePage() {
   const user = await stackServerApp.getUser();
@@ -15,19 +15,33 @@ export default async function HomePage() {
             A calm command centre for a chaotic desert.
           </p>
         </div>
-        <a
-          href="/handler/sign-in"
-          className="rounded-md bg-[color:var(--color-primary)] px-6 py-3 text-sm font-medium text-[color:var(--color-primary-foreground)]"
-        >
-          Sign in
-        </a>
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row">
+          <a
+            href="/signup"
+            className="rounded-md bg-[color:var(--color-primary)] px-6 py-3 text-center text-sm font-medium text-[color:var(--color-primary-foreground)]"
+          >
+            Sign up
+          </a>
+          <a
+            href="/handler/sign-in"
+            className="rounded-md border border-[color:var(--color-border)] px-6 py-3 text-center text-sm font-medium"
+          >
+            Sign in
+          </a>
+        </div>
       </main>
     );
   }
 
+  // Invite gate — god accounts (GOD_EMAILS) bypass; everyone else must have
+  // redeemed an invite code at /signup before getting past this point.
+  const campUser = await ensureCampUser(user);
+  if (!hasCampAccess(campUser, user.primaryEmail ?? null)) {
+    redirect("/signup/required");
+  }
+
   // Mandatory burner-profile questionnaire — everything else is gated until
   // it's done.
-  const campUser = await ensureCampUser(user);
   const profile = await getBurnerProfile(campUser.id);
   if (!profile?.completedAt) {
     redirect("/onboarding/questionnaire");

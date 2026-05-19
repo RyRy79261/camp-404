@@ -1,5 +1,5 @@
 {
-  "id": "a2de2f94-34d1-4ce6-b97b-50dfc8cfdbc6",
+  "id": "d4e68d0c-2724-4337-be65-3f2e769c9d8d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1028,6 +1028,12 @@
         "emergency_contacts": {
           "name": "emergency_contacts",
           "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "invite_code": {
+          "name": "invite_code",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

@@ -99,6 +99,12 @@ export const users = pgTable("users", {
     Array<{ name: string; phone: string; relationship: string }>
   >(),
 
+  // Signup gating. Set to the invite code the user redeemed when creating
+  // their account. NULL = god account (email matched GOD_EMAILS). Used as
+  // durable evidence that the account is allowed past the questionnaire
+  // gate, independent of the short-lived signup cookie.
+  inviteCode: text("invite_code"),
+
   // POPIA / GDPR
   termsVersion: text("terms_version"),
   termsConsentedAt: timestamp("terms_consented_at", { mode: "date" }),
