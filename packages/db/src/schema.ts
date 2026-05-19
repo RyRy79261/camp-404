@@ -110,6 +110,27 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// --- Burner profile / questionnaire --------------------------------------
+// Every member completes a mandatory questionnaire on signup that builds
+// their "burner profile": chef skills, build skills, fire skills, etc.
+// Responses are stored as JSONB keyed by question id; the catalogue itself
+// lives in code (see apps/web/lib/questionnaire.ts) and is versioned so
+// questions can evolve without breaking historical responses.
+
+export const burnerProfiles = pgTable("burner_profiles", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  version: text("version").notNull(),
+  responses: jsonb("responses")
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default({}),
+  startedAt: timestamp("started_at", { mode: "date" }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { mode: "date" }),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
 // --- Teams ---------------------------------------------------------------
 
 export const teamMemberships = pgTable(

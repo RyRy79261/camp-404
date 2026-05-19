@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { stackServerApp } from "@/stack";
 import { QuadrantNav } from "@camp404/ui/components/quadrant-nav";
+import { ensureCampUser, getBurnerProfile } from "@/lib/users";
 
 export default async function HomePage() {
   const user = await stackServerApp.getUser();
@@ -21,6 +23,14 @@ export default async function HomePage() {
         </a>
       </main>
     );
+  }
+
+  // Mandatory burner-profile questionnaire — everything else is gated until
+  // it's done.
+  const campUser = await ensureCampUser(user);
+  const profile = await getBurnerProfile(campUser.id);
+  if (!profile?.completedAt) {
+    redirect("/onboarding/questionnaire");
   }
 
   return (
