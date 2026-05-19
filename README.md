@@ -12,11 +12,11 @@ See [`docs/brief.md`](docs/brief.md) for the full project brief (vision, archite
 - **Web:** Next.js 15 (App Router), React 19, Tailwind v4, shadcn/ui
 - **Mobile:** Capacitor 8 wrapping the same Next.js static export
 - **Database:** Neon Postgres + Drizzle ORM (HTTP + WebSocket drivers)
-- **Auth:** Auth.js v5 (magic link, Google, CI/Agent service token)
+- **Auth:** Neon Auth (Stack) — hosted at `/handler/*`
 - **AI:** Anthropic Claude Opus 4.7 (reasoning) + Haiku 4.5 (intent) + Groq Whisper Large v3 Turbo (voice)
-- **Payments:** Zapper (ZAR only)
 - **Push:** Firebase Cloud Messaging (iOS, Android, Web Push)
 - **Storage:** Vercel Blob
+- **Payments:** TBD
 
 ## Layout
 
@@ -61,11 +61,15 @@ Scheduled from `apps/web/vercel.json`:
 
 | Path | Schedule | Phase |
 |---|---|---|
-| `/api/cron/recipes/analyse` | every 15 min | 3 |
-| `/api/cron/manuals/generate` | every 10 min | 4 |
+| `/api/cron/recipes/analyse` | daily 08:00 UTC | 3 |
+| `/api/cron/manuals/generate` | daily 08:30 UTC | 4 |
 | `/api/cron/notifications/reminders` | daily 09:00 UTC | 2 |
 
 All cron endpoints require `Authorization: Bearer ${CRON_SECRET}`.
+
+> Vercel's Hobby plan caps cron jobs at one run per day. Upgrade to Pro
+> to run the recipe / manual jobs on a tighter schedule (e.g. every
+> 15 min during the planning window) if needed.
 
 ## Security / POPIA
 

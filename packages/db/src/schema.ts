@@ -13,6 +13,11 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+// Camp 404 schema. Authentication is handled by Neon Auth (Stack) — its
+// `neon_auth.users_sync` view is the source of truth for credentials and
+// identity. Our `users` table below stores camp-specific profile data and
+// joins to Stack via the `stack_user_id` column.
+
 // --- Enums ---------------------------------------------------------------
 
 export const roleEnum = pgEnum("role", [
@@ -60,27 +65,18 @@ export const reimbursementStatusEnum = pgEnum("reimbursement_status", [
   "rejected",
 ]);
 
-export const paymentStatusEnum = pgEnum("payment_status", [
-  "pending",
-  "paid",
-  "failed",
-  "refunded",
-]);
-
 export const platformEnum = pgEnum("platform", ["web", "ios", "android"]);
 
-// --- Users / auth --------------------------------------------------------
-// `users` is owned by Auth.js v5 via @auth/drizzle-adapter; we extend it with
-// camp-specific columns. The adapter expects the canonical column names below.
+// --- Users ---------------------------------------------------------------
+// Camp-specific profile. Identity (email, password, OAuth, MFA, sessions)
+// lives in Neon Auth's `neon_auth.users_sync` view; this table joins to it
+// via `stack_user_id`.
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name"),
-  email: text("email").unique(),
-  emailVerified: timestamp("emailVerified", { mode: "date" }),
-  image: text("image"),
+  stackUserId: text("stack_user_id").notNull().unique(),
+  displayName: text("display_name"),
 
-  // Camp-specific
   role: roleEnum("role").notNull().default("member"),
   membershipTier: membershipTierEnum("membership_tier"),
   duesPaid: boolean("dues_paid").notNull().default(false),
@@ -113,48 +109,6 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
-
-export const accounts = pgTable(
-  "accounts",
-  {
-    userId: uuid("userId")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    type: text("type").notNull(),
-    provider: text("provider").notNull(),
-    providerAccountId: text("providerAccountId").notNull(),
-    refresh_token: text("refresh_token"),
-    access_token: text("access_token"),
-    expires_at: integer("expires_at"),
-    token_type: text("token_type"),
-    scope: text("scope"),
-    id_token: text("id_token"),
-    session_state: text("session_state"),
-  },
-  (account) => ({
-    pk: primaryKey({ columns: [account.provider, account.providerAccountId] }),
-  }),
-);
-
-export const sessions = pgTable("sessions", {
-  sessionToken: text("sessionToken").primaryKey(),
-  userId: uuid("userId")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  expires: timestamp("expires", { mode: "date" }).notNull(),
-});
-
-export const verificationTokens = pgTable(
-  "verification_token",
-  {
-    identifier: text("identifier").notNull(),
-    token: text("token").notNull(),
-    expires: timestamp("expires", { mode: "date" }).notNull(),
-  },
-  (vt) => ({
-    pk: primaryKey({ columns: [vt.identifier, vt.token] }),
-  }),
-);
 
 // --- Teams ---------------------------------------------------------------
 
@@ -262,29 +216,6 @@ export const reimbursements = pgTable(
   (r) => ({
     statusIdx: index("reimbursements_status_idx").on(r.status),
     submitterIdx: index("reimbursements_submitter_idx").on(r.submitterId),
-  }),
-);
-
-// --- Payments (Zapper) ---------------------------------------------------
-
-export const payments = pgTable(
-  "payments",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    zapperInvoiceId: text("zapper_invoice_id").notNull().unique(),
-    paymentReference: text("payment_reference"),
-    amountZar: numeric("amount_zar", { precision: 12, scale: 2 }).notNull(),
-    status: paymentStatusEnum("status").notNull().default("pending"),
-    purpose: text("purpose").notNull().default("camp_dues"),
-
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    paidAt: timestamp("paid_at", { mode: "date" }),
-  },
-  (p) => ({
-    userIdx: index("payments_user_idx").on(p.userId),
   }),
 );
 

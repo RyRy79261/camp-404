@@ -14,7 +14,7 @@ export interface QuadrantNavProps {
   topRight: QuadrantNavItem;
   bottomLeft: QuadrantNavItem;
   bottomRight: QuadrantNavItem;
-  /** Centre button — Zapper-inspired push-to-talk (see §11). */
+  /** Centre button — circular push-to-talk control (see brief §11). */
   centre: {
     label: string;
     onPress?: () => void;
@@ -24,9 +24,9 @@ export interface QuadrantNavProps {
 }
 
 /**
- * Camp 404's four-quadrant home navigation with circular centre button.
- * Defined in the brief §11 as an open question — this is the v0 layout to
- * be validated in Figma.
+ * Camp 404's four-quadrant home navigation with circular centre button
+ * (push-to-talk). Open question per brief §14.1 — v0 layout, to be
+ * validated in Figma.
  */
 export function QuadrantNav({
   topLeft,
