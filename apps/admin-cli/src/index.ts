@@ -2,7 +2,7 @@
 /**
  * Camp 404 admin CLI — for data ops, seeding, bulk imports.
  */
-const [, , command, ...args] = process.argv;
+const [, , command] = process.argv;
 
 async function main() {
   switch (command) {

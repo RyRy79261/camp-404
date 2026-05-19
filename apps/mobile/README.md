@@ -14,10 +14,12 @@ pnpm --filter @camp404/mobile sync         # copies web build into native projec
 ## Each subsequent build
 
 ```bash
-pnpm --filter @camp404/mobile build        # rebuilds web + cap sync
+pnpm --filter @camp404/mobile build:native # rebuilds web + cap sync
 pnpm --filter @camp404/mobile open:ios     # opens Xcode
 pnpm --filter @camp404/mobile open:android # opens Android Studio
 ```
+
+Mobile build is intentionally **not** part of the default `pnpm turbo run build` pipeline (it shares an output directory with the web build and requires native tooling). Run it manually with `build:native`.
 
 ## Notes
 

@@ -8,14 +8,13 @@ export * as schema from "./schema";
 // In Node.js (e.g. cron jobs, CLI), use the WebSocket-backed serverless driver.
 // In edge / route handlers, prefer the HTTP driver — zero connection cost.
 
+// Placeholder used during `next build`'s page-data collection step, when
+// real secrets aren't available. Any actual query will fail loudly.
+const BUILD_PLACEHOLDER_URL =
+  "postgres://build:build@localhost:5432/build?sslmode=disable";
+
 function requireDatabaseUrl(): string {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error(
-      "DATABASE_URL is not set. Copy .env.example to .env.local and fill it in.",
-    );
-  }
-  return url;
+  return process.env.DATABASE_URL ?? BUILD_PLACEHOLDER_URL;
 }
 
 /**
