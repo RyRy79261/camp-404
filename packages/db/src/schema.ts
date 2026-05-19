@@ -99,6 +99,12 @@ export const users = pgTable("users", {
     Array<{ name: string; phone: string; relationship: string }>
   >(),
 
+  // Signup gating. Set to the invite code the user redeemed when creating
+  // their account. NULL = god account (email matched GOD_EMAILS). Used as
+  // durable evidence that the account is allowed past the questionnaire
+  // gate, independent of the short-lived signup cookie.
+  inviteCode: text("invite_code"),
+
   // POPIA / GDPR
   termsVersion: text("terms_version"),
   termsConsentedAt: timestamp("terms_consented_at", { mode: "date" }),
@@ -107,6 +113,53 @@ export const users = pgTable("users", {
   lostCatNumber: integer("lost_cat_number"),
 
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// --- Invite codes --------------------------------------------------------
+// Real invite codes with provenance. `users.invite_code` stores the code a
+// member redeemed; joining back to this table yields who issued it,
+// remaining uses, and any expiry. The INVITE_CODES env var remains as a
+// bootstrap fallback so the first god account can sign up before any rows
+// exist here.
+
+export const inviteCodes = pgTable(
+  "invite_codes",
+  {
+    code: text("code").primaryKey(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    note: text("note"),
+    maxUses: integer("max_uses"),
+    useCount: integer("use_count").notNull().default(0),
+    expiresAt: timestamp("expires_at", { mode: "date" }),
+    revokedAt: timestamp("revoked_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    createdByIdx: index("invite_codes_created_by_idx").on(t.createdByUserId),
+  }),
+);
+
+// --- Burner profile / questionnaire --------------------------------------
+// Every member completes a mandatory questionnaire on signup that builds
+// their "burner profile": chef skills, build skills, fire skills, etc.
+// Responses are stored as JSONB keyed by question id; the catalogue itself
+// lives in code (see apps/web/lib/questionnaire.ts) and is versioned so
+// questions can evolve without breaking historical responses.
+
+export const burnerProfiles = pgTable("burner_profiles", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  version: text("version").notNull(),
+  responses: jsonb("responses")
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default({}),
+  startedAt: timestamp("started_at", { mode: "date" }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { mode: "date" }),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
