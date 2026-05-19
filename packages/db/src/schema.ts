@@ -116,6 +116,32 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// --- Invite codes --------------------------------------------------------
+// Real invite codes with provenance. `users.invite_code` stores the code a
+// member redeemed; joining back to this table yields who issued it,
+// remaining uses, and any expiry. The INVITE_CODES env var remains as a
+// bootstrap fallback so the first god account can sign up before any rows
+// exist here.
+
+export const inviteCodes = pgTable(
+  "invite_codes",
+  {
+    code: text("code").primaryKey(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    note: text("note"),
+    maxUses: integer("max_uses"),
+    useCount: integer("use_count").notNull().default(0),
+    expiresAt: timestamp("expires_at", { mode: "date" }),
+    revokedAt: timestamp("revoked_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    createdByIdx: index("invite_codes_created_by_idx").on(t.createdByUserId),
+  }),
+);
+
 // --- Burner profile / questionnaire --------------------------------------
 // Every member completes a mandatory questionnaire on signup that builds
 // their "burner profile": chef skills, build skills, fire skills, etc.

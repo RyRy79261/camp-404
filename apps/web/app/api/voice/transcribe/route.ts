@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { stackServerApp } from "@/stack";
+import { getAuthenticatedUser } from "@/lib/auth";
 import { transcribeAudio } from "@/lib/groq";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
 import { QUESTIONNAIRE_PROMPT } from "@/lib/voice-prompts";
@@ -12,7 +12,7 @@ const ACCEPTED_PROMPT_KEYS = new Set(["questionnaire"]);
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const user = await stackServerApp.getUser();
+  const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

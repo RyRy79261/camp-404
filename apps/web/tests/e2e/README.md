@@ -1,6 +1,6 @@
 # Camp 404 — End-to-end tests
 
-Two complementary test layers cover the questionnaire flow today.
+Two complementary layers cover the questionnaire and invite-gate flows.
 
 ## Layer 1 — Vitest + React Testing Library
 
@@ -9,8 +9,7 @@ server, no DB, no network. Exercises:
 
 - the questionnaire wizard's multi-page navigation, validation, and
   submission contract (`wizard.test.tsx`),
-- the questionnaire schema + validator
-  (`questionnaire.test.ts`),
+- the questionnaire schema + validator (`questionnaire.test.ts`),
 - the in-memory rate limiter (`rate-limit.test.ts`).
 
 Run with:
@@ -19,17 +18,18 @@ Run with:
 pnpm --filter @camp404/web test
 ```
 
-This layer is the one we lean on hardest — it's fast (sub-second), runs in
-CI, and exercises real React renders against real shadcn / Radix
-primitives. Most regressions in the wizard logic land here first.
+This is the fast feedback layer — sub-second, runs on every PR.
 
 ## Layer 2 — Playwright
 
-`apps/web/tests/e2e/*.spec.ts` — runs Chromium against a real Next.js
-server. The Playwright config (`playwright.config.ts`) auto-starts
-`next dev` on port 3000 with `INVITE_CODES=TEST-INVITE` and
-`GOD_EMAILS=god@example.com` in its environment so the gating specs have
-known fixtures.
+`apps/web/tests/e2e/*.spec.ts`. Auto-starts `next dev` on port 3000 with
+the following fixture env (see `playwright.config.ts`):
+
+| Var | Value | Purpose |
+|---|---|---|
+| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,inspect}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
+| `INVITE_CODES` | `TEST-INVITE` | One known bootstrap (env-list) code for redemption specs. |
+| `GOD_EMAILS` | `god@example.com` | One whitelisted god account that bypasses the invite gate. |
 
 Run with:
 
@@ -41,48 +41,75 @@ pnpm --filter @camp404/web exec playwright install chromium
 pnpm --filter @camp404/web test:e2e
 ```
 
-Current spec coverage:
+### How auth bypass works
 
-- `smoke.spec.ts` — server is up, branding renders.
-- `home.spec.ts` — unauthenticated home page shows both auth CTAs and
-  routes "Sign up" through `/signup`.
-- `signup.spec.ts` — invite-code form renders, invalid codes surface
-  errors and don't set a cookie, valid codes set the HttpOnly
-  `camp404_invite` cookie and redirect to Stack's sign-up handler.
-- `api.spec.ts` — `/api/health` returns 200, `/api/voice/transcribe`
+In production, every page that needs a user calls
+`getAuthenticatedUser()` which reads Stack's session cookie. In test
+mode, that same helper looks for the `camp404_test_user` cookie first
+and only falls back to Stack if it's absent. Playwright specs POST to
+`/api/test/login` with a JSON body to set that cookie:
+
+```ts
+await login(request, { id: "alice-stack", email: "god@example.com" });
+```
+
+The `id` field becomes the synthetic Stack-user id, so the camp `users`
+row that gets lazily created is keyed to it deterministically. The
+in-memory store (`apps/web/lib/test-store.ts`) replaces all the
+Neon-backed reads/writes in this mode.
+
+### Spec coverage
+
+- `home.spec.ts` — unauth home page shows both auth CTAs.
+- `signup.spec.ts` — invite form renders, invalid codes error, valid
+  codes set the cookie and redirect to Stack's sign-up handler.
+- `api.spec.ts` — `/api/health` returns ok, `/api/voice/transcribe`
   rejects unauthenticated callers with 401.
+- `authenticated.spec.ts` — god email reaches the questionnaire,
+  non-god without invite is bounced to `/signup/required`, redeeming an
+  invite at `/signup/required` unlocks the questionnaire, completing
+  the questionnaire redirects home, voice transcribe accepts an authed
+  request and rejects bad input.
+- `invite-tracking.spec.ts` — env (bootstrap) code redemption survives
+  signup, DB-backed codes record their issuer and use count, and an
+  exhausted code can't be claimed even by a stale cookie.
 
 ### Running against a deployed preview
 
-Skip the bundled `webServer` block by exporting:
+The test-mode endpoints are deliberately disabled in production. To run
+the unauth-only specs (`home`, `signup`, `api`, `smoke`) against a
+deployed preview, point at it and skip the bundled server:
 
 ```bash
 export PLAYWRIGHT_BASE_URL=https://your-preview.vercel.app
 export PLAYWRIGHT_SKIP_WEB_SERVER=1
-pnpm --filter @camp404/web test:e2e
+pnpm --filter @camp404/web test:e2e -- home.spec.ts signup.spec.ts api.spec.ts
 ```
 
-## What's NOT covered today
+The `authenticated.spec.ts` and `invite-tracking.spec.ts` specs depend
+on `E2E_TEST_MODE` and so only run against the local dev server.
 
-Anything past the auth gate. Stack Auth is the source of truth for
-sessions and we don't have a way to mint a Stack session in this
-sandbox, so we can't yet drive the authenticated paths:
+## What real production E2E will need
 
-- Lazy-upsert of `users` rows from a Stack identity.
-- Completing the questionnaire end-to-end (page 1 → 7 → redirect home).
-- Successful voice transcription against Groq.
-- God-email bypass redirecting straight to the questionnaire.
+Once a Neon database and a Stack project are wired up, the
+`E2E_TEST_MODE` harness can stay as the fast development inner loop and
+a parallel suite of "true" E2E specs can drive real Stack signups and
+real DB rows. The shape that fits the existing scaffolding:
 
-When the project gets a real Stack project + Neon database wired up,
-add a `tests/e2e/fixtures/` directory that uses the Stack server SDK
-to create a test user before each spec, store the session token in a
-cookie via Playwright's `context.addCookies()`, and tear the user
-down afterwards. The current scaffolding (`webServer.env`,
-`PLAYWRIGHT_BASE_URL`) is ready for that.
+1. Create a dedicated test Stack project; surface `STACK_TEST_*` env
+   vars to a separate Playwright config.
+2. Use the Stack server SDK to create + delete a fresh user per spec.
+3. Use Playwright's `context.addCookies()` to inject the Stack session
+   token.
+4. Drop a Neon branch DB per CI run via `neon branches create`, point
+   the dev server at it, then delete the branch in teardown.
+
+The existing `_helpers.ts` already isolates the
+`login` / `resetTestState` shape — a real-Stack implementation would
+share the same signature so the specs themselves don't change.
 
 ## CI
 
-The Playwright suite is intentionally **not** in the CI workflow yet
-(see `.github/workflows/ci.yml`). It runs locally / from a developer's
-machine until we have a stable preview URL to point it at. The Vitest
-layer runs on every PR.
+The Playwright suite is intentionally **not** in `.github/workflows/ci.yml`
+yet. It runs locally / from a developer's machine until we have a stable
+preview URL to point it at. The Vitest layer runs on every PR.

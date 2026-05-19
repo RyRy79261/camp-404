@@ -1,10 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { upsertBurnerProfile } from "@camp404/db/burner-profile";
 import { validateResponses } from "@camp404/types";
-import { stackServerApp } from "@/stack";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
+import {
+  ensureCampUser,
+  hasCampAccess,
+  upsertBurnerProfile,
+} from "@/lib/users";
 import { QUESTIONNAIRE } from "@/lib/questionnaire";
 
 export type SaveResult =
@@ -20,9 +23,9 @@ export async function saveBurnerProfile(
   rawResponses: unknown,
   final: boolean,
 ): Promise<SaveResult> {
-  const stackUser = await stackServerApp.getUser({ or: "redirect" });
-  const campUser = await ensureCampUser(stackUser);
-  if (!hasCampAccess(campUser, stackUser.primaryEmail ?? null)) {
+  const authUser = await getAuthenticatedUserOrRedirect();
+  const campUser = await ensureCampUser(authUser);
+  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     redirect("/signup/required");
   }
 

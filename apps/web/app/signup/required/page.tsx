@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { stackServerApp } from "@/stack";
+import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 import { InviteCodeForm } from "../invite-form";
 
@@ -14,9 +14,9 @@ export const metadata = {
  * their existing user row via `ensureCampUser` on the next request.
  */
 export default async function SignupRequiredPage() {
-  const stackUser = await stackServerApp.getUser({ or: "redirect" });
-  const campUser = await ensureCampUser(stackUser);
-  if (hasCampAccess(campUser, stackUser.primaryEmail ?? null)) {
+  const authUser = await getAuthenticatedUserOrRedirect();
+  const campUser = await ensureCampUser(authUser);
+  if (hasCampAccess(campUser, authUser.primaryEmail)) {
     redirect("/");
   }
 

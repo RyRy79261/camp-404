@@ -33,7 +33,7 @@ export async function redeemInviteCode(
   const raw = formData.get("code");
   const code = typeof raw === "string" ? raw.trim() : "";
   if (!code) return { ok: false, error: "Please enter an invite code." };
-  if (!isValidInviteCode(code)) {
+  if (!(await isValidInviteCode(code))) {
     return { ok: false, error: "That invite code isn't valid." };
   }
 

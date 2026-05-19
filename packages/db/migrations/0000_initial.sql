@@ -53,6 +53,17 @@ CREATE TABLE IF NOT EXISTS "documents" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "invite_codes" (
+	"code" text PRIMARY KEY NOT NULL,
+	"created_by_user_id" uuid,
+	"note" text,
+	"max_uses" integer,
+	"use_count" integer DEFAULT 0 NOT NULL,
+	"expires_at" timestamp,
+	"revoked_at" timestamp,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "push_tokens" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -184,6 +195,12 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
+ ALTER TABLE "invite_codes" ADD CONSTRAINT "invite_codes_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
  ALTER TABLE "push_tokens" ADD CONSTRAINT "push_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -235,6 +252,7 @@ CREATE INDEX IF NOT EXISTS "audit_log_actor_idx" ON "audit_log" USING btree ("ac
 CREATE INDEX IF NOT EXISTS "audit_log_action_idx" ON "audit_log" USING btree ("action");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "documents_slug_idx" ON "documents" USING btree ("slug");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "documents_category_idx" ON "documents" USING btree ("category");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "invite_codes_created_by_idx" ON "invite_codes" USING btree ("created_by_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "push_tokens_token_idx" ON "push_tokens" USING btree ("token");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "push_tokens_user_idx" ON "push_tokens" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "recipes_status_idx" ON "recipes" USING btree ("status");--> statement-breakpoint

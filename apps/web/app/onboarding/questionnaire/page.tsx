@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { stackServerApp } from "@/stack";
+import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
 import { QUESTIONNAIRE } from "@/lib/questionnaire";
 import { QuestionnaireWizard } from "@/components/questionnaire/wizard";
@@ -7,9 +7,9 @@ import { saveBurnerProfile } from "./actions";
 import type { QuestionnaireResponses } from "@camp404/types";
 
 export default async function QuestionnairePage() {
-  const stackUser = await stackServerApp.getUser({ or: "redirect" });
-  const campUser = await ensureCampUser(stackUser);
-  if (!hasCampAccess(campUser, stackUser.primaryEmail ?? null)) {
+  const authUser = await getAuthenticatedUserOrRedirect();
+  const campUser = await ensureCampUser(authUser);
+  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     redirect("/signup/required");
   }
   const profile = await getBurnerProfile(campUser.id);

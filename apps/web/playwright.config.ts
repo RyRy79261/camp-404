@@ -27,8 +27,11 @@ export default defineConfig({
         timeout: 120_000,
         env: {
           // Test fixtures for the gating flows. INVITE_CODES seeds a known
-          // code so the /signup spec can submit it; everything else stays
-          // on the in-repo placeholder fallbacks.
+          // bootstrap code so the /signup spec can submit it; everything
+          // else stays on the in-repo placeholder fallbacks. E2E_TEST_MODE
+          // enables /api/test/login + the in-memory user store so we can
+          // drive authenticated flows without a real Stack session.
+          E2E_TEST_MODE: "1",
           INVITE_CODES: "TEST-INVITE",
           GOD_EMAILS: "god@example.com",
         },

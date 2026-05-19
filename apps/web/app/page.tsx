@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { stackServerApp } from "@/stack";
 import { Button } from "@camp404/ui/components/button";
 import { QuadrantNav } from "@camp404/ui/components/quadrant-nav";
+import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
 
 export default async function HomePage() {
-  const user = await stackServerApp.getUser();
+  const user = await getAuthenticatedUser();
 
   if (!user) {
     return (
@@ -31,7 +31,7 @@ export default async function HomePage() {
   // Invite gate — god accounts (GOD_EMAILS) bypass; everyone else must have
   // redeemed an invite code at /signup before getting past this point.
   const campUser = await ensureCampUser(user);
-  if (!hasCampAccess(campUser, user.primaryEmail ?? null)) {
+  if (!hasCampAccess(campUser, user.primaryEmail)) {
     redirect("/signup/required");
   }
 

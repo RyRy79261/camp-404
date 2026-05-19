@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
-    "./burner-profile": "./src/burner-profile.ts"
+    "./burner-profile": "./src/burner-profile.ts",
+    "./invite-codes": "./src/invite-codes.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
