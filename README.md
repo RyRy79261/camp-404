@@ -61,11 +61,15 @@ Scheduled from `apps/web/vercel.json`:
 
 | Path | Schedule | Phase |
 |---|---|---|
-| `/api/cron/recipes/analyse` | every 15 min | 3 |
-| `/api/cron/manuals/generate` | every 10 min | 4 |
+| `/api/cron/recipes/analyse` | daily 08:00 UTC | 3 |
+| `/api/cron/manuals/generate` | daily 08:30 UTC | 4 |
 | `/api/cron/notifications/reminders` | daily 09:00 UTC | 2 |
 
 All cron endpoints require `Authorization: Bearer ${CRON_SECRET}`.
+
+> Vercel's Hobby plan caps cron jobs at one run per day. Upgrade to Pro
+> to run the recipe / manual jobs on a tighter schedule (e.g. every
+> 15 min during the planning window) if needed.
 
 ## Security / POPIA
 
