@@ -31,28 +31,6 @@ jobs:
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
         run: pnpm turbo run lint typecheck test build
 
-  e2e:
-    needs: verify
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browsers
-        run: pnpm --filter @camp404/web exec playwright install --with-deps chromium
-
-      - name: Run regression tests against preview deployment
-        env:
-          PLAYWRIGHT_BASE_URL: ${{ secrets.VERCEL_PREVIEW_URL }}
-          AUTH_AGENT_TOKEN: ${{ secrets.AUTH_AGENT_TOKEN }}
-        run: pnpm --filter @camp404/web test:e2e
+  # Playwright e2e regression suite — disabled until a Vercel preview
+  # deployment exists to point PLAYWRIGHT_BASE_URL at. The config and
+  # smoke spec are kept in apps/web/tests/e2e for when we re-enable it.
