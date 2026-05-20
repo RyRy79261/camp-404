@@ -42,3 +42,6 @@ test-results/
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# design exports (regenerate from .pen sources)
+design/exports/
