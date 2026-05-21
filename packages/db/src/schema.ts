@@ -20,10 +20,11 @@ import {
 
 // --- Enums ---------------------------------------------------------------
 
-// Global rank ladder: captain > team_lead > member. `captain` carries god
-// rights in-app. Which team(s) a team_lead actually leads is recorded
-// per-team on `team_memberships.is_lead` — `rank` is only the coarse tier.
-export const rankEnum = pgEnum("rank", ["captain", "team_lead", "member"]);
+// Assigned rank is only `captain` or `member`. `captain` carries god
+// rights in-app. Every other "role" is DERIVED at read time, never stored:
+//   - team lead — derived from `team_memberships.is_lead` on any team
+//   - driver    — derived from `driver_profiles.intends_to_drive`
+export const rankEnum = pgEnum("rank", ["captain", "member"]);
 
 export const teamEnum = pgEnum("team", [
   "kitchen",
@@ -64,6 +65,11 @@ export const reimbursementStatusEnum = pgEnum("reimbursement_status", [
 
 export const platformEnum = pgEnum("platform", ["web", "ios", "android"]);
 
+export const reimbursementAccountTypeEnum = pgEnum(
+  "reimbursement_account_type",
+  ["sa", "international"],
+);
+
 // A required_action is one outstanding obligation for one user. `type`
 // describes the kind of obligation; the bespoke feature that satisfies it
 // flips `status` to `completed` when its own domain table is written.
@@ -85,7 +91,6 @@ export const requiredActionStatusEnum = pgEnum("required_action_status", [
 export const questionnaireScopeEnum = pgEnum("questionnaire_scope", [
   "everyone",
   "team",
-  "rank",
   "team_leads",
   "individual",
   "opt_in",
@@ -108,8 +113,8 @@ export const broadcastKindEnum = pgEnum("broadcast_kind", [
 export const broadcastScopeEnum = pgEnum("broadcast_scope", [
   "everyone",
   "team",
-  "rank",
   "team_leads",
+  "drivers",
   "individual",
 ]);
 
@@ -288,6 +293,28 @@ export const driverProfiles = pgTable("driver_profiles", {
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// --- Car members ---------------------------------------------------------
+// A driver assigns riders to their car. "Driver" and "car group" are
+// derived facets of a user profile, not ranks. This group can be a
+// notification audience (broadcast scope 'drivers', or individual targets).
+
+export const carMembers = pgTable(
+  "car_members",
+  {
+    driverUserId: uuid("driver_user_id")
+      .notNull()
+      .references(() => driverProfiles.userId, { onDelete: "cascade" }),
+    memberUserId: uuid("member_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (c) => ({
+    pk: primaryKey({ columns: [c.driverUserId, c.memberUserId] }),
+    memberIdx: index("car_members_member_idx").on(c.memberUserId),
+  }),
+);
+
 // --- Teams ---------------------------------------------------------------
 
 export const teamMemberships = pgTable(
@@ -326,8 +353,9 @@ export const questionnaireActivations = pgTable(
     description: text("description"),
 
     scope: questionnaireScopeEnum("scope").notNull(),
+    // Set when scope = 'team'. The 'team_leads' / 'opt_in' / 'everyone'
+    // scopes need no parameter; 'individual' uses the targets table below.
     team: teamEnum("team"),
-    targetRank: rankEnum("target_rank"),
 
     blocking: boolean("blocking").notNull().default(true),
     status: activationStatusEnum("status").notNull().default("draft"),
@@ -378,9 +406,11 @@ export const requiredActions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     type: requiredActionTypeEnum("type").notNull(),
-    // Stable identifier of the obligation, e.g. the questionnaire key
+    // Stable id of the obligation — e.g. the questionnaire key
     // ("burner_profile", "dietary_requirements", "driver_profile") or a
-    // payment slug. Unique per user so re-activation upserts in place.
+    // payment slug. A code-side registry maps this key to the bespoke
+    // component the app renders for the gate. Unique per user so
+    // re-activation upserts in place.
     actionKey: text("action_key").notNull(),
     // For questionnaire gates: the version the user must satisfy. A
     // completion recorded against an older version re-opens the gate.
@@ -468,6 +498,11 @@ export const documents = pgTable(
 );
 
 // --- Reimbursements ------------------------------------------------------
+// A member submits an out-of-pocket expense, lodged under a team (NULL =
+// general). Approval routing is app logic: a team's lead approves that
+// team's claims; any lead or a captain approves general ones; a captain can
+// approve anything. Payments are actioned manually offline — this is a log,
+// not a finance system.
 
 export const reimbursements = pgTable(
   "reimbursements",
@@ -476,12 +511,23 @@ export const reimbursements = pgTable(
     submitterId: uuid("submitter_id")
       .notNull()
       .references(() => users.id, { onDelete: "set null" }),
-    amountZar: numeric("amount_zar", { precision: 12, scale: 2 }).notNull(),
-    category: text("category").notNull(),
+    // NULL = lodged under "general".
+    team: teamEnum("team"),
+
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    // ISO 4217 code of the currency the member actually paid in.
+    currency: text("currency").notNull(),
+
+    // Where to reimburse to. Bank details are encrypted via pgcrypto in
+    // route handlers (never stored plaintext); accountType picks the shape.
+    accountType: reimbursementAccountTypeEnum("account_type").notNull(),
+    accountDetailsEncrypted: text("account_details_encrypted").notNull(),
+
     description: text("description").notNull(),
-    receiptBlobUrl: text("receipt_blob_url").notNull(),
+    // Photo of the receipt and/or the item — at least one (enforced in app).
+    receiptBlobUrl: text("receipt_blob_url"),
+    itemPhotoBlobUrl: text("item_photo_blob_url"),
     voiceMemoBlobUrl: text("voice_memo_blob_url"),
-    eftDetailsEncrypted: text("eft_details_encrypted").notNull(),
 
     status: reimbursementStatusEnum("status").notNull().default("submitted"),
     approverId: uuid("approver_id").references(() => users.id, {
@@ -497,8 +543,22 @@ export const reimbursements = pgTable(
   (r) => ({
     statusIdx: index("reimbursements_status_idx").on(r.status),
     submitterIdx: index("reimbursements_submitter_idx").on(r.submitterId),
+    teamIdx: index("reimbursements_team_idx").on(r.team),
   }),
 );
+
+// --- Team budgets --------------------------------------------------------
+// Lightweight per-team budget: assigned (allocated) vs perceived
+// (projected) spend. Deliberately simple — reimbursements are the ledger.
+
+export const teamBudgets = pgTable("team_budgets", {
+  team: teamEnum("team").primaryKey(),
+  currency: text("currency").notNull().default("ZAR"),
+  assignedAmount: numeric("assigned_amount", { precision: 12, scale: 2 }),
+  perceivedAmount: numeric("perceived_amount", { precision: 12, scale: 2 }),
+  notes: text("notes"),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
 
 // --- Push notifications --------------------------------------------------
 
@@ -526,8 +586,10 @@ export const pushTokens = pgTable(
 // --- Broadcasts ----------------------------------------------------------
 // A composed message from a sender to an audience: captain announcements to
 // the whole camp, team-lead messages to their team, captain directives to
-// team leads, system reminders. Fanned out into per-user
-// `notification_deliveries` rows.
+// team leads, system reminders. The delivery pipeline is a queue: a
+// broadcast row is fanned out by a worker into per-user
+// `notification_deliveries` rows (`dispatched_at` marks fan-out done);
+// those rows are then drained by the push worker.
 
 export const broadcasts = pgTable(
   "broadcasts",
@@ -539,17 +601,21 @@ export const broadcasts = pgTable(
     kind: broadcastKindEnum("kind").notNull(),
 
     scope: broadcastScopeEnum("scope").notNull(),
+    // Set when scope = 'team'. 'individual' uses broadcast_targets below.
     team: teamEnum("team"),
-    targetRank: rankEnum("target_rank"),
 
     title: text("title").notNull(),
     body: text("body").notNull(),
     channel: notificationChannelEnum("channel").notNull().default("both"),
 
-    // Deep-link target, e.g. refType = 'questionnaire_activation'.
+    // Deep-link target the recipient's app opens — e.g. refType
+    // 'questionnaire_activation' maps (in code) to the bespoke component
+    // that must pop up. refId is the row that component renders.
     refType: text("ref_type"),
     refId: uuid("ref_id"),
 
+    // NULL until the fan-out worker has materialised the deliveries.
+    dispatchedAt: timestamp("dispatched_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (b) => ({

@@ -1,5 +1,5 @@
 {
-  "id": "7bb39fa9-408c-4942-ab61-cdd6e6286f75",
+  "id": "960d255c-5640-4bde-9389-d45768444cd5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -318,13 +318,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "target_rank": {
-          "name": "target_rank",
-          "type": "rank",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
         "title": {
           "name": "title",
           "type": "text",
@@ -354,6 +347,12 @@
         "ref_id": {
           "name": "ref_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispatched_at": {
+          "name": "dispatched_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
@@ -479,6 +478,89 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.car_members": {
+      "name": "car_members",
+      "schema": "",
+      "columns": {
+        "driver_user_id": {
+          "name": "driver_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "member_user_id": {
+          "name": "member_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "car_members_member_idx": {
+          "name": "car_members_member_idx",
+          "columns": [
+            {
+              "expression": "member_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "car_members_driver_user_id_driver_profiles_user_id_fk": {
+          "name": "car_members_driver_user_id_driver_profiles_user_id_fk",
+          "tableFrom": "car_members",
+          "tableTo": "driver_profiles",
+          "columnsFrom": [
+            "driver_user_id"
+          ],
+          "columnsTo": [
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "car_members_member_user_id_users_id_fk": {
+          "name": "car_members_member_user_id_users_id_fk",
+          "tableFrom": "car_members",
+          "tableTo": "users",
+          "columnsFrom": [
+            "member_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "car_members_driver_user_id_member_user_id_pk": {
+          "name": "car_members_driver_user_id_member_user_id_pk",
+          "columns": [
+            "driver_user_id",
+            "member_user_id"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1320,13 +1402,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "target_rank": {
-          "name": "target_rank",
-          "type": "rank",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
         "blocking": {
           "name": "blocking",
           "type": "boolean",
@@ -1600,14 +1675,34 @@
           "primaryKey": false,
           "notNull": true
         },
-        "amount_zar": {
-          "name": "amount_zar",
+        "team": {
+          "name": "team",
+          "type": "team",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount": {
+          "name": "amount",
           "type": "numeric(12, 2)",
           "primaryKey": false,
           "notNull": true
         },
-        "category": {
-          "name": "category",
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_type": {
+          "name": "account_type",
+          "type": "reimbursement_account_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_details_encrypted": {
+          "name": "account_details_encrypted",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -1622,19 +1717,19 @@
           "name": "receipt_blob_url",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "item_photo_blob_url": {
+          "name": "item_photo_blob_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "voice_memo_blob_url": {
           "name": "voice_memo_blob_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "eft_details_encrypted": {
-          "name": "eft_details_encrypted",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
         },
         "status": {
           "name": "status",
@@ -1704,6 +1799,21 @@
           "columns": [
             {
               "expression": "submitter_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "reimbursements_team_idx": {
+          "name": "reimbursements_team_idx",
+          "columns": [
+            {
+              "expression": "team",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2055,6 +2165,58 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.team_budgets": {
+      "name": "team_budgets",
+      "schema": "",
+      "columns": {
+        "team": {
+          "name": "team",
+          "type": "team",
+          "typeSchema": "public",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ZAR'"
+        },
+        "assigned_amount": {
+          "name": "assigned_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "perceived_amount": {
+          "name": "perceived_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2490,8 +2652,8 @@
       "values": [
         "everyone",
         "team",
-        "rank",
         "team_leads",
+        "drivers",
         "individual"
       ]
     },
@@ -2537,7 +2699,6 @@
       "values": [
         "everyone",
         "team",
-        "rank",
         "team_leads",
         "individual",
         "opt_in"
@@ -2548,7 +2709,6 @@
       "schema": "public",
       "values": [
         "captain",
-        "team_lead",
         "member"
       ]
     },
@@ -2570,6 +2730,14 @@
         "ready",
         "scheduled",
         "rejected"
+      ]
+    },
+    "public.reimbursement_account_type": {
+      "name": "reimbursement_account_type",
+      "schema": "public",
+      "values": [
+        "sa",
+        "international"
       ]
     },
     "public.reimbursement_status": {

@@ -1,14 +1,15 @@
 CREATE TYPE "public"."activation_status" AS ENUM('draft', 'open', 'closed');--> statement-breakpoint
 CREATE TYPE "public"."broadcast_kind" AS ENUM('announcement', 'team_message', 'lead_directive', 'reminder', 'system');--> statement-breakpoint
-CREATE TYPE "public"."broadcast_scope" AS ENUM('everyone', 'team', 'rank', 'team_leads', 'individual');--> statement-breakpoint
+CREATE TYPE "public"."broadcast_scope" AS ENUM('everyone', 'team', 'team_leads', 'drivers', 'individual');--> statement-breakpoint
 CREATE TYPE "public"."membership_tier" AS ENUM('full', 'build_week_only');--> statement-breakpoint
 CREATE TYPE "public"."notification_channel" AS ENUM('push', 'in_app', 'both');--> statement-breakpoint
 CREATE TYPE "public"."platform" AS ENUM('web', 'ios', 'android');--> statement-breakpoint
 CREATE TYPE "public"."push_delivery_status" AS ENUM('queued', 'sent', 'failed', 'skipped');--> statement-breakpoint
-CREATE TYPE "public"."questionnaire_scope" AS ENUM('everyone', 'team', 'rank', 'team_leads', 'individual', 'opt_in');--> statement-breakpoint
-CREATE TYPE "public"."rank" AS ENUM('captain', 'team_lead', 'member');--> statement-breakpoint
+CREATE TYPE "public"."questionnaire_scope" AS ENUM('everyone', 'team', 'team_leads', 'individual', 'opt_in');--> statement-breakpoint
+CREATE TYPE "public"."rank" AS ENUM('captain', 'member');--> statement-breakpoint
 CREATE TYPE "public"."recipe_source" AS ENUM('url', 'text', 'voice');--> statement-breakpoint
 CREATE TYPE "public"."recipe_status" AS ENUM('pending', 'analysing', 'ready', 'scheduled', 'rejected');--> statement-breakpoint
+CREATE TYPE "public"."reimbursement_account_type" AS ENUM('sa', 'international');--> statement-breakpoint
 CREATE TYPE "public"."reimbursement_status" AS ENUM('submitted', 'approved', 'paid', 'reconciled', 'rejected');--> statement-breakpoint
 CREATE TYPE "public"."required_action_status" AS ENUM('pending', 'completed', 'waived', 'expired');--> statement-breakpoint
 CREATE TYPE "public"."required_action_type" AS ENUM('questionnaire', 'acknowledgement', 'payment', 'profile_update');--> statement-breakpoint
@@ -51,12 +52,12 @@ CREATE TABLE IF NOT EXISTS "broadcasts" (
 	"kind" "broadcast_kind" NOT NULL,
 	"scope" "broadcast_scope" NOT NULL,
 	"team" "team",
-	"target_rank" "rank",
 	"title" text NOT NULL,
 	"body" text NOT NULL,
 	"channel" "notification_channel" DEFAULT 'both' NOT NULL,
 	"ref_type" text,
 	"ref_id" uuid,
+	"dispatched_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -67,6 +68,13 @@ CREATE TABLE IF NOT EXISTS "burner_profiles" (
 	"started_at" timestamp DEFAULT now() NOT NULL,
 	"completed_at" timestamp,
 	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "car_members" (
+	"driver_user_id" uuid NOT NULL,
+	"member_user_id" uuid NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "car_members_driver_user_id_member_user_id_pk" PRIMARY KEY("driver_user_id","member_user_id")
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "dietary_requirements" (
@@ -169,7 +177,6 @@ CREATE TABLE IF NOT EXISTS "questionnaire_activations" (
 	"description" text,
 	"scope" "questionnaire_scope" NOT NULL,
 	"team" "team",
-	"target_rank" "rank",
 	"blocking" boolean DEFAULT true NOT NULL,
 	"status" "activation_status" DEFAULT 'draft' NOT NULL,
 	"due_at" timestamp,
@@ -200,12 +207,15 @@ CREATE TABLE IF NOT EXISTS "recipes" (
 CREATE TABLE IF NOT EXISTS "reimbursements" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"submitter_id" uuid NOT NULL,
-	"amount_zar" numeric(12, 2) NOT NULL,
-	"category" text NOT NULL,
+	"team" "team",
+	"amount" numeric(12, 2) NOT NULL,
+	"currency" text NOT NULL,
+	"account_type" "reimbursement_account_type" NOT NULL,
+	"account_details_encrypted" text NOT NULL,
 	"description" text NOT NULL,
-	"receipt_blob_url" text NOT NULL,
+	"receipt_blob_url" text,
+	"item_photo_blob_url" text,
 	"voice_memo_blob_url" text,
-	"eft_details_encrypted" text NOT NULL,
 	"status" "reimbursement_status" DEFAULT 'submitted' NOT NULL,
 	"approver_id" uuid,
 	"approved_at" timestamp,
@@ -241,6 +251,15 @@ CREATE TABLE IF NOT EXISTS "tasks" (
 	"status" "task_status" DEFAULT 'open' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"completed_at" timestamp
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "team_budgets" (
+	"team" "team" PRIMARY KEY NOT NULL,
+	"currency" text DEFAULT 'ZAR' NOT NULL,
+	"assigned_amount" numeric(12, 2),
+	"perceived_amount" numeric(12, 2),
+	"notes" text,
+	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "team_memberships" (
@@ -335,6 +354,18 @@ END $$;
 --> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "burner_profiles" ADD CONSTRAINT "burner_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "car_members" ADD CONSTRAINT "car_members_driver_user_id_driver_profiles_user_id_fk" FOREIGN KEY ("driver_user_id") REFERENCES "public"."driver_profiles"("user_id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "car_members" ADD CONSTRAINT "car_members_member_user_id_users_id_fk" FOREIGN KEY ("member_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -469,6 +500,7 @@ CREATE INDEX IF NOT EXISTS "audit_log_actor_idx" ON "audit_log" USING btree ("ac
 CREATE INDEX IF NOT EXISTS "audit_log_action_idx" ON "audit_log" USING btree ("action");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "broadcasts_sender_idx" ON "broadcasts" USING btree ("sender_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "broadcasts_created_at_idx" ON "broadcasts" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "car_members_member_idx" ON "car_members" USING btree ("member_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "documents_slug_idx" ON "documents" USING btree ("slug");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "documents_category_idx" ON "documents" USING btree ("category");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "invite_codes_created_by_idx" ON "invite_codes" USING btree ("created_by_user_id");--> statement-breakpoint
@@ -482,6 +514,7 @@ CREATE INDEX IF NOT EXISTS "recipes_status_idx" ON "recipes" USING btree ("statu
 CREATE INDEX IF NOT EXISTS "recipes_submitter_idx" ON "recipes" USING btree ("submitter_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "reimbursements_status_idx" ON "reimbursements" USING btree ("status");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "reimbursements_submitter_idx" ON "reimbursements" USING btree ("submitter_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "reimbursements_team_idx" ON "reimbursements" USING btree ("team");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "required_actions_user_action_idx" ON "required_actions" USING btree ("user_id","action_key");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "required_actions_user_status_idx" ON "required_actions" USING btree ("user_id","status");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "tasks_assignee_idx" ON "tasks" USING btree ("assignee_id");--> statement-breakpoint
