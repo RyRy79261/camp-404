@@ -21,7 +21,7 @@ export const RANK_LABEL: Record<ControlPanelRank, string> = {
   captain: "Captain",
 };
 
-function rankLevel(rank: ControlPanelRank): number {
+export function rankLevel(rank: ControlPanelRank): number {
   return RANK_ORDER.indexOf(rank);
 }
 
