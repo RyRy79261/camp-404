@@ -20,13 +20,10 @@ import {
 
 // --- Enums ---------------------------------------------------------------
 
-export const roleEnum = pgEnum("role", [
-  "admin",
-  "treasurer",
-  "team_lead",
-  "member",
-  "agent",
-]);
+// Global rank ladder: captain > team_lead > member. `captain` carries god
+// rights in-app. Which team(s) a team_lead actually leads is recorded
+// per-team on `team_memberships.is_lead` — `rank` is only the coarse tier.
+export const rankEnum = pgEnum("rank", ["captain", "team_lead", "member"]);
 
 export const teamEnum = pgEnum("team", [
   "kitchen",
@@ -67,17 +64,90 @@ export const reimbursementStatusEnum = pgEnum("reimbursement_status", [
 
 export const platformEnum = pgEnum("platform", ["web", "ios", "android"]);
 
+// A required_action is one outstanding obligation for one user. `type`
+// describes the kind of obligation; the bespoke feature that satisfies it
+// flips `status` to `completed` when its own domain table is written.
+export const requiredActionTypeEnum = pgEnum("required_action_type", [
+  "questionnaire",
+  "acknowledgement",
+  "payment",
+  "profile_update",
+]);
+
+export const requiredActionStatusEnum = pgEnum("required_action_status", [
+  "pending",
+  "completed",
+  "waived",
+  "expired",
+]);
+
+// Audience a captain picks when activating a questionnaire.
+export const questionnaireScopeEnum = pgEnum("questionnaire_scope", [
+  "everyone",
+  "team",
+  "rank",
+  "team_leads",
+  "individual",
+  "opt_in",
+]);
+
+export const activationStatusEnum = pgEnum("activation_status", [
+  "draft",
+  "open",
+  "closed",
+]);
+
+export const broadcastKindEnum = pgEnum("broadcast_kind", [
+  "announcement",
+  "team_message",
+  "lead_directive",
+  "reminder",
+  "system",
+]);
+
+export const broadcastScopeEnum = pgEnum("broadcast_scope", [
+  "everyone",
+  "team",
+  "rank",
+  "team_leads",
+  "individual",
+]);
+
+export const notificationChannelEnum = pgEnum("notification_channel", [
+  "push",
+  "in_app",
+  "both",
+]);
+
+export const pushDeliveryStatusEnum = pgEnum("push_delivery_status", [
+  "queued",
+  "sent",
+  "failed",
+  "skipped",
+]);
+
+export const taskStatusEnum = pgEnum("task_status", [
+  "open",
+  "done",
+  "cancelled",
+]);
+
 // --- Users ---------------------------------------------------------------
 // Camp-specific profile. Identity (email, password, OAuth, MFA, sessions)
 // lives in Neon Auth's `neon_auth.users_sync` view; this table joins to it
-// via `stack_user_id`.
+// via `stack_user_id`. Account + history persist across the yearly camp
+// reset; per-burn data in other tables is cleared.
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   stackUserId: text("stack_user_id").notNull().unique(),
   displayName: text("display_name"),
 
-  role: roleEnum("role").notNull().default("member"),
+  rank: rankEnum("rank").notNull().default("member"),
+  // The AI / voice agent (and any other non-human actor) owns a row so
+  // foreign keys resolve, but is excluded from human-facing audiences.
+  isSystem: boolean("is_system").notNull().default(false),
+
   membershipTier: membershipTierEnum("membership_tier"),
   duesPaid: boolean("dues_paid").notNull().default(false),
   duesPaidAt: timestamp("dues_paid_at", { mode: "date" }),
@@ -87,8 +157,6 @@ export const users = pgTable("users", {
   saIdEncrypted: text("sa_id_encrypted"),
   eftDetailsEncrypted: text("eft_details_encrypted"),
 
-  dietaryTags: jsonb("dietary_tags").$type<string[]>().default([]),
-  dietaryNotes: text("dietary_notes"),
   skills: jsonb("skills").$type<string[]>().default([]),
 
   previousAfrikaburns: integer("previous_afrikaburns").default(0),
@@ -142,12 +210,13 @@ export const inviteCodes = pgTable(
   }),
 );
 
-// --- Burner profile / questionnaire --------------------------------------
-// Every member completes a mandatory questionnaire on signup that builds
-// their "burner profile": chef skills, build skills, fire skills, etc.
-// Responses are stored as JSONB keyed by question id; the catalogue itself
-// lives in code (see apps/web/lib/questionnaire.ts) and is versioned so
-// questions can evolve without breaking historical responses.
+// --- Burner profile ------------------------------------------------------
+// A distinct, long-lived facet of the user account, captured by the
+// onboarding questionnaire (a bespoke page — see apps/web/lib/questionnaire.ts).
+// One row per user; persists across the yearly reset. The catalogue of
+// questions lives in code and is versioned so historical responses stay
+// renderable. Blocking of the app until this is done is tracked separately
+// via a `required_actions` row of type `questionnaire`.
 
 export const burnerProfiles = pgTable("burner_profiles", {
   userId: uuid("user_id")
@@ -163,6 +232,62 @@ export const burnerProfiles = pgTable("burner_profiles", {
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// --- Dietary requirements ------------------------------------------------
+// The formal dietary questionnaire — its own bespoke page and table (the
+// single source of truth for dietary data; there are no dietary columns on
+// `users`). Re-requested by activating the questionnaire with a new
+// `version`; AI recipe analysis reads from here.
+
+export const dietaryRequirements = pgTable("dietary_requirements", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  allergies: text("allergies"),
+  intolerances: text("intolerances"),
+  // Hard-stop allergies the kitchen must never cross-contaminate.
+  isAnaphylactic: boolean("is_anaphylactic").notNull().default(false),
+  notes: text("notes"),
+  version: text("version").notNull(),
+  completedAt: timestamp("completed_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// --- Driver profiles -----------------------------------------------------
+// Opt-in: a member registers intent to drive (`intends_to_drive`), which
+// triggers a blocking questionnaire to capture vehicle + proficiency
+// detail. Its own bespoke page and table.
+
+export const driverProfiles = pgTable("driver_profiles", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  intendsToDrive: boolean("intends_to_drive").notNull().default(false),
+  intentRegisteredAt: timestamp("intent_registered_at", { mode: "date" }),
+
+  vehicleMake: text("vehicle_make"),
+  vehicleModel: text("vehicle_model"),
+  vehicleRegistration: text("vehicle_registration"),
+  seatsTotal: integer("seats_total"),
+  seatsOffered: integer("seats_offered"),
+  canOfferLifts: boolean("can_offer_lifts").notNull().default(false),
+
+  offroadExperienced: boolean("offroad_experienced").notNull().default(false),
+  canTow: boolean("can_tow").notNull().default(false),
+  proficiencyNotes: text("proficiency_notes"),
+
+  departureCity: text("departure_city"),
+  arrivalAt: timestamp("arrival_at", { mode: "date" }),
+  departureAt: timestamp("departure_at", { mode: "date" }),
+  notes: text("notes"),
+
+  version: text("version").notNull(),
+  completedAt: timestamp("completed_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
 // --- Teams ---------------------------------------------------------------
 
 export const teamMemberships = pgTable(
@@ -172,12 +297,115 @@ export const teamMemberships = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     team: teamEnum("team").notNull(),
+    // Authoritative answer to "does this user lead this team". A user who
+    // is a lead on any team should also carry `users.rank = 'team_lead'`.
     isLead: boolean("is_lead").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (tm) => ({
     pk: primaryKey({ columns: [tm.userId, tm.team] }),
     teamIdx: index("team_memberships_team_idx").on(tm.team),
+  }),
+);
+
+// --- Questionnaire activations -------------------------------------------
+// A questionnaire is a bespoke coded page (`questionnaire_key`) writing into
+// its own domain table. An activation is a captain's act of requiring that
+// questionnaire from an audience: "send the dietary questionnaire to the
+// whole camp, blocking, due Friday". Opening one fans out `required_actions`
+// rows to the matched users; new joiners / team changes / opt-ins are
+// reconciled against still-open activations.
+
+export const questionnaireActivations = pgTable(
+  "questionnaire_activations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    questionnaireKey: text("questionnaire_key").notNull(),
+    version: text("version").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+
+    scope: questionnaireScopeEnum("scope").notNull(),
+    team: teamEnum("team"),
+    targetRank: rankEnum("target_rank"),
+
+    blocking: boolean("blocking").notNull().default(true),
+    status: activationStatusEnum("status").notNull().default("draft"),
+    dueAt: timestamp("due_at", { mode: "date" }),
+
+    activatedByUserId: uuid("activated_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    openedAt: timestamp("opened_at", { mode: "date" }),
+    closedAt: timestamp("closed_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    keyIdx: index("questionnaire_activations_key_idx").on(a.questionnaireKey),
+    statusIdx: index("questionnaire_activations_status_idx").on(a.status),
+  }),
+);
+
+// Explicit recipients for `scope = 'individual'` activations.
+export const questionnaireActivationTargets = pgTable(
+  "questionnaire_activation_targets",
+  {
+    activationId: uuid("activation_id")
+      .notNull()
+      .references(() => questionnaireActivations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.activationId, t.userId] }),
+  }),
+);
+
+// --- Required actions ----------------------------------------------------
+// The single generic "what is blocking this user" table. The home page /
+// middleware queries `(user_id, status = 'pending', blocking = true)` and
+// routes to the first gate. A bespoke feature satisfies its own row by
+// flipping `status` to `completed` when its domain table is written.
+
+export const requiredActions = pgTable(
+  "required_actions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: requiredActionTypeEnum("type").notNull(),
+    // Stable identifier of the obligation, e.g. the questionnaire key
+    // ("burner_profile", "dietary_requirements", "driver_profile") or a
+    // payment slug. Unique per user so re-activation upserts in place.
+    actionKey: text("action_key").notNull(),
+    // For questionnaire gates: the version the user must satisfy. A
+    // completion recorded against an older version re-opens the gate.
+    version: text("version"),
+    // For questionnaire gates, the activation that created this row.
+    activationId: uuid("activation_id").references(
+      () => questionnaireActivations.id,
+      { onDelete: "set null" },
+    ),
+    title: text("title").notNull(),
+    blocking: boolean("blocking").notNull().default(true),
+    status: requiredActionStatusEnum("status").notNull().default("pending"),
+    dueAt: timestamp("due_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { mode: "date" }),
+  },
+  (ra) => ({
+    userActionIdx: uniqueIndex("required_actions_user_action_idx").on(
+      ra.userId,
+      ra.actionKey,
+    ),
+    userStatusIdx: index("required_actions_user_status_idx").on(
+      ra.userId,
+      ra.status,
+    ),
   }),
 );
 
@@ -292,6 +520,127 @@ export const pushTokens = pgTable(
   (pt) => ({
     tokenIdx: uniqueIndex("push_tokens_token_idx").on(pt.token),
     userIdx: index("push_tokens_user_idx").on(pt.userId),
+  }),
+);
+
+// --- Broadcasts ----------------------------------------------------------
+// A composed message from a sender to an audience: captain announcements to
+// the whole camp, team-lead messages to their team, captain directives to
+// team leads, system reminders. Fanned out into per-user
+// `notification_deliveries` rows.
+
+export const broadcasts = pgTable(
+  "broadcasts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    senderId: uuid("sender_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    kind: broadcastKindEnum("kind").notNull(),
+
+    scope: broadcastScopeEnum("scope").notNull(),
+    team: teamEnum("team"),
+    targetRank: rankEnum("target_rank"),
+
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    channel: notificationChannelEnum("channel").notNull().default("both"),
+
+    // Deep-link target, e.g. refType = 'questionnaire_activation'.
+    refType: text("ref_type"),
+    refId: uuid("ref_id"),
+
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (b) => ({
+    senderIdx: index("broadcasts_sender_idx").on(b.senderId),
+    createdAtIdx: index("broadcasts_created_at_idx").on(b.createdAt),
+  }),
+);
+
+// Explicit recipients for `scope = 'individual'` broadcasts.
+export const broadcastTargets = pgTable(
+  "broadcast_targets",
+  {
+    broadcastId: uuid("broadcast_id")
+      .notNull()
+      .references(() => broadcasts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.broadcastId, t.userId] }),
+  }),
+);
+
+// --- Notification deliveries ---------------------------------------------
+// Per-user inbox: one row per recipient of a broadcast (or a system-
+// generated notification with no broadcast). Tracks push delivery state and
+// read state.
+
+export const notificationDeliveries = pgTable(
+  "notification_deliveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    broadcastId: uuid("broadcast_id").references(() => broadcasts.id, {
+      onDelete: "cascade",
+    }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    channel: notificationChannelEnum("channel").notNull(),
+    pushStatus: pushDeliveryStatusEnum("push_status")
+      .notNull()
+      .default("queued"),
+
+    refType: text("ref_type"),
+    refId: uuid("ref_id"),
+
+    readAt: timestamp("read_at", { mode: "date" }),
+    deliveredAt: timestamp("delivered_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (n) => ({
+    userReadIdx: index("notification_deliveries_user_read_idx").on(
+      n.userId,
+      n.readAt,
+    ),
+    broadcastIdx: index("notification_deliveries_broadcast_idx").on(
+      n.broadcastId,
+    ),
+  }),
+);
+
+// --- Tasks ---------------------------------------------------------------
+// Non-blocking to-dos with deadlines. Assigned to a member or a whole team;
+// the reminders cron nudges via broadcasts as `due_at` approaches.
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    title: text("title").notNull(),
+    description: text("description"),
+    assigneeId: uuid("assignee_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    team: teamEnum("team"),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    dueAt: timestamp("due_at", { mode: "date" }),
+    status: taskStatusEnum("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { mode: "date" }),
+  },
+  (t) => ({
+    assigneeIdx: index("tasks_assignee_idx").on(t.assigneeId),
+    teamIdx: index("tasks_team_idx").on(t.team),
+    statusIdx: index("tasks_status_idx").on(t.status),
   }),
 );
 

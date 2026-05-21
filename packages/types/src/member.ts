@@ -1,6 +1,8 @@
 import { z } from "zod";
-import { Role, Team } from "./roles";
+import { Rank, Team } from "./roles";
 
+// Used by the formal dietary questionnaire (its own page + dietary_requirements
+// table). Not captured at signup.
 export const DietaryTag = z.enum([
   "vegan",
   "vegetarian",
@@ -31,8 +33,6 @@ export const SignupInput = z.object({
     .string()
     .regex(/^\d{13}$/, "South African ID number must be 13 digits")
     .optional(),
-  dietaryTags: z.array(DietaryTag).default([]),
-  dietaryNotes: z.string().max(500).optional(),
   skills: z.array(z.string()).default([]),
   previousAfrikaburns: z.number().int().nonnegative().default(0),
   previousBurningMans: z.number().int().nonnegative().default(0),
@@ -48,7 +48,7 @@ export const MemberProfile = z.object({
   id: z.string().uuid(),
   email: z.string().email().nullable(),
   displayName: z.string(),
-  role: Role,
+  rank: Rank,
   teams: z.array(Team).default([]),
   duesPaid: z.boolean().default(false),
   sanitised: z.boolean().default(false),
