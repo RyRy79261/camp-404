@@ -38,6 +38,13 @@
     "test": {
       "outputs": ["coverage/**"]
     },
+    "storybook": {
+      "cache": false,
+      "persistent": true
+    },
+    "build-storybook": {
+      "outputs": ["storybook-static/**"]
+    },
     "test:e2e": {
       "cache": false,
       "dependsOn": ["^build"]

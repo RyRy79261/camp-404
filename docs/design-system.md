@@ -42,9 +42,23 @@ In `packages/ui/src/components/`, exported via `@camp404/ui/components/*`:
 | `slider.tsx` | Wraps `@radix-ui/react-slider`. |
 | `textarea.tsx` | Multi-line input. |
 | `quadrant-nav.tsx` | Camp 404's bespoke four-quadrant home layout with a circular push-to-talk centre button. **v0 — open question per brief §14.1, to be validated before treating as final.** |
+| `control-panel.tsx` | Layered four-quadrant control panel. Three stacked layers (camp member → team lead → captain); the centre circle (30% of panel width) cycles between them. Layers above the viewer's rank stay visible but locked. Exports `ControlPanel`, `ControlPanelHeader`, `RANK_LABEL`. |
 
 Most primitives are thin wrappers over Radix; styling lives in Tailwind
 classes referencing the tokens above.
+
+### `ControlPanel` rank model
+
+`ControlPanel` takes a `viewerRank` (`camp_member` | `team_lead` | `captain`)
+and an ordered `layers` array. A layer whose `rank` is above the viewer's is
+rendered but locked — the quadrant tiles are non-interactive and carry no
+data, so a member can browse what each rank's tools look like without seeing
+their contents.
+
+`ControlPanelRank` is **UI-local on purpose**: the app derives a viewer's
+rank from their `Role` and team-lead assignments (a camp member becomes
+`team_lead` by being made lead of a team group). Reconciling this with the
+`Role` enum in `@camp404/types` is a deliberate follow-up.
 
 ## Conventions
 
@@ -54,6 +68,27 @@ classes referencing the tokens above.
   and the stylesheet via `@camp404/ui/styles.css`.
 - **Styling:** reference tokens as `var(--color-*)`; do not hard-code hex
   colours.
+
+## Storybook
+
+`@camp404/ui` ships a Storybook (Storybook 9, React + Vite) so components can
+be developed and reviewed in isolation.
+
+```bash
+pnpm --filter @camp404/ui storybook         # dev server on :6006
+pnpm --filter @camp404/ui build-storybook   # static build → storybook-static/
+```
+
+- Config lives in `packages/ui/.storybook/` (`main.ts`, `preview.ts`).
+  Tailwind v4 is wired in via the `@tailwindcss/vite` plugin, and
+  `globals.css` is imported in `preview.ts` so tokens resolve.
+- Stories sit next to their component as `*.stories.tsx` and are grouped
+  under `Components/*` (primitives) and `Control Panel/*` (the bespoke
+  navigation components). Every component in the table above has a story.
+- `storybook-static/` is a build artefact and is gitignored.
+
+To add a story for a new component, create `<component>.stories.tsx` beside
+it, default-export a `Meta`, and export one `StoryObj` per state.
 
 ## For design tools
 

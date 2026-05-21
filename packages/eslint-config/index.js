@@ -30,6 +30,7 @@ export default [
       "**/dist/**",
       "**/node_modules/**",
       "**/migrations/**",
+      "**/storybook-static/**",
     ],
   },
 ];
