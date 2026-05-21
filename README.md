@@ -52,6 +52,9 @@ pnpm --filter @camp404/db db:migrate
 # Dev (web only)
 pnpm --filter @camp404/web dev
 
+# Component Storybook (@camp404/ui)
+pnpm --filter @camp404/ui storybook
+
 # Everything (lint, typecheck, test, build)
 pnpm turbo run lint typecheck test build
 ```
