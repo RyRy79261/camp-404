@@ -23,7 +23,7 @@ packages/
   ui/         Shared shadcn/ui components (@camp404/ui)
   db/         Drizzle schema + migrations (@camp404/db)
   types/      Zod schemas + shared TS types (@camp404/types)
-  ai-prompts/ Versioned prompt templates
+  ai-prompts/ Versioned prompt templates (@camp404/ai-prompts)
   eslint-config/ typescript-config/
 ```
 
@@ -63,6 +63,12 @@ frozen — never regenerate, edit, or delete an existing migration. Each
 change is a new `0001_*.sql`, `0002_*.sql`, … `pnpm --filter @camp404/db
 exec drizzle-kit check` validates consistency.
 
+**Driver choice.** `@camp404/db` exposes two drivers: `createHttpDb()` is
+stateless, for route handlers and server components, and has **no
+transactions**; `createPooledDb()` is a WebSocket pool, for cron jobs and
+the CLI, and **supports transactions**. Multi-statement atomic work must
+use the pooled driver.
+
 ## Schema domain model
 
 Decisions baked into the schema — keep new code consistent with them:
@@ -75,7 +81,10 @@ Decisions baked into the schema — keep new code consistent with them:
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping
-  `status` to `completed` when it writes its domain table.
+  `status` to `completed` when it writes its domain table. A new blocking
+  requirement is a `required_actions` row — never an ad-hoc `redirect()`.
+  (The hardcoded gates currently in `page.tsx` are tech debt to migrate,
+  not a pattern to copy.)
 - **Questionnaires.** Each questionnaire is a bespoke coded page writing
   into its own distinct domain table (`burner_profiles`,
   `dietary_requirements`, `driver_profiles`, …). There is no generic
@@ -89,6 +98,36 @@ Decisions baked into the schema — keep new code consistent with them:
   map to bespoke components via a code-side registry — the DB stores the
   key, never the component.
 
+**Bespoke over generic.** Features get distinct domain tables and bespoke
+components — no CMS, no dynamic content engine, no generic response store.
+This is a deliberate product stance; prefer a new table and a new
+component over a configurable abstraction.
+
+## Environment variables
+
+When adding an env var, update **both** `.env.example` **and** the
+`globalEnv` list in `turbo.json`. Miss the latter and Turbo's cache won't
+invalidate when the var changes, causing stale builds.
+
+## Mobile builds
+
+The web app is statically exported and wrapped by Capacitor (`build:mobile`,
+`MOBILE_BUILD`). Server-only features — route handlers, server actions —
+do not exist in the mobile build. Anything a mobile screen depends on must
+work client-side or call a separately deployed API.
+
+## AI providers
+
+Model IDs (Claude Opus 4.7, Haiku 4.5, Groq Whisper Large v3 Turbo) and the
+prompt templates in `@camp404/ai-prompts` are pinned and versioned
+deliberately. Do not swap models or edit a prompt in place — bump the
+version instead.
+
+## Cron jobs
+
+All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}` and
+are scheduled in `apps/web/vercel.json`.
+
 ## Conventions
 
 - TypeScript throughout; shared types and Zod schemas live in
@@ -96,6 +135,9 @@ Decisions baked into the schema — keep new code consistent with them:
 - Lint via `@camp404/eslint-config`; format via Prettier (`.prettierrc.json`).
 - Prefer editing existing files; do not add files or abstractions a task
   doesn't need.
+- Add or update tests with behavioural changes. Vitest covers units;
+  Playwright e2e exists in `apps/web/tests/e2e` but is disabled pending a
+  preview deployment.
 
 ## Security / POPIA
 
@@ -105,6 +147,12 @@ Decisions baked into the schema — keep new code consistent with them:
 - Never store passport images, credit card numbers, or CVVs.
 - Account deletion sanitises to a `Lost Cat #N` stub to preserve
   relational integrity. See `docs/brief.md` §12.
+
+## Git & pull requests
+
+- Work on feature branches; never force-push a shared branch.
+- Commit subjects are imperative and explain *why*, not just *what*.
+- One PR per feature. Keep the CI gate green before requesting review.
 
 ## Before you commit
 
