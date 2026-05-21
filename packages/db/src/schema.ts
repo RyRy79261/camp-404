@@ -26,14 +26,19 @@ import {
 //   - driver    — derived from `driver_profiles.intends_to_drive`
 export const rankEnum = pgEnum("rank", ["captain", "member"]);
 
+// The camp's working teams. Used wherever a row is scoped to a team:
+// memberships, budgets, reimbursements, broadcasts, questionnaires,
+// documents, tasks, inventory. Values are stable identifiers — the
+// human label is a code-side concern.
 export const teamEnum = pgEnum("team", [
   "kitchen",
-  "build",
-  "fire",
-  "art",
-  "vehicle",
-  "onboarding",
-  "safety",
+  "structures",
+  "power_and_lighting",
+  "sanitation_and_water",
+  "health_and_safety",
+  "art_and_activities",
+  "ministry_of_memes",
+  "ministry_of_vibes",
 ]);
 
 export const membershipTierEnum = pgEnum("membership_tier", [
@@ -135,6 +140,16 @@ export const taskStatusEnum = pgEnum("task_status", [
   "open",
   "done",
   "cancelled",
+]);
+
+// State of a proposed inventory change. A member's proposal starts
+// `pending`; a team lead / captain moves it to `approved` or `rejected`.
+// A change made directly by a lead / captain is inserted already
+// `approved` (reviewer = author) so this table stays a full change log.
+export const inventoryUpdateStatusEnum = pgEnum("inventory_update_status", [
+  "pending",
+  "approved",
+  "rejected",
 ]);
 
 // --- Users ---------------------------------------------------------------
@@ -758,6 +773,142 @@ export const workshopRsvps = pgTable(
   },
   (r) => ({
     pk: primaryKey({ columns: [r.workshopId, r.userId] }),
+  }),
+);
+
+// --- Inventory -----------------------------------------------------------
+// The camp's stocked gear, tracked for a status page reachable from the
+// member section. Each row is one stocked item with its current state.
+// Changes flow through `inventory_updates` (below): a regular member
+// proposes, a team lead / captain approves; a lead's own change is logged
+// as an already-approved update, so the pair is a full audit trail.
+
+export const inventoryItems = pgTable(
+  "inventory_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    // Free-text detail, e.g. "12 chef knives, mixed brands; 2 blunt".
+    details: text("details"),
+    // Which team the item belongs to / is maintained by.
+    team: teamEnum("team").notNull(),
+
+    // Count of the thing, in `unit`s. A "box of knives" is name = "Chef
+    // knives", quantity = 12, unit = "knife".
+    quantity: integer("quantity").notNull().default(0),
+    unit: text("unit"),
+    // Optional total weight, in kilograms.
+    weightKg: numeric("weight_kg", { precision: 10, scale: 2 }),
+
+    // Maintenance schedule. `requiresMaintenance` gates the rest; the
+    // status page flags items whose `nextMaintenanceDueAt` has passed.
+    requiresMaintenance: boolean("requires_maintenance")
+      .notNull()
+      .default(false),
+    maintenanceIntervalDays: integer("maintenance_interval_days"),
+    lastMaintainedAt: timestamp("last_maintained_at", { mode: "date" }),
+    nextMaintenanceDueAt: timestamp("next_maintenance_due_at", {
+      mode: "date",
+    }),
+    maintenanceNotes: text("maintenance_notes"),
+
+    // Storage. A NULL `custodianUserId` means the camp storage room;
+    // otherwise the item lives at that person's home (e.g. petrol jerry
+    // cans). `storageLocation` is the free-text spot ("shelf 3", "garage").
+    custodianUserId: uuid("custodian_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    storageLocation: text("storage_location"),
+
+    // Last physical check / report — denormalised from the most recent
+    // approved `inventory_updates` row for cheap status-page queries.
+    lastCheckedAt: timestamp("last_checked_at", { mode: "date" }),
+    lastCheckedByUserId: uuid("last_checked_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Soft-removal when an item is no longer stocked — keeps the change
+    // history in `inventory_updates` intact.
+    archivedAt: timestamp("archived_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (i) => ({
+    teamIdx: index("inventory_items_team_idx").on(i.team),
+    custodianIdx: index("inventory_items_custodian_idx").on(i.custodianUserId),
+    maintenanceDueIdx: index("inventory_items_maintenance_due_idx").on(
+      i.nextMaintenanceDueAt,
+    ),
+  }),
+);
+
+// --- Inventory updates ---------------------------------------------------
+// A proposed (or applied) change to inventory, and the audit trail. Each
+// row carries a FULL snapshot of the item's editable fields — the desired
+// state, not a diff — so approving is a straight copy onto the item.
+// `itemId` is NULL for a proposal to create a brand-new item; it is set to
+// the new item's id once such a proposal is approved.
+//
+// Approval is not team-scoped: any team lead or captain may approve any
+// update, regardless of which team they are on (enforced in app logic).
+
+export const inventoryUpdates = pgTable(
+  "inventory_updates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // NULL = a proposal to create a new item.
+    itemId: uuid("item_id").references(() => inventoryItems.id, {
+      onDelete: "cascade",
+    }),
+
+    proposedByUserId: uuid("proposed_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "set null" }),
+    status: inventoryUpdateStatusEnum("status").notNull().default("pending"),
+
+    // Proposed snapshot of the item's editable fields.
+    name: text("name").notNull(),
+    details: text("details"),
+    team: teamEnum("team").notNull(),
+    quantity: integer("quantity").notNull(),
+    unit: text("unit"),
+    weightKg: numeric("weight_kg", { precision: 10, scale: 2 }),
+    requiresMaintenance: boolean("requires_maintenance")
+      .notNull()
+      .default(false),
+    maintenanceIntervalDays: integer("maintenance_interval_days"),
+    custodianUserId: uuid("custodian_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    storageLocation: text("storage_location"),
+    // Set when this update records a maintenance / service event; on
+    // approval it becomes the item's `lastMaintainedAt`.
+    maintenancePerformedAt: timestamp("maintenance_performed_at", {
+      mode: "date",
+    }),
+
+    // Proposer's comment, e.g. "counted 8, two cans are leaking".
+    note: text("note"),
+
+    reviewedByUserId: uuid("reviewed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at", { mode: "date" }),
+    // Reviewer's comment — e.g. why a proposal was rejected.
+    reviewNote: text("review_note"),
+
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (u) => ({
+    itemIdx: index("inventory_updates_item_idx").on(u.itemId),
+    statusIdx: index("inventory_updates_status_idx").on(u.status),
+    proposedByIdx: index("inventory_updates_proposed_by_idx").on(
+      u.proposedByUserId,
+    ),
   }),
 );
 
