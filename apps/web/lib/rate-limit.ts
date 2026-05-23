@@ -6,9 +6,13 @@
 interface Bucket {
   tokens: number;
   updatedAt: number;
+  limit: number;
+  refillPerMs: number;
 }
 
 const buckets = new Map<string, Bucket>();
+let checkCount = 0;
+const SWEEP_EVERY = 100;
 
 export interface RateLimitOptions {
   /** Max requests per `windowMs`. */
@@ -31,6 +35,15 @@ export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult 
   const windowMs = opts.windowMs ?? 60_000;
   const refillPerMs = opts.limit / windowMs;
   const now = Date.now();
+
+  if (++checkCount % SWEEP_EVERY === 0) {
+    for (const [k, b] of buckets) {
+      if (b.tokens + (now - b.updatedAt) * b.refillPerMs >= b.limit) {
+        buckets.delete(k);
+      }
+    }
+  }
+
   const existing = buckets.get(key);
   const tokens = existing
     ? Math.min(opts.limit, existing.tokens + (now - existing.updatedAt) * refillPerMs)
@@ -44,7 +57,7 @@ export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult 
     };
   }
 
-  buckets.set(key, { tokens: tokens - 1, updatedAt: now });
+  buckets.set(key, { tokens: tokens - 1, updatedAt: now, limit: opts.limit, refillPerMs });
   return { ok: true, retryAfterSeconds: 0 };
 }
 
