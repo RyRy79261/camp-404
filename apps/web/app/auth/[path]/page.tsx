@@ -2,24 +2,16 @@ import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthView } from "@neondatabase/auth/react/ui";
-import { authViewPaths } from "@neondatabase/auth/react/ui/server";
 import { AuthShell } from "@/components/auth-shell";
 import { INVITE_COOKIE } from "@/lib/access-control";
 import { SignInForm } from "../sign-in-form";
 import { SignUpForm } from "../sign-up-form";
 
-// Statically known views: sign-in, sign-up, forgot-password, reset-password,
-// callback, sign-out, magic-link, etc.
-export const dynamicParams = false;
-
-export function generateStaticParams() {
-  return Object.values(authViewPaths).map((path) => ({ path }));
-}
-
-// The sign-up view must always sit downstream of /signup's invite-code
-// gate — we don't want anyone creating an account (password OR Google)
-// without first redeeming a code. Reading the invite cookie here forces
-// the page to render dynamically.
+// Reads the invite cookie for the sign-up guard — can't be statically
+// prerendered. `dynamicParams` is left at the default (true) so any
+// auth subpath Neon Auth ends up redirecting to (error states,
+// provider-specific paths, …) renders via the AuthView fallback rather
+// than 404ing.
 export const dynamic = "force-dynamic";
 
 export default async function AuthPage({
