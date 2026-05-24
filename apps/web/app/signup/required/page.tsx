@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { AuthShell } from "@/components/auth-shell";
 import { InviteCodeForm } from "../invite-form";
 
 // Pulls the Neon Auth session via cookies — can't be statically prerendered.
@@ -25,15 +26,13 @@ export default async function SignupRequiredPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col justify-center gap-6 px-6 py-12">
-      <header className="text-center">
-        <h1 className="text-2xl font-semibold">Just one thing</h1>
-        <p className="mt-2 text-sm text-[color:var(--color-muted-foreground)]">
-          Camp 404 sign-up is invite-only. Drop the code you were given and
-          we'll continue.
-        </p>
-      </header>
-      <InviteCodeForm next="/" cta="Unlock my account" />
-    </main>
+    <AuthShell hideBack>
+      <InviteCodeForm
+        next="/"
+        cta="Unlock my account"
+        title="Just one thing"
+        subtitle="Camp 404 sign-up is invite-only. Drop the code you were given and we'll continue."
+      />
+    </AuthShell>
   );
 }
