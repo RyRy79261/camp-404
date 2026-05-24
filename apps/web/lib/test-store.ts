@@ -6,7 +6,7 @@ import "server-only";
 
 interface TestUser {
   id: string;
-  stackUserId: string;
+  authUserId: string;
   displayName: string | null;
   inviteCode: string | null;
   createdAt: Date;
@@ -34,7 +34,7 @@ interface TestInviteCode {
 }
 
 let nextSerial = 1;
-const usersByStackId = new Map<string, TestUser>();
+const usersByAuthId = new Map<string, TestUser>();
 const profilesByUserId = new Map<string, TestBurnerProfile>();
 const inviteCodes = new Map<string, TestInviteCode>();
 
@@ -43,28 +43,28 @@ function nextId(): string {
 }
 
 export const testStore = {
-  findUserByStackId(stackUserId: string): TestUser | null {
-    return usersByStackId.get(stackUserId) ?? null;
+  findUserByAuthId(authUserId: string): TestUser | null {
+    return usersByAuthId.get(authUserId) ?? null;
   },
   createUser(input: {
-    stackUserId: string;
+    authUserId: string;
     displayName: string | null;
     inviteCode: string | null;
   }): TestUser {
     const now = new Date();
     const user: TestUser = {
       id: nextId(),
-      stackUserId: input.stackUserId,
+      authUserId: input.authUserId,
       displayName: input.displayName,
       inviteCode: input.inviteCode,
       createdAt: now,
       updatedAt: now,
     };
-    usersByStackId.set(input.stackUserId, user);
+    usersByAuthId.set(input.authUserId, user);
     return user;
   },
   setUserInviteCode(userId: string, code: string): void {
-    for (const user of usersByStackId.values()) {
+    for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
         user.inviteCode = code;
         user.updatedAt = new Date();
@@ -137,7 +137,7 @@ export const testStore = {
   },
 
   reset(): void {
-    usersByStackId.clear();
+    usersByAuthId.clear();
     profilesByUserId.clear();
     inviteCodes.clear();
     nextSerial = 1;

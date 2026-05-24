@@ -13,10 +13,11 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-// Camp 404 schema. Authentication is handled by Neon Auth (Stack) — its
-// `neon_auth.users_sync` view is the source of truth for credentials and
-// identity. Our `users` table below stores camp-specific profile data and
-// joins to Stack via the `stack_user_id` column.
+// Camp 404 schema. Authentication is handled by Neon Auth (Better Auth) —
+// the managed auth service holds credentials, sessions, and identity. Our
+// `users` table below stores camp-specific profile data and joins to the
+// auth service via the `auth_user_id` column (the upstream Better Auth
+// user id).
 
 // --- Enums ---------------------------------------------------------------
 
@@ -154,13 +155,14 @@ export const inventoryUpdateStatusEnum = pgEnum("inventory_update_status", [
 
 // --- Users ---------------------------------------------------------------
 // Camp-specific profile. Identity (email, password, OAuth, MFA, sessions)
-// lives in Neon Auth's `neon_auth.users_sync` view; this table joins to it
-// via `stack_user_id`. Account + history persist across the yearly camp
-// reset; per-burn data in other tables is cleared.
+// lives in Neon Auth (Better Auth); this table joins to it via
+// `auth_user_id`, which mirrors the upstream `user.id`. Account + history
+// persist across the yearly camp reset; per-burn data in other tables is
+// cleared.
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
-  stackUserId: text("stack_user_id").notNull().unique(),
+  authUserId: text("auth_user_id").notNull().unique(),
   displayName: text("display_name"),
 
   rank: rankEnum("rank").notNull().default("member"),

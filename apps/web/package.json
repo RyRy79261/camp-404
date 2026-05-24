@@ -20,7 +20,7 @@
     "@camp404/db": "workspace:*",
     "@camp404/types": "workspace:*",
     "@camp404/ui": "workspace:*",
-    "@stackframe/stack": "^2.7.0",
+    "@neondatabase/auth": "0.4.1-beta",
     "@vercel/blob": "^0.27.0",
     "firebase-admin": "^13.0.1",
     "groq-sdk": "^0.9.1",

@@ -16,7 +16,7 @@ export default function SignupPage() {
       <InviteCodeForm />
       <p className="text-center text-xs text-[color:var(--color-muted-foreground)]">
         Already have an account?{" "}
-        <a className="underline" href="/handler/sign-in">
+        <a className="underline" href="/auth/sign-in">
           Sign in
         </a>
       </p>

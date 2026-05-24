@@ -14,7 +14,7 @@ interface InviteCodeFormProps {
 }
 
 export function InviteCodeForm({
-  next = "/handler/sign-up",
+  next = "/auth/sign-up",
   cta = "Continue",
 }: InviteCodeFormProps) {
   const [state, formAction, isPending] = useActionState<

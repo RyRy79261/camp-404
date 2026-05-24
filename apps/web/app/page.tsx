@@ -21,7 +21,7 @@ export default async function HomePage() {
             <a href="/signup">Sign up</a>
           </Button>
           <Button asChild size="lg" variant="outline">
-            <a href="/handler/sign-in">Sign in</a>
+            <a href="/auth/sign-in">Sign in</a>
           </Button>
         </div>
       </main>

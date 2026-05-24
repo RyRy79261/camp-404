@@ -12,7 +12,7 @@ See [`docs/brief.md`](docs/brief.md) for the full project brief (vision, archite
 - **Web:** Next.js 15 (App Router), React 19, Tailwind v4, shadcn/ui
 - **Mobile:** Capacitor 8 wrapping the same Next.js static export
 - **Database:** Neon Postgres + Drizzle ORM (HTTP + WebSocket drivers)
-- **Auth:** Neon Auth (Stack) — hosted at `/handler/*`
+- **Auth:** Neon Auth (Better Auth) — handler at `/api/auth/*`, UI at `/auth/*`
 - **AI:** Anthropic Claude Opus 4.7 (reasoning) + Haiku 4.5 (intent) + Groq Whisper Large v3 Turbo (voice)
 - **Push:** Firebase Cloud Messaging (iOS, Android, Web Push)
 - **Storage:** Vercel Blob

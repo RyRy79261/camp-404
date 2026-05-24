@@ -14,9 +14,9 @@ export type RedeemInviteResult =
 
 // Only allow same-origin paths as redirect targets to avoid open-redirect.
 function safeNext(value: FormDataEntryValue | null): string {
-  if (typeof value !== "string") return "/handler/sign-up";
+  if (typeof value !== "string") return "/auth/sign-up";
   if (!value.startsWith("/") || value.startsWith("//")) {
-    return "/handler/sign-up";
+    return "/auth/sign-up";
   }
   return value;
 }

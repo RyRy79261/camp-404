@@ -10,7 +10,7 @@ test.describe("unauthenticated home page", () => {
     );
     await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute(
       "href",
-      "/handler/sign-in",
+      "/auth/sign-in",
     );
   });
 

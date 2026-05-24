@@ -2,8 +2,8 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import {
-  createUserFromStack,
-  findUserByStackId,
+  createCampUser,
+  findUserByAuthId,
   getBurnerProfileByUserId,
   setUserInviteCode,
   upsertBurnerProfile as upsertBurnerProfileDb,
@@ -23,13 +23,13 @@ import { testStore } from "./test-store";
  */
 export interface CampUser {
   id: string;
-  stackUserId: string;
+  authUserId: string;
   displayName: string | null;
   inviteCode: string | null;
 }
 
 /**
- * Ensure a row exists for the given authenticated user (Stack or test).
+ * Ensure a row exists for the given authenticated user (Neon Auth or test).
  * Lazy-upserts on first hit and persists a valid invite cookie onto the
  * row. Routes through the test store when E2E_TEST_MODE=1.
  */
@@ -41,7 +41,7 @@ export async function ensureCampUser(
   const cookieValue = cookieStore.get(INVITE_COOKIE)?.value ?? null;
 
   const store = isE2ETestMode() ? testBackend : realBackend;
-  const existing = await store.findUserByStackId(authUser.id);
+  const existing = await store.findUserByAuthId(authUser.id);
 
   // Already has access (god or a code on file) — nothing to do with the
   // cookie except clear it.
@@ -67,7 +67,7 @@ export async function ensureCampUser(
   }
 
   const created = await store.createUser({
-    stackUserId: authUser.id,
+    authUserId: authUser.id,
     displayName: authUser.displayName ?? authUser.primaryEmail,
     inviteCode: god ? null : claimedCode,
   });
@@ -101,9 +101,9 @@ export function hasCampAccess(
 // --- Backends -----------------------------------------------------------
 
 interface UserBackend {
-  findUserByStackId(stackUserId: string): Promise<CampUser | null>;
+  findUserByAuthId(authUserId: string): Promise<CampUser | null>;
   createUser(input: {
-    stackUserId: string;
+    authUserId: string;
     displayName: string | null;
     inviteCode: string | null;
   }): Promise<CampUser>;
@@ -128,12 +128,12 @@ export async function upsertBurnerProfile(input: {
 }
 
 const realBackend: UserBackend = {
-  async findUserByStackId(stackUserId) {
-    const row = await findUserByStackId(stackUserId);
+  async findUserByAuthId(authUserId) {
+    const row = await findUserByAuthId(authUserId);
     return row ? toCampUser(row) : null;
   },
   async createUser(input) {
-    const row = await createUserFromStack(input);
+    const row = await createCampUser(input);
     return toCampUser(row);
   },
   async setUserInviteCode(userId, code) {
@@ -153,8 +153,8 @@ const realBackend: UserBackend = {
 };
 
 const testBackend: UserBackend = {
-  async findUserByStackId(stackUserId) {
-    const row = testStore.findUserByStackId(stackUserId);
+  async findUserByAuthId(authUserId) {
+    const row = testStore.findUserByAuthId(authUserId);
     return row ? toCampUser(row) : null;
   },
   async createUser(input) {
@@ -176,13 +176,13 @@ const testBackend: UserBackend = {
 
 function toCampUser(row: {
   id: string;
-  stackUserId: string;
+  authUserId: string;
   displayName: string | null;
   inviteCode: string | null;
 }): CampUser {
   return {
     id: row.id,
-    stackUserId: row.stackUserId,
+    authUserId: row.authUserId,
     displayName: row.displayName,
     inviteCode: row.inviteCode,
   };

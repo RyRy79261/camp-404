@@ -22,25 +22,25 @@ read + write tools scoped to what that user can do in the web app.
 Non-public project, friends-only, no POPIA-strict wall — but ID documents
 (passport / SA ID / EFT) are gated behind a per-user opt-in.
 
-## Auth adapter: Neon Auth = Stack
+## Auth foundation
 
-camp-404 already uses **Neon Auth (Stack)** — `@stackframe/stack` v2.7.0,
-handler mounted at `/handler/[...stack]`, server-side session via
-`stackServerApp.getUser()`. The intake-tracker briefing's Phase A is
-effectively already done; the swaps are:
+camp-404 uses **Neon Auth (Better Auth)** via `@neondatabase/auth` —
+server instance in `apps/web/lib/neon-auth.ts`, catch-all handler at
+`/api/auth/[...path]`, auth UI at `/auth/[path]` (sign-in, sign-up,
+forgot-password, callback, …), and `auth.middleware()` installed in
+`apps/web/proxy.ts` to run the OAuth verifier-to-cookie exchange on
+return trips. Server-side sessions are read with `await auth.getSession()`.
 
-| Briefing assumes | camp-404 uses |
-|---|---|
-| `@neondatabase/auth` (Better Auth flavour) | `@stackframe/stack` (Stack flavour) |
-| `auth.getSession()` in authorize route | `stackServerApp.getUser()` |
-| `auth.middleware()` verifier exchange (gotcha #1) | not applicable — Stack handles its own |
-| `/auth?callbackURL=…` post-sign-in bridge | `/handler/sign-in?after_auth_return_to=<authorize-url>` if Stack honours it, otherwise a thin `/mcp/bridge` page that runs `window.location.replace` once `useUser()` resolves |
+That matches the briefing's Phase A verbatim. Phase B applies as
+written: DCR + PKCE, `MCP_PUBLIC_URL` / `x-forwarded-host` precedence,
+HTML redirect on consent POST (CSP `form-action`), `Cache-Control:
+no-store` on token responses, transactional refresh rotation, doubled
+`/api/mcp/mcp` URL, allow-listed redirect URIs to `claude.ai` /
+`anthropic.com`.
 
-Phase B of the briefing applies verbatim: DCR + PKCE, `MCP_PUBLIC_URL` /
-`x-forwarded-host` precedence, HTML redirect on consent POST (CSP
-`form-action`), `Cache-Control: no-store` on token responses, transactional
-refresh rotation, doubled `/api/mcp/mcp` URL, allow-listed redirect URIs
-to `claude.ai` / `anthropic.com`.
+The intake-tracker briefing's gotcha #1 (verifier exchange must run
+inside the middleware) is real and already handled by `proxy.ts`; don't
+remove that file or the OAuth round-trip breaks.
 
 ## Schema additions
 
@@ -287,7 +287,6 @@ apps/web/
       register/route.ts               # DCR
       authorize/route.ts              # GET consent + POST approve (HTML redirect)
       token/route.ts                  # authorization_code + refresh_token grants
-    bridge/page.tsx                   # optional Stack sign-in bridge if needed
   lib/mcp/
     scope.ts                          # getMcpScope(campUserId)
     consent.ts                        # aiDataConsent gate helpers
@@ -308,8 +307,8 @@ next.config.js                        # + .well-known rewrites
 
 1. Schema: `aiDataConsent` column + 4 OAuth tables + migration.
 2. `getMcpScope` + `consent` helpers + unit tests.
-3. OAuth scaffolding: well-known, DCR, authorize (Stack session read),
-   token. Verify with `curl` end-to-end.
+3. OAuth scaffolding: well-known, DCR, authorize (Neon Auth session read
+   via `auth.getSession()`), token. Verify with `curl` end-to-end.
 4. MCP endpoint with `withMcpAuth` + `whoami` only — connect from
    Claude.ai end-to-end.
 5. Identity + profile tools.

@@ -43,7 +43,8 @@ Per-package work uses `--filter`, e.g. `pnpm --filter @camp404/web dev`.
 ## Database — read this before touching the schema
 
 The database is Neon Postgres + Drizzle ORM. Authentication/identity lives
-in Neon Auth (Stack); our `users` table joins to it via `stack_user_id`.
+in Neon Auth (Better Auth); our `users` table joins to it via
+`auth_user_id` (the upstream `user.id`).
 
 **`packages/db/src/schema.ts` is the single hand-authored source of truth.**
 Everything under `packages/db/migrations/` — the `.sql` files,

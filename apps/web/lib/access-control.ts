@@ -43,7 +43,7 @@ export function isGodEmail(email: string | null | undefined): boolean {
  * Use this at `/signup` to decide whether to set the cookie. Don't use it
  * as the source of truth for granting account access — race against other
  * redeemers means a code that's valid here may be exhausted by the time
- * the user finishes Stack signup. `redeemInviteCode` is the authoritative
+ * the user finishes Neon Auth signup. `redeemInviteCode` is the authoritative
  * "claim this code" call.
  */
 export async function isValidInviteCode(code: string): Promise<boolean> {

@@ -2,12 +2,12 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { stackServerApp } from "@/stack";
+import { auth } from "@/lib/neon-auth";
 import { isE2ETestMode, TEST_USER_COOKIE } from "./test-mode";
 
 /**
- * Minimal authenticated-user shape we use across the app. Both Stack's
- * CurrentServerUser and the test-mode harness produce values matching
+ * Minimal authenticated-user shape we use across the app. Both Neon
+ * Auth's session and the test-mode harness produce values matching
  * this — callers don't need to know which one they got.
  */
 export interface AuthenticatedUser {
@@ -19,27 +19,27 @@ export interface AuthenticatedUser {
 /**
  * Reads the current authenticated user. In E2E test mode, the
  * `camp404_test_user` cookie (set via POST /api/test/login) takes
- * precedence and Stack is bypassed entirely. Otherwise this falls through
- * to Stack's session-cookie reader.
+ * precedence and Neon Auth is bypassed entirely. Otherwise this falls
+ * through to Neon Auth's session reader.
  */
 export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> {
   if (isE2ETestMode()) {
     const fromCookie = await readTestUserCookie();
     if (fromCookie) return fromCookie;
   }
-  const stackUser = await stackServerApp.getUser();
-  if (!stackUser) return null;
+  const { data: session } = await auth.getSession();
+  if (!session?.user) return null;
   return {
-    id: stackUser.id,
-    primaryEmail: stackUser.primaryEmail ?? null,
-    displayName: stackUser.displayName ?? null,
+    id: session.user.id,
+    primaryEmail: session.user.email ?? null,
+    displayName: session.user.name ?? null,
   };
 }
 
 /** Same as getAuthenticatedUser but redirects to sign-in when unauthenticated. */
 export async function getAuthenticatedUserOrRedirect(): Promise<AuthenticatedUser> {
   const user = await getAuthenticatedUser();
-  if (!user) redirect("/handler/sign-in");
+  if (!user) redirect("/auth/sign-in");
   return user;
 }
 
