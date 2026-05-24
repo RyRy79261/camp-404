@@ -456,7 +456,7 @@ function LongTextField({
           variant="outline"
           size="lg"
           onClick={() => setDictating(true)}
-          className="gap-2 self-end"
+          className="h-auto gap-3 self-end px-8 py-4"
         >
           <Mic className="h-5 w-5" />
           Dictate instead
