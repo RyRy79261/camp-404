@@ -47,7 +47,7 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 export const QUESTIONNAIRE: Questionnaire = {
-  version: "2026.05.24-v6",
+  version: "2026.05.24-v7",
   pages: [
     {
       id: "about_you",
@@ -97,6 +97,42 @@ export const QUESTIONNAIRE: Questionnaire = {
             "SA ID: 13 digits. SA passport: a letter then 8 digits (e.g. A12345678). Stored privately for ticket allocation only.",
           maxLength: 40,
           required: true,
+        },
+      ],
+    },
+    {
+      id: "bio",
+      kind: "questions",
+      title: "A bit about you",
+      subtitle:
+        "Free-form. Tap the mic to dictate if typing on a phone isn't your thing.",
+      questions: [
+        {
+          id: "bio.statement",
+          kind: "long_text",
+          prompt: "Tell us about yourself",
+          helper:
+            "Who you are when you're in the dust — this is the bio your team lead reads first.",
+          maxLength: 2000,
+          required: true,
+        },
+      ],
+    },
+    {
+      id: "burn_ideas",
+      kind: "questions",
+      title: "Your ideas for this year's burn",
+      subtitle:
+        "Workshops, art, performances, vibe projects — anything you want to bring or build.",
+      questions: [
+        {
+          id: "ideas.this_year",
+          kind: "long_text",
+          prompt: "What do you want to make happen?",
+          helper:
+            "Rough is fine — the dust shapes the plan. Tap the mic to dictate.",
+          maxLength: 2000,
+          required: false,
         },
       ],
     },

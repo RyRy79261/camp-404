@@ -28,6 +28,12 @@ interface QuestionFieldProps {
   value: QuestionnaireResponseValue | undefined;
   onChange: (value: QuestionnaireResponseValue) => void;
   error?: string;
+  /**
+   * Page-level hint that this question owns the full viewport (single
+   * scale, single long_text). Lets the LongTextField grow vertically
+   * instead of sitting at a fixed 4-row height.
+   */
+  fullScreen?: boolean;
 }
 
 export function QuestionField({
@@ -35,11 +41,18 @@ export function QuestionField({
   value,
   onChange,
   error,
+  fullScreen,
 }: QuestionFieldProps) {
   const fieldId = `q-${question.id}`;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div
+      className={
+        fullScreen
+          ? "flex flex-1 flex-col gap-2"
+          : "flex flex-col gap-2"
+      }
+    >
       <Label htmlFor={fieldId}>
         {question.prompt}
         {"required" in question && question.required && (
@@ -56,6 +69,7 @@ export function QuestionField({
         question={question}
         value={value}
         onChange={onChange}
+        fullScreen={fullScreen}
       />
       {error && (
         <p className="text-xs text-red-600" role="alert">
@@ -71,11 +85,13 @@ function FieldInput({
   question,
   value,
   onChange,
+  fullScreen,
 }: {
   id: string;
   question: Question;
   value: QuestionnaireResponseValue | undefined;
   onChange: (value: QuestionnaireResponseValue) => void;
+  fullScreen?: boolean;
 }) {
   switch (question.kind) {
     case "slider": {
@@ -168,6 +184,7 @@ function FieldInput({
           question={question}
           value={typeof value === "string" ? value : ""}
           onChange={(v) => onChange(v)}
+          fullScreen={fullScreen}
         />
       );
     case "date":
@@ -359,17 +376,23 @@ function ScaleField({
  * out as a row: textarea on the left (grows), shadcn Button + waveform
  * stacked on the right. Transcript splices in at the textarea's current
  * cursor position; the user is free to keep typing too.
+ *
+ * In `fullScreen` mode (single long_text on its own page — bio, this
+ * year's ideas) the textarea grows to fill the available viewport
+ * height instead of sitting at a fixed 4 rows.
  */
 function LongTextField({
   id,
   question,
   value,
   onChange,
+  fullScreen,
 }: {
   id: string;
   question: LongTextQuestion;
   value: string;
   onChange: (value: string) => void;
+  fullScreen?: boolean;
 }) {
   const ref = React.useRef<HTMLTextAreaElement | null>(null);
 
@@ -395,6 +418,25 @@ function LongTextField({
       ta.focus();
       ta.setSelectionRange(caret, caret);
     });
+  }
+
+  if (fullScreen) {
+    return (
+      <div className="flex flex-1 items-stretch gap-2">
+        <Textarea
+          id={id}
+          ref={ref}
+          maxLength={question.maxLength}
+          value={value}
+          onChange={(e) => onChange(e.currentTarget.value)}
+          className="min-h-[40dvh] flex-1 resize-none"
+        />
+        <DictateButton
+          onTranscript={insertAtCursor}
+          promptKey="questionnaire"
+        />
+      </div>
+    );
   }
 
   return (

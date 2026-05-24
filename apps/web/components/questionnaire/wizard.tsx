@@ -99,7 +99,8 @@ export function QuestionnaireWizard({
     page.kind === "intro" ||
     (page.kind === "questions" &&
       page.questions.length === 1 &&
-      page.questions[0]?.kind === "scale");
+      (page.questions[0]?.kind === "scale" ||
+        page.questions[0]?.kind === "long_text"));
 
   return (
     <form
@@ -148,6 +149,7 @@ export function QuestionnaireWizard({
                 value={responses[q.id]}
                 onChange={(v) => setResponse(q.id, v)}
                 error={errors[q.id]}
+                fullScreen={isFullScreen}
               />
             ))}
           </div>

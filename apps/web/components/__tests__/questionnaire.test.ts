@@ -17,6 +17,7 @@ const validResponses: Record<string, unknown> = {
   "logistics.onsite_after": "yes_partial",
   "history.afrikaburn_count": "1_2",
   "intent.this_year": "want",
+  "bio.statement": "Long-time burner, first-time member.",
 };
 
 describe("burner-profile questionnaire", () => {
