@@ -9,6 +9,7 @@ import type {
   ToggleQuestion,
 } from "@camp404/types";
 import { cn } from "@camp404/ui/lib/utils";
+import { Button } from "@camp404/ui/components/button";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { Combobox } from "@camp404/ui/components/combobox";
 import { Input } from "@camp404/ui/components/input";
@@ -22,7 +23,8 @@ import {
 } from "@camp404/ui/components/select";
 import { Slider } from "@camp404/ui/components/slider";
 import { Textarea } from "@camp404/ui/components/textarea";
-import { DictateButton } from "../voice/dictate-button";
+import { Mic } from "lucide-react";
+import { RecorderPanel } from "../voice/recorder-panel";
 
 interface QuestionFieldProps {
   question: Question;
@@ -391,14 +393,17 @@ function ScaleField({
 }
 
 /**
- * Long-form textarea with a sibling dictation column on the right. Lays
- * out as a row: textarea on the left (grows), shadcn Button + waveform
- * stacked on the right. Transcript splices in at the textarea's current
- * cursor position; the user is free to keep typing too.
+ * Long-form textarea with optional dictation revealed on demand —
+ * pattern mirrored from RyRy79261/intake-tracker's bug-report dialog.
+ * Textarea is the primary input; "Dictate instead" sits beneath as a
+ * compact button. Tapping it swaps the button for a bordered recorder
+ * panel (big circular mic, waveform, timer). Each completed recording
+ * appends to whatever's already in the textarea, so the user can mix
+ * typing and dictation freely.
  *
  * In `fullScreen` mode (single long_text on its own page — bio, this
- * year's ideas) the textarea grows to fill the available viewport
- * height instead of sitting at a fixed 4 rows.
+ * year's ideas) the textarea grows to fill the viewport instead of
+ * sitting at a fixed row count.
  */
 function LongTextField({
   id,
@@ -413,63 +418,50 @@ function LongTextField({
   onChange: (value: string) => void;
   fullScreen?: boolean;
 }) {
-  const ref = React.useRef<HTMLTextAreaElement | null>(null);
+  const [dictating, setDictating] = React.useState(false);
 
-  function insertAtCursor(text: string) {
-    const ta = ref.current;
-    if (!ta) {
-      onChange(value ? `${value} ${text}` : text);
-      return;
-    }
-    const start = ta.selectionStart ?? value.length;
-    const end = ta.selectionEnd ?? value.length;
-    const before = value.slice(0, start);
-    const after = value.slice(end);
-    const joiner = before && !/\s$/.test(before) ? " " : "";
-    const trailing = after && !/^\s/.test(after) ? " " : "";
-    const next = `${before}${joiner}${text}${trailing}${after}`.slice(
-      0,
-      question.maxLength,
-    );
+  function appendTranscript(text: string) {
+    const cleaned = text.trim();
+    if (!cleaned) return;
+    const joiner = value && !/\n\s*$/.test(value) ? "\n" : "";
+    const next = `${value}${joiner}${cleaned}`.slice(0, question.maxLength);
     onChange(next);
-    const caret = (before + joiner + text).length;
-    requestAnimationFrame(() => {
-      ta.focus();
-      ta.setSelectionRange(caret, caret);
-    });
-  }
-
-  if (fullScreen) {
-    return (
-      <div className="flex flex-1 items-stretch gap-2">
-        <Textarea
-          id={id}
-          ref={ref}
-          maxLength={question.maxLength}
-          value={value}
-          onChange={(e) => onChange(e.currentTarget.value)}
-          className="min-h-[40dvh] flex-1 resize-none"
-        />
-        <DictateButton
-          onTranscript={insertAtCursor}
-          promptKey="questionnaire"
-        />
-      </div>
-    );
   }
 
   return (
-    <div className="flex items-start gap-2">
+    <div
+      className={
+        fullScreen ? "flex flex-1 flex-col gap-3" : "flex flex-col gap-3"
+      }
+    >
       <Textarea
         id={id}
-        ref={ref}
         maxLength={question.maxLength}
         value={value}
         onChange={(e) => onChange(e.currentTarget.value)}
-        rows={4}
-        className="flex-1"
+        rows={fullScreen ? undefined : 6}
+        className={
+          fullScreen ? "min-h-[40dvh] flex-1 resize-none" : undefined
+        }
       />
-      <DictateButton onTranscript={insertAtCursor} promptKey="questionnaire" />
+      {dictating ? (
+        <RecorderPanel
+          onTranscript={appendTranscript}
+          onDismiss={() => setDictating(false)}
+          promptKey="questionnaire"
+        />
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setDictating(true)}
+          className="gap-2 self-start"
+        >
+          <Mic className="h-4 w-4" />
+          Dictate instead
+        </Button>
+      )}
     </div>
   );
 }
