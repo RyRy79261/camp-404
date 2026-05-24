@@ -1,4 +1,5 @@
 import type { Questionnaire } from "@camp404/types";
+import { COUNTRIES } from "./countries";
 
 // Mandatory burner-profile questionnaire shown right after signup. Real
 // copy will evolve — bump `version` whenever the catalogue changes;
@@ -46,7 +47,7 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 export const QUESTIONNAIRE: Questionnaire = {
-  version: "2026.05.24-v5",
+  version: "2026.05.24-v6",
   pages: [
     {
       id: "about_you",
@@ -72,10 +73,10 @@ export const QUESTIONNAIRE: Questionnaire = {
         },
         {
           id: "country",
-          kind: "short_text",
+          kind: "single_select",
           prompt: "Country you're flying from",
           helper: "Where you'll be travelling to Afrikaburn from.",
-          maxLength: 80,
+          options: [...COUNTRIES],
           required: true,
         },
         {
@@ -222,15 +223,19 @@ export const QUESTIONNAIRE: Questionnaire = {
         "So we know who the dust-veterans are and who's getting their first hug from the playa.",
       questions: [
         {
-          id: "history.camp404_before",
-          kind: "single_select",
-          prompt: "Have you been with Camp 404 before?",
+          id: "history.camp404_years",
+          kind: "multi_select",
+          prompt: "Which years have you been with Camp 404?",
+          helper: "Leave blank if this would be your first year with us.",
           options: [
-            { value: "no", label: "No — this would be my first year" },
-            { value: "yes_once", label: "Yes — one previous year" },
-            { value: "yes_multi", label: "Yes — multiple years" },
+            { value: "2019", label: "2019" },
+            { value: "2022", label: "2022" },
+            { value: "2023", label: "2023" },
+            { value: "2024", label: "2024" },
+            { value: "2025", label: "2025" },
+            { value: "2026", label: "2026" },
           ],
-          required: true,
+          required: false,
         },
         {
           id: "history.afrikaburn_count",
@@ -252,6 +257,29 @@ export const QUESTIONNAIRE: Questionnaire = {
             "Burning Man, regional burns, theme camps, fire-arts collectives — anything dusty.",
           maxLength: 1000,
           required: false,
+        },
+      ],
+    },
+    {
+      id: "burn_intent",
+      kind: "questions",
+      title: "Coming to burn this year?",
+      subtitle:
+        "Drives camp planning — we'd rather hear 'unsure' than nothing.",
+      questions: [
+        {
+          id: "intent.this_year",
+          kind: "scale",
+          prompt: "How likely are you coming to burn this year?",
+          steps: [
+            { value: "definite", label: "100% coming" },
+            { value: "want", label: "Definitely want to" },
+            { value: "try", label: "Will try" },
+            { value: "unsure", label: "Unsure" },
+            { value: "unlikely", label: "Not likely" },
+            { value: "not_coming", label: "Definitely not" },
+          ],
+          required: true,
         },
       ],
     },

@@ -7,24 +7,16 @@ import { QUESTIONNAIRE } from "@/lib/questionnaire";
 const validResponses: Record<string, unknown> = {
   birthday: "1990-04-12",
   phone: "+27 82 555 1234",
-  country: "South Africa",
+  country: "ZA",
   "id.type": "sa_id",
   "id.number": "1234567890123",
-  "team_interest.kitchen": 4,
-  "team_interest.structures": 0,
-  "team_interest.power_and_lighting": 1,
-  "team_interest.sanitation_and_water": 0,
-  "team_interest.health_and_safety": 0,
-  "team_interest.art_and_activities": 2,
-  "team_interest.ministry_of_memes": 3,
-  "team_interest.ministry_of_vibes": 5,
   "competency.cooking": "teach",
   "competency.hardware": "assist",
   "logistics.driving": "yes",
   "logistics.onsite_before": "yes_full",
   "logistics.onsite_after": "yes_partial",
-  "history.camp404_before": "no",
   "history.afrikaburn_count": "1_2",
+  "intent.this_year": "want",
 };
 
 describe("burner-profile questionnaire", () => {
