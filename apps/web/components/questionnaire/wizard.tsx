@@ -32,6 +32,13 @@ export function QuestionnaireWizard({
 
   if (!page) return null;
 
+  // A page with a single `scale` question is rendered as a full-height
+  // dedicated step (the cooking / hardware competency pages). The page
+  // chrome shrinks accordingly so the vertical slider can take the
+  // viewport.
+  const isFullScreenScale =
+    page.questions.length === 1 && page.questions[0]?.kind === "scale";
+
   function setResponse(id: string, value: QuestionnaireResponseValue) {
     setResponses((prev) => ({ ...prev, [id]: value }));
     setErrors((prev) => {
@@ -103,7 +110,13 @@ export function QuestionnaireWizard({
           </p>
         )}
       </section>
-      <div className="flex flex-col gap-5">
+      <div
+        className={
+          isFullScreenScale
+            ? "flex flex-1 flex-col gap-5"
+            : "flex flex-col gap-5"
+        }
+      >
         {page.questions.map((q) => (
           <QuestionField
             key={q.id}

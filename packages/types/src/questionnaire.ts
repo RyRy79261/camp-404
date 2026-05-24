@@ -62,12 +62,41 @@ export const LongTextQuestion = z.object({
 });
 export type LongTextQuestion = z.infer<typeof LongTextQuestion>;
 
+// ISO 8601 yyyy-mm-dd. Backed by `<input type="date">`.
+export const DateQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("date"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  required: z.boolean().default(true),
+});
+export type DateQuestion = z.infer<typeof DateQuestion>;
+
+// Discrete labelled scale rendered as a vertical full-screen slider on
+// mobile (top = highest, bottom = lowest) and a horizontal slider with
+// labels on desktop. Used for cooking / hardware competency.
+export const ScaleQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("scale"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  // Ordered top → bottom for the vertical mobile layout. The selected
+  // value is the option's `value`.
+  steps: z
+    .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
+    .min(2),
+  required: z.boolean().default(true),
+});
+export type ScaleQuestion = z.infer<typeof ScaleQuestion>;
+
 export const Question = z.discriminatedUnion("kind", [
   SliderQuestion,
   SingleSelectQuestion,
   MultiSelectQuestion,
   ShortTextQuestion,
   LongTextQuestion,
+  DateQuestion,
+  ScaleQuestion,
 ]);
 export type Question = z.infer<typeof Question>;
 
@@ -182,6 +211,24 @@ function validateOne(
         return { ok: false, error: "Expected text" };
       if (raw.length > q.maxLength)
         return { ok: false, error: `Max ${q.maxLength} characters` };
+      return { ok: true, value: raw };
+    }
+    case "date": {
+      if (typeof raw !== "string")
+        return { ok: false, error: "Expected a date" };
+      // Strict yyyy-mm-dd: matches what `<input type="date">` produces and
+      // what Postgres `date` columns accept directly.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw))
+        return { ok: false, error: "Use yyyy-mm-dd" };
+      const t = Date.parse(raw);
+      if (Number.isNaN(t)) return { ok: false, error: "Not a real date" };
+      return { ok: true, value: raw };
+    }
+    case "scale": {
+      if (typeof raw !== "string")
+        return { ok: false, error: "Pick a level" };
+      if (!q.steps.some((s) => s.value === raw))
+        return { ok: false, error: "Not a valid level" };
       return { ok: true, value: raw };
     }
   }

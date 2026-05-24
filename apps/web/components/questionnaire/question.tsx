@@ -5,6 +5,7 @@ import type {
   LongTextQuestion,
   Question,
   QuestionnaireResponseValue,
+  ScaleQuestion,
 } from "@camp404/types";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { Input } from "@camp404/ui/components/input";
@@ -168,7 +169,133 @@ function FieldInput({
           onChange={(v) => onChange(v)}
         />
       );
+    case "date":
+      return (
+        <Input
+          id={id}
+          type="date"
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => onChange(e.currentTarget.value)}
+        />
+      );
+    case "scale":
+      return (
+        <ScaleField
+          id={id}
+          question={question}
+          value={typeof value === "string" ? value : undefined}
+          onChange={onChange}
+        />
+      );
   }
+}
+
+/**
+ * Discrete labelled scale. On mobile this fills the viewport height as a
+ * vertical column (top = highest level, bottom = lowest) with a vertical
+ * slider running alongside the labels. On md+ it falls back to a
+ * horizontal slider with labels above each tick. The underlying value is
+ * the index of the chosen step in `steps`.
+ */
+function ScaleField({
+  id,
+  question,
+  value,
+  onChange,
+}: {
+  id: string;
+  question: ScaleQuestion;
+  value: string | undefined;
+  onChange: (value: QuestionnaireResponseValue) => void;
+}) {
+  const steps = question.steps;
+  // `steps` is ordered top→bottom for the vertical UI; the slider's
+  // numeric axis runs bottom→top so the top label corresponds to the
+  // highest value.
+  const indexOfValue =
+    value !== undefined ? steps.findIndex((s) => s.value === value) : -1;
+  const currentIndex = indexOfValue >= 0 ? indexOfValue : Math.floor(steps.length / 2);
+  const sliderValue = steps.length - 1 - currentIndex;
+
+  function commitFromSlider(next: number[]) {
+    const v = next[0];
+    if (v === undefined) return;
+    const idx = steps.length - 1 - v;
+    const step = steps[idx];
+    if (step) onChange(step.value);
+  }
+
+  return (
+    <>
+      {/* Mobile: full-height vertical scale */}
+      <div className="flex h-[70dvh] gap-4 md:hidden" id={id}>
+        <div className="flex h-full flex-col justify-between py-1">
+          <Slider
+            orientation="vertical"
+            value={[sliderValue]}
+            onValueChange={commitFromSlider}
+            min={0}
+            max={steps.length - 1}
+            step={1}
+            aria-labelledby={`${id}-label`}
+            className="h-full"
+          />
+        </div>
+        <ol
+          className="flex h-full flex-1 flex-col justify-between py-1"
+          aria-hidden="true"
+        >
+          {steps.map((s, i) => {
+            const selected = i === currentIndex;
+            return (
+              <li
+                key={s.value}
+                className={
+                  "text-sm leading-tight transition-colors " +
+                  (selected
+                    ? "font-semibold text-[color:var(--color-foreground)]"
+                    : "text-[color:var(--color-muted-foreground)]")
+                }
+              >
+                {s.label}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+
+      {/* Desktop: horizontal scale with labels above each tick */}
+      <div className="hidden md:block">
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+          {[...steps].reverse().map((s, i) => {
+            const reversedIdx = steps.length - 1 - i;
+            const selected = reversedIdx === currentIndex;
+            return (
+              <p
+                key={s.value}
+                className={
+                  "text-center text-xs leading-tight " +
+                  (selected
+                    ? "font-semibold text-[color:var(--color-foreground)]"
+                    : "text-[color:var(--color-muted-foreground)]")
+                }
+              >
+                {s.label}
+              </p>
+            );
+          })}
+        </div>
+        <Slider
+          value={[sliderValue]}
+          onValueChange={commitFromSlider}
+          min={0}
+          max={steps.length - 1}
+          step={1}
+          className="mt-3"
+        />
+      </div>
+    </>
+  );
 }
 
 /**
