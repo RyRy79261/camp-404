@@ -117,12 +117,32 @@ export const Question = z.discriminatedUnion("kind", [
 ]);
 export type Question = z.infer<typeof Question>;
 
-export const QuestionnairePage = z.object({
+// Standard page: one or more questions, the wizard validates them and
+// advances on Next.
+export const QuestionsPage = z.object({
   id: z.string().min(1),
+  kind: z.literal("questions"),
   title: z.string().min(1),
   subtitle: z.string().optional(),
   questions: z.array(Question).min(1),
 });
+export type QuestionsPage = z.infer<typeof QuestionsPage>;
+
+// Full-screen "what's coming next" interstitial. No questions, no
+// validation — just a heading + body and a Next button. Rendered at
+// full viewport height on mobile, like the scale screens.
+export const IntroPage = z.object({
+  id: z.string().min(1),
+  kind: z.literal("intro"),
+  heading: z.string().min(1),
+  body: z.string().min(1),
+});
+export type IntroPage = z.infer<typeof IntroPage>;
+
+export const QuestionnairePage = z.discriminatedUnion("kind", [
+  QuestionsPage,
+  IntroPage,
+]);
 export type QuestionnairePage = z.infer<typeof QuestionnairePage>;
 
 export const Questionnaire = z.object({
@@ -169,6 +189,7 @@ export function validateResponses(
   const errors: Record<string, string> = {};
 
   for (const page of questionnaire.pages) {
+    if (page.kind === "intro") continue;
     for (const q of page.questions) {
       const value = parsed.data[q.id];
       const result = validateOne(q, value);

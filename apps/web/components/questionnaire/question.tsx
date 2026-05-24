@@ -79,10 +79,9 @@ function FieldInput({
 }) {
   switch (question.kind) {
     case "slider": {
-      const current =
-        typeof value === "number"
-          ? value
-          : Math.round((question.min + question.max) / 2);
+      // Default to the min when the user hasn't touched it yet — the
+      // most honest "no preference" position for an interest slider.
+      const current = typeof value === "number" ? value : question.min;
       return (
         <div className="flex flex-col gap-2">
           <Slider

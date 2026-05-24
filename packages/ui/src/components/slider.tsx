@@ -35,7 +35,7 @@ export const Slider = React.forwardRef<
           )}
         />
       </SliderPrimitive.Track>
-      <SliderPrimitive.Thumb className="block h-5 w-5 rounded-full border border-[color:var(--color-primary)] bg-[color:var(--color-background)] shadow transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)] disabled:pointer-events-none disabled:opacity-50" />
+      <SliderPrimitive.Thumb className="block h-6 w-6 rounded-full border-2 border-[color:var(--color-primary-foreground)] bg-[color:var(--color-primary)] shadow-md transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--color-background)] disabled:pointer-events-none disabled:opacity-50" />
     </SliderPrimitive.Root>
   );
 });

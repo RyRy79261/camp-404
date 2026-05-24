@@ -46,10 +46,11 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 export const QUESTIONNAIRE: Questionnaire = {
-  version: "2026.05.24-v4",
+  version: "2026.05.24-v5",
   pages: [
     {
       id: "about_you",
+      kind: "questions",
       title: "About you",
       subtitle:
         "Name and email come from your sign-in account — we won't ask for them again.",
@@ -92,14 +93,21 @@ export const QUESTIONNAIRE: Questionnaire = {
           kind: "short_text",
           prompt: "Document number",
           helper:
-            "Stored privately — only used for the ticket allocation paperwork.",
+            "SA ID: 13 digits. SA passport: a letter then 8 digits (e.g. A12345678). Stored privately for ticket allocation only.",
           maxLength: 40,
           required: true,
         },
       ],
     },
     {
+      id: "team_interests_intro",
+      kind: "intro",
+      heading: "Indicate your interest in whichever teams you want.",
+      body: "It's okay not to know yet — leave the sliders at zero for anything you're unsure about. None of these are required. You can revisit them later as the camp comes into focus.",
+    },
+    {
       id: "team_interests",
+      kind: "questions",
       title: "Team interests",
       subtitle:
         "Slide each team based on how keen you are to help. If you nudge a team above zero we'll send you their team-specific questionnaire later.",
@@ -112,11 +120,12 @@ export const QUESTIONNAIRE: Questionnaire = {
         step: 1,
         minLabel: "Not for me",
         maxLabel: "Sign me up",
-        required: true,
+        required: false,
       })),
     },
     {
       id: "cooking_competency",
+      kind: "questions",
       title: "Cooking competency",
       subtitle: "Be honest — overstating helps nobody when the dust hits.",
       questions: [
@@ -136,6 +145,7 @@ export const QUESTIONNAIRE: Questionnaire = {
     },
     {
       id: "hardware_competency",
+      kind: "questions",
       title: "Hardware competency",
       subtitle:
         "Building, wiring, fixing — the camp lives or dies on this stuff.",
@@ -156,6 +166,7 @@ export const QUESTIONNAIRE: Questionnaire = {
     },
     {
       id: "leadership_logistics",
+      kind: "questions",
       title: "Leadership & logistics",
       subtitle:
         "You can change any of these later — this is a starting picture.",
@@ -205,6 +216,7 @@ export const QUESTIONNAIRE: Questionnaire = {
     },
     {
       id: "burn_history",
+      kind: "questions",
       title: "Burn history",
       subtitle:
         "So we know who the dust-veterans are and who's getting their first hug from the playa.",
@@ -245,6 +257,7 @@ export const QUESTIONNAIRE: Questionnaire = {
     },
     {
       id: "dietary",
+      kind: "questions",
       title: "Dietary requirements",
       subtitle:
         "Splitting dislikes from allergies so the kitchen knows what's preference and what's life-or-death.",
