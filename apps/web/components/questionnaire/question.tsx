@@ -10,6 +10,7 @@ import type {
 } from "@camp404/types";
 import { cn } from "@camp404/ui/lib/utils";
 import { Checkbox } from "@camp404/ui/components/checkbox";
+import { Combobox } from "@camp404/ui/components/combobox";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
 import {
@@ -212,6 +213,17 @@ function FieldInput({
           question={question}
           value={typeof value === "string" ? value : undefined}
           onChange={onChange}
+        />
+      );
+    case "combobox":
+      return (
+        <Combobox
+          id={id}
+          options={question.options}
+          value={typeof value === "string" ? value : undefined}
+          onChange={onChange}
+          placeholder={question.placeholder ?? "Select…"}
+          searchPlaceholder={question.searchPlaceholder ?? "Search…"}
         />
       );
   }

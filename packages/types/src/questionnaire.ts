@@ -105,6 +105,23 @@ export const ToggleQuestion = z.object({
 });
 export type ToggleQuestion = z.infer<typeof ToggleQuestion>;
 
+// Combobox — searchable single-select. Same data shape as single_select
+// but rendered as a Popover + cmdk filterable list. Use for long lookup
+// sets (countries, cities, …) where scrolling a plain Select is hostile.
+export const ComboboxQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("combobox"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  options: z
+    .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
+    .min(2),
+  placeholder: z.string().optional(),
+  searchPlaceholder: z.string().optional(),
+  required: z.boolean().default(true),
+});
+export type ComboboxQuestion = z.infer<typeof ComboboxQuestion>;
+
 export const Question = z.discriminatedUnion("kind", [
   SliderQuestion,
   SingleSelectQuestion,
@@ -114,6 +131,7 @@ export const Question = z.discriminatedUnion("kind", [
   DateQuestion,
   ScaleQuestion,
   ToggleQuestion,
+  ComboboxQuestion,
 ]);
 export type Question = z.infer<typeof Question>;
 
@@ -270,6 +288,13 @@ function validateOne(
       return { ok: true, value: raw };
     }
     case "toggle": {
+      if (typeof raw !== "string")
+        return { ok: false, error: "Expected a choice" };
+      if (!q.options.some((o) => o.value === raw))
+        return { ok: false, error: "Not a valid option" };
+      return { ok: true, value: raw };
+    }
+    case "combobox": {
       if (typeof raw !== "string")
         return { ok: false, error: "Expected a choice" };
       if (!q.options.some((o) => o.value === raw))

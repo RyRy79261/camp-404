@@ -73,10 +73,12 @@ export const QUESTIONNAIRE: Questionnaire = {
         },
         {
           id: "country",
-          kind: "single_select",
+          kind: "combobox",
           prompt: "Country you're flying from",
           helper: "Where you'll be travelling to Afrikaburn from.",
           options: [...COUNTRIES],
+          placeholder: "Pick your country…",
+          searchPlaceholder: "Search countries…",
           required: true,
         },
         {
