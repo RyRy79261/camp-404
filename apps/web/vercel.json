@@ -3,7 +3,8 @@
   "crons": [
     { "path": "/api/cron/recipes/analyse", "schedule": "0 8 * * *" },
     { "path": "/api/cron/manuals/generate", "schedule": "30 8 * * *" },
-    { "path": "/api/cron/notifications/reminders", "schedule": "0 9 * * *" }
+    { "path": "/api/cron/notifications/reminders", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/telegram/dispatch", "schedule": "*/5 * * * *" }
   ],
   "headers": [
     {

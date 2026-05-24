@@ -15,7 +15,9 @@
     "FIREBASE_CLIENT_EMAIL",
     "FIREBASE_PRIVATE_KEY",
     "CRON_SECRET",
-    "PGCRYPTO_KEY"
+    "PGCRYPTO_KEY",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_WEBHOOK_SECRET"
   ],
   "tasks": {
     "build": {

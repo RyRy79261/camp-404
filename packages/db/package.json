@@ -10,7 +10,8 @@
     "./schema": "./src/schema.ts",
     "./burner-profile": "./src/burner-profile.ts",
     "./invite-codes": "./src/invite-codes.ts",
-    "./mcp": "./src/mcp.ts"
+    "./mcp": "./src/mcp.ts",
+    "./telegram": "./src/telegram.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
