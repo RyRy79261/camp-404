@@ -35,7 +35,8 @@ interface ComboboxProps {
  * Searchable single-select dropdown. Popover-anchored cmdk list with a
  * filterable input — the right primitive for long lookup sets like a
  * country picker where a plain Select would force the user to scroll
- * through hundreds of options.
+ * through hundreds of options. Composes the verbatim shadcn Popover +
+ * Command primitives copied from RyRy79261/intake-tracker.
  */
 export function Combobox({
   options,
@@ -63,7 +64,7 @@ export function Combobox({
           disabled={disabled}
           className={cn(
             "w-full justify-between font-normal",
-            !selected && "text-[color:var(--color-muted-foreground)]",
+            !selected && "text-muted-foreground",
             className,
           )}
         >
@@ -83,7 +84,7 @@ export function Combobox({
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
               {options.map((o) => {
-                const selected = value === o.value;
+                const isSelected = value === o.value;
                 return (
                   <CommandItem
                     key={o.value}
@@ -93,14 +94,12 @@ export function Combobox({
                       setOpen(false);
                     }}
                   >
-                    {/* Fixed-width slot for the check — always rendered
-                      * so item text doesn't shift when the selection
-                      * changes. Conditional render (vs opacity toggling)
-                      * dodges a Tailwind class-scanner pitfall where
-                      * opacity-0 in a shared package didn't make it into
-                      * the consuming app's bundle. */}
-                    <span className="mr-2 inline-flex h-4 w-4 shrink-0 items-center justify-center">
-                      {selected && <Check className="h-4 w-4" />}
+                    {/* Fixed-width slot so the row text doesn't shift
+                      * when the selection changes. Conditional render
+                      * (rather than opacity-toggling) avoids the
+                      * Tailwind v4 shared-package class-scanner quirk. */}
+                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                      {isSelected && <Check />}
                     </span>
                     <span className="truncate">{o.label}</span>
                   </CommandItem>

@@ -13,7 +13,11 @@
   --color-muted-foreground: oklch(0.72 0.03 320);
   --color-card: oklch(0.24 0.05 320);
   --color-card-foreground: oklch(0.96 0.01 320);
+  /* popover shares the card surface — same elevation, same colour. */
+  --color-popover: oklch(0.24 0.05 320);
+  --color-popover-foreground: oklch(0.96 0.01 320);
   --color-border: oklch(0.32 0.05 320);
+  --color-input: oklch(0.32 0.05 320);
   --color-accent: oklch(0.45 0.12 320);
   --color-accent-foreground: oklch(0.98 0 0);
   --color-destructive: oklch(0.65 0.22 18);
