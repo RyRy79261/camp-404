@@ -300,22 +300,29 @@ function ScaleField({
 
   return (
     <>
-      {/* Mobile: full-height vertical scale */}
-      <div className="flex h-[70dvh] gap-4 md:hidden" id={id}>
-        <div className="flex h-full flex-col justify-between py-1">
-          <Slider
-            orientation="vertical"
-            value={[sliderValue]}
-            onValueChange={commitFromSlider}
-            min={0}
-            max={steps.length - 1}
-            step={1}
-            aria-labelledby={`${id}-label`}
-            className="h-full"
-          />
-        </div>
+      {/* Mobile: full-height vertical scale.
+        * Three-column grid puts the slider track dead-centre with
+        * equal-width gutters on either side. Left column is empty for
+        * now — reserved for a future secondary label set. Right column
+        * carries the step labels, distributed top-to-bottom matching
+        * the slider's max-at-top / min-at-bottom orientation.
+        */}
+      <div
+        id={id}
+        className="grid h-[70dvh] grid-cols-[1fr_auto_1fr] items-stretch gap-4 md:hidden"
+      >
+        <div aria-hidden />
+        <Slider
+          orientation="vertical"
+          value={[sliderValue]}
+          onValueChange={commitFromSlider}
+          min={0}
+          max={steps.length - 1}
+          step={1}
+          aria-labelledby={`${id}-label`}
+        />
         <ol
-          className="flex h-full flex-1 flex-col justify-between py-1"
+          className="flex h-full flex-col justify-between py-1"
           aria-hidden="true"
         >
           {steps.map((s, i) => {
