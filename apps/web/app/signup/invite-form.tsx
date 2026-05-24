@@ -19,7 +19,7 @@ export function InviteCodeForm({
   next = "/auth/sign-up",
   cta = "Continue",
   title = "Welcome to Camp 404",
-  subtitle = "Sign-up is invite-only. Drop your code below to continue.",
+  subtitle = "Camp 404 is invite-only. Drop your code below and we'll get you logged in — password or Google, your call.",
 }: InviteCodeFormProps) {
   const [state, formAction, isPending] = useActionState<
     RedeemInviteResult | null,
@@ -59,13 +59,6 @@ export function InviteCodeForm({
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? "Checking…" : cta}
       </Button>
-
-      <p className="text-center text-sm text-[color:var(--color-muted-foreground)]">
-        Already have an account?{" "}
-        <a className="underline underline-offset-4" href="/auth/sign-in">
-          Sign in
-        </a>
-      </p>
     </form>
   );
 }
