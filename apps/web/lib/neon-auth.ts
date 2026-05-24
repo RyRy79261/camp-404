@@ -26,5 +26,10 @@ export const auth = createNeonAuth({
   baseUrl: process.env.NEON_AUTH_BASE_URL ?? PLACEHOLDER_BASE_URL,
   cookies: {
     secret: process.env.NEON_AUTH_COOKIE_SECRET ?? PLACEHOLDER_COOKIE_SECRET,
+    // Lax (not strict — the default) so cross-site top-level navigations
+    // — claude.ai → /api/mcp/oauth/authorize → /mcp/connect, etc. —
+    // carry the session cookie. Strict drops the cookie on cross-site
+    // GETs and breaks the OAuth round-trip.
+    sameSite: "lax",
   },
 });

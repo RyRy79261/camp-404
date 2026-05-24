@@ -22,6 +22,7 @@
     "@camp404/ui": "workspace:*",
     "@neondatabase/auth": "0.4.1-beta",
     "@vercel/blob": "^2.4.0",
+    "drizzle-orm": "^0.45.2",
     "firebase-admin": "^13.10.0",
     "groq-sdk": "^1.2.0",
     "lucide-react": "^1.16.0",
