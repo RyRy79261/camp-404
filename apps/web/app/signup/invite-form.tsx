@@ -31,7 +31,8 @@ export function InviteCodeForm({
         name="code"
         autoComplete="off"
         spellCheck={false}
-        autoCapitalize="characters"
+        autoCapitalize="off"
+        autoCorrect="off"
         className="tracking-widest"
         required
       />
