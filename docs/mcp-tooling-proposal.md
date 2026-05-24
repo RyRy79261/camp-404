@@ -162,9 +162,13 @@ the appropriate tier with no consent gate.
 | Tool | R/W | Tier |
 |---|---|---|
 | `list_questionnaire_activations(filter)` | R | C |
-| `create_questionnaire_activation` | W | C |
-| `open_activation` / `close_activation` | W | C |
+| `create_questionnaire_activation` | W | C — drafts only, status='draft' |
 | `list_activation_targets(activationId)` | R | C |
+
+**Activation must happen from the app**, not via MCP. The MCP layer can
+draft the row; flipping it to `open` (which fans out the
+`required_actions` rows that block members) is a deliberate human-in-loop
+action that runs through the captain's web UI.
 
 ### Recipes
 
@@ -191,14 +195,18 @@ the appropriate tier with no consent gate.
 | `approve_reimbursement` / `reject_reimbursement` | W | team L of claim's team OR C | per existing routing |
 | `mark_paid` / `mark_reconciled` | W | C | |
 
-### Broadcasts (draft-only via MCP)
+### Broadcasts / inbox (read-only)
 
 | Tool | R/W | Tier | Notes |
 |---|---|---|---|
 | `list_my_inbox(unreadOnly?)` | R | M | `notification_deliveries` for self |
-| `mark_notification_read(id)` | W | M | |
-| `draft_broadcast(kind, scope, ...)` | W | C (any); L (team_message / lead_directive within own team) | writes row with `dispatched_at = NULL`; web app confirms to fan out |
-| `list_broadcasts(filter)` | R | C |
+| `mark_notification_read(id)` | W | M | flips own delivery row's `readAt` |
+| `list_broadcasts(filter)` | R | C | read history of sent announcements |
+
+**No write tools for broadcasts.** Camp-wide notifications are an
+explicit human-in-loop action — every broadcast that reaches phones
+gets composed and sent from the captain's web UI, never by an MCP
+agent. The `broadcasts` table is read-only via MCP.
 
 ### Tasks
 
@@ -215,13 +223,6 @@ the appropriate tier with no consent gate.
 | `rsvp_workshop(id)` / `cancel_rsvp(id)` | W | M |
 | `list_workshop_rsvps(id)` | R | host + C |
 | `create_workshop` / `update_workshop` / `cancel_workshop` | W | host + C |
-
-### Adoptees
-
-| Tool | R/W | Tier |
-|---|---|---|
-| `list_adoptees` / `get_adoptee(id)` | R | sponsor (own) + C |
-| `create_adoptee` / `update_adoptee` / `approve_adoptee` | W | C |
 
 ### Inventory
 
@@ -305,18 +306,34 @@ next.config.js                        # + .well-known rewrites
 
 ## Phasing
 
+Order: **smoke-test first, then camp member, then captains.**
+
 1. Schema: `aiDataConsent` column + 4 OAuth tables + migration.
 2. `getMcpScope` + `consent` helpers + unit tests.
 3. OAuth scaffolding: well-known, DCR, authorize (Neon Auth session read
    via `auth.getSession()`), token. Verify with `curl` end-to-end.
-4. MCP endpoint with `withMcpAuth` + `whoami` only — connect from
-   Claude.ai end-to-end.
-5. Identity + profile tools.
-6. People + teams + required actions + questionnaires.
-7. Recipes + documents + reimbursements.
-8. Inbox + draft broadcasts + tasks + workshops + adoptees.
-9. Inventory + drivers.
-10. Admin + audit + search.
+4. MCP endpoint with `withMcpAuth` + `whoami` only.
+5. **Smoke test against Claude.ai end-to-end** — paste the URL into the
+   custom connector dialog, sign in, approve, call `whoami` in a chat.
+   Only after this passes do we expand the tool surface.
+6. **Member-tier tools.** Identity, self-profile, directory reads,
+   recipe submission, document reads, reimbursement submission +
+   list-my, team-budget reads. Inbox reads + read-only broadcast list.
+7. **Captain-tier tools.** People writes (rank, team membership),
+   team budget writes, required-actions admin, questionnaire drafting,
+   recipe review, document drafts + publish, reimbursement approval
+   flow, tasks, workshops, inventory admin.
+8. **Logistics + admin.** Inventory member tools, drivers/lifts,
+   invite-code admin, audit log read, search.
+
+Out of scope:
+- **Camp-wide broadcasts as a write surface.** Every notification that
+  reaches phones is composed and sent from the captain's web UI.
+- **Adoptees.** No app feature exists for the orphanage shadow gift
+  yet; MCP holds off until the schema has a working bespoke UI.
+- **Questionnaire activation (`open` / `close`).** Drafting via MCP is
+  fine; activating is a deliberate captain-web action because it
+  fans out blocking gates to members.
 
 Tests to port from intake-tracker:
 `mcp/tokens.test.ts`, `mcp/oauth-flow.test.ts`, the integration test for
