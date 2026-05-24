@@ -4,6 +4,12 @@ import { QuadrantNav } from "@camp404/ui/components/quadrant-nav";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
 
+// Reads the Neon Auth session cookie on every request, so can't be
+// statically prerendered. Without this, Next 16's build step logs a
+// loud DYNAMIC_SERVER_USAGE trace before correctly falling back to
+// dynamic rendering — same noise we already silenced on /signup/required.
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const user = await getAuthenticatedUser();
 
@@ -21,7 +27,7 @@ export default async function HomePage() {
             <a href="/signup">Sign up</a>
           </Button>
           <Button asChild size="lg" variant="outline">
-            <a href="/handler/sign-in">Sign in</a>
+            <a href="/auth/sign-in">Sign in</a>
           </Button>
         </div>
       </main>

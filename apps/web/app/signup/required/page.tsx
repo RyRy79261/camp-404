@@ -3,15 +3,19 @@ import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 import { InviteCodeForm } from "../invite-form";
 
+// Pulls the Neon Auth session via cookies — can't be statically prerendered.
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Invite required — Camp 404",
 };
 
 /**
- * Shown when an authenticated user has a Stack account but no invite code
- * recorded on their camp user row (and isn't a god account). They can redeem
- * a code here — the same server action used at `/signup` records it on
- * their existing user row via `ensureCampUser` on the next request.
+ * Shown when an authenticated user has a Neon Auth account but no invite
+ * code recorded on their camp user row (and isn't a god account). They
+ * can redeem a code here — the same server action used at `/signup`
+ * records it on their existing user row via `ensureCampUser` on the next
+ * request.
  */
 export default async function SignupRequiredPage() {
   const authUser = await getAuthenticatedUserOrRedirect();

@@ -19,10 +19,11 @@ test.describe("invite-code redemption", () => {
     await page.goto("/signup");
     await page.getByLabel("Invite code").fill("TEST-INVITE");
     await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/handler\/sign-up/);
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
 
-    // Now simulate the Stack signup completing by logging in our test user.
-    // The redeem cookie was set on the previous request and is reused here.
+    // Now simulate the Neon Auth signup completing by logging in our test
+    // user. The redeem cookie was set on the previous request and is
+    // reused here.
     await login(request, { email: "fresh@example.com" });
 
     // Hitting / triggers ensureCampUser, which sees the cookie and persists
@@ -49,12 +50,12 @@ test.describe("invite-code redemption", () => {
     request,
   }) => {
     // 1. Alice (a god) signs in — this lazy-creates her camp user row.
-    await login(request, { id: "alice-stack", email: "god@example.com" });
+    await login(request, { id: "alice-auth", email: "god@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     const aliceLookup = await request.get(
-      "/api/test/inspect?stackUserId=alice-stack",
+      "/api/test/inspect?stackUserId=alice-auth",
     );
     const alice = (await aliceLookup.json()) as { user: { id: string } };
 
@@ -75,16 +76,16 @@ test.describe("invite-code redemption", () => {
     await page.goto("/signup");
     await page.getByLabel("Invite code").fill("BERLIN-CREW");
     await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/handler\/sign-up/);
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
 
-    await login(request, { id: "bob-stack", email: "bob@example.com" });
+    await login(request, { id: "bob-auth", email: "bob@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     // 4. Provenance check: bob's user row points at BERLIN-CREW, the
     //    BERLIN-CREW row points at alice, and the use_count went up by 1.
     const bobLookup = await request.get(
-      "/api/test/inspect?stackUserId=bob-stack",
+      "/api/test/inspect?stackUserId=bob-auth",
     );
     const bob = (await bobLookup.json()) as {
       user: { id: string; inviteCode: string };
@@ -108,7 +109,7 @@ test.describe("invite-code redemption", () => {
     });
 
     // Alice claims it.
-    await login(request, { id: "alice-stack", email: "alice@example.com" });
+    await login(request, { id: "alice-auth", email: "alice@example.com" });
     await context.addCookies([
       {
         name: "camp404_invite",
@@ -124,7 +125,7 @@ test.describe("invite-code redemption", () => {
 
     // Now bob arrives with the same code in his cookie. Claim should fail
     // and he should get bounced to /signup/required.
-    await login(request, { id: "bob-stack", email: "bob@example.com" });
+    await login(request, { id: "bob-auth", email: "bob@example.com" });
     await context.addCookies([
       {
         name: "camp404_invite",

@@ -13,11 +13,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   const url = new URL(req.url);
-  const stackUserId = url.searchParams.get("stackUserId");
+  const authUserId = url.searchParams.get("authUserId");
   const code = url.searchParams.get("code");
 
-  if (stackUserId) {
-    const user = testStore.findUserByStackId(stackUserId);
+  if (authUserId) {
+    const user = testStore.findUserByAuthId(authUserId);
     if (!user) return NextResponse.json({ user: null });
     const invite = user.inviteCode
       ? testStore.findUsableInviteCode(user.inviteCode) ??
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json(
-    { error: "Pass ?stackUserId=... or ?code=..." },
+    { error: "Pass ?authUserId=... or ?code=..." },
     { status: 400 },
   );
 }

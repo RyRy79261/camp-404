@@ -2,6 +2,7 @@
   "extends": "@camp404/typescript-config/base.json",
   "include": ["src/**/*.ts", "drizzle.config.ts"],
   "compilerOptions": {
-    "outDir": "dist"
+    "outDir": "dist",
+    "types": ["node"]
   }
 }

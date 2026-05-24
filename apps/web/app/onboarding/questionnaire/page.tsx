@@ -6,6 +6,9 @@ import { QuestionnaireWizard } from "@/components/questionnaire/wizard";
 import { saveBurnerProfile } from "./actions";
 import type { QuestionnaireResponses } from "@camp404/types";
 
+// Reads the Neon Auth session on every request.
+export const dynamic = "force-dynamic";
+
 export default async function QuestionnairePage() {
   const authUser = await getAuthenticatedUserOrRedirect();
   const campUser = await ensureCampUser(authUser);

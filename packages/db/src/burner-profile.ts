@@ -2,18 +2,18 @@ import { eq, sql } from "drizzle-orm";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
 
-export async function findUserByStackId(stackUserId: string) {
+export async function findUserByAuthId(authUserId: string) {
   const db = createHttpDb();
   const rows = await db
     .select()
     .from(schema.users)
-    .where(eq(schema.users.stackUserId, stackUserId))
+    .where(eq(schema.users.authUserId, authUserId))
     .limit(1);
   return rows[0] ?? null;
 }
 
-export async function createUserFromStack(input: {
-  stackUserId: string;
+export async function createCampUser(input: {
+  authUserId: string;
   displayName: string | null;
   inviteCode: string | null;
 }) {
@@ -21,7 +21,7 @@ export async function createUserFromStack(input: {
   const [created] = await db
     .insert(schema.users)
     .values({
-      stackUserId: input.stackUserId,
+      authUserId: input.authUserId,
       displayName: input.displayName,
       inviteCode: input.inviteCode,
     })

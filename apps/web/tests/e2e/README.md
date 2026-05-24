@@ -44,16 +44,16 @@ pnpm --filter @camp404/web test:e2e
 ### How auth bypass works
 
 In production, every page that needs a user calls
-`getAuthenticatedUser()` which reads Stack's session cookie. In test
-mode, that same helper looks for the `camp404_test_user` cookie first
-and only falls back to Stack if it's absent. Playwright specs POST to
-`/api/test/login` with a JSON body to set that cookie:
+`getAuthenticatedUser()` which reads the Neon Auth session cookie. In
+test mode, that same helper looks for the `camp404_test_user` cookie
+first and only falls back to Neon Auth if it's absent. Playwright specs
+POST to `/api/test/login` with a JSON body to set that cookie:
 
 ```ts
-await login(request, { id: "alice-stack", email: "god@example.com" });
+await login(request, { id: "alice-auth", email: "god@example.com" });
 ```
 
-The `id` field becomes the synthetic Stack-user id, so the camp `users`
+The `id` field becomes the synthetic auth-user id, so the camp `users`
 row that gets lazily created is keyed to it deterministically. The
 in-memory store (`apps/web/lib/test-store.ts`) replaces all the
 Neon-backed reads/writes in this mode.
@@ -62,7 +62,7 @@ Neon-backed reads/writes in this mode.
 
 - `home.spec.ts` — unauth home page shows both auth CTAs.
 - `signup.spec.ts` — invite form renders, invalid codes error, valid
-  codes set the cookie and redirect to Stack's sign-up handler.
+  codes set the cookie and redirect to the Neon Auth sign-up page.
 - `api.spec.ts` — `/api/health` returns ok, `/api/voice/transcribe`
   rejects unauthenticated callers with 401.
 - `authenticated.spec.ts` — god email reaches the questionnaire,
@@ -91,22 +91,23 @@ on `E2E_TEST_MODE` and so only run against the local dev server.
 
 ## What real production E2E will need
 
-Once a Neon database and a Stack project are wired up, the
+Once a Neon database and a Neon Auth project are wired up, the
 `E2E_TEST_MODE` harness can stay as the fast development inner loop and
-a parallel suite of "true" E2E specs can drive real Stack signups and
-real DB rows. The shape that fits the existing scaffolding:
+a parallel suite of "true" E2E specs can drive real Neon Auth signups
+and real DB rows. The shape that fits the existing scaffolding:
 
-1. Create a dedicated test Stack project; surface `STACK_TEST_*` env
-   vars to a separate Playwright config.
-2. Use the Stack server SDK to create + delete a fresh user per spec.
-3. Use Playwright's `context.addCookies()` to inject the Stack session
-   token.
+1. Create a dedicated test Neon Auth project; surface
+   `NEON_AUTH_TEST_*` env vars to a separate Playwright config.
+2. Use the Neon Auth server API to create + delete a fresh user per
+   spec.
+3. Use Playwright's `context.addCookies()` to inject the Neon Auth
+   session token.
 4. Drop a Neon branch DB per CI run via `neon branches create`, point
    the dev server at it, then delete the branch in teardown.
 
 The existing `_helpers.ts` already isolates the
-`login` / `resetTestState` shape — a real-Stack implementation would
-share the same signature so the specs themselves don't change.
+`login` / `resetTestState` shape — a real-Neon-Auth implementation
+would share the same signature so the specs themselves don't change.
 
 ## CI
 

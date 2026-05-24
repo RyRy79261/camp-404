@@ -43,7 +43,8 @@ Per-package work uses `--filter`, e.g. `pnpm --filter @camp404/web dev`.
 ## Database — read this before touching the schema
 
 The database is Neon Postgres + Drizzle ORM. Authentication/identity lives
-in Neon Auth (Stack); our `users` table joins to it via `stack_user_id`.
+in Neon Auth (Better Auth); our `users` table joins to it via
+`auth_user_id` (the upstream `user.id`).
 
 **`packages/db/src/schema.ts` is the single hand-authored source of truth.**
 Everything under `packages/db/migrations/` — the `.sql` files,
@@ -115,6 +116,16 @@ The web app is statically exported and wrapped by Capacitor (`build:mobile`,
 `MOBILE_BUILD`). Server-only features — route handlers, server actions —
 do not exist in the mobile build. Anything a mobile screen depends on must
 work client-side or call a separately deployed API.
+
+**Status: `pnpm --filter @camp404/web build:mobile` is currently broken
+and deferred to Phase 7.** Next 16 tightened `output: "export"` so every
+route handler / dynamic page in the bundle has to be statically
+pre-renderable. Every page in this repo today reads cookies via
+`getAuthenticatedUser()` and every `/api/*` route is server-only —
+so even the planned fix (a `pageExtensions` gate that excludes
+`*.server.{ts,tsx}` from the mobile build) would just produce an empty
+shell at this point. Revisit once there's a client-side mobile screen
+that actually has something to ship.
 
 ## AI providers
 

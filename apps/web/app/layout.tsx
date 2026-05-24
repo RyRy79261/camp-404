@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { StackProvider, StackTheme } from "@stackframe/stack";
-import { stackServerApp } from "@/stack";
+import { Providers } from "./providers";
 import "@camp404/ui/styles.css";
 
 export const metadata: Metadata = {
@@ -23,9 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <StackProvider app={stackServerApp}>
-          <StackTheme>{children}</StackTheme>
-        </StackProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
