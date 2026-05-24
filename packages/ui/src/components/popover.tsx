@@ -19,7 +19,12 @@ export const PopoverContent = React.forwardRef<
       sideOffset={sideOffset}
       collisionPadding={8}
       className={cn(
-        "z-50 flex max-h-[var(--radix-popover-content-available-height)] w-72 flex-col overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-4 text-[color:var(--color-card-foreground)] shadow-md outline-none",
+        // max-h uses BOTH Radix's available-height (correct on desktop
+        // and iOS) AND a hard 60dvh cap (defensive — Android Chrome's
+        // window.innerHeight doesn't shrink when the soft keyboard
+        // opens, so Radix's calculation is too generous and the
+        // popover ends up under the keyboard otherwise).
+        "z-50 flex max-h-[min(var(--radix-popover-content-available-height),60dvh)] w-72 flex-col overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-4 text-[color:var(--color-card-foreground)] shadow-md outline-none",
         className,
       )}
       {...props}

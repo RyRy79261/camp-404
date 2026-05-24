@@ -82,24 +82,30 @@ export function Combobox({
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
-              {options.map((o) => (
-                <CommandItem
-                  key={o.value}
-                  value={o.label}
-                  onSelect={() => {
-                    onChange(o.value);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4 shrink-0",
-                      value === o.value ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <span className="truncate">{o.label}</span>
-                </CommandItem>
-              ))}
+              {options.map((o) => {
+                const selected = value === o.value;
+                return (
+                  <CommandItem
+                    key={o.value}
+                    value={o.label}
+                    onSelect={() => {
+                      onChange(o.value);
+                      setOpen(false);
+                    }}
+                  >
+                    {/* Fixed-width slot for the check — always rendered
+                      * so item text doesn't shift when the selection
+                      * changes. Conditional render (vs opacity toggling)
+                      * dodges a Tailwind class-scanner pitfall where
+                      * opacity-0 in a shared package didn't make it into
+                      * the consuming app's bundle. */}
+                    <span className="mr-2 inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                      {selected && <Check className="h-4 w-4" />}
+                    </span>
+                    <span className="truncate">{o.label}</span>
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>

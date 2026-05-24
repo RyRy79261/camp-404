@@ -30,14 +30,18 @@ export const CommandInput = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => (
   <div
-    className="flex items-center gap-2 border-b border-[color:var(--color-border)] px-3"
+    className="flex items-center gap-2 border-b border-[color:var(--color-border)] px-3 py-1"
     cmdk-input-wrapper=""
   >
     <Search className="h-4 w-4 shrink-0 opacity-50" />
     <CommandPrimitive.Input
       ref={ref}
+      // `border-0` strips the browser default 2px input border that was
+      // showing as a stray rectangle around the search field. `px-2` is
+      // inside-the-input padding so the placeholder doesn't touch the
+      // icon / right edge.
       className={cn(
-        "flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-[color:var(--color-muted-foreground)] disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-11 w-full appearance-none rounded-md border-0 bg-transparent px-2 py-2 text-base shadow-none outline-none placeholder:text-[color:var(--color-muted-foreground)] focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       {...props}
