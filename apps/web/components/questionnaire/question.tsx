@@ -6,7 +6,9 @@ import type {
   Question,
   QuestionnaireResponseValue,
   ScaleQuestion,
+  ToggleQuestion,
 } from "@camp404/types";
+import { cn } from "@camp404/ui/lib/utils";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
@@ -187,7 +189,62 @@ function FieldInput({
           onChange={onChange}
         />
       );
+    case "toggle":
+      return (
+        <ToggleField
+          id={id}
+          question={question}
+          value={typeof value === "string" ? value : undefined}
+          onChange={onChange}
+        />
+      );
   }
+}
+
+/**
+ * Segmented-control renderer for the `toggle` question kind. A row of
+ * equal-width buttons; the selected one carries the primary colour, the
+ * others are bordered ghosts. Wraps to multiple rows if a label is long.
+ */
+function ToggleField({
+  id,
+  question,
+  value,
+  onChange,
+}: {
+  id: string;
+  question: ToggleQuestion;
+  value: string | undefined;
+  onChange: (value: QuestionnaireResponseValue) => void;
+}) {
+  return (
+    <div
+      id={id}
+      role="radiogroup"
+      className="inline-flex w-full rounded-md border border-[color:var(--color-border)] p-1"
+    >
+      {question.options.map((o) => {
+        const selected = value === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              "flex-1 rounded-sm px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)]",
+              selected
+                ? "bg-[color:var(--color-primary)] text-[color:var(--color-primary-foreground)] shadow-sm"
+                : "text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]",
+            )}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 /**

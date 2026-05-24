@@ -89,6 +89,22 @@ export const ScaleQuestion = z.object({
 });
 export type ScaleQuestion = z.infer<typeof ScaleQuestion>;
 
+// Segmented control — same data shape as single_select but rendered as a
+// horizontal button group rather than a dropdown. Use for small option
+// sets (2–4) where the dropdown is overkill and the choices benefit from
+// always being visible.
+export const ToggleQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("toggle"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  options: z
+    .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
+    .min(2),
+  required: z.boolean().default(true),
+});
+export type ToggleQuestion = z.infer<typeof ToggleQuestion>;
+
 export const Question = z.discriminatedUnion("kind", [
   SliderQuestion,
   SingleSelectQuestion,
@@ -97,6 +113,7 @@ export const Question = z.discriminatedUnion("kind", [
   LongTextQuestion,
   DateQuestion,
   ScaleQuestion,
+  ToggleQuestion,
 ]);
 export type Question = z.infer<typeof Question>;
 
@@ -229,6 +246,13 @@ function validateOne(
         return { ok: false, error: "Pick a level" };
       if (!q.steps.some((s) => s.value === raw))
         return { ok: false, error: "Not a valid level" };
+      return { ok: true, value: raw };
+    }
+    case "toggle": {
+      if (typeof raw !== "string")
+        return { ok: false, error: "Expected a choice" };
+      if (!q.options.some((o) => o.value === raw))
+        return { ok: false, error: "Not a valid option" };
       return { ok: true, value: raw };
     }
   }

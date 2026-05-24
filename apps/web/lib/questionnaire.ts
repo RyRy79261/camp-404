@@ -79,7 +79,7 @@ export const QUESTIONNAIRE: Questionnaire = {
         },
         {
           id: "id.type",
-          kind: "single_select",
+          kind: "toggle",
           prompt: "ID document",
           options: [
             { value: "passport", label: "Passport" },
