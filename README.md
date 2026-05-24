@@ -63,6 +63,23 @@ pnpm turbo run lint typecheck test build
 
 See [`apps/mobile/README.md`](apps/mobile/README.md). App Store / Play submission is deferred per brief §11.
 
+## Deploying
+
+The web app deploys to Vercel. The `vercel-build` script in
+`apps/web/package.json` runs `drizzle-kit migrate` before `next build`,
+so every deploy applies any pending migrations to whichever database
+`DATABASE_URL` points at. Vercel auto-detects `vercel-build` and runs it
+in place of `build` — no project setting required, as long as the
+project's Build Command field is left empty (or set to `next build`).
+
+If you've set a custom Build Command in the Vercel dashboard, change it
+to `pnpm vercel-build` (with the project's Root Directory at
+`apps/web`) or fold `pnpm --filter @camp404/db db:migrate &&` into the
+front of whatever command you use.
+
+`drizzle-kit migrate` tracks applied migrations in the
+`__drizzle_migrations` table, so it is safe to run on every deploy.
+
 ## Cron jobs
 
 Scheduled from `apps/web/vercel.json`:
