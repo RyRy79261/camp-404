@@ -1,8 +1,12 @@
+import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthView } from "@neondatabase/auth/react/ui";
 import { authViewPaths } from "@neondatabase/auth/react/ui/server";
+import { AuthShell } from "@/components/auth-shell";
 import { INVITE_COOKIE } from "@/lib/access-control";
+import { SignInForm } from "../sign-in-form";
+import { SignUpForm } from "../sign-up-form";
 
 // Statically known views: sign-in, sign-up, forgot-password, reset-password,
 // callback, sign-out, magic-link, etc.
@@ -30,8 +34,26 @@ export default async function AuthPage({
     if (!cookieStore.get(INVITE_COOKIE)?.value) {
       redirect("/signup");
     }
+    return (
+      <AuthShell hideBack>
+        <SignUpForm />
+      </AuthShell>
+    );
   }
 
+  if (path === "sign-in") {
+    return (
+      <AuthShell hideBack>
+        <Suspense fallback={null}>
+          <SignInForm />
+        </Suspense>
+      </AuthShell>
+    );
+  }
+
+  // Forgot/reset password, callback, sign-out, magic-link — fall back to
+  // Neon Auth's hosted UI. Those flows are side trips we haven't (yet)
+  // built bespoke screens for.
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col items-center justify-center px-6 py-12">
       <AuthView path={path} />
