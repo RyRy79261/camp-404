@@ -5,8 +5,6 @@ import { QUESTIONNAIRE } from "@/lib/questionnaire";
 // Minimum set of answers that satisfies every required question in the
 // current catalogue. Update alongside questionnaire.ts.
 const validResponses: Record<string, unknown> = {
-  "name.first": "Ash",
-  "name.last": "Dust",
   birthday: "1990-04-12",
   phone: "+27 82 555 1234",
   country: "South Africa",

@@ -46,42 +46,20 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 export const QUESTIONNAIRE: Questionnaire = {
-  version: "2026.05.24-v3",
+  version: "2026.05.24-v4",
   pages: [
     {
       id: "about_you",
       title: "About you",
-      subtitle: "The boring-but-necessary part. Used for ticket admin.",
+      subtitle:
+        "Name and email come from your sign-in account — we won't ask for them again.",
       questions: [
-        {
-          id: "name.first",
-          kind: "short_text",
-          prompt: "First name",
-          maxLength: 80,
-          required: true,
-        },
-        {
-          id: "name.last",
-          kind: "short_text",
-          prompt: "Surname",
-          maxLength: 80,
-          required: true,
-        },
         {
           id: "birthday",
           kind: "date",
           prompt: "Date of birth",
           helper: "Used to confirm you're old enough to attend.",
           required: true,
-        },
-        {
-          id: "email.alt",
-          kind: "short_text",
-          prompt: "Email",
-          helper:
-            "We already have your sign-in email. Drop a different one here if you'd rather we use it.",
-          maxLength: 200,
-          required: false,
         },
         {
           id: "phone",
