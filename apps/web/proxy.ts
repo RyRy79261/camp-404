@@ -10,5 +10,10 @@ import { auth } from "@/lib/neon-auth";
 export default auth.middleware({ loginUrl: "/auth/sign-in" });
 
 export const config = {
-  matcher: ["/auth", "/auth/:path*"],
+  // /auth/* covers the standard sign-in/sign-up round-trip. /mcp/connect
+  // is the post-signin landing for the MCP OAuth flow — Better Auth lands
+  // the user there with a session verifier appended, and the
+  // verifier-to-cookie exchange has to run before the page's useSession
+  // can see a logged-in state.
+  matcher: ["/auth", "/auth/:path*", "/mcp/:path*"],
 };
