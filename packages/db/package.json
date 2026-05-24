@@ -20,14 +20,15 @@
   },
   "dependencies": {
     "@camp404/types": "workspace:*",
-    "@neondatabase/serverless": "^0.10.4",
-    "drizzle-orm": "^0.36.4"
+    "@neondatabase/serverless": "^1.1.0",
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "@camp404/eslint-config": "workspace:*",
     "@camp404/typescript-config": "workspace:*",
-    "drizzle-kit": "^0.28.1",
-    "eslint": "^9.14.0",
-    "typescript": "^5.6.3"
+    "@types/node": "^25.9.1",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^10.4.0",
+    "typescript": "^6.0.3"
   }
 }

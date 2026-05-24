@@ -1,7 +1,6 @@
 {
   "extends": "@camp404/typescript-config/nextjs.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
     }

@@ -82,7 +82,7 @@ async function mintInvite(args: string[]) {
       "\nUsage: camp404 mint-invite --code CODE [--created-by UUID]" +
         " [--note 'Berlin crew'] [--max-uses 5] [--expires-at 2026-06-01]",
     );
-    process.exit(1);
+    return process.exit(1);
   }
 
   const row = await createInviteCode(parsed);

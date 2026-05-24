@@ -13,12 +13,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@camp404/eslint-config": "workspace:*",
     "@camp404/typescript-config": "workspace:*",
-    "eslint": "^9.14.0",
-    "typescript": "^5.6.3"
+    "eslint": "^10.4.0",
+    "typescript": "^6.0.3"
   }
 }
