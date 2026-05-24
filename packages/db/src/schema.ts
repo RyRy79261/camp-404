@@ -202,6 +202,16 @@ export const users = pgTable("users", {
   sanitisedAt: timestamp("sanitised_at", { mode: "date" }),
   lostCatNumber: integer("lost_cat_number"),
 
+  // AI / MCP consent. Opt-in for surfacing this user's *identification
+  // documents* — passport, SA ID, EFT details, others' reimbursement bank
+  // details — to AI / MCP sessions belonging to OTHER users (a captain
+  // viewing this user's profile via Claude.ai, say). Everything else
+  // (display name, email, phone, dietary, vehicle, …) is freely visible
+  // to the appropriate in-app tier regardless of this flag. The subject
+  // always sees their own data via MCP. See `docs/mcp-tooling-proposal.md`.
+  aiDataConsent: boolean("ai_data_consent").notNull().default(false),
+  aiDataConsentAt: timestamp("ai_data_consent_at", { mode: "date" }),
+
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
@@ -931,5 +941,135 @@ export const auditLog = pgTable(
   (a) => ({
     actorIdx: index("audit_log_actor_idx").on(a.actorId),
     actionIdx: index("audit_log_action_idx").on(a.action),
+  }),
+);
+
+// --- MCP OAuth (server-only) --------------------------------------------
+// Pure auth-server state for Claude.ai (and other MCP clients) connecting
+// over OAuth 2.1 + Dynamic Client Registration. Nothing in here is
+// rendered or surfaced to the app's UI — these tables back the routes
+// under /api/mcp/oauth/* and the bearer-token check on /api/mcp/mcp.
+// Design notes live in docs/mcp-tooling-proposal.md.
+
+export const mcpClientAuthMethodEnum = pgEnum("mcp_client_auth_method", [
+  "none",
+  "client_secret_basic",
+  "client_secret_post",
+]);
+
+export const mcpCodeChallengeMethodEnum = pgEnum("mcp_code_challenge_method", [
+  "S256",
+  "plain",
+]);
+
+export const mcpAuditOutcomeEnum = pgEnum("mcp_audit_outcome", [
+  "success",
+  "error",
+]);
+
+// One row per DCR-registered MCP client (typically one row per Claude
+// install). Public clients (`token_endpoint_auth_method = 'none'`) leave
+// `client_secret_hash` NULL; confidential clients store the SHA-256.
+export const mcpOauthClients = pgTable(
+  "mcp_oauth_clients",
+  {
+    clientId: text("client_id").primaryKey(),
+    clientSecretHash: text("client_secret_hash"),
+    clientName: text("client_name").notNull(),
+    // RFC 7591 — every URI the client is allowed to redirect to.
+    redirectUris: text("redirect_uris").array().notNull(),
+    tokenEndpointAuthMethod: mcpClientAuthMethodEnum(
+      "token_endpoint_auth_method",
+    ).notNull(),
+    scope: text("scope"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { mode: "date" }),
+  },
+);
+
+// Single-use authorization codes (RFC 6749 §4.1). PKCE-required per OAuth
+// 2.1: code_challenge + code_challenge_method are non-null. Codes are
+// short-lived (~5min) and stored plaintext — they're consumed once via
+// the `consumed_at` flip in a transaction.
+export const mcpAuthCodes = pgTable(
+  "mcp_auth_codes",
+  {
+    code: text("code").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => mcpOauthClients.clientId, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    redirectUri: text("redirect_uri").notNull(),
+    codeChallenge: text("code_challenge").notNull(),
+    codeChallengeMethod: mcpCodeChallengeMethodEnum(
+      "code_challenge_method",
+    ).notNull(),
+    scope: text("scope").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    consumedAt: timestamp("consumed_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    clientIdx: index("mcp_auth_codes_client_idx").on(t.clientId),
+    expiresIdx: index("mcp_auth_codes_expires_idx").on(t.expiresAt),
+  }),
+);
+
+// Issued access + refresh tokens, stored as SHA-256 hashes. Plaintext
+// tokens never hit the DB. Refresh rotates transactionally — see the
+// briefing's gotcha around atomic revoke-old + insert-new.
+export const mcpAccessTokens = pgTable(
+  "mcp_access_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    refreshTokenHash: text("refresh_token_hash").unique(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => mcpOauthClients.clientId, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    refreshExpiresAt: timestamp("refresh_expires_at", { mode: "date" }),
+    revokedAt: timestamp("revoked_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { mode: "date" }),
+  },
+  (t) => ({
+    userIdx: index("mcp_access_tokens_user_idx").on(t.userId),
+    expiresIdx: index("mcp_access_tokens_expires_idx").on(t.expiresAt),
+  }),
+);
+
+// One row per MCP tool invocation. Captures the call regardless of
+// outcome; state-mutating writes additionally append to the existing
+// `audit_log` with `actor_id = camp user id`.
+export const mcpAuditLog = pgTable(
+  "mcp_audit_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Not an FK — we want the audit row to survive a client being
+    // deleted, since we still want forensic visibility after the fact.
+    clientId: text("client_id").notNull(),
+    tool: text("tool").notNull(),
+    // Redacted arg snapshot — secrets, encrypted plaintext, etc. must
+    // be stripped at the boundary before write.
+    argsJson: jsonb("args_json"),
+    outcome: mcpAuditOutcomeEnum("outcome").notNull(),
+    errorMessage: text("error_message"),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userCreatedIdx: index("mcp_audit_log_user_created_idx").on(
+      t.userId,
+      t.createdAt,
+    ),
   }),
 );

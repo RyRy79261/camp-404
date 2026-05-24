@@ -117,6 +117,16 @@ The web app is statically exported and wrapped by Capacitor (`build:mobile`,
 do not exist in the mobile build. Anything a mobile screen depends on must
 work client-side or call a separately deployed API.
 
+**Status: `pnpm --filter @camp404/web build:mobile` is currently broken
+and deferred to Phase 7.** Next 16 tightened `output: "export"` so every
+route handler / dynamic page in the bundle has to be statically
+pre-renderable. Every page in this repo today reads cookies via
+`getAuthenticatedUser()` and every `/api/*` route is server-only —
+so even the planned fix (a `pageExtensions` gate that excludes
+`*.server.{ts,tsx}` from the mobile build) would just produce an empty
+shell at this point. Revisit once there's a client-side mobile screen
+that actually has something to ship.
+
 ## AI providers
 
 Model IDs (Claude Opus 4.7, Haiku 4.5, Groq Whisper Large v3 Turbo) and the
