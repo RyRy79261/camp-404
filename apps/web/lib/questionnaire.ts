@@ -1,5 +1,12 @@
 import type { Questionnaire } from "@camp404/types";
-import { COUNTRIES } from "./countries";
+import { COUNTRIES, countryFlag } from "./countries";
+
+// Render each country option with its flag emoji prefixed, e.g.
+// "🇿🇦 South Africa". Stored value stays the ISO alpha-2 code.
+const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({
+  value: c.value,
+  label: `${countryFlag(c.value)} ${c.label}`,
+}));
 
 // Mandatory burner-profile questionnaire shown right after signup. Real
 // copy will evolve — bump `version` whenever the catalogue changes;
@@ -76,7 +83,7 @@ export const QUESTIONNAIRE: Questionnaire = {
           kind: "combobox",
           prompt: "Country you're flying from",
           helper: "Where you'll be travelling to Afrikaburn from.",
-          options: [...COUNTRIES],
+          options: COUNTRY_OPTIONS,
           placeholder: "Pick your country…",
           searchPlaceholder: "Search countries…",
           required: true,

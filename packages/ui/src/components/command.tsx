@@ -53,7 +53,10 @@ export const CommandList = React.forwardRef<
   <CommandPrimitive.List
     ref={ref}
     className={cn(
-      "max-h-[300px] overflow-y-auto overflow-x-hidden",
+      // No fixed max-height — the parent popover supplies it via
+      // --radix-popover-content-available-height. flex-1 lets us fill
+      // the remaining popover space below the search input.
+      "min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
       className,
     )}
     {...props}

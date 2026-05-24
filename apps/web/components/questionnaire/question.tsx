@@ -454,11 +454,11 @@ function LongTextField({
         <Button
           type="button"
           variant="outline"
-          size="sm"
+          size="lg"
           onClick={() => setDictating(true)}
-          className="gap-2 self-start"
+          className="gap-2 self-end"
         >
-          <Mic className="h-4 w-4" />
+          <Mic className="h-5 w-5" />
           Dictate instead
         </Button>
       )}

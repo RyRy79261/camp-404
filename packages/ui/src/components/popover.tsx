@@ -17,8 +17,9 @@ export const PopoverContent = React.forwardRef<
       ref={ref}
       align={align}
       sideOffset={sideOffset}
+      collisionPadding={8}
       className={cn(
-        "z-50 w-72 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-4 text-[color:var(--color-card-foreground)] shadow-md outline-none",
+        "z-50 flex max-h-[var(--radix-popover-content-available-height)] w-72 flex-col overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-4 text-[color:var(--color-card-foreground)] shadow-md outline-none",
         className,
       )}
       {...props}

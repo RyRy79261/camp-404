@@ -9,6 +9,24 @@ export interface Country {
   label: string;
 }
 
+/**
+ * Render an ISO 3166-1 alpha-2 code as its flag emoji by mapping each
+ * letter to its Unicode regional indicator (U+1F1E6 + letter index).
+ * Works on every modern OS / browser bar pre-Windows-11 (which falls
+ * back to the two-letter glyph cluster — still legible).
+ */
+export function countryFlag(iso: string): string {
+  const upper = iso.toUpperCase();
+  if (upper.length !== 2) return "";
+  const a = upper.charCodeAt(0);
+  const b = upper.charCodeAt(1);
+  if (a < 65 || a > 90 || b < 65 || b > 90) return "";
+  return (
+    String.fromCodePoint(0x1f1e6 + a - 65) +
+    String.fromCodePoint(0x1f1e6 + b - 65)
+  );
+}
+
 export const COUNTRIES: ReadonlyArray<Country> = [
   { value: "ZA", label: "South Africa" },
   { value: "AF", label: "Afghanistan" },
