@@ -10,27 +10,206 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+      db: ${{ steps.filter.outputs.db }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            src:
+              - 'apps/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+              - 'tsconfig*.json'
+              - '.github/**'
+            db:
+              - 'packages/db/**'
+
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint, typecheck, test, build
+      - run: pnpm install --frozen-lockfile
+      - name: Lint
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-        run: pnpm turbo run lint typecheck test build
+        run: pnpm turbo run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        run: pnpm turbo run typecheck
+      - name: Verify drizzle migrations are up-to-date with packages/db/src/schema.ts
+        run: |
+          pnpm --filter @camp404/db exec drizzle-kit generate
+          if [ -n "$(git status --porcelain packages/db/migrations/)" ]; then
+            echo "::error::Drizzle migrations are out of date. Run 'pnpm --filter @camp404/db db:generate' locally and commit the result."
+            git status --porcelain packages/db/migrations/
+            git diff packages/db/migrations/ | head -100
+            exit 1
+          fi
+          echo "packages/db/migrations/ is up-to-date with src/schema.ts"
+
+  test:
+    needs: [changes]
+    if: needs.changes.outputs.src == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Test
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        run: pnpm turbo run test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/apps/web/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'apps/web/next.config.*') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-
+      - name: Build
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        run: pnpm turbo run build
+
+  schema-migration:
+    # Apply the committed Drizzle migration SQL to a fresh ephemeral Neon
+    # branch per PR run. Catches schema-vs-Postgres drift that static
+    # freshness checks cannot (bad CHECK syntax, cross-schema FK
+    # permissions, unreachable target tables). Each run gets its own
+    # branch so concurrent PRs don't collide; cleanup runs unconditionally
+    # to keep branch usage bounded.
+    needs: [changes]
+    if: needs.changes.outputs.db == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create Neon test branch
+        id: neon-branch
+        uses: neondatabase/create-branch-action@v5
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch_name: ci-schema-${{ github.run_id }}
+      - name: Apply Drizzle migrations
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+        run: pnpm --filter @camp404/db db:migrate
+      - name: Delete Neon test branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: ci-schema-${{ github.run_id }}
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Audit dependencies
+        run: pnpm audit --audit-level high
 
   # Playwright e2e regression suite — disabled until a Vercel preview
-  # deployment exists to point PLAYWRIGHT_BASE_URL at. The config and
-  # smoke spec are kept in apps/web/tests/e2e for when we re-enable it.
+  # deployment exists to point PLAYWRIGHT_BASE_URL at, and CI secrets
+  # for Neon Auth (NEON_AUTH_*) are configured. The config and smoke
+  # specs are kept in apps/web/tests/e2e for when we re-enable it.
+
+  ci-pass:
+    if: always()
+    needs: [changes, lint, typecheck, test, build, schema-migration, supply-chain]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs passed
+        run: |
+          echo "=== Unconditional jobs ==="
+          echo "changes: ${{ needs.changes.result }}"
+          echo "lint: ${{ needs.lint.result }}"
+          echo "typecheck: ${{ needs.typecheck.result }}"
+          echo "build: ${{ needs.build.result }}"
+          echo "supply-chain: ${{ needs.supply-chain.result }}"
+
+          # Unconditional jobs: must succeed
+          if [[ "${{ needs.changes.result }}" != "success" ||
+                "${{ needs.lint.result }}" != "success" ||
+                "${{ needs.typecheck.result }}" != "success" ||
+                "${{ needs.build.result }}" != "success" ||
+                "${{ needs.supply-chain.result }}" != "success" ]]; then
+            echo "::error::Unconditional job failed"
+            exit 1
+          fi
+
+          echo "=== Gated jobs (success or skipped) ==="
+          echo "test: ${{ needs.test.result }}"
+          echo "schema-migration: ${{ needs.schema-migration.result }}"
+
+          # Gated jobs: success OR skipped
+          for result in \
+            "${{ needs.test.result }}" \
+            "${{ needs.schema-migration.result }}"; do
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              echo "::error::Gated job failed (not success or skipped): $result"
+              exit 1
+            fi
+          done
+
+          echo "All jobs passed"

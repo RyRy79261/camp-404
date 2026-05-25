@@ -1,0 +1,10 @@
+{
+  "extends": "@camp404/typescript-config/base.json",
+  "include": ["capacitor.config.ts"],
+  "compilerOptions": {
+    "types": ["node"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true
+  }
+}
