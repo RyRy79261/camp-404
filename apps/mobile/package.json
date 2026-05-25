@@ -9,7 +9,9 @@
     "open:ios": "cap open ios",
     "open:android": "cap open android",
     "add:ios": "cap add ios",
-    "add:android": "cap add android"
+    "add:android": "cap add android",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@capacitor-firebase/messaging": "^8.2.0",
@@ -25,6 +27,11 @@
     "@capacitor/status-bar": "^8.0.2"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.3.4"
+    "@camp404/eslint-config": "workspace:*",
+    "@camp404/typescript-config": "workspace:*",
+    "@capacitor/cli": "^8.3.4",
+    "@types/node": "^25.9.1",
+    "eslint": "^10.4.0",
+    "typescript": "^6.0.3"
   }
 }

@@ -10,7 +10,9 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@camp404/db": "workspace:*",
@@ -22,6 +24,7 @@
     "@types/node": "^25.9.1",
     "eslint": "^10.4.0",
     "tsx": "^4.22.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   }
 }

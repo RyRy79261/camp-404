@@ -10,7 +10,9 @@
   },
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "zod": "^4.4.3"
@@ -19,6 +21,7 @@
     "@camp404/eslint-config": "workspace:*",
     "@camp404/typescript-config": "workspace:*",
     "eslint": "^10.4.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   }
 }

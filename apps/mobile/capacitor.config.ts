@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appId: "com.camp-404.app",
   appName: "Camp 404",
   // Bundled static export from apps/web (`MOBILE_BUILD=1 next build`).
-  webDir: path.resolve(__dirname, "../web/out"),
+  webDir: path.resolve(import.meta.dirname, "../web/out"),
   ios: {
     contentInset: "always",
   },
