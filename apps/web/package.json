@@ -18,6 +18,7 @@
     "@anthropic-ai/sdk": "^0.98.0",
     "@camp404/ai-prompts": "workspace:*",
     "@camp404/db": "workspace:*",
+    "@camp404/telegram": "workspace:*",
     "@camp404/types": "workspace:*",
     "@camp404/ui": "workspace:*",
     "@modelcontextprotocol/sdk": "1.26.0",

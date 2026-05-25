@@ -153,6 +153,31 @@ export const inventoryUpdateStatusEnum = pgEnum("inventory_update_status", [
   "rejected",
 ]);
 
+// Kind of Telegram chat the camp's bot is attached to. `main_group` is the
+// members-only group chat invitees are added to; `announcement_channel` is
+// a read-only channel for broadcast posts (e.g. unlock announcements).
+export const telegramChatKindEnum = pgEnum("telegram_chat_kind", [
+  "main_group",
+  "announcement_channel",
+]);
+
+// Lifecycle of a single-use Telegram invite link the bot issues to a user
+// once they are approved as a camp member. `pending` = link created but
+// not yet used; `used` = the user joined; `expired` / `revoked` are the
+// dead states.
+export const telegramInviteStatusEnum = pgEnum("telegram_invite_status", [
+  "pending",
+  "used",
+  "expired",
+  "revoked",
+]);
+
+// Outbound Telegram message queue state.
+export const telegramAnnouncementStatusEnum = pgEnum(
+  "telegram_announcement_status",
+  ["queued", "sent", "failed"],
+);
+
 // --- Users ---------------------------------------------------------------
 // Camp-specific profile. Identity (email, password, OAuth, MFA, sessions)
 // lives in Neon Auth (Better Auth); this table joins to it via
@@ -201,6 +226,14 @@ export const users = pgTable("users", {
   sanitised: boolean("sanitised").notNull().default(false),
   sanitisedAt: timestamp("sanitised_at", { mode: "date" }),
   lostCatNumber: integer("lost_cat_number"),
+
+  // Telegram identity. `telegramHandle` mirrors the value the user
+  // entered in the burner-profile questionnaire (denormalised here for
+  // cheap lookup). `telegramUserId` is the numeric user id Telegram
+  // assigns once the user has joined the camp group via a bot-issued
+  // invite link — captured from the `chat_member` webhook update.
+  telegramHandle: text("telegram_handle"),
+  telegramUserId: text("telegram_user_id").unique(),
 
   // AI / MCP consent. Opt-in for surfacing this user's *identification
   // documents* — passport, SA ID, EFT details, others' reimbursement bank
@@ -941,6 +974,99 @@ export const auditLog = pgTable(
   (a) => ({
     actorIdx: index("audit_log_actor_idx").on(a.actorId),
     actionIdx: index("audit_log_action_idx").on(a.action),
+  }),
+);
+
+// --- Telegram bot --------------------------------------------------------
+// Camp 404 runs a Telegram bot that (a) issues single-use invite links to
+// the main group chat once a member is approved, and (b) posts unlock /
+// announcement messages to a broadcast channel. Telegram does not let
+// bots silently add users by @handle — every join is gated by an invite
+// link the user must tap themselves. We track issued links so the
+// `chat_member` webhook can map an incoming join back to a camp user.
+
+// Registry of chats the bot is a member of and the camp manages — the
+// main members group and the announcement channel. Telegram chat ids are
+// 64-bit signed integers (channels are negative), stored as text to
+// dodge JS's Number-precision limit. Captain-managed.
+export const telegramChats = pgTable("telegram_chats", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  kind: telegramChatKindEnum("kind").notNull(),
+  chatId: text("chat_id").notNull().unique(),
+  title: text("title").notNull(),
+  // Public username for the chat (without @), if any. Useful for
+  // generating deep links and verifying webhook updates target the
+  // expected chat.
+  username: text("username"),
+  addedByUserId: uuid("added_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  addedAt: timestamp("added_at", { mode: "date" }).notNull().defaultNow(),
+  archivedAt: timestamp("archived_at", { mode: "date" }),
+});
+
+// Single-use invite link issued to one camp user. Created when the user
+// is approved; surfaced to the user in-app (and via push); marked `used`
+// when the bot sees them join via this link in a `chat_member` update.
+export const telegramInvites = pgTable(
+  "telegram_invites",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The Telegram chat id this link grants access to. Not an FK to
+    // `telegram_chats` so a chat can be archived without losing the
+    // historical link.
+    chatId: text("chat_id").notNull(),
+    inviteLink: text("invite_link").notNull().unique(),
+    status: telegramInviteStatusEnum("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at", { mode: "date" }),
+    joinedAt: timestamp("joined_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("telegram_invites_user_idx").on(t.userId),
+    statusIdx: index("telegram_invites_status_idx").on(t.status),
+  }),
+);
+
+// Outbound message to a Telegram chat (typically the announcement
+// channel). A queue drained by the dispatch cron: rows are inserted
+// `queued`, the worker calls `sendMessage`, and on success the row is
+// flipped to `sent` with the returned `message_id`. Optional
+// `broadcastId` cross-references a `broadcasts` row when the announcement
+// was created as part of an in-app broadcast.
+export const telegramAnnouncements = pgTable(
+  "telegram_announcements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    broadcastId: uuid("broadcast_id").references(() => broadcasts.id, {
+      onDelete: "set null",
+    }),
+    chatId: text("chat_id").notNull(),
+    body: text("body").notNull(),
+    status: telegramAnnouncementStatusEnum("status")
+      .notNull()
+      .default("queued"),
+    // Telegram-assigned message id of the sent post, for back-reference.
+    messageId: text("message_id"),
+    errorMessage: text("error_message"),
+    // Earliest time the dispatcher may send this row. Lets a caller
+    // schedule a future announcement (e.g. on an unlock timestamp).
+    sendAfter: timestamp("send_after", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    sentAt: timestamp("sent_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    statusSendAfterIdx: index(
+      "telegram_announcements_status_send_after_idx",
+    ).on(t.status, t.sendAfter),
+    broadcastIdx: index("telegram_announcements_broadcast_idx").on(
+      t.broadcastId,
+    ),
   }),
 );
 
