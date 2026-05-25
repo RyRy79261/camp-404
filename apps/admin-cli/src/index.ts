@@ -2,7 +2,7 @@
 /**
  * Camp 404 admin CLI — for data ops, seeding, bulk imports.
  */
-import { createInviteCode } from "@camp404/db/invite-codes";
+import { createInviteCode, findUsableInviteCode } from "@camp404/db/invite-codes";
 
 const [, , command, ...rest] = process.argv;
 
@@ -16,6 +16,9 @@ async function main() {
       break;
     case "mint-invite":
       await mintInvite(rest);
+      break;
+    case "bootstrap-founder":
+      await bootstrapFounder(rest);
       break;
     case undefined:
     case "help":
@@ -101,6 +104,73 @@ async function mintInvite(args: string[]) {
   );
 }
 
+// The well-known founder code minted by `bootstrap-founder`. Single-use,
+// pinned so a fresh database always knows the redemption value.
+const FOUNDER_CODE = "meowzit";
+
+/**
+ * One-shot bootstrap for the first account: nobody can issue an invite to
+ * the founder, so this command mints `meowzit` as a single-use code
+ * tagged with the founder's email. The founder then redeems it through
+ * the normal /signup flow, after which the code is in claimed state
+ * (use_count = max_uses = 1) and unusable by anyone else.
+ */
+async function bootstrapFounder(args: string[]) {
+  let email: string | null = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--email") {
+      const next = args[i + 1];
+      if (!next || next.startsWith("--")) {
+        console.error("Missing value for --email");
+        return process.exit(1);
+      }
+      email = next;
+      i++;
+    }
+  }
+  if (!email || !email.includes("@")) {
+    console.error("Usage: camp404 bootstrap-founder --email you@example.com");
+    return process.exit(1);
+  }
+
+  const existing = await findUsableInviteCode(FOUNDER_CODE);
+  if (existing) {
+    console.error(
+      `'${FOUNDER_CODE}' already exists and is redeemable. Refusing to ` +
+        `overwrite — revoke / consume it manually if you really meant to ` +
+        `re-bootstrap.`,
+    );
+    return process.exit(1);
+  }
+
+  const row = await createInviteCode({
+    code: FOUNDER_CODE,
+    createdByUserId: null,
+    note: `Founder bootstrap for ${email}`,
+    maxUses: 1,
+    expiresAt: null,
+  });
+
+  console.log(
+    JSON.stringify(
+      {
+        code: row.code,
+        maxUses: row.maxUses,
+        useCount: row.useCount,
+        note: row.note,
+        createdAt: row.createdAt,
+      },
+      null,
+      2,
+    ),
+  );
+  console.log(
+    `\nNext: go to /signup, enter '${FOUNDER_CODE}', then complete Neon ` +
+      `Auth signup with ${email}. The code consumes itself on redemption.`,
+  );
+}
+
 function printHelp() {
   console.log(
     `camp404 — admin CLI
@@ -113,6 +183,9 @@ Usage:
     [--note 'free text']              (e.g. "Berlin crew", "Camp Lead VIP")
     [--max-uses N]                    (default: unlimited)
     [--expires-at YYYY-MM-DD]         (default: never)
+  camp404 bootstrap-founder --email YOU@EXAMPLE.COM
+                                    Mint the single-use '${FOUNDER_CODE}'
+                                    founder invite. Redeem at /signup.
   camp404 help                      Show this help`,
   );
 }

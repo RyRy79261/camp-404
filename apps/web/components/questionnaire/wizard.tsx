@@ -3,11 +3,13 @@
 import * as React from "react";
 import type {
   Questionnaire,
+  QuestionnairePage,
   QuestionnaireResponses,
   QuestionnaireResponseValue,
 } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { QuestionField } from "./question";
+import { validateIdNumber } from "@/lib/id-validation";
 import type { SaveResult } from "@/app/onboarding/questionnaire/actions";
 
 interface QuestionnaireWizardProps {
@@ -42,13 +44,24 @@ export function QuestionnaireWizard({
     });
   }
 
-  function validatePageLocally(): boolean {
+  function validatePageLocally(p: QuestionnairePage): boolean {
+    if (p.kind === "intro") return true;
     const next: Record<string, string> = {};
-    for (const q of page!.questions) {
+    for (const q of p.questions) {
       const v = responses[q.id];
       const missing = v === undefined || v === null || v === "";
       if (missing && "required" in q && q.required) {
         next[q.id] = "This question is required";
+        continue;
+      }
+      // Cross-field: validate id.number against the chosen id.type.
+      if (q.id === "id.number" && typeof v === "string" && v.length > 0) {
+        const type = responses["id.type"];
+        const result = validateIdNumber(
+          typeof type === "string" ? type : null,
+          v,
+        );
+        if (!result.ok) next[q.id] = result.error;
       }
     }
     setErrors(next);
@@ -56,7 +69,7 @@ export function QuestionnaireWizard({
   }
 
   function handleNext() {
-    if (!validatePageLocally()) return;
+    if (!validatePageLocally(page!)) return;
     startTransition(async () => {
       const result = await action(responses, false);
       if (!result.ok) {
@@ -72,7 +85,7 @@ export function QuestionnaireWizard({
   }
 
   function handleSubmit() {
-    if (!validatePageLocally()) return;
+    if (!validatePageLocally(page!)) return;
     startTransition(async () => {
       const result = await action(responses, true);
       if (!result.ok) {
@@ -81,6 +94,13 @@ export function QuestionnaireWizard({
       // Success path triggers a server-side redirect.
     });
   }
+
+  const isFullScreen =
+    page.kind === "intro" ||
+    (page.kind === "questions" &&
+      page.questions.length === 1 &&
+      (page.questions[0]?.kind === "scale" ||
+        page.questions[0]?.kind === "long_text"));
 
   return (
     <form
@@ -95,25 +115,47 @@ export function QuestionnaireWizard({
         current={pageIndex + 1}
         total={questionnaire.pages.length}
       />
-      <section className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">{page.title}</h2>
-        {page.subtitle && (
-          <p className="text-sm text-[color:var(--color-muted-foreground)]">
-            {page.subtitle}
+
+      {page.kind === "intro" ? (
+        <section className="flex flex-1 flex-col items-center justify-center gap-6 py-12 text-center">
+          <h2 className="text-3xl font-bold leading-tight md:text-4xl">
+            {page.heading}
+          </h2>
+          <p className="max-w-prose text-balance text-lg leading-relaxed text-[color:var(--color-muted-foreground)] md:text-xl">
+            {page.body}
           </p>
-        )}
-      </section>
-      <div className="flex flex-col gap-5">
-        {page.questions.map((q) => (
-          <QuestionField
-            key={q.id}
-            question={q}
-            value={responses[q.id]}
-            onChange={(v) => setResponse(q.id, v)}
-            error={errors[q.id]}
-          />
-        ))}
-      </div>
+        </section>
+      ) : (
+        <>
+          <section className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold">{page.title}</h2>
+            {page.subtitle && (
+              <p className="text-sm text-[color:var(--color-muted-foreground)]">
+                {page.subtitle}
+              </p>
+            )}
+          </section>
+          <div
+            className={
+              isFullScreen
+                ? "flex flex-1 flex-col gap-5"
+                : "flex flex-col gap-5"
+            }
+          >
+            {page.questions.map((q) => (
+              <QuestionField
+                key={q.id}
+                question={q}
+                value={responses[q.id]}
+                onChange={(v) => setResponse(q.id, v)}
+                error={errors[q.id]}
+                fullScreen={isFullScreen}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
       <div className="mt-auto flex items-center justify-between pt-6">
         <Button
           type="button"

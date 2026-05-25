@@ -12,6 +12,7 @@ const Q: Questionnaire = {
   pages: [
     {
       id: "p1",
+      kind: "questions",
       title: "Page One",
       questions: [
         {
@@ -25,6 +26,7 @@ const Q: Questionnaire = {
     },
     {
       id: "p2",
+      kind: "questions",
       title: "Page Two",
       questions: [
         {
