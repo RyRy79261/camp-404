@@ -62,21 +62,105 @@ export const LongTextQuestion = z.object({
 });
 export type LongTextQuestion = z.infer<typeof LongTextQuestion>;
 
+// ISO 8601 yyyy-mm-dd. Backed by `<input type="date">`.
+export const DateQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("date"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  required: z.boolean().default(true),
+});
+export type DateQuestion = z.infer<typeof DateQuestion>;
+
+// Discrete labelled scale rendered as a vertical full-screen slider on
+// mobile (top = highest, bottom = lowest) and a horizontal slider with
+// labels on desktop. Used for cooking / hardware competency.
+export const ScaleQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("scale"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  // Ordered top → bottom for the vertical mobile layout. The selected
+  // value is the option's `value`.
+  steps: z
+    .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
+    .min(2),
+  required: z.boolean().default(true),
+});
+export type ScaleQuestion = z.infer<typeof ScaleQuestion>;
+
+// Segmented control — same data shape as single_select but rendered as a
+// horizontal button group rather than a dropdown. Use for small option
+// sets (2–4) where the dropdown is overkill and the choices benefit from
+// always being visible.
+export const ToggleQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("toggle"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  options: z
+    .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
+    .min(2),
+  required: z.boolean().default(true),
+});
+export type ToggleQuestion = z.infer<typeof ToggleQuestion>;
+
+// Combobox — searchable single-select. Same data shape as single_select
+// but rendered as a Popover + cmdk filterable list. Use for long lookup
+// sets (countries, cities, …) where scrolling a plain Select is hostile.
+export const ComboboxQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("combobox"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  options: z
+    .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
+    .min(2),
+  placeholder: z.string().optional(),
+  searchPlaceholder: z.string().optional(),
+  required: z.boolean().default(true),
+});
+export type ComboboxQuestion = z.infer<typeof ComboboxQuestion>;
+
 export const Question = z.discriminatedUnion("kind", [
   SliderQuestion,
   SingleSelectQuestion,
   MultiSelectQuestion,
   ShortTextQuestion,
   LongTextQuestion,
+  DateQuestion,
+  ScaleQuestion,
+  ToggleQuestion,
+  ComboboxQuestion,
 ]);
 export type Question = z.infer<typeof Question>;
 
-export const QuestionnairePage = z.object({
+// Standard page: one or more questions, the wizard validates them and
+// advances on Next.
+export const QuestionsPage = z.object({
   id: z.string().min(1),
+  kind: z.literal("questions"),
   title: z.string().min(1),
   subtitle: z.string().optional(),
   questions: z.array(Question).min(1),
 });
+export type QuestionsPage = z.infer<typeof QuestionsPage>;
+
+// Full-screen "what's coming next" interstitial. No questions, no
+// validation — just a heading + body and a Next button. Rendered at
+// full viewport height on mobile, like the scale screens.
+export const IntroPage = z.object({
+  id: z.string().min(1),
+  kind: z.literal("intro"),
+  heading: z.string().min(1),
+  body: z.string().min(1),
+});
+export type IntroPage = z.infer<typeof IntroPage>;
+
+export const QuestionnairePage = z.discriminatedUnion("kind", [
+  QuestionsPage,
+  IntroPage,
+]);
 export type QuestionnairePage = z.infer<typeof QuestionnairePage>;
 
 export const Questionnaire = z.object({
@@ -123,6 +207,7 @@ export function validateResponses(
   const errors: Record<string, string> = {};
 
   for (const page of questionnaire.pages) {
+    if (page.kind === "intro") continue;
     for (const q of page.questions) {
       const value = parsed.data[q.id];
       const result = validateOne(q, value);
@@ -182,6 +267,38 @@ function validateOne(
         return { ok: false, error: "Expected text" };
       if (raw.length > q.maxLength)
         return { ok: false, error: `Max ${q.maxLength} characters` };
+      return { ok: true, value: raw };
+    }
+    case "date": {
+      if (typeof raw !== "string")
+        return { ok: false, error: "Expected a date" };
+      // Strict yyyy-mm-dd: matches what `<input type="date">` produces and
+      // what Postgres `date` columns accept directly.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw))
+        return { ok: false, error: "Use yyyy-mm-dd" };
+      const t = Date.parse(raw);
+      if (Number.isNaN(t)) return { ok: false, error: "Not a real date" };
+      return { ok: true, value: raw };
+    }
+    case "scale": {
+      if (typeof raw !== "string")
+        return { ok: false, error: "Pick a level" };
+      if (!q.steps.some((s) => s.value === raw))
+        return { ok: false, error: "Not a valid level" };
+      return { ok: true, value: raw };
+    }
+    case "toggle": {
+      if (typeof raw !== "string")
+        return { ok: false, error: "Expected a choice" };
+      if (!q.options.some((o) => o.value === raw))
+        return { ok: false, error: "Not a valid option" };
+      return { ok: true, value: raw };
+    }
+    case "combobox": {
+      if (typeof raw !== "string")
+        return { ok: false, error: "Expected a choice" };
+      if (!q.options.some((o) => o.value === raw))
+        return { ok: false, error: "Not a valid option" };
       return { ok: true, value: raw };
     }
   }

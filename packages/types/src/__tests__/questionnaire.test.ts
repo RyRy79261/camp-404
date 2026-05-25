@@ -7,6 +7,7 @@ const sample: Questionnaire = {
   pages: [
     {
       id: "page1",
+      kind: "questions",
       title: "Basics",
       questions: [
         {
@@ -139,5 +140,25 @@ describe("validateResponses", () => {
       ok: false,
       errors: { _root: "Malformed response payload" },
     });
+  });
+
+  it("skips intro pages when validating (they have no questions to check)", () => {
+    const withIntro: Questionnaire = {
+      version: "v1",
+      pages: [
+        {
+          id: "welcome",
+          kind: "intro",
+          heading: "Welcome to Camp 404",
+          body: "We'll ask a few questions next.",
+        },
+        sample.pages[0]!,
+      ],
+    };
+    const result = validateResponses(withIntro, {
+      experience: 2,
+      tier: "full",
+    });
+    expect(result.ok).toBe(true);
   });
 });
