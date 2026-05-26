@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Tailwind v4 only scans the *consuming* project by default, so the
+   web app misses the `bg-primary` / `text-primary-foreground` etc.
+   classes baked into this package's CVA variants. Explicitly point at
+   the components dir so those utilities get generated. */
+@source "../components/**/*.{ts,tsx}";
+
 @theme {
   /* Palette sampled from the Camp 404 lantern-lit tent reference:
      magenta primary, electric-blue accent, midnight-violet base. */

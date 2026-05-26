@@ -1,256 +1,237 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import Image from "next/image";
-import { Caveat } from "next/font/google";
 import { Button } from "@camp404/ui/components/button";
 
-const caveat = Caveat({
-  subsets: ["latin"],
-  display: "swap",
-  weight: ["400", "600"],
-});
-
-type Variant = "a" | "b" | "c";
-
-const STORAGE_KEY = "camp404-landing-variant";
-
 export function LandingHero() {
-  const [variant, setVariant] = useState<Variant>("a");
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved === "a" || saved === "b" || saved === "c") {
-      setVariant(saved);
-    }
-  }, []);
-
-  function pick(v: Variant) {
-    setVariant(v);
-    window.localStorage.setItem(STORAGE_KEY, v);
-  }
-
   return (
-    <>
-      <main className="relative flex min-h-[100dvh] flex-col items-center justify-between gap-8 overflow-hidden px-6 pb-24 pt-10 sm:pt-16">
-        {variant === "a" && <FrameA />}
-        {variant === "b" && <FrameB />}
-        {variant === "c" && <FrameC />}
-      </main>
-      <VariantToggle current={variant} onPick={pick} />
-      <style>{landingStyles}</style>
-    </>
-  );
-}
-
-const landingStyles = `
-  @keyframes camp404-flicker {
-    0%, 92%, 96%, 100% { opacity: 1; }
-    93%, 95% { opacity: 0.62; }
-    94% { opacity: 0.88; }
-  }
-  .camp404-flicker { animation: camp404-flicker 8s infinite; }
-  .camp404-scanline {
-    background-image: repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent 3px,
-      rgba(255, 255, 255, 0.05) 3px,
-      rgba(255, 255, 255, 0.05) 4px
-    );
-  }
-  .camp404-chromatic {
-    text-shadow:
-      -1.5px 0 0 rgba(255, 0, 128, 0.7),
-       1.5px 0 0 rgba(0, 200, 255, 0.7);
-  }
-  .camp404-vignette {
-    -webkit-mask-image: radial-gradient(
-      ellipse 78% 68% at 50% 48%,
-      black 22%,
-      transparent 92%
-    );
-    mask-image: radial-gradient(
-      ellipse 78% 68% at 50% 48%,
-      black 22%,
-      transparent 92%
-    );
-  }
-`;
-
-function NeonPhoto({
-  flicker = false,
-  scanline = false,
-}: {
-  flicker?: boolean;
-  scanline?: boolean;
-}) {
-  return (
-    <div className="relative aspect-[1080/694] w-full max-w-[640px]">
-      <Image
-        src="/landing/sign-404.jpg"
-        alt="The Camp 404 neon sign — blue 4s flanking a magenta 0 lit at night"
-        fill
-        priority
-        sizes="(max-width: 640px) 100vw, 640px"
-        unoptimized
-        className={`camp404-vignette object-cover ${flicker ? "camp404-flicker" : ""}`}
+    <main className="relative min-h-[100dvh] overflow-hidden bg-[color:var(--color-background)]">
+      <div
+        aria-hidden
+        className="camp404-scanlines pointer-events-none absolute inset-0 z-0"
       />
       <div
         aria-hidden
-        className="camp404-vignette pointer-events-none absolute inset-0 bg-[color:var(--color-background)] opacity-30"
+        className="camp404-noise pointer-events-none absolute inset-0 z-0 opacity-[0.06]"
       />
-      {scanline ? (
-        <div
-          aria-hidden
-          className="camp404-vignette camp404-scanline pointer-events-none absolute inset-0 opacity-60"
-        />
-      ) : null}
-    </div>
-  );
-}
+      <div
+        aria-hidden
+        className="camp404-scanbeam pointer-events-none absolute inset-x-0 top-0 z-0 h-24"
+      />
 
-function CTAs() {
-  return (
-    <div className="flex w-full max-w-xs flex-col items-center gap-3">
-      <Button asChild size="lg" className="w-full">
-        <a href="/signup">Sign up</a>
-      </Button>
-      <Button
-        asChild
-        variant="link"
-        className="text-[color:var(--color-accent)]"
-      >
-        <a href="/auth/sign-in">Already a 404er? Sign in</a>
-      </Button>
-    </div>
-  );
-}
+      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-md flex-col items-center justify-between gap-10 px-6 pb-10 pt-14 sm:max-w-xl sm:pt-20">
+        <div className="flex flex-col items-center gap-3">
+          <h1 className="text-[10px] uppercase tracking-[0.5em] text-[color:var(--color-muted-foreground)]">
+            Camp 404
+          </h1>
+          <p className="camp404-chromatic font-mono text-[11px] uppercase tracking-[0.3em] text-[color:var(--color-foreground)]">
+            Error 404 — Camp not found
+          </p>
+        </div>
 
-function FrameA() {
-  return (
-    <>
-      <h1 className="text-xs uppercase tracking-[0.4em] text-[color:var(--color-muted-foreground)]">
-        Camp 404
-      </h1>
-      <NeonPhoto />
-      <div className="flex flex-col items-center gap-6">
-        <p className="max-w-sm text-center text-sm text-[color:var(--color-muted-foreground)]">
-          A calm command centre for a chaotic desert.
-        </p>
-        <CTAs />
-      </div>
-    </>
-  );
-}
+        <Glitch404 />
 
-function FrameB() {
-  return (
-    <>
-      <div className="flex flex-col items-center gap-2">
-        <h1 className="text-xs uppercase tracking-[0.4em] text-[color:var(--color-muted-foreground)]">
-          Camp 404
-        </h1>
-        <p
-          className="camp404-chromatic font-mono text-[10px] uppercase tracking-[0.25em] text-[color:var(--color-muted-foreground)]"
-          aria-hidden
-        >
-          Error 404 — location not on any map
-        </p>
-      </div>
-      <NeonPhoto flicker scanline />
-      <div className="flex flex-col items-center gap-6">
-        <p className="max-w-sm text-center text-sm text-[color:var(--color-muted-foreground)]">
-          <span className="line-through opacity-60">
-            The page you requested could not be found.
-          </span>{" "}
-          A calm command centre for a chaotic desert.
-        </p>
-        <CTAs />
-      </div>
-    </>
-  );
-}
-
-function FrameC() {
-  return (
-    <>
-      <div className="flex flex-col items-center gap-2">
-        <h1
-          className={`${caveat.className} -rotate-1 text-3xl text-[color:var(--color-foreground)]`}
-        >
-          Camp 404
-        </h1>
-        <p
-          aria-hidden
-          className={`${caveat.className} -rotate-2 text-xl text-[color:var(--color-accent)]`}
-        >
-          you are here ↓
-        </p>
-      </div>
-      <div className="relative w-full max-w-[640px]">
-        <NeonPhoto />
-        <span
-          aria-hidden
-          className={`${caveat.className} pointer-events-none absolute bottom-2 right-4 -rotate-6 text-lg text-[color:var(--color-accent)]`}
-        >
-          adopted?
-        </span>
-      </div>
-      <div className="flex flex-col items-center gap-5">
-        <p className="max-w-sm text-center text-sm text-[color:var(--color-muted-foreground)]">
-          A calm command centre for a chaotic desert.
-        </p>
-        <div className="relative">
-          <span
-            aria-hidden
-            className={`${caveat.className} absolute -left-14 top-1 -rotate-12 whitespace-nowrap text-xl text-[color:var(--color-accent)]`}
+        <div className="flex w-full max-w-xs flex-col items-center gap-2">
+          <Button asChild size="lg" className="w-full">
+            <a href="/signup">Are you lost?</a>
+          </Button>
+          <Button
+            asChild
+            variant="link"
+            className="text-[color:var(--color-accent)]"
           >
-            lost? →
-          </span>
-          <CTAs />
+            <a href="/auth/sign-in">Sign in</a>
+          </Button>
+          <p
+            aria-hidden
+            className="camp404-cursor mt-4 font-mono text-[10px] uppercase tracking-[0.3em] text-[color:var(--color-muted-foreground)]"
+          >
+            $ awaiting input_
+          </p>
         </div>
       </div>
-    </>
+
+      <style>{glitchStyles}</style>
+    </main>
   );
 }
 
-function VariantToggle({
-  current,
-  onPick,
-}: {
-  current: Variant;
-  onPick: (v: Variant) => void;
-}) {
-  const items: { id: Variant; label: string; hint: string }[] = [
-    { id: "a", label: "A", hint: "clean neon melt" },
-    { id: "b", label: "B", hint: "glitchy broken" },
-    { id: "c", label: "C", hint: "hand scrawled" },
-  ];
+function Glitch404() {
   return (
-    <div className="fixed bottom-3 left-1/2 z-50 -translate-x-1/2 rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)]/85 p-1 text-xs shadow-lg backdrop-blur-md">
-      <div className="flex items-center gap-1">
-        <span className="px-2 text-[color:var(--color-muted-foreground)]">
-          preview
-        </span>
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onPick(item.id)}
-            aria-pressed={current === item.id}
-            title={item.hint}
-            className={
-              "rounded-full px-3 py-1 transition-colors " +
-              (current === item.id
-                ? "bg-[color:var(--color-primary)] text-[color:var(--color-primary-foreground)]"
-                : "text-[color:var(--color-foreground)] hover:bg-[color:var(--color-muted)]")
-            }
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+    <div
+      className="camp404-glitch-shake relative leading-none select-none"
+      aria-hidden
+    >
+      <span className="camp404-glitch-base">404</span>
+      <span
+        className="camp404-glitch-rgb camp404-glitch-rgb-magenta"
+        aria-hidden
+      >
+        404
+      </span>
+      <span className="camp404-glitch-rgb camp404-glitch-rgb-cyan" aria-hidden>
+        404
+      </span>
+      <span className="camp404-glitch-tear camp404-glitch-tear-a" aria-hidden>
+        404
+      </span>
+      <span className="camp404-glitch-tear camp404-glitch-tear-b" aria-hidden>
+        404
+      </span>
     </div>
   );
 }
+
+/* All bespoke glitch CSS lives here so the rest of the design system
+   stays clean. References --color-foreground / accent / primary tokens. */
+const glitchStyles = `
+  .camp404-chromatic {
+    text-shadow:
+      -1.5px 0 0 rgba(255, 0, 128, 0.8),
+       1.5px 0 0 rgba(0, 200, 255, 0.8);
+  }
+
+  .camp404-scanlines {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 2px,
+      rgba(255, 255, 255, 0.045) 2px,
+      rgba(255, 255, 255, 0.045) 3px
+    );
+  }
+
+  .camp404-noise {
+    background-image:
+      radial-gradient(rgba(255,255,255,0.6) 0.5px, transparent 0.5px),
+      radial-gradient(rgba(255,255,255,0.4) 0.5px, transparent 0.5px);
+    background-size: 3px 3px, 7px 7px;
+    background-position: 0 0, 1px 1px;
+    mix-blend-mode: overlay;
+  }
+
+  .camp404-scanbeam {
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(180, 100, 255, 0.05) 40%,
+      rgba(255, 0, 200, 0.1) 50%,
+      rgba(180, 100, 255, 0.05) 60%,
+      transparent 100%
+    );
+    animation: camp404-scanbeam 7s linear infinite;
+  }
+  @keyframes camp404-scanbeam {
+    0%   { transform: translateY(-100%); }
+    100% { transform: translateY(2200%); }
+  }
+
+  /* ---- Giant glitched "404" ---- */
+
+  .camp404-glitch-shake {
+    animation: camp404-shake 5s steps(1) infinite;
+  }
+  @keyframes camp404-shake {
+    0%, 4%, 8%, 100% { transform: translate(0, 0); }
+    2%   { transform: translate(-1px, 1px); }
+    6%   { transform: translate(2px, -1px); }
+    18%  { transform: translate(-2px, 0); }
+    19%  { transform: translate(1px, 1px); }
+    20%, 99% { transform: translate(0, 0); }
+  }
+
+  .camp404-glitch-base,
+  .camp404-glitch-rgb,
+  .camp404-glitch-tear {
+    display: block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 900;
+    font-size: clamp(7rem, 30vw, 14rem);
+    letter-spacing: -0.05em;
+    line-height: 0.9;
+    text-align: center;
+  }
+
+  .camp404-glitch-base {
+    color: var(--color-foreground);
+    position: relative;
+  }
+
+  .camp404-glitch-rgb {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+
+  .camp404-glitch-rgb-magenta {
+    color: rgba(255, 0, 140, 0.85);
+    animation: camp404-rgb-magenta 3.7s steps(1) infinite;
+  }
+  @keyframes camp404-rgb-magenta {
+    0%, 100% { transform: translate(0, 0); }
+    10%      { transform: translate(-4px, 0); }
+    11%      { transform: translate(-2px, 2px); }
+    30%      { transform: translate(-3px, -1px); }
+    50%      { transform: translate(-5px, 0); }
+    70%      { transform: translate(-2px, 1px); }
+    90%      { transform: translate(-4px, 0); }
+  }
+
+  .camp404-glitch-rgb-cyan {
+    color: rgba(0, 220, 255, 0.85);
+    animation: camp404-rgb-cyan 3.7s steps(1) infinite;
+  }
+  @keyframes camp404-rgb-cyan {
+    0%, 100% { transform: translate(0, 0); }
+    10%      { transform: translate(4px, 0); }
+    11%      { transform: translate(2px, -2px); }
+    30%      { transform: translate(3px, 1px); }
+    50%      { transform: translate(5px, 0); }
+    70%      { transform: translate(2px, -1px); }
+    90%      { transform: translate(4px, 0); }
+  }
+
+  /* Two clip-path "tear" layers slice the 404 horizontally and yank
+     the slice sideways for one frame — that's the broken-display
+     feel. Each layer runs on its own offset cycle. */
+  .camp404-glitch-tear {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    color: var(--color-foreground);
+    mix-blend-mode: screen;
+  }
+  .camp404-glitch-tear-a {
+    animation: camp404-tear-a 4.3s steps(1) infinite;
+  }
+  .camp404-glitch-tear-b {
+    animation: camp404-tear-b 5.1s steps(1) infinite;
+  }
+  @keyframes camp404-tear-a {
+    0%, 8%, 100% { clip-path: inset(100% 0 0 0); transform: translate(0, 0); }
+    9%   { clip-path: inset(20% 0 70% 0); transform: translate(8px, 0); }
+    11%  { clip-path: inset(35% 0 55% 0); transform: translate(-6px, 0); }
+    13%  { clip-path: inset(50% 0 40% 0); transform: translate(10px, 0); }
+    15%  { clip-path: inset(100% 0 0 0); transform: translate(0, 0); }
+    40%  { clip-path: inset(15% 0 75% 0); transform: translate(-12px, 0); }
+    42%  { clip-path: inset(45% 0 45% 0); transform: translate(6px, 0); }
+    44%  { clip-path: inset(100% 0 0 0); transform: translate(0, 0); }
+  }
+  @keyframes camp404-tear-b {
+    0%, 20%, 100% { clip-path: inset(100% 0 0 0); transform: translate(0, 0); }
+    22%  { clip-path: inset(60% 0 25% 0); transform: translate(-10px, 0); }
+    24%  { clip-path: inset(75% 0 10% 0); transform: translate(4px, 0); }
+    26%  { clip-path: inset(100% 0 0 0); transform: translate(0, 0); }
+    65%  { clip-path: inset(8% 0 80% 0); transform: translate(7px, 0); }
+    67%  { clip-path: inset(28% 0 60% 0); transform: translate(-5px, 0); }
+    69%  { clip-path: inset(100% 0 0 0); transform: translate(0, 0); }
+  }
+
+  /* Blinking terminal cursor underscore. */
+  .camp404-cursor::after { content: ""; }
+  .camp404-cursor {
+    animation: camp404-cursor-blink 1.05s steps(1) infinite;
+  }
+  @keyframes camp404-cursor-blink {
+    0%, 49%   { opacity: 1; }
+    50%, 100% { opacity: 0.35; }
+  }
+`;
