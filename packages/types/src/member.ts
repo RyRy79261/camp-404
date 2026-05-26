@@ -26,22 +26,27 @@ export const EmergencyContact = z.object({
 export const MembershipTier = z.enum(["full", "build_week_only"]);
 export type MembershipTier = z.infer<typeof MembershipTier>;
 
-export const SignupInput = z.object({
-  fullName: z.string().min(1),
-  passportNumber: z.string().min(1).optional(),
-  saIdNumber: z
-    .string()
-    .regex(/^\d{13}$/, "South African ID number must be 13 digits")
-    .optional(),
-  skills: z.array(z.string()).default([]),
-  previousAfrikaburns: z.number().int().nonnegative().default(0),
-  previousBurningMans: z.number().int().nonnegative().default(0),
-  firstTime: z.boolean().default(false),
-  emergencyContacts: z.array(EmergencyContact).min(1).max(2),
-  membershipTier: MembershipTier,
-  termsVersion: z.string(),
-  termsConsentedAt: z.string().datetime(),
-});
+export const SignupInput = z
+  .object({
+    fullName: z.string().min(1),
+    passportNumber: z.string().min(1).optional(),
+    saIdNumber: z
+      .string()
+      .regex(/^\d{13}$/, "South African ID number must be 13 digits")
+      .optional(),
+    skills: z.array(z.string()).default([]),
+    previousAfrikaburns: z.number().int().nonnegative().default(0),
+    previousBurningMans: z.number().int().nonnegative().default(0),
+    firstTime: z.boolean().default(false),
+    emergencyContacts: z.array(EmergencyContact).min(1).max(2),
+    membershipTier: MembershipTier,
+    termsVersion: z.string(),
+    termsConsentedAt: z.string().datetime(),
+  })
+  .refine((d) => d.passportNumber !== undefined || d.saIdNumber !== undefined, {
+    message: "Either a passport number or SA ID number is required",
+    path: ["passportNumber"],
+  });
 export type SignupInput = z.infer<typeof SignupInput>;
 
 export const MemberProfile = z.object({
