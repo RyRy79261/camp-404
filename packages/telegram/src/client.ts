@@ -15,6 +15,8 @@ export interface TelegramClientOptions {
   baseUrl?: string;
   /** Inject a custom fetch (for tests). */
   fetchImpl?: typeof fetch;
+  /** Request timeout in ms. Defaults to 10_000 (10 s). */
+  timeoutMs?: number;
 }
 
 export class TelegramApiError extends Error {
@@ -65,6 +67,7 @@ export class TelegramClient {
   private readonly botToken: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
 
   constructor(opts: TelegramClientOptions) {
     if (!opts.botToken) {
@@ -73,23 +76,31 @@ export class TelegramClient {
     this.botToken = opts.botToken;
     this.baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
     this.fetchImpl = opts.fetchImpl ?? fetch;
+    this.timeoutMs = opts.timeoutMs ?? 10_000;
   }
 
   async call<T>(method: string, payload?: Record<string, unknown>): Promise<T> {
     const url = `${this.baseUrl}/bot${this.botToken}/${method}`;
-    const res = await this.fetchImpl(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: payload ? JSON.stringify(payload) : undefined,
-    });
-    const data = (await res.json()) as TelegramApiResponse<T>;
-    if (!data.ok || data.result === undefined) {
-      throw new TelegramApiError(
-        data.error_code ?? res.status,
-        data.description ?? "unknown error",
-      );
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const res = await this.fetchImpl(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: payload ? JSON.stringify(payload) : undefined,
+        signal: controller.signal,
+      });
+      const data = (await res.json()) as TelegramApiResponse<T>;
+      if (!data.ok || data.result === undefined) {
+        throw new TelegramApiError(
+          data.error_code ?? res.status,
+          data.description ?? "unknown error",
+        );
+      }
+      return data.result;
+    } finally {
+      clearTimeout(timer);
     }
-    return data.result;
   }
 
   getMe(): Promise<BotIdentity> {
