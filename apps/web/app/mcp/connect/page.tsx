@@ -67,7 +67,7 @@ function MCPConnectInner() {
         Sign in with Google
       </button>
       {error && (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-destructive">
           {error}
         </p>
       )}

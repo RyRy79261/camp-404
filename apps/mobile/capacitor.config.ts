@@ -15,7 +15,7 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchAutoHide: true,
-      backgroundColor: "#000000",
+      backgroundColor: "#0d061e",
     },
     FirebaseMessaging: {
       presentationOptions: ["alert", "sound"],

@@ -1,32 +1,35 @@
 @import "tailwindcss";
 
 @theme {
-  /* Dark purple / mauve base with red accent. Provisional palette — Camp
-     404 Phase 1, swap once a designer touches it. */
-  --color-background: oklch(0.16 0.04 320);
-  --color-foreground: oklch(0.96 0.01 320);
-  --color-primary: oklch(0.62 0.22 18);
-  --color-primary-foreground: oklch(0.98 0 0);
+  /* Palette sampled from the Camp 404 lantern-lit tent reference:
+     magenta primary, electric-blue accent, midnight-violet base. */
+  --color-background: oklch(0.15 0.05 295);
+  --color-foreground: oklch(0.97 0.02 330);
+  --color-primary: oklch(0.65 0.27 340);
+  --color-primary-foreground: oklch(0.99 0.005 340);
   /* `muted` is the auth-page surface; `card` sits one step lighter so it
      visually elevates above the muted background (login-04 pattern). */
-  --color-muted: oklch(0.2 0.04 320);
-  --color-muted-foreground: oklch(0.72 0.03 320);
-  --color-card: oklch(0.24 0.05 320);
-  --color-card-foreground: oklch(0.96 0.01 320);
+  --color-muted: oklch(0.22 0.06 295);
+  --color-muted-foreground: oklch(0.7 0.05 325);
+  --color-card: oklch(0.26 0.08 295);
+  --color-card-foreground: oklch(0.97 0.02 330);
   /* popover shares the card surface — same elevation, same colour. */
-  --color-popover: oklch(0.24 0.05 320);
-  --color-popover-foreground: oklch(0.96 0.01 320);
-  --color-border: oklch(0.32 0.05 320);
-  --color-input: oklch(0.32 0.05 320);
-  --color-accent: oklch(0.45 0.12 320);
-  --color-accent-foreground: oklch(0.98 0 0);
-  /* `secondary` is the muted surface for non-primary buttons / pills.
-     Slightly lighter than `muted` so it reads as interactive. */
-  --color-secondary: oklch(0.28 0.05 320);
-  --color-secondary-foreground: oklch(0.96 0.01 320);
+  --color-popover: oklch(0.26 0.08 295);
+  --color-popover-foreground: oklch(0.97 0.02 330);
+  --color-border: oklch(0.35 0.1 305);
+  --color-input: oklch(0.35 0.1 305);
+  /* `accent` carries the cool blue from the image — used for highlights,
+     focus haloes, and the second brand colour. */
+  --color-accent: oklch(0.62 0.18 255);
+  --color-accent-foreground: oklch(0.99 0.005 255);
+  /* `secondary` is the muted surface for non-primary buttons / pills —
+     a deeper magenta-violet so it reads as interactive but quieter than
+     `primary`. */
+  --color-secondary: oklch(0.42 0.18 320);
+  --color-secondary-foreground: oklch(0.98 0.01 330);
   --color-destructive: oklch(0.65 0.22 18);
   --color-destructive-foreground: oklch(0.98 0 0);
-  --color-ring: oklch(0.62 0.22 18);
+  --color-ring: oklch(0.65 0.27 340);
   --radius: 0.625rem;
 }
 

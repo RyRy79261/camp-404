@@ -13,15 +13,30 @@ Defined in `packages/ui/src/styles/globals.css` via a Tailwind v4 `@theme`
 block (no `tailwind.config.js`). Consumed as CSS variables, e.g.
 `bg-[color:var(--color-primary)]`.
 
+Palette sampled from the lantern-lit tent reference photo: hot magenta
+primary, electric-blue accent, midnight-violet base.
+
 | Token | Value | Role |
 |---|---|---|
-| `--color-background` | `oklch(0.99 0 0)` | near-white page background |
-| `--color-foreground` | `oklch(0.18 0 0)` | near-black body text |
-| `--color-primary` | `oklch(0.55 0.18 32)` | warm orange/red brand accent |
-| `--color-primary-foreground` | `oklch(0.98 0 0)` | text on primary |
-| `--color-muted` | `oklch(0.96 0 0)` | subtle surfaces / hover states |
-| `--color-muted-foreground` | `oklch(0.5 0 0)` | secondary text |
-| `--color-border` | `oklch(0.9 0 0)` | hairline borders |
+| `--color-background` | `oklch(0.15 0.05 295)` | midnight-violet page background |
+| `--color-foreground` | `oklch(0.97 0.02 330)` | warm-white body text |
+| `--color-primary` | `oklch(0.65 0.27 340)` | hot magenta brand accent |
+| `--color-primary-foreground` | `oklch(0.99 0.005 340)` | text on primary |
+| `--color-secondary` | `oklch(0.42 0.18 320)` | deep magenta-violet surface for secondary buttons / pills |
+| `--color-secondary-foreground` | `oklch(0.98 0.01 330)` | text on secondary |
+| `--color-accent` | `oklch(0.62 0.18 255)` | electric-blue highlight / focus halo (second brand colour) |
+| `--color-accent-foreground` | `oklch(0.99 0.005 255)` | text on accent |
+| `--color-muted` | `oklch(0.22 0.06 295)` | auth-page / subtle surface |
+| `--color-muted-foreground` | `oklch(0.7 0.05 325)` | secondary text |
+| `--color-card` | `oklch(0.26 0.08 295)` | elevated card surface (one step above muted) |
+| `--color-card-foreground` | `oklch(0.97 0.02 330)` | text on card |
+| `--color-popover` | `oklch(0.26 0.08 295)` | popover surface (shares card elevation) |
+| `--color-popover-foreground` | `oklch(0.97 0.02 330)` | text on popover |
+| `--color-border` | `oklch(0.35 0.1 305)` | hairline borders |
+| `--color-input` | `oklch(0.35 0.1 305)` | input borders |
+| `--color-destructive` | `oklch(0.65 0.22 18)` | warm-red destructive accent |
+| `--color-destructive-foreground` | `oklch(0.98 0 0)` | text on destructive |
+| `--color-ring` | `oklch(0.65 0.27 340)` | focus ring (matches primary) |
 | `--radius` | `0.625rem` | corner radius baseline |
 
 The `@layer base` block applies the border colour globally and sets the
@@ -97,4 +112,6 @@ When generating designs or code:
 - Target **shadcn/ui** as the component system.
 - Reuse the tokens and components above; prefer an existing component over
   new markup.
-- Keep the warm orange/red `--color-primary` as the only brand accent.
+- Treat hot magenta `--color-primary` as the dominant brand colour and
+  electric-blue `--color-accent` as the supporting accent; reach for
+  those before introducing a new hue.

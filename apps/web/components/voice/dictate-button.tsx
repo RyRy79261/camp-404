@@ -81,7 +81,7 @@ export function DictateButton({
       </Button>
       <Waveform analyser={analyser} active={isRecording} />
       {error && (
-        <p className="text-[10px] leading-tight text-red-600" role="alert">
+        <p className="text-[10px] leading-tight text-destructive" role="alert">
           {error}
         </p>
       )}
