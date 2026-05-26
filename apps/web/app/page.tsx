@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { Button } from "@camp404/ui/components/button";
 import { QuadrantNav } from "@camp404/ui/components/quadrant-nav";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
+import { LandingHero } from "./landing-hero";
 
 // Reads the Neon Auth session cookie on every request, so can't be
 // statically prerendered. Without this, Next 16's build step logs a
@@ -14,24 +14,7 @@ export default async function HomePage() {
   const user = await getAuthenticatedUser();
 
   if (!user) {
-    return (
-      <main className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 p-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-semibold">Camp 404</h1>
-          <p className="mt-2 max-w-sm text-sm text-[color:var(--color-muted-foreground)]">
-            A calm command centre for a chaotic desert.
-          </p>
-        </div>
-        <div className="flex flex-col items-stretch gap-2 sm:flex-row">
-          <Button asChild size="lg">
-            <a href="/signup">Sign up</a>
-          </Button>
-          <Button asChild size="lg" variant="outline">
-            <a href="/auth/sign-in">Sign in</a>
-          </Button>
-        </div>
-      </main>
-    );
+    return <LandingHero />;
   }
 
   // Invite gate — god accounts (GOD_EMAILS) bypass; everyone else must have
