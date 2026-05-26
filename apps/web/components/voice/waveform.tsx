@@ -38,7 +38,8 @@ export function Waveform({ analyser, active, className }: WaveformProps) {
     function drawIdle() {
       if (!ctx || !canvas) return;
       ctx.clearRect(0, 0, clientWidth, clientHeight);
-      ctx.strokeStyle = "rgba(0,0,0,0.2)";
+      const idle = getComputedStyle(canvas).color || "#000";
+      ctx.strokeStyle = `color-mix(in oklch, ${idle} 25%, transparent)`;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, clientHeight / 2);
