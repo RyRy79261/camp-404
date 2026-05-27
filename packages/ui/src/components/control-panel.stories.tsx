@@ -1,48 +1,53 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import {
+  Bell,
   CalendarClock,
-  CircleDashed,
   ClipboardList,
   FileText,
   ListChecks,
   Megaphone,
-  Users,
   UserRound,
+  Users,
   Wallet,
+  Wrench,
 } from "lucide-react";
 import {
   ControlPanel,
-  ControlPanelHeader,
   type ControlPanelLayer,
 } from "./control-panel";
 
 /**
- * Three stacked layers — camp member, team lead, captain. Tap the centre
- * circle to cycle through them. The two undecided personal quadrants
- * (top-right, bottom-left) are intentionally left as placeholders.
+ * Three stacked layers — camp member, team lead, captain. The bottom tab bar
+ * switches between them; the centre circle is push-to-talk.
  */
 const layers: ControlPanelLayer[] = [
   {
     rank: "camp_member",
     topLeft: {
-      label: "My Profile",
-      hint: "Identity, dietary, emergency contacts",
-      icon: <UserRound className="h-5 w-5" />,
+      label: "My Teams",
+      hint: "Your crews",
+      href: "#teams",
+      icon: <Users className="h-5 w-5" />,
     },
     topRight: {
-      label: "Coming soon",
-      hint: "Quadrant to be decided",
-      icon: <CircleDashed className="h-5 w-5" />,
+      label: "My Tasks",
+      hint: "What's on you",
+      href: "#tasks",
+      icon: <ListChecks className="h-5 w-5" />,
+      badge: 3,
     },
     bottomLeft: {
-      label: "Coming soon",
-      hint: "Quadrant to be decided",
-      icon: <CircleDashed className="h-5 w-5" />,
+      label: "My Profile",
+      hint: "You & your data",
+      href: "#profile",
+      icon: <UserRound className="h-5 w-5" />,
     },
     bottomRight: {
-      label: "My Tasks",
-      hint: "What the camp needs from you",
-      icon: <ListChecks className="h-5 w-5" />,
+      label: "Tools",
+      hint: "Meals, expenses…",
+      href: "#tools",
+      icon: <Wrench className="h-5 w-5" />,
+      badge: 2,
     },
   },
   {
@@ -93,6 +98,26 @@ const layers: ControlPanelLayer[] = [
   },
 ];
 
+function DemoHeader() {
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Notifications (4 unread)"
+        className="relative rounded-full p-1.5 text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-muted)]"
+      >
+        <Bell className="h-5 w-5" aria-hidden />
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[color:var(--color-primary)] px-1 text-[10px] font-semibold text-[color:var(--color-primary-foreground)]">
+          4
+        </span>
+      </button>
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--color-secondary)] text-xs font-semibold text-[color:var(--color-secondary-foreground)]">
+        RK
+      </span>
+    </>
+  );
+}
+
 const meta = {
   title: "Control Panel/ControlPanel",
   component: ControlPanel,
@@ -108,7 +133,8 @@ const meta = {
   },
   args: {
     layers,
-    header: <ControlPanelHeader userName="Ash" />,
+    header: <DemoHeader />,
+    centre: { label: "TALK" },
   },
 } satisfies Meta<typeof ControlPanel>;
 
@@ -132,7 +158,7 @@ export const Captain: Story = {
 };
 
 /**
- * What a camp member sees after cycling up to the captain layer — the UI is
+ * What a camp member sees after tapping up to the captain tab — the UI is
  * fully browsable, but the tiles are locked and carry no data.
  */
 export const LockedLayer: Story = {
