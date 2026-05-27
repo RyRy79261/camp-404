@@ -57,8 +57,8 @@ test.describe("authenticated flow (test-mode)", () => {
     await completeQuestionnaire(page);
 
     await expect(page).toHaveURL("/");
-    // Home now shows the QuadrantNav instead of the sign-in CTA.
-    await expect(page.getByRole("link", { name: "Members" })).toBeVisible();
+    // Home now shows the layered ControlPanel instead of the sign-in CTA.
+    await expect(page.getByRole("link", { name: /My Teams/ })).toBeVisible();
   });
 
   test("/api/voice/transcribe accepts an authed request and rejects bad input", async ({
