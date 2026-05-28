@@ -44,24 +44,25 @@ export async function getMcpScopeRows(
 
   if (!userRow) return null;
 
-  const memberships = await db
-    .select({
-      team: schema.teamMemberships.team,
-      isLead: schema.teamMemberships.isLead,
-    })
-    .from(schema.teamMemberships)
-    .where(eq(schema.teamMemberships.userId, campUserId));
-
-  const [driver] = await db
-    .select({ intendsToDrive: schema.driverProfiles.intendsToDrive })
-    .from(schema.driverProfiles)
-    .where(eq(schema.driverProfiles.userId, campUserId))
-    .limit(1);
+  const [memberships, driverRows] = await Promise.all([
+    db
+      .select({
+        team: schema.teamMemberships.team,
+        isLead: schema.teamMemberships.isLead,
+      })
+      .from(schema.teamMemberships)
+      .where(eq(schema.teamMemberships.userId, campUserId)),
+    db
+      .select({ intendsToDrive: schema.driverProfiles.intendsToDrive })
+      .from(schema.driverProfiles)
+      .where(eq(schema.driverProfiles.userId, campUserId))
+      .limit(1),
+  ]);
 
   return {
     user: userRow,
     teamMemberships: memberships,
-    driverIntent: driver?.intendsToDrive ?? false,
+    driverIntent: driverRows[0]?.intendsToDrive ?? false,
   };
 }
 
