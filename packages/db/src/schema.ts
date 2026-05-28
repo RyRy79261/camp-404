@@ -272,6 +272,10 @@ export const inviteCodes = pgTable(
     // redeemer keeps the default `member` rank. Use `captain` to mint a code
     // that auto-promotes the redeemer.
     assignedRank: rankEnum("assigned_rank"),
+    // For in-app invites created via /tools/invite: the email address of
+    // the person the inviter is sending this code to. Lowercased on insert.
+    // CLI-minted codes leave this NULL.
+    invitedEmail: text("invited_email"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => ({

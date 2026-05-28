@@ -34,6 +34,7 @@ interface TestInviteCode {
   expiresAt: Date | null;
   revokedAt: Date | null;
   assignedRank: TestRank | null;
+  invitedEmail: string | null;
   createdAt: Date;
 }
 
@@ -123,6 +124,7 @@ export const testStore = {
     maxUses?: number | null;
     expiresAt?: Date | null;
     assignedRank?: TestRank | null;
+    invitedEmail?: string | null;
   }): TestInviteCode {
     const row: TestInviteCode = {
       code: input.code,
@@ -133,6 +135,7 @@ export const testStore = {
       expiresAt: input.expiresAt ?? null,
       revokedAt: null,
       assignedRank: input.assignedRank ?? null,
+      invitedEmail: input.invitedEmail ?? null,
       createdAt: new Date(),
     };
     inviteCodes.set(input.code, row);
