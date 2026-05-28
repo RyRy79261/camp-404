@@ -2,6 +2,8 @@ import { and, eq, isNull, or, sql, gt } from "drizzle-orm";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
 
+export type AssignedRank = "captain" | "member";
+
 export interface InviteCodeRow {
   code: string;
   createdByUserId: string | null;
@@ -10,6 +12,7 @@ export interface InviteCodeRow {
   useCount: number;
   expiresAt: Date | null;
   revokedAt: Date | null;
+  assignedRank: AssignedRank | null;
   createdAt: Date;
 }
 
@@ -81,6 +84,7 @@ export async function createInviteCode(input: {
   note?: string | null;
   maxUses?: number | null;
   expiresAt?: Date | null;
+  assignedRank?: AssignedRank | null;
 }): Promise<InviteCodeRow> {
   const db = createHttpDb();
   const [row] = await db
@@ -91,6 +95,7 @@ export async function createInviteCode(input: {
       note: input.note ?? null,
       maxUses: input.maxUses ?? null,
       expiresAt: input.expiresAt ?? null,
+      assignedRank: input.assignedRank ?? null,
     })
     .returning();
   if (!row) throw new Error("Failed to insert invite code");

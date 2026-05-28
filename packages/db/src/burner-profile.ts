@@ -16,6 +16,7 @@ export async function createCampUser(input: {
   authUserId: string;
   displayName: string | null;
   inviteCode: string | null;
+  rank?: "captain" | "member";
 }) {
   const db = createHttpDb();
   const [created] = await db
@@ -24,6 +25,7 @@ export async function createCampUser(input: {
       authUserId: input.authUserId,
       displayName: input.displayName,
       inviteCode: input.inviteCode,
+      ...(input.rank ? { rank: input.rank } : {}),
     })
     .returning();
   if (!created) throw new Error("Failed to insert camp user row");
@@ -35,6 +37,14 @@ export async function setUserInviteCode(userId: string, code: string) {
   await db
     .update(schema.users)
     .set({ inviteCode: code, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+}
+
+export async function setUserRank(userId: string, rank: "captain" | "member") {
+  const db = createHttpDb();
+  await db
+    .update(schema.users)
+    .set({ rank, updatedAt: new Date() })
     .where(eq(schema.users.id, userId));
 }
 

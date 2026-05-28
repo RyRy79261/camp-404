@@ -16,7 +16,24 @@ describe("parseMintArgs", () => {
       note: null,
       maxUses: null,
       expiresAt: null,
+      assignedRank: null,
     });
+  });
+
+  it("parses --assigns-rank captain to auto-promote the redeemer", () => {
+    const parsed = parseMintArgs([
+      "--code",
+      "CAPTAIN-MEOW",
+      "--assigns-rank",
+      "captain",
+    ]);
+    expect(parsed.assignedRank).toBe("captain");
+  });
+
+  it("rejects an invalid --assigns-rank value", () => {
+    expect(() =>
+      parseMintArgs(["--code", "X", "--assigns-rank", "admin"]),
+    ).toThrow(/--assigns-rank must be 'captain' or 'member'/);
   });
 
   it("parses every optional field, coercing --max-uses to a number and --expires-at to a Date", () => {

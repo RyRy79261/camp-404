@@ -55,7 +55,8 @@ async function mintInvite(args: string[]) {
     console.error(err instanceof Error ? err.message : String(err));
     console.error(
       "\nUsage: camp404 mint-invite --code CODE [--created-by UUID]" +
-        " [--note 'Berlin crew'] [--max-uses 5] [--expires-at 2026-06-01]",
+        " [--note 'Berlin crew'] [--max-uses 5] [--expires-at 2026-06-01]" +
+        " [--assigns-rank captain|member]",
     );
     return process.exit(1);
   }
@@ -69,6 +70,7 @@ async function mintInvite(args: string[]) {
         note: row.note,
         maxUses: row.maxUses,
         expiresAt: row.expiresAt,
+        assignedRank: row.assignedRank,
       },
       null,
       2,
@@ -155,6 +157,7 @@ Usage:
     [--note 'free text']              (e.g. "Berlin crew", "Camp Lead VIP")
     [--max-uses N]                    (default: unlimited)
     [--expires-at YYYY-MM-DD]         (default: never)
+    [--assigns-rank captain|member]   (auto-promote redeemer; default: none)
   camp404 bootstrap-founder --email YOU@EXAMPLE.COM
                                     Mint the single-use '${FOUNDER_CODE}'
                                     founder invite. Redeem at /signup.

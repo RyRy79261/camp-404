@@ -4,6 +4,7 @@ export interface MintInviteArgs {
   note: string | null;
   maxUses: number | null;
   expiresAt: Date | null;
+  assignedRank: "captain" | "member" | null;
 }
 
 export function parseMintArgs(args: string[]): MintInviteArgs {
@@ -21,11 +22,18 @@ export function parseMintArgs(args: string[]): MintInviteArgs {
     }
   }
   if (!opts.code) throw new Error("--code is required");
+  const rankRaw = opts["assigns-rank"] ?? null;
+  if (rankRaw !== null && rankRaw !== "captain" && rankRaw !== "member") {
+    throw new Error(
+      `--assigns-rank must be 'captain' or 'member' (got '${rankRaw}')`,
+    );
+  }
   return {
     code: opts.code,
     createdByUserId: opts["created-by"] ?? null,
     note: opts.note ?? null,
     maxUses: opts["max-uses"] ? Number(opts["max-uses"]) : null,
     expiresAt: opts["expires-at"] ? new Date(opts["expires-at"]) : null,
+    assignedRank: rankRaw,
   };
 }
