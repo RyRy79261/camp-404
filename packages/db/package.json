@@ -10,6 +10,7 @@
     "./schema": "./src/schema.ts",
     "./burner-profile": "./src/burner-profile.ts",
     "./invite-codes": "./src/invite-codes.ts",
+    "./relations": "./src/relations.ts",
     "./mcp": "./src/mcp.ts",
     "./telegram": "./src/telegram.ts"
   },

@@ -12,6 +12,16 @@ export async function findUserByAuthId(authUserId: string) {
   return rows[0] ?? null;
 }
 
+export async function findUserById(userId: string) {
+  const db = createHttpDb();
+  const rows = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function createCampUser(input: {
   authUserId: string;
   displayName: string | null;
