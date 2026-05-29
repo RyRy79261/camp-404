@@ -190,6 +190,10 @@ export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   authUserId: text("auth_user_id").notNull().unique(),
   displayName: text("display_name"),
+  // Public Vercel Blob URL for the member's optional profile photo. Lives
+  // on the identity row (not buried in burner_profiles.responses) so it's
+  // cheap to read from the home header, profile page, and family tree.
+  profileImageUrl: text("profile_image_url"),
 
   rank: rankEnum("rank").notNull().default("member"),
   // The AI / voice agent (and any other non-human actor) owns a row so

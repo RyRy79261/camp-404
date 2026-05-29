@@ -58,6 +58,28 @@ export async function setUserRank(userId: string, rank: "captain" | "member") {
     .where(eq(schema.users.id, userId));
 }
 
+export async function setUserProfileImage(
+  userId: string,
+  profileImageUrl: string | null,
+) {
+  const db = createHttpDb();
+  await db
+    .update(schema.users)
+    .set({ profileImageUrl, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+}
+
+export async function setUserDisplayName(
+  userId: string,
+  displayName: string | null,
+) {
+  const db = createHttpDb();
+  await db
+    .update(schema.users)
+    .set({ displayName, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+}
+
 export async function getBurnerProfileByUserId(userId: string) {
   const db = createHttpDb();
   const rows = await db

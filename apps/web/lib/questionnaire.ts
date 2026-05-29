@@ -54,8 +54,24 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 export const QUESTIONNAIRE: Questionnaire = {
-  version: "2026.05.24-v7",
+  version: "2026.05.29-v8",
   pages: [
+    {
+      id: "profile_photo",
+      kind: "questions",
+      title: "Add a profile photo",
+      subtitle:
+        "Optional — helps the camp put a face to your name. You can skip and add it later from your profile.",
+      questions: [
+        {
+          id: "profile.image",
+          kind: "image",
+          prompt: "Profile photo",
+          helper: "A clear photo of your face works best.",
+          required: false,
+        },
+      ],
+    },
     {
       id: "about_you",
       kind: "questions",

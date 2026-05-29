@@ -48,6 +48,7 @@ In `packages/ui/src/components/`, exported via `@camp404/ui/components/*`:
 
 | Component | Notes |
 |---|---|
+| `avatar.tsx` | Circular avatar wrapping `@radix-ui/react-avatar`. Exports `Avatar`, `AvatarImage`, `AvatarFallback`; the fallback renders initials over the secondary token while the image loads or when none is set. Sized by `className` (e.g. `h-8 w-8` in the header, `h-32 w-32` on the profile page). |
 | `button.tsx` | CVA variants — `default`, `outline`, `ghost`, `destructive`, `secondary`; sizes `default`, `sm`, `lg`, `icon`. Supports `asChild` via Radix `Slot`. |
 | `card.tsx` | Surface container. |
 | `checkbox.tsx` | Wraps `@radix-ui/react-checkbox`. |
