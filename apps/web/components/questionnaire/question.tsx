@@ -25,6 +25,7 @@ import { Slider } from "@camp404/ui/components/slider";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { Mic } from "lucide-react";
 import { RecorderPanel } from "../voice/recorder-panel";
+import { AvatarUpload } from "../profile/avatar-upload";
 
 interface QuestionFieldProps {
   question: Question;
@@ -227,6 +228,15 @@ function FieldInput({
           placeholder={question.placeholder ?? "Select…"}
           searchPlaceholder={question.searchPlaceholder ?? "Search…"}
         />
+      );
+    case "image":
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center py-4">
+          <AvatarUpload
+            value={typeof value === "string" ? value : null}
+            onChange={(url) => onChange(url)}
+          />
+        </div>
       );
   }
 }

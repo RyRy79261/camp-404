@@ -6,6 +6,7 @@ import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
   hasCampAccess,
+  setProfileImage,
   upsertBurnerProfile,
 } from "@/lib/users";
 import { QUESTIONNAIRE } from "@/lib/questionnaire";
@@ -47,6 +48,14 @@ export async function saveBurnerProfile(
     responses,
     markComplete: final,
   });
+
+  // Mirror the optional profile photo onto the canonical users column so it
+  // can be read cheaply everywhere (header, profile page) without parsing
+  // the questionnaire JSON. Runs on progress + final saves alike.
+  const image = responses["profile.image"];
+  if (typeof image === "string") {
+    await setProfileImage(campUser.id, image.length > 0 ? image : null);
+  }
 
   if (final) redirect("/");
   return { ok: true };

@@ -12,6 +12,7 @@ interface TestUser {
   id: string;
   authUserId: string;
   displayName: string | null;
+  profileImageUrl: string | null;
   inviteCode: string | null;
   rank: TestRank;
   createdAt: Date;
@@ -75,6 +76,7 @@ export const testStore = {
       id: nextId(),
       authUserId: input.authUserId,
       displayName: input.displayName,
+      profileImageUrl: null,
       inviteCode: input.inviteCode,
       rank: input.rank ?? "member",
       createdAt: now,
@@ -96,6 +98,24 @@ export const testStore = {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
         user.rank = rank;
+        user.updatedAt = new Date();
+        return;
+      }
+    }
+  },
+  setProfileImage(userId: string, url: string | null): void {
+    for (const user of usersByAuthId.values()) {
+      if (user.id === userId) {
+        user.profileImageUrl = url;
+        user.updatedAt = new Date();
+        return;
+      }
+    }
+  },
+  setDisplayName(userId: string, name: string | null): void {
+    for (const user of usersByAuthId.values()) {
+      if (user.id === userId) {
+        user.displayName = name;
         user.updatedAt = new Date();
         return;
       }

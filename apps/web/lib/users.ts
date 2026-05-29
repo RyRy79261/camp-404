@@ -5,7 +5,9 @@ import {
   createCampUser,
   findUserByAuthId,
   getBurnerProfileByUserId,
+  setUserDisplayName,
   setUserInviteCode,
+  setUserProfileImage,
   setUserRank,
   upsertBurnerProfile as upsertBurnerProfileDb,
 } from "@camp404/db/burner-profile";
@@ -24,6 +26,7 @@ export interface CampUser {
   id: string;
   authUserId: string;
   displayName: string | null;
+  profileImageUrl: string | null;
   inviteCode: string | null;
   rank: Rank;
 }
@@ -121,6 +124,8 @@ interface UserBackend {
   }): Promise<CampUser>;
   setUserInviteCode(userId: string, code: string): Promise<void>;
   setUserRank(userId: string, rank: Rank): Promise<void>;
+  setUserProfileImage(userId: string, url: string | null): Promise<void>;
+  setUserDisplayName(userId: string, name: string | null): Promise<void>;
   getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null>;
   upsertBurnerProfile(input: {
     userId: string;
@@ -140,6 +145,24 @@ export async function upsertBurnerProfile(input: {
   await store.upsertBurnerProfile(input);
 }
 
+/** Persist the member's profile photo URL (or null to clear it). */
+export async function setProfileImage(
+  userId: string,
+  url: string | null,
+): Promise<void> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  await store.setUserProfileImage(userId, url);
+}
+
+/** Update the member's display name. */
+export async function setDisplayName(
+  userId: string,
+  name: string | null,
+): Promise<void> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  await store.setUserDisplayName(userId, name);
+}
+
 const realBackend: UserBackend = {
   async findUserByAuthId(authUserId) {
     const row = await findUserByAuthId(authUserId);
@@ -154,6 +177,12 @@ const realBackend: UserBackend = {
   },
   async setUserRank(userId, rank) {
     await setUserRank(userId, rank);
+  },
+  async setUserProfileImage(userId, url) {
+    await setUserProfileImage(userId, url);
+  },
+  async setUserDisplayName(userId, name) {
+    await setUserDisplayName(userId, name);
   },
   async getBurnerProfile(userId) {
     const row = await getBurnerProfileByUserId(userId);
@@ -185,6 +214,12 @@ const testBackend: UserBackend = {
   async setUserRank(userId, rank) {
     testStore.setUserRank(userId, rank);
   },
+  async setUserProfileImage(userId, url) {
+    testStore.setProfileImage(userId, url);
+  },
+  async setUserDisplayName(userId, name) {
+    testStore.setDisplayName(userId, name);
+  },
   async getBurnerProfile(userId) {
     const row = testStore.getProfile(userId);
     if (!row) return null;
@@ -204,6 +239,7 @@ function toCampUser(row: {
   id: string;
   authUserId: string;
   displayName: string | null;
+  profileImageUrl?: string | null;
   inviteCode: string | null;
   rank: Rank;
 }): CampUser {
@@ -211,6 +247,7 @@ function toCampUser(row: {
     id: row.id,
     authUserId: row.authUserId,
     displayName: row.displayName,
+    profileImageUrl: row.profileImageUrl ?? null,
     inviteCode: row.inviteCode,
     rank: row.rank,
   };

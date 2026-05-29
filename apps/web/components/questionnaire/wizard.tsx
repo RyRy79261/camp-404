@@ -123,7 +123,25 @@ export function QuestionnaireWizard({
     (page.kind === "questions" &&
       page.questions.length === 1 &&
       (page.questions[0]?.kind === "scale" ||
-        page.questions[0]?.kind === "long_text"));
+        page.questions[0]?.kind === "long_text" ||
+        page.questions[0]?.kind === "image"));
+
+  // A lone optional question with no answer yet (e.g. the profile photo
+  // page) lets the user move on with an explicit "Skip" rather than
+  // "Next" — clearer that nothing is being captured.
+  const lone =
+    page.kind === "questions" && page.questions.length === 1
+      ? page.questions[0]
+      : undefined;
+  const isSkippable =
+    !!lone &&
+    "required" in lone &&
+    !lone.required &&
+    (() => {
+      const v = responses[lone.id];
+      return v === undefined || v === null || v === "";
+    })();
+  const nextLabel = isSkippable ? "Skip" : "Next";
 
   return (
     <form
@@ -186,7 +204,7 @@ export function QuestionnaireWizard({
           Back
         </Button>
         <Button type="submit" disabled={isPending}>
-          {isLast ? submitLabel : "Next"}
+          {isLast ? submitLabel : nextLabel}
         </Button>
       </div>
     </form>

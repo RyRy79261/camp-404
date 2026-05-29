@@ -122,6 +122,18 @@ export const ComboboxQuestion = z.object({
 });
 export type ComboboxQuestion = z.infer<typeof ComboboxQuestion>;
 
+// Image upload — the stored value is the public URL of the uploaded image
+// (a Vercel Blob URL in production). Rendered as a large circular uploader
+// in the wizard. Optional by default; profile photos are never mandatory.
+export const ImageQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("image"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  required: z.boolean().default(false),
+});
+export type ImageQuestion = z.infer<typeof ImageQuestion>;
+
 export const Question = z.discriminatedUnion("kind", [
   SliderQuestion,
   SingleSelectQuestion,
@@ -132,6 +144,7 @@ export const Question = z.discriminatedUnion("kind", [
   ScaleQuestion,
   ToggleQuestion,
   ComboboxQuestion,
+  ImageQuestion,
 ]);
 export type Question = z.infer<typeof Question>;
 
@@ -412,6 +425,11 @@ function validateOne(
         return { ok: false, error: "Expected a choice" };
       if (!q.options.some((o) => o.value === raw))
         return { ok: false, error: "Not a valid option" };
+      return { ok: true, value: raw };
+    }
+    case "image": {
+      if (typeof raw !== "string")
+        return { ok: false, error: "Expected an image URL" };
       return { ok: true, value: raw };
     }
   }

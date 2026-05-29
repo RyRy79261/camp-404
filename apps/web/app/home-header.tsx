@@ -1,18 +1,26 @@
+import Link from "next/link";
 import { Bell } from "lucide-react";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@camp404/ui/components/avatar";
 
 interface HomeHeaderProps {
   initials: string;
+  /** Member's profile photo URL, when set. */
+  imageUrl?: string | null;
   /** Optional unread-notification count. Falsy hides the badge. */
   notifications?: number;
 }
 
 /**
  * Right-hand header content for the home control panel: notifications bell
- * with an unread badge, and the signed-in member's initials as an avatar.
- * Read-only for now — wiring the bell to the notifications inbox and the
- * avatar to /profile are follow-ups.
+ * with an unread badge, and the signed-in member's avatar (photo or
+ * initials) linking through to their profile. Wiring the bell to the
+ * notifications inbox is still a follow-up.
  */
-export function HomeHeader({ initials, notifications }: HomeHeaderProps) {
+export function HomeHeader({ initials, imageUrl, notifications }: HomeHeaderProps) {
   return (
     <>
       <button
@@ -34,12 +42,16 @@ export function HomeHeader({ initials, notifications }: HomeHeaderProps) {
           </span>
         ) : null}
       </button>
-      <span
-        aria-label={`Signed in as ${initials}`}
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--color-secondary)] text-xs font-semibold text-[color:var(--color-secondary-foreground)]"
+      <Link
+        href="/profile"
+        aria-label="Your profile"
+        className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)]"
       >
-        {initials}
-      </span>
+        <Avatar className="h-8 w-8">
+          {imageUrl ? <AvatarImage src={imageUrl} alt="" /> : null}
+          <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+        </Avatar>
+      </Link>
     </>
   );
 }
