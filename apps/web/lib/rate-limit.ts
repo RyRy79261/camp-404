@@ -10,6 +10,19 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 
+// Sweep expired buckets every N calls to prevent unbounded Map growth
+// under high-cardinality IP traffic.
+const SWEEP_EVERY = 200;
+let sweepCounter = 0;
+
+function maybeSweep(windowMs: number): void {
+  if (++sweepCounter % SWEEP_EVERY !== 0) return;
+  const expiresBefore = Date.now() - windowMs;
+  for (const [key, bucket] of buckets) {
+    if (bucket.updatedAt < expiresBefore) buckets.delete(key);
+  }
+}
+
 export interface RateLimitOptions {
   /** Max requests per `windowMs`. */
   limit: number;
@@ -29,6 +42,7 @@ export interface RateLimitResult {
  */
 export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult {
   const windowMs = opts.windowMs ?? 60_000;
+  maybeSweep(windowMs);
   const refillPerMs = opts.limit / windowMs;
   const now = Date.now();
   const existing = buckets.get(key);
