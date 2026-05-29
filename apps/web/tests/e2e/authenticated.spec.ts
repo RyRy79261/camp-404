@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { completeQuestionnaire, login, resetTestState } from "./_helpers";
+import { completeOnboarding, login, resetTestState } from "./_helpers";
 
 // All specs here rely on E2E_TEST_MODE=1 in the dev server env (see
 // playwright.config.ts). The /api/test/login + reset routes are only
@@ -31,34 +31,72 @@ test.describe("authenticated flow (test-mode)", () => {
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/signup\/required/);
-    await expect(page.getByText("Just one thing")).toBeVisible();
+    await expect(page.getByText("You're not on the list")).toBeVisible();
   });
 
-  test("invite redeemed at /signup/required unlocks the questionnaire", async ({
+  test("invite redeemed at /signup unlocks the questionnaire", async ({
     page,
     request,
   }) => {
-    await login(request, { email: "redeemer@example.com" });
-    await page.goto("/signup/required");
+    // The invite form lives only on /signup. Redeeming drops the cookie and
+    // sends the (still-anonymous) browser to the Neon Auth sign-up page.
+    await page.goto("/signup");
     await page.getByLabel("Invite code").fill("TEST-INVITE");
-    await page.getByRole("button", { name: "Unlock my account" }).click();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
 
-    // The action sets the cookie and redirects to /, which then sees the
-    // (now-claimed) code on the user row and forwards to the questionnaire.
+    // Simulate sign-up completing: the test user logs in and hits /, which
+    // claims the cookie code onto their row and forwards to the questionnaire.
+    await login(request, { id: "redeemer-auth", email: "redeemer@example.com" });
+    await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
   });
 
-  test("completing the questionnaire redirects home", async ({
+  test("completing onboarding redirects an approved user home", async ({
     page,
     request,
   }) => {
-    await login(request, { email: "god@example.com" });
-    await page.goto("/onboarding/questionnaire");
-    await completeQuestionnaire(page);
+    // God accounts are approved by default — straight to the app once
+    // onboarding is done.
+    await login(request, { id: "god-auth", email: "god@example.com" });
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
+    await completeOnboarding(request, "god-auth");
+
+    await page.goto("/");
     await expect(page).toHaveURL("/");
     // Home now shows the layered ControlPanel instead of the sign-in CTA.
     await expect(page.getByRole("link", { name: /My Teams/ })).toBeVisible();
+  });
+
+  test("a pending member is held at /pending-approval after onboarding", async ({
+    page,
+    request,
+  }) => {
+    // A vetting-required code lands the redeemer in the approval queue.
+    await request.post("/api/test/seed-invite", {
+      data: { code: "GATEKEEP", maxUses: 1, requiresApproval: true },
+    });
+    await page.goto("/signup");
+    await page.getByLabel("Invite code").fill("GATEKEEP");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
+
+    await login(request, { id: "pending-auth", email: "pending@example.com" });
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+
+    // Finish onboarding — now the approval gate is the only thing left, and
+    // it blocks the app with the "application submitted" screen.
+    await completeOnboarding(request, "pending-auth");
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/pending-approval/);
+    await expect(page.getByText("Application submitted")).toBeVisible();
+
+    // The gate holds on other protected routes too, not just home.
+    await page.goto("/tools");
+    await expect(page).toHaveURL(/\/pending-approval/);
   });
 
   test("/api/voice/transcribe accepts an authed request and rejects bad input", async ({

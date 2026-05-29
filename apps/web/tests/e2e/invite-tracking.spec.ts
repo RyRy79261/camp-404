@@ -55,7 +55,7 @@ test.describe("invite-code redemption", () => {
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     const aliceLookup = await request.get(
-      "/api/test/inspect?stackUserId=alice-auth",
+      "/api/test/inspect?authUserId=alice-auth",
     );
     const alice = (await aliceLookup.json()) as { user: { id: string } };
 
@@ -85,7 +85,7 @@ test.describe("invite-code redemption", () => {
     // 4. Provenance check: bob's user row points at BERLIN-CREW, the
     //    BERLIN-CREW row points at alice, and the use_count went up by 1.
     const bobLookup = await request.get(
-      "/api/test/inspect?stackUserId=bob-auth",
+      "/api/test/inspect?authUserId=bob-auth",
     );
     const bob = (await bobLookup.json()) as {
       user: { id: string; inviteCode: string };

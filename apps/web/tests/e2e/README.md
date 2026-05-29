@@ -27,7 +27,7 @@ the following fixture env (see `playwright.config.ts`):
 
 | Var | Value | Purpose |
 |---|---|---|
-| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,inspect}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
+| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,inspect,complete-onboarding}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
 | `INVITE_CODES` | `TEST-INVITE` | One known bootstrap (env-list) code for redemption specs. |
 | `GOD_EMAILS` | `god@example.com` | One whitelisted god account that bypasses the invite gate. |
 
@@ -58,6 +58,24 @@ row that gets lazily created is keyed to it deterministically. The
 in-memory store (`apps/web/lib/test-store.ts`) replaces all the
 Neon-backed reads/writes in this mode.
 
+#### Reaching post-onboarding gates
+
+The burner-profile questionnaire is a 13-page wizard. Its page-by-page
+navigation, validation and submission contract are covered at the
+component layer (`components/__tests__/wizard.test.tsx`), so e2e specs
+don't re-drive every field — they call `completeOnboarding(request,
+authUserId)` (POST `/api/test/complete-onboarding`) to mark the profile
+complete and jump straight to the gates that follow it (home vs.
+`/pending-approval`). The user row must exist first, so hit a gated page
+(e.g. `/`) once after login before calling it.
+
+> Note: the captains' camp-management roster (`getCampManagementRoster` /
+> `getCampMemberDetail`) reads the **real** Neon DB, not the in-memory
+> store, so the approve/reject UI isn't drivable under `E2E_TEST_MODE`.
+> The approval *gate* (pending users blocked at `/pending-approval`) and
+> the `users.approval_status` stamping on redemption are, since those go
+> through the test-backed `users` helpers.
+
 ### Spec coverage
 
 - `home.spec.ts` — unauth home page shows both auth CTAs.
@@ -67,12 +85,15 @@ Neon-backed reads/writes in this mode.
   rejects unauthenticated callers with 401.
 - `authenticated.spec.ts` — god email reaches the questionnaire,
   non-god without invite is bounced to `/signup/required`, redeeming an
-  invite at `/signup/required` unlocks the questionnaire, completing
-  the questionnaire redirects home, voice transcribe accepts an authed
-  request and rejects bad input.
+  invite at `/signup` unlocks the questionnaire, an approved user who
+  finishes onboarding lands home, a pending (vetting-required) user is
+  held at `/pending-approval` after onboarding, and voice transcribe
+  accepts an authed request while rejecting bad input.
 - `invite-tracking.spec.ts` — env (bootstrap) code redemption survives
-  signup, DB-backed codes record their issuer and use count, and an
-  exhausted code can't be claimed even by a stale cookie.
+  signup, DB-backed codes record their issuer and use count, an
+  approval-required code creates a `pending` account and a pre-approved
+  one creates an `approved` account, and an exhausted code can't be
+  claimed even by a stale cookie.
 
 ### Running against a deployed preview
 

@@ -1,4 +1,4 @@
-import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
+import type { APIRequestContext, BrowserContext } from "@playwright/test";
 
 /**
  * Test-mode helpers. These hit `/api/test/*` endpoints that are only
@@ -29,56 +29,29 @@ export async function resetTestState(request: APIRequestContext): Promise<void> 
 }
 
 /**
- * Walk every page of the burner-profile wizard with valid answers, then
- * click Finish on the last page. Caller is responsible for being on
- * /onboarding/questionnaire first.
+ * Mark a test user's burner-profile onboarding complete via the test seam.
+ * The questionnaire is a 13-page wizard whose page-by-page navigation,
+ * validation and submission contract are covered at the component layer
+ * (`components/__tests__/wizard.test.tsx`); e2e only needs to reach the
+ * post-onboarding gates (home vs. /pending-approval), so it shortcuts there
+ * deterministically instead of re-driving every field.
+ *
+ * The user row must already exist — hit a gated page (e.g. `/`) once after
+ * login so `ensureCampUser` lazily creates it before calling this.
  */
-export async function completeQuestionnaire(page: Page): Promise<void> {
-  // Page 1 — About you
-  await page.getByLabel("First name").fill("Ash");
-  await page.getByLabel("Surname").fill("Dust");
-  await page.getByLabel("Nationality").fill("South African");
-  await page.getByLabel("ID document").click();
-  await page.getByRole("option", { name: "South African ID" }).click();
-  await page.getByLabel("Document number").fill("1234567890123");
-  await page.getByLabel("Telegram handle").fill("ash_in_the_dust");
-  await page.getByRole("button", { name: "Next" }).click();
-
-  // Page 2 — Burner history (everything optional, just advance)
-  await page.getByText("Burner history", { exact: false }).waitFor();
-  await page.getByRole("button", { name: "Next" }).click();
-
-  // Page 3 — Ticketing
-  await page.getByText("Ticketing", { exact: false }).waitFor();
-  await page.getByLabel(/Do you need help/i).click();
-  await page
-    .getByRole("option", { name: /No — I already have a ticket/ })
-    .click();
-  await page.getByRole("button", { name: "Next" }).click();
-
-  // Page 4 — Intent
-  await page.getByLabel("Your intent for this burn").fill("Cook and vibe.");
-  await page.getByRole("button", { name: "Next" }).click();
-
-  // Page 5 — Skills (sliders default to mid; just submit)
-  await page.getByText("Skills", { exact: false }).first().waitFor();
-  await page.getByRole("button", { name: "Next" }).click();
-
-  // Page 6 — Bio
-  await page
-    .getByLabel("Tell us about yourself")
-    .fill("Long-time burner, first-time member.");
-  await page.getByRole("button", { name: "Next" }).click();
-
-  // Page 7 — Referral
-  await page.getByLabel("How did you hear about Camp 404?").click();
-  await page
-    .getByRole("option", { name: /A current member invited me/ })
-    .click();
-  await page.getByRole("button", { name: "Finish" }).click();
+export async function completeOnboarding(
+  request: APIRequestContext,
+  authUserId: string,
+): Promise<void> {
+  const res = await request.post("/api/test/complete-onboarding", {
+    data: { authUserId },
+  });
+  if (!res.ok()) {
+    throw new Error(`completeOnboarding failed: ${res.status()}`);
+  }
 }
 
-/** Drop a Stack-style auth-cookie placeholder for an existing Browser context. */
+/** Clear cookies for an existing Browser context. */
 export async function logoutAll(context: BrowserContext): Promise<void> {
   await context.clearCookies();
 }

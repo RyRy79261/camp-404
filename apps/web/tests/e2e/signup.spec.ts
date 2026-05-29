@@ -24,16 +24,17 @@ test.describe("invite-code gate", () => {
     expect(cookies.find((c) => c.name === "camp404_invite")).toBeUndefined();
   });
 
-  test("a valid code sets the cookie and redirects to Stack's sign-up", async ({
+  test("a valid code sets the cookie and redirects to the sign-up page", async ({
     page,
   }) => {
     await page.goto("/signup");
     await page.getByLabel("Invite code").fill("TEST-INVITE");
     await page.getByRole("button", { name: "Continue" }).click();
 
-    // Stack's hosted UI lives under /handler — we don't assert anything
-    // about its DOM, just that the redirect happened and our cookie is set.
-    await expect(page).toHaveURL(/\/handler\/sign-up/);
+    // Neon Auth's sign-up UI lives under /auth/sign-up (the form's default
+    // `next`). We don't assert anything about its DOM, just that the redirect
+    // happened and our cookie is set.
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
     const cookies = await page.context().cookies();
     const invite = cookies.find((c) => c.name === "camp404_invite");
     expect(invite?.value).toBe("TEST-INVITE");
