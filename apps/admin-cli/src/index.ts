@@ -6,6 +6,7 @@ import {
   createInviteCode,
   findUsableInviteCode,
 } from "@camp404/db/invite-codes";
+import { findUserById } from "@camp404/db/burner-profile";
 import { parseMintArgs } from "./parse-mint-args";
 
 const [, , command, ...rest] = process.argv;
@@ -54,8 +55,35 @@ async function mintInvite(args: string[]) {
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     console.error(
-      "\nUsage: camp404 mint-invite --code CODE [--created-by UUID]" +
-        " [--note 'Berlin crew'] [--max-uses 5] [--expires-at 2026-06-01]",
+      "\nUsage: camp404 mint-invite --code CODE --created-by UUID" +
+        " [--note 'Berlin crew'] [--max-uses 5] [--expires-at 2026-06-01]" +
+        " [--assigns-rank captain|member]",
+    );
+    return process.exit(1);
+  }
+
+  // Captain-gate: this CLI is a privileged operator tool (anyone with
+  // DATABASE_URL can already do anything; this is defense in depth, not a
+  // real auth boundary — the same check belongs on the eventual in-app
+  // endpoint). The operator must name a real captain as `--created-by` so
+  // every code has a verified inviter. Bootstrap-founder is the only path
+  // that mints a code with no inviter (used once, before any captain exists).
+  if (!parsed.createdByUserId) {
+    console.error(
+      "--created-by is required (must be a captain's users.id UUID).",
+    );
+    return process.exit(1);
+  }
+  const inviter = await findUserById(parsed.createdByUserId);
+  if (!inviter) {
+    console.error(
+      `No user found with id ${parsed.createdByUserId}. Cannot mint.`,
+    );
+    return process.exit(1);
+  }
+  if (inviter.rank !== "captain") {
+    console.error(
+      `User ${inviter.id} has rank '${inviter.rank}'. Only captains may mint invite codes.`,
     );
     return process.exit(1);
   }
@@ -69,6 +97,7 @@ async function mintInvite(args: string[]) {
         note: row.note,
         maxUses: row.maxUses,
         expiresAt: row.expiresAt,
+        assignedRank: row.assignedRank,
       },
       null,
       2,
@@ -151,10 +180,12 @@ Usage:
   camp404 seed                      Seed minimum viable camp data
   camp404 wipe-test-data            Remove all test- prefixed rows
   camp404 mint-invite --code CODE   Issue a new invite code
-    [--created-by UUID]               (the inviting member's users.id)
+    --created-by UUID                 (REQUIRED — must be a captain's users.id)
     [--note 'free text']              (e.g. "Berlin crew", "Camp Lead VIP")
     [--max-uses N]                    (default: unlimited)
     [--expires-at YYYY-MM-DD]         (default: never)
+    [--assigns-rank captain|member]   (auto-promote redeemer; default: none)
+                                      Refuses unless --created-by is a captain.
   camp404 bootstrap-founder --email YOU@EXAMPLE.COM
                                     Mint the single-use '${FOUNDER_CODE}'
                                     founder invite. Redeem at /signup.

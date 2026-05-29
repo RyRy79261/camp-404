@@ -1,6 +1,6 @@
 {
-  "id": "9024fbcc-99c9-4f54-80f8-41611ce1d507",
-  "prevId": "9d4f9f64-67dd-4341-9362-79d4f82dfa1f",
+  "id": "145bf397-cead-43cd-885b-de806aaf15c9",
+  "prevId": "9024fbcc-99c9-4f54-80f8-41611ce1d507",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1455,6 +1455,12 @@
           "name": "assigned_rank",
           "type": "rank",
           "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "invited_email": {
+          "name": "invited_email",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

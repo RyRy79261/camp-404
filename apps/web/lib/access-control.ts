@@ -3,9 +3,15 @@ import "server-only";
 import {
   consumeInviteCode as dbConsumeInviteCode,
   findUsableInviteCode as dbFindUsableInviteCode,
+  type AssignedRank,
 } from "@camp404/db/invite-codes";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
+
+export interface ClaimedInvite {
+  code: string;
+  assignedRank: AssignedRank | null;
+}
 
 // Name of the HttpOnly cookie that proves a user redeemed an invite code on
 // `/signup` before being sent to Stack's sign-up UI. Read on the first
@@ -55,17 +61,22 @@ export async function isValidInviteCode(code: string): Promise<boolean> {
 
 /**
  * Atomically claim a code. For env codes (unlimited bootstrap) this is a
- * pure validity check. For DB codes this increments `use_count` inside a
- * single UPDATE so two concurrent redeemers can't both succeed on the
- * last remaining use. Returns the code string on success, `null` on
- * failure (invalid, expired, revoked, exhausted, or race-loser).
+ * pure validity check and never assigns a rank. For DB codes this
+ * increments `use_count` inside a single UPDATE so two concurrent
+ * redeemers can't both succeed on the last remaining use; the returned
+ * row carries any `assignedRank` the code stamps onto its redeemer.
+ * Returns null on failure (invalid, expired, revoked, exhausted, or
+ * race-loser).
  */
-export async function claimInviteCode(code: string): Promise<string | null> {
+export async function claimInviteCode(
+  code: string,
+): Promise<ClaimedInvite | null> {
   const trimmed = code.trim();
   if (!trimmed) return null;
-  if (isEnvCode(trimmed)) return trimmed;
+  if (isEnvCode(trimmed)) return { code: trimmed, assignedRank: null };
   const consumed = await consumeDbCode(trimmed);
-  return consumed ? trimmed : null;
+  if (!consumed) return null;
+  return { code: trimmed, assignedRank: consumed.assignedRank };
 }
 
 function isEnvCode(code: string): boolean {

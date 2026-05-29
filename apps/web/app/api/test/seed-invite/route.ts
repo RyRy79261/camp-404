@@ -13,6 +13,7 @@ interface SeedBody {
   note?: string;
   maxUses?: number;
   expiresAt?: string;
+  assignedRank?: "captain" | "member";
 }
 
 export async function POST(req: Request) {
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
     note: body.note ?? null,
     maxUses: body.maxUses ?? null,
     expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+    assignedRank: body.assignedRank ?? null,
   });
   return NextResponse.json({ ok: true, inviteCode: row });
 }

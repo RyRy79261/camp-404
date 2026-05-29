@@ -1,6 +1,6 @@
 {
-  "id": "9024fbcc-99c9-4f54-80f8-41611ce1d507",
-  "prevId": "9d4f9f64-67dd-4341-9362-79d4f82dfa1f",
+  "id": "32f3faa8-d331-4d45-8840-051dc32906de",
+  "prevId": "145bf397-cead-43cd-885b-de806aaf15c9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1458,6 +1458,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "invited_email": {
+          "name": "invited_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -2407,6 +2413,119 @@
           "tableTo": "users",
           "columnsFrom": [
             "activated_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.questionnaire_edits": {
+      "name": "questionnaire_edits",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "questionnaire_key": {
+          "name": "questionnaire_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "edited_by_user_id": {
+          "name": "edited_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "changes": {
+          "name": "changes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "questionnaire_edits_user_key_created_idx": {
+          "name": "questionnaire_edits_user_key_created_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "questionnaire_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "questionnaire_edits_user_id_users_id_fk": {
+          "name": "questionnaire_edits_user_id_users_id_fk",
+          "tableFrom": "questionnaire_edits",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "questionnaire_edits_edited_by_user_id_users_id_fk": {
+          "name": "questionnaire_edits_edited_by_user_id_users_id_fk",
+          "tableFrom": "questionnaire_edits",
+          "tableTo": "users",
+          "columnsFrom": [
+            "edited_by_user_id"
           ],
           "columnsTo": [
             "id"

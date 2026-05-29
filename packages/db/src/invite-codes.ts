@@ -2,6 +2,8 @@ import { and, eq, isNull, or, sql, gt } from "drizzle-orm";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
 
+export type AssignedRank = "captain" | "member";
+
 export interface InviteCodeRow {
   code: string;
   createdByUserId: string | null;
@@ -10,6 +12,8 @@ export interface InviteCodeRow {
   useCount: number;
   expiresAt: Date | null;
   revokedAt: Date | null;
+  assignedRank: AssignedRank | null;
+  invitedEmail: string | null;
   createdAt: Date;
 }
 
@@ -81,6 +85,8 @@ export async function createInviteCode(input: {
   note?: string | null;
   maxUses?: number | null;
   expiresAt?: Date | null;
+  assignedRank?: AssignedRank | null;
+  invitedEmail?: string | null;
 }): Promise<InviteCodeRow> {
   const db = createHttpDb();
   const [row] = await db
@@ -91,8 +97,30 @@ export async function createInviteCode(input: {
       note: input.note ?? null,
       maxUses: input.maxUses ?? null,
       expiresAt: input.expiresAt ?? null,
+      assignedRank: input.assignedRank ?? null,
+      invitedEmail: input.invitedEmail?.toLowerCase() ?? null,
     })
     .returning();
   if (!row) throw new Error("Failed to insert invite code");
   return row;
+}
+
+/**
+ * Existence check — used for GitHub-style "is this code name taken?"
+ * availability hints on /tools/invite. Returns the row regardless of
+ * revoked / expired / exhausted state, because we don't want to let two
+ * people pick the same name even if the first one is dead — codes are
+ * forever-unique by primary key anyway, this just gives the UI an early
+ * heads-up before the insert fails.
+ */
+export async function findInviteCodeByCode(
+  code: string,
+): Promise<InviteCodeRow | null> {
+  const db = createHttpDb();
+  const rows = await db
+    .select()
+    .from(schema.inviteCodes)
+    .where(eq(schema.inviteCodes.code, code))
+    .limit(1);
+  return rows[0] ?? null;
 }

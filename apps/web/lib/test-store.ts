@@ -6,11 +6,14 @@ import type { QuestionnaireFieldChange } from "@camp404/types";
 // burner-profile tables. Only used when isE2ETestMode() is true.
 // Reset between tests via DELETE /api/test/reset.
 
+type TestRank = "captain" | "member";
+
 interface TestUser {
   id: string;
   authUserId: string;
   displayName: string | null;
   inviteCode: string | null;
+  rank: TestRank;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,6 +45,8 @@ interface TestInviteCode {
   useCount: number;
   expiresAt: Date | null;
   revokedAt: Date | null;
+  assignedRank: TestRank | null;
+  invitedEmail: string | null;
   createdAt: Date;
 }
 
@@ -63,6 +68,7 @@ export const testStore = {
     authUserId: string;
     displayName: string | null;
     inviteCode: string | null;
+    rank?: TestRank;
   }): TestUser {
     const now = new Date();
     const user: TestUser = {
@@ -70,6 +76,7 @@ export const testStore = {
       authUserId: input.authUserId,
       displayName: input.displayName,
       inviteCode: input.inviteCode,
+      rank: input.rank ?? "member",
       createdAt: now,
       updatedAt: now,
     };
@@ -80,6 +87,15 @@ export const testStore = {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
         user.inviteCode = code;
+        user.updatedAt = new Date();
+        return;
+      }
+    }
+  },
+  setUserRank(userId: string, rank: TestRank): void {
+    for (const user of usersByAuthId.values()) {
+      if (user.id === userId) {
+        user.rank = rank;
         user.updatedAt = new Date();
         return;
       }
@@ -152,6 +168,8 @@ export const testStore = {
     note?: string | null;
     maxUses?: number | null;
     expiresAt?: Date | null;
+    assignedRank?: TestRank | null;
+    invitedEmail?: string | null;
   }): TestInviteCode {
     const row: TestInviteCode = {
       code: input.code,
@@ -161,6 +179,8 @@ export const testStore = {
       useCount: 0,
       expiresAt: input.expiresAt ?? null,
       revokedAt: null,
+      assignedRank: input.assignedRank ?? null,
+      invitedEmail: input.invitedEmail ?? null,
       createdAt: new Date(),
     };
     inviteCodes.set(input.code, row);

@@ -6,12 +6,15 @@ import {
   findUserByAuthId,
   getBurnerProfileByUserId,
   setUserInviteCode,
+  setUserRank,
   upsertBurnerProfile as upsertBurnerProfileDb,
 } from "@camp404/db/burner-profile";
 import { claimInviteCode, INVITE_COOKIE, isGodEmail } from "./access-control";
 import type { AuthenticatedUser } from "./auth";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
+
+type Rank = "captain" | "member";
 
 /**
  * Common camp-user shape that both the real Drizzle row and the in-memory
@@ -22,6 +25,7 @@ export interface CampUser {
   authUserId: string;
   displayName: string | null;
   inviteCode: string | null;
+  rank: Rank;
 }
 
 /**
@@ -48,15 +52,23 @@ export async function ensureCampUser(
 
   // Need to redeem the cookie code (if any) before granting access. This
   // is the authoritative atomic claim — if two browsers race for the last
-  // remaining use of a DB-backed code, only one wins.
-  const claimedCode =
+  // remaining use of a DB-backed code, only one wins. The claim returns
+  // any `assignedRank` stamped on the code (e.g. captain-tier invites).
+  const claimed =
     !god && cookieValue ? await claimInviteCode(cookieValue) : null;
 
   if (existing) {
-    if (claimedCode) {
-      await store.setUserInviteCode(existing.id, claimedCode);
+    if (claimed) {
+      await store.setUserInviteCode(existing.id, claimed.code);
+      if (claimed.assignedRank && claimed.assignedRank !== existing.rank) {
+        await store.setUserRank(existing.id, claimed.assignedRank);
+      }
       cookieStore.delete(INVITE_COOKIE);
-      return { ...existing, inviteCode: claimedCode };
+      return {
+        ...existing,
+        inviteCode: claimed.code,
+        rank: claimed.assignedRank ?? existing.rank,
+      };
     }
     if (cookieValue) cookieStore.delete(INVITE_COOKIE);
     return existing;
@@ -65,7 +77,8 @@ export async function ensureCampUser(
   const created = await store.createUser({
     authUserId: authUser.id,
     displayName: authUser.displayName ?? authUser.primaryEmail,
-    inviteCode: god ? null : claimedCode,
+    inviteCode: god ? null : claimed?.code ?? null,
+    rank: claimed?.assignedRank ?? "member",
   });
   if (cookieValue) cookieStore.delete(INVITE_COOKIE);
   return created;
@@ -104,8 +117,10 @@ interface UserBackend {
     authUserId: string;
     displayName: string | null;
     inviteCode: string | null;
+    rank: Rank;
   }): Promise<CampUser>;
   setUserInviteCode(userId: string, code: string): Promise<void>;
+  setUserRank(userId: string, rank: Rank): Promise<void>;
   getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null>;
   upsertBurnerProfile(input: {
     userId: string;
@@ -137,6 +152,9 @@ const realBackend: UserBackend = {
   async setUserInviteCode(userId, code) {
     await setUserInviteCode(userId, code);
   },
+  async setUserRank(userId, rank) {
+    await setUserRank(userId, rank);
+  },
   async getBurnerProfile(userId) {
     const row = await getBurnerProfileByUserId(userId);
     if (!row) return null;
@@ -164,6 +182,9 @@ const testBackend: UserBackend = {
   async setUserInviteCode(userId, code) {
     testStore.setUserInviteCode(userId, code);
   },
+  async setUserRank(userId, rank) {
+    testStore.setUserRank(userId, rank);
+  },
   async getBurnerProfile(userId) {
     const row = testStore.getProfile(userId);
     if (!row) return null;
@@ -184,11 +205,13 @@ function toCampUser(row: {
   authUserId: string;
   displayName: string | null;
   inviteCode: string | null;
+  rank: Rank;
 }): CampUser {
   return {
     id: row.id,
     authUserId: row.authUserId,
     displayName: row.displayName,
     inviteCode: row.inviteCode,
+    rank: row.rank,
   };
 }
