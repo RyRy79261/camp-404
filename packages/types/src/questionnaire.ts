@@ -188,6 +188,120 @@ export const QuestionnaireResponses = z.record(
 );
 export type QuestionnaireResponses = z.infer<typeof QuestionnaireResponses>;
 
+// --- Edit change log -----------------------------------------------------
+// One field that changed when a user replayed (re-submitted) a questionnaire
+// they had already completed. We deliberately keep no full version history —
+// just a running log of *what* changed and *when*. `from` / `to` are the
+// human-readable display values (option labels resolved, lists joined), so
+// the log renders straight to the user without needing the catalogue.
+
+export const QuestionnaireFieldChange = z.object({
+  fieldId: z.string().min(1),
+  // The question prompt at edit time, captured so the log stays readable
+  // even if the catalogue copy changes later.
+  label: z.string(),
+  from: z.string(),
+  to: z.string(),
+});
+export type QuestionnaireFieldChange = z.infer<typeof QuestionnaireFieldChange>;
+
+// Flatten a questionnaire's pages into a single ordered list of questions
+// (intro pages have none). Useful for diffing and for resolving a field id
+// back to its question definition.
+export function flattenQuestions(questionnaire: Questionnaire): Question[] {
+  const out: Question[] = [];
+  for (const page of questionnaire.pages) {
+    if (page.kind === "questions") out.push(...page.questions);
+  }
+  return out;
+}
+
+const EMPTY_DISPLAY = "—";
+
+/**
+ * Render a stored response value as the string a human would recognise —
+ * option labels instead of raw values, lists joined, empty answers as a
+ * dash. Falls back to the raw value for unknown options.
+ */
+export function displayResponseValue(
+  question: Question,
+  value: QuestionnaireResponseValue | undefined,
+): string {
+  if (value === undefined || value === null || value === "") {
+    return EMPTY_DISPLAY;
+  }
+  switch (question.kind) {
+    case "single_select":
+    case "toggle":
+    case "combobox": {
+      const opt = question.options.find((o) => o.value === value);
+      return opt ? opt.label : String(value);
+    }
+    case "scale": {
+      const step = question.steps.find((s) => s.value === value);
+      return step ? step.label : String(value);
+    }
+    case "multi_select": {
+      if (!Array.isArray(value) || value.length === 0) return EMPTY_DISPLAY;
+      return value
+        .map((v) => question.options.find((o) => o.value === v)?.label ?? v)
+        .join(", ");
+    }
+    default:
+      return Array.isArray(value) ? value.join(", ") : String(value);
+  }
+}
+
+function isEmptyValue(v: QuestionnaireResponseValue | undefined): boolean {
+  return (
+    v === undefined ||
+    v === null ||
+    v === "" ||
+    (Array.isArray(v) && v.length === 0)
+  );
+}
+
+function sameValue(
+  a: QuestionnaireResponseValue | undefined,
+  b: QuestionnaireResponseValue | undefined,
+): boolean {
+  if (isEmptyValue(a) && isEmptyValue(b)) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    const sa = [...a].sort();
+    const sb = [...b].sort();
+    return sa.every((v, i) => v === sb[i]);
+  }
+  return a === b;
+}
+
+/**
+ * Compare two response maps against a questionnaire and return the list of
+ * fields that changed, in questionnaire order. Multi-selects are compared as
+ * sets (re-ordering is not a change); empty/absent answers are treated as
+ * equal. Only questions in the catalogue are considered — stale keys from an
+ * older version are ignored.
+ */
+export function diffResponses(
+  questionnaire: Questionnaire,
+  before: QuestionnaireResponses,
+  after: QuestionnaireResponses,
+): QuestionnaireFieldChange[] {
+  const changes: QuestionnaireFieldChange[] = [];
+  for (const q of flattenQuestions(questionnaire)) {
+    const b = before[q.id];
+    const a = after[q.id];
+    if (sameValue(b, a)) continue;
+    changes.push({
+      fieldId: q.id,
+      label: q.prompt,
+      from: displayResponseValue(q, b),
+      to: displayResponseValue(q, a),
+    });
+  }
+  return changes;
+}
+
 /**
  * Validate a response map against a questionnaire definition. Returns the
  * normalised responses on success; throws ZodError-shaped errors otherwise.
@@ -197,7 +311,8 @@ export type QuestionnaireResponses = z.infer<typeof QuestionnaireResponses>;
 export function validateResponses(
   questionnaire: Questionnaire,
   raw: unknown,
-): { ok: true; responses: QuestionnaireResponses }
+):
+  | { ok: true; responses: QuestionnaireResponses }
   | { ok: false; errors: Record<string, string> } {
   const parsed = QuestionnaireResponses.safeParse(raw);
   if (!parsed.success) {
@@ -263,8 +378,7 @@ function validateOne(
     }
     case "short_text":
     case "long_text": {
-      if (typeof raw !== "string")
-        return { ok: false, error: "Expected text" };
+      if (typeof raw !== "string") return { ok: false, error: "Expected text" };
       if (raw.length > q.maxLength)
         return { ok: false, error: `Max ${q.maxLength} characters` };
       return { ok: true, value: raw };
@@ -281,8 +395,7 @@ function validateOne(
       return { ok: true, value: raw };
     }
     case "scale": {
-      if (typeof raw !== "string")
-        return { ok: false, error: "Pick a level" };
+      if (typeof raw !== "string") return { ok: false, error: "Pick a level" };
       if (!q.steps.some((s) => s.value === raw))
         return { ok: false, error: "Not a valid level" };
       return { ok: true, value: raw };

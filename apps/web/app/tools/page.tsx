@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight, GitBranch, Mail } from "lucide-react";
+import { ChevronRight, ClipboardList, GitBranch, Mail } from "lucide-react";
 import {
   Card,
   CardDescription,
@@ -31,6 +31,13 @@ const TOOLS: ToolEntry[] = [
     title: "Invite a member",
     description: "Mint a single-use code to bring someone onto Camp 404.",
     icon: <Mail className="h-5 w-5" />,
+  },
+  {
+    href: "/tools/forms",
+    title: "My forms",
+    description:
+      "Revisit a questionnaire you've already completed, update your answers, and see what changed.",
+    icon: <ClipboardList className="h-5 w-5" />,
   },
   {
     href: "/family-tree",

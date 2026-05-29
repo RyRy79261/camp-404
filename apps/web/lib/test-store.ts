@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { QuestionnaireFieldChange } from "@camp404/types";
+
 // Process-scoped in-memory replacement for the Neon-backed user and
 // burner-profile tables. Only used when isE2ETestMode() is true.
 // Reset between tests via DELETE /api/test/reset.
@@ -25,6 +27,16 @@ interface TestBurnerProfile {
   updatedAt: Date;
 }
 
+interface TestQuestionnaireEdit {
+  id: string;
+  userId: string;
+  questionnaireKey: string;
+  version: string;
+  editedByUserId: string | null;
+  changes: QuestionnaireFieldChange[];
+  createdAt: Date;
+}
+
 interface TestInviteCode {
   code: string;
   createdByUserId: string | null;
@@ -42,6 +54,7 @@ let nextSerial = 1;
 const usersByAuthId = new Map<string, TestUser>();
 const profilesByUserId = new Map<string, TestBurnerProfile>();
 const inviteCodes = new Map<string, TestInviteCode>();
+const questionnaireEdits: TestQuestionnaireEdit[] = [];
 
 function nextId(): string {
   return `test-user-${nextSerial++}`;
@@ -115,6 +128,38 @@ export const testStore = {
       updatedAt: now,
     });
   },
+  // --- Questionnaire edit log -------------------------------------------
+
+  recordQuestionnaireEdit(input: {
+    userId: string;
+    questionnaireKey: string;
+    version: string;
+    editedByUserId: string | null;
+    changes: QuestionnaireFieldChange[];
+  }): void {
+    questionnaireEdits.push({
+      id: `test-edit-${nextSerial++}`,
+      userId: input.userId,
+      questionnaireKey: input.questionnaireKey,
+      version: input.version,
+      editedByUserId: input.editedByUserId,
+      changes: input.changes,
+      createdAt: new Date(),
+    });
+  },
+  listQuestionnaireEdits(
+    userId: string,
+    questionnaireKey: string,
+    limit = 20,
+  ): TestQuestionnaireEdit[] {
+    return questionnaireEdits
+      .filter(
+        (e) => e.userId === userId && e.questionnaireKey === questionnaireKey,
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+  },
+
   // --- Invite codes -----------------------------------------------------
 
   seedInviteCode(input: {
@@ -160,8 +205,14 @@ export const testStore = {
     usersByAuthId.clear();
     profilesByUserId.clear();
     inviteCodes.clear();
+    questionnaireEdits.length = 0;
     nextSerial = 1;
   },
 };
 
-export type { TestUser, TestBurnerProfile, TestInviteCode };
+export type {
+  TestUser,
+  TestBurnerProfile,
+  TestInviteCode,
+  TestQuestionnaireEdit,
+};

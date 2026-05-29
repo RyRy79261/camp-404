@@ -54,7 +54,10 @@ export default async function HomePage() {
 
 function initialsFrom(source: string | null): string {
   if (!source) return "?";
-  const parts = source.trim().split(/[\s@.]+/).filter(Boolean);
+  const parts = source
+    .trim()
+    .split(/[\s@.]+/)
+    .filter(Boolean);
   if (parts.length === 0) return "?";
   return parts
     .slice(0, 2)
@@ -85,7 +88,7 @@ const homeLayers: ControlPanelLayer[] = [
     },
     bottomRight: {
       label: "Tools",
-      hint: "Invites, family tree…",
+      hint: "Meals, expenses…",
       href: "/tools",
       icon: <Wrench className="h-5 w-5" />,
     },

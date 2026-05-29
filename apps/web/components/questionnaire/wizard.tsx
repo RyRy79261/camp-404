@@ -16,12 +16,27 @@ interface QuestionnaireWizardProps {
   questionnaire: Questionnaire;
   initialResponses: QuestionnaireResponses;
   action: (responses: unknown, final: boolean) => Promise<SaveResult>;
+  // When false, page-to-page "Next" advances locally without calling the
+  // save action — the form is only persisted once on the final submit. Used
+  // by the replay flow so the change-log diff compares the stored answers
+  // against the final edit, not against half-saved progress. Onboarding
+  // leaves this true so a partially-filled signup survives a reload.
+  persistProgress?: boolean;
+  // Called after a successful final submit. Onboarding relies on the action
+  // itself redirecting server-side, so it omits this; the replay flow uses
+  // it to show a confirmation and refresh the change log in place.
+  onComplete?: () => void;
+  // Label for the final-page button (default "Finish").
+  submitLabel?: string;
 }
 
 export function QuestionnaireWizard({
   questionnaire,
   initialResponses,
   action,
+  persistProgress = true,
+  onComplete,
+  submitLabel = "Finish",
 }: QuestionnaireWizardProps) {
   const [pageIndex, setPageIndex] = React.useState(0);
   const [responses, setResponses] =
@@ -70,6 +85,10 @@ export function QuestionnaireWizard({
 
   function handleNext() {
     if (!validatePageLocally(page!)) return;
+    if (!persistProgress) {
+      setPageIndex((i) => Math.min(i + 1, questionnaire.pages.length - 1));
+      return;
+    }
     startTransition(async () => {
       const result = await action(responses, false);
       if (!result.ok) {
@@ -90,8 +109,12 @@ export function QuestionnaireWizard({
       const result = await action(responses, true);
       if (!result.ok) {
         setErrors(result.errors);
+        return;
       }
-      // Success path triggers a server-side redirect.
+      // Onboarding's action redirects server-side, so code below never runs
+      // there. The replay flow returns normally and uses onComplete to show
+      // a confirmation and refresh the change log.
+      onComplete?.();
     });
   }
 
@@ -111,10 +134,7 @@ export function QuestionnaireWizard({
       }}
       className="flex flex-1 flex-col gap-6"
     >
-      <ProgressBar
-        current={pageIndex + 1}
-        total={questionnaire.pages.length}
-      />
+      <ProgressBar current={pageIndex + 1} total={questionnaire.pages.length} />
 
       {page.kind === "intro" ? (
         <section className="flex flex-1 flex-col items-center justify-center gap-6 py-12 text-center">
@@ -166,7 +186,7 @@ export function QuestionnaireWizard({
           Back
         </Button>
         <Button type="submit" disabled={isPending}>
-          {isLast ? "Finish" : "Next"}
+          {isLast ? submitLabel : "Next"}
         </Button>
       </div>
     </form>

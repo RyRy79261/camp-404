@@ -9,11 +9,7 @@ import {
   setUserRank,
   upsertBurnerProfile as upsertBurnerProfileDb,
 } from "@camp404/db/burner-profile";
-import {
-  claimInviteCode,
-  INVITE_COOKIE,
-  isGodEmail,
-} from "./access-control";
+import { claimInviteCode, INVITE_COOKIE, isGodEmail } from "./access-control";
 import type { AuthenticatedUser } from "./auth";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
@@ -91,6 +87,8 @@ export async function ensureCampUser(
 export interface BurnerProfileSummary {
   responses: Record<string, unknown>;
   completedAt: Date | null;
+  updatedAt: Date | null;
+  version: string | null;
 }
 
 export async function getBurnerProfile(
@@ -163,6 +161,8 @@ const realBackend: UserBackend = {
     return {
       responses: (row.responses as Record<string, unknown>) ?? {},
       completedAt: row.completedAt,
+      updatedAt: row.updatedAt,
+      version: row.version,
     };
   },
   async upsertBurnerProfile(input) {
@@ -188,7 +188,12 @@ const testBackend: UserBackend = {
   async getBurnerProfile(userId) {
     const row = testStore.getProfile(userId);
     if (!row) return null;
-    return { responses: row.responses, completedAt: row.completedAt };
+    return {
+      responses: row.responses,
+      completedAt: row.completedAt,
+      updatedAt: row.updatedAt,
+      version: row.version,
+    };
   },
   async upsertBurnerProfile(input) {
     testStore.upsertProfile(input);
