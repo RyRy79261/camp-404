@@ -140,6 +140,11 @@ on `E2E_TEST_MODE` and so only run against the local dev server.
 
 ## What real production E2E will need
 
+> Full plan: [`docs/e2e-true-auth.md`](../../../../docs/e2e-true-auth.md) —
+> a brief for the real-Neon-Auth suite (dedicated test identity, ephemeral
+> Neon branch per run, `storageState` reuse, CI job sketch, secrets
+> checklist, and the real-DB captain flows it unlocks).
+
 Once a Neon database and a Neon Auth project are wired up, the
 `E2E_TEST_MODE` harness can stay as the fast development inner loop and
 a parallel suite of "true" E2E specs can drive real Neon Auth signups
