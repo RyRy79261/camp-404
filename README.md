@@ -15,7 +15,7 @@ See [`docs/brief.md`](docs/brief.md) for the full project brief (vision, archite
 - **Auth:** Neon Auth (Better Auth) — handler at `/api/auth/*`, UI at `/auth/*`
 - **AI:** Anthropic Claude Opus 4.7 (reasoning) + Haiku 4.5 (intent) + Groq Whisper Large v3 Turbo (voice)
 - **Push:** Firebase Cloud Messaging (iOS, Android, Web Push)
-- **Storage:** Vercel Blob
+- **Storage:** Vercel Blob — used for [profile photos](docs/profile-photos.md), receipts, and voice memos
 - **Payments:** TBD
 
 ## Layout
