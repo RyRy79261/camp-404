@@ -11,6 +11,8 @@ import { testStore } from "./test-store";
 export interface ClaimedInvite {
   code: string;
   assignedRank: AssignedRank | null;
+  /** Redeemer must be vetted by a captain before access. Env codes: false. */
+  requiresApproval: boolean;
 }
 
 // Name of the HttpOnly cookie that proves a user redeemed an invite code on
@@ -73,10 +75,15 @@ export async function claimInviteCode(
 ): Promise<ClaimedInvite | null> {
   const trimmed = code.trim();
   if (!trimmed) return null;
-  if (isEnvCode(trimmed)) return { code: trimmed, assignedRank: null };
+  if (isEnvCode(trimmed))
+    return { code: trimmed, assignedRank: null, requiresApproval: false };
   const consumed = await consumeDbCode(trimmed);
   if (!consumed) return null;
-  return { code: trimmed, assignedRank: consumed.assignedRank };
+  return {
+    code: trimmed,
+    assignedRank: consumed.assignedRank,
+    requiresApproval: consumed.requiresApproval,
+  };
 }
 
 function isEnvCode(code: string): boolean {

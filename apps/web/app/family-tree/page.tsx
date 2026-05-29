@@ -3,7 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { getReferralRoster } from "@camp404/db/relations";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { FamilyTree } from "./family-tree";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,9 @@ export default async function FamilyTreePage() {
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     redirect("/signup/required");
+  }
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    redirect("/pending-approval");
   }
 
   const roster = await getReferralRoster();

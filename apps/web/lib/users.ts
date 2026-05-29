@@ -5,6 +5,8 @@ import {
   createCampUser,
   findUserByAuthId,
   getBurnerProfileByUserId,
+  setUserApproval,
+  setUserApprovalStatus,
   setUserDisplayName,
   setUserInviteCode,
   setUserProfileImage,
@@ -17,6 +19,7 @@ import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
 
 type Rank = "captain" | "member";
+type ApprovalStatus = "pending" | "approved" | "rejected";
 
 /**
  * Common camp-user shape that both the real Drizzle row and the in-memory
@@ -29,6 +32,7 @@ export interface CampUser {
   profileImageUrl: string | null;
   inviteCode: string | null;
   rank: Rank;
+  approvalStatus: ApprovalStatus;
 }
 
 /**
@@ -66,22 +70,37 @@ export async function ensureCampUser(
       if (claimed.assignedRank && claimed.assignedRank !== existing.rank) {
         await store.setUserRank(existing.id, claimed.assignedRank);
       }
+      // A code that requires vetting drops the redeemer into the captain
+      // approval queue. Only ever tightens access — never auto-approve here.
+      const approvalStatus: ApprovalStatus = claimed.requiresApproval
+        ? "pending"
+        : existing.approvalStatus;
+      if (approvalStatus !== existing.approvalStatus) {
+        await store.setUserApprovalStatus(existing.id, approvalStatus);
+      }
       cookieStore.delete(INVITE_COOKIE);
       return {
         ...existing,
         inviteCode: claimed.code,
         rank: claimed.assignedRank ?? existing.rank,
+        approvalStatus,
       };
     }
     if (cookieValue) cookieStore.delete(INVITE_COOKIE);
     return existing;
   }
 
+  // New account. God accounts and pre-approved invites land `approved`;
+  // a vetting-required code creates the account `pending` (blocked after
+  // onboarding until a captain decides).
+  const approvalStatus: ApprovalStatus =
+    !god && claimed?.requiresApproval ? "pending" : "approved";
   const created = await store.createUser({
     authUserId: authUser.id,
     displayName: authUser.displayName ?? authUser.primaryEmail,
     inviteCode: god ? null : claimed?.code ?? null,
     rank: claimed?.assignedRank ?? "member",
+    approvalStatus,
   });
   if (cookieValue) cookieStore.delete(INVITE_COOKIE);
   return created;
@@ -103,13 +122,40 @@ export async function getBurnerProfile(
 
 /**
  * Whether this user is allowed past the signup gate (god account or has
- * redeemed a valid invite code).
+ * redeemed a valid invite code). Note this is the *invite* gate only — a
+ * member can be camp-active but still awaiting captain approval; use
+ * {@link isApproved} for the full "can use the app" check.
  */
 export function hasCampAccess(
   user: { inviteCode: string | null },
   email: string | null,
 ): boolean {
   return isGodEmail(email) || !!user.inviteCode;
+}
+
+/**
+ * Whether this user has cleared captain vetting. God accounts are always
+ * approved (they never carry a pending status). Pending users are blocked
+ * behind /pending-approval; rejected users are denied.
+ */
+export function isApproved(
+  user: { approvalStatus: ApprovalStatus },
+  email: string | null,
+): boolean {
+  return isGodEmail(email) || user.approvalStatus === "approved";
+}
+
+/**
+ * Apply a captain's vetting decision. Captain-gated by the caller; this just
+ * persists the decision and stamps the deciding captain for the audit trail.
+ */
+export async function decideUserApproval(input: {
+  userId: string;
+  status: "approved" | "rejected";
+  decidedByUserId: string;
+}): Promise<void> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  await store.setUserApproval(input);
 }
 
 // --- Backends -----------------------------------------------------------
@@ -121,9 +167,16 @@ interface UserBackend {
     displayName: string | null;
     inviteCode: string | null;
     rank: Rank;
+    approvalStatus: ApprovalStatus;
   }): Promise<CampUser>;
   setUserInviteCode(userId: string, code: string): Promise<void>;
   setUserRank(userId: string, rank: Rank): Promise<void>;
+  setUserApprovalStatus(userId: string, status: ApprovalStatus): Promise<void>;
+  setUserApproval(input: {
+    userId: string;
+    status: "approved" | "rejected";
+    decidedByUserId: string;
+  }): Promise<void>;
   setUserProfileImage(userId: string, url: string | null): Promise<void>;
   setUserDisplayName(userId: string, name: string | null): Promise<void>;
   getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null>;
@@ -178,6 +231,12 @@ const realBackend: UserBackend = {
   async setUserRank(userId, rank) {
     await setUserRank(userId, rank);
   },
+  async setUserApprovalStatus(userId, status) {
+    await setUserApprovalStatus(userId, status);
+  },
+  async setUserApproval(input) {
+    await setUserApproval(input);
+  },
   async setUserProfileImage(userId, url) {
     await setUserProfileImage(userId, url);
   },
@@ -214,6 +273,12 @@ const testBackend: UserBackend = {
   async setUserRank(userId, rank) {
     testStore.setUserRank(userId, rank);
   },
+  async setUserApprovalStatus(userId, status) {
+    testStore.setUserApprovalStatus(userId, status);
+  },
+  async setUserApproval(input) {
+    testStore.setUserApproval(input);
+  },
   async setUserProfileImage(userId, url) {
     testStore.setProfileImage(userId, url);
   },
@@ -242,6 +307,7 @@ function toCampUser(row: {
   profileImageUrl?: string | null;
   inviteCode: string | null;
   rank: Rank;
+  approvalStatus?: ApprovalStatus | null;
 }): CampUser {
   return {
     id: row.id,
@@ -250,5 +316,6 @@ function toCampUser(row: {
     profileImageUrl: row.profileImageUrl ?? null,
     inviteCode: row.inviteCode,
     rank: row.rank,
+    approvalStatus: row.approvalStatus ?? "approved",
   };
 }

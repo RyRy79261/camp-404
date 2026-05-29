@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from "@camp404/ui/components/card";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +52,9 @@ export default async function ToolsPage() {
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     redirect("/signup/required");
+  }
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    redirect("/pending-approval");
   }
 
   return (

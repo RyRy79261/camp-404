@@ -7,6 +7,7 @@ import type { QuestionnaireFieldChange } from "@camp404/types";
 // Reset between tests via DELETE /api/test/reset.
 
 type TestRank = "captain" | "member";
+type TestApprovalStatus = "pending" | "approved" | "rejected";
 
 interface TestUser {
   id: string;
@@ -15,6 +16,9 @@ interface TestUser {
   profileImageUrl: string | null;
   inviteCode: string | null;
   rank: TestRank;
+  approvalStatus: TestApprovalStatus;
+  approvalDecidedByUserId: string | null;
+  approvalDecidedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +52,7 @@ interface TestInviteCode {
   revokedAt: Date | null;
   assignedRank: TestRank | null;
   invitedEmail: string | null;
+  requiresApproval: boolean;
   createdAt: Date;
 }
 
@@ -70,6 +75,7 @@ export const testStore = {
     displayName: string | null;
     inviteCode: string | null;
     rank?: TestRank;
+    approvalStatus?: TestApprovalStatus;
   }): TestUser {
     const now = new Date();
     const user: TestUser = {
@@ -79,6 +85,9 @@ export const testStore = {
       profileImageUrl: null,
       inviteCode: input.inviteCode,
       rank: input.rank ?? "member",
+      approvalStatus: input.approvalStatus ?? "approved",
+      approvalDecidedByUserId: null,
+      approvalDecidedAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -98,6 +107,30 @@ export const testStore = {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
         user.rank = rank;
+        user.updatedAt = new Date();
+        return;
+      }
+    }
+  },
+  setUserApprovalStatus(userId: string, status: TestApprovalStatus): void {
+    for (const user of usersByAuthId.values()) {
+      if (user.id === userId) {
+        user.approvalStatus = status;
+        user.updatedAt = new Date();
+        return;
+      }
+    }
+  },
+  setUserApproval(input: {
+    userId: string;
+    status: "approved" | "rejected";
+    decidedByUserId: string;
+  }): void {
+    for (const user of usersByAuthId.values()) {
+      if (user.id === input.userId) {
+        user.approvalStatus = input.status;
+        user.approvalDecidedByUserId = input.decidedByUserId;
+        user.approvalDecidedAt = new Date();
         user.updatedAt = new Date();
         return;
       }
@@ -190,6 +223,7 @@ export const testStore = {
     expiresAt?: Date | null;
     assignedRank?: TestRank | null;
     invitedEmail?: string | null;
+    requiresApproval?: boolean;
   }): TestInviteCode {
     const row: TestInviteCode = {
       code: input.code,
@@ -201,6 +235,7 @@ export const testStore = {
       revokedAt: null,
       assignedRank: input.assignedRank ?? null,
       invitedEmail: input.invitedEmail ?? null,
+      requiresApproval: input.requiresApproval ?? false,
       createdAt: new Date(),
     };
     inviteCodes.set(input.code, row);

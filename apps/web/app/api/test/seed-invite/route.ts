@@ -14,6 +14,7 @@ interface SeedBody {
   maxUses?: number;
   expiresAt?: string;
   assignedRank?: "captain" | "member";
+  requiresApproval?: boolean;
 }
 
 export async function POST(req: Request) {
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
     maxUses: body.maxUses ?? null,
     expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
     assignedRank: body.assignedRank ?? null,
+    requiresApproval: body.requiresApproval ?? false,
   });
   return NextResponse.json({ ok: true, inviteCode: row });
 }

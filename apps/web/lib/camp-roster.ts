@@ -5,7 +5,12 @@ import { COUNTRIES } from "./countries";
 // rendering layer dumb: every flag/label a cell needs is derived here, in one
 // pure pass that's cheap to unit test.
 
-export type RosterStatus = "ready" | "onboarding" | "pending";
+export type RosterStatus =
+  | "ready"
+  | "onboarding"
+  | "awaiting_approval"
+  | "rejected"
+  | "pending";
 
 export interface RosterRow {
   id: string;
@@ -18,6 +23,10 @@ export interface RosterRow {
   /** Overall signup standing, for the status pill. */
   status: RosterStatus;
   statusLabel: string;
+  /** Captain-approval lifecycle. */
+  approvalStatus: "pending" | "approved" | "rejected";
+  /** Awaiting a captain's vetting decision — the "unapproved" filter. */
+  awaitingApproval: boolean;
   onboardingComplete: boolean;
   pendingRequiredActions: number;
   /** All blocking questionnaires/actions done. */
@@ -34,20 +43,32 @@ const COUNTRY_NAME = new Map(COUNTRIES.map((c) => [c.value, c.label]));
 const STATUS_LABEL: Record<RosterStatus, string> = {
   ready: "Ready",
   onboarding: "Onboarding",
+  awaiting_approval: "Awaiting approval",
+  rejected: "Rejected",
   pending: "Action needed",
 };
 
 /**
  * Collapse a member's facets into the view-model the roster table renders.
  * Pure — no DB, no I/O — so the status/derivation rules are unit-testable.
+ *
+ * Status precedence: onboarding (profile unfinished) → the captain-approval
+ * lifecycle (awaiting / rejected) → outstanding required actions → ready.
+ * Approval sits above generic actions because it's the gate that blocks the
+ * member from the app entirely.
  */
 export function toRosterRow(member: CampManagementMember): RosterRow {
   const requiredComplete = member.pendingRequiredActions === 0;
+  const awaitingApproval = member.approvalStatus === "pending";
   const status: RosterStatus = !member.onboardingComplete
     ? "onboarding"
-    : requiredComplete
-      ? "ready"
-      : "pending";
+    : awaitingApproval
+      ? "awaiting_approval"
+      : member.approvalStatus === "rejected"
+        ? "rejected"
+        : requiredComplete
+          ? "ready"
+          : "pending";
 
   return {
     id: member.id,
@@ -58,6 +79,8 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
     teams: member.teams,
     status,
     statusLabel: STATUS_LABEL[status],
+    approvalStatus: member.approvalStatus,
+    awaitingApproval,
     onboardingComplete: member.onboardingComplete,
     pendingRequiredActions: member.pendingRequiredActions,
     requiredComplete,

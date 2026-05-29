@@ -97,6 +97,58 @@ test.describe("invite-code redemption", () => {
     expect(bob.inviteCode.note).toBe("Berlin crew");
   });
 
+  test("approval-required code creates a PENDING account", async ({
+    page,
+    request,
+  }) => {
+    // A non-captain's invites always require vetting. Seed one and redeem it.
+    await request.post("/api/test/seed-invite", {
+      data: { code: "VET-ME", maxUses: 1, requiresApproval: true },
+    });
+
+    await page.goto("/signup");
+    await page.getByLabel("Invite code").fill("VET-ME");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
+
+    await login(request, { id: "vet-auth", email: "vet@example.com" });
+    // Hitting / claims the code; onboarding still owes answers so they land
+    // on the questionnaire — but the row is already stamped `pending`.
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+
+    const lookup = await request.get("/api/test/inspect?authUserId=vet-auth");
+    const body = (await lookup.json()) as {
+      user: { inviteCode: string; approvalStatus: string };
+    };
+    expect(body.user.inviteCode).toBe("VET-ME");
+    expect(body.user.approvalStatus).toBe("pending");
+  });
+
+  test("pre-approved code creates an APPROVED account", async ({
+    page,
+    request,
+  }) => {
+    await request.post("/api/test/seed-invite", {
+      data: { code: "WAVE-IN", maxUses: 1, requiresApproval: false },
+    });
+
+    await page.goto("/signup");
+    await page.getByLabel("Invite code").fill("WAVE-IN");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
+
+    await login(request, { id: "wave-auth", email: "wave@example.com" });
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+
+    const lookup = await request.get("/api/test/inspect?authUserId=wave-auth");
+    const body = (await lookup.json()) as {
+      user: { approvalStatus: string };
+    };
+    expect(body.user.approvalStatus).toBe("approved");
+  });
+
   test("DB code: exhausted code can't be claimed even with a stale cookie", async ({
     page,
     request,

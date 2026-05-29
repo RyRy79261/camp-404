@@ -14,6 +14,7 @@ export interface InviteCodeRow {
   revokedAt: Date | null;
   assignedRank: AssignedRank | null;
   invitedEmail: string | null;
+  requiresApproval: boolean;
   createdAt: Date;
 }
 
@@ -87,6 +88,7 @@ export async function createInviteCode(input: {
   expiresAt?: Date | null;
   assignedRank?: AssignedRank | null;
   invitedEmail?: string | null;
+  requiresApproval?: boolean;
 }): Promise<InviteCodeRow> {
   const db = createHttpDb();
   const [row] = await db
@@ -99,6 +101,7 @@ export async function createInviteCode(input: {
       expiresAt: input.expiresAt ?? null,
       assignedRank: input.assignedRank ?? null,
       invitedEmail: input.invitedEmail?.toLowerCase() ?? null,
+      requiresApproval: input.requiresApproval ?? false,
     })
     .returning();
   if (!row) throw new Error("Failed to insert invite code");

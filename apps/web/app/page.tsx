@@ -6,7 +6,12 @@ import {
 } from "@camp404/ui/components/control-panel";
 import { isTeamLead } from "@camp404/db/roster";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
+import {
+  ensureCampUser,
+  getBurnerProfile,
+  hasCampAccess,
+  isApproved,
+} from "@/lib/users";
 import { initialsFrom } from "@/lib/initials";
 import { HomeHeader } from "./home-header";
 import { LandingHero } from "./landing-hero";
@@ -36,6 +41,13 @@ export default async function HomePage() {
   const profile = await getBurnerProfile(campUser.id);
   if (!profile?.completedAt) {
     redirect("/onboarding/questionnaire");
+  }
+
+  // Captain-approval gate — a member who redeemed a vetting-required invite
+  // code lands here after onboarding but is held behind the blocking
+  // application screen until a captain approves (or rejects) them.
+  if (!isApproved(campUser, user.primaryEmail)) {
+    redirect("/pending-approval");
   }
 
   const initials = initialsFrom(campUser.displayName ?? user.primaryEmail);

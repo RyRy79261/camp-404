@@ -1,4 +1,5 @@
 import { and, asc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
 
@@ -15,6 +16,8 @@ export interface CampManagementMember {
   id: string;
   displayName: string | null;
   rank: "captain" | "member";
+  /** Captain-approval lifecycle: pending vetting, approved, or rejected. */
+  approvalStatus: "pending" | "approved" | "rejected";
   /** Derived: leads at least one team (`team_memberships.is_lead`). */
   isLead: boolean;
   /** Teams the member belongs to, for context. */
@@ -51,6 +54,7 @@ export async function getCampManagementRoster(): Promise<
       id: schema.users.id,
       displayName: schema.users.displayName,
       rank: schema.users.rank,
+      approvalStatus: schema.users.approvalStatus,
       duesPaid: schema.users.duesPaid,
       membershipTier: schema.users.membershipTier,
       onboardingCompletedAt: schema.burnerProfiles.completedAt,
@@ -91,6 +95,7 @@ export async function getCampManagementRoster(): Promise<
     id: r.id,
     displayName: r.displayName,
     rank: r.rank,
+    approvalStatus: r.approvalStatus,
     isLead: r.isLead,
     teams: r.teams ?? [],
     duesPaid: r.duesPaid,
@@ -102,6 +107,87 @@ export async function getCampManagementRoster(): Promise<
     country: r.country,
     createdAt: r.createdAt,
   }));
+}
+
+// Full per-member detail behind the camp-management roster modal. Captain-
+// only: callers MUST gate this behind a captain rank check. Pulls the
+// burner-profile answers and invite provenance a captain reviews before
+// approving or rejecting a pending applicant.
+
+export interface CampMemberDetail {
+  id: string;
+  displayName: string | null;
+  rank: "captain" | "member";
+  approvalStatus: "pending" | "approved" | "rejected";
+  approvalDecidedAt: Date | null;
+  /** Display name of the captain who approved/rejected (NULL if undecided). */
+  approvalDecidedByName: string | null;
+  onboardingComplete: boolean;
+  onboardingVersion: string | null;
+  /** Raw burner-profile answers, keyed by question id, for the profile tabs. */
+  responses: Record<string, unknown>;
+  /** The code this member redeemed to join (NULL for god/founder accounts). */
+  inviteCode: string | null;
+  /** Free-text note the inviter left when minting the code. */
+  inviteNote: string | null;
+  /** Display name of whoever issued the invite (NULL for root codes). */
+  invitedByName: string | null;
+  createdAt: Date;
+}
+
+export async function getCampMemberDetail(
+  userId: string,
+): Promise<CampMemberDetail | null> {
+  const db = createHttpDb();
+  const decider = alias(schema.users, "decider");
+  const inviter = alias(schema.users, "inviter");
+  const rows = await db
+    .select({
+      id: schema.users.id,
+      displayName: schema.users.displayName,
+      rank: schema.users.rank,
+      approvalStatus: schema.users.approvalStatus,
+      approvalDecidedAt: schema.users.approvalDecidedAt,
+      approvalDecidedByName: decider.displayName,
+      onboardingCompletedAt: schema.burnerProfiles.completedAt,
+      onboardingVersion: schema.burnerProfiles.version,
+      responses: schema.burnerProfiles.responses,
+      inviteCode: schema.users.inviteCode,
+      inviteNote: schema.inviteCodes.note,
+      invitedByName: inviter.displayName,
+      createdAt: schema.users.createdAt,
+    })
+    .from(schema.users)
+    .leftJoin(decider, eq(decider.id, schema.users.approvalDecidedByUserId))
+    .leftJoin(
+      schema.burnerProfiles,
+      eq(schema.burnerProfiles.userId, schema.users.id),
+    )
+    .leftJoin(
+      schema.inviteCodes,
+      eq(schema.inviteCodes.code, schema.users.inviteCode),
+    )
+    .leftJoin(inviter, eq(inviter.id, schema.inviteCodes.createdByUserId))
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    displayName: r.displayName,
+    rank: r.rank,
+    approvalStatus: r.approvalStatus,
+    approvalDecidedAt: r.approvalDecidedAt,
+    approvalDecidedByName: r.approvalDecidedByName,
+    onboardingComplete: r.onboardingCompletedAt != null,
+    onboardingVersion: r.onboardingVersion,
+    responses: (r.responses as Record<string, unknown>) ?? {},
+    inviteCode: r.inviteCode,
+    inviteNote: r.inviteNote,
+    invitedByName: r.invitedByName,
+    createdAt: r.createdAt,
+  };
 }
 
 /**

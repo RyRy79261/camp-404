@@ -11,6 +11,7 @@ import {
   primaryKey,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import type { QuestionnaireFieldChange } from "@camp404/types";
 
@@ -27,6 +28,20 @@ import type { QuestionnaireFieldChange } from "@camp404/types";
 //   - team lead — derived from `team_memberships.is_lead` on any team
 //   - driver    — derived from `driver_profiles.intends_to_drive`
 export const rankEnum = pgEnum("rank", ["captain", "member"]);
+
+// A member's vetting lifecycle. Most accounts are `approved` outright (god
+// accounts, captain-minted pre-approved invites, and every account that
+// pre-dates this gate). An invite code can require captain approval: its
+// redeemer is created `pending` and blocked from the app until a captain
+// `approved`s them (or `rejected`s them — a terminal denied state). This is
+// a first-class membership-lifecycle field rather than a `required_actions`
+// row because (a) it has a terminal `rejected` state the generic gate can't
+// express, and (b) it is actioned by a captain, not completed by the user.
+export const approvalStatusEnum = pgEnum("approval_status", [
+  "pending",
+  "approved",
+  "rejected",
+]);
 
 // The camp's working teams. Used wherever a row is scoped to a team:
 // memberships, budgets, reimbursements, broadcasts, questionnaires,
@@ -226,6 +241,20 @@ export const users = pgTable("users", {
   // gate, independent of the short-lived signup cookie.
   inviteCode: text("invite_code"),
 
+  // Captain-approval gating. `approved` by default so god accounts and every
+  // account created before this gate existed keep their access. A redeemer of
+  // an invite code with `requires_approval = true` is created `pending` and
+  // blocked from the app (after onboarding) until a captain decides. The
+  // captain who decided and when are stamped for the camp-management audit.
+  approvalStatus: approvalStatusEnum("approval_status")
+    .notNull()
+    .default("approved"),
+  approvalDecidedByUserId: uuid("approval_decided_by_user_id").references(
+    (): AnyPgColumn => users.id,
+    { onDelete: "set null" },
+  ),
+  approvalDecidedAt: timestamp("approval_decided_at", { mode: "date" }),
+
   // POPIA / GDPR
   termsVersion: text("terms_version"),
   termsConsentedAt: timestamp("terms_consented_at", { mode: "date" }),
@@ -282,6 +311,11 @@ export const inviteCodes = pgTable(
     // the person the inviter is sending this code to. Lowercased on insert.
     // CLI-minted codes leave this NULL.
     invitedEmail: text("invited_email"),
+    // Whether redeeming this code drops the new account into the captain
+    // approval queue (`users.approval_status = 'pending'`). Codes minted by
+    // non-captains are ALWAYS true — only a captain can wave someone in
+    // unvetted. Captain-minted codes choose: false pre-approves the redeemer.
+    requiresApproval: boolean("requires_approval").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => ({
