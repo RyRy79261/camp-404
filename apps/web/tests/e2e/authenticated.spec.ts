@@ -12,9 +12,8 @@ test.describe("authenticated flow (test-mode)", () => {
 
   test("god email bypasses the invite gate and reaches the questionnaire", async ({
     page,
-    request,
   }) => {
-    await login(request, { email: "god@example.com" });
+    await login(page, { email: "god@example.com" });
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
@@ -25,9 +24,8 @@ test.describe("authenticated flow (test-mode)", () => {
 
   test("non-god without an invite is bounced to /signup/required", async ({
     page,
-    request,
   }) => {
-    await login(request, { email: "newbie@example.com" });
+    await login(page, { email: "newbie@example.com" });
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/signup\/required/);
@@ -36,7 +34,6 @@ test.describe("authenticated flow (test-mode)", () => {
 
   test("invite redeemed at /signup unlocks the questionnaire", async ({
     page,
-    request,
   }) => {
     // The invite form lives only on /signup. Redeeming drops the cookie and
     // sends the (still-anonymous) browser to the Neon Auth sign-up page.
@@ -47,7 +44,7 @@ test.describe("authenticated flow (test-mode)", () => {
 
     // Simulate sign-up completing: the test user logs in and hits /, which
     // claims the cookie code onto their row and forwards to the questionnaire.
-    await login(request, { id: "redeemer-auth", email: "redeemer@example.com" });
+    await login(page, { id: "redeemer-auth", email: "redeemer@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
   });
@@ -58,7 +55,7 @@ test.describe("authenticated flow (test-mode)", () => {
   }) => {
     // God accounts are approved by default — straight to the app once
     // onboarding is done.
-    await login(request, { id: "god-auth", email: "god@example.com" });
+    await login(page, { id: "god-auth", email: "god@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
@@ -83,7 +80,7 @@ test.describe("authenticated flow (test-mode)", () => {
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page).toHaveURL(/\/auth\/sign-up/);
 
-    await login(request, { id: "pending-auth", email: "pending@example.com" });
+    await login(page, { id: "pending-auth", email: "pending@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
@@ -127,7 +124,7 @@ test.describe("authenticated flow (test-mode)", () => {
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page).toHaveURL(/\/auth\/sign-up/);
 
-    await login(request, { id: "rejected-auth", email: "rejected@example.com" });
+    await login(page, { id: "rejected-auth", email: "rejected@example.com" });
     await page.goto("/");
     await completeOnboarding(request, "rejected-auth");
 
@@ -143,12 +140,13 @@ test.describe("authenticated flow (test-mode)", () => {
   });
 
   test("/api/voice/transcribe accepts an authed request and rejects bad input", async ({
-    request,
+    page,
   }) => {
-    await login(request, { email: "god@example.com" });
+    await login(page, { email: "god@example.com" });
 
-    // Wrong content type → 415.
-    const wrongType = await request.post("/api/voice/transcribe", {
+    // Wrong content type → 415. Use page.request so the auth cookie set by
+    // login() travels with the request.
+    const wrongType = await page.request.post("/api/voice/transcribe", {
       multipart: {
         audio: {
           name: "not-audio.txt",
@@ -160,7 +158,7 @@ test.describe("authenticated flow (test-mode)", () => {
     expect(wrongType.status()).toBe(415);
 
     // Missing audio field → 400.
-    const noAudio = await request.post("/api/voice/transcribe", {
+    const noAudio = await page.request.post("/api/voice/transcribe", {
       multipart: {},
     });
     expect(noAudio.status()).toBe(400);

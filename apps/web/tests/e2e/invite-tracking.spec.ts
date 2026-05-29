@@ -13,7 +13,6 @@ test.describe("invite-code redemption", () => {
 
   test("env (bootstrap) code: redeems on /signup, persists on the user row", async ({
     page,
-    request,
   }) => {
     // First half of the flow — anonymous user submits the code.
     await page.goto("/signup");
@@ -24,7 +23,7 @@ test.describe("invite-code redemption", () => {
     // Now simulate the Neon Auth signup completing by logging in our test
     // user. The redeem cookie was set on the previous request and is
     // reused here.
-    await login(request, { email: "fresh@example.com" });
+    await login(page, { email: "fresh@example.com" });
 
     // Hitting / triggers ensureCampUser, which sees the cookie and persists
     // the code onto the user's row. The redirect then takes them to the
@@ -50,7 +49,7 @@ test.describe("invite-code redemption", () => {
     request,
   }) => {
     // 1. Alice (a god) signs in — this lazy-creates her camp user row.
-    await login(request, { id: "alice-auth", email: "god@example.com" });
+    await login(page, { id: "alice-auth", email: "god@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
@@ -78,7 +77,7 @@ test.describe("invite-code redemption", () => {
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page).toHaveURL(/\/auth\/sign-up/);
 
-    await login(request, { id: "bob-auth", email: "bob@example.com" });
+    await login(page, { id: "bob-auth", email: "bob@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
@@ -111,7 +110,7 @@ test.describe("invite-code redemption", () => {
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page).toHaveURL(/\/auth\/sign-up/);
 
-    await login(request, { id: "vet-auth", email: "vet@example.com" });
+    await login(page, { id: "vet-auth", email: "vet@example.com" });
     // Hitting / claims the code; onboarding still owes answers so they land
     // on the questionnaire — but the row is already stamped `pending`.
     await page.goto("/");
@@ -138,7 +137,7 @@ test.describe("invite-code redemption", () => {
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page).toHaveURL(/\/auth\/sign-up/);
 
-    await login(request, { id: "wave-auth", email: "wave@example.com" });
+    await login(page, { id: "wave-auth", email: "wave@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
@@ -161,7 +160,7 @@ test.describe("invite-code redemption", () => {
     });
 
     // Alice claims it.
-    await login(request, { id: "alice-auth", email: "alice@example.com" });
+    await login(page, { id: "alice-auth", email: "alice@example.com" });
     await context.addCookies([
       {
         name: "camp404_invite",
@@ -177,7 +176,7 @@ test.describe("invite-code redemption", () => {
 
     // Now bob arrives with the same code in his cookie. Claim should fail
     // and he should get bounced to /signup/required.
-    await login(request, { id: "bob-auth", email: "bob@example.com" });
+    await login(page, { id: "bob-auth", email: "bob@example.com" });
     await context.addCookies([
       {
         name: "camp404_invite",

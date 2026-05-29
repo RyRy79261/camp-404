@@ -1,4 +1,4 @@
-import type { APIRequestContext, BrowserContext } from "@playwright/test";
+import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 
 /**
  * Test-mode helpers. These hit `/api/test/*` endpoints that are only
@@ -6,6 +6,13 @@ import type { APIRequestContext, BrowserContext } from "@playwright/test";
  * `playwright.config.ts`'s `webServer.env`). They sit on top of the
  * in-memory user / burner-profile / invite-code store in
  * `apps/web/lib/test-store.ts` — production builds never load it.
+ *
+ * Cookie jars matter here. The standalone `request` fixture has its OWN
+ * cookie jar that is NOT shared with `page`, so the auth cookie must be set
+ * through `page.request` (which shares the browser context's cookies) or the
+ * page navigations won't be authenticated. The other helpers below only
+ * mutate the process-wide in-memory store (keyed by authUserId, not a
+ * cookie), so they're fine on the standalone `request` fixture.
  */
 
 export interface LoginUser {
@@ -14,12 +21,15 @@ export interface LoginUser {
   displayName?: string;
 }
 
-/** Sign in as a synthetic user. Sets the `camp404_test_user` cookie. */
-export async function login(
-  request: APIRequestContext,
-  user: LoginUser = {},
-): Promise<void> {
-  const res = await request.post("/api/test/login", { data: user });
+/**
+ * Sign in as a synthetic user by setting the `camp404_test_user` cookie on
+ * the PAGE's browser context (via `page.request`), so subsequent
+ * `page.goto(...)` navigations are authenticated. Passing the standalone
+ * `request` fixture instead would drop the cookie into a jar the page never
+ * sends — the classic Playwright auth-cookie pitfall.
+ */
+export async function login(page: Page, user: LoginUser = {}): Promise<void> {
+  const res = await page.request.post("/api/test/login", { data: user });
   if (!res.ok()) throw new Error(`login failed: ${res.status()}`);
 }
 
