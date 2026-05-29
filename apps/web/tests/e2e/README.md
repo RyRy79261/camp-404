@@ -27,7 +27,7 @@ the following fixture env (see `playwright.config.ts`):
 
 | Var | Value | Purpose |
 |---|---|---|
-| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,inspect,complete-onboarding}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
+| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,inspect,complete-onboarding,set-approval}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
 | `INVITE_CODES` | `TEST-INVITE` | One known bootstrap (env-list) code for redemption specs. |
 | `GOD_EMAILS` | `god@example.com` | One whitelisted god account that bypasses the invite gate. |
 
@@ -87,13 +87,41 @@ complete and jump straight to the gates that follow it (home vs.
   non-god without invite is bounced to `/signup/required`, redeeming an
   invite at `/signup` unlocks the questionnaire, an approved user who
   finishes onboarding lands home, a pending (vetting-required) user is
-  held at `/pending-approval` after onboarding, and voice transcribe
-  accepts an authed request while rejecting bad input.
+  held at `/pending-approval` after onboarding, a rejected member sees the
+  not-approved screen, an unauthenticated visit to a protected page
+  redirects to sign-in, the sign-up page is guarded by the invite cookie,
+  and voice transcribe accepts an authed request while rejecting bad input.
 - `invite-tracking.spec.ts` — env (bootstrap) code redemption survives
   signup, DB-backed codes record their issuer and use count, an
   approval-required code creates a `pending` account and a pre-approved
   one creates an `approved` account, and an exhausted code can't be
   claimed even by a stale cookie.
+
+### What is NOT covered (and why)
+
+The flows below are intentionally out of scope for the `E2E_TEST_MODE`
+suite — covered elsewhere, or only coverable by the future real-auth suite:
+
+- **Real sign-in / account creation (credential + Google).** `E2E_TEST_MODE`
+  *bypasses* Neon Auth entirely — `/api/test/login` just drops the synthetic
+  session cookie that `getAuthenticatedUser()` reads. The actual
+  email/password + OAuth forms (`auth/sign-in-form.tsx` / `sign-up-form.tsx`,
+  driven by `authClient`) talk to a real Neon Auth backend and so can't run
+  here. What *is* covered is everything around auth: the invite gate, the
+  sign-up cookie guard, and the unauthenticated → sign-in redirect. Real
+  credential auth needs the "true E2E" suite below (a Neon Auth test user +
+  `context.addCookies()` for the session token).
+- **Questionnaire field-by-field validation.** The 13-page wizard's
+  navigation, required-field blocking and submission contract are covered at
+  the component layer in `components/__tests__/wizard.test.tsx` (jsdom). E2E
+  jumps past it via the `complete-onboarding` seam, so it only asserts the
+  gates on either side, not each field.
+- **Captain approve / reject from the UI.** The camp-management roster
+  (`getCampManagementRoster` / `getCampMemberDetail`) reads the real Neon DB,
+  not the in-memory store, so the modal + action aren't drivable under
+  `E2E_TEST_MODE`. The approval *gate* it controls is covered: pending and
+  rejected members are driven via the `set-approval` seam and asserted at
+  `/pending-approval`.
 
 ### Running against a deployed preview
 

@@ -99,6 +99,49 @@ test.describe("authenticated flow (test-mode)", () => {
     await expect(page).toHaveURL(/\/pending-approval/);
   });
 
+  test("an unauthenticated visit to a protected page redirects to sign-in", async ({
+    page,
+  }) => {
+    // No test-user cookie → getAuthenticatedUserOrRedirect bounces to the
+    // Neon Auth sign-in page.
+    await page.goto("/tools");
+    await expect(page).toHaveURL(/\/auth\/sign-in/);
+  });
+
+  test("the sign-up page is guarded by the invite cookie", async ({ page }) => {
+    // /auth/sign-up may only be reached with a redeemed invite cookie; without
+    // one it kicks back to the invite gate. (No cookie set here.)
+    await page.goto("/auth/sign-up");
+    await expect(page).toHaveURL(/\/signup$/);
+  });
+
+  test("a rejected member sees the not-approved screen", async ({
+    page,
+    request,
+  }) => {
+    await request.post("/api/test/seed-invite", {
+      data: { code: "VETO", maxUses: 1, requiresApproval: true },
+    });
+    await page.goto("/signup");
+    await page.getByLabel("Invite code").fill("VETO");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
+
+    await login(request, { id: "rejected-auth", email: "rejected@example.com" });
+    await page.goto("/");
+    await completeOnboarding(request, "rejected-auth");
+
+    // A captain rejects them (simulated via the test seam — the real
+    // approve/reject UI reads the live DB and isn't drivable in test mode).
+    await request.post("/api/test/set-approval", {
+      data: { authUserId: "rejected-auth", status: "rejected" },
+    });
+
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/pending-approval/);
+    await expect(page.getByText("Application not approved")).toBeVisible();
+  });
+
   test("/api/voice/transcribe accepts an authed request and rejects bad input", async ({
     request,
   }) => {
