@@ -27,7 +27,7 @@ the following fixture env (see `playwright.config.ts`):
 
 | Var | Value | Purpose |
 |---|---|---|
-| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,inspect}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
+| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,inspect,complete-onboarding,set-approval}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
 | `INVITE_CODES` | `TEST-INVITE` | One known bootstrap (env-list) code for redemption specs. |
 | `GOD_EMAILS` | `god@example.com` | One whitelisted god account that bypasses the invite gate. |
 
@@ -58,6 +58,24 @@ row that gets lazily created is keyed to it deterministically. The
 in-memory store (`apps/web/lib/test-store.ts`) replaces all the
 Neon-backed reads/writes in this mode.
 
+#### Reaching post-onboarding gates
+
+The burner-profile questionnaire is a 13-page wizard. Its page-by-page
+navigation, validation and submission contract are covered at the
+component layer (`components/__tests__/wizard.test.tsx`), so e2e specs
+don't re-drive every field — they call `completeOnboarding(request,
+authUserId)` (POST `/api/test/complete-onboarding`) to mark the profile
+complete and jump straight to the gates that follow it (home vs.
+`/pending-approval`). The user row must exist first, so hit a gated page
+(e.g. `/`) once after login before calling it.
+
+> Note: the captains' camp-management roster (`getCampManagementRoster` /
+> `getCampMemberDetail`) reads the **real** Neon DB, not the in-memory
+> store, so the approve/reject UI isn't drivable under `E2E_TEST_MODE`.
+> The approval *gate* (pending users blocked at `/pending-approval`) and
+> the `users.approval_status` stamping on redemption are, since those go
+> through the test-backed `users` helpers.
+
 ### Spec coverage
 
 - `home.spec.ts` — unauth home page shows both auth CTAs.
@@ -67,12 +85,43 @@ Neon-backed reads/writes in this mode.
   rejects unauthenticated callers with 401.
 - `authenticated.spec.ts` — god email reaches the questionnaire,
   non-god without invite is bounced to `/signup/required`, redeeming an
-  invite at `/signup/required` unlocks the questionnaire, completing
-  the questionnaire redirects home, voice transcribe accepts an authed
-  request and rejects bad input.
+  invite at `/signup` unlocks the questionnaire, an approved user who
+  finishes onboarding lands home, a pending (vetting-required) user is
+  held at `/pending-approval` after onboarding, a rejected member sees the
+  not-approved screen, an unauthenticated visit to a protected page
+  redirects to sign-in, the sign-up page is guarded by the invite cookie,
+  and voice transcribe accepts an authed request while rejecting bad input.
 - `invite-tracking.spec.ts` — env (bootstrap) code redemption survives
-  signup, DB-backed codes record their issuer and use count, and an
-  exhausted code can't be claimed even by a stale cookie.
+  signup, DB-backed codes record their issuer and use count, an
+  approval-required code creates a `pending` account and a pre-approved
+  one creates an `approved` account, and an exhausted code can't be
+  claimed even by a stale cookie.
+
+### What is NOT covered (and why)
+
+The flows below are intentionally out of scope for the `E2E_TEST_MODE`
+suite — covered elsewhere, or only coverable by the future real-auth suite:
+
+- **Real sign-in / account creation (credential + Google).** `E2E_TEST_MODE`
+  *bypasses* Neon Auth entirely — `/api/test/login` just drops the synthetic
+  session cookie that `getAuthenticatedUser()` reads. The actual
+  email/password + OAuth forms (`auth/sign-in-form.tsx` / `sign-up-form.tsx`,
+  driven by `authClient`) talk to a real Neon Auth backend and so can't run
+  here. What *is* covered is everything around auth: the invite gate, the
+  sign-up cookie guard, and the unauthenticated → sign-in redirect. Real
+  credential auth needs the "true E2E" suite below (a Neon Auth test user +
+  `context.addCookies()` for the session token).
+- **Questionnaire field-by-field validation.** The 13-page wizard's
+  navigation, required-field blocking and submission contract are covered at
+  the component layer in `components/__tests__/wizard.test.tsx` (jsdom). E2E
+  jumps past it via the `complete-onboarding` seam, so it only asserts the
+  gates on either side, not each field.
+- **Captain approve / reject from the UI.** The camp-management roster
+  (`getCampManagementRoster` / `getCampMemberDetail`) reads the real Neon DB,
+  not the in-memory store, so the modal + action aren't drivable under
+  `E2E_TEST_MODE`. The approval *gate* it controls is covered: pending and
+  rejected members are driven via the `set-approval` seam and asserted at
+  `/pending-approval`.
 
 ### Running against a deployed preview
 
@@ -90,6 +139,11 @@ The `authenticated.spec.ts` and `invite-tracking.spec.ts` specs depend
 on `E2E_TEST_MODE` and so only run against the local dev server.
 
 ## What real production E2E will need
+
+> Full plan: [`docs/e2e-true-auth.md`](../../../../docs/e2e-true-auth.md) —
+> a brief for the real-Neon-Auth suite (dedicated test identity, ephemeral
+> Neon branch per run, `storageState` reuse, CI job sketch, secrets
+> checklist, and the real-DB captain flows it unlocks).
 
 Once a Neon database and a Neon Auth project are wired up, the
 `E2E_TEST_MODE` harness can stay as the fast development inner loop and
@@ -111,6 +165,16 @@ would share the same signature so the specs themselves don't change.
 
 ## CI
 
-The Playwright suite is intentionally **not** in `.github/workflows/ci.yml`
-yet. It runs locally / from a developer's machine until we have a stable
-preview URL to point it at. The Vitest layer runs on every PR.
+The Playwright suite runs in `.github/workflows/ci.yml` as the `e2e` job on
+every PR that touches `apps/**` / `packages/**` / config. It's self-contained:
+the job installs the Chromium browser (cached on `~/.cache/ms-playwright`,
+keyed by the lockfile) and runs `pnpm --filter @camp404/web test:e2e`, which
+auto-starts `next dev` with `E2E_TEST_MODE=1`. Because that flag routes auth
+and DB through the in-memory store, the job needs **no** Vercel preview, no
+`DATABASE_URL`, and no Neon Auth secrets — the build-time placeholder env in
+`lib/neon-auth.ts` / `packages/db/src/index.ts` carries module load. On
+failure the Playwright HTML report is uploaded as a build artifact.
+
+The Vitest layer also runs on every PR (the `test` job). A future "true" E2E
+suite driving real Neon Auth + a real Neon branch (see below) would be a
+separate job with its own secrets.

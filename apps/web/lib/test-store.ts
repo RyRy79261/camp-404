@@ -7,6 +7,7 @@ import type { QuestionnaireFieldChange } from "@camp404/types";
 // Reset between tests via DELETE /api/test/reset.
 
 type TestRank = "captain" | "member";
+type TestApprovalStatus = "pending" | "approved" | "rejected";
 
 interface TestUser {
   id: string;
@@ -15,6 +16,9 @@ interface TestUser {
   profileImageUrl: string | null;
   inviteCode: string | null;
   rank: TestRank;
+  approvalStatus: TestApprovalStatus;
+  approvalDecidedByUserId: string | null;
+  approvalDecidedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,17 +52,53 @@ interface TestInviteCode {
   revokedAt: Date | null;
   assignedRank: TestRank | null;
   invitedEmail: string | null;
+  requiresApproval: boolean;
   createdAt: Date;
 }
 
-let nextSerial = 1;
-const usersByAuthId = new Map<string, TestUser>();
-const profilesByUserId = new Map<string, TestBurnerProfile>();
-const inviteCodes = new Map<string, TestInviteCode>();
-const questionnaireEdits: TestQuestionnaireEdit[] = [];
+interface TestStoreState {
+  usersByAuthId: Map<string, TestUser>;
+  profilesByUserId: Map<string, TestBurnerProfile>;
+  inviteCodes: Map<string, TestInviteCode>;
+  questionnaireEdits: TestQuestionnaireEdit[];
+  nextSerial: number;
+}
+
+// Next.js gives RSC renders and route handlers SEPARATE module graphs in the
+// same process (pronounced under Turbopack dev), so a plain module-level
+// singleton would be DUPLICATED — and the two halves of an e2e spec (a page
+// render that creates a user vs. an /api/test/* route that reads it) wouldn't
+// see each other's writes. Hanging the state off globalThis — the one true
+// per-process singleton — keeps every module-graph copy pointed at the same
+// store. Same trick as the common "Prisma client on globalThis in dev"
+// pattern. (Only ever loaded under E2E_TEST_MODE; production never imports
+// this module.)
+const GLOBAL_KEY = "__camp404TestStore__";
+
+function globalState(): TestStoreState {
+  const g = globalThis as Record<string, unknown>;
+  if (!g[GLOBAL_KEY]) {
+    g[GLOBAL_KEY] = {
+      usersByAuthId: new Map<string, TestUser>(),
+      profilesByUserId: new Map<string, TestBurnerProfile>(),
+      inviteCodes: new Map<string, TestInviteCode>(),
+      questionnaireEdits: [] as TestQuestionnaireEdit[],
+      nextSerial: 1,
+    } satisfies TestStoreState;
+  }
+  return g[GLOBAL_KEY] as TestStoreState;
+}
+
+const S = globalState();
+// Map/array bindings are stable references shared across module graphs;
+// `nextSerial` is a primitive so it must be read/written through `S`.
+const usersByAuthId = S.usersByAuthId;
+const profilesByUserId = S.profilesByUserId;
+const inviteCodes = S.inviteCodes;
+const questionnaireEdits = S.questionnaireEdits;
 
 function nextId(): string {
-  return `test-user-${nextSerial++}`;
+  return `test-user-${S.nextSerial++}`;
 }
 
 export const testStore = {
@@ -70,6 +110,7 @@ export const testStore = {
     displayName: string | null;
     inviteCode: string | null;
     rank?: TestRank;
+    approvalStatus?: TestApprovalStatus;
   }): TestUser {
     const now = new Date();
     const user: TestUser = {
@@ -79,6 +120,9 @@ export const testStore = {
       profileImageUrl: null,
       inviteCode: input.inviteCode,
       rank: input.rank ?? "member",
+      approvalStatus: input.approvalStatus ?? "approved",
+      approvalDecidedByUserId: null,
+      approvalDecidedAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -98,6 +142,30 @@ export const testStore = {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
         user.rank = rank;
+        user.updatedAt = new Date();
+        return;
+      }
+    }
+  },
+  setUserApprovalStatus(userId: string, status: TestApprovalStatus): void {
+    for (const user of usersByAuthId.values()) {
+      if (user.id === userId) {
+        user.approvalStatus = status;
+        user.updatedAt = new Date();
+        return;
+      }
+    }
+  },
+  setUserApproval(input: {
+    userId: string;
+    status: "approved" | "rejected";
+    decidedByUserId: string;
+  }): void {
+    for (const user of usersByAuthId.values()) {
+      if (user.id === input.userId) {
+        user.approvalStatus = input.status;
+        user.approvalDecidedByUserId = input.decidedByUserId;
+        user.approvalDecidedAt = new Date();
         user.updatedAt = new Date();
         return;
       }
@@ -158,7 +226,7 @@ export const testStore = {
     changes: QuestionnaireFieldChange[];
   }): void {
     questionnaireEdits.push({
-      id: `test-edit-${nextSerial++}`,
+      id: `test-edit-${S.nextSerial++}`,
       userId: input.userId,
       questionnaireKey: input.questionnaireKey,
       version: input.version,
@@ -190,6 +258,7 @@ export const testStore = {
     expiresAt?: Date | null;
     assignedRank?: TestRank | null;
     invitedEmail?: string | null;
+    requiresApproval?: boolean;
   }): TestInviteCode {
     const row: TestInviteCode = {
       code: input.code,
@@ -201,6 +270,7 @@ export const testStore = {
       revokedAt: null,
       assignedRank: input.assignedRank ?? null,
       invitedEmail: input.invitedEmail ?? null,
+      requiresApproval: input.requiresApproval ?? false,
       createdAt: new Date(),
     };
     inviteCodes.set(input.code, row);
@@ -226,7 +296,7 @@ export const testStore = {
     profilesByUserId.clear();
     inviteCodes.clear();
     questionnaireEdits.length = 0;
-    nextSerial = 1;
+    S.nextSerial = 1;
   },
 };
 

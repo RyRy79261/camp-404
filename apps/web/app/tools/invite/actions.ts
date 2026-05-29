@@ -13,6 +13,8 @@ export type CreateInviteResult =
       ok: true;
       code: string;
       invitedEmail: string;
+      maxUses: number;
+      requiresApproval: boolean;
     }
   | {
       ok: false;
@@ -21,17 +23,27 @@ export type CreateInviteResult =
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// A captain can mint a code for many redeemers; cap it so a typo can't
+// create an effectively unlimited code by accident.
+const MAX_USES_LIMIT = 100;
+
 /**
- * Mint a single-use, member-tier invite code from inside the app.
+ * Mint an invite code from inside the app.
  *
- * Auth-gated to any signed-in camp member (anyone past the invite
- * gate). Always sets `assigned_rank = NULL` — captain-tier codes can
- * ONLY be minted from the CLI. The current user is recorded as the
- * inviter, so the family-tree page can attribute the relationship.
+ * Auth-gated to any signed-in camp member (anyone past the invite gate).
+ * Always sets `assigned_rank = NULL` — captain-tier codes can ONLY be minted
+ * from the CLI. The current user is recorded as the inviter, so the
+ * family-tree page can attribute the relationship.
+ *
+ * Captain vetting:
+ *   - A non-captain's codes ALWAYS require captain approval (the redeemer
+ *     lands in the vetting queue) and stay single-use, tied to one email.
+ *   - A captain may pre-approve the redeemer (skip vetting) and raise the
+ *     use cap to hand the code to several people.
  *
  * Validates everything server-side: email format, code syntax, code
- * uniqueness. The /api/tools/invite/check endpoint is a UX
- * convenience; this is the security boundary.
+ * uniqueness, captain-only options. The /api/tools/invite/check endpoint is a
+ * UX convenience; this is the security boundary.
  */
 export async function createInviteAction(
   _prev: CreateInviteResult | null,
@@ -44,6 +56,7 @@ export async function createInviteAction(
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     return { ok: false, error: "Your account isn't camp-active yet." };
   }
+  const isCaptain = campUser.rank === "captain";
 
   const emailRaw =
     typeof formData.get("email") === "string"
@@ -58,8 +71,36 @@ export async function createInviteAction(
       ? (formData.get("code") as string)
       : "";
 
+  // Captain-only knobs. A non-captain can't pre-approve anyone or mint a
+  // multi-use code — the form never shows the controls, and we re-enforce
+  // here so a crafted POST can't bypass it.
+  const preApprove = isCaptain && formData.get("preApprove") === "on";
+  const requiresApproval = !preApprove;
+
+  let maxUses = 1;
+  if (isCaptain) {
+    const raw = formData.get("maxUses");
+    if (typeof raw === "string" && raw.trim()) {
+      const parsed = Number(raw.trim());
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_USES_LIMIT) {
+        return {
+          ok: false,
+          error: `Max uses must be a whole number between 1 and ${MAX_USES_LIMIT}.`,
+        };
+      }
+      maxUses = parsed;
+    }
+  }
+
+  // The email targets a single person, so it's only meaningful (and required)
+  // for a single-use code. A captain minting a multi-use code may leave it
+  // blank; if they fill it in we still record it as the lead recipient.
   const email = emailRaw.trim().toLowerCase();
-  if (!EMAIL_PATTERN.test(email)) {
+  const emailRequired = maxUses === 1;
+  if (email && !EMAIL_PATTERN.test(email)) {
+    return { ok: false, error: "Enter a valid email address." };
+  }
+  if (emailRequired && !email) {
     return { ok: false, error: "Enter a valid email address." };
   }
   const note = noteRaw.trim() || null;
@@ -88,9 +129,10 @@ export async function createInviteAction(
       code,
       createdByUserId: campUser.id,
       note,
-      maxUses: 1,
+      maxUses,
       assignedRank: null,
-      invitedEmail: email,
+      invitedEmail: email || null,
+      requiresApproval,
     });
   } catch {
     // Unique-PK collision (race with another redeemer) or any other DB
@@ -98,7 +140,7 @@ export async function createInviteAction(
     return { ok: false, error: "Couldn't save invite. Try a different code." };
   }
 
-  return { ok: true, code, invitedEmail: email };
+  return { ok: true, code, invitedEmail: email, maxUses, requiresApproval };
 }
 
 async function generateUnusedCode(): Promise<string> {

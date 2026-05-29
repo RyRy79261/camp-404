@@ -17,23 +17,29 @@ test.describe("invite-code gate", () => {
     await page.getByLabel("Invite code").fill("DEFINITELY-NOT-VALID");
     await page.getByRole("button", { name: "Continue" }).click();
 
-    await expect(page.getByRole("alert")).toContainText(/isn't valid/i);
+    // Scope to our error alert by text — Next injects its own empty
+    // role="alert" route announcer (#__next-route-announcer__) on every page,
+    // so a bare getByRole("alert") is a strict-mode collision.
+    await expect(
+      page.getByRole("alert").filter({ hasText: /isn't valid/i }),
+    ).toBeVisible();
     await expect(page).toHaveURL(/\/signup$/);
     // Cookie must NOT have been set on a bad code.
     const cookies = await page.context().cookies();
     expect(cookies.find((c) => c.name === "camp404_invite")).toBeUndefined();
   });
 
-  test("a valid code sets the cookie and redirects to Stack's sign-up", async ({
+  test("a valid code sets the cookie and redirects to the sign-up page", async ({
     page,
   }) => {
     await page.goto("/signup");
     await page.getByLabel("Invite code").fill("TEST-INVITE");
     await page.getByRole("button", { name: "Continue" }).click();
 
-    // Stack's hosted UI lives under /handler — we don't assert anything
-    // about its DOM, just that the redirect happened and our cookie is set.
-    await expect(page).toHaveURL(/\/handler\/sign-up/);
+    // Neon Auth's sign-up UI lives under /auth/sign-up (the form's default
+    // `next`). We don't assert anything about its DOM, just that the redirect
+    // happened and our cookie is set.
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
     const cookies = await page.context().cookies();
     const invite = cookies.find((c) => c.name === "camp404_invite");
     expect(invite?.value).toBe("TEST-INVITE");

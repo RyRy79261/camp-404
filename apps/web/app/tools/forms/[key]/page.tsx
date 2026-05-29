@@ -3,7 +3,12 @@ import { notFound, redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import type { QuestionnaireResponses } from "@camp404/types";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
+import {
+  ensureCampUser,
+  getBurnerProfile,
+  hasCampAccess,
+  isApproved,
+} from "@/lib/users";
 import { getReplayableForm, listFormEdits, type FormEdit } from "@/lib/forms";
 import { FormReplay } from "./form-replay";
 
@@ -31,6 +36,9 @@ export default async function FormReplayPage({
   const onboarding = await getBurnerProfile(campUser.id);
   if (!onboarding?.completedAt) {
     redirect("/onboarding/questionnaire");
+  }
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    redirect("/pending-approval");
   }
 
   const form = getReplayableForm(key);

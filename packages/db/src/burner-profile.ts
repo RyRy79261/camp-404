@@ -27,6 +27,7 @@ export async function createCampUser(input: {
   displayName: string | null;
   inviteCode: string | null;
   rank?: "captain" | "member";
+  approvalStatus?: "pending" | "approved" | "rejected";
 }) {
   const db = createHttpDb();
   const [created] = await db
@@ -36,10 +37,50 @@ export async function createCampUser(input: {
       displayName: input.displayName,
       inviteCode: input.inviteCode,
       ...(input.rank ? { rank: input.rank } : {}),
+      ...(input.approvalStatus
+        ? { approvalStatus: input.approvalStatus }
+        : {}),
     })
     .returning();
   if (!created) throw new Error("Failed to insert camp user row");
   return created;
+}
+
+/**
+ * Set a member's approval status without a deciding captain — used to drop a
+ * redeemer into the `pending` queue at signup. Captain decisions go through
+ * {@link setUserApproval}, which also records who decided.
+ */
+export async function setUserApprovalStatus(
+  userId: string,
+  status: "pending" | "approved" | "rejected",
+) {
+  const db = createHttpDb();
+  await db
+    .update(schema.users)
+    .set({ approvalStatus: status, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+}
+
+/**
+ * Record a captain's vetting decision on a pending member. Stamps who
+ * decided and when for the camp-management audit trail.
+ */
+export async function setUserApproval(input: {
+  userId: string;
+  status: "approved" | "rejected";
+  decidedByUserId: string;
+}) {
+  const db = createHttpDb();
+  await db
+    .update(schema.users)
+    .set({
+      approvalStatus: input.status,
+      approvalDecidedByUserId: input.decidedByUserId,
+      approvalDecidedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.users.id, input.userId));
 }
 
 export async function setUserInviteCode(userId: string, code: string) {

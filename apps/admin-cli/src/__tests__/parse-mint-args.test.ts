@@ -17,7 +17,21 @@ describe("parseMintArgs", () => {
       maxUses: null,
       expiresAt: null,
       assignedRank: null,
+      requiresApproval: false,
     });
+  });
+
+  it("treats --requires-approval as a value-less boolean flag", () => {
+    const parsed = parseMintArgs([
+      "--code",
+      "VET-ME",
+      "--requires-approval",
+      "--note",
+      "needs vetting",
+    ]);
+    expect(parsed.requiresApproval).toBe(true);
+    // The flag must not swallow the following token as its value.
+    expect(parsed.note).toBe("needs vetting");
   });
 
   it("parses --assigns-rank captain to auto-promote the redeemer", () => {

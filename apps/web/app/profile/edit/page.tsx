@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
+import {
+  ensureCampUser,
+  getBurnerProfile,
+  hasCampAccess,
+  isApproved,
+} from "@/lib/users";
 import { ProfileEditForm } from "./edit-form";
 
 // Reads the Neon Auth session on every request.
@@ -16,6 +21,9 @@ export default async function ProfileEditPage() {
   const profile = await getBurnerProfile(campUser.id);
   if (!profile?.completedAt) {
     redirect("/onboarding/questionnaire");
+  }
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    redirect("/pending-approval");
   }
 
   const initialDisplayName =

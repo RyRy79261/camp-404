@@ -38,8 +38,12 @@ real (non-system, non-sanitised) camp member, aggregating:
 - **Member** — display name + the teams they belong to (`team_memberships`).
 - **Rank** — `users.rank`, with **Team Lead** derived from any
   `team_memberships.is_lead` (captain > lead > member).
-- **Status** — `Onboarding` if the burner profile isn't finished, `Action
-needed` if it is but blocking `required_actions` remain, else `Ready`.
+- **Status** — `Onboarding` if the burner profile isn't finished,
+  `Awaiting approval` if onboarded but pending a captain's vetting decision,
+  `Rejected` if a captain denied them, `Action needed` if onboarded and
+  approved but blocking `required_actions` remain, else `Ready`. Approval
+  outranks generic actions because it gates the member out of the app
+  entirely.
 - **Questionnaires** — a tick when there are zero pending blocking
   `required_actions` for the user.
 - **Driver** — derived from `driver_profiles.intends_to_drive`.
@@ -60,8 +64,48 @@ lead of any team → team-lead layer, everyone else → their own. Previously th
 home page hard-coded every viewer to `camp_member`; captains can now reach
 their layer (and this page) for real.
 
+## Reviewing & approving applicants
+
+Rows are **clickable**. A captain clicking a burner opens a modal with that
+member's detail split into **Overview** (country, join date, onboarding state,
+the invite code they redeemed, who invited them, and the inviter's note) and
+**Profile** (their burner-profile answers, grouped by questionnaire page).
+Detail is fetched on open via the captain-gated `getMemberDetailAction` so the
+heavy questionnaire catalogue and raw answers never ship to the client until a
+captain asks for them.
+
+The modal footer is an **Actions** bar — reserved for things the captain needs
+to *do*, not for editing the member's account data:
+
+- **Reject** (destructive) and **Approve** (green) appear together only while a
+  decision is outstanding (`approval_status = 'pending'`); once a decision is
+  made they disappear and the modal shows who decided and when.
+- **Ping** is greyed out — a future feature (nudge a member to check the app).
+
+A new **Awaiting approval** filter toggle (with a count badge) narrows the
+table to just the people in the vetting queue. `decideApprovalAction` persists
+the decision through `decideUserApproval` and revalidates the page.
+
+## Captain approval gate
+
+Invite codes carry `invite_codes.requires_approval`. A **non-captain's** codes
+always set it (only a captain can wave someone in unvetted); a **captain**
+minting a code chooses — pre-approve the redeemer, or leave them for vetting —
+and can also raise the code's use cap. Redeeming a vetting-required code creates
+the account with `users.approval_status = 'pending'`; after onboarding that
+member is held at `/pending-approval` (a blocking screen) until a captain
+approves (→ app unlocks) or rejects (→ terminal "not approved" message).
+
+Approval is a first-class `users.approval_status` lifecycle field rather than a
+`required_actions` row, because it has a terminal `rejected` state the generic
+gate can't express and is actioned by a captain, not completed by the user.
+`isApproved()` in `apps/web/lib/users.ts` is the shared gate the protected
+pages check after the invite + onboarding gates.
+
 ## Notes
 
-- No new table or migration — the view is read-only over existing data.
+- One migration (`0009`): `invite_codes.requires_approval` and the
+  `users.approval_status` / `approval_decided_by_user_id` / `approval_decided_at`
+  columns. The roster query is otherwise still read-only over existing data.
 - The table renders with plain Tailwind (no shared `Table` component exists
   yet); a client-side text filter searches name, team, and country.

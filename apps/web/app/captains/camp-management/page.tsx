@@ -3,7 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { getCampManagementRoster } from "@camp404/db/roster";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { toRosterRow } from "@/lib/camp-roster";
 import { CampManagementRoster } from "./camp-management-roster";
 
@@ -21,6 +21,9 @@ export default async function CampManagementPage() {
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     redirect("/signup/required");
+  }
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    redirect("/pending-approval");
   }
 
   const isCaptain = campUser.rank === "captain";

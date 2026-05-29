@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { completeQuestionnaire, login, resetTestState } from "./_helpers";
+import { completeOnboarding, login, resetTestState } from "./_helpers";
 
 // All specs here rely on E2E_TEST_MODE=1 in the dev server env (see
 // playwright.config.ts). The /api/test/login + reset routes are only
@@ -12,9 +12,8 @@ test.describe("authenticated flow (test-mode)", () => {
 
   test("god email bypasses the invite gate and reaches the questionnaire", async ({
     page,
-    request,
   }) => {
-    await login(request, { email: "god@example.com" });
+    await login(page, { email: "god@example.com" });
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
@@ -25,49 +24,129 @@ test.describe("authenticated flow (test-mode)", () => {
 
   test("non-god without an invite is bounced to /signup/required", async ({
     page,
-    request,
   }) => {
-    await login(request, { email: "newbie@example.com" });
+    await login(page, { email: "newbie@example.com" });
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/signup\/required/);
-    await expect(page.getByText("Just one thing")).toBeVisible();
+    await expect(page.getByText("You're not on the list")).toBeVisible();
   });
 
-  test("invite redeemed at /signup/required unlocks the questionnaire", async ({
+  test("invite redeemed at /signup unlocks the questionnaire", async ({
     page,
-    request,
   }) => {
-    await login(request, { email: "redeemer@example.com" });
-    await page.goto("/signup/required");
+    // The invite form lives only on /signup. Redeeming drops the cookie and
+    // sends the (still-anonymous) browser to the Neon Auth sign-up page.
+    await page.goto("/signup");
     await page.getByLabel("Invite code").fill("TEST-INVITE");
-    await page.getByRole("button", { name: "Unlock my account" }).click();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
 
-    // The action sets the cookie and redirects to /, which then sees the
-    // (now-claimed) code on the user row and forwards to the questionnaire.
+    // Simulate sign-up completing: the test user logs in and hits /, which
+    // claims the cookie code onto their row and forwards to the questionnaire.
+    await login(page, { id: "redeemer-auth", email: "redeemer@example.com" });
+    await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
   });
 
-  test("completing the questionnaire redirects home", async ({
+  test("completing onboarding redirects an approved user home", async ({
     page,
     request,
   }) => {
-    await login(request, { email: "god@example.com" });
-    await page.goto("/onboarding/questionnaire");
-    await completeQuestionnaire(page);
+    // God accounts are approved by default — straight to the app once
+    // onboarding is done.
+    await login(page, { id: "god-auth", email: "god@example.com" });
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
+    await completeOnboarding(request, "god-auth");
+
+    await page.goto("/");
     await expect(page).toHaveURL("/");
     // Home now shows the layered ControlPanel instead of the sign-in CTA.
     await expect(page.getByRole("link", { name: /My Teams/ })).toBeVisible();
   });
 
-  test("/api/voice/transcribe accepts an authed request and rejects bad input", async ({
+  test("a pending member is held at /pending-approval after onboarding", async ({
+    page,
     request,
   }) => {
-    await login(request, { email: "god@example.com" });
+    // A vetting-required code lands the redeemer in the approval queue.
+    await request.post("/api/test/seed-invite", {
+      data: { code: "GATEKEEP", maxUses: 1, requiresApproval: true },
+    });
+    await page.goto("/signup");
+    await page.getByLabel("Invite code").fill("GATEKEEP");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
 
-    // Wrong content type → 415.
-    const wrongType = await request.post("/api/voice/transcribe", {
+    await login(page, { id: "pending-auth", email: "pending@example.com" });
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+
+    // Finish onboarding — now the approval gate is the only thing left, and
+    // it blocks the app with the "application submitted" screen.
+    await completeOnboarding(request, "pending-auth");
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/pending-approval/);
+    await expect(page.getByText("Application submitted")).toBeVisible();
+
+    // The gate holds on other protected routes too, not just home.
+    await page.goto("/tools");
+    await expect(page).toHaveURL(/\/pending-approval/);
+  });
+
+  test("an unauthenticated visit to a protected page redirects to sign-in", async ({
+    page,
+  }) => {
+    // No test-user cookie → getAuthenticatedUserOrRedirect bounces to the
+    // Neon Auth sign-in page.
+    await page.goto("/tools");
+    await expect(page).toHaveURL(/\/auth\/sign-in/);
+  });
+
+  test("the sign-up page is guarded by the invite cookie", async ({ page }) => {
+    // /auth/sign-up may only be reached with a redeemed invite cookie; without
+    // one it kicks back to the invite gate. (No cookie set here.)
+    await page.goto("/auth/sign-up");
+    await expect(page).toHaveURL(/\/signup$/);
+  });
+
+  test("a rejected member sees the not-approved screen", async ({
+    page,
+    request,
+  }) => {
+    await request.post("/api/test/seed-invite", {
+      data: { code: "VETO", maxUses: 1, requiresApproval: true },
+    });
+    await page.goto("/signup");
+    await page.getByLabel("Invite code").fill("VETO");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/auth\/sign-up/);
+
+    await login(page, { id: "rejected-auth", email: "rejected@example.com" });
+    await page.goto("/");
+    await completeOnboarding(request, "rejected-auth");
+
+    // A captain rejects them (simulated via the test seam — the real
+    // approve/reject UI reads the live DB and isn't drivable in test mode).
+    await request.post("/api/test/set-approval", {
+      data: { authUserId: "rejected-auth", status: "rejected" },
+    });
+
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/pending-approval/);
+    await expect(page.getByText("Application not approved")).toBeVisible();
+  });
+
+  test("/api/voice/transcribe accepts an authed request and rejects bad input", async ({
+    page,
+  }) => {
+    await login(page, { email: "god@example.com" });
+
+    // Wrong content type → 415. Use page.request so the auth cookie set by
+    // login() travels with the request.
+    const wrongType = await page.request.post("/api/voice/transcribe", {
       multipart: {
         audio: {
           name: "not-audio.txt",
@@ -79,7 +158,7 @@ test.describe("authenticated flow (test-mode)", () => {
     expect(wrongType.status()).toBe(415);
 
     // Missing audio field → 400.
-    const noAudio = await request.post("/api/voice/transcribe", {
+    const noAudio = await page.request.post("/api/voice/transcribe", {
       multipart: {},
     });
     expect(noAudio.status()).toBe(400);

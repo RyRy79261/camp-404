@@ -8,12 +8,23 @@ const skipWebServer = process.env.PLAYWRIGHT_SKIP_WEB_SERVER === "1";
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
-  fullyParallel: true,
+  // MUST stay serial. The E2E_TEST_MODE harness backs auth + DB with a
+  // single process-wide in-memory store (apps/web/lib/test-store.ts) shared
+  // by the one `next dev` server every worker hits. Parallel workers would
+  // race it — one test's `resetTestState`/`seed-invite` clobbers another's
+  // mid-flight. One worker, no intra-file parallelism.
+  fullyParallel: false,
+  workers: 1,
   retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? "github" : "list",
+  // In CI: `list` for a readable per-test log, `github` for inline
+  // annotations on failures, and `html` for a downloadable report artifact.
+  reporter: process.env.CI
+    ? [["list"], ["github"], ["html", { open: "never" }]]
+    : "list",
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
     trace: "on-first-retry",
+    screenshot: "only-on-failure",
   },
   projects: [{ name: "chromium", use: devices["Desktop Chrome"] }],
   webServer: skipWebServer

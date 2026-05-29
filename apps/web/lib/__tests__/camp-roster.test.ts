@@ -9,6 +9,7 @@ function member(
     id: "00000000-0000-0000-0000-000000000001",
     displayName: "Dusty Boot",
     rank: "member",
+    approvalStatus: "approved",
     isLead: false,
     teams: [],
     duesPaid: false,
@@ -58,6 +59,40 @@ describe("toRosterRow status", () => {
     );
     expect(row.status).toBe("ready");
     expect(row.requiredComplete).toBe(true);
+  });
+
+  it("is 'awaiting_approval' when onboarded but not yet vetted", () => {
+    const row = toRosterRow(
+      member({ onboardingComplete: true, approvalStatus: "pending" }),
+    );
+    expect(row.status).toBe("awaiting_approval");
+    expect(row.awaitingApproval).toBe(true);
+  });
+
+  it("approval outranks outstanding actions in the status pill", () => {
+    const row = toRosterRow(
+      member({
+        onboardingComplete: true,
+        approvalStatus: "pending",
+        pendingRequiredActions: 3,
+      }),
+    );
+    expect(row.status).toBe("awaiting_approval");
+  });
+
+  it("is 'rejected' when a captain has denied the applicant", () => {
+    const row = toRosterRow(
+      member({ onboardingComplete: true, approvalStatus: "rejected" }),
+    );
+    expect(row.status).toBe("rejected");
+    expect(row.awaitingApproval).toBe(false);
+  });
+
+  it("still shows 'onboarding' before the profile is done, even if pending", () => {
+    const row = toRosterRow(
+      member({ onboardingComplete: false, approvalStatus: "pending" }),
+    );
+    expect(row.status).toBe("onboarding");
   });
 });
 

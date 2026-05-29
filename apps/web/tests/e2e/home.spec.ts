@@ -18,7 +18,7 @@ test.describe("unauthenticated home page", () => {
     await page.getByRole("link", { name: "Are you lost?" }).click();
     await expect(page).toHaveURL(/\/signup$/);
     await expect(
-      page.getByText("Sign-up is invite-only", { exact: false }),
+      page.getByText("Camp 404 is invite-only", { exact: false }),
     ).toBeVisible();
   });
 });
