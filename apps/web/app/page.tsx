@@ -85,8 +85,8 @@ const homeLayers: ControlPanelLayer[] = [
     },
     bottomRight: {
       label: "Tools",
-      hint: "Meals, expenses…",
-      href: "/manuals",
+      hint: "Invites, family tree…",
+      href: "/tools",
       icon: <Wrench className="h-5 w-5" />,
     },
   },

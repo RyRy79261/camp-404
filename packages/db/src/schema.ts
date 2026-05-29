@@ -268,6 +268,14 @@ export const inviteCodes = pgTable(
     useCount: integer("use_count").notNull().default(0),
     expiresAt: timestamp("expires_at", { mode: "date" }),
     revokedAt: timestamp("revoked_at", { mode: "date" }),
+    // Optional rank to stamp onto a user when they redeem this code. NULL =
+    // redeemer keeps the default `member` rank. Use `captain` to mint a code
+    // that auto-promotes the redeemer.
+    assignedRank: rankEnum("assigned_rank"),
+    // For in-app invites created via /tools/invite: the email address of
+    // the person the inviter is sending this code to. Lowercased on insert.
+    // CLI-minted codes leave this NULL.
+    invitedEmail: text("invited_email"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => ({
