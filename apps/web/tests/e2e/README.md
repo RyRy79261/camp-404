@@ -132,6 +132,16 @@ would share the same signature so the specs themselves don't change.
 
 ## CI
 
-The Playwright suite is intentionally **not** in `.github/workflows/ci.yml`
-yet. It runs locally / from a developer's machine until we have a stable
-preview URL to point it at. The Vitest layer runs on every PR.
+The Playwright suite runs in `.github/workflows/ci.yml` as the `e2e` job on
+every PR that touches `apps/**` / `packages/**` / config. It's self-contained:
+the job installs the Chromium browser (cached on `~/.cache/ms-playwright`,
+keyed by the lockfile) and runs `pnpm --filter @camp404/web test:e2e`, which
+auto-starts `next dev` with `E2E_TEST_MODE=1`. Because that flag routes auth
+and DB through the in-memory store, the job needs **no** Vercel preview, no
+`DATABASE_URL`, and no Neon Auth secrets — the build-time placeholder env in
+`lib/neon-auth.ts` / `packages/db/src/index.ts` carries module load. On
+failure the Playwright HTML report is uploaded as a build artifact.
+
+The Vitest layer also runs on every PR (the `test` job). A future "true" E2E
+suite driving real Neon Auth + a real Neon branch (see below) would be a
+separate job with its own secrets.

@@ -13,6 +13,7 @@ import {
   setUserRank,
   upsertBurnerProfile as upsertBurnerProfileDb,
 } from "@camp404/db/burner-profile";
+import { isTeamLead as dbIsTeamLead } from "@camp404/db/roster";
 import { claimInviteCode, INVITE_COOKIE, isGodEmail } from "./access-control";
 import type { AuthenticatedUser } from "./auth";
 import { isE2ETestMode } from "./test-mode";
@@ -36,6 +37,26 @@ export interface CampUser {
 }
 
 /**
+ * Delete a cookie best-effort. `ensureCampUser` runs from both Server
+ * Components (a page render, where Next 16 forbids cookie mutation and
+ * throws) and Server Actions / route handlers (where it's allowed). During
+ * render we can't clear the invite cookie, so we swallow that specific error
+ * and let the cookie lapse on its own short `maxAge`. The claim has already
+ * been persisted to the user row by that point, and the has-access branch
+ * never re-claims, so a briefly-lingering cookie is harmless.
+ */
+function safeDeleteCookie(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  name: string,
+): void {
+  try {
+    cookieStore.delete(name);
+  } catch {
+    // Render context — cookies are read-only here; it expires via maxAge.
+  }
+}
+
+/**
  * Ensure a row exists for the given authenticated user (Neon Auth or test).
  * Lazy-upserts on first hit and persists a valid invite cookie onto the
  * row. Routes through the test store when E2E_TEST_MODE=1.
@@ -53,7 +74,7 @@ export async function ensureCampUser(
   // Already has access (god or a code on file) — nothing to do with the
   // cookie except clear it.
   if (existing && (god || existing.inviteCode)) {
-    if (cookieValue) cookieStore.delete(INVITE_COOKIE);
+    if (cookieValue) safeDeleteCookie(cookieStore, INVITE_COOKIE);
     return existing;
   }
 
@@ -78,7 +99,7 @@ export async function ensureCampUser(
       if (approvalStatus !== existing.approvalStatus) {
         await store.setUserApprovalStatus(existing.id, approvalStatus);
       }
-      cookieStore.delete(INVITE_COOKIE);
+      safeDeleteCookie(cookieStore, INVITE_COOKIE);
       return {
         ...existing,
         inviteCode: claimed.code,
@@ -86,7 +107,7 @@ export async function ensureCampUser(
         approvalStatus,
       };
     }
-    if (cookieValue) cookieStore.delete(INVITE_COOKIE);
+    if (cookieValue) safeDeleteCookie(cookieStore, INVITE_COOKIE);
     return existing;
   }
 
@@ -102,7 +123,7 @@ export async function ensureCampUser(
     rank: claimed?.assignedRank ?? "member",
     approvalStatus,
   });
-  if (cookieValue) cookieStore.delete(INVITE_COOKIE);
+  if (cookieValue) safeDeleteCookie(cookieStore, INVITE_COOKIE);
   return created;
 }
 
@@ -146,6 +167,17 @@ export function isApproved(
 }
 
 /**
+ * Whether a user leads at least one team — the derived `team_lead` rank that
+ * unlocks the control panel's team-lead layer. Routed through the test store
+ * under E2E_TEST_MODE (which has no team-membership concept, so always
+ * false), keeping the home page renderable without a real DB.
+ */
+export async function isTeamLead(userId: string): Promise<boolean> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  return store.isTeamLead(userId);
+}
+
+/**
  * Apply a captain's vetting decision. Captain-gated by the caller; this just
  * persists the decision and stamps the deciding captain for the audit trail.
  */
@@ -180,6 +212,7 @@ interface UserBackend {
   setUserProfileImage(userId: string, url: string | null): Promise<void>;
   setUserDisplayName(userId: string, name: string | null): Promise<void>;
   getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null>;
+  isTeamLead(userId: string): Promise<boolean>;
   upsertBurnerProfile(input: {
     userId: string;
     version: string;
@@ -253,6 +286,9 @@ const realBackend: UserBackend = {
       version: row.version,
     };
   },
+  async isTeamLead(userId) {
+    return dbIsTeamLead(userId);
+  },
   async upsertBurnerProfile(input) {
     await upsertBurnerProfileDb(input);
   },
@@ -294,6 +330,10 @@ const testBackend: UserBackend = {
       updatedAt: row.updatedAt,
       version: row.version,
     };
+  },
+  // The in-memory store models no team memberships, so nobody is a lead.
+  async isTeamLead() {
+    return false;
   },
   async upsertBurnerProfile(input) {
     testStore.upsertProfile(input);

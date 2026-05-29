@@ -56,14 +56,49 @@ interface TestInviteCode {
   createdAt: Date;
 }
 
-let nextSerial = 1;
-const usersByAuthId = new Map<string, TestUser>();
-const profilesByUserId = new Map<string, TestBurnerProfile>();
-const inviteCodes = new Map<string, TestInviteCode>();
-const questionnaireEdits: TestQuestionnaireEdit[] = [];
+interface TestStoreState {
+  usersByAuthId: Map<string, TestUser>;
+  profilesByUserId: Map<string, TestBurnerProfile>;
+  inviteCodes: Map<string, TestInviteCode>;
+  questionnaireEdits: TestQuestionnaireEdit[];
+  nextSerial: number;
+}
+
+// Next.js gives RSC renders and route handlers SEPARATE module graphs in the
+// same process (pronounced under Turbopack dev), so a plain module-level
+// singleton would be DUPLICATED — and the two halves of an e2e spec (a page
+// render that creates a user vs. an /api/test/* route that reads it) wouldn't
+// see each other's writes. Hanging the state off globalThis — the one true
+// per-process singleton — keeps every module-graph copy pointed at the same
+// store. Same trick as the common "Prisma client on globalThis in dev"
+// pattern. (Only ever loaded under E2E_TEST_MODE; production never imports
+// this module.)
+const GLOBAL_KEY = "__camp404TestStore__";
+
+function globalState(): TestStoreState {
+  const g = globalThis as Record<string, unknown>;
+  if (!g[GLOBAL_KEY]) {
+    g[GLOBAL_KEY] = {
+      usersByAuthId: new Map<string, TestUser>(),
+      profilesByUserId: new Map<string, TestBurnerProfile>(),
+      inviteCodes: new Map<string, TestInviteCode>(),
+      questionnaireEdits: [] as TestQuestionnaireEdit[],
+      nextSerial: 1,
+    } satisfies TestStoreState;
+  }
+  return g[GLOBAL_KEY] as TestStoreState;
+}
+
+const S = globalState();
+// Map/array bindings are stable references shared across module graphs;
+// `nextSerial` is a primitive so it must be read/written through `S`.
+const usersByAuthId = S.usersByAuthId;
+const profilesByUserId = S.profilesByUserId;
+const inviteCodes = S.inviteCodes;
+const questionnaireEdits = S.questionnaireEdits;
 
 function nextId(): string {
-  return `test-user-${nextSerial++}`;
+  return `test-user-${S.nextSerial++}`;
 }
 
 export const testStore = {
@@ -191,7 +226,7 @@ export const testStore = {
     changes: QuestionnaireFieldChange[];
   }): void {
     questionnaireEdits.push({
-      id: `test-edit-${nextSerial++}`,
+      id: `test-edit-${S.nextSerial++}`,
       userId: input.userId,
       questionnaireKey: input.questionnaireKey,
       version: input.version,
@@ -261,7 +296,7 @@ export const testStore = {
     profilesByUserId.clear();
     inviteCodes.clear();
     questionnaireEdits.length = 0;
-    nextSerial = 1;
+    S.nextSerial = 1;
   },
 };
 

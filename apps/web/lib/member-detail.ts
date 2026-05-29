@@ -1,9 +1,13 @@
-import "server-only";
-
 import type { Question } from "@camp404/types";
 import type { CampMemberDetail } from "@camp404/db/roster";
 import { QUESTIONNAIRE } from "./questionnaire";
 import { COUNTRIES } from "./countries";
+
+// Intentionally not `import "server-only"` — `presentMemberDetail` is a pure
+// function exercised in unit tests under jsdom (see __tests__/member-detail).
+// Its only callers are the camp-management server action (which fetches the
+// DB-bound `CampMemberDetail`) and the client modal, which imports the types
+// with `import type` so nothing here reaches a client bundle.
 
 // Serializable view-model for the camp-management member modal. Built on the
 // server so the (heavy) questionnaire catalogue and a member's raw answers
@@ -42,7 +46,14 @@ const dateFmt = new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium" });
 function renderAnswer(question: Question, raw: unknown): string | null {
   if (raw == null || raw === "") return null;
 
+  // Resolve a stored value to its human label. `scale` carries its choices on
+  // `steps`; every other labelled kind uses `options`.
   const optionLabel = (val: string): string => {
+    if (question.kind === "scale") {
+      const step = question.steps.find((s) => s.value === val);
+      if (step) return step.label;
+      return val;
+    }
     if ("options" in question) {
       const opt = question.options.find((o) => o.value === val);
       if (opt) return opt.label;

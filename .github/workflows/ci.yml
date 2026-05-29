@@ -169,14 +169,53 @@ jobs:
       - name: Audit dependencies
         run: pnpm audit --audit-level high
 
-  # Playwright e2e regression suite — disabled until a Vercel preview
-  # deployment exists to point PLAYWRIGHT_BASE_URL at, and CI secrets
-  # for Neon Auth (NEON_AUTH_*) are configured. The config and smoke
-  # specs are kept in apps/web/tests/e2e for when we re-enable it.
+  # Playwright e2e suite. Self-contained: playwright.config.ts auto-starts
+  # `next dev` with E2E_TEST_MODE=1, which bypasses Neon Auth and the Neon
+  # database with the in-memory test store (apps/web/lib/test-store.ts). So
+  # this job needs no Vercel preview, no DATABASE_URL, and no Neon Auth
+  # secrets — the app's build-time placeholder env (see lib/neon-auth.ts and
+  # packages/db/src/index.ts) carries module load, and every test-mode path
+  # reads/writes the in-memory store instead.
+  e2e:
+    needs: [changes]
+    if: needs.changes.outputs.src == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright browser + system deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @camp404/web exec playwright install --with-deps chromium
+      - name: Install Playwright system deps (cached browser)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @camp404/web exec playwright install-deps chromium
+      - name: Run e2e tests
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        run: pnpm --filter @camp404/web test:e2e
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
 
   ci-pass:
     if: always()
-    needs: [changes, lint, typecheck, test, build, schema-migration, supply-chain]
+    needs: [changes, lint, typecheck, test, build, e2e, schema-migration, supply-chain]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -200,11 +239,13 @@ jobs:
 
           echo "=== Gated jobs (success or skipped) ==="
           echo "test: ${{ needs.test.result }}"
+          echo "e2e: ${{ needs.e2e.result }}"
           echo "schema-migration: ${{ needs.schema-migration.result }}"
 
           # Gated jobs: success OR skipped
           for result in \
             "${{ needs.test.result }}" \
+            "${{ needs.e2e.result }}" \
             "${{ needs.schema-migration.result }}"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
               echo "::error::Gated job failed (not success or skipped): $result"

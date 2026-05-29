@@ -4,13 +4,13 @@ import {
   ControlPanel,
   type ControlPanelLayer,
 } from "@camp404/ui/components/control-panel";
-import { isTeamLead } from "@camp404/db/roster";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
   ensureCampUser,
   getBurnerProfile,
   hasCampAccess,
   isApproved,
+  isTeamLead,
 } from "@/lib/users";
 import { initialsFrom } from "@/lib/initials";
 import { HomeHeader } from "./home-header";
