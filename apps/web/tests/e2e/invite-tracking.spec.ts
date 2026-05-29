@@ -39,7 +39,11 @@ test.describe("invite-code redemption", () => {
     await page.getByLabel("Invite code").fill("NOPE");
     await page.getByRole("button", { name: "Continue" }).click();
 
-    await expect(page.getByRole("alert")).toContainText(/isn't valid/i);
+    // Scope to our error alert by text — Next's empty role="alert" route
+    // announcer would otherwise make a bare getByRole("alert") ambiguous.
+    await expect(
+      page.getByRole("alert").filter({ hasText: /isn't valid/i }),
+    ).toBeVisible();
     const cookies = await page.context().cookies();
     expect(cookies.find((c) => c.name === "camp404_invite")).toBeUndefined();
   });

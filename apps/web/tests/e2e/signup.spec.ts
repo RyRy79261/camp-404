@@ -17,7 +17,12 @@ test.describe("invite-code gate", () => {
     await page.getByLabel("Invite code").fill("DEFINITELY-NOT-VALID");
     await page.getByRole("button", { name: "Continue" }).click();
 
-    await expect(page.getByRole("alert")).toContainText(/isn't valid/i);
+    // Scope to our error alert by text — Next injects its own empty
+    // role="alert" route announcer (#__next-route-announcer__) on every page,
+    // so a bare getByRole("alert") is a strict-mode collision.
+    await expect(
+      page.getByRole("alert").filter({ hasText: /isn't valid/i }),
+    ).toBeVisible();
     await expect(page).toHaveURL(/\/signup$/);
     // Cookie must NOT have been set on a bad code.
     const cookies = await page.context().cookies();
