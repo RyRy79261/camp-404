@@ -12,6 +12,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { QuestionnaireFieldChange } from "@camp404/types";
 
 // Camp 404 schema. Authentication is handled by Neon Auth (Better Auth) —
 // the managed auth service holds credentials, sessions, and identity. Our
@@ -210,9 +211,10 @@ export const users = pgTable("users", {
   previousBurningMans: integer("previous_burning_mans").default(0),
   firstTime: boolean("first_time").default(false),
 
-  emergencyContacts: jsonb("emergency_contacts").$type<
-    Array<{ name: string; phone: string; relationship: string }>
-  >(),
+  emergencyContacts:
+    jsonb("emergency_contacts").$type<
+      Array<{ name: string; phone: string; relationship: string }>
+    >(),
 
   // Signup gating. Set to the invite code the user redeemed when creating
   // their account. NULL = god account (email matched GOD_EMAILS). Used as
@@ -421,10 +423,9 @@ export const questionnaireActivations = pgTable(
     status: activationStatusEnum("status").notNull().default("draft"),
     dueAt: timestamp("due_at", { mode: "date" }),
 
-    activatedByUserId: uuid("activated_by_user_id").references(
-      () => users.id,
-      { onDelete: "set null" },
-    ),
+    activatedByUserId: uuid("activated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     openedAt: timestamp("opened_at", { mode: "date" }),
     closedAt: timestamp("closed_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
@@ -449,6 +450,50 @@ export const questionnaireActivationTargets = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.activationId, t.userId] }),
+  }),
+);
+
+// --- Questionnaire edits -------------------------------------------------
+// Internal change log for the "replay a form" tool. When a user revisits a
+// questionnaire they have already completed and re-submits it, we append one
+// row per edit session capturing *when* it happened, *who* made it, and the
+// per-field before → after diff. We deliberately keep NO full version
+// history — the domain table (e.g. burner_profiles) always holds the latest
+// answers; this table is only the running "what changed" log, surfaced back
+// to the user on the replay screen. `changes` is empty-tolerant but in
+// practice a no-op replay records no row at all (see lib/forms).
+
+export const questionnaireEdits = pgTable(
+  "questionnaire_edits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // The subject of the form (whose answers these are).
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Stable questionnaire key — same registry key as required_actions /
+    // questionnaire_activations (e.g. "burner_profile").
+    questionnaireKey: text("questionnaire_key").notNull(),
+    // Catalogue version in force when the edit was made.
+    version: text("version").notNull(),
+    // Who performed the edit. Usually the subject themselves; nullable so a
+    // captain editing on someone's behalf (or a deleted account) still keeps
+    // the log intact.
+    editedByUserId: uuid("edited_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    changes: jsonb("changes")
+      .$type<QuestionnaireFieldChange[]>()
+      .notNull()
+      .default([]),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (e) => ({
+    userKeyCreatedIdx: index("questionnaire_edits_user_key_created_idx").on(
+      e.userId,
+      e.questionnaireKey,
+      e.createdAt,
+    ),
   }),
 );
 
@@ -1054,9 +1099,7 @@ export const telegramAnnouncements = pgTable(
     errorMessage: text("error_message"),
     // Earliest time the dispatcher may send this row. Lets a caller
     // schedule a future announcement (e.g. on an unlock timestamp).
-    sendAfter: timestamp("send_after", { mode: "date" })
-      .notNull()
-      .defaultNow(),
+    sendAfter: timestamp("send_after", { mode: "date" }).notNull().defaultNow(),
     sentAt: timestamp("sent_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -1096,22 +1139,19 @@ export const mcpAuditOutcomeEnum = pgEnum("mcp_audit_outcome", [
 // One row per DCR-registered MCP client (typically one row per Claude
 // install). Public clients (`token_endpoint_auth_method = 'none'`) leave
 // `client_secret_hash` NULL; confidential clients store the SHA-256.
-export const mcpOauthClients = pgTable(
-  "mcp_oauth_clients",
-  {
-    clientId: text("client_id").primaryKey(),
-    clientSecretHash: text("client_secret_hash"),
-    clientName: text("client_name").notNull(),
-    // RFC 7591 — every URI the client is allowed to redirect to.
-    redirectUris: text("redirect_uris").array().notNull(),
-    tokenEndpointAuthMethod: mcpClientAuthMethodEnum(
-      "token_endpoint_auth_method",
-    ).notNull(),
-    scope: text("scope"),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    lastUsedAt: timestamp("last_used_at", { mode: "date" }),
-  },
-);
+export const mcpOauthClients = pgTable("mcp_oauth_clients", {
+  clientId: text("client_id").primaryKey(),
+  clientSecretHash: text("client_secret_hash"),
+  clientName: text("client_name").notNull(),
+  // RFC 7591 — every URI the client is allowed to redirect to.
+  redirectUris: text("redirect_uris").array().notNull(),
+  tokenEndpointAuthMethod: mcpClientAuthMethodEnum(
+    "token_endpoint_auth_method",
+  ).notNull(),
+  scope: text("scope"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  lastUsedAt: timestamp("last_used_at", { mode: "date" }),
+});
 
 // Single-use authorization codes (RFC 6749 §4.1). PKCE-required per OAuth
 // 2.1: code_challenge + code_challenge_method are non-null. Codes are

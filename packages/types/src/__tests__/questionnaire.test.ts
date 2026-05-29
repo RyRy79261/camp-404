@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Questionnaire } from "../questionnaire";
-import { validateResponses } from "../questionnaire";
+import {
+  diffResponses,
+  displayResponseValue,
+  flattenQuestions,
+  validateResponses,
+} from "../questionnaire";
 
 const sample: Questionnaire = {
   version: "v1",
@@ -77,7 +82,8 @@ describe("validateResponses", () => {
       tier: "full",
     });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.errors.experience).toMatch(/between 0 and 20/);
+    if (!result.ok)
+      expect(result.errors.experience).toMatch(/between 0 and 20/);
   });
 
   it("rejects a single_select value not in the options list", () => {
@@ -96,7 +102,8 @@ describe("validateResponses", () => {
       diet: ["vegan", "carnivore", "gluten_free"],
     });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.responses.diet).toEqual(["vegan", "gluten_free"]);
+    if (result.ok)
+      expect(result.responses.diet).toEqual(["vegan", "gluten_free"]);
   });
 
   it("flags missing required questions but not missing optional ones", () => {
@@ -160,5 +167,88 @@ describe("validateResponses", () => {
       tier: "full",
     });
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("displayResponseValue", () => {
+  const [experience, tier, diet, bio] = flattenQuestions(sample);
+
+  it("resolves single_select values to their option label", () => {
+    expect(displayResponseValue(tier!, "build_week_only")).toBe(
+      "Build week only",
+    );
+  });
+
+  it("joins multi_select values by their labels", () => {
+    expect(displayResponseValue(diet!, ["vegan", "nut_free"])).toBe(
+      "Vegan, Nut free",
+    );
+  });
+
+  it("renders empty / absent answers as a dash", () => {
+    expect(displayResponseValue(bio!, "")).toBe("—");
+    expect(displayResponseValue(bio!, undefined)).toBe("—");
+    expect(displayResponseValue(diet!, [])).toBe("—");
+  });
+
+  it("stringifies plain values like sliders", () => {
+    expect(displayResponseValue(experience!, 4)).toBe("4");
+  });
+});
+
+describe("diffResponses", () => {
+  it("returns no changes for identical response sets", () => {
+    const before = { experience: 3, tier: "full", diet: ["vegan"] };
+    expect(diffResponses(sample, before, { ...before })).toEqual([]);
+  });
+
+  it("treats multi_select re-ordering as unchanged", () => {
+    const before = { diet: ["vegan", "nut_free"] };
+    const after = { diet: ["nut_free", "vegan"] };
+    expect(diffResponses(sample, before, after)).toEqual([]);
+  });
+
+  it("treats absent vs empty answers as unchanged", () => {
+    expect(diffResponses(sample, {}, { bio: "", diet: [] })).toEqual([]);
+  });
+
+  it("captures a changed field with readable from / to labels", () => {
+    const changes = diffResponses(
+      sample,
+      { tier: "full" },
+      { tier: "build_week_only" },
+    );
+    expect(changes).toEqual([
+      {
+        fieldId: "tier",
+        label: "Membership tier?",
+        from: "Full",
+        to: "Build week only",
+      },
+    ]);
+  });
+
+  it("captures multi_select additions and a newly-filled field", () => {
+    const changes = diffResponses(
+      sample,
+      { diet: ["vegan"] },
+      { diet: ["vegan", "gluten_free"], bio: "Sparkle" },
+    );
+    expect(changes).toHaveLength(2);
+    const byField = Object.fromEntries(changes.map((c) => [c.fieldId, c]));
+    expect(byField.diet).toMatchObject({
+      from: "Vegan",
+      to: "Vegan, Gluten free",
+    });
+    expect(byField.bio).toMatchObject({ from: "—", to: "Sparkle" });
+  });
+
+  it("ignores stale keys not in the catalogue", () => {
+    const changes = diffResponses(
+      sample,
+      { removed_in_v2: "old" },
+      { removed_in_v2: "new" },
+    );
+    expect(changes).toEqual([]);
   });
 });

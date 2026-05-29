@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
     "./burner-profile": "./src/burner-profile.ts",
+    "./questionnaire-edits": "./src/questionnaire-edits.ts",
     "./invite-codes": "./src/invite-codes.ts",
     "./mcp": "./src/mcp.ts",
     "./telegram": "./src/telegram.ts"
