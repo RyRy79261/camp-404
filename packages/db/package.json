@@ -12,6 +12,7 @@
     "./questionnaire-edits": "./src/questionnaire-edits.ts",
     "./invite-codes": "./src/invite-codes.ts",
     "./relations": "./src/relations.ts",
+    "./roster": "./src/roster.ts",
     "./mcp": "./src/mcp.ts",
     "./telegram": "./src/telegram.ts"
   },

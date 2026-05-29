@@ -4,6 +4,7 @@ import {
   ControlPanel,
   type ControlPanelLayer,
 } from "@camp404/ui/components/control-panel";
+import { isTeamLead } from "@camp404/db/roster";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
 import { initialsFrom } from "@/lib/initials";
@@ -39,19 +40,22 @@ export default async function HomePage() {
 
   const initials = initialsFrom(campUser.displayName ?? user.primaryEmail);
 
-  // Until `users.rank` is plumbed through the helpers, every viewer sees
-  // their own layer plus a visible-but-locked Team Lead / Captain peek.
-  const viewerRank = "camp_member" as const;
+  // Map the stored rank (+ derived team-lead) onto the control panel's three
+  // layers. Captains unlock the captain layer (and Camp Management); a lead
+  // of any team unlocks the team-lead layer; everyone else sees their own.
+  const viewerRank: ControlPanelLayer["rank"] =
+    campUser.rank === "captain"
+      ? "captain"
+      : (await isTeamLead(campUser.id))
+        ? "team_lead"
+        : "camp_member";
 
   return (
     <ControlPanel
       layers={homeLayers}
       viewerRank={viewerRank}
       header={
-        <HomeHeader
-          initials={initials}
-          imageUrl={campUser.profileImageUrl}
-        />
+        <HomeHeader initials={initials} imageUrl={campUser.profileImageUrl} />
       }
       centre={{ label: "TALK" }}
     />
@@ -112,8 +116,9 @@ const homeLayers: ControlPanelLayer[] = [
   {
     rank: "captain",
     topLeft: {
-      label: "Camp Roster",
-      hint: "Every camp member",
+      label: "Camp Management",
+      hint: "Roster & statuses",
+      href: "/captains/camp-management",
       icon: <Users className="h-5 w-5" />,
     },
     topRight: {
