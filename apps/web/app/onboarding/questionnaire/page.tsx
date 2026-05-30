@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, getBurnerProfile, hasCampAccess } from "@/lib/users";
+import {
+  ensureCampUser,
+  getBurnerProfile,
+  getIdDocuments,
+  hasCampAccess,
+} from "@/lib/users";
+import { mergeIdNumber } from "@camp404/db/id-documents";
 import { QUESTIONNAIRE } from "@/lib/questionnaire";
 import { QuestionnaireWizard } from "@/components/questionnaire/wizard";
 import { saveBurnerProfile } from "./actions";
@@ -21,8 +27,17 @@ export default async function QuestionnairePage() {
     redirect("/");
   }
 
-  const initialResponses: QuestionnaireResponses =
-    (profile?.responses as QuestionnaireResponses | undefined) ?? {};
+  // Merge the owner's decrypted ID number back into the pre-fill so the field
+  // shows their existing value — it lives encrypted on `users`, not in
+  // `responses`. Owner-only path: this page always serves the signed-in user.
+  const id = (await getIdDocuments(campUser.id)) ?? {
+    idType: null,
+    idNumber: null,
+  };
+  const initialResponses: QuestionnaireResponses = mergeIdNumber(
+    (profile?.responses as Record<string, unknown> | undefined) ?? {},
+    id,
+  ) as QuestionnaireResponses;
 
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 py-8">
