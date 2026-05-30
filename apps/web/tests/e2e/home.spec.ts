@@ -7,10 +7,9 @@ test.describe("unauthenticated home page", () => {
     await expect(
       page.getByRole("link", { name: "Are you lost?" }),
     ).toHaveAttribute("href", "/signup");
-    await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute(
-      "href",
-      "/auth/sign-in",
-    );
+    await expect(
+      page.getByRole("link", { name: "Already found" }),
+    ).toHaveAttribute("href", "/auth/sign-in");
   });
 
   test("Sign up link routes through the invite gate", async ({ page }) => {

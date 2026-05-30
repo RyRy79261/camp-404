@@ -37,7 +37,7 @@ export function LandingHero() {
             variant="link"
             className="text-[color:var(--color-accent)]"
           >
-            <a href="/auth/sign-in">Sign in</a>
+            <a href="/auth/sign-in">Already found</a>
           </Button>
           <p
             aria-hidden
