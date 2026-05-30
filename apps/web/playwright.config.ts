@@ -10,19 +10,12 @@ export default defineConfig({
   timeout: 60_000,
   // MUST stay serial. The E2E_TEST_MODE harness backs auth + DB with a
   // single process-wide in-memory store (apps/web/lib/test-store.ts) shared
-  // by the one `next dev` server every worker hits. Parallel workers would
+  // by the one Next server every worker hits. Parallel workers would
   // race it — one test's `resetTestState`/`seed-invite` clobbers another's
   // mid-flight. One worker, no intra-file parallelism.
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 2 : 0,
-  // The web server is `next dev`, which compiles routes/server-actions on first
-  // hit. The first invocation of a heavy action (e.g. announcement publish +
-  // fan-out) can blow past Playwright's default 5s expect timeout, then pass
-  // warm on retry — a benign cold-compile flake. Give assertions headroom; the
-  // 60s per-test timeout still bounds genuinely-stuck cases, and passing
-  // assertions resolve the moment the element appears (no green-path slowdown).
-  expect: { timeout: 10_000 },
   // In CI: `list` for a readable per-test log, `github` for inline
   // annotations on failures, and `html` for a downloadable report artifact.
   reporter: process.env.CI
@@ -37,12 +30,22 @@ export default defineConfig({
   webServer: skipWebServer
     ? undefined
     : {
-        // `next dev` is fine for the breadth of unauth tests we run here.
-        // Switch to `next start` against a build if HMR ever interferes.
-        command: "pnpm next dev --port 3000",
+        // Production build (`next build && next start`), NOT `next dev`.
+        // `next dev` compiles each route/server-action on first hit, so the
+        // first invocation of a heavy server action (announcement publish +
+        // fan-out) cold-compiles its whole module graph and overruns the
+        // assertion — a deterministic fail-then-pass-on-retry flake. A
+        // prebuilt server has no on-demand compilation, so every test runs
+        // warm and deterministic. `next build` needs no extra env (the CI
+        // build job builds env-free), and the E2E_TEST_MODE seam is
+        // runtime-gated, so it survives the prod build and stays enabled.
+        // Locally, `reuseExistingServer` means a running `pnpm dev` is reused
+        // and this build step is skipped.
+        command: "pnpm next build && pnpm next start --port 3000",
         url: "http://localhost:3000/api/health",
         reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
+        // Cold `next build` (~50-60s, no .next cache in the e2e job) + start.
+        timeout: 240_000,
         env: {
           // Test fixtures for the gating flows. INVITE_CODES seeds a known
           // bootstrap code so the /signup spec can submit it; everything
