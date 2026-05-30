@@ -13,7 +13,6 @@ These deviation-review findings were fixed (branch `claude/deviation-review-fixe
 
 - Dispatch cron now uses `assertCron` (was inline, non-constant-time, fail-open). **[audit #6]**
 - PKCE `plain` removed from the authorize enum + well-known metadata (S256-only). **[audit #13]**
-- Invite-code case normalised at the redeem choke point (`claimInviteCode`/`isEnvCode` lowercase, matching `/invite/check`). **[audit #11]**
 - Sign-out link added to `/profile`. **[audit #11]**
 - Avatar uploader shows a local object-URL preview (no proxy 401 mid-onboarding). **[audit #7]**
 - `quadrant-nav.tsx` dangling `brief §11/§14.1` citations resolved. **[audit #12]**
@@ -22,7 +21,8 @@ These deviation-review findings were fixed (branch `claude/deviation-review-fixe
 
 ## Open follow-ups (code)
 
-- **Telegram outbound triggers** — `issueGroupInviteForUser` (on captain approval) and `queueAnnouncement` (on announcement publish) are built + unit-tested in `@camp404/telegram` but **not yet called**. Wiring is a behaviour change (approval → group invite "you're in" flow; announcements mirrored to Telegram) that wants: a guard so it no-ops without bot config, an announcement→Telegram **toggle** (product decision), and surfacing the invite link via `notification_deliveries`. Own PR. **[audit #10]**
+- **Telegram outbound triggers — intentionally NOT activated (maintainer decision).** `issueGroupInviteForUser` (on captain approval) and `queueAnnouncement` (on announcement publish) are built + unit-tested in `@camp404/telegram`, and the inbound webhook + dispatch cron exist, but the triggers are deliberately **left uncalled** — Telegram outbound must not run yet. Keep all the code; wire the triggers (guarded for no bot config, with an announcement→Telegram toggle, surfacing the invite link via `notification_deliveries`) only when Telegram is explicitly turned on. **[audit #10]**
+- **Invite-code case handling** — generated/DB codes are canonically lowercase (validity pattern `/^[a-z0-9]+.../`), but the redeem path matches **verbatim** while `/api/tools/invite/check` lowercases — so a DB code typed in the wrong case can pass the availability check yet fail on redeem. Fixing this needs a *coordinated* change (normalise at redeem + env + seed + storage **and** update the e2e fixtures + the CI `INVITE_CODES`, which currently use uppercase verbatim). An earlier attempt that only lowercased the redeem path broke the e2e and was reverted; do it as a deliberate, test-data-aware change. **[audit #11]**
 - **MCP OAuth DB-flow tests** — the pure crypto is now tested; the DB-backed flows (authorization-code consume, refresh-token rotation, rotation-race, Postgres round-trip) need an integration/DB test harness the repo doesn't have yet. **[audit #9]**
 - **Gate fallback removal** — `page.tsx` keeps a belt-and-braces `completedAt` check beside the `required_actions` gate. Remove it once (a) existing members are backfilled a `burner_profile` required_action and (b) the MCP completion hooks below land. **[E]**
 - **MCP completion hooks** — `update_my_burner_profile` / `update_my_dietary_requirements` / `update_my_driver_profile` on `markComplete` should call `satisfyRequiredAction`. Prerequisite for removing the gate fallback. **[E]**
