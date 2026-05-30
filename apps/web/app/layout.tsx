@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Providers } from "./providers";
+import { AcknowledgementGate } from "./acknowledgement-gate";
 import "@camp404/ui/styles.css";
 
 const SITE_URL = "https://camp-404.com";
@@ -43,7 +44,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <AcknowledgementGate />
+        </Providers>
       </body>
     </html>
   );

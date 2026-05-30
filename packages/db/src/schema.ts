@@ -153,6 +153,21 @@ export const pushDeliveryStatusEnum = pgEnum("push_delivery_status", [
   "skipped",
 ]);
 
+// How a notification demands the recipient's attention in-app. This is the
+// "variant" a sender picks when composing:
+//   - `acknowledge` — takes over the screen as a full-screen, scrollable
+//     modal the recipient must explicitly acknowledge to dismiss (the
+//     terms-&-conditions pattern). Used for captain announcements everyone
+//     must see.
+//   - `popup` — a transient, dismissable pop-up that needs no acknowledgement.
+//   - `feed` — no interruption; it simply lands in the notification inbox
+//     behind the header bell.
+export const broadcastPresentationEnum = pgEnum("broadcast_presentation", [
+  "acknowledge",
+  "popup",
+  "feed",
+]);
+
 export const taskStatusEnum = pgEnum("task_status", [
   "open",
   "done",
@@ -761,12 +776,22 @@ export const broadcasts = pgTable(
     body: text("body").notNull(),
     channel: notificationChannelEnum("channel").notNull().default("both"),
 
+    // How the recipient is interrupted in-app — see broadcastPresentationEnum.
+    // Copied onto each `notification_deliveries` row at fan-out so the inbox
+    // and the acknowledge gate stay self-contained.
+    presentation: broadcastPresentationEnum("presentation")
+      .notNull()
+      .default("feed"),
+
     // Deep-link target the recipient's app opens — e.g. refType
     // 'questionnaire_activation' maps (in code) to the bespoke component
     // that must pop up. refId is the row that component renders.
     refType: text("ref_type"),
     refId: uuid("ref_id"),
 
+    // NULL while the broadcast is a draft. A captain composes and saves a
+    // draft, then publishing stamps this and triggers the fan-out below.
+    publishedAt: timestamp("published_at", { mode: "date" }),
     // NULL until the fan-out worker has materialised the deliveries.
     dispatchedAt: timestamp("dispatched_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
@@ -812,6 +837,11 @@ export const notificationDeliveries = pgTable(
     title: text("title").notNull(),
     body: text("body").notNull(),
     channel: notificationChannelEnum("channel").notNull(),
+    // Self-contained copy of the broadcast's presentation variant, so the
+    // acknowledge gate and inbox never have to join back to `broadcasts`.
+    presentation: broadcastPresentationEnum("presentation")
+      .notNull()
+      .default("feed"),
     pushStatus: pushDeliveryStatusEnum("push_status")
       .notNull()
       .default("queued"),
@@ -820,6 +850,10 @@ export const notificationDeliveries = pgTable(
     refId: uuid("ref_id"),
 
     readAt: timestamp("read_at", { mode: "date" }),
+    // Set when the recipient explicitly acknowledges a `presentation =
+    // 'acknowledge'` notification (dismissing the full-screen takeover). The
+    // gate surfaces every acknowledge delivery where this is still NULL.
+    acknowledgedAt: timestamp("acknowledged_at", { mode: "date" }),
     deliveredAt: timestamp("delivered_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -827,6 +861,12 @@ export const notificationDeliveries = pgTable(
     userReadIdx: index("notification_deliveries_user_read_idx").on(
       n.userId,
       n.readAt,
+    ),
+    // The acknowledge gate polls "my unacknowledged acknowledge-deliveries"
+    // on every authenticated load — index the exact predicate.
+    userAckIdx: index("notification_deliveries_user_ack_idx").on(
+      n.userId,
+      n.acknowledgedAt,
     ),
     broadcastIdx: index("notification_deliveries_broadcast_idx").on(
       n.broadcastId,
