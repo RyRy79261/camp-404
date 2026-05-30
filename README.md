@@ -107,3 +107,24 @@ All cron endpoints require `Authorization: Bearer ${CRON_SECRET}`.
 
 **Phase 0 — Setup.** Scaffold only; no runtime functionality wired up beyond `/api/health`.
 Next: Phase 1 (Members & payments) — signup flow, T&Cs, Zapper invoice, account sanitisation.
+
+## License
+
+This project is licensed under the [Functional Source License, Version 1.1, with Apache 2.0 Future License (FSL-1.1-ALv2)](https://fsl.software/). See [LICENSE](LICENSE) for the full text.
+
+**In plain language:**
+
+- You can use, copy, modify, fork, and redistribute the code for **any purpose** — personal use, self-hosting, internal use at your camp or organization, education, research, or as part of professional services you provide — **except a Competing Use**. The LICENSE defines a Competing Use as making the Software available to others in a commercial product or service that (1) substitutes for the Software, (2) substitutes for any other product or service the licensor offers using the Software, or (3) offers the same or substantially similar functionality as the Software.
+- Clause (3) stands on its own: a commercial product or service offering the same or substantially similar functionality is a Competing Use **even if the licensor does not currently offer a competing product or service**.
+- **Every release auto-converts to Apache 2.0 on the second anniversary of its publication.** Each version carries its own clock, so older versions become fully open source on a rolling basis.
+
+**Examples:**
+
+- A camp member self-hosting their own copy to manage their own theme camp: allowed.
+- A camp lead deploying it internally for their camp's members: allowed.
+- A developer forking it, wiring up their own AI provider, and sharing it with a community: allowed.
+- A company launching "CampManagerCloud" as a paid SaaS offering the same or substantially similar functionality as the Software: **not allowed** without a commercial license, whether or not the licensor currently offers a competing service.
+
+### Commercial licensing
+
+If your intended use is a Competing Use, or you're unsure whether it qualifies, please get in touch before deploying: **meowzit.eth@gmail.com**.
