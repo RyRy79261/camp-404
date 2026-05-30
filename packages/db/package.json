@@ -17,6 +17,7 @@
     "./audience": "./src/audience.ts",
     "./push": "./src/push.ts",
     "./push-status": "./src/push-status.ts",
+    "./account": "./src/account.ts",
     "./activations": "./src/activations.ts",
     "./versions": "./src/versions.ts",
     "./mcp": "./src/mcp.ts",
