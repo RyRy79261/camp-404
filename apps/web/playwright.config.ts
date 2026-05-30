@@ -16,6 +16,13 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 2 : 0,
+  // The web server is `next dev`, which compiles routes/server-actions on first
+  // hit. The first invocation of a heavy action (e.g. announcement publish +
+  // fan-out) can blow past Playwright's default 5s expect timeout, then pass
+  // warm on retry — a benign cold-compile flake. Give assertions headroom; the
+  // 60s per-test timeout still bounds genuinely-stuck cases, and passing
+  // assertions resolve the moment the element appears (no green-path slowdown).
+  expect: { timeout: 10_000 },
   // In CI: `list` for a readable per-test log, `github` for inline
   // annotations on failures, and `html` for a downloadable report artifact.
   reporter: process.env.CI
