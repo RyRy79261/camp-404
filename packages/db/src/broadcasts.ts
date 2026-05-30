@@ -1,6 +1,17 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
+import { computeAudience, type BroadcastScope } from "./audience";
 
 // Announcements & notifications data layer.
 //
@@ -29,6 +40,56 @@ function isOwnedAnnouncementDraft(id: string, senderId: string) {
     eq(schema.broadcasts.kind, "announcement"),
     eq(schema.broadcasts.scope, "everyone"),
     isNull(schema.broadcasts.publishedAt),
+  );
+}
+
+/**
+ * Recipient user ids for a broadcast, resolved by scope — the single audience
+ * primitive the inline publish and the scheduled dispatch worker share. Reads
+ * via the stateless HTTP driver; the pure scope→ids mapping lives in
+ * ./audience so it can be unit-tested without a database.
+ */
+export async function resolveAudience(
+  broadcast: { id: string; scope: BroadcastScope; team: string | null },
+  senderId: string | null,
+): Promise<string[]> {
+  const db = createHttpDb();
+  const [members, memberships, drivers, targets] = await Promise.all([
+    db
+      .select({
+        id: schema.users.id,
+        isSystem: schema.users.isSystem,
+        sanitised: schema.users.sanitised,
+      })
+      .from(schema.users),
+    db
+      .select({
+        userId: schema.teamMemberships.userId,
+        team: schema.teamMemberships.team,
+        isLead: schema.teamMemberships.isLead,
+      })
+      .from(schema.teamMemberships),
+    db
+      .select({ userId: schema.driverProfiles.userId })
+      .from(schema.driverProfiles)
+      .where(eq(schema.driverProfiles.intendsToDrive, true)),
+    broadcast.scope === "individual"
+      ? db
+          .select({ userId: schema.broadcastTargets.userId })
+          .from(schema.broadcastTargets)
+          .where(eq(schema.broadcastTargets.broadcastId, broadcast.id))
+      : Promise.resolve([] as { userId: string }[]),
+  ]);
+
+  return computeAudience(
+    broadcast,
+    {
+      members,
+      memberships,
+      driverUserIds: drivers.map((d) => d.userId),
+      targetUserIds: targets.map((t) => t.userId),
+    },
+    senderId,
   );
 }
 
@@ -192,40 +253,133 @@ export async function publishAnnouncement(input: {
         };
       }
 
-      // Resolve the audience: every real member except the author. The camp
-      // is small (tens of people), so materialising ids then bulk-inserting
-      // is clearer — and just as atomic inside this transaction — as an
-      // INSERT…SELECT.
-      const recipients = await tx
-        .select({ id: schema.users.id })
-        .from(schema.users)
-        .where(
-          and(
-            eq(schema.users.isSystem, false),
-            eq(schema.users.sanitised, false),
-            sql`${schema.users.id} <> ${input.senderId}`,
-          ),
-        );
+      // Resolve the audience via the shared resolver (scope = 'everyone' for a
+      // camp-wide announcement — same recipient set as before). ON CONFLICT DO
+      // NOTHING pairs with the new (broadcast_id, user_id) dedupe index so a
+      // retry can never double-deliver.
+      const recipientIds = await resolveAudience(
+        { id: broadcast.id, scope: "everyone", team: null },
+        input.senderId,
+      );
 
-      if (recipients.length === 0) {
+      if (recipientIds.length === 0) {
         return { ok: true as const, recipientCount: 0 };
       }
 
-      await tx.insert(schema.notificationDeliveries).values(
-        recipients.map((r) => ({
-          broadcastId: broadcast.id,
-          userId: r.id,
-          title: broadcast.title,
-          body: broadcast.body,
-          channel: broadcast.channel,
-          presentation: broadcast.presentation,
-          refType: "announcement",
-          refId: broadcast.id,
-        })),
-      );
+      await tx
+        .insert(schema.notificationDeliveries)
+        .values(
+          recipientIds.map((userId) => ({
+            broadcastId: broadcast.id,
+            userId,
+            title: broadcast.title,
+            body: broadcast.body,
+            channel: broadcast.channel,
+            presentation: broadcast.presentation,
+            refType: "announcement",
+            refId: broadcast.id,
+          })),
+        )
+        .onConflictDoNothing();
 
-      return { ok: true as const, recipientCount: recipients.length };
+      return { ok: true as const, recipientCount: recipientIds.length };
     });
+  } finally {
+    await pool.end();
+  }
+}
+
+export interface DispatchResult {
+  dispatched: number;
+  deliveries: number;
+}
+
+/**
+ * Scheduled fan-out worker. Materialises `notification_deliveries` for every
+ * broadcast that is published, not yet dispatched, and whose `send_at` has
+ * arrived (or is immediate / NULL). Each broadcast is claimed by atomically
+ * flipping `dispatched_at`, so overlapping cron runs can't double-process it;
+ * the `(broadcast_id, user_id)` dedupe index makes the insert idempotent too.
+ * Immediate camp-wide announcements still fan out inline via
+ * {@link publishAnnouncement} — this drains the deferred / scheduled tail.
+ */
+export async function dispatchDueBroadcasts(
+  now: Date = new Date(),
+): Promise<DispatchResult> {
+  const httpDb = createHttpDb();
+  const due = await httpDb
+    .select({
+      id: schema.broadcasts.id,
+      senderId: schema.broadcasts.senderId,
+      scope: schema.broadcasts.scope,
+      team: schema.broadcasts.team,
+      title: schema.broadcasts.title,
+      body: schema.broadcasts.body,
+      channel: schema.broadcasts.channel,
+      presentation: schema.broadcasts.presentation,
+      refType: schema.broadcasts.refType,
+      refId: schema.broadcasts.refId,
+    })
+    .from(schema.broadcasts)
+    .where(
+      and(
+        isNotNull(schema.broadcasts.publishedAt),
+        isNull(schema.broadcasts.dispatchedAt),
+        or(
+          isNull(schema.broadcasts.sendAt),
+          lte(schema.broadcasts.sendAt, now),
+        ),
+      ),
+    );
+
+  if (due.length === 0) return { dispatched: 0, deliveries: 0 };
+
+  const { db, pool } = createPooledDb();
+  let dispatched = 0;
+  let deliveries = 0;
+  try {
+    for (const b of due) {
+      const recipientIds = await resolveAudience(
+        { id: b.id, scope: b.scope, team: b.team },
+        b.senderId,
+      );
+      const claimedOk = await db.transaction(async (tx) => {
+        const claimed = await tx
+          .update(schema.broadcasts)
+          .set({ dispatchedAt: now })
+          .where(
+            and(
+              eq(schema.broadcasts.id, b.id),
+              isNull(schema.broadcasts.dispatchedAt),
+            ),
+          )
+          .returning({ id: schema.broadcasts.id });
+        if (!claimed[0]) return false; // another run already dispatched it
+        if (recipientIds.length > 0) {
+          await tx
+            .insert(schema.notificationDeliveries)
+            .values(
+              recipientIds.map((userId) => ({
+                broadcastId: b.id,
+                userId,
+                title: b.title,
+                body: b.body,
+                channel: b.channel,
+                presentation: b.presentation,
+                refType: b.refType ?? null,
+                refId: b.refId ?? b.id,
+              })),
+            )
+            .onConflictDoNothing();
+        }
+        return true;
+      });
+      if (claimedOk) {
+        dispatched += 1;
+        deliveries += recipientIds.length;
+      }
+    }
+    return { dispatched, deliveries };
   } finally {
     await pool.end();
   }

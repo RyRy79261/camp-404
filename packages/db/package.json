@@ -14,6 +14,7 @@
     "./relations": "./src/relations.ts",
     "./roster": "./src/roster.ts",
     "./broadcasts": "./src/broadcasts.ts",
+    "./audience": "./src/audience.ts",
     "./mcp": "./src/mcp.ts",
     "./telegram": "./src/telegram.ts",
     "./crypto": "./src/crypto.ts",

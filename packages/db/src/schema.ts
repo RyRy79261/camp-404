@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import type { QuestionnaireFieldChange } from "@camp404/types";
 
 // Camp 404 schema. Authentication is handled by Neon Auth (Better Auth) —
@@ -794,6 +795,9 @@ export const broadcasts = pgTable(
     publishedAt: timestamp("published_at", { mode: "date" }),
     // NULL until the fan-out worker has materialised the deliveries.
     dispatchedAt: timestamp("dispatched_at", { mode: "date" }),
+    // When the broadcast should fan out. NULL or <= now means immediate (the
+    // inline publish path); a future value defers fan-out to the dispatch cron.
+    sendAt: timestamp("send_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (b) => ({
@@ -871,6 +875,14 @@ export const notificationDeliveries = pgTable(
     broadcastIdx: index("notification_deliveries_broadcast_idx").on(
       n.broadcastId,
     ),
+    // One delivery per (broadcast, user): lets the scheduled fan-out worker
+    // INSERT ... ON CONFLICT DO NOTHING without double-delivering. System rows
+    // (broadcast_id NULL) are exempt via the partial predicate.
+    broadcastUserUniq: uniqueIndex(
+      "notification_deliveries_broadcast_user_uniq",
+    )
+      .on(n.broadcastId, n.userId)
+      .where(sql`${n.broadcastId} IS NOT NULL`),
   }),
 );
 

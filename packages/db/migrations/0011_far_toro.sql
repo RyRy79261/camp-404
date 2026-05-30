@@ -1,0 +1,2 @@
+ALTER TABLE "broadcasts" ADD COLUMN "send_at" timestamp;--> statement-breakpoint
+CREATE UNIQUE INDEX "notification_deliveries_broadcast_user_uniq" ON "notification_deliveries" USING btree ("broadcast_id","user_id") WHERE "notification_deliveries"."broadcast_id" IS NOT NULL;

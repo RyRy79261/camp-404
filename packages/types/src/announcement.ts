@@ -15,6 +15,11 @@ export type AnnouncementPresentation = z.infer<typeof AnnouncementPresentation>;
 // What a captain composes. Title and body are required; presentation defaults
 // to the full-screen acknowledge variant, which is the primary use case
 // (camp-wide announcements everyone must see and dismiss).
+//
+// This intentionally covers only the camp-wide subset: scope is fixed to
+// 'everyone' with no send_at/channel here. The scoped (team / drivers /
+// individual) and scheduled compose inputs land with the gating + push UIs
+// that drive `resolveAudience` / `dispatchDueBroadcasts` (@camp404/db/audience).
 export const ComposeAnnouncementInput = z.object({
   title: z.string().trim().min(1, "Give it a title.").max(120),
   body: z.string().trim().min(1, "Write the announcement.").max(5000),
