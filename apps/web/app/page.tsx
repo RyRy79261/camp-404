@@ -18,6 +18,7 @@ import { countUnread } from "@/lib/notifications";
 import { initialsFrom } from "@/lib/initials";
 import { HomeHeader } from "./home-header";
 import { LandingHero } from "./landing-hero";
+import { EnablePush } from "@/components/push/enable-push";
 
 // Reads the Neon Auth session cookie on every request, so can't be
 // statically prerendered. Without this, Next 16's build step logs a
@@ -79,18 +80,23 @@ export default async function HomePage() {
   const unreadNotifications = await unreadPromise;
 
   return (
-    <ControlPanel
-      layers={homeLayers}
-      viewerRank={viewerRank}
-      header={
-        <HomeHeader
-          initials={initials}
-          imageUrl={campUser.profileImageUrl}
-          notifications={unreadNotifications}
-        />
-      }
-      centre={{ label: "TALK" }}
-    />
+    <>
+      <ControlPanel
+        layers={homeLayers}
+        viewerRank={viewerRank}
+        header={
+          <HomeHeader
+            initials={initials}
+            imageUrl={campUser.profileImageUrl}
+            notifications={unreadNotifications}
+          />
+        }
+        centre={{ label: "TALK" }}
+      />
+      {/* Web push opt-in — only for authenticated members; renders nothing
+          unless notifications are supported and undecided. */}
+      <EnablePush />
+    </>
   );
 }
 
