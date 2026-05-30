@@ -6,7 +6,7 @@ import { generateOpaqueToken, sha256, verifyPkce } from "./tokens";
 // --- Lifetimes -----------------------------------------------------------
 // All in seconds. Re-tune per security/UX trade-offs.
 export const AUTH_CODE_TTL_SEC = 5 * 60; // 5 min — RFC recommends ≤ 10 min
-export const ACCESS_TOKEN_TTL_SEC = 60 * 60; // 1 hour
+export const ACCESS_TOKEN_TTL_SEC = 24 * 60 * 60; // 24 hours
 export const REFRESH_TOKEN_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
 
 // Single coarse scope for now. Per-tool scopes can carve this later.
