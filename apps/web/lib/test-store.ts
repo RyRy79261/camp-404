@@ -86,6 +86,7 @@ interface TestDelivery {
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
+  idDocsByUserId: Map<string, { idType: string | null; idNumber: string | null }>;
   inviteCodes: Map<string, TestInviteCode>;
   questionnaireEdits: TestQuestionnaireEdit[];
   broadcasts: TestBroadcast[];
@@ -110,6 +111,10 @@ function globalState(): TestStoreState {
     g[GLOBAL_KEY] = {
       usersByAuthId: new Map<string, TestUser>(),
       profilesByUserId: new Map<string, TestBurnerProfile>(),
+      idDocsByUserId: new Map<
+        string,
+        { idType: string | null; idNumber: string | null }
+      >(),
       inviteCodes: new Map<string, TestInviteCode>(),
       questionnaireEdits: [] as TestQuestionnaireEdit[],
       broadcasts: [] as TestBroadcast[],
@@ -125,6 +130,7 @@ const S = globalState();
 // `nextSerial` is a primitive so it must be read/written through `S`.
 const usersByAuthId = S.usersByAuthId;
 const profilesByUserId = S.profilesByUserId;
+const idDocsByUserId = S.idDocsByUserId;
 const inviteCodes = S.inviteCodes;
 const questionnaireEdits = S.questionnaireEdits;
 const broadcasts = S.broadcasts;
@@ -256,6 +262,20 @@ export const testStore = {
       updatedAt: now,
     });
   },
+  // --- ID documents (raw in test mode — no crypto) ----------------------
+
+  setIdDocuments(
+    userId: string,
+    id: { idType: string | null; idNumber: string | null },
+  ): void {
+    idDocsByUserId.set(userId, id);
+  },
+  getIdDocuments(
+    userId: string,
+  ): { idType: string | null; idNumber: string | null } | null {
+    return idDocsByUserId.get(userId) ?? null;
+  },
+
   // --- Questionnaire edit log -------------------------------------------
 
   recordQuestionnaireEdit(input: {
@@ -538,6 +558,7 @@ export const testStore = {
   reset(): void {
     usersByAuthId.clear();
     profilesByUserId.clear();
+    idDocsByUserId.clear();
     inviteCodes.clear();
     questionnaireEdits.length = 0;
     broadcasts.length = 0;
