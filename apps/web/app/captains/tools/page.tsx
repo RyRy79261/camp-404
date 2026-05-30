@@ -69,8 +69,11 @@ export default async function CaptainToolsPage() {
       <ul className="space-y-3">
         {TOOLS.map((tool) => (
           <li key={tool.href}>
-            <Link href={tool.href} className="block focus:outline-none">
-              <Card className="transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring">
+            <Link
+              href={tool.href}
+              className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Card className="transition-colors hover:bg-accent/30">
                 <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                   <span className="flex h-10 w-10 items-center justify-center rounded-md border bg-muted/40">
                     {tool.icon}

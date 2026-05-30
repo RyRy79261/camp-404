@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Bell, ChevronLeft, Megaphone, MessageSquare } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
-import { listInbox, markAllRead, type InboxItem } from "@/lib/notifications";
+import { listInbox, markRead, type InboxItem } from "@/lib/notifications";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 
@@ -28,9 +28,13 @@ export default async function NotificationsPage() {
     redirect("/signup/required");
   }
 
-  // Snapshot the inbox (with pre-read state) before clearing the badge.
+  // Snapshot the inbox (with pre-read state), then clear the badge for exactly
+  // those rows — a delivery that arrives after the snapshot stays unread.
   const items = await listInbox(campUser.id);
-  await markAllRead(campUser.id);
+  await markRead(
+    campUser.id,
+    items.map((i) => i.id),
+  );
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-10">

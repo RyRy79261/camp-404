@@ -9,7 +9,7 @@ import {
   updateAnnouncementDraft,
 } from "@/lib/notifications";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 
 export type ActionResult<T = undefined> =
   | ({ ok: true } & (T extends undefined ? object : { data: T }))
@@ -28,6 +28,10 @@ async function requireCaptain(): Promise<
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     return { ok: false, error: "Your account isn't camp-active yet." };
+  }
+  // Mirror the page's gates: a captain still held behind vetting can't act.
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    return { ok: false, error: "Your account is still awaiting approval." };
   }
   if (campUser.rank !== "captain") {
     return { ok: false, error: "Captain access only." };

@@ -52,7 +52,9 @@ export default async function HomePage() {
   }
 
   const initials = initialsFrom(campUser.displayName ?? user.primaryEmail);
-  const unreadNotifications = await countUnread(campUser.id);
+  // Kick off the unread count alongside the team-lead probe below rather than
+  // serially before it.
+  const unreadPromise = countUnread(campUser.id);
 
   // Map the stored rank (+ derived team-lead) onto the control panel's three
   // layers. Captains unlock the captain layer (and Camp Management); a lead
@@ -63,6 +65,8 @@ export default async function HomePage() {
       : (await isTeamLead(campUser.id))
         ? "team_lead"
         : "camp_member";
+
+  const unreadNotifications = await unreadPromise;
 
   return (
     <ControlPanel

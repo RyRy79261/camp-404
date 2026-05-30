@@ -8,7 +8,7 @@ import {
   getPendingAcknowledgements as dbGetPending,
   listAnnouncements as dbListAnnouncements,
   listInbox as dbListInbox,
-  markAllRead as dbMarkAllRead,
+  markRead as dbMarkRead,
   publishAnnouncement as dbPublish,
   updateAnnouncementDraft as dbUpdateDraft,
   type AnnouncementPresentation,
@@ -38,7 +38,7 @@ export type {
 interface NotificationsBackend {
   countUnread(userId: string): Promise<number>;
   listInbox(userId: string): Promise<InboxItem[]>;
-  markAllRead(userId: string): Promise<void>;
+  markRead(userId: string, ids: string[]): Promise<void>;
   getPendingAcknowledgements(userId: string): Promise<PendingAcknowledgement[]>;
   acknowledgeDelivery(input: {
     deliveryId: string;
@@ -71,7 +71,7 @@ interface NotificationsBackend {
 const realBackend: NotificationsBackend = {
   countUnread: dbCountUnread,
   listInbox: dbListInbox,
-  markAllRead: dbMarkAllRead,
+  markRead: dbMarkRead,
   getPendingAcknowledgements: dbGetPending,
   acknowledgeDelivery: dbAcknowledgeDelivery,
   listAnnouncements: dbListAnnouncements,
@@ -88,8 +88,8 @@ const testBackend: NotificationsBackend = {
   async listInbox(userId) {
     return testStore.listInbox(userId);
   },
-  async markAllRead(userId) {
-    testStore.markAllRead(userId);
+  async markRead(userId, ids) {
+    testStore.markRead(userId, ids);
   },
   async getPendingAcknowledgements(userId) {
     return testStore.getPendingAcknowledgements(userId);
@@ -126,8 +126,8 @@ export function listInbox(userId: string): Promise<InboxItem[]> {
   return backend().listInbox(userId);
 }
 
-export function markAllRead(userId: string): Promise<void> {
-  return backend().markAllRead(userId);
+export function markRead(userId: string, ids: string[]): Promise<void> {
+  return backend().markRead(userId, ids);
 }
 
 export function getPendingAcknowledgements(

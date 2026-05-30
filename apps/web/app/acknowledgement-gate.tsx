@@ -30,14 +30,19 @@ export function AcknowledgementGate() {
   const [queue, setQueue] = useState<PendingItem[]>([]);
   const [acking, setAcking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Monotonic token so overlapping polls (interval vs. focus) can't let a
+  // slower, older response clobber a newer one — only the latest request wins.
+  const requestIdRef = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     try {
       const res = await fetch("/api/notifications/pending", {
         cache: "no-store",
       });
       if (!res.ok) return;
       const data = (await res.json()) as { pending: PendingItem[] };
+      if (requestId !== requestIdRef.current) return; // superseded — drop it
       setQueue(data.pending ?? []);
     } catch {
       // Network hiccup — the next poll (or focus) retries.
@@ -86,6 +91,8 @@ export function AcknowledgementGate() {
         body: JSON.stringify({ deliveryId: current.deliveryId }),
       });
       if (!res.ok) return;
+      // Supersede any in-flight poll so it can't re-add what we just dismissed.
+      requestIdRef.current++;
       // Drop the acknowledged item; reveal the next in the queue (if any).
       setQueue((q) => q.filter((i) => i.deliveryId !== current.deliveryId));
       // Refresh server components so an updated unread badge / inbox reflect it.

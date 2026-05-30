@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
 
@@ -17,6 +17,20 @@ import * as schema from "./schema";
 
 export type AnnouncementPresentation =
   (typeof schema.broadcastPresentationEnum.enumValues)[number];
+
+// Every mutation here targets a draft *announcement* by id + author. Locking
+// the predicate to `kind = 'announcement'` and `scope = 'everyone'` keeps
+// these writers from ever touching a broadcast of another kind (a team
+// message, a reminder) that happened to share an id, even by mistake.
+function isOwnedAnnouncementDraft(id: string, senderId: string) {
+  return and(
+    eq(schema.broadcasts.id, id),
+    eq(schema.broadcasts.senderId, senderId),
+    eq(schema.broadcasts.kind, "announcement"),
+    eq(schema.broadcasts.scope, "everyone"),
+    isNull(schema.broadcasts.publishedAt),
+  );
+}
 
 export interface AnnouncementSummary {
   id: string;
@@ -118,13 +132,7 @@ export async function updateAnnouncementDraft(input: {
       body: input.body,
       presentation: input.presentation,
     })
-    .where(
-      and(
-        eq(schema.broadcasts.id, input.id),
-        eq(schema.broadcasts.senderId, input.senderId),
-        isNull(schema.broadcasts.publishedAt),
-      ),
-    )
+    .where(isOwnedAnnouncementDraft(input.id, input.senderId))
     .returning({ id: schema.broadcasts.id });
   return rows.length > 0;
 }
@@ -137,13 +145,7 @@ export async function deleteAnnouncementDraft(input: {
   const db = createHttpDb();
   const rows = await db
     .delete(schema.broadcasts)
-    .where(
-      and(
-        eq(schema.broadcasts.id, input.id),
-        eq(schema.broadcasts.senderId, input.senderId),
-        isNull(schema.broadcasts.publishedAt),
-      ),
-    )
+    .where(isOwnedAnnouncementDraft(input.id, input.senderId))
     .returning({ id: schema.broadcasts.id });
   return rows.length > 0;
 }
@@ -173,13 +175,7 @@ export async function publishAnnouncement(input: {
       const claimed = await tx
         .update(schema.broadcasts)
         .set({ publishedAt: new Date(), dispatchedAt: new Date() })
-        .where(
-          and(
-            eq(schema.broadcasts.id, input.id),
-            eq(schema.broadcasts.senderId, input.senderId),
-            isNull(schema.broadcasts.publishedAt),
-          ),
-        )
+        .where(isOwnedAnnouncementDraft(input.id, input.senderId))
         .returning({
           id: schema.broadcasts.id,
           title: schema.broadcasts.title,
@@ -297,6 +293,9 @@ export async function acknowledgeDelivery(input: {
       and(
         eq(schema.notificationDeliveries.id, input.deliveryId),
         eq(schema.notificationDeliveries.userId, input.userId),
+        // Only the full-screen variant carries an acknowledgement; never stamp
+        // one on a popup/feed delivery that was never meant to be acknowledged.
+        eq(schema.notificationDeliveries.presentation, "acknowledge"),
         isNull(schema.notificationDeliveries.acknowledgedAt),
       ),
     )
@@ -354,8 +353,14 @@ export async function countUnread(userId: string): Promise<number> {
   return row?.count ?? 0;
 }
 
-/** Mark every unread delivery for a user as read (used when they open the inbox). */
-export async function markAllRead(userId: string): Promise<void> {
+/**
+ * Mark a user's deliveries as read. Pass the exact `ids` the caller just
+ * snapshotted (e.g. from {@link listInbox}) so a delivery that arrives between
+ * the snapshot and this write isn't silently marked read without being shown.
+ * An empty list is a no-op.
+ */
+export async function markRead(userId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
   const db = createHttpDb();
   await db
     .update(schema.notificationDeliveries)
@@ -363,6 +368,7 @@ export async function markAllRead(userId: string): Promise<void> {
     .where(
       and(
         eq(schema.notificationDeliveries.userId, userId),
+        inArray(schema.notificationDeliveries.id, ids),
         isNull(schema.notificationDeliveries.readAt),
       ),
     );

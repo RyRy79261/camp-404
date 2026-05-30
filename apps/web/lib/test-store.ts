@@ -482,6 +482,7 @@ export const testStore = {
       (x) =>
         x.id === input.deliveryId &&
         x.userId === input.userId &&
+        x.presentation === "acknowledge" &&
         x.acknowledgedAt === null,
     );
     if (!d) return false;
@@ -523,10 +524,14 @@ export const testStore = {
     return deliveries.filter((d) => d.userId === userId && d.readAt === null)
       .length;
   },
-  markAllRead(userId: string): void {
+  markRead(userId: string, ids: string[]): void {
+    if (ids.length === 0) return;
     const now = new Date();
+    const idSet = new Set(ids);
     for (const d of deliveries) {
-      if (d.userId === userId && d.readAt === null) d.readAt = now;
+      if (d.userId === userId && d.readAt === null && idSet.has(d.id)) {
+        d.readAt = now;
+      }
     }
   },
 
