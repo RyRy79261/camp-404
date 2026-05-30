@@ -8,8 +8,10 @@ import {
   setDisplayName,
   setProfileImage,
 } from "@/lib/users";
+import { deleteAccount } from "@/lib/account";
 
 export type UpdateProfileResult = { ok: false; error: string };
+export type DeleteAccountResult = { ok: false; error: string };
 
 const MAX_NAME_LENGTH = 80;
 
@@ -43,4 +45,25 @@ export async function updateProfile(
   await setProfileImage(campUser.id, image.length > 0 ? image : null);
 
   redirect("/profile");
+}
+
+/**
+ * Permanently erase the signed-in member's account — anonymise to a "Lost Cat"
+ * stub and remove their personal data (irreversible). Requires the typed DELETE
+ * confirmation; on success the auth session is ended via the sign-out route.
+ */
+export async function deleteOwnAccount(
+  _prev: DeleteAccountResult | null,
+  formData: FormData,
+): Promise<DeleteAccountResult> {
+  const authUser = await getAuthenticatedUserOrRedirect();
+  const campUser = await ensureCampUser(authUser);
+  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+    redirect("/signup/required");
+  }
+  if (formData.get("confirm") !== "DELETE") {
+    return { ok: false, error: "Type DELETE to confirm." };
+  }
+  await deleteAccount(campUser.id);
+  redirect("/auth/sign-out");
 }
