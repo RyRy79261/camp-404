@@ -17,7 +17,14 @@ import {
 import { encrypt, decryptOrNull } from "@camp404/db/crypto";
 import { idColumnsFor } from "@camp404/db/id-documents";
 import { isTeamLead as dbIsTeamLead } from "@camp404/db/roster";
+import {
+  ensureRequiredAction,
+  satisfyRequiredAction as dbSatisfyRequiredAction,
+  getPendingRequiredActions as dbGetPendingRequiredActions,
+  type PendingRequiredAction,
+} from "@camp404/db/activations";
 import { claimInviteCode, isGodEmail } from "./access-control";
+import { QUESTIONNAIRE } from "./questionnaire";
 import type { AuthenticatedUser } from "./auth";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
@@ -61,13 +68,15 @@ export async function ensureCampUser(
   // God accounts bypass the invite gate entirely — give them a real,
   // approved row on first sign-in.
   if (god) {
-    return store.createUser({
+    const created = await store.createUser({
       authUserId: authUser.id,
       displayName: authUser.displayName ?? authUser.primaryEmail,
       inviteCode: null,
       rank: "member",
       approvalStatus: "approved",
     });
+    await seedBurnerProfileAction(created.id);
+    return created;
   }
 
   // Signed in, but no row and no invite redeemed yet. Hand back a synthetic,
@@ -132,13 +141,14 @@ export async function redeemInviteForUser(
   // First time through: create the row stamped with the claimed code.
   // Pre-approved invites land `approved`; vetting-required ones land
   // `pending` (blocked after onboarding until a captain decides).
-  await store.createUser({
+  const created = await store.createUser({
     authUserId: authUser.id,
     displayName: authUser.displayName ?? authUser.primaryEmail,
     inviteCode: claimed.code,
     rank: claimed.assignedRank ?? "member",
     approvalStatus: claimed.requiresApproval ? "pending" : "approved",
   });
+  await seedBurnerProfileAction(created.id);
   return { ok: true };
 }
 
@@ -174,6 +184,38 @@ export async function findCampUserByAuthId(
  * member can be camp-active but still awaiting captain approval; use
  * {@link isApproved} for the full "can use the app" check.
  */
+/**
+ * required_actions gating helpers. Real-DB only: under E2E_TEST_MODE these are
+ * no-ops, and the legacy `completedAt` fallback still present in the home gate
+ * preserves test behaviour until a test-store implementation lands.
+ */
+export async function seedBurnerProfileAction(userId: string): Promise<void> {
+  if (isE2ETestMode()) return;
+  await ensureRequiredAction({
+    userId,
+    type: "questionnaire",
+    actionKey: "burner_profile",
+    title: "Complete your burner profile",
+    version: QUESTIONNAIRE.version,
+  });
+}
+
+/** Satisfy the burner-profile gate when the profile is completed. */
+export async function satisfyBurnerProfileAction(
+  userId: string,
+): Promise<void> {
+  if (isE2ETestMode()) return;
+  await dbSatisfyRequiredAction(userId, "burner_profile", QUESTIONNAIRE.version);
+}
+
+/** The user's pending blocking required actions (empty under E2E test mode). */
+export async function getPendingRequiredActions(
+  userId: string,
+): Promise<PendingRequiredAction[]> {
+  if (isE2ETestMode()) return [];
+  return dbGetPendingRequiredActions(userId);
+}
+
 export function hasCampAccess(
   user: { inviteCode: string | null },
   email: string | null,
