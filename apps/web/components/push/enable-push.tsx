@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getToken } from "firebase/messaging";
+import { getToken, onMessage } from "firebase/messaging";
 import { Button } from "@camp404/ui/components/button";
 import { getMessagingIfSupported, VAPID_KEY } from "@/lib/firebase-client";
 
@@ -29,6 +29,15 @@ async function registerToken(): Promise<boolean> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token, platform: "web" }),
+  });
+
+  // Foreground messages don't fire the service worker's onBackgroundMessage,
+  // so surface them ourselves while the app is focused.
+  onMessage(messaging, (payload) => {
+    const n = payload.notification;
+    if (n?.title && Notification.permission === "granted") {
+      new Notification(n.title, { body: n.body ?? "", icon: "/icon.svg" });
+    }
   });
   return true;
 }
