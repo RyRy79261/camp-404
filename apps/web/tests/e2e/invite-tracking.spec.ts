@@ -152,6 +152,27 @@ test.describe("invite-code redemption", () => {
     expect(body.user.approvalStatus).toBe("approved");
   });
 
+  test("sign-in without an invite is bounced and persists NO camp row", async ({
+    page,
+    request,
+  }) => {
+    // A non-god user signs in without ever redeeming an invite at /signup
+    // (e.g. they hit the landing page's "Already found" link, or Google,
+    // instead of "Are you lost?"). No camp404_invite cookie is set.
+    await login(page, { id: "stray-auth", email: "stray@example.com" });
+
+    // Hitting / runs ensureCampUser. With no code to claim they're bounced
+    // to the dead-end...
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/signup\/required/);
+
+    // ...and crucially, NO orphan "signed in, no invite" row is written for
+    // them. They only earn a row once they actually redeem an invite.
+    const lookup = await request.get("/api/test/inspect?authUserId=stray-auth");
+    const body = (await lookup.json()) as { user: unknown };
+    expect(body.user).toBeNull();
+  });
+
   test("DB code: exhausted code can't be claimed even with a stale cookie", async ({
     page,
     request,

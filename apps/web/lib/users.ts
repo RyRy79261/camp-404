@@ -57,9 +57,14 @@ function safeDeleteCookie(
 }
 
 /**
- * Ensure a row exists for the given authenticated user (Neon Auth or test).
- * Lazy-upserts on first hit and persists a valid invite cookie onto the
- * row. Routes through the test store when E2E_TEST_MODE=1.
+ * Resolve the camp user row for the given authenticated user (Neon Auth or
+ * test), lazily creating it on first hit. A row is only ever persisted when
+ * the caller has earned access — a god account, or a valid invite code
+ * claimed from the `camp404_invite` cookie. An authenticated user who never
+ * redeemed an invite (e.g. a Google sign-in straight from the sign-in page)
+ * gets a synthetic, non-persisted row back so the access gate still bounces
+ * them to /signup/required, but no orphan "signed in, no invite" entry is
+ * written to the database. Routes through the test store when E2E_TEST_MODE=1.
  */
 export async function ensureCampUser(
   authUser: AuthenticatedUser,
@@ -109,6 +114,28 @@ export async function ensureCampUser(
     }
     if (cookieValue) safeDeleteCookie(cookieStore, INVITE_COOKIE);
     return existing;
+  }
+
+  // No existing row, not a god account, and no invite to claim. This is the
+  // sign-in-without-an-invite case — e.g. a captain who hit "Sign in" (or
+  // Google) straight from the landing page instead of redeeming an invite at
+  // /signup. We must NOT persist a row here: that's the orphan "signed in but
+  // never used an invite code" entry we used to leak. Hand back a synthetic,
+  // non-persisted row instead. `hasCampAccess` reads false off it, so every
+  // caller routes them to /signup/required without ever touching the (empty)
+  // id, and nothing is written. They get a real row only once they redeem an
+  // invite at /signup and come back through this function with a claim.
+  if (!god && !claimed) {
+    if (cookieValue) safeDeleteCookie(cookieStore, INVITE_COOKIE);
+    return {
+      id: "",
+      authUserId: authUser.id,
+      displayName: authUser.displayName ?? authUser.primaryEmail,
+      profileImageUrl: null,
+      inviteCode: null,
+      rank: "member",
+      approvalStatus: "approved",
+    };
   }
 
   // New account. God accounts and pre-approved invites land `approved`;
