@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { completeOnboarding, login, resetTestState, setRank } from "./_helpers";
+import {
+  completeOnboarding,
+  login,
+  redeemInviteAtGate,
+  resetTestState,
+  setRank,
+} from "./_helpers";
 
 // Captain announcements & notifications, end to end against the in-memory
 // test store (E2E_TEST_MODE=1 — see playwright.config.ts). Covers the marquee
@@ -33,11 +39,11 @@ test.describe("captain announcements (test-mode)", () => {
     page,
     request,
   }) => {
-    // 1. The recipient must exist before fan-out — create their row by
-    //    visiting a gated page once.
+    // 1. The recipient must exist before fan-out — sign in and redeem an
+    //    invite so their member row is persisted.
     await login(page, { id: "member-auth", email: "member@example.com" });
-    await page.goto("/");
-    await expect(page).toHaveURL(/\/signup\/required/);
+    await redeemInviteAtGate(page, "TEST-INVITE");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     // 2. Become a captain (god email clears the access + approval gates; the
     //    seam grants captain rank) and open the announcements composer.
