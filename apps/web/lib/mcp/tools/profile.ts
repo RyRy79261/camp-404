@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
 import * as schema from "@camp404/db/schema";
-import { decryptOrNull, encrypt } from "@/lib/crypto";
+import { decryptOrNull, encrypt } from "@camp404/db/crypto";
 import { runTool, ToolError } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);

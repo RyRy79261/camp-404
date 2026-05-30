@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
 import * as schema from "@camp404/db/schema";
-import { decryptOrNull } from "@/lib/crypto";
+import { decryptOrNull } from "@camp404/db/crypto";
 import { canSeeIdDocuments } from "../consent";
 import { notFound, runTool, truncateList } from "../tool-utils";
 
