@@ -16,7 +16,7 @@ Turborepo + pnpm workspaces. Node >= 22, pnpm 10.x.
 
 ```
 apps/
-  web/        Next.js 15 app (App Router, React 19, Tailwind v4)
+  web/        Next.js 16 app (App Router, React 19, Tailwind v4)
   mobile/     Capacitor host wrapping the web static export
   admin-cli/  Node CLI for data ops
 packages/
@@ -129,15 +129,19 @@ that actually has something to ship.
 
 ## AI providers
 
-Model IDs (Claude Opus 4.7, Haiku 4.5, Groq Whisper Large v3 Turbo) and the
+Model IDs (Claude Opus 4.8, Haiku 4.5, Groq Whisper Large v3 Turbo) and the
 prompt templates in `@camp404/ai-prompts` are pinned and versioned
 deliberately. Do not swap models or edit a prompt in place — bump the
 version instead.
 
 ## Cron jobs
 
-All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}` and
-are scheduled in `apps/web/vercel.json`.
+All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
+Scheduled routes are registered in `apps/web/vercel.json` (recipes, manuals,
+reminders). `telegram/dispatch` is intentionally **not** scheduled yet —
+nothing enqueues announcements until the notifications work lands, and Vercel's
+daily-cron cap means it will be scheduled (or folded into an inline send) only
+once there is a queue to drain (see the route's own comment).
 
 ## Conventions
 
@@ -157,7 +161,7 @@ are scheduled in `apps/web/vercel.json`.
   never store these plaintext.
 - Never store passport images, credit card numbers, or CVVs.
 - Account deletion sanitises to a `Lost Cat #N` stub to preserve
-  relational integrity. See `docs/brief.md` §12.
+  relational integrity. See `docs/brief.md`.
 
 ## Git & pull requests
 

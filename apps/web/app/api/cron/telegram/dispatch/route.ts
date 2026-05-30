@@ -5,7 +5,10 @@ import { assertCron } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 
-// Drains the `telegram_announcements` queue. Scheduled in vercel.json.
+// Drains the `telegram_announcements` queue. NOT yet registered in
+// vercel.json — nothing enqueues announcements yet, and Vercel's daily-cron
+// cap means this will need an inline send or a plan upgrade once the enqueue
+// side ships. Until then it is only reachable via a manual authorized request.
 export async function GET(req: Request) {
   const deny = assertCron(req);
   if (deny) return deny;

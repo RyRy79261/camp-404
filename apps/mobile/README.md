@@ -24,6 +24,6 @@ Mobile build is intentionally **not** part of the default `pnpm turbo run build`
 ## Notes
 
 - Bundle ID: `com.camp-404.app`.
-- App Store / Play submission is **deferred** (see brief §11). TestFlight + Play Internal only for now.
+- App Store / Play submission is **deferred** (see the project brief). TestFlight + Play Internal only for now.
 - iOS builds require a Mac with Xcode; Android builds require Android Studio.
 - The `ios/` and `android/` directories are generated and gitignored once tooling is configured.

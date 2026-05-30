@@ -57,7 +57,7 @@ In `packages/ui/src/components/`, exported via `@camp404/ui/components/*`:
 | `select.tsx` | Wraps `@radix-ui/react-select`. |
 | `slider.tsx` | Wraps `@radix-ui/react-slider`. |
 | `textarea.tsx` | Multi-line input. |
-| `quadrant-nav.tsx` | Camp 404's bespoke four-quadrant home layout with a circular push-to-talk centre button. **v0 — open question per brief §14.1, to be validated before treating as final.** |
+| `quadrant-nav.tsx` | Camp 404's bespoke four-quadrant home layout with a circular push-to-talk centre button. **v0 — open question per the project brief, to be validated before treating as final.** |
 | `control-panel.tsx` | Layered four-quadrant control panel. Three stacked layers (camp member → team lead → captain); the centre circle (30% of panel width) cycles between them. Layers above the viewer's rank stay visible but locked. Exports `ControlPanel`, `ControlPanelHeader`, `RANK_LABEL`. |
 
 Most primitives are thin wrappers over Radix; styling lives in Tailwind
