@@ -13,9 +13,9 @@ export function anthropic(): Anthropic {
   return client;
 }
 
-// Camp 404 standardises on Claude Opus 4.7 for high-quality reasoning and
+// Camp 404 standardises on Claude Opus 4.8 for high-quality reasoning and
 // Claude Haiku 4.5 for cheap, fast intent classification.
 export const MODELS = {
-  opus: "claude-opus-4-7",
+  opus: "claude-opus-4-8",
   haiku: "claude-haiku-4-5-20251001",
 } as const;
