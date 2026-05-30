@@ -3,7 +3,8 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
 import * as schema from "@camp404/db/schema";
-import { decryptOrNull, encrypt } from "@/lib/crypto";
+import { decryptOrNull, encrypt } from "@camp404/db/crypto";
+import { splitIdNumber, idColumnsFor } from "@camp404/db/id-documents";
 import { runTool, ToolError } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
@@ -34,7 +35,14 @@ export function registerProfileTools(server: McpServer): void {
             .from(schema.burnerProfiles)
             .where(eq(schema.burnerProfiles.userId, scope.campUserId))
             .limit(1);
-          return row ?? null;
+          if (!row) return null;
+          // Never surface the plaintext id.number here — get_my_id_documents
+          // is the dedicated (decrypting) channel for that field.
+          return {
+            ...row,
+            responses: splitIdNumber(row.responses as Record<string, unknown>)
+              .cleaned,
+          };
         },
       }),
   );
@@ -59,26 +67,39 @@ export function registerProfileTools(server: McpServer): void {
         handler: async ({ scope }) => {
           const db = createHttpDb();
           const now = new Date();
+          // Route any government ID number to the encrypted users column
+          // instead of persisting it plaintext in responses.
+          const { cleaned, idType, idNumber } = splitIdNumber(args.responses);
           const [row] = await db
             .insert(schema.burnerProfiles)
             .values({
               userId: scope.campUserId,
               version: args.version,
-              responses: args.responses,
+              responses: cleaned,
               completedAt: args.markComplete ? now : null,
             })
             .onConflictDoUpdate({
               target: schema.burnerProfiles.userId,
               set: {
                 version: args.version,
-                responses: args.responses,
+                responses: cleaned,
                 updatedAt: now,
                 ...(args.markComplete ? { completedAt: now } : {}),
               },
             })
             .returning();
+          if (idNumber) {
+            await db
+              .update(schema.users)
+              .set({
+                ...idColumnsFor(idType, encrypt(idNumber)),
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.users.id, scope.campUserId));
+          }
           return row;
         },
+
       }),
   );
 

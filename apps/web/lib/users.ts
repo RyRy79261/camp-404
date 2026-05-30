@@ -11,7 +11,11 @@ import {
   setUserProfileImage,
   setUserRank,
   upsertBurnerProfile as upsertBurnerProfileDb,
+  getIdDocumentColumns,
+  setIdDocumentColumns,
 } from "@camp404/db/burner-profile";
+import { encrypt, decryptOrNull } from "@camp404/db/crypto";
+import { idColumnsFor } from "@camp404/db/id-documents";
 import { isTeamLead as dbIsTeamLead } from "@camp404/db/roster";
 import { claimInviteCode, isGodEmail } from "./access-control";
 import type { AuthenticatedUser } from "./auth";
@@ -242,6 +246,13 @@ interface UserBackend {
     responses: Record<string, unknown>;
     markComplete: boolean;
   }): Promise<void>;
+  setIdDocuments(
+    userId: string,
+    id: { idType: string | null; idNumber: string | null },
+  ): Promise<void>;
+  getIdDocuments(
+    userId: string,
+  ): Promise<{ idType: string | null; idNumber: string | null } | null>;
 }
 
 export async function upsertBurnerProfile(input: {
@@ -270,6 +281,28 @@ export async function setDisplayName(
 ): Promise<void> {
   const store = isE2ETestMode() ? testBackend : realBackend;
   await store.setUserDisplayName(userId, name);
+}
+
+/**
+ * Persist the member's government ID number. Encrypted on write in the real
+ * backend (AES-256-GCM via PGCRYPTO_KEY); the E2E test backend keeps the raw
+ * value in memory so tests need no key.
+ */
+export async function setIdDocuments(
+  userId: string,
+  id: { idType: string | null; idNumber: string | null },
+): Promise<void> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  await store.setIdDocuments(userId, id);
+}
+
+/** Read + decrypt the member's government ID number (owner/captain gated by
+ * the caller). Returns null when the user has no row. */
+export async function getIdDocuments(
+  userId: string,
+): Promise<{ idType: string | null; idNumber: string | null } | null> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  return store.getIdDocuments(userId);
 }
 
 const realBackend: UserBackend = {
@@ -314,6 +347,21 @@ const realBackend: UserBackend = {
   },
   async upsertBurnerProfile(input) {
     await upsertBurnerProfileDb(input);
+  },
+  async setIdDocuments(userId, id) {
+    await setIdDocumentColumns(
+      userId,
+      idColumnsFor(id.idType, id.idNumber ? encrypt(id.idNumber) : null),
+    );
+  },
+  async getIdDocuments(userId) {
+    const cols = await getIdDocumentColumns(userId);
+    if (!cols) return null;
+    const passport = decryptOrNull(cols.passportEncrypted);
+    const saId = decryptOrNull(cols.saIdEncrypted);
+    if (passport) return { idType: "passport", idNumber: passport };
+    if (saId) return { idType: "sa_id", idNumber: saId };
+    return { idType: null, idNumber: null };
   },
 };
 
@@ -360,6 +408,12 @@ const testBackend: UserBackend = {
   },
   async upsertBurnerProfile(input) {
     testStore.upsertProfile(input);
+  },
+  async setIdDocuments(userId, id) {
+    testStore.setIdDocuments(userId, id);
+  },
+  async getIdDocuments(userId) {
+    return testStore.getIdDocuments(userId);
   },
 };
 

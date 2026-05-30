@@ -13,6 +13,8 @@ function detail(overrides: Partial<CampMemberDetail> = {}): CampMemberDetail {
     onboardingComplete: true,
     onboardingVersion: "2026.05.29-v8",
     responses: {},
+    passportEncrypted: null,
+    saIdEncrypted: null,
     inviteCode: "berlin-crew",
     inviteNote: "Kitchen lead from last burn",
     invitedByName: "Alice",

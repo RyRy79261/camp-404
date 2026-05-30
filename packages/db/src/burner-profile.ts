@@ -159,3 +159,29 @@ export async function upsertBurnerProfile(input: {
       },
     });
 }
+
+/** Raw text read of the two ID-number ciphertext columns (no decrypt). */
+export async function getIdDocumentColumns(userId: string) {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      passportEncrypted: schema.users.passportEncrypted,
+      saIdEncrypted: schema.users.saIdEncrypted,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Raw text write of the two ID-number ciphertext columns. */
+export async function setIdDocumentColumns(
+  userId: string,
+  cols: { passportEncrypted: string | null; saIdEncrypted: string | null },
+) {
+  const db = createHttpDb();
+  await db
+    .update(schema.users)
+    .set({ ...cols, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+}

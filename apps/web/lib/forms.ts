@@ -9,8 +9,14 @@ import {
   listQuestionnaireEdits as listEditsDb,
   recordQuestionnaireEdit as recordEditDb,
 } from "@camp404/db/questionnaire-edits";
+import { splitIdNumber, mergeIdNumber } from "@camp404/db/id-documents";
 import { QUESTIONNAIRE } from "./questionnaire";
-import { getBurnerProfile, upsertBurnerProfile } from "./users";
+import {
+  getBurnerProfile,
+  getIdDocuments,
+  setIdDocuments,
+  upsertBurnerProfile,
+} from "./users";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -48,21 +54,31 @@ const BURNER_PROFILE: ReplayableForm = {
   async load(userId) {
     const profile = await getBurnerProfile(userId);
     if (!profile) return null;
+    // Merge the decrypted ID number back in so the owner's replay pre-fills.
+    const id = (await getIdDocuments(userId)) ?? {
+      idType: null,
+      idNumber: null,
+    };
     return {
-      responses: (profile.responses as QuestionnaireResponses) ?? {},
+      responses: mergeIdNumber(
+        (profile.responses as Record<string, unknown>) ?? {},
+        id,
+      ) as QuestionnaireResponses,
       completedAt: profile.completedAt,
       updatedAt: profile.updatedAt,
     };
   },
   async save(userId, responses) {
+    const { cleaned, idType, idNumber } = splitIdNumber(responses);
     await upsertBurnerProfile({
       userId,
       version: QUESTIONNAIRE.version,
-      responses,
+      responses: cleaned,
       // A replay only happens on an already-completed form, so it stays
       // complete. markComplete is idempotent on completedAt.
       markComplete: true,
     });
+    if (idNumber) await setIdDocuments(userId, { idType, idNumber });
   },
 };
 

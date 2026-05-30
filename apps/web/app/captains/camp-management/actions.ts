@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getCampMemberDetail } from "@camp404/db/roster";
+import { decryptOrNull } from "@camp404/db/crypto";
+import { mergeIdNumber } from "@camp404/db/id-documents";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
   decideUserApproval,
@@ -49,7 +51,20 @@ export async function getMemberDetailAction(
 
   const detail = await getCampMemberDetail(userId);
   if (!detail) return { ok: false, error: "Member not found." };
-  return { ok: true, member: presentMemberDetail(detail) };
+
+  // Captain-gated above — decrypt this member's government ID number and merge
+  // it back into the answers so the profile modal can show it. Captains and
+  // the owner are the only readers of this field.
+  const passport = decryptOrNull(detail.passportEncrypted);
+  const saId = decryptOrNull(detail.saIdEncrypted);
+  const id = passport
+    ? { idType: "passport", idNumber: passport }
+    : saId
+      ? { idType: "sa_id", idNumber: saId }
+      : { idType: null, idNumber: null };
+  const responses = mergeIdNumber(detail.responses, id);
+
+  return { ok: true, member: presentMemberDetail({ ...detail, responses }) };
 }
 
 /**

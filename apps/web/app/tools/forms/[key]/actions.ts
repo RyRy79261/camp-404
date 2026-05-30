@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { diffResponses, validateResponses } from "@camp404/types";
+import { ID_NUMBER_KEY } from "@camp404/db/id-documents";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 import { getReplayableForm, recordFormEdit } from "@/lib/forms";
@@ -47,11 +48,14 @@ export async function saveFormReplay(
     };
   }
 
+  // Exclude the government ID number from the change-log so its plaintext
+  // never lands in questionnaire_edits (it lives encrypted on users, and the
+  // owner's load() merges it back into both sides of the diff).
   const changes = diffResponses(
     form.questionnaire,
     state.responses,
     result.responses,
-  );
+  ).filter((c) => c.fieldId !== ID_NUMBER_KEY);
 
   await form.save(campUser.id, result.responses);
 

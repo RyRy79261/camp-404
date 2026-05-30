@@ -13,11 +13,14 @@ const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({
 // existing responses stay attached to their original version on
 // burner_profiles.version so we can re-render them in context later.
 //
-// NOTE on PII: passport / SA-ID numbers and date of birth are captured
-// here as ordinary text for the skeleton. Before going to production they
-// must be moved to the pgcrypto-encrypted columns on `users`
-// (passportEncrypted / saIdEncrypted) and stripped from `responses`.
-// See brief §12.
+// NOTE on PII: the government ID number (`id.number`) is split out of
+// `responses` at every write boundary and stored encrypted on `users`
+// (`passport_encrypted` / `sa_id_encrypted`, keyed off `id.type`); it is
+// decrypted back only for the owner and for captains. `id.type` is not
+// sensitive and stays in `responses`. Date of birth (`birthday`) intentionally
+// stays in `responses` as ordinary profile data — it is not in the
+// encrypted-PII class (passport / SA-ID / bank details). See
+// docs/superpowers/specs/2026-05-30-pii-at-rest-encryption-design.md.
 //
 // NOTE on the team-specific questionnaires: the team-interest sliders on
 // the "Team interests" page drive which follow-up questionnaires the user
