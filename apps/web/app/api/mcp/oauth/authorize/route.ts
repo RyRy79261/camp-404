@@ -23,7 +23,7 @@ const AuthorizeQuery = z.object({
   client_id: z.string().min(1),
   redirect_uri: z.string().url(),
   code_challenge: z.string().min(1),
-  code_challenge_method: z.enum(["S256", "plain"]).default("S256"),
+  code_challenge_method: z.enum(["S256"]).default("S256"),
   scope: z.string().optional(),
   state: z.string().optional(),
 });

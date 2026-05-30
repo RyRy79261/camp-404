@@ -43,7 +43,10 @@ export function isGodEmail(email: string | null | undefined): boolean {
 export async function claimInviteCode(
   code: string,
 ): Promise<ClaimedInvite | null> {
-  const trimmed = code.trim();
+  // Normalise to lowercase so redemption matches the availability check
+  // (/api/tools/invite/check lowercases) and DB codes (stored lowercase) — an
+  // uppercase entry must not pass the check then silently fail here.
+  const trimmed = code.trim().toLowerCase();
   if (!trimmed) return null;
   if (isEnvCode(trimmed))
     return { code: trimmed, assignedRank: null, requiresApproval: false };
@@ -57,7 +60,11 @@ export async function claimInviteCode(
 }
 
 function isEnvCode(code: string): boolean {
-  return csv(process.env.INVITE_CODES).includes(code);
+  // `code` is already lowercased by the caller; lowercase the env list too so a
+  // bootstrap code set in any case still matches.
+  return csv(process.env.INVITE_CODES)
+    .map((c) => c.toLowerCase())
+    .includes(code);
 }
 
 async function consumeDbCode(code: string) {
