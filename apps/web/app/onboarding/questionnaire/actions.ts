@@ -57,7 +57,13 @@ export async function saveBurnerProfile(
     markComplete: final,
   });
 
-  if (idNumber) await setIdDocuments(campUser.id, { idType, idNumber });
+  // Persist the sensitive ID number only on the final submit. Progress saves
+  // already strip it from the responses JSONB (splitIdNumber above), so it is
+  // never stored plaintext; deferring the encrypted-column write means the
+  // mid-onboarding "Next" between pages doesn't depend on the encryption path
+  // (a missing/short PGCRYPTO_KEY surfaces a clear error at Finish instead of
+  // silently blocking the user from advancing past the "About you" page).
+  if (final && idNumber) await setIdDocuments(campUser.id, { idType, idNumber });
 
   // Mirror the optional profile photo onto the canonical users column so it
   // can be read cheaply everywhere (header, profile page) without parsing

@@ -158,6 +158,30 @@ describe("QuestionnaireWizard", () => {
     );
   });
 
+  it("surfaces a thrown save (not just validation errors) and stays put", async () => {
+    // A save that *rejects* — e.g. a server misconfig like a missing
+    // encryption key when persisting the ID document — must not silently
+    // swallow the failure and leave the user stuck with a dead "Next".
+    const action = vi.fn(() => Promise.reject(new Error("boom")));
+    render(
+      <QuestionnaireWizard
+        questionnaire={Q}
+        initialResponses={{ name: "Ash" }}
+        action={action}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain(
+        "couldn't save your answers",
+      ),
+    );
+    // Still on the first page — the failure was surfaced, not swallowed.
+    expect(screen.getByText("Page One")).toBeDefined();
+  });
+
   it("surfaces server-side validation errors back into the form", async () => {
     const action = vi.fn(() =>
       Promise.resolve({

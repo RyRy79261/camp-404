@@ -30,6 +30,9 @@ interface QuestionnaireWizardProps {
   submitLabel?: string;
 }
 
+const SAVE_ERROR =
+  "We couldn't save your answers just now. Please try again — if it keeps happening, let the camp leads know.";
+
 export function QuestionnaireWizard({
   questionnaire,
   initialResponses,
@@ -42,6 +45,11 @@ export function QuestionnaireWizard({
   const [responses, setResponses] =
     React.useState<QuestionnaireResponses>(initialResponses);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+  // Page-level error for a save that *threw* rather than returning validation
+  // errors (network blip, server misconfig). Without this the rejected
+  // promise below was swallowed and the wizard just stopped advancing with no
+  // feedback — the user couldn't tell why "Next" did nothing.
+  const [formError, setFormError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
   const page = questionnaire.pages[pageIndex];
@@ -89,13 +97,18 @@ export function QuestionnaireWizard({
       setPageIndex((i) => Math.min(i + 1, questionnaire.pages.length - 1));
       return;
     }
+    setFormError(null);
     startTransition(async () => {
-      const result = await action(responses, false);
-      if (!result.ok) {
-        setErrors(result.errors);
-        return;
+      try {
+        const result = await action(responses, false);
+        if (!result.ok) {
+          setErrors(result.errors);
+          return;
+        }
+        setPageIndex((i) => Math.min(i + 1, questionnaire.pages.length - 1));
+      } catch {
+        setFormError(SAVE_ERROR);
       }
-      setPageIndex((i) => Math.min(i + 1, questionnaire.pages.length - 1));
     });
   }
 
@@ -105,16 +118,21 @@ export function QuestionnaireWizard({
 
   function handleSubmit() {
     if (!validatePageLocally(page!)) return;
+    setFormError(null);
     startTransition(async () => {
-      const result = await action(responses, true);
-      if (!result.ok) {
-        setErrors(result.errors);
-        return;
+      try {
+        const result = await action(responses, true);
+        if (!result.ok) {
+          setErrors(result.errors);
+          return;
+        }
+        // Onboarding's action redirects server-side, so code below never runs
+        // there. The replay flow returns normally and uses onComplete to show
+        // a confirmation and refresh the change log.
+        onComplete?.();
+      } catch {
+        setFormError(SAVE_ERROR);
       }
-      // Onboarding's action redirects server-side, so code below never runs
-      // there. The replay flow returns normally and uses onComplete to show
-      // a confirmation and refresh the change log.
-      onComplete?.();
     });
   }
 
@@ -192,6 +210,12 @@ export function QuestionnaireWizard({
             ))}
           </div>
         </>
+      )}
+
+      {formError && (
+        <p role="alert" className="text-sm text-destructive">
+          {formError}
+        </p>
       )}
 
       <div className="mt-auto flex items-center justify-between pt-6">
