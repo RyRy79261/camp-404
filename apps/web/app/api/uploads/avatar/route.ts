@@ -12,11 +12,14 @@ const MAX_BYTES = 5 * 1024 * 1024;
 export const runtime = "nodejs";
 
 /**
- * Accept a single normalised avatar image and store it in Vercel Blob,
- * returning its public URL. Auth + rate limiting mirror the voice
- * transcription route. In E2E test mode (or when the Blob token is
- * absent) we skip the network call and echo a deterministic placeholder
- * URL so tests and local dev work without a configured Blob store.
+ * Accept a single normalised avatar image and store it in a *private*
+ * Vercel Blob, returning a same-origin proxy URL (`/api/avatar?pathname=…`)
+ * rather than the raw blob URL. Profile photos are members-only: the blob
+ * itself is unreadable without the store token, and the proxy route gates
+ * access on an authenticated session. Auth + rate limiting mirror the voice
+ * transcription route. In E2E test mode (or when the Blob token is absent)
+ * we skip the network call and echo a deterministic proxy URL so tests and
+ * local dev work without a configured Blob store.
  */
 export async function POST(req: Request) {
   const user = await getAuthenticatedUser();
@@ -65,24 +68,31 @@ export async function POST(req: Request) {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
 
   // Test mode / unconfigured store — don't hit the network. Return a stable
-  // stub URL so the rest of the flow (persisting + rendering) still works.
+  // proxy URL so the rest of the flow (persisting + rendering) still works.
   if (isE2ETestMode() || !token) {
     return NextResponse.json({
-      url: `https://example.invalid/avatars/${user.id}/test-avatar.webp`,
+      url: avatarProxyUrl(`avatars/${user.id}/test-avatar.webp`),
     });
   }
 
   try {
     const ext = file.type === "image/png" ? "png" : "webp";
     const blob = await put(`avatars/${user.id}/avatar.${ext}`, file, {
-      access: "public",
+      access: "private",
       addRandomSuffix: true,
       contentType: file.type,
       token,
     });
-    return NextResponse.json({ url: blob.url });
+    // Never hand the raw private blob URL to the client — it isn't readable
+    // without the store token. Persist + render through the gated proxy.
+    return NextResponse.json({ url: avatarProxyUrl(blob.pathname) });
   } catch (err) {
     console.error("avatar-upload error", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 502 });
   }
+}
+
+/** Same-origin URL that streams a private avatar blob to signed-in members. */
+function avatarProxyUrl(pathname: string): string {
+  return `/api/avatar?pathname=${encodeURIComponent(pathname)}`;
 }
