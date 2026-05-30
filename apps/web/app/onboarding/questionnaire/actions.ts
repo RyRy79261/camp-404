@@ -6,9 +6,11 @@ import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
   hasCampAccess,
+  setIdDocuments,
   setProfileImage,
   upsertBurnerProfile,
 } from "@/lib/users";
+import { splitIdNumber } from "@camp404/db/id-documents";
 import { QUESTIONNAIRE } from "@/lib/questionnaire";
 
 export type SaveResult =
@@ -42,17 +44,24 @@ export async function saveBurnerProfile(
       ? (rawResponses as Record<string, unknown>)
       : {};
 
+  // Split the sensitive government ID number out of the generic responses
+  // JSONB so it is never persisted plaintext; it goes to the encrypted users
+  // column instead (decryptable only by the owner and captains).
+  const { cleaned, idType, idNumber } = splitIdNumber(responses);
+
   await upsertBurnerProfile({
     userId: campUser.id,
     version: QUESTIONNAIRE.version,
-    responses,
+    responses: cleaned,
     markComplete: final,
   });
+
+  if (idNumber) await setIdDocuments(campUser.id, { idType, idNumber });
 
   // Mirror the optional profile photo onto the canonical users column so it
   // can be read cheaply everywhere (header, profile page) without parsing
   // the questionnaire JSON. Runs on progress + final saves alike.
-  const image = responses["profile.image"];
+  const image = cleaned["profile.image"];
   if (typeof image === "string") {
     await setProfileImage(campUser.id, image.length > 0 ? image : null);
   }
