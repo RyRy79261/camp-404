@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { acknowledgeDelivery } from "@/lib/notifications";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser } from "@/lib/users";
+import { ensureCampUser, hasCampAccess } from "@/lib/users";
 
 export const runtime = "nodejs";
 
@@ -24,6 +24,10 @@ export async function POST(req: Request) {
   }
 
   const campUser = await ensureCampUser(user);
+  // No camp access → synthetic empty id; never query with it (would 500).
+  if (!hasCampAccess(campUser, user.primaryEmail)) {
+    return NextResponse.json({ ok: false });
+  }
   const ok = await acknowledgeDelivery({
     deliveryId: parsed.data.deliveryId,
     userId: campUser.id,
