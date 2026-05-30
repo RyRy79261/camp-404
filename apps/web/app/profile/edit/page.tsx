@@ -8,6 +8,7 @@ import {
   isApproved,
 } from "@/lib/users";
 import { ProfileEditForm } from "./edit-form";
+import { DeleteAccountForm } from "./delete-account";
 
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
@@ -43,6 +44,15 @@ export default async function ProfileEditPage() {
             initialDisplayName={initialDisplayName}
             initialImageUrl={campUser.profileImageUrl}
           />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6 overflow-hidden">
+        <CardContent className="p-6">
+          <h2 className="mb-3 text-lg font-semibold text-[color:var(--color-destructive)]">
+            Danger zone
+          </h2>
+          <DeleteAccountForm />
         </CardContent>
       </Card>
     </main>
