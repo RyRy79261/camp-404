@@ -1,6 +1,5 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import {
   createCampUser,
   findUserByAuthId,
@@ -14,7 +13,7 @@ import {
   upsertBurnerProfile as upsertBurnerProfileDb,
 } from "@camp404/db/burner-profile";
 import { isTeamLead as dbIsTeamLead } from "@camp404/db/roster";
-import { claimInviteCode, INVITE_COOKIE, isGodEmail } from "./access-control";
+import { claimInviteCode, isGodEmail } from "./access-control";
 import type { AuthenticatedUser } from "./auth";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
@@ -37,94 +36,106 @@ export interface CampUser {
 }
 
 /**
- * Delete a cookie best-effort. `ensureCampUser` runs from both Server
- * Components (a page render, where Next 16 forbids cookie mutation and
- * throws) and Server Actions / route handlers (where it's allowed). During
- * render we can't clear the invite cookie, so we swallow that specific error
- * and let the cookie lapse on its own short `maxAge`. The claim has already
- * been persisted to the user row by that point, and the has-access branch
- * never re-claims, so a briefly-lingering cookie is harmless.
- */
-function safeDeleteCookie(
-  cookieStore: Awaited<ReturnType<typeof cookies>>,
-  name: string,
-): void {
-  try {
-    cookieStore.delete(name);
-  } catch {
-    // Render context — cookies are read-only here; it expires via maxAge.
-  }
-}
-
-/**
- * Ensure a row exists for the given authenticated user (Neon Auth or test).
- * Lazy-upserts on first hit and persists a valid invite cookie onto the
- * row. Routes through the test store when E2E_TEST_MODE=1.
+ * Resolve the camp user row for the given authenticated user (Neon Auth or
+ * test). A row is only ever persisted for someone who has earned access: a
+ * god account (auto-created, approved) or an existing row. An authenticated
+ * user with no row and no invite yet gets a synthetic, non-persisted row
+ * back — `hasCampAccess` reads false off it, so every caller bounces them to
+ * the /signup/required invite gate without writing an orphan "signed in, no
+ * invite" entry. They get a real row when they redeem a code at the gate (see
+ * {@link redeemInviteForUser}). Routes through the test store when
+ * E2E_TEST_MODE=1.
  */
 export async function ensureCampUser(
   authUser: AuthenticatedUser,
 ): Promise<CampUser> {
   const god = isGodEmail(authUser.primaryEmail);
-  const cookieStore = await cookies();
-  const cookieValue = cookieStore.get(INVITE_COOKIE)?.value ?? null;
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  const existing = await store.findUserByAuthId(authUser.id);
+  if (existing) return existing;
+
+  // God accounts bypass the invite gate entirely — give them a real,
+  // approved row on first sign-in.
+  if (god) {
+    return store.createUser({
+      authUserId: authUser.id,
+      displayName: authUser.displayName ?? authUser.primaryEmail,
+      inviteCode: null,
+      rank: "member",
+      approvalStatus: "approved",
+    });
+  }
+
+  // Signed in, but no row and no invite redeemed yet. Hand back a synthetic,
+  // non-persisted row so the access gate bounces them to /signup/required to
+  // enter a code — without leaking an orphan entry. The empty id is never
+  // used: every caller checks hasCampAccess and redirects first.
+  return {
+    id: "",
+    authUserId: authUser.id,
+    displayName: authUser.displayName ?? authUser.primaryEmail,
+    profileImageUrl: null,
+    inviteCode: null,
+    rank: "member",
+    approvalStatus: "approved",
+  };
+}
+
+export type RedeemInviteResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Claim an invite code for an already-authenticated user and stamp it onto
+ * their camp row, creating the row if this is their first time through. This
+ * is the post-auth invite gate (POSTed from /signup/required): the user has
+ * signed in via Neon Auth but can't reach the questionnaire until a valid
+ * code is on file.
+ *
+ * The claim is atomic — for a capped DB code, two racing redeemers can't both
+ * win the last use. A code that requires vetting drops the redeemer into the
+ * captain approval queue (`pending`). God accounts and users who already hold
+ * a code short-circuit without burning another use.
+ */
+export async function redeemInviteForUser(
+  authUser: AuthenticatedUser,
+  rawCode: string,
+): Promise<RedeemInviteResult> {
+  const code = rawCode.trim();
+  if (!code) return { ok: false, error: "Please enter an invite code." };
 
   const store = isE2ETestMode() ? testBackend : realBackend;
   const existing = await store.findUserByAuthId(authUser.id);
 
-  // Already has access (god or a code on file) — nothing to do with the
-  // cookie except clear it.
-  if (existing && (god || existing.inviteCode)) {
-    if (cookieValue) safeDeleteCookie(cookieStore, INVITE_COOKIE);
-    return existing;
+  // Already past the gate (god or a code on file) — don't spend another use.
+  if (isGodEmail(authUser.primaryEmail) || existing?.inviteCode) {
+    return { ok: true };
   }
 
-  // Need to redeem the cookie code (if any) before granting access. This
-  // is the authoritative atomic claim — if two browsers race for the last
-  // remaining use of a DB-backed code, only one wins. The claim returns
-  // any `assignedRank` stamped on the code (e.g. captain-tier invites).
-  const claimed =
-    !god && cookieValue ? await claimInviteCode(cookieValue) : null;
+  const claimed = await claimInviteCode(code);
+  if (!claimed) return { ok: false, error: "That invite code isn't valid." };
 
   if (existing) {
-    if (claimed) {
-      await store.setUserInviteCode(existing.id, claimed.code);
-      if (claimed.assignedRank && claimed.assignedRank !== existing.rank) {
-        await store.setUserRank(existing.id, claimed.assignedRank);
-      }
-      // A code that requires vetting drops the redeemer into the captain
-      // approval queue. Only ever tightens access — never auto-approve here.
-      const approvalStatus: ApprovalStatus = claimed.requiresApproval
-        ? "pending"
-        : existing.approvalStatus;
-      if (approvalStatus !== existing.approvalStatus) {
-        await store.setUserApprovalStatus(existing.id, approvalStatus);
-      }
-      safeDeleteCookie(cookieStore, INVITE_COOKIE);
-      return {
-        ...existing,
-        inviteCode: claimed.code,
-        rank: claimed.assignedRank ?? existing.rank,
-        approvalStatus,
-      };
+    await store.setUserInviteCode(existing.id, claimed.code);
+    if (claimed.assignedRank && claimed.assignedRank !== existing.rank) {
+      await store.setUserRank(existing.id, claimed.assignedRank);
     }
-    if (cookieValue) safeDeleteCookie(cookieStore, INVITE_COOKIE);
-    return existing;
+    // A vetting-required code only ever tightens access into the queue.
+    if (claimed.requiresApproval && existing.approvalStatus !== "pending") {
+      await store.setUserApprovalStatus(existing.id, "pending");
+    }
+    return { ok: true };
   }
 
-  // New account. God accounts and pre-approved invites land `approved`;
-  // a vetting-required code creates the account `pending` (blocked after
-  // onboarding until a captain decides).
-  const approvalStatus: ApprovalStatus =
-    !god && claimed?.requiresApproval ? "pending" : "approved";
-  const created = await store.createUser({
+  // First time through: create the row stamped with the claimed code.
+  // Pre-approved invites land `approved`; vetting-required ones land
+  // `pending` (blocked after onboarding until a captain decides).
+  await store.createUser({
     authUserId: authUser.id,
     displayName: authUser.displayName ?? authUser.primaryEmail,
-    inviteCode: god ? null : claimed?.code ?? null,
-    rank: claimed?.assignedRank ?? "member",
-    approvalStatus,
+    inviteCode: claimed.code,
+    rank: claimed.assignedRank ?? "member",
+    approvalStatus: claimed.requiresApproval ? "pending" : "approved",
   });
-  if (cookieValue) safeDeleteCookie(cookieStore, INVITE_COOKIE);
-  return created;
+  return { ok: true };
 }
 
 export interface BurnerProfileSummary {

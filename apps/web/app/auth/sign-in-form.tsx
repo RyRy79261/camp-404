@@ -11,7 +11,7 @@ import { authClient } from "@/lib/auth-client";
 /**
  * Email/password + Google sign-in form, mirroring the intake-tracker
  * login-04 block. No invite-code field — invite-only enforcement lives
- * on /signup and the cookie guard on /auth/sign-up.
+ * after auth at the /signup/required gate.
  */
 
 function safeCallbackUrl(raw: string | null | undefined): string {

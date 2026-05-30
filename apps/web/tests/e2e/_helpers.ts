@@ -1,3 +1,4 @@
+import { expect } from "@playwright/test";
 import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 
 /**
@@ -61,6 +62,22 @@ export async function completeOnboarding(
   if (!res.ok()) {
     throw new Error(`completeOnboarding failed: ${res.status()}`);
   }
+}
+
+/**
+ * Redeem an invite code at the post-auth gate (/signup/required). The user
+ * must already be signed in (see {@link login}). Submitting a valid code
+ * claims it onto their row and redirects home, which routes onward to the
+ * questionnaire; an invalid code keeps them on the gate with an error.
+ */
+export async function redeemInviteAtGate(
+  page: Page,
+  code: string,
+): Promise<void> {
+  await page.goto("/signup/required");
+  await expect(page.getByLabel("Invite code")).toBeVisible();
+  await page.getByLabel("Invite code").fill(code);
+  await page.getByRole("button", { name: "Enter camp" }).click();
 }
 
 /**

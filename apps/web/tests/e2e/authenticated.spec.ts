@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { completeOnboarding, login, resetTestState } from "./_helpers";
+import {
+  completeOnboarding,
+  login,
+  redeemInviteAtGate,
+  resetTestState,
+} from "./_helpers";
 
 // All specs here rely on E2E_TEST_MODE=1 in the dev server env (see
 // playwright.config.ts). The /api/test/login + reset routes are only
@@ -22,30 +27,26 @@ test.describe("authenticated flow (test-mode)", () => {
     ).toBeVisible();
   });
 
-  test("non-god without an invite is bounced to /signup/required", async ({
+  test("non-god without an invite is bounced to the invite gate", async ({
     page,
   }) => {
     await login(page, { email: "newbie@example.com" });
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/signup\/required/);
-    await expect(page.getByText("You're not on the list")).toBeVisible();
+    await expect(page.getByLabel("Invite code")).toBeVisible();
   });
 
-  test("invite redeemed at /signup unlocks the questionnaire", async ({
+  test("an invite entered at the gate unlocks the questionnaire", async ({
     page,
   }) => {
-    // The invite form lives only on /signup. Redeeming drops the cookie and
-    // sends the (still-anonymous) browser to the Neon Auth sign-up page.
-    await page.goto("/signup");
-    await page.getByLabel("Invite code").fill("TEST-INVITE");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/auth\/sign-up/);
-
-    // Simulate sign-up completing: the test user logs in and hits /, which
-    // claims the cookie code onto their row and forwards to the questionnaire.
+    // Signed in via Neon Auth but no code on file → bounced to the gate.
     await login(page, { id: "redeemer-auth", email: "redeemer@example.com" });
     await page.goto("/");
+    await expect(page).toHaveURL(/\/signup\/required/);
+
+    // Entering a valid code claims it onto their row and forwards onward.
+    await redeemInviteAtGate(page, "TEST-INVITE");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
   });
 
@@ -75,13 +76,8 @@ test.describe("authenticated flow (test-mode)", () => {
     await request.post("/api/test/seed-invite", {
       data: { code: "GATEKEEP", maxUses: 1, requiresApproval: true },
     });
-    await page.goto("/signup");
-    await page.getByLabel("Invite code").fill("GATEKEEP");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/auth\/sign-up/);
-
     await login(page, { id: "pending-auth", email: "pending@example.com" });
-    await page.goto("/");
+    await redeemInviteAtGate(page, "GATEKEEP");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     // Finish onboarding — now the approval gate is the only thing left, and
@@ -105,11 +101,14 @@ test.describe("authenticated flow (test-mode)", () => {
     await expect(page).toHaveURL(/\/auth\/sign-in/);
   });
 
-  test("the sign-up page is guarded by the invite cookie", async ({ page }) => {
-    // /auth/sign-up may only be reached with a redeemed invite cookie; without
-    // one it kicks back to the invite gate. (No cookie set here.)
+  test("the sign-up page is reachable without an invite", async ({ page }) => {
+    // The invite gate moved past auth, so /auth/sign-up is now open — the
+    // code is collected later at /signup/required.
     await page.goto("/auth/sign-up");
-    await expect(page).toHaveURL(/\/signup$/);
+    await expect(page).toHaveURL(/\/auth\/sign-up$/);
+    await expect(
+      page.getByRole("heading", { name: "Create your account" }),
+    ).toBeVisible();
   });
 
   test("a rejected member sees the not-approved screen", async ({
@@ -119,13 +118,9 @@ test.describe("authenticated flow (test-mode)", () => {
     await request.post("/api/test/seed-invite", {
       data: { code: "VETO", maxUses: 1, requiresApproval: true },
     });
-    await page.goto("/signup");
-    await page.getByLabel("Invite code").fill("VETO");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/auth\/sign-up/);
-
     await login(page, { id: "rejected-auth", email: "rejected@example.com" });
-    await page.goto("/");
+    await redeemInviteAtGate(page, "VETO");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
     await completeOnboarding(request, "rejected-auth");
 
     // A captain rejects them (simulated via the test seam — the real
