@@ -17,20 +17,20 @@ interface HomeHeaderProps {
 /**
  * Right-hand header content for the home control panel: notifications bell
  * with an unread badge, and the signed-in member's avatar (photo or
- * initials) linking through to their profile. Wiring the bell to the
- * notifications inbox is still a follow-up.
+ * initials) linking through to their profile. The bell links to the
+ * notification inbox.
  */
 export function HomeHeader({ initials, imageUrl, notifications }: HomeHeaderProps) {
   return (
     <>
-      <button
-        type="button"
+      <Link
+        href="/notifications"
         aria-label={
           notifications
             ? `Notifications (${notifications} unread)`
             : "Notifications"
         }
-        className="relative rounded-full p-1.5 text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-muted)]"
+        className="relative rounded-full p-1.5 text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)]"
       >
         <Bell className="h-5 w-5" aria-hidden />
         {notifications ? (
@@ -41,7 +41,7 @@ export function HomeHeader({ initials, imageUrl, notifications }: HomeHeaderProp
             {notifications > 99 ? "99+" : notifications}
           </span>
         ) : null}
-      </button>
+      </Link>
       <Link
         href="/profile"
         aria-label="Your profile"

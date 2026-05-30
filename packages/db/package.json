@@ -13,6 +13,7 @@
     "./invite-codes": "./src/invite-codes.ts",
     "./relations": "./src/relations.ts",
     "./roster": "./src/roster.ts",
+    "./broadcasts": "./src/broadcasts.ts",
     "./mcp": "./src/mcp.ts",
     "./telegram": "./src/telegram.ts"
   },
