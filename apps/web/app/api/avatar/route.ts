@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { get } from "@vercel/blob";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { findCampUserByAuthId, isApproved } from "@/lib/users";
 import { isE2ETestMode } from "@/lib/test-mode";
 
 export const runtime = "nodejs";
@@ -12,16 +13,23 @@ export const runtime = "nodejs";
  * aren't readable without the store token. We never expose that URL; instead
  * the uploader persists a `/api/avatar?pathname=…` link and this route fetches
  * the blob server-side (with the token) and streams it back — but only to an
- * authenticated session. A logged-out request gets a 401, so the `<img>`
- * simply fails to load: photos are visible to signed-in members only.
+ * approved member. A logged-out or not-yet-approved request gets a 401, so the
+ * `<img>` simply fails to load: photos are visible to vetted members only.
  *
- * Any signed-in member may view any member's avatar (they're shown across the
+ * Any approved member may view any member's avatar (they're shown across the
  * home header, profile pages, the family tree, and the captain roster), so the
- * gate is "are you logged in", not ownership.
+ * gate is `isApproved` — matching the rest of the protected pages — not
+ * ownership.
  */
 export async function GET(req: Request) {
   const user = await getAuthenticatedUser();
   if (!user) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+  // Match the app-wide "can use the app" gate: a signed-in but pending /
+  // rejected account must not be able to pull member photos.
+  const campUser = await findCampUserByAuthId(user.id);
+  if (!campUser || !isApproved(campUser, user.primaryEmail)) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 

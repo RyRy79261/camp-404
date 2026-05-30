@@ -2,7 +2,7 @@
 
 > How a burner's optional profile photo is captured, stored, and shown.
 > Photos are stored in a **private** Vercel Blob store and surfaced — to
-> signed-in members only, via a gated proxy route — as a large circular
+> approved members only, via a gated proxy route — as a large circular
 > avatar on the profile page and a small one in the home header.
 
 ## Goal
@@ -30,13 +30,13 @@ be added or changed later from the profile editor.
    same-origin proxy URL — `{ url: "/api/avatar?pathname=…" }` — never the
    blob URL itself.
 4. **Serving.** `app/api/avatar/route.ts` is the gated proxy. It requires an
-   authenticated session, then streams the blob via `get(pathname, { access:
-   "private" })`. A logged-out request gets a 401, so the `<img>` just fails
-   to load — photos are visible to signed-in members only. Any signed-in
-   member may view any member's avatar (header, profile, family tree, captain
-   roster), so the gate is "are you logged in", not ownership. Responses are
-   cached `private, immutable` (the pathname's random suffix changes on every
-   new upload).
+   approved member (`isApproved`, the same gate as the protected pages), then
+   streams the blob via `get(pathname, { access: "private" })`. A logged-out
+   or not-yet-approved request gets a 401, so the `<img>` just fails to load —
+   photos are visible to vetted members only. Any approved member may view any
+   member's avatar (header, profile, family tree, captain roster), so the gate
+   is approval, not ownership. Responses are cached `private, immutable` (the
+   pathname's random suffix changes on every new upload).
 5. **Persistence.** The returned URL is stored on `users.profile_image_url`
    (migration `0008`). On the onboarding save action it is mirrored from the
    questionnaire response onto the column; the profile editor writes it
