@@ -16,6 +16,7 @@
     "./broadcasts": "./src/broadcasts.ts",
     "./audience": "./src/audience.ts",
     "./activations": "./src/activations.ts",
+    "./versions": "./src/versions.ts",
     "./mcp": "./src/mcp.ts",
     "./telegram": "./src/telegram.ts",
     "./crypto": "./src/crypto.ts",

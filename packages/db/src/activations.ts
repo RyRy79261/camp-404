@@ -2,6 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
+import { meetsRequiredVersion } from "./versions";
 
 // The required_actions gating producer + satisfaction. A questionnaire
 // activation fans out one required_actions row per matched member (the generic
@@ -184,7 +185,11 @@ export async function satisfyRequiredAction(
     )
     .limit(1);
   if (!row || row.status !== "pending") return false;
-  if (row.version && completedVersion && completedVersion < row.version) {
+  if (
+    row.version &&
+    completedVersion &&
+    !meetsRequiredVersion(row.version, completedVersion)
+  ) {
     return false; // completion against an older version — leave the gate open
   }
   await db

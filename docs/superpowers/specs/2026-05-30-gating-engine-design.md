@@ -1,7 +1,7 @@
 # Sub-project E — required_actions gating engine (design + plan)
 
 **Date:** 2026-05-30
-**Status:** Proposed — **needs a decision on the page-gate migration approach (see end)**
+**Status:** Implemented — option **(b)** belt-and-braces, with a one-release `completedAt` fallback (see the decision section).
 **Program:** Camp 404 audit remediation, sub-project **E**. Builds on C (`resolveAudience`). **Highest blast radius in the program** — it changes how every authenticated user is routed.
 
 ## Problem (from the audit)
@@ -17,9 +17,9 @@
 - Upserts one `required_actions` row per recipient: `type='questionnaire'`, `actionKey=questionnaireKey`, `version`, `activationId`, `title`, `blocking`. The `(user_id, action_key)` unique index makes this idempotent and re-activation-safe (`ON CONFLICT … DO UPDATE` the version/title/status→pending).
 
 ### 2. Completion hooks (`satisfyRequiredAction`)
-`satisfyRequiredAction(userId, actionKey, completedVersion)` — flips the matching pending row to `completed` (only when `completedVersion >= required version`, per the schema's "completion against an older version re-opens" rule). Wired into the existing domain-write paths:
-- burner profile: `saveBurnerProfile` (web) + `BURNER_PROFILE.save` (replay) + MCP `update_my_burner_profile` on `markComplete`.
-- dietary / driver: MCP `update_my_dietary_requirements` / `update_my_driver_profile` on `markComplete` (their bespoke web pages don't exist yet; the hook lives at the write boundary so it fires wherever the table is written).
+`satisfyRequiredAction(userId, actionKey, completedVersion)` — flips the matching pending row to `completed` (only when `completedVersion >= required version` via `meetsRequiredVersion`, which compares the numeric `-vN` suffix as an integer, not lexicographically; per the schema's "completion against an older version re-opens" rule).
+- **Implemented (this PR):** burner profile — `saveBurnerProfile` (web) + `BURNER_PROFILE.save` (replay).
+- **Deferred follow-up:** the MCP tool hooks (`update_my_burner_profile` / `update_my_dietary_requirements` / `update_my_driver_profile` on `markComplete`). The belt-and-braces `completedAt` fallback already covers an MCP-completed profile, so these hooks are a prerequisite for *removing* the fallback, not for this PR.
 
 ### 3. Seed the mandatory burner-profile gate
 Today every member must finish the burner profile before home — that obligation must become a `required_actions` row so the generic gate sees it. Seed `actionKey='burner_profile'` (type questionnaire, blocking, version = current `QUESTIONNAIRE.version`) when the camp user row is first created (`redeemInviteForUser` / god bootstrap in `ensureCampUser`). Idempotent via the unique index.
@@ -38,13 +38,14 @@ Replace the hardcoded **burner-profile** redirect with the generic gate: after t
 - Migrating the *other* ~8 pages' gate ladders — E does `page.tsx` + a shared helper they can adopt incrementally; a mass sweep is a follow-up.
 
 ## Files
+
 | File | Action |
 |---|---|
 | `packages/db/src/activations.ts` | Create — `openActivation` producer + `satisfyRequiredAction` + `getPendingRequiredActions` |
 | `packages/db/src/audience.ts` | Maybe extend `computeAudience` for the questionnaire scope set (no `drivers`; `opt_in` deferred) |
 | `apps/web/lib/required-actions.ts` | Create — action registry + pure `nextGate` |
 | `apps/web/lib/users.ts` | Seed burner-profile required_action on user creation; `satisfyRequiredAction` wrapper (+ test-store) |
-| `apps/web/app/onboarding/questionnaire/actions.ts`, `lib/forms.ts`, MCP profile tools | Call `satisfyRequiredAction` on completion |
+| `apps/web/app/onboarding/questionnaire/actions.ts`, `lib/forms.ts` | Call `satisfyRequiredAction` on completion (web + replay). MCP tool hooks deferred — see §2. |
 | `apps/web/app/page.tsx` | Generic gate via `nextGate`; keep invite + approval hardcoded |
 | tests | `nextGate` + registry; `satisfyRequiredAction` version rule; producer audience reuse |
 
@@ -60,5 +61,7 @@ This is the one change that re-routes every signed-in user. Two ways to land it:
 
 - **(a) Clean swap** — `page.tsx` drives routing purely off `required_actions` (after seeding the burner-profile obligation + backfilling existing members a row). Cleanest end state; the risk is a seeding/backfill miss could mis-route someone.
 - **(b) Belt-and-braces** — keep the existing `completedAt` check as a fallback alongside the new `required_actions` gate for one release, then drop the fallback once we've confirmed rows are seeded correctly. Safer rollout; slightly more code for one cycle.
+
+**Decision: (b) was chosen and is what this PR implements.** `page.tsx` routes off `required_actions` (via `nextGate`) with the legacy `completedAt` check retained as a one-release fallback. Rollout: ship → confirm every member has a seeded `burner_profile` row (new members are seeded at signup; existing members need a one-off backfill) and add the MCP completion hooks → then remove the fallback.
 
 I recommend **(b)** for the first landing given the blast radius, then a follow-up to remove the fallback. Which do you want?
