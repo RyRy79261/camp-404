@@ -81,6 +81,14 @@ export default async function ProfilePage() {
         </Link>
         .
       </p>
+      <p className="mt-3 text-center text-sm">
+        <a
+          href="/auth/sign-out"
+          className="text-[color:var(--color-muted-foreground)] underline underline-offset-4"
+        >
+          Sign out
+        </a>
+      </p>
     </main>
   );
 }
