@@ -17,7 +17,8 @@
     "./mcp": "./src/mcp.ts",
     "./telegram": "./src/telegram.ts",
     "./crypto": "./src/crypto.ts",
-    "./id-documents": "./src/id-documents.ts"
+    "./id-documents": "./src/id-documents.ts",
+    "./maintenance": "./src/maintenance.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
