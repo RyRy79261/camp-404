@@ -25,6 +25,16 @@ export function AvatarUpload({ value, onChange, className }: AvatarUploadProps) 
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Local object-URL preview of the just-uploaded image, shown instead of the
+  // authed avatar proxy (which 401s for a not-yet-approved member mid-
+  // onboarding). Revoked on change / unmount.
+  const [preview, setPreview] = React.useState<string | null>(null);
+  React.useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -32,6 +42,8 @@ export function AvatarUpload({ value, onChange, className }: AvatarUploadProps) 
     setUploading(true);
     try {
       const blob = await cropResizeToSquare(file);
+      // The useEffect cleanup (keyed on `preview`) revokes the previous URL.
+      setPreview(URL.createObjectURL(blob));
       const body = new FormData();
       body.append("image", new File([blob], "avatar.webp", { type: blob.type }));
 
@@ -55,6 +67,8 @@ export function AvatarUpload({ value, onChange, className }: AvatarUploadProps) 
     }
   }
 
+  const displaySrc = preview ?? value;
+
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="relative">
@@ -62,16 +76,18 @@ export function AvatarUpload({ value, onChange, className }: AvatarUploadProps) 
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          aria-label={value ? "Change profile photo" : "Add a profile photo"}
+          aria-label={
+            displaySrc ? "Change profile photo" : "Add a profile photo"
+          }
           className={cn(
             "relative flex h-40 w-40 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-[color:var(--color-border)] bg-[color:var(--color-muted)] text-[color:var(--color-muted-foreground)] transition-colors hover:border-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)] disabled:opacity-60",
             value && "border-solid",
             className,
           )}
         >
-          {value ? (
+          {displaySrc ? (
             <img
-              src={value}
+              src={displaySrc}
               alt="Profile preview"
               className="h-full w-full object-cover"
             />
@@ -88,11 +104,12 @@ export function AvatarUpload({ value, onChange, className }: AvatarUploadProps) 
           )}
         </button>
 
-        {value && !uploading && (
+        {displaySrc && !uploading && (
           <button
             type="button"
             onClick={() => {
               setError(null);
+              setPreview(null);
               onChange(null);
             }}
             aria-label="Remove profile photo"
@@ -109,7 +126,7 @@ export function AvatarUpload({ value, onChange, className }: AvatarUploadProps) 
         disabled={uploading}
         className="text-sm font-medium text-[color:var(--color-primary)] underline-offset-4 hover:underline disabled:opacity-60"
       >
-        {uploading ? "Uploading…" : value ? "Change photo" : "Upload a photo"}
+        {uploading ? "Uploading…" : displaySrc ? "Change photo" : "Upload a photo"}
       </button>
 
       {error && (

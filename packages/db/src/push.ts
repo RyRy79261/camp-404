@@ -59,6 +59,57 @@ export async function deletePushTokenForUser(
     );
 }
 
+export interface QueuedPushDelivery {
+  id: string;
+  userId: string;
+  title: string;
+  body: string;
+  refType: string | null;
+  refId: string | null;
+}
+
+/**
+ * Pure (no DB) core of the drain: given the queued deliveries, each user's
+ * tokens, and the injected send fn, decide each delivery's terminal status and
+ * collect dead tokens to prune. Unit-tested with a stub send; `drainQueuedPush`
+ * wraps it with the DB read/write.
+ */
+export async function planPushDrain(
+  queued: QueuedPushDelivery[],
+  tokensByUser: Map<string, string[]>,
+  send: PushSend,
+): Promise<{
+  statusById: Map<string, "sent" | "failed" | "skipped">;
+  deadTokens: Set<string>;
+}> {
+  const statusById = new Map<string, "sent" | "failed" | "skipped">();
+  const deadTokens = new Set<string>();
+  for (const d of queued) {
+    // Exclude tokens already classified dead earlier in this run so we don't
+    // re-send to (and re-collect) a token a prior delivery already pruned.
+    const tokens = (tokensByUser.get(d.userId) ?? []).filter(
+      (t) => !deadTokens.has(t),
+    );
+    if (tokens.length === 0) {
+      statusById.set(d.id, "skipped");
+      continue;
+    }
+    const data: Record<string, string> = { deliveryId: d.id };
+    if (d.refType) data.refType = d.refType;
+    if (d.refId) data.refId = d.refId;
+
+    const results: TokenSendResult[] = [];
+    for (const batch of chunk(tokens, 500)) {
+      results.push(...(await send(batch, { title: d.title, body: d.body }, data)));
+    }
+    statusById.set(d.id, deliveryPushStatus(results));
+    for (const r of results) {
+      if (!r.success && shouldPruneToken(r.errorCode)) deadTokens.add(r.token);
+    }
+  }
+  return { statusById, deadTokens };
+}
+
 export interface PushDrainResult {
   sent: number;
   failed: number;
@@ -112,28 +163,11 @@ export async function drainQueuedPush(send: PushSend): Promise<PushDrainResult> 
     tokensByUser.set(r.userId, list);
   }
 
-  const statusById = new Map<string, "sent" | "failed" | "skipped">();
-  const deadTokens = new Set<string>();
-
-  for (const d of queued) {
-    const tokens = tokensByUser.get(d.userId) ?? [];
-    if (tokens.length === 0) {
-      statusById.set(d.id, "skipped");
-      continue;
-    }
-    const data: Record<string, string> = { deliveryId: d.id };
-    if (d.refType) data.refType = d.refType;
-    if (d.refId) data.refId = d.refId;
-
-    const results: TokenSendResult[] = [];
-    for (const batch of chunk(tokens, 500)) {
-      results.push(...(await send(batch, { title: d.title, body: d.body }, data)));
-    }
-    statusById.set(d.id, deliveryPushStatus(results));
-    for (const r of results) {
-      if (!r.success && shouldPruneToken(r.errorCode)) deadTokens.add(r.token);
-    }
-  }
+  const { statusById, deadTokens } = await planPushDrain(
+    queued,
+    tokensByUser,
+    send,
+  );
 
   const { db, pool } = createPooledDb();
   let sent = 0;
