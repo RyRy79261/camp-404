@@ -72,11 +72,11 @@ function MCPConnectInner() {
         </p>
       )}
       <p className="mt-4 text-xs text-[color:var(--color-muted-foreground)]">
-        Don't have a camp account yet?{" "}
+        New to Camp 404?{" "}
         <a className="underline" href="/auth/sign-in">
           Sign in first
-        </a>
-        .
+        </a>{" "}
+        — you'll enter your invite code once you're in.
       </p>
     </Shell>
   );
