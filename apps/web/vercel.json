@@ -4,7 +4,8 @@
     { "path": "/api/cron/recipes/analyse", "schedule": "0 8 * * *" },
     { "path": "/api/cron/manuals/generate", "schedule": "30 8 * * *" },
     { "path": "/api/cron/notifications/reminders", "schedule": "0 9 * * *" },
-    { "path": "/api/cron/notifications/dispatch", "schedule": "15 9 * * *" }
+    { "path": "/api/cron/notifications/dispatch", "schedule": "15 9 * * *" },
+    { "path": "/api/cron/notifications/push", "schedule": "25 9 * * *" }
   ],
   "headers": [
     {
