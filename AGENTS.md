@@ -16,7 +16,7 @@ Turborepo + pnpm workspaces. Node >= 22, pnpm 10.x.
 
 ```
 apps/
-  web/        Next.js 15 app (App Router, React 19, Tailwind v4)
+  web/        Next.js 16 app (App Router, React 19, Tailwind v4)
   mobile/     Capacitor host wrapping the web static export
   admin-cli/  Node CLI for data ops
 packages/
@@ -129,7 +129,7 @@ that actually has something to ship.
 
 ## AI providers
 
-Model IDs (Claude Opus 4.7, Haiku 4.5, Groq Whisper Large v3 Turbo) and the
+Model IDs (Claude Opus 4.8, Haiku 4.5, Groq Whisper Large v3 Turbo) and the
 prompt templates in `@camp404/ai-prompts` are pinned and versioned
 deliberately. Do not swap models or edit a prompt in place — bump the
 version instead.
@@ -157,7 +157,7 @@ are scheduled in `apps/web/vercel.json`.
   never store these plaintext.
 - Never store passport images, credit card numbers, or CVVs.
 - Account deletion sanitises to a `Lost Cat #N` stub to preserve
-  relational integrity. See `docs/brief.md` §12.
+  relational integrity. See `docs/brief.md`.
 
 ## Git & pull requests
 

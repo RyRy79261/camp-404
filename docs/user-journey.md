@@ -18,102 +18,103 @@ and 🔭-marked sections are planned / proposed.
 
 ## 1. The whole journey at a glance
 
-The app is **invite-only** and gated in three layers. Every authenticated
-request flows through the same checks (`hasCampAccess`, then a completed
-burner profile) before a member reaches the home control panel.
+The app is **invite-only** and gated in four layers. A person signs in
+first; every authenticated request then flows through the same checks
+(`hasCampAccess` → a completed burner profile → captain approval) before a
+member reaches the home control panel.
 
 ```mermaid
 flowchart TD
-    A([Lost burner gets an invite code]) --> B[Landing: 'Error 404 — Camp not found']
-    B -->|Are you lost?| C[/signup: enter invite code/]
-    C -->|valid code| D[Auth: sign up / sign in<br/>password or Google]
-    C -->|invalid code| C
+    A([Lost burner has an invite code]) --> B[Landing: 'Error 404 — Camp not found']
+    B -->|Are you lost?| D[Auth: sign in / sign up<br/>password or Google]
     D --> E{Has camp access?<br/>god email OR redeemed code}
-    E -->|no| F[/signup/required: dead-end<br/>sign out & retry/]
-    E -->|yes| G{Burner profile complete?}
+    E -->|no| F[/signup/required: enter code<br/>dead-end — sign out & retry/]
+    F -->|valid code| G
+    E -->|yes / god| G{Burner profile complete?}
     G -->|no| H[/onboarding/questionnaire<br/>mandatory, ~2 min/]
-    H -->|saved & completed| I
-    G -->|yes| I([Home control panel])
+    H -->|saved & completed| K
+    G -->|yes| K{Captain-approved?<br/>vetting-required invites only}
+    K -->|no| P[/pending-approval<br/>held until a captain decides/]
+    K -->|yes / god| I([Home control panel])
     I --> J[Tools, Profile, Teams, Tasks]
-
-    classDef planned stroke-dasharray: 5 5;
 ```
 
-The three gates, in order, are enforced on **every** protected page
-(`app/page.tsx`, `tools/*`, `family-tree`, `onboarding/*`):
+The four gates, in order, are enforced on **every** protected page
+(`app/page.tsx` is the canonical chain; `tools/*`, `family-tree`,
+`onboarding/*` repeat it):
 
 1. **Authenticated?** — Neon Auth (Better Auth) session cookie. No session
    → landing hero / sign-in.
 2. **Has camp access?** — `hasCampAccess()`: either a `GOD_EMAILS` address
    or an invite code redeemed onto the user's row. No access →
-   `/signup/required`.
+   `/signup/required`, where the code is entered (see §2).
 3. **Profile complete?** — a `burner_profiles` row with `completedAt` set.
    Incomplete → `/onboarding/questionnaire`.
+4. **Captain-approved?** — `isApproved()`. A member who redeemed a
+   vetting-required invite is held at `/pending-approval` until a captain
+   approves or rejects them; god accounts and non-vetting invites pass
+   straight through.
 
 ---
 
 ## 2. Access & authentication
 
-A person never reaches auth without first redeeming an invite code. The
-code is validated on `/signup`, stashed in a short-lived (2-hour) HttpOnly
-cookie, and only **claimed** atomically once the new account first loads a
-protected page.
+Neon Auth creates an identity the moment someone signs in — especially via
+Google — so the app **cannot** gate sign-up behind an invite code. Instead
+the invite check lives *after* auth: a signed-in user with no code on file
+is bounced to `/signup/required`, where they enter a code that is **claimed**
+atomically and stamped onto their camp row. (There is no longer a pre-auth
+`/signup` page or a `camp404_invite` cookie — that earlier design was removed
+when the gate moved post-auth.)
 
 ```mermaid
 flowchart LR
     subgraph Unauthenticated
-        L[Landing hero] -->|Are you lost?| S[/signup/]
-        L -->|Sign in| SI[/auth/sign-in/]
+        L[Landing hero] -->|Are you lost?| SI[/auth/sign-in · sign-up<br/>password or Google/]
     end
 
-    subgraph "Invite redemption"
-        S -->|enter code| V{isValidInviteCode?}
-        V -->|no| S
-        V -->|yes| CK[Set camp404_invite cookie<br/>HttpOnly · 2h]
-        CK --> SU[/auth/sign-up<br/>guarded by cookie/]
-    end
-
-    SU -->|create account| EC[ensureCampUser]
-    SI -->|existing account| EC
-    EC --> CLAIM{cookie code present<br/>& not god?}
-    CLAIM -->|yes| CI[claimInviteCode<br/>atomic single-use claim<br/>+ assignedRank]
-    CLAIM -->|no / god| HOME
-    CI --> HOME([Gated home])
+    SI -->|session created| EC[ensureCampUser]
+    EC --> HC{hasCampAccess?<br/>god email OR code on row}
+    HC -->|yes / god| HOME([Gated home])
+    HC -->|no| SR[/signup/required<br/>enter invite code/]
+    SR -->|submitInviteCode| CI[claimInviteCode<br/>atomic single-use claim<br/>+ assignedRank · requiresApproval]
+    CI -->|ok| HOME
+    CI -->|invalid / exhausted| SR
 ```
 
 Key behaviours worth knowing:
 
-- **The invite-code form lives *only* on `/signup`.** A logged-in user who
-  somehow lacks a code can't enter one — they hit `/signup/required`, whose
-  only exit is *sign out and start over from the invite link*.
+- **The invite-code form lives on `/signup/required`, post-auth.** A
+  signed-in user with no code can't reach the questionnaire until they enter
+  a valid one; the screen's only other exit is to *sign out and start over*
+  (today just a link to Neon's hosted sign-out — there's no programmatic
+  sign-out control).
 - **Claiming is the authoritative race-winner.** If two browsers race for
-  the last remaining use of a code, `claimInviteCode` lets exactly one win.
-- **Captain-tier invites** can stamp an `assignedRank` on the code, which is
-  applied at claim time.
-- **God accounts** (`GOD_EMAILS`) bypass the invite gate entirely.
+  the last remaining use of a DB code, `claimInviteCode` lets exactly one
+  win (a single atomic `use_count` increment). Env `INVITE_CODES` are
+  unlimited bootstrap codes — a pure validity check that never stamps a rank.
+- **Captain-tier invites** can stamp an `assignedRank` and a
+  `requiresApproval` flag on the code, both applied at claim time; the latter
+  routes the redeemer through the captain-approval gate (gate 4 in §1).
+- **God accounts** (`GOD_EMAILS`) bypass the invite *and* approval gates.
 
 ### Sequence: redeeming an invite end-to-end
 
 ```mermaid
 sequenceDiagram
     actor U as New member
-    participant SP as /signup
-    participant SA as redeemInviteCode (server action)
     participant NA as Neon Auth
-    participant APP as ensureCampUser
-    participant DB as Postgres (invites)
+    participant SR as /signup/required
+    participant SA as submitInviteCode (server action)
+    participant DB as Postgres (invites + users)
 
-    U->>SP: open invite link, paste code
-    SP->>SA: submit code
-    SA->>DB: isValidInviteCode(code)
-    DB-->>SA: valid
-    SA-->>U: set camp404_invite cookie, redirect /auth/sign-up
-    U->>NA: sign up (password / Google)
+    U->>NA: open app, sign in / sign up (password / Google)
     NA-->>U: session cookie set
-    U->>APP: first load of a gated page
-    APP->>DB: claimInviteCode(cookie) — atomic
-    DB-->>APP: claimed (+ assignedRank?)
-    APP-->>U: access granted → onboarding gate
+    U->>SR: first gated load with no code → bounced here
+    U->>SA: paste code, submit
+    SA->>DB: redeemInviteForUser → claimInviteCode (atomic)
+    DB-->>SA: claimed (+ assignedRank? + requiresApproval?)
+    SA-->>U: code stamped on row → redirect home → onboarding gate
 ```
 
 ---

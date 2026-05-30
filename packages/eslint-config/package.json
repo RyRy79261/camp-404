@@ -6,8 +6,7 @@
   "main": "index.js",
   "files": [
     "index.js",
-    "next.js",
-    "react.js"
+    "next.js"
   ],
   "dependencies": {
     "@eslint/js": "^10.0.1",
@@ -16,6 +15,6 @@
     "typescript-eslint": "^8.59.4"
   },
   "peerDependencies": {
-    "eslint": "^9"
+    "eslint": "^10"
   }
 }

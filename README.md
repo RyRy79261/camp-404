@@ -9,11 +9,11 @@ See [`docs/brief.md`](docs/brief.md) for the full project brief (vision, archite
 ## Stack
 
 - **Monorepo:** Turborepo + pnpm workspaces
-- **Web:** Next.js 15 (App Router), React 19, Tailwind v4, shadcn/ui
+- **Web:** Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui
 - **Mobile:** Capacitor 8 wrapping the same Next.js static export
 - **Database:** Neon Postgres + Drizzle ORM (HTTP + WebSocket drivers)
 - **Auth:** Neon Auth (Better Auth) — handler at `/api/auth/*`, UI at `/auth/*`
-- **AI:** Anthropic Claude Opus 4.7 (reasoning) + Haiku 4.5 (intent) + Groq Whisper Large v3 Turbo (voice)
+- **AI:** Anthropic Claude Opus 4.8 (reasoning) + Haiku 4.5 (intent) + Groq Whisper Large v3 Turbo (voice)
 - **Push:** Firebase Cloud Messaging (iOS, Android, Web Push)
 - **Storage:** Vercel Blob — used for [profile photos](docs/profile-photos.md), receipts, and voice memos
 - **Payments:** TBD
@@ -61,7 +61,7 @@ pnpm turbo run lint typecheck test build
 
 ## Mobile builds
 
-See [`apps/mobile/README.md`](apps/mobile/README.md). App Store / Play submission is deferred per brief §11.
+See [`apps/mobile/README.md`](apps/mobile/README.md). App Store / Play submission is deferred per the project brief.
 
 ## Deploying
 
@@ -101,7 +101,7 @@ All cron endpoints require `Authorization: Bearer ${CRON_SECRET}`.
 - Passport / SA ID numbers and EFT details are column-level encrypted with `pgcrypto`.
 - We never store passport images, credit card numbers, or CVVs.
 - Members can sanitise or fully delete their account; anonymised stub is renamed `Lost Cat #N` to preserve relational integrity.
-- See brief §12 for the full data-protection model.
+- See the project brief for the full data-protection model.
 
 ## Status
 

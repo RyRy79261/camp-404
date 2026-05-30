@@ -22,7 +22,7 @@
   },
   "pnpm": {
     "overrides": {
-      "better-auth": ">=1.4.17"
+      "better-auth": "~1.4.18"
     }
   }
 }

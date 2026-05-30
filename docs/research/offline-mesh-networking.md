@@ -24,14 +24,15 @@ canonical users (see `docs/brief.md` §1).
 
 Today the app assumes connectivity end-to-end:
 
-- **API surface.** `apps/web` is Next.js 15 with server actions and
+- **API surface.** `apps/web` is Next.js 16 with server actions and
   `/api/*` routes against Neon Postgres (`AGENTS.md` "Mobile builds").
   The Capacitor static export still _calls_ those endpoints; it just
   cannot host them. With no internet, every write fails.
 - **Notifications.** `broadcasts` fan out into `notification_deliveries`,
-  which the Vercel cron / push worker drains via FCM
-  (`packages/db/src/schema.ts:609-697`, `apps/web/vercel.json`). FCM
-  needs a Google Play / APNs reachable network.
+  which today populate only the in-app inbox; the FCM push worker that
+  would drain `pushStatus = 'queued'` deliveries is planned but not yet
+  wired (`packages/db/src/schema.ts`). Once built, FCM would need a
+  Google Play / APNs reachable network.
 - **Inventory.** The propose-and-approve workflow
   (`inventory_updates` → `inventory_items`,
   `packages/db/src/schema.ts:786-913`) writes to Postgres on submit and
@@ -253,9 +254,10 @@ bandwidth budget.
 ### 4.3 Broadcasts / notifications → the killer use case
 
 `broadcasts` + `notification_deliveries`
-(`packages/db/src/schema.ts:609-697`) is a fanout queue: today FCM
-delivers, on-site FCM cannot. Replacing FCM with mesh-flood for the
-duration of the burn is the most _impactful_ change:
+(`packages/db/src/schema.ts`) is a fanout queue: the in-app inbox works
+online, the (still-unbuilt) FCM push channel would need signal, and
+on-site FCM cannot reach Google Play / APNs at all. Replacing FCM with
+mesh-flood for the duration of the burn is the most _impactful_ change:
 
 - A captain composes a broadcast. The phone signs and floods a packet
   carrying `{ id, title, body, scope, team, refType, refId, senderId,
