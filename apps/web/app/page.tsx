@@ -12,7 +12,7 @@ import {
   isApproved,
   isTeamLead,
 } from "@/lib/users";
-import { countUnread } from "@camp404/db/broadcasts";
+import { countUnread } from "@/lib/notifications";
 import { initialsFrom } from "@/lib/initials";
 import { HomeHeader } from "./home-header";
 import { LandingHero } from "./landing-hero";

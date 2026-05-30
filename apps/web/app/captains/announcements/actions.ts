@@ -7,7 +7,7 @@ import {
   deleteAnnouncementDraft,
   publishAnnouncement,
   updateAnnouncementDraft,
-} from "@camp404/db/broadcasts";
+} from "@/lib/notifications";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 

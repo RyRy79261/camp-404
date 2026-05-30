@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPendingAcknowledgements } from "@camp404/db/broadcasts";
+import { getPendingAcknowledgements } from "@/lib/notifications";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser } from "@/lib/users";
 

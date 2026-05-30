@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Bell, ChevronLeft, Megaphone, MessageSquare } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
-import { listInbox, markAllRead, type InboxItem } from "@camp404/db/broadcasts";
+import { listInbox, markAllRead, type InboxItem } from "@/lib/notifications";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 

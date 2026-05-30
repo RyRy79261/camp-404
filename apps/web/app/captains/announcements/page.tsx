@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
-import { listAnnouncements } from "@camp404/db/broadcasts";
+import { listAnnouncements } from "@/lib/notifications";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { AnnouncementsManager } from "./announcements-manager";

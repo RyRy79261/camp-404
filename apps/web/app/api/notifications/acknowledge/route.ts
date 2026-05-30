@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { acknowledgeDelivery } from "@camp404/db/broadcasts";
+import { acknowledgeDelivery } from "@/lib/notifications";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser } from "@/lib/users";
 
