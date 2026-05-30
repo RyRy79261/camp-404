@@ -30,7 +30,8 @@ export default async function HomePage() {
   }
 
   // Invite gate — god accounts (GOD_EMAILS) bypass; everyone else must have
-  // redeemed an invite code at /signup before getting past this point.
+  // redeemed an invite code before getting past this point. Without one they
+  // land on /signup/required to enter a code.
   const campUser = await ensureCampUser(user);
   if (!hasCampAccess(campUser, user.primaryEmail)) {
     redirect("/signup/required");

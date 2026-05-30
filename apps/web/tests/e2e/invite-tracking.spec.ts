@@ -1,51 +1,29 @@
 import { test, expect } from "@playwright/test";
-import { login, resetTestState } from "./_helpers";
+import { login, redeemInviteAtGate, resetTestState } from "./_helpers";
 
-// Bootstrap (env) codes and DB-backed codes follow slightly different
-// paths through `redeemInviteCode` / `claimInviteCode`. These specs assert
-// the user ends up with the code recorded on their camp user row in both
-// cases.
+// Invite codes are redeemed at the post-auth gate (/signup/required): the
+// user signs in via Neon Auth first, then enters a code to come aboard.
+// Bootstrap (env) codes and DB-backed codes follow slightly different paths
+// through `claimInviteCode`. These specs assert the user ends up with the
+// code recorded on their camp user row in both cases, and that provenance is
+// tracked back to the issuer.
 
 test.describe("invite-code redemption", () => {
   test.beforeEach(async ({ request }) => {
     await resetTestState(request);
   });
 
-  test("env (bootstrap) code: redeems on /signup, persists on the user row", async ({
+  test("env (bootstrap) code: redeems at the gate, persists on the user row", async ({
     page,
+    request,
   }) => {
-    // First half of the flow — anonymous user submits the code.
-    await page.goto("/signup");
-    await page.getByLabel("Invite code").fill("TEST-INVITE");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/auth\/sign-up/);
-
-    // Now simulate the Neon Auth signup completing by logging in our test
-    // user. The redeem cookie was set on the previous request and is
-    // reused here.
-    await login(page, { email: "fresh@example.com" });
-
-    // Hitting / triggers ensureCampUser, which sees the cookie and persists
-    // the code onto the user's row. The redirect then takes them to the
-    // questionnaire (i.e. they passed the invite gate).
-    await page.goto("/");
+    await login(page, { id: "fresh-auth", email: "fresh@example.com" });
+    await redeemInviteAtGate(page, "TEST-INVITE");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
-  });
 
-  test("invalid code: stays on /signup with an error, no cookie set", async ({
-    page,
-  }) => {
-    await page.goto("/signup");
-    await page.getByLabel("Invite code").fill("NOPE");
-    await page.getByRole("button", { name: "Continue" }).click();
-
-    // Scope to our error alert by text — Next's empty role="alert" route
-    // announcer would otherwise make a bare getByRole("alert") ambiguous.
-    await expect(
-      page.getByRole("alert").filter({ hasText: /isn't valid/i }),
-    ).toBeVisible();
-    const cookies = await page.context().cookies();
-    expect(cookies.find((c) => c.name === "camp404_invite")).toBeUndefined();
+    const lookup = await request.get("/api/test/inspect?authUserId=fresh-auth");
+    const body = (await lookup.json()) as { user: { inviteCode: string } };
+    expect(body.user.inviteCode).toBe("TEST-INVITE");
   });
 
   test("DB code: alice's invite is tracked back to alice after bob redeems it", async ({
@@ -74,15 +52,9 @@ test.describe("invite-code redemption", () => {
     expect(seedRes.ok()).toBeTruthy();
 
     // 3. Bob arrives. He's NOT a god — the only way past the gate is to
-    //    redeem a valid code. Submit at /signup first (sets cookie), then
-    //    switch the test session over to bob and hit /.
-    await page.goto("/signup");
-    await page.getByLabel("Invite code").fill("BERLIN-CREW");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/auth\/sign-up/);
-
+    //    redeem a valid code after signing in.
     await login(page, { id: "bob-auth", email: "bob@example.com" });
-    await page.goto("/");
+    await redeemInviteAtGate(page, "BERLIN-CREW");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     // 4. Provenance check: bob's user row points at BERLIN-CREW, the
@@ -109,15 +81,10 @@ test.describe("invite-code redemption", () => {
       data: { code: "VET-ME", maxUses: 1, requiresApproval: true },
     });
 
-    await page.goto("/signup");
-    await page.getByLabel("Invite code").fill("VET-ME");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/auth\/sign-up/);
-
     await login(page, { id: "vet-auth", email: "vet@example.com" });
-    // Hitting / claims the code; onboarding still owes answers so they land
+    // Redeeming claims the code; onboarding still owes answers so they land
     // on the questionnaire — but the row is already stamped `pending`.
-    await page.goto("/");
+    await redeemInviteAtGate(page, "VET-ME");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     const lookup = await request.get("/api/test/inspect?authUserId=vet-auth");
@@ -136,13 +103,8 @@ test.describe("invite-code redemption", () => {
       data: { code: "WAVE-IN", maxUses: 1, requiresApproval: false },
     });
 
-    await page.goto("/signup");
-    await page.getByLabel("Invite code").fill("WAVE-IN");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/auth\/sign-up/);
-
     await login(page, { id: "wave-auth", email: "wave@example.com" });
-    await page.goto("/");
+    await redeemInviteAtGate(page, "WAVE-IN");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     const lookup = await request.get("/api/test/inspect?authUserId=wave-auth");
@@ -156,13 +118,11 @@ test.describe("invite-code redemption", () => {
     page,
     request,
   }) => {
-    // A non-god user signs in without ever redeeming an invite at /signup
-    // (e.g. they hit the landing page's "Already found" link, or Google,
-    // instead of "Are you lost?"). No camp404_invite cookie is set.
+    // A non-god user signs in via Neon Auth without redeeming an invite.
     await login(page, { id: "stray-auth", email: "stray@example.com" });
 
-    // Hitting / runs ensureCampUser. With no code to claim they're bounced
-    // to the dead-end...
+    // Hitting / runs ensureCampUser. With no code on file they're bounced to
+    // the invite gate...
     await page.goto("/");
     await expect(page).toHaveURL(/\/signup\/required/);
 
@@ -173,46 +133,32 @@ test.describe("invite-code redemption", () => {
     expect(body.user).toBeNull();
   });
 
-  test("DB code: exhausted code can't be claimed even with a stale cookie", async ({
+  test("DB code: an exhausted code can't be claimed by a second user", async ({
     page,
     request,
-    context,
   }) => {
-    // Seed a single-use code, then simulate it being burned by alice
-    // before bob tries to use it.
+    // Seed a single-use code; alice burns it, then bob tries the same code.
     await request.post("/api/test/seed-invite", {
       data: { code: "ONE-SHOT", maxUses: 1 },
     });
 
-    // Alice claims it.
+    // Alice claims it at the gate.
     await login(page, { id: "alice-auth", email: "alice@example.com" });
-    await context.addCookies([
-      {
-        name: "camp404_invite",
-        value: "ONE-SHOT",
-        domain: "localhost",
-        path: "/",
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
-    await page.goto("/");
+    await redeemInviteAtGate(page, "ONE-SHOT");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
-    // Now bob arrives with the same code in his cookie. Claim should fail
-    // and he should get bounced to /signup/required.
+    // Bob signs in and tries the now-exhausted code — the claim fails and he
+    // stays on the gate with an error.
     await login(page, { id: "bob-auth", email: "bob@example.com" });
-    await context.addCookies([
-      {
-        name: "camp404_invite",
-        value: "ONE-SHOT",
-        domain: "localhost",
-        path: "/",
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
-    await page.goto("/");
+    await redeemInviteAtGate(page, "ONE-SHOT");
+    await expect(
+      page.getByRole("alert").filter({ hasText: /isn't valid/i }),
+    ).toBeVisible();
     await expect(page).toHaveURL(/\/signup\/required/);
+
+    // And no row was persisted for bob.
+    const lookup = await request.get("/api/test/inspect?authUserId=bob-auth");
+    const body = (await lookup.json()) as { user: unknown };
+    expect(body.user).toBeNull();
   });
 });

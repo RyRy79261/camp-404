@@ -30,14 +30,7 @@ export function LandingHero() {
 
         <div className="flex w-full max-w-xs flex-col items-center gap-2">
           <Button asChild size="lg" className="w-full">
-            <a href="/signup">Are you lost?</a>
-          </Button>
-          <Button
-            asChild
-            variant="link"
-            className="text-[color:var(--color-accent)]"
-          >
-            <a href="/auth/sign-in">Already found</a>
+            <a href="/auth/sign-in">Are you lost?</a>
           </Button>
           <p
             aria-hidden

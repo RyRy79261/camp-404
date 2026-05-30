@@ -1,41 +1,39 @@
 "use client";
 
-import * as React from "react";
 import { useActionState } from "react";
 import { Button } from "@camp404/ui/components/button";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
-import { redeemInviteCode, type RedeemInviteResult } from "./actions";
+import { submitInviteCode, type SubmitInviteResult } from "./actions";
 
-interface InviteCodeFormProps {
-  /** Path to redirect to once the code is accepted. Must start with "/". */
-  next?: string;
-  cta?: string;
-  title?: string;
-  subtitle?: string;
-}
-
-export function InviteCodeForm({
-  next = "/auth/sign-up",
-  cta = "Continue",
-  title = "Welcome to Camp 404",
-  subtitle = "Camp 404 is invite-only. Drop your code below and we'll get you logged in — password or Google, your call.",
-}: InviteCodeFormProps) {
+/**
+ * Invite-code entry for an already-signed-in user. Posts to the
+ * `submitInviteCode` server action, which claims the code onto their row and
+ * redirects home on success; on failure the returned error renders inline.
+ */
+export function InviteGateForm({ email }: { email: string | null }) {
   const [state, formAction, isPending] = useActionState<
-    RedeemInviteResult | null,
+    SubmitInviteResult | null,
     FormData
-  >(redeemInviteCode, null);
+  >(submitInviteCode, null);
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-2xl font-bold">{title}</h1>
+        <h1 className="text-2xl font-bold">One more thing</h1>
         <p className="text-balance text-sm text-[color:var(--color-muted-foreground)]">
-          {subtitle}
+          {email ? (
+            <>
+              You're signed in as{" "}
+              <span className="font-medium text-[color:var(--color-foreground)]">
+                {email}
+              </span>
+              .{" "}
+            </>
+          ) : null}
+          Camp 404 is invite-only — drop your code below to come aboard.
         </p>
       </div>
-
-      <input type="hidden" name="next" value={next} />
 
       <div className="grid gap-2">
         <Label htmlFor="invite-code">Invite code</Label>
@@ -57,7 +55,15 @@ export function InviteCodeForm({
       )}
 
       <Button type="submit" className="w-full" disabled={isPending}>
-        {isPending ? "Checking…" : cta}
+        {isPending ? "Checking…" : "Enter camp"}
+      </Button>
+
+      <Button
+        asChild
+        variant="link"
+        className="text-[color:var(--color-muted-foreground)]"
+      >
+        <a href="/auth/sign-out">Sign out</a>
       </Button>
     </form>
   );

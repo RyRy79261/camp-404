@@ -1,48 +1,50 @@
 import { test, expect } from "@playwright/test";
+import { login, resetTestState } from "./_helpers";
 
-// These specs rely on the dev server having INVITE_CODES=TEST-INVITE in
-// its environment. See playwright.config.ts's `webServer.env`.
+// The invite gate now lives AFTER auth: a signed-in user without a code on
+// file is held at /signup/required until they enter a valid one. These specs
+// rely on E2E_TEST_MODE=1 (test login route) and INVITE_CODES=TEST-INVITE in
+// the dev server env. See playwright.config.ts's `webServer.env`.
 
-test.describe("invite-code gate", () => {
-  test("renders the invite form on /signup", async ({ page }) => {
-    await page.goto("/signup");
-    await expect(page.getByLabel("Invite code")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
+test.describe("invite-code gate (post-auth)", () => {
+  test.beforeEach(async ({ request }) => {
+    await resetTestState(request);
   });
 
-  test("an invalid code surfaces an error and stays on /signup", async ({
+  test("renders the invite form for a signed-in user without a code", async ({
     page,
   }) => {
-    await page.goto("/signup");
+    await login(page, { email: "newbie@example.com" });
+    await page.goto("/signup/required");
+    await expect(page.getByLabel("Invite code")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Enter camp" }),
+    ).toBeVisible();
+  });
+
+  test("an invalid code surfaces an error and stays on the gate", async ({
+    page,
+  }) => {
+    await login(page, { email: "newbie@example.com" });
+    await page.goto("/signup/required");
     await page.getByLabel("Invite code").fill("DEFINITELY-NOT-VALID");
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("button", { name: "Enter camp" }).click();
 
     // Scope to our error alert by text — Next injects its own empty
-    // role="alert" route announcer (#__next-route-announcer__) on every page,
-    // so a bare getByRole("alert") is a strict-mode collision.
+    // role="alert" route announcer on every page, so a bare getByRole("alert")
+    // is a strict-mode collision.
     await expect(
       page.getByRole("alert").filter({ hasText: /isn't valid/i }),
     ).toBeVisible();
-    await expect(page).toHaveURL(/\/signup$/);
-    // Cookie must NOT have been set on a bad code.
-    const cookies = await page.context().cookies();
-    expect(cookies.find((c) => c.name === "camp404_invite")).toBeUndefined();
+    await expect(page).toHaveURL(/\/signup\/required/);
   });
 
-  test("a valid code sets the cookie and redirects to the sign-up page", async ({
-    page,
-  }) => {
-    await page.goto("/signup");
+  test("a valid code unlocks the questionnaire", async ({ page }) => {
+    await login(page, { id: "gate-auth", email: "gate@example.com" });
+    await page.goto("/signup/required");
     await page.getByLabel("Invite code").fill("TEST-INVITE");
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("button", { name: "Enter camp" }).click();
 
-    // Neon Auth's sign-up UI lives under /auth/sign-up (the form's default
-    // `next`). We don't assert anything about its DOM, just that the redirect
-    // happened and our cookie is set.
-    await expect(page).toHaveURL(/\/auth\/sign-up/);
-    const cookies = await page.context().cookies();
-    const invite = cookies.find((c) => c.name === "camp404_invite");
-    expect(invite?.value).toBe("TEST-INVITE");
-    expect(invite?.httpOnly).toBe(true);
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
   });
 });

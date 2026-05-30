@@ -83,7 +83,7 @@ export async function GET(req: Request) {
     return errorPage(
       403,
       "no_camp_account",
-      "You're signed in, but you don't have a Camp 404 profile yet. Complete signup at /signup before connecting Claude.",
+      "You're signed in, but you don't have a Camp 404 profile yet. Open the app and enter your invite code before connecting Claude.",
     );
   }
 

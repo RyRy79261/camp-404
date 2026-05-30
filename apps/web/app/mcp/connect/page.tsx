@@ -73,8 +73,8 @@ function MCPConnectInner() {
       )}
       <p className="mt-4 text-xs text-[color:var(--color-muted-foreground)]">
         Don't have a camp account yet?{" "}
-        <a className="underline" href="/signup">
-          Sign up first
+        <a className="underline" href="/auth/sign-in">
+          Sign in first
         </a>
         .
       </p>

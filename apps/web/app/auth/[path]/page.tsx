@@ -1,17 +1,12 @@
 import { Suspense } from "react";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { AuthView } from "@neondatabase/auth/react/ui";
 import { AuthShell } from "@/components/auth-shell";
-import { INVITE_COOKIE } from "@/lib/access-control";
 import { SignInForm } from "../sign-in-form";
 import { SignUpForm } from "../sign-up-form";
 
-// Reads the invite cookie for the sign-up guard — can't be statically
-// prerendered. `dynamicParams` is left at the default (true) so any
-// auth subpath Neon Auth ends up redirecting to (error states,
-// provider-specific paths, …) renders via the AuthView fallback rather
-// than 404ing.
+// `dynamicParams` is left at the default (true) so any auth subpath Neon
+// Auth ends up redirecting to (error states, provider-specific paths, …)
+// renders via the AuthView fallback rather than 404ing.
 export const dynamic = "force-dynamic";
 
 export default async function AuthPage({
@@ -22,10 +17,9 @@ export default async function AuthPage({
   const { path } = await params;
 
   if (path === "sign-up") {
-    const cookieStore = await cookies();
-    if (!cookieStore.get(INVITE_COOKIE)?.value) {
-      redirect("/signup");
-    }
+    // Sign-up is open — the invite check happens after auth at the
+    // /signup/required gate, since we can't stop Neon Auth (Google
+    // especially) from creating an identity at sign-in time.
     return (
       <AuthShell hideBack>
         <SignUpForm />

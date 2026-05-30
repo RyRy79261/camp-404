@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { Button } from "@camp404/ui/components/button";
 import { AuthShell } from "@/components/auth-shell";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { InviteGateForm } from "./invite-gate-form";
 
 // Pulls the Neon Auth session via cookies — can't be statically prerendered.
 export const dynamic = "force-dynamic";
@@ -12,12 +12,12 @@ export const metadata = {
 };
 
 /**
- * Edge-case dead-end: an authenticated user has somehow landed without
- * an invite code on their row (e.g. created their account in a window
- * where the cookie had expired). They can't enter a code here — the
- * invite code form lives ONLY on /signup, never anywhere a logged-in
- * user can reach. Their only option is to sign out and start over via
- * the invite link they were given.
+ * The post-auth invite gate. We can't stop Neon Auth from creating an
+ * identity when someone signs in (Google especially), so the invite check
+ * lives here instead of before sign-up: a signed-in user with no code on
+ * file lands on this screen and can't reach the questionnaire until they
+ * enter a valid one. Anyone who already has access (a god account, or a code
+ * already redeemed) is forwarded straight home.
  */
 export default async function SignupRequiredPage() {
   const authUser = await getAuthenticatedUserOrRedirect();
@@ -27,22 +27,8 @@ export default async function SignupRequiredPage() {
   }
 
   return (
-    <AuthShell hideBack>
-      <div className="flex flex-col items-center gap-6 text-center">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-bold">You're not on the list — yet</h1>
-          <p className="text-balance text-sm text-[color:var(--color-muted-foreground)]">
-            You're signed in but the camp doesn't see an invite for{" "}
-            <span className="font-medium text-[color:var(--color-foreground)]">
-              {authUser.primaryEmail ?? "this account"}
-            </span>
-            . Sign out and start again from the invite link you were given.
-          </p>
-        </div>
-        <Button asChild className="w-full">
-          <a href="/auth/sign-out">Sign out</a>
-        </Button>
-      </div>
+    <AuthShell hideBack footer="Camp 404 is invite-only.">
+      <InviteGateForm email={authUser.primaryEmail} />
     </AuthShell>
   );
 }
