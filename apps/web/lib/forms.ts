@@ -14,6 +14,7 @@ import { QUESTIONNAIRE } from "./questionnaire";
 import {
   getBurnerProfile,
   getIdDocuments,
+  satisfyBurnerProfileAction,
   setIdDocuments,
   upsertBurnerProfile,
 } from "./users";
@@ -79,6 +80,9 @@ const BURNER_PROFILE: ReplayableForm = {
       markComplete: true,
     });
     if (idNumber) await setIdDocuments(userId, { idType, idNumber });
+    // A re-submit also re-satisfies the gate (e.g. after a captain re-activates
+    // the questionnaire with a new version).
+    await satisfyBurnerProfileAction(userId);
   },
 };
 

@@ -6,6 +6,7 @@ import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
   hasCampAccess,
+  satisfyBurnerProfileAction,
   setIdDocuments,
   setProfileImage,
   upsertBurnerProfile,
@@ -66,6 +67,11 @@ export async function saveBurnerProfile(
     await setProfileImage(campUser.id, image.length > 0 ? image : null);
   }
 
-  if (final) redirect("/");
+  if (final) {
+    // Completing the profile satisfies the burner-profile required action that
+    // gates the app (no-op under E2E test mode — the fallback gate covers it).
+    await satisfyBurnerProfileAction(campUser.id);
+    redirect("/");
+  }
   return { ok: true };
 }
