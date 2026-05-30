@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { findUserByAuthId } from "@camp404/db/burner-profile";
+import {
+  findUserByAuthId,
+  getBurnerProfileByUserId,
+} from "@camp404/db/burner-profile";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { hasCampAccess, isApproved } from "@/lib/users";
+import { mcpAccessError } from "@/lib/mcp/access";
 import {
   DEFAULT_SCOPE,
   findClient,
@@ -87,6 +92,17 @@ export async function GET(req: Request) {
     );
   }
 
+  // Mirror the app's own gate — a token must not be issued to a member who
+  // lacks camp access, hasn't finished onboarding, or is awaiting captain
+  // approval (each of which blocks them in the app itself).
+  const profile = await getBurnerProfileByUserId(campUser.id);
+  const denied = mcpAccessError({
+    hasCampAccess: hasCampAccess(campUser, authUser.primaryEmail),
+    profileComplete: !!profile?.completedAt,
+    isApproved: isApproved(campUser, authUser.primaryEmail),
+  });
+  if (denied) return errorPage(403, denied.error, denied.description);
+
   return consentHtml({
     clientName: resolved.client.clientName,
     scope: resolved.scope,
@@ -144,6 +160,14 @@ export async function POST(req: Request) {
       "No Camp 404 profile for this account.",
     );
   }
+
+  const profile = await getBurnerProfileByUserId(campUser.id);
+  const denied = mcpAccessError({
+    hasCampAccess: hasCampAccess(campUser, authUser.primaryEmail),
+    profileComplete: !!profile?.completedAt,
+    isApproved: isApproved(campUser, authUser.primaryEmail),
+  });
+  if (denied) return errorPage(403, denied.error, denied.description);
 
   const code = await issueAuthCode({
     clientId: parsed.data.client_id,

@@ -4,6 +4,7 @@ import {
   isAllowedRedirectUri,
   registerClient,
 } from "@/lib/mcp/oauth";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +26,25 @@ const RegisterRequest = z.object({
 // Hardening: redirect URIs must be on a known MCP-client domain (loopback,
 // claude.ai, anthropic.com) — see briefing gotcha — otherwise reject 400.
 export async function POST(req: Request) {
+  const limited = rateLimit(`mcp-register:${getClientIp(req.headers)}`, {
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (!limited.ok) {
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        error_description: "Too many registration attempts.",
+      },
+      {
+        status: 429,
+        headers: {
+          ...CORS_HEADERS,
+          "retry-after": String(limited.retryAfterSeconds),
+        },
+      },
+    );
+  }
   let body: unknown;
   try {
     body = await req.json();

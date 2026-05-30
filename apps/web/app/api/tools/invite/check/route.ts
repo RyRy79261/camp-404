@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { findInviteCodeByCode } from "@camp404/db/invite-codes";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 import {
   CODE_RULES_HINT,
   isSyntacticallyValidCode,
@@ -18,6 +19,21 @@ export async function GET(req: Request) {
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // Throttle the existence oracle so a signed-in account can't enumerate codes.
+  const limited = rateLimit(`invite-check:${user.id}`, {
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "rate_limited" },
+      {
+        status: 429,
+        headers: { "retry-after": String(limited.retryAfterSeconds) },
+      },
+    );
   }
 
   const url = new URL(req.url);
