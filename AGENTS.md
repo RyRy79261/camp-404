@@ -136,8 +136,12 @@ version instead.
 
 ## Cron jobs
 
-All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}` and
-are scheduled in `apps/web/vercel.json`.
+All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
+Scheduled routes are registered in `apps/web/vercel.json` (recipes, manuals,
+reminders). `telegram/dispatch` is intentionally **not** scheduled yet —
+nothing enqueues announcements until the notifications work lands, and Vercel's
+daily-cron cap means it will be scheduled (or folded into an inline send) only
+once there is a queue to drain (see the route's own comment).
 
 ## Conventions
 

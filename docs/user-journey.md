@@ -206,7 +206,7 @@ flowchart LR
     TOOLS --> FORMS[My forms<br/>review & edit answers]
     TOOLS --> FT[Family tree<br/>who brought who]
 
-    INV -->|share code| NEW([another lost burner →<br/>back to /signup])
+    INV -->|share code| NEW([another lost burner →<br/>back to landing / sign-in])
     FORMS --> REPLAY[Replay form + change log]
     FT --> GRAPH[Referral roster graph<br/>roots = pre-invite accounts]
 ```
