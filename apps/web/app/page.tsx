@@ -12,6 +12,7 @@ import {
   isApproved,
   isTeamLead,
 } from "@/lib/users";
+import { countUnread } from "@/lib/notifications";
 import { initialsFrom } from "@/lib/initials";
 import { HomeHeader } from "./home-header";
 import { LandingHero } from "./landing-hero";
@@ -52,6 +53,9 @@ export default async function HomePage() {
   }
 
   const initials = initialsFrom(campUser.displayName ?? user.primaryEmail);
+  // Kick off the unread count alongside the team-lead probe below rather than
+  // serially before it.
+  const unreadPromise = countUnread(campUser.id);
 
   // Map the stored rank (+ derived team-lead) onto the control panel's three
   // layers. Captains unlock the captain layer (and Camp Management); a lead
@@ -63,12 +67,18 @@ export default async function HomePage() {
         ? "team_lead"
         : "camp_member";
 
+  const unreadNotifications = await unreadPromise;
+
   return (
     <ControlPanel
       layers={homeLayers}
       viewerRank={viewerRank}
       header={
-        <HomeHeader initials={initials} imageUrl={campUser.profileImageUrl} />
+        <HomeHeader
+          initials={initials}
+          imageUrl={campUser.profileImageUrl}
+          notifications={unreadNotifications}
+        />
       }
       centre={{ label: "TALK" }}
     />
@@ -146,7 +156,8 @@ const homeLayers: ControlPanelLayer[] = [
     },
     bottomRight: {
       label: "Camp Tools",
-      hint: "Registrations, ops…",
+      hint: "Announcements, ops…",
+      href: "/captains/tools",
       icon: <Wrench className="h-5 w-5" />,
     },
   },

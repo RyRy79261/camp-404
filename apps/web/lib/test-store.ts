@@ -56,11 +56,40 @@ interface TestInviteCode {
   createdAt: Date;
 }
 
+type TestPresentation = "acknowledge" | "popup" | "feed";
+
+// In-memory stand-ins for the `broadcasts` and `notification_deliveries`
+// tables. An announcement is a broadcast with `publishedAt === null` while a
+// draft; publishing fans it out into one delivery per recipient.
+interface TestBroadcast {
+  id: string;
+  senderId: string | null;
+  title: string;
+  body: string;
+  presentation: TestPresentation;
+  publishedAt: Date | null;
+  createdAt: Date;
+}
+
+interface TestDelivery {
+  id: string;
+  broadcastId: string | null;
+  userId: string;
+  title: string;
+  body: string;
+  presentation: TestPresentation;
+  readAt: Date | null;
+  acknowledgedAt: Date | null;
+  createdAt: Date;
+}
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
   inviteCodes: Map<string, TestInviteCode>;
   questionnaireEdits: TestQuestionnaireEdit[];
+  broadcasts: TestBroadcast[];
+  deliveries: TestDelivery[];
   nextSerial: number;
 }
 
@@ -83,6 +112,8 @@ function globalState(): TestStoreState {
       profilesByUserId: new Map<string, TestBurnerProfile>(),
       inviteCodes: new Map<string, TestInviteCode>(),
       questionnaireEdits: [] as TestQuestionnaireEdit[],
+      broadcasts: [] as TestBroadcast[],
+      deliveries: [] as TestDelivery[],
       nextSerial: 1,
     } satisfies TestStoreState;
   }
@@ -96,6 +127,15 @@ const usersByAuthId = S.usersByAuthId;
 const profilesByUserId = S.profilesByUserId;
 const inviteCodes = S.inviteCodes;
 const questionnaireEdits = S.questionnaireEdits;
+const broadcasts = S.broadcasts;
+const deliveries = S.deliveries;
+
+function findUserById(userId: string): TestUser | null {
+  for (const user of usersByAuthId.values()) {
+    if (user.id === userId) return user;
+  }
+  return null;
+}
 
 function nextId(): string {
   return `test-user-${S.nextSerial++}`;
@@ -291,11 +331,217 @@ export const testStore = {
     return row;
   },
 
+  // --- Announcements & notifications ------------------------------------
+
+  createBroadcastDraft(input: {
+    senderId: string;
+    title: string;
+    body: string;
+    presentation: TestPresentation;
+  }): { id: string } {
+    const row: TestBroadcast = {
+      id: crypto.randomUUID(),
+      senderId: input.senderId,
+      title: input.title,
+      body: input.body,
+      presentation: input.presentation,
+      publishedAt: null,
+      createdAt: new Date(),
+    };
+    broadcasts.push(row);
+    return { id: row.id };
+  },
+  updateBroadcastDraft(input: {
+    id: string;
+    senderId: string;
+    title: string;
+    body: string;
+    presentation: TestPresentation;
+  }): boolean {
+    const row = broadcasts.find(
+      (b) =>
+        b.id === input.id &&
+        b.senderId === input.senderId &&
+        b.publishedAt === null,
+    );
+    if (!row) return false;
+    row.title = input.title;
+    row.body = input.body;
+    row.presentation = input.presentation;
+    return true;
+  },
+  deleteBroadcastDraft(input: { id: string; senderId: string }): boolean {
+    const idx = broadcasts.findIndex(
+      (b) =>
+        b.id === input.id &&
+        b.senderId === input.senderId &&
+        b.publishedAt === null,
+    );
+    if (idx === -1) return false;
+    broadcasts.splice(idx, 1);
+    return true;
+  },
+  publishBroadcast(input: {
+    id: string;
+    senderId: string;
+  }): { ok: true; recipientCount: number } | { ok: false; error: string } {
+    const row = broadcasts.find(
+      (b) =>
+        b.id === input.id &&
+        b.senderId === input.senderId &&
+        b.publishedAt === null,
+    );
+    if (!row) {
+      return {
+        ok: false,
+        error: "Draft not found, already published, or not yours.",
+      };
+    }
+    row.publishedAt = new Date();
+    const recipients = [...usersByAuthId.values()].filter(
+      (u) => u.id !== input.senderId,
+    );
+    for (const u of recipients) {
+      deliveries.push({
+        id: crypto.randomUUID(),
+        broadcastId: row.id,
+        userId: u.id,
+        title: row.title,
+        body: row.body,
+        presentation: row.presentation,
+        readAt: null,
+        acknowledgedAt: null,
+        createdAt: new Date(),
+      });
+    }
+    return { ok: true, recipientCount: recipients.length };
+  },
+  listBroadcasts(): Array<{
+    id: string;
+    title: string;
+    body: string;
+    presentation: TestPresentation;
+    senderId: string | null;
+    senderName: string | null;
+    publishedAt: Date | null;
+    createdAt: Date;
+    recipientCount: number;
+    acknowledgedCount: number;
+  }> {
+    return [...broadcasts]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((b) => {
+        const own = deliveries.filter((d) => d.broadcastId === b.id);
+        return {
+          id: b.id,
+          title: b.title,
+          body: b.body,
+          presentation: b.presentation,
+          senderId: b.senderId,
+          senderName: b.senderId
+            ? (findUserById(b.senderId)?.displayName ?? null)
+            : null,
+          publishedAt: b.publishedAt,
+          createdAt: b.createdAt,
+          recipientCount: own.length,
+          acknowledgedCount: own.filter((d) => d.acknowledgedAt !== null)
+            .length,
+        };
+      });
+  },
+  getPendingAcknowledgements(userId: string): Array<{
+    deliveryId: string;
+    title: string;
+    body: string;
+    senderName: string | null;
+    createdAt: Date;
+  }> {
+    return deliveries
+      .filter(
+        (d) =>
+          d.userId === userId &&
+          d.presentation === "acknowledge" &&
+          d.acknowledgedAt === null,
+      )
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((d) => {
+        const b = broadcasts.find((x) => x.id === d.broadcastId);
+        return {
+          deliveryId: d.id,
+          title: d.title,
+          body: d.body,
+          senderName: b?.senderId
+            ? (findUserById(b.senderId)?.displayName ?? null)
+            : null,
+          createdAt: d.createdAt,
+        };
+      });
+  },
+  acknowledgeDelivery(input: { deliveryId: string; userId: string }): boolean {
+    const d = deliveries.find(
+      (x) =>
+        x.id === input.deliveryId &&
+        x.userId === input.userId &&
+        x.presentation === "acknowledge" &&
+        x.acknowledgedAt === null,
+    );
+    if (!d) return false;
+    const now = new Date();
+    d.acknowledgedAt = now;
+    d.readAt = now;
+    return true;
+  },
+  listInbox(userId: string): Array<{
+    id: string;
+    title: string;
+    body: string;
+    presentation: TestPresentation;
+    senderName: string | null;
+    readAt: Date | null;
+    acknowledgedAt: Date | null;
+    createdAt: Date;
+  }> {
+    return deliveries
+      .filter((d) => d.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((d) => {
+        const b = broadcasts.find((x) => x.id === d.broadcastId);
+        return {
+          id: d.id,
+          title: d.title,
+          body: d.body,
+          presentation: d.presentation,
+          senderName: b?.senderId
+            ? (findUserById(b.senderId)?.displayName ?? null)
+            : null,
+          readAt: d.readAt,
+          acknowledgedAt: d.acknowledgedAt,
+          createdAt: d.createdAt,
+        };
+      });
+  },
+  countUnread(userId: string): number {
+    return deliveries.filter((d) => d.userId === userId && d.readAt === null)
+      .length;
+  },
+  markRead(userId: string, ids: string[]): void {
+    if (ids.length === 0) return;
+    const now = new Date();
+    const idSet = new Set(ids);
+    for (const d of deliveries) {
+      if (d.userId === userId && d.readAt === null && idSet.has(d.id)) {
+        d.readAt = now;
+      }
+    }
+  },
+
   reset(): void {
     usersByAuthId.clear();
     profilesByUserId.clear();
     inviteCodes.clear();
     questionnaireEdits.length = 0;
+    broadcasts.length = 0;
+    deliveries.length = 0;
     S.nextSerial = 1;
   },
 };

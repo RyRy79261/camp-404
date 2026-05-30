@@ -153,6 +153,18 @@ export async function getBurnerProfile(
 }
 
 /**
+ * Read-only lookup of the camp user for an auth session — no cookie handling
+ * or invite-code writes (unlike {@link ensureCampUser}). For hot paths that
+ * just need the existing row, e.g. gating the avatar proxy on every image load.
+ */
+export async function findCampUserByAuthId(
+  authUserId: string,
+): Promise<CampUser | null> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  return store.findUserByAuthId(authUserId);
+}
+
+/**
  * Whether this user is allowed past the signup gate (god account or has
  * redeemed a valid invite code). Note this is the *invite* gate only — a
  * member can be camp-active but still awaiting captain approval; use

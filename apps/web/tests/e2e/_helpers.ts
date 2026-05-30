@@ -35,7 +35,9 @@ export async function login(page: Page, user: LoginUser = {}): Promise<void> {
 }
 
 /** Clear the test-mode user store and the auth/invite cookies. */
-export async function resetTestState(request: APIRequestContext): Promise<void> {
+export async function resetTestState(
+  request: APIRequestContext,
+): Promise<void> {
   await request.post("/api/test/reset");
 }
 
@@ -76,6 +78,23 @@ export async function redeemInviteAtGate(
   await expect(page.getByLabel("Invite code")).toBeVisible();
   await page.getByLabel("Invite code").fill(code);
   await page.getByRole("button", { name: "Enter camp" }).click();
+}
+
+/**
+ * Force a test user's rank via the test seam. Lets a spec promote a user to
+ * captain to reach captain-only surfaces without minting a captain invite and
+ * walking the redeem flow. The user row must already exist (hit a gated page
+ * once after login so `ensureCampUser` creates it).
+ */
+export async function setRank(
+  request: APIRequestContext,
+  authUserId: string,
+  rank: "captain" | "member",
+): Promise<void> {
+  const res = await request.post("/api/test/set-rank", {
+    data: { authUserId, rank },
+  });
+  if (!res.ok()) throw new Error(`setRank failed: ${res.status()}`);
 }
 
 /** Clear cookies for an existing Browser context. */

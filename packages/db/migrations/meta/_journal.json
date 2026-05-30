@@ -71,6 +71,13 @@
       "when": 1780092379807,
       "tag": "0009_busy_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780145824107,
+      "tag": "0010_loud_genesis",
+      "breakpoints": true
     }
   ]
 }
