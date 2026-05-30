@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
+import type { CampMemberDetail } from "@camp404/db/roster";
 import {
   splitIdNumber,
   mergeIdNumber,
   idColumnsFor,
   ID_NUMBER_KEY,
 } from "@camp404/db/id-documents";
+import { presentMemberDetail } from "../member-detail";
 
 describe("splitIdNumber", () => {
   it("removes id.number, returns idType + idNumber, keeps id.type", () => {
@@ -61,5 +63,34 @@ describe("idColumnsFor", () => {
       passportEncrypted: null,
       saIdEncrypted: "ct",
     });
+  });
+});
+
+describe("captain member-detail render", () => {
+  it("shows id.number once it has been merged into the responses", () => {
+    const detail: CampMemberDetail = {
+      id: "u1",
+      displayName: "Test Burner",
+      rank: "member",
+      approvalStatus: "approved",
+      approvalDecidedAt: null,
+      approvalDecidedByName: null,
+      onboardingComplete: true,
+      onboardingVersion: "v",
+      responses: mergeIdNumber(
+        { "id.type": "passport" },
+        { idType: "passport", idNumber: "A12345678" },
+      ),
+      passportEncrypted: null,
+      saIdEncrypted: null,
+      inviteCode: null,
+      inviteNote: null,
+      invitedByName: null,
+      createdAt: new Date(),
+    };
+    const flat = presentMemberDetail(detail).profileSections.flatMap(
+      (s) => s.items,
+    );
+    expect(flat.some((i) => i.value === "A12345678")).toBe(true);
   });
 });

@@ -126,6 +126,9 @@ export interface CampMemberDetail {
   onboardingVersion: string | null;
   /** Raw burner-profile answers, keyed by question id, for the profile tabs. */
   responses: Record<string, unknown>;
+  /** Encrypted government ID columns. Decrypt only behind the captain gate. */
+  passportEncrypted: string | null;
+  saIdEncrypted: string | null;
   /** The code this member redeemed to join (NULL for god/founder accounts). */
   inviteCode: string | null;
   /** Free-text note the inviter left when minting the code. */
@@ -152,6 +155,8 @@ export async function getCampMemberDetail(
       onboardingCompletedAt: schema.burnerProfiles.completedAt,
       onboardingVersion: schema.burnerProfiles.version,
       responses: schema.burnerProfiles.responses,
+      passportEncrypted: schema.users.passportEncrypted,
+      saIdEncrypted: schema.users.saIdEncrypted,
       inviteCode: schema.users.inviteCode,
       inviteNote: schema.inviteCodes.note,
       invitedByName: inviter.displayName,
@@ -183,6 +188,8 @@ export async function getCampMemberDetail(
     onboardingComplete: r.onboardingCompletedAt != null,
     onboardingVersion: r.onboardingVersion,
     responses: (r.responses as Record<string, unknown>) ?? {},
+    passportEncrypted: r.passportEncrypted,
+    saIdEncrypted: r.saIdEncrypted,
     inviteCode: r.inviteCode,
     inviteNote: r.inviteNote,
     invitedByName: r.invitedByName,
