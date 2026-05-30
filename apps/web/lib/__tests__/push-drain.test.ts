@@ -81,4 +81,25 @@ describe("planPushDrain", () => {
     );
     expect(calls).toBe(3); // 500 + 500 + 100
   });
+
+  it("does not re-send to a token pruned earlier in the same run", async () => {
+    let calls = 0;
+    const send: PushSend = async (toks) => {
+      calls++;
+      return toks.map((t) => ({
+        token: t,
+        success: false,
+        errorCode: "messaging/registration-token-not-registered",
+      }));
+    };
+    const { statusById, deadTokens } = await planPushDrain(
+      [delivery("d1", "u1"), delivery("d2", "u1")],
+      new Map([["u1", ["dead"]]]),
+      send,
+    );
+    expect(statusById.get("d1")).toBe("failed");
+    expect(statusById.get("d2")).toBe("skipped"); // dead token filtered out
+    expect([...deadTokens]).toEqual(["dead"]);
+    expect(calls).toBe(1); // only d1 attempted a send
+  });
 });

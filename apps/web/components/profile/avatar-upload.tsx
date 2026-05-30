@@ -42,10 +42,8 @@ export function AvatarUpload({ value, onChange, className }: AvatarUploadProps) 
     setUploading(true);
     try {
       const blob = await cropResizeToSquare(file);
-      setPreview((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return URL.createObjectURL(blob);
-      });
+      // The useEffect cleanup (keyed on `preview`) revokes the previous URL.
+      setPreview(URL.createObjectURL(blob));
       const body = new FormData();
       body.append("image", new File([blob], "avatar.webp", { type: blob.type }));
 
@@ -111,10 +109,7 @@ export function AvatarUpload({ value, onChange, className }: AvatarUploadProps) 
             type="button"
             onClick={() => {
               setError(null);
-              setPreview((prev) => {
-                if (prev) URL.revokeObjectURL(prev);
-                return null;
-              });
+              setPreview(null);
               onChange(null);
             }}
             aria-label="Remove profile photo"

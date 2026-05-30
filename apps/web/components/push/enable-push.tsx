@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getToken, onMessage } from "firebase/messaging";
+import { z } from "zod";
 import { Button } from "@camp404/ui/components/button";
 import { getMessagingIfSupported, VAPID_KEY } from "@/lib/firebase-client";
 
@@ -13,6 +14,13 @@ import { getMessagingIfSupported, VAPID_KEY } from "@/lib/firebase-client";
 // nothing when push is unsupported/unconfigured or already denied.
 
 type State = "loading" | "unavailable" | "default" | "granted" | "denied";
+
+// Validate the FCM payload before constructing a Notification (it's external
+// input from the push service).
+const FcmNotification = z.object({
+  title: z.string().min(1),
+  body: z.string().optional(),
+});
 
 async function registerToken(): Promise<boolean> {
   const messaging = await getMessagingIfSupported();
@@ -30,21 +38,13 @@ async function registerToken(): Promise<boolean> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token, platform: "web" }),
   });
-
-  // Foreground messages don't fire the service worker's onBackgroundMessage,
-  // so surface them ourselves while the app is focused.
-  onMessage(messaging, (payload) => {
-    const n = payload.notification;
-    if (n?.title && Notification.permission === "granted") {
-      new Notification(n.title, { body: n.body ?? "", icon: "/icon.svg" });
-    }
-  });
   return true;
 }
 
 export function EnablePush() {
   const [state, setState] = useState<State>("loading");
 
+  // Detect support + current permission; register the token if already granted.
   useEffect(() => {
     let active = true;
     (async () => {
@@ -60,7 +60,6 @@ export function EnablePush() {
       }
       if (Notification.permission === "granted") {
         setState("granted");
-        // Refresh the token on every load — tokens rotate.
         registerToken().catch(() => {});
       } else if (Notification.permission === "denied") {
         setState("denied");
@@ -72,6 +71,31 @@ export function EnablePush() {
       active = false;
     };
   }, []);
+
+  // Foreground messages don't fire the service worker's onBackgroundMessage, so
+  // surface them ourselves. Registered ONCE while granted and unsubscribed on
+  // cleanup, so a remount can't stack duplicate listeners.
+  useEffect(() => {
+    if (state !== "granted") return;
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+    (async () => {
+      const messaging = await getMessagingIfSupported();
+      if (!active || !messaging) return;
+      unsubscribe = onMessage(messaging, (payload) => {
+        const parsed = FcmNotification.safeParse(payload.notification);
+        if (!parsed.success || Notification.permission !== "granted") return;
+        new Notification(parsed.data.title, {
+          body: parsed.data.body ?? "",
+          icon: "/icon.svg",
+        });
+      });
+    })();
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [state]);
 
   if (state !== "default") return null;
 

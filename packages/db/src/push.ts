@@ -85,7 +85,11 @@ export async function planPushDrain(
   const statusById = new Map<string, "sent" | "failed" | "skipped">();
   const deadTokens = new Set<string>();
   for (const d of queued) {
-    const tokens = tokensByUser.get(d.userId) ?? [];
+    // Exclude tokens already classified dead earlier in this run so we don't
+    // re-send to (and re-collect) a token a prior delivery already pruned.
+    const tokens = (tokensByUser.get(d.userId) ?? []).filter(
+      (t) => !deadTokens.has(t),
+    );
     if (tokens.length === 0) {
       statusById.set(d.id, "skipped");
       continue;
