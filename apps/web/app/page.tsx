@@ -8,10 +8,12 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import {
   ensureCampUser,
   getBurnerProfile,
+  getPendingRequiredActions,
   hasCampAccess,
   isApproved,
   isTeamLead,
 } from "@/lib/users";
+import { nextGate } from "@/lib/required-actions";
 import { countUnread } from "@/lib/notifications";
 import { initialsFrom } from "@/lib/initials";
 import { HomeHeader } from "./home-header";
@@ -38,8 +40,15 @@ export default async function HomePage() {
     redirect("/signup/required");
   }
 
-  // Mandatory burner-profile questionnaire — everything else is gated until
-  // it's done.
+  // Generic required_actions gate — the canonical "what blocks this user"
+  // mechanism. Routes to the first pending blocking action's bespoke page
+  // (today: the burner profile; future questionnaires slot in via the registry).
+  const gate = nextGate(await getPendingRequiredActions(campUser.id));
+  if (gate) redirect(gate);
+
+  // Belt-and-braces fallback (one release): until every member is guaranteed a
+  // seeded burner_profile required action, also honour the legacy completedAt
+  // check. Drop once required_actions seeding is confirmed in prod.
   const profile = await getBurnerProfile(campUser.id);
   if (!profile?.completedAt) {
     redirect("/onboarding/questionnaire");
