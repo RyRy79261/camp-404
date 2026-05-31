@@ -105,14 +105,15 @@ export async function submitFeedbackAction(
   }
 
   const repo = (process.env.GITHUB_FEEDBACK_REPO || DEFAULT_REPO).trim();
-  const [owner, name] = repo.split("/");
-  if (!owner || !name) {
+  const segments = repo.split("/").map((s) => s.trim()).filter(Boolean);
+  if (segments.length !== 2) {
     console.error("submitFeedbackAction: GITHUB_FEEDBACK_REPO is misconfigured:", repo);
     return {
       ok: false,
       error: "Feedback isn't configured correctly. Let a camp captain know.",
     };
   }
+  const [owner, name] = segments;
 
   try {
     const res = await fetch(

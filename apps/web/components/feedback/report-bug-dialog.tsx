@@ -78,21 +78,38 @@ export function ReportBugDialog({
   function handleSubmit() {
     setError(null);
     startTransition(async () => {
-      const res = await submitFeedbackAction({
-        kind,
-        description,
-        dictated,
-        route: typeof window !== "undefined" ? window.location.pathname : undefined,
-      });
-      if (res.ok) setResult(res);
-      else setError(res.error);
+      try {
+        const res = await submitFeedbackAction({
+          kind,
+          description,
+          dictated,
+          route:
+            typeof window !== "undefined" ? window.location.pathname : undefined,
+        });
+        if (res.ok) setResult(res);
+        else setError(res.error);
+      } catch {
+        // The action itself returns a typed result, but the action *transport*
+        // can still reject (network/runtime). Surface it instead of leaving the
+        // user on a stuck spinner.
+        setError("Couldn't send your report just now. Please try again.");
+      }
     });
   }
 
   const canSubmit = description.trim().length > 0 && !isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Don't let Escape / outside-click / X dismiss the dialog mid-send —
+        // the request would complete against a closed dialog and the
+        // result/error would be lost. (Cancel is already disabled while pending.)
+        if (!next && isPending) return;
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         {result ? (
           <>

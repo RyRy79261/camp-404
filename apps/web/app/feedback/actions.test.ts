@@ -107,6 +107,13 @@ describe("submitFeedbackAction", () => {
     if (!res.ok) expect(res.error).toMatch(/configured correctly/i);
   });
 
+  it("rejects a repo slug with extra path segments", async () => {
+    process.env.GITHUB_FEEDBACK_REPO = "owner/repo/issues";
+    const res = await submitFeedbackAction(VALID);
+    expect(res).toMatchObject({ ok: false });
+    if (!res.ok) expect(res.error).toMatch(/configured correctly/i);
+  });
+
   it("creates the issue and returns its number + url on 201", async () => {
     const fetchFn = mockFetch({
       status: 201,

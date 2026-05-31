@@ -101,7 +101,9 @@ export function createShakeDetector(config: ShakeDetectorConfig) {
       jolts = jolts.filter((t) => now - t <= config.windowMs);
       if (
         jolts.length >= config.requiredJolts &&
-        now - lastShakeAt > config.cooldownMs
+        // `>=` so a gap of exactly cooldownMs counts — the field is a *minimum*
+        // gap, and this matches the inclusive (`<=`) window boundary above.
+        now - lastShakeAt >= config.cooldownMs
       ) {
         lastShakeAt = now;
         jolts = [];

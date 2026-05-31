@@ -126,6 +126,19 @@ describe("buildFeedbackIssue", () => {
     expect(issue.title).toHaveLength(100);
   });
 
+  it("neutralizes backticks/newlines in footer values (no inline-code breakout)", () => {
+    const issue = buildFeedbackIssue({
+      kind: "bug",
+      description: "broken",
+      dictated: false,
+      reporterRef: "camp`1",
+      route: "/x`y\nz",
+    });
+    expect(issue.body).toContain("reporter: `camp1`");
+    expect(issue.body).toContain("from: `/xy z`");
+    expect(issue.body).not.toContain("camp`1");
+  });
+
   it("sanitizes PII/HTML in the route before it reaches the footer", () => {
     const issue = buildFeedbackIssue({
       kind: "bug",

@@ -79,6 +79,16 @@ function fenced(content: string): string {
   return "```\n" + content.replace(/```/g, "''' ") + "\n```";
 }
 
+/**
+ * Make a value safe to drop inside a Markdown inline-code span: strip backticks
+ * (which would close the span and let following text inject Markdown) and
+ * collapse newlines. Used for the footer's reporter id + route, since `route`
+ * is client-supplied to the action and a crafted request could carry either.
+ */
+function inlineCode(value: string): string {
+  return value.replace(/`/g, "").replace(/\s*\n\s*/g, " ").trim();
+}
+
 export interface BuildIssueInput {
   kind: FeedbackKind;
   /** Raw user description (will be sanitized here). */
@@ -111,12 +121,13 @@ export function buildFeedbackIssue(input: BuildIssueInput): BuiltIssue {
     (input.kind === "bug" ? "Bug report" : "Feature request");
 
   const safeRoute = input.route
-    ? sanitizeReportText(input.route, 300)
+    ? inlineCode(sanitizeReportText(input.route, 300))
     : null;
+  const reporter = inlineCode(input.reporterRef);
 
   const footerBits = [
     "Filed via the in-app reporter" + (input.dictated ? " (voice-dictated)" : ""),
-    `reporter: \`${input.reporterRef}\``,
+    `reporter: \`${reporter}\``,
     safeRoute ? `from: \`${safeRoute}\`` : null,
   ].filter(Boolean);
 

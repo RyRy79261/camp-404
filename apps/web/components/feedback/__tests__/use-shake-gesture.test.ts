@@ -56,6 +56,19 @@ describe("createShakeDetector", () => {
     expect(d.process(REST, 360)).toBe(false);
   });
 
+  it("fires again once exactly cooldownMs has elapsed (>= boundary)", () => {
+    const d = createShakeDetector(CONFIG);
+    expect(d.process(REST, 0)).toBe(false);
+    expect(d.process(SWING, 60)).toBe(false);
+    expect(d.process(REST, 120)).toBe(false);
+    expect(d.process(SWING, 180)).toBe(true); // first fire at t=180
+    // Three fresh jolts ending at t=3180 — exactly cooldownMs (3000) after the
+    // first fire. With `>=` this fires; with the old `>` it would not.
+    expect(d.process(REST, 3060)).toBe(false);
+    expect(d.process(SWING, 3120)).toBe(false);
+    expect(d.process(REST, 3180)).toBe(true);
+  });
+
   it("expires stale jolts outside the rolling window", () => {
     const d = createShakeDetector(CONFIG);
     expect(d.process(REST, 0)).toBe(false);
