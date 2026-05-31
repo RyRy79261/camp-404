@@ -65,8 +65,8 @@ export function redactPii(input: string): string {
       // International phone numbers — consume ALL trailing digit groups so the
       // last group can't leak (e.g. "+27 82 555 1234" → "[phone]", not "[phone] 1234").
       .replace(/\+\d{1,3}(?:[-.\s]?\d{1,4}){1,6}/g, "[phone]")
-      // Local phone numbers: 123-456-7890, 123.456.7890
-      .replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, "[phone]")
+      // Local phone numbers: 123-456-7890, 123.456.7890, 123 456 7890
+      .replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, "[phone]")
       // SA ID / SSN-like 13- and 9-digit runs
       .replace(/\b\d{13}\b/g, "[id]")
       .replace(/\b\d{3}[-]?\d{2}[-]?\d{4}\b/g, "[id]")
@@ -97,6 +97,17 @@ function fenced(content: string): string {
  */
 function inlineCode(value: string): string {
   return value.replace(/`/g, "").replace(/\s*\n\s*/g, " ").trim();
+}
+
+/**
+ * Make AI-derived free text safe to drop into the Markdown body as prose:
+ * defuse ``` fences and collapse newlines so it can't inject block-level
+ * Markdown (headings, fences, blockquotes, lists all require a line start).
+ * Inline emphasis is harmless. The model is faithful to user text, so this is
+ * defence in depth — the structured fields are still user-derived.
+ */
+function mdInline(value: string): string {
+  return value.replace(/```/g, "''' ").replace(/\s*\n\s*/g, " ").trim();
 }
 
 export interface BuildIssueInput {
@@ -134,21 +145,25 @@ function plainParts(rawDescription: string, kind: FeedbackKind) {
 /** Title + body sections for an AI-restructured report. Every field is
  *  re-sanitized — the model can echo PII from the raw description. */
 function structuredParts(s: StructuredReport, kind: FeedbackKind) {
+  // Markdown-inert prose for the AI free-text fields; our own `## …` headings
+  // and the severity hint below are trusted (not user-derived). The title goes
+  // into GitHub's issue title, which isn't rendered as Markdown.
+  const safe = (v: string, max: number) => mdInline(sanitizeReportText(v, max));
   const title = sanitizeReportText(s.title, TITLE_MAX) || fallbackTitle(kind);
-  const sections = [sanitizeReportText(s.summary, 2000)];
+  const sections = [safe(s.summary, 2000)];
   if (s.stepsToReproduce?.length) {
     sections.push(
       "## Steps to reproduce\n" +
         s.stepsToReproduce
-          .map((step, i) => `${i + 1}. ${sanitizeReportText(step, 500)}`)
+          .map((step, i) => `${i + 1}. ${safe(step, 500)}`)
           .join("\n"),
     );
   }
   if (s.expected) {
-    sections.push("## Expected\n" + sanitizeReportText(s.expected, 1000));
+    sections.push("## Expected\n" + safe(s.expected, 1000));
   }
   if (s.actual) {
-    sections.push("## Actual\n" + sanitizeReportText(s.actual, 1000));
+    sections.push("## Actual\n" + safe(s.actual, 1000));
   }
   if (s.severity) sections.push(`_Severity hint: ${s.severity}_`);
   return { title, sections };

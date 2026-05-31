@@ -29,6 +29,11 @@ describe("redactPii", () => {
     }
   });
 
+  it("redacts space-separated local phone numbers", () => {
+    expect(redactPii("082 555 1234")).toBe("[phone]");
+    expect(redactPii("call 082 555 1234 please")).toContain("[phone]");
+  });
+
   it("redacts secrets: bearer tokens, JWTs, API keys, and token-bearing URLs", () => {
     expect(redactPii("Authorization: Bearer abc.def-123")).toContain(
       "Bearer [token]",
@@ -150,6 +155,26 @@ describe("buildFeedbackIssue", () => {
     // The model can echo PII from the raw text — structured fields are re-sanitized.
     expect(issue.body).not.toContain("jane@example.com");
     expect(issue.body).toContain("[email]");
+  });
+
+  it("neutralizes Markdown injection in AI-structured fields", () => {
+    const issue = buildFeedbackIssue({
+      kind: "bug",
+      description: "raw",
+      dictated: false,
+      reporterRef: "camp-user-123",
+      structured: {
+        title: "T",
+        summary: "Line one\n## Fake heading\n```\ninjected\n```",
+        expected: "ok",
+      },
+    });
+    // Fences are defused and the injected heading is no longer at a line start.
+    expect(issue.body).not.toContain("```");
+    const lines = issue.body.split("\n");
+    expect(lines.some((l) => l.startsWith("## Fake heading"))).toBe(false);
+    // Our own trusted section heading still renders.
+    expect(issue.body).toContain("## Expected");
   });
 
   it("neutralizes backticks/newlines in footer values (no inline-code breakout)", () => {

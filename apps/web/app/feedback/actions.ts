@@ -31,6 +31,13 @@ const InputSchema = z.object({
 
 const DEFAULT_REPO = "RyRy79261/camp-404";
 
+// GitHub's create-issue 201 payload — validated rather than blindly cast so a
+// caller never receives a malformed number/url.
+const GithubIssueSchema = z.object({
+  number: z.number(),
+  html_url: z.string().url(),
+});
+
 /**
  * File an in-app bug/feature report as a GitHub issue. Nothing is stored in our
  * DB — GitHub Issues is the store. Requires sign-in (so the report is
@@ -148,8 +155,17 @@ export async function submitFeedbackAction(
     );
 
     if (res.status === 201) {
-      const data = (await res.json()) as { number: number; html_url: string };
-      return { ok: true, number: data.number, url: data.html_url };
+      const parsed = GithubIssueSchema.safeParse(
+        await res.json().catch(() => null),
+      );
+      if (!parsed.success) {
+        console.error("submitFeedbackAction: unexpected GitHub 201 response shape");
+        return {
+          ok: false,
+          error: "Your report was filed, but we couldn't read GitHub's reply.",
+        };
+      }
+      return { ok: true, number: parsed.data.number, url: parsed.data.html_url };
     }
 
     console.error(

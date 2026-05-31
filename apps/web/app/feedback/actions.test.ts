@@ -171,6 +171,40 @@ describe("submitFeedbackAction", () => {
     expect(structureWithAi).not.toHaveBeenCalled();
   });
 
+  it("passes already-sanitized text to the AI restructurer", async () => {
+    vi.mocked(structureWithAi).mockResolvedValue(null);
+    mockFetch({
+      status: 201,
+      json: async () => ({ number: 3, html_url: "https://x/y/issues/3" }),
+    });
+    await submitFeedbackAction({
+      kind: "bug",
+      description: "ping me at jane@example.com when fixed",
+      useAi: true,
+    });
+    expect(structureWithAi).toHaveBeenCalledTimes(1);
+    const text = vi.mocked(structureWithAi).mock.calls[0]![1];
+    expect(text).not.toContain("jane@example.com");
+    expect(text).toContain("[email]");
+  });
+
+  it("files a plain issue when AI restructuring returns null", async () => {
+    vi.mocked(structureWithAi).mockResolvedValue(null);
+    const fetchFn = mockFetch({
+      status: 201,
+      json: async () => ({ number: 4, html_url: "https://x/y/issues/4" }),
+    });
+    const res = await submitFeedbackAction({ ...VALID, useAi: true });
+    expect(res).toMatchObject({ ok: true, number: 4 });
+    expect(structureWithAi).toHaveBeenCalled();
+    const body = JSON.parse(
+      (fetchFn.mock.calls[0]![1] as RequestInit).body as string,
+    );
+    // Plain path: title is the first line of the sanitized description.
+    expect(body.title).toBe("The publish button does nothing");
+    expect(body.body).toContain("## Description");
+  });
+
   it("maps GitHub error statuses to friendly messages", async () => {
     const cases: Array<[number, RegExp]> = [
       [401, /refresh/i],
