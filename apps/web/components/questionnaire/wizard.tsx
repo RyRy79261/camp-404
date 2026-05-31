@@ -39,6 +39,11 @@ interface QuestionnaireWizardProps {
   onComplete?: () => void;
   // Label for the final-page button (default "Finish").
   submitLabel?: string;
+  // Onboarding-only: on the first page (where "Back" is otherwise disabled),
+  // show a "Sign out" link instead, so someone who signed in with the wrong
+  // account — before creating anything — isn't trapped. The replay flow leaves
+  // this off (its users are established members editing a form).
+  firstStepSignOut?: boolean;
 }
 
 export function QuestionnaireWizard({
@@ -48,6 +53,7 @@ export function QuestionnaireWizard({
   persistProgress = true,
   onComplete,
   submitLabel = "Finish",
+  firstStepSignOut = false,
 }: QuestionnaireWizardProps) {
   const [pageIndex, setPageIndex] = React.useState(0);
   const [responses, setResponses] =
@@ -230,14 +236,22 @@ export function QuestionnaireWizard({
       )}
 
       <div className="mt-auto flex items-center justify-between pt-6">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={handleBack}
-          disabled={pageIndex === 0 || isPending}
-        >
-          Back
-        </Button>
+        {pageIndex === 0 && firstStepSignOut ? (
+          // First page has nothing to go "Back" to; offer an escape hatch for
+          // someone who signed in with the wrong account.
+          <Button type="button" variant="ghost" asChild>
+            <a href="/auth/sign-out">Sign out</a>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleBack}
+            disabled={pageIndex === 0 || isPending}
+          >
+            Back
+          </Button>
+        )}
         <Button type="submit" disabled={isPending}>
           {isLast ? submitLabel : nextLabel}
         </Button>

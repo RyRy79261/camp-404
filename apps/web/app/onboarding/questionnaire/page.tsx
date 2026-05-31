@@ -52,6 +52,7 @@ export default async function QuestionnairePage() {
         questionnaire={QUESTIONNAIRE}
         initialResponses={initialResponses}
         action={saveBurnerProfile}
+        firstStepSignOut
       />
     </main>
   );

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Providers } from "./providers";
 import { AcknowledgementGate } from "./acknowledgement-gate";
+import { FeedbackGate } from "./feedback-gate";
 import "@camp404/ui/styles.css";
 
 const SITE_URL = "https://camp-404.com";
@@ -47,6 +48,9 @@ export default function RootLayout({
         <Providers>
           {children}
           <AcknowledgementGate />
+          {/* The gate self-gates on the live client session; aiAvailable is a
+              server-only env check passed down for the "Improve with AI" toggle. */}
+          <FeedbackGate aiAvailable={!!process.env.ANTHROPIC_API_KEY} />
         </Providers>
       </body>
     </html>
