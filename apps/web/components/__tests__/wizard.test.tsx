@@ -158,6 +158,35 @@ describe("QuestionnaireWizard", () => {
     );
   });
 
+  it("replaces the disabled Back with a Sign out link on page 1 when firstStepSignOut is set", () => {
+    render(
+      <QuestionnaireWizard
+        questionnaire={Q}
+        initialResponses={{}}
+        action={noopAction}
+        firstStepSignOut
+      />,
+    );
+    const link = screen.getByRole("link", { name: /sign out/i });
+    expect(link.getAttribute("href")).toBe("/auth/sign-out");
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+  });
+
+  it("keeps the disabled Back button on page 1 without firstStepSignOut", () => {
+    render(
+      <QuestionnaireWizard
+        questionnaire={Q}
+        initialResponses={{}}
+        action={noopAction}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: /sign out/i })).toBeNull();
+    const back = screen.getByRole("button", {
+      name: "Back",
+    }) as HTMLButtonElement;
+    expect(back.disabled).toBe(true);
+  });
+
   it("surfaces a form-level error and stays put when the action throws", async () => {
     // Regression guard for the onboarding stage 2→3 block: a thrown save
     // action (e.g. encryption misconfig) must NOT silently fail to advance.

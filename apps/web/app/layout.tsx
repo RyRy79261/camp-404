@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Providers } from "./providers";
 import { AcknowledgementGate } from "./acknowledgement-gate";
 import { FeedbackGate } from "./feedback-gate";
-import { getAuthenticatedUser } from "@/lib/auth";
 import "@camp404/ui/styles.css";
 
 const SITE_URL = "https://camp-404.com";
@@ -38,30 +37,20 @@ export const viewport: Viewport = {
   themeColor: "#0d061e",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Gate the feedback button/shake on being signed in. Wrapped so a transient
-  // auth failure only hides the button rather than breaking every page.
-  let signedIn = false;
-  try {
-    signedIn = !!(await getAuthenticatedUser());
-  } catch {
-    // A transient auth error just hides the button; don't break the layout.
-  }
-
   return (
     <html lang="en">
       <body>
         <Providers>
           {children}
           <AcknowledgementGate />
-          <FeedbackGate
-            signedIn={signedIn}
-            aiAvailable={!!process.env.ANTHROPIC_API_KEY}
-          />
+          {/* The gate self-gates on the live client session; aiAvailable is a
+              server-only env check passed down for the "Improve with AI" toggle. */}
+          <FeedbackGate aiAvailable={!!process.env.ANTHROPIC_API_KEY} />
         </Providers>
       </body>
     </html>
