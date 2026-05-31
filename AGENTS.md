@@ -40,6 +40,23 @@ pnpm format                            # prettier --write
 
 Per-package work uses `--filter`, e.g. `pnpm --filter @camp404/web dev`.
 
+## Design (pencil.dev)
+
+The design system is captured from the running app and recreated in Pencil. See
+[`design/README.md`](design/README.md) for the full pipeline; tokens live in
+`packages/ui/src/styles/globals.css` (mirrored in `design/brief.md`).
+
+```bash
+pnpm --filter @camp404/web design:capture   # Playwright → design/reference/*.png (mobile, dark)
+pnpm --filter @camp404/web design:status     # pencil status
+```
+
+The Pencil CLI is a **global** tool, not a repo dependency: `npm i -g
+@pencil.dev/cli` then `pencil login` (stored at `~/.pencil/session-cli.json`).
+`scripts/pencil/run.sh` puts the pnpm global bin on `$PATH` and **guards the
+machine-wide singleton** — never run two `pencil` processes at once (any repo);
+they share one global canvas and corrupt each other.
+
 ## Database — read this before touching the schema
 
 The database is Neon Postgres + Drizzle ORM. Authentication/identity lives

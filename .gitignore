@@ -48,3 +48,5 @@ test-results/
 
 # design exports (regenerate from .pen sources)
 design/exports/
+# working renders from in-progress Pencil generations
+design/**/*-wip-*.png
