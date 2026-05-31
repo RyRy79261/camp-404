@@ -158,6 +158,78 @@ describe("QuestionnaireWizard", () => {
     );
   });
 
+  it("surfaces a form-level error and stays put when the action throws", async () => {
+    // Regression guard for the onboarding stage 2→3 block: a thrown save
+    // action (e.g. encryption misconfig) must NOT silently fail to advance.
+    const action = vi.fn(() => Promise.reject(new Error("boom")));
+    render(
+      <QuestionnaireWizard
+        questionnaire={Q}
+        initialResponses={{ name: "Ash" }}
+        action={action}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain(
+        "couldn't save",
+      ),
+    );
+    // Did not advance past the failing page.
+    expect(screen.getByText("Page One")).toBeDefined();
+  });
+
+  it("surfaces a returned _form error as the page-level banner and stays put", async () => {
+    // The production action does NOT throw on encrypt failure — it RETURNS
+    // {ok:false, errors:{_form}}. That flows through setErrors(result.errors),
+    // a different branch from the thrown-action catch above.
+    const action = vi.fn(() =>
+      Promise.resolve({
+        ok: false as const,
+        errors: { _form: "We couldn't save your answers just now." },
+      }),
+    );
+    render(
+      <QuestionnaireWizard
+        questionnaire={Q}
+        initialResponses={{ name: "Ash" }}
+        action={action}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("couldn't save"),
+    );
+    expect(screen.getByText("Page One")).toBeDefined();
+  });
+
+  it("surfaces a returned _root error in the banner (replay/validation path)", async () => {
+    // saveFormReplay + validateResponses return non-field failures under "_root";
+    // the banner must render that reserved key too, not just "_form".
+    const action = vi.fn(() =>
+      Promise.resolve({
+        ok: false as const,
+        errors: { _root: "Unknown form." },
+      }),
+    );
+    render(
+      <QuestionnaireWizard
+        questionnaire={Q}
+        initialResponses={{ name: "Ash" }}
+        action={action}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("Unknown form."),
+    );
+    expect(screen.getByText("Page One")).toBeDefined();
+  });
+
   it("surfaces server-side validation errors back into the form", async () => {
     const action = vi.fn(() =>
       Promise.resolve({
