@@ -37,6 +37,15 @@ describe("ReportBugDialog", () => {
     );
   });
 
+  it("shows the Improve-with-AI toggle only when aiAvailable", () => {
+    const { rerender } = render(
+      <ReportBugDialog open onOpenChange={() => {}} />,
+    );
+    expect(screen.queryByText(/improve with ai/i)).toBeNull();
+    rerender(<ReportBugDialog open onOpenChange={() => {}} aiAvailable />);
+    expect(screen.getByText(/improve with ai/i)).toBeDefined();
+  });
+
   it("shows the success state with the issue link on ok", async () => {
     vi.mocked(submitFeedbackAction).mockResolvedValue({
       ok: true,

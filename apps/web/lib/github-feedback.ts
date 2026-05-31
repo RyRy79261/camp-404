@@ -8,6 +8,16 @@
 
 export type FeedbackKind = "bug" | "feature";
 
+/** Result of the optional AI restructuring pass (see lib/feedback-ai.ts). */
+export interface StructuredReport {
+  title: string;
+  summary: string;
+  stepsToReproduce?: string[];
+  expected?: string;
+  actual?: string;
+  severity?: "critical" | "high" | "medium" | "low";
+}
+
 export const DESCRIPTION_MAX = 5000;
 const TITLE_MAX = 100;
 const ISSUE_BODY_MAX = 60_000; // GitHub's hard limit is 65536.
@@ -99,6 +109,8 @@ export interface BuildIssueInput {
   reporterRef: string;
   /** In-app path the report was filed from, e.g. "/captains/announcements". */
   route?: string | null;
+  /** Optional AI-restructured report; when present it shapes the body. */
+  structured?: StructuredReport | null;
 }
 
 export interface BuiltIssue {
@@ -107,36 +119,65 @@ export interface BuiltIssue {
   labels: string[];
 }
 
+function fallbackTitle(kind: FeedbackKind): string {
+  return kind === "bug" ? "Bug report" : "Feature request";
+}
+
+/** Title + body sections for a plain (non-AI) report. */
+function plainParts(rawDescription: string, kind: FeedbackKind) {
+  const description = sanitizeReportText(rawDescription, DESCRIPTION_MAX);
+  const firstLine = description.split("\n")[0]?.trim() ?? "";
+  const title = firstLine.slice(0, TITLE_MAX) || fallbackTitle(kind);
+  return { title, sections: ["## Description", fenced(description)] };
+}
+
+/** Title + body sections for an AI-restructured report. Every field is
+ *  re-sanitized — the model can echo PII from the raw description. */
+function structuredParts(s: StructuredReport, kind: FeedbackKind) {
+  const title = sanitizeReportText(s.title, TITLE_MAX) || fallbackTitle(kind);
+  const sections = [sanitizeReportText(s.summary, 2000)];
+  if (s.stepsToReproduce?.length) {
+    sections.push(
+      "## Steps to reproduce\n" +
+        s.stepsToReproduce
+          .map((step, i) => `${i + 1}. ${sanitizeReportText(step, 500)}`)
+          .join("\n"),
+    );
+  }
+  if (s.expected) {
+    sections.push("## Expected\n" + sanitizeReportText(s.expected, 1000));
+  }
+  if (s.actual) {
+    sections.push("## Actual\n" + sanitizeReportText(s.actual, 1000));
+  }
+  if (s.severity) sections.push(`_Severity hint: ${s.severity}_`);
+  return { title, sections };
+}
+
 /**
- * Assemble the issue title/body/labels from a sanitized report. Title is the
- * first line of the description (the reference's non-AI path); body carries the
- * description plus a small, PII-free provenance footer.
+ * Assemble the issue title/body/labels. Without `structured`, the body is the
+ * fenced description with a first-line title; with it, a restructured
+ * summary/steps/expected/actual. A small PII-free provenance footer is common
+ * to both.
  */
 export function buildFeedbackIssue(input: BuildIssueInput): BuiltIssue {
-  const description = sanitizeReportText(input.description, DESCRIPTION_MAX);
-
-  const firstLine = description.split("\n")[0]?.trim() ?? "";
-  const title =
-    firstLine.slice(0, TITLE_MAX) ||
-    (input.kind === "bug" ? "Bug report" : "Feature request");
-
   const safeRoute = input.route
     ? inlineCode(sanitizeReportText(input.route, 300))
     : null;
   const reporter = inlineCode(input.reporterRef);
-
-  const footerBits = [
+  const footer = `_${[
     "Filed via the in-app reporter" + (input.dictated ? " (voice-dictated)" : ""),
     `reporter: \`${reporter}\``,
     safeRoute ? `from: \`${safeRoute}\`` : null,
-  ].filter(Boolean);
-
-  const body = [
-    "## Description",
-    fenced(description),
-    "---",
-    `_${footerBits.join(" · ")}_`,
   ]
+    .filter(Boolean)
+    .join(" · ")}_`;
+
+  const { title, sections } = input.structured
+    ? structuredParts(input.structured, input.kind)
+    : plainParts(input.description, input.kind);
+
+  const body = [...sections, "---", footer]
     .join("\n\n")
     .slice(0, ISSUE_BODY_MAX);
 

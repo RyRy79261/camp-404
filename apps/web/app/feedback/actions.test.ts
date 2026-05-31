@@ -11,12 +11,14 @@ vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));
 vi.mock("@/lib/rate-limit", () => ({
   rateLimit: vi.fn(() => ({ ok: true, retryAfterSeconds: 0 })),
 }));
+vi.mock("@/lib/feedback-ai", () => ({ structureWithAi: vi.fn() }));
 
 import { submitFeedbackAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
 import { isE2ETestMode } from "@/lib/test-mode";
 import { rateLimit } from "@/lib/rate-limit";
+import { structureWithAi } from "@/lib/feedback-ai";
 
 const VALID = { kind: "bug" as const, description: "The publish button does nothing" };
 
@@ -32,6 +34,7 @@ function mockFetch(response: Partial<Response> & { status: number }) {
 
 describe("submitFeedbackAction", () => {
   beforeEach(() => {
+    vi.clearAllMocks(); // reset call history so per-test call-count assertions are isolated
     vi.mocked(getAuthenticatedUser).mockResolvedValue({
       id: "auth-1",
       primaryEmail: "m@example.com",
@@ -40,6 +43,7 @@ describe("submitFeedbackAction", () => {
     vi.mocked(findCampUserByAuthId).mockResolvedValue({ id: "camp-1" } as never);
     vi.mocked(isE2ETestMode).mockReturnValue(false);
     vi.mocked(rateLimit).mockReturnValue({ ok: true, retryAfterSeconds: 0 });
+    vi.mocked(structureWithAi).mockResolvedValue(null);
     process.env.GITHUB_FEEDBACK_TOKEN = "test-token";
     delete process.env.GITHUB_FEEDBACK_REPO;
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -133,6 +137,38 @@ describe("submitFeedbackAction", () => {
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body).toMatchObject({ labels: ["bug", "from-app"] });
     expect(body.title).toBeTruthy();
+  });
+
+  it("restructures with AI when requested and files the structured issue", async () => {
+    vi.mocked(structureWithAi).mockResolvedValue({
+      title: "AI title",
+      summary: "AI summary",
+      severity: "low",
+    });
+    const fetchFn = mockFetch({
+      status: 201,
+      json: async () => ({
+        number: 9,
+        html_url: "https://github.com/RyRy79261/camp-404/issues/9",
+      }),
+    });
+    const res = await submitFeedbackAction({ ...VALID, useAi: true });
+    expect(res).toMatchObject({ ok: true, number: 9 });
+    expect(structureWithAi).toHaveBeenCalledWith("bug", expect.any(String));
+    const body = JSON.parse(
+      (fetchFn.mock.calls[0]![1] as RequestInit).body as string,
+    );
+    expect(body.title).toBe("AI title");
+    expect(body.body).toContain("AI summary");
+  });
+
+  it("does not call AI when useAi is omitted", async () => {
+    mockFetch({
+      status: 201,
+      json: async () => ({ number: 1, html_url: "https://x/y/issues/1" }),
+    });
+    await submitFeedbackAction(VALID);
+    expect(structureWithAi).not.toHaveBeenCalled();
   });
 
   it("maps GitHub error statuses to friendly messages", async () => {

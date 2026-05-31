@@ -126,6 +126,32 @@ describe("buildFeedbackIssue", () => {
     expect(issue.title).toHaveLength(100);
   });
 
+  it("builds a structured body from an AI report and re-sanitizes its fields", () => {
+    const issue = buildFeedbackIssue({
+      kind: "bug",
+      description: "raw text",
+      dictated: false,
+      reporterRef: "camp-user-123",
+      structured: {
+        title: "Publish fails silently",
+        summary: "Tapping publish does nothing; mail me at jane@example.com",
+        stepsToReproduce: ["Open announcements", "Tap publish"],
+        expected: "An announcement is published",
+        actual: "Nothing happens",
+        severity: "high",
+      },
+    });
+    expect(issue.title).toBe("Publish fails silently");
+    expect(issue.body).toContain("## Steps to reproduce");
+    expect(issue.body).toContain("1. Open announcements");
+    expect(issue.body).toContain("## Expected");
+    expect(issue.body).toContain("## Actual");
+    expect(issue.body).toContain("Severity hint: high");
+    // The model can echo PII from the raw text — structured fields are re-sanitized.
+    expect(issue.body).not.toContain("jane@example.com");
+    expect(issue.body).toContain("[email]");
+  });
+
   it("neutralizes backticks/newlines in footer values (no inline-code breakout)", () => {
     const issue = buildFeedbackIssue({
       kind: "bug",

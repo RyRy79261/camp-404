@@ -10,6 +10,7 @@ import {
   DESCRIPTION_MAX,
   sanitizeReportText,
 } from "@/lib/github-feedback";
+import { structureWithAi } from "@/lib/feedback-ai";
 
 export type FeedbackResult =
   | { ok: true; number: number; url: string }
@@ -24,6 +25,8 @@ const InputSchema = z.object({
     .max(DESCRIPTION_MAX),
   dictated: z.boolean().optional(),
   route: z.string().max(300).optional(),
+  // "Improve with AI" toggle — restructure the report before filing.
+  useAi: z.boolean().optional(),
 });
 
 const DEFAULT_REPO = "RyRy79261/camp-404";
@@ -68,11 +71,13 @@ export async function submitFeedbackAction(
       error: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
   }
-  const { kind, description, dictated, route } = parsed.data;
+  const { kind, description, dictated, route, useAi } = parsed.data;
 
-  // Reject input that's empty once PII/HTML is stripped (e.g. HTML-only text)
-  // so we never file a blank issue on the public tracker.
-  if (!sanitizeReportText(description, DESCRIPTION_MAX)) {
+  // Sanitize once: reject input that's empty after PII/HTML stripping (e.g.
+  // HTML-only) so we never file a blank issue, and use the clean text as the
+  // AI input so no PII is sent to the model.
+  const sanitized = sanitizeReportText(description, DESCRIPTION_MAX);
+  if (!sanitized) {
     return { ok: false, error: "Please describe the issue." };
   }
 
@@ -82,18 +87,22 @@ export async function submitFeedbackAction(
   const campUser = await findCampUserByAuthId(user.id);
   const reporterRef = campUser?.id || "unlinked";
 
-  const issue = buildFeedbackIssue({
-    kind,
-    description,
-    dictated: dictated ?? false,
-    reporterRef,
-    route,
-  });
-
-  // E2E mode exercises auth + validation + issue-building but never hits GitHub.
+  // E2E mode exercises auth + validation but never calls the AI or GitHub.
   if (isE2ETestMode()) {
     return { ok: true, number: 0, url: `https://github.com/${DEFAULT_REPO}/issues` };
   }
+
+  // Optional "Improve with AI" restructuring; null on any failure → plain body.
+  const structured = useAi ? await structureWithAi(kind, sanitized) : null;
+
+  const issue = buildFeedbackIssue({
+    kind,
+    description: sanitized,
+    dictated: dictated ?? false,
+    reporterRef,
+    route,
+    structured,
+  });
 
   const token = process.env.GITHUB_FEEDBACK_TOKEN;
   if (!token) {

@@ -58,7 +58,10 @@ export default async function RootLayout({
         <Providers>
           {children}
           <AcknowledgementGate />
-          <FeedbackGate signedIn={signedIn} />
+          <FeedbackGate
+            signedIn={signedIn}
+            aiAvailable={!!process.env.ANTHROPIC_API_KEY}
+          />
         </Providers>
       </body>
     </html>

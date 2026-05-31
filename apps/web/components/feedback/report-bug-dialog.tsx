@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@camp404/ui/components/dialog";
 import { Button } from "@camp404/ui/components/button";
+import { Checkbox } from "@camp404/ui/components/checkbox";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { Label } from "@camp404/ui/components/label";
 import {
@@ -31,23 +32,28 @@ interface ReportBugDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultKind?: FeedbackKind;
+  /** Whether the server has an ANTHROPIC_API_KEY — gates the AI toggle. */
+  aiAvailable?: boolean;
 }
 
 /**
  * Bug / feature-request modal. Files a GitHub issue via the feedback server
  * action — nothing is stored in our DB. Layout copied from
- * RyRy79261/intake-tracker's report-bug dialog (minus its manual section, AI
- * toggle, and diagnostics capture), adapted to our Dialog + voice RecorderPanel.
+ * RyRy79261/intake-tracker's report-bug dialog (minus its manual section and
+ * diagnostics capture), adapted to our Dialog + voice RecorderPanel. The
+ * "Improve with AI" toggle restructures the report server-side before filing.
  */
 export function ReportBugDialog({
   open,
   onOpenChange,
   defaultKind = "bug",
+  aiAvailable = false,
 }: ReportBugDialogProps) {
   const [kind, setKind] = React.useState<FeedbackKind>(defaultKind);
   const [description, setDescription] = React.useState("");
   const [dictating, setDictating] = React.useState(false);
   const [dictated, setDictated] = React.useState(false);
+  const [useAi, setUseAi] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<
     Extract<FeedbackResult, { ok: true }> | null
@@ -61,6 +67,7 @@ export function ReportBugDialog({
     setDescription("");
     setDictating(false);
     setDictated(false);
+    setUseAi(true);
     setError(null);
     setResult(null);
   }, [open, defaultKind]);
@@ -83,6 +90,7 @@ export function ReportBugDialog({
           kind,
           description,
           dictated,
+          useAi: aiAvailable && useAi,
           route:
             typeof window !== "undefined" ? window.location.pathname : undefined,
         });
@@ -221,6 +229,27 @@ export function ReportBugDialog({
                   <Mic className="h-4 w-4" />
                   Dictate instead
                 </Button>
+              )}
+
+              {/* Improve with AI — only when the server has a Claude key. */}
+              {aiAvailable && (
+                <div className="flex items-start gap-3 rounded-md border border-[color:var(--color-border)] p-3">
+                  <Checkbox
+                    id="feedback-use-ai"
+                    checked={useAi}
+                    onCheckedChange={(c) => setUseAi(c === true)}
+                  />
+                  <Label
+                    htmlFor="feedback-use-ai"
+                    className="flex flex-col gap-0.5 font-normal"
+                  >
+                    <span className="text-sm font-medium">Improve with AI</span>
+                    <span className="text-xs text-[color:var(--color-muted-foreground)]">
+                      Restructures your report into a clear title and steps
+                      before filing.
+                    </span>
+                  </Label>
+                </div>
               )}
 
               {error && (
