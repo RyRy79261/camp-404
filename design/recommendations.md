@@ -69,11 +69,28 @@ actual forks called out at the end.
 
 7. **Delete `quadrant-nav.tsx`** — self-described "v0… validate in Figma", strictly
    superseded by `control-panel`. Dead weight.
-8. **Resolve dark mode.** There's no `.dark`/ThemeProvider mechanism yet 12 `dark:`
-   utilities sit in the code as dead variants; a dev-mode hydration mismatch on
-   `<html className="dark">` shows up on every page (it's what tripped the Next
-   dev-tools "1 Issue" pill during capture). Either commit to a single dark theme and
-   strip the `dark:` variants, or wire a real theme mechanism.
+8. **Dark mode — commit to dark-only and strip the dead `dark:` variants.**
+   `design/brief.md` is explicit: "Dark-only. There is no light theme." So the chosen
+   strategy is to **remove the 12 `dark:` utilities** (all `dark:text-{emerald,sky,rose,amber}-*`
+   status colours, in `app/pending-approval`, `app/family-tree`, `app/tools/invite`,
+   and the two `app/captains/*` screens). They aren't just redundant — they're
+   **decoupled from the actual theme**: there is no `@custom-variant dark`, so
+   Tailwind v4 resolves `dark:` via the `prefers-color-scheme` *media query*, not a
+   class. They only diverge when the user's OS is in dark mode, in a UI that is
+   already dark regardless. Fold whatever shade they expressed into the semantic
+   status tokens from P0-2, then delete the variants. (A code change — out of scope
+   for this design PR; this is the instruction for the follow-up.)
+   - **Separately, a real hydration mismatch exists** (it's what tripped the Next
+     dev-tools "1 Issue" pill during capture, not the `dark:` utilities): `next-themes`
+     — pulled in transitively by `NeonAuthUIProvider` — sets `class="dark"` +
+     `style="color-scheme:dark"` on `<html>` client-side, but `app/layout.tsx` renders
+     `<html lang="en">` with no `suppressHydrationWarning`. This is the classic
+     next-themes setup gotcha. Fix: add `suppressHydrationWarning` to the `<html>`
+     element in `app/layout.tsx` (one line). Independent of the `dark:` cleanup above.
+   - **Only if you ever want two switchable themes:** add a class-based dark variant
+     (`@custom-variant dark (&:where(.dark, .dark *))` in `globals.css`) and drive
+     next-themes deliberately — then the `dark:` utilities become meaningful again and
+     should be kept and expanded rather than stripped.
 9. **Stories + tests for the 5 composite components** with none (dialog, popover,
    combobox, command, avatar); fix `vitest.config` so `.tsx` render tests can run
    (it's currently `node` env + a `.ts`-only glob).

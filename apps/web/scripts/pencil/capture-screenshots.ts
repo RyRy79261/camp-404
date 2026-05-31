@@ -80,9 +80,11 @@ async function prep(page: Page) {
     route.fulfill({ json: { text: "" } }),
   );
   // Hide the Next.js dev-tools indicator (the "N · 1 Issue" pill). It's dev-only
-  // chrome — here it flags a benign `dark`-className hydration warning — and must
-  // not bleed into a design reference. Persist a style so it stays hidden as the
-  // portal mounts after load.
+  // chrome — here it flags the known next-themes `<html>` dark-class hydration
+  // mismatch (next-themes, via NeonAuthUIProvider, sets class="dark" client-side
+  // while layout.tsx renders <html lang="en"> with no suppressHydrationWarning;
+  // see design/recommendations.md) — and must not bleed into a design reference.
+  // Persist a style so it stays hidden as the portal mounts after load.
   await page.addInitScript(() => {
     const css =
       "nextjs-portal,[data-next-badge-root],[data-nextjs-toast]," +

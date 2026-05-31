@@ -22,8 +22,10 @@ const APP_DIR = path.resolve(
  *    config uses Desktop Chrome; capturing there would frame the app wrong.
  *  - DARK colour scheme by default (Camp 404 is dark-only; the OKLCH tokens in
  *    packages/ui/src/styles/globals.css define a single midnight-violet theme).
- *    Flip with CAPTURE_THEME=light to see how the stray `dark:` utilities fall
- *    back on a light-OS preference.
+ *    Flip with CAPTURE_THEME=light to surface the stray `dark:` utilities — they're
+ *    media-query (prefers-color-scheme) based, not class-based, so they only show
+ *    under a light OS preference. They're slated for removal in a dark-only app
+ *    (see design/recommendations.md).
  *  - serviceWorkers blocked so page.route() mocks are never bypassed by a cache.
  *
  * Run via: pnpm --filter @camp404/web design:capture
