@@ -12,6 +12,17 @@ import { QuestionField } from "./question";
 import { validateIdNumber } from "@/lib/id-validation";
 import type { SaveResult } from "@/app/onboarding/questionnaire/actions";
 
+// Reserved error-map keys for a page-level (non-field) failure. `_form` is set
+// by this component when a save action throws; `_root` is what server actions
+// return for non-field failures (e.g. saveFormReplay's "Unknown form.",
+// validateResponses' "Malformed response payload"). Both must render in the
+// banner. Question ids are always dotted/namespaced (e.g. "id.number"), so
+// these underscore keys can never collide with a real question.
+const FORM_ERROR_KEY = "_form";
+const ROOT_ERROR_KEY = "_root";
+const SAVE_FAILED =
+  "We couldn't save your answers just now. Please try again — if it keeps happening, let a camp captain know.";
+
 interface QuestionnaireWizardProps {
   questionnaire: Questionnaire;
   initialResponses: QuestionnaireResponses;
@@ -90,12 +101,19 @@ export function QuestionnaireWizard({
       return;
     }
     startTransition(async () => {
-      const result = await action(responses, false);
-      if (!result.ok) {
-        setErrors(result.errors);
-        return;
+      try {
+        const result = await action(responses, false);
+        if (!result.ok) {
+          setErrors(result.errors);
+          return;
+        }
+        setPageIndex((i) => Math.min(i + 1, questionnaire.pages.length - 1));
+      } catch {
+        // A thrown action (DB outage, encryption misconfig, …) must not leave
+        // the user stuck on the page with no feedback — surface a form-level
+        // error and let them retry instead of silently swallowing it.
+        setErrors((prev) => ({ ...prev, [FORM_ERROR_KEY]: SAVE_FAILED }));
       }
-      setPageIndex((i) => Math.min(i + 1, questionnaire.pages.length - 1));
     });
   }
 
@@ -106,15 +124,19 @@ export function QuestionnaireWizard({
   function handleSubmit() {
     if (!validatePageLocally(page!)) return;
     startTransition(async () => {
-      const result = await action(responses, true);
-      if (!result.ok) {
-        setErrors(result.errors);
-        return;
+      try {
+        const result = await action(responses, true);
+        if (!result.ok) {
+          setErrors(result.errors);
+          return;
+        }
+        // Onboarding's action redirects server-side, so code below never runs
+        // there. The replay flow returns normally and uses onComplete to show
+        // a confirmation and refresh the change log.
+        onComplete?.();
+      } catch {
+        setErrors((prev) => ({ ...prev, [FORM_ERROR_KEY]: SAVE_FAILED }));
       }
-      // Onboarding's action redirects server-side, so code below never runs
-      // there. The replay flow returns normally and uses onComplete to show
-      // a confirmation and refresh the change log.
-      onComplete?.();
     });
   }
 
@@ -143,6 +165,10 @@ export function QuestionnaireWizard({
     })();
   const nextLabel = isSkippable ? "Skip" : "Next";
 
+  // A page-level error from either the local catch (_form) or a server action
+  // that returned a non-field failure (_root).
+  const formError = errors[FORM_ERROR_KEY] ?? errors[ROOT_ERROR_KEY];
+
   return (
     <form
       onSubmit={(e) => {
@@ -153,6 +179,15 @@ export function QuestionnaireWizard({
       className="flex flex-1 flex-col gap-6"
     >
       <ProgressBar current={pageIndex + 1} total={questionnaire.pages.length} />
+
+      {formError && (
+        <p
+          role="alert"
+          className="rounded-md border border-[color:var(--color-destructive)] bg-[color:var(--color-destructive)]/10 px-3 py-2 text-sm text-[color:var(--color-destructive)]"
+        >
+          {formError}
+        </p>
+      )}
 
       {page.kind === "intro" ? (
         <section className="flex flex-1 flex-col items-center justify-center gap-6 py-12 text-center">
