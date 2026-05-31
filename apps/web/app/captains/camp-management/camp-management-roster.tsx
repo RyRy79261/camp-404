@@ -41,11 +41,11 @@ import {
 // (approve / reject a pending applicant).
 
 const STATUS_STYLE: Record<RosterStatus, string> = {
-  ready: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  onboarding: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  awaiting_approval: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-  rejected: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
-  pending: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+  ready: "bg-emerald-500/15 text-emerald-400",
+  onboarding: "bg-amber-500/15 text-amber-400",
+  awaiting_approval: "bg-sky-500/15 text-sky-400",
+  rejected: "bg-rose-500/15 text-rose-400",
+  pending: "bg-rose-500/15 text-rose-400",
 };
 
 function teamLabel(team: string): string {
@@ -58,7 +58,7 @@ function teamLabel(team: string): string {
 /** Yes/no cell — a tick when true, a muted dash when false. */
 function YesNo({ value, label }: { value: boolean; label: string }) {
   return value ? (
-    <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+    <span className="inline-flex items-center gap-1 text-emerald-400">
       <Check className="h-4 w-4" aria-hidden />
       <span className="sr-only">{label}: yes</span>
     </span>
@@ -137,7 +137,7 @@ export function CampManagementRoster({
             >
               Awaiting approval
               {awaitingCount > 0 && (
-                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-500/20 px-1.5 text-xs text-sky-600 dark:text-sky-400">
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-500/20 px-1.5 text-xs text-sky-400">
                   {awaitingCount}
                 </span>
               )}
@@ -229,7 +229,7 @@ export function CampManagementRoster({
                         r.rank === "captain"
                           ? "bg-primary/15 text-primary"
                           : r.isLead
-                            ? "bg-sky-500/15 text-sky-600 dark:text-sky-400"
+                            ? "bg-sky-500/15 text-sky-400"
                             : "bg-muted text-muted-foreground",
                       )}
                     >

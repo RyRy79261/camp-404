@@ -42,8 +42,10 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // next-themes (via NeonAuthUIProvider) sets class="dark" on <html> on the
+  // client; suppressHydrationWarning silences the resulting attribute mismatch.
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
         <Providers>
           {children}

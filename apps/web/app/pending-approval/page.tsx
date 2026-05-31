@@ -52,7 +52,7 @@ export default async function PendingApprovalPage() {
           className={
             rejected
               ? "flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive"
-              : "flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400"
+              : "flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/15 text-amber-400"
           }
         >
           {rejected ? (

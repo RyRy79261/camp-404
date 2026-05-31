@@ -227,7 +227,7 @@ function Branch({
                   {node.user.displayName ?? "(no name)"}
                 </span>
                 {node.user.rank === "captain" && (
-                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-300">
                     Captain
                   </span>
                 )}
