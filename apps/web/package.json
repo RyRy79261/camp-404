@@ -13,7 +13,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "design:capture": "playwright test --config scripts/pencil/capture.config.ts",
+    "design:cli": "bash ../../scripts/pencil/run.sh",
+    "design:status": "bash ../../scripts/pencil/run.sh status"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
