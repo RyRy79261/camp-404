@@ -249,7 +249,7 @@ export function AnnouncementsManager({
             </p>
           )}
           {notice && !error && (
-            <p className="text-sm text-emerald-600 dark:text-emerald-400">
+            <p className="text-sm text-emerald-400">
               {notice}
             </p>
           )}

@@ -226,7 +226,7 @@ function AvailabilityHint({
   }
   if (availability.state === "available") {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+      <p className="flex items-center gap-1.5 text-xs text-emerald-400">
         <Check className="h-3 w-3" />{" "}
         <span>
           <span className="font-mono">{code}</span> is available.
