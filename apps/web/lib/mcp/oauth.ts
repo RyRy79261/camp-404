@@ -1,7 +1,7 @@
 import { createHttpDb, createPooledDb } from "@camp404/db";
 import * as schema from "@camp404/db/schema";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { generateOpaqueToken, sha256, verifyPkce } from "./tokens";
+import { constantTimeEqual, generateOpaqueToken, sha256, verifyPkce } from "./tokens";
 
 // --- Lifetimes -----------------------------------------------------------
 // All in seconds. Re-tune per security/UX trade-offs.
@@ -106,13 +106,13 @@ export async function findClient(clientId: string) {
   return row ?? null;
 }
 
-/** Constant-time-ish check via sha256 + string compare on the hashes. */
+/** Constant-time check: hashes the presented secret then does a timing-safe compare. */
 export function verifyClientSecret(
   presented: string,
   storedHash: string | null,
 ): boolean {
   if (!storedHash) return false;
-  return sha256(presented) === storedHash;
+  return constantTimeEqual(sha256(presented), storedHash);
 }
 
 // --- Authorization codes -------------------------------------------------

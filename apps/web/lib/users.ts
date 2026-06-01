@@ -90,7 +90,7 @@ export async function ensureCampUser(
     profileImageUrl: null,
     inviteCode: null,
     rank: "member",
-    approvalStatus: "approved",
+    approvalStatus: "pending",
   };
 }
 
@@ -475,6 +475,6 @@ function toCampUser(row: {
     profileImageUrl: row.profileImageUrl ?? null,
     inviteCode: row.inviteCode,
     rank: row.rank,
-    approvalStatus: row.approvalStatus ?? "approved",
+    approvalStatus: row.approvalStatus ?? "pending",
   };
 }
