@@ -31,7 +31,7 @@
 ### POST /api/test/login (app/api/test/login/route.ts)
 - `runtime = "nodejs"` (line 9). 404s if not in test mode (lines 18-20).
 - Parses JSON body `LoginBody { id?, email?, displayName? }`; on parse failure defaults to `{}` (line 21).
-- Builds the synthetic user: `id = body.id ?? `test-stack-${Date.now()}``; `primaryEmail = body.email ?? null`; `displayName = body.displayName ?? body.email ?? null` (lines 22-26).
+- Builds the synthetic user: `` id = body.id ?? `test-stack-${Date.now()}` ``; `primaryEmail = body.email ?? null`; `displayName = body.displayName ?? body.email ?? null` (lines 22-26).
 - Sets the `camp404_test_user` cookie to `encodeURIComponent(JSON.stringify(user))` with `httpOnly: true`, `secure: process.env.NODE_ENV === "production"`, `sameSite: "lax"`, `path: "/"`, `maxAge: 60 * 60` (1 hour) (lines 28-35).
 - Returns `{ ok: true, user }` (line 36). Note: only sets the auth cookie — does NOT create a `testStore` user row; the row is created lazily on first authenticated gated page load via `ensureCampUser` (users.ts:60-95).
 
@@ -97,7 +97,7 @@ These are the real app code paths the seam relies on; each picks the test backen
 - `lib/notifications.ts` — full `testBackend` mapping all announcement/inbox methods to `testStore` (notifications.ts:84-119).
 - `lib/forms.ts` — `recordQuestionnaireEdit` / `listQuestionnaireEdits` route to `testStore` in test mode (forms.ts:144-158).
 - `app/api/tools/invite/check/route.ts` — availability check uses `testStore.findUsableInviteCode(raw)` in test mode (route.ts:57-59).
-- `app/feedback/actions.ts` — short-circuits before AI/GitHub, returning `{ ok: true, number: 0, url: `https://github.com/${DEFAULT_REPO}/issues` }` in test mode (actions.ts:97-100).
+- `app/feedback/actions.ts` — short-circuits before AI/GitHub, returning `` { ok: true, number: 0, url: `https://github.com/${DEFAULT_REPO}/issues` } `` in test mode (actions.ts:97-100).
 - `lib/account.ts` — `isE2ETestMode()` returns `{ lostCatNumber: 0 }` (account.ts:11).
 - `lib/push.ts` — push subscribe/notify are no-ops in test mode (push.ts:23, 32).
 - `app/api/avatar/route.ts` & `app/api/uploads/avatar/route.ts` — bypass the token/blob path in test mode (avatar route.ts:46; uploads route.ts:72).

@@ -4,11 +4,13 @@
 The doc is an unusually faithful, digit-exact mirror of the real source: every line:line citation I sampled landed on the cited code, all enum/numeric constants (350ms, 30/60_000, 8 retries, 1500ms, MAX_USES_LIMIT=100, 3–48) match verbatim, and the two "ugly truths" (test/prod existence mismatch, client/server hint divergence) are real and correctly flagged. The only defect is one cosmetic mislabel of an export style; no high- or medium-severity inaccuracies.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | `InviteForm` is a "default export-ish client component" (Sub-components) | `InviteForm` is a plain **named** export (`export function InviteForm(...)`); there is no default export in the file. The whole module is `"use client"`, so "client component" is right, but "default export-ish" is wrong. | apps/web/app/tools/invite/invite-form.tsx:1, 30 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The check route imports both `isE2ETestMode` (from `@/lib/test-mode`) and `testStore`. The doc mentions the E2E branch but not the explicit `isE2ETestMode()` import/guard wiring — fully covered in spirit, just not the import detail. | apps/web/app/api/tools/invite/check/route.ts:9-10, 57 |

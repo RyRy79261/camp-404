@@ -4,12 +4,14 @@
 The doc is a faithful, digit-exact catalog of the `@camp404/ui` primitive layer; every component file, variant, default, token, and consumer claim I checked confirmed against source. The single defect is a cosmetic line-range citation for `DialogContent`/`DialogFooter` (the underlying behaviour is correct). No high- or medium-severity inaccuracies.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | DialogContent close affordance "(dialog.tsx:50-78)" and DialogFooter "(dialog.tsx:94-118)" — the cited 50-78 range overlaps but the close button block is 70-78 and the footer Close button is 112-116. Ranges are loose but encompass the real code. | `DialogContent` is `50-82`; `showCloseButton` default `true` at 53; X-close block at 70-78. `DialogFooter` is `94-119`; `showCloseButton=false` at 96; outline Close button at 112-116. | dialog.tsx:50-82, 94-119 |
 | low | Doc lists package `exports` map as having no aggregate index; implies only `components/*` and `lib/utils` (States §, Validation §). | Correct that there is no barrel index. Map also exposes `./styles.css` and `./hooks/*` — the latter points to `./src/hooks/*.ts`, but **no `hooks/` dir exists**. Not a doc claim, but the doc's enumeration of import paths is incomplete (omits `./styles.css`). | packages/ui/package.json (exports), no `src/hooks/` |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | Slider thumb className includes `disabled:pointer-events-none disabled:opacity-50` in addition to the documented `data-[disabled]:opacity-50` on root and `hover:ring-4 focus-visible:ring-4` on thumb. Doc captures the salient ones. | slider.tsx:56 |

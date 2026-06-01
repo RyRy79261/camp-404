@@ -44,7 +44,7 @@
 - `canSeeIdDocuments(scope, subject)` (consent.ts:17-23): the rule deciding whether an MCP call may surface a subject's identification documents (passport, SA ID, EFT details, others' reimbursement bank details).
   - **Self always sees own data** regardless of consent: `if (scope.campUserId === subject.id) return true;` (consent.ts:21).
   - Otherwise both gates required: `return scope.isCaptain && subject.aiDataConsent;` (consent.ts:22).
-- `redactIdDocuments(scope, row)` (consent.ts:33-45): strips `passportEncrypted`, `saIdEncrypted`, `eftDetailsEncrypted` from a row when `canSeeIdDocuments` is false; otherwise returns the row unchanged. Intended as a second line of defence (callers must not decrypt before this gate — consent.ts:30-31). **Test-only / orphaned:** `redactIdDocuments` has ZERO production callers — only `consent.test.ts` exercises it. The live path (`people.ts`) does its own conditional include keyed on `canSeeIdDocuments` rather than calling this helper, so the documented "defence-in-depth" layer is not actually wired in.
+- `redactIdDocuments(scope, row)` (consent.ts:33-45): a **TEST-ONLY helper** that strips `passportEncrypted`, `saIdEncrypted`, `eftDetailsEncrypted` from a row when `canSeeIdDocuments` is false; otherwise returns the row unchanged. **It provides no production defence-in-depth layer:** `redactIdDocuments` has ZERO production callers — only `consent.test.ts` exercises it. The live path (`people.ts`) does its own conditional include keyed on `canSeeIdDocuments` (people.ts:133) rather than calling this helper, so this redaction is not wired into the live tool surface. (Its own doc comment at consent.ts:30-31 calls it a "second line of defence," but that second layer is not actually invoked in production.)
 - Everything else (phone, email, emergency contacts, dietary, vehicle details) bypasses this gate and is freely visible at the appropriate tier (consent.ts:11-16).
 
 ### Scope snapshot & capability predicates (scope.ts)
@@ -73,7 +73,7 @@ On the **consent screen** (`GET /api/mcp/oauth/authorize` HTML):
 - Tap **Deny** (`<button name="action" value="deny">`) → POST → redirect to client with `error=access_denied`.
 - The form (`method="POST" action="/api/mcp/oauth/authorize"`) carries all OAuth params as hidden inputs (route.ts:208-213, 243-249) so the POST handler reconstructs the request.
 
-No other interactive controls exist on this surface. There is **no per-scope checkbox, no granular toggle, and no `aiDataConsent` toggle on this screen** — scope is the single coarse `mcp:user`, all-or-nothing. (The `aiDataConsent` opt-in is a stored user flag set elsewhere; no UI for it was found under `apps/web/app`. <!-- low-confidence: aiDataConsent toggle UI location — not present in app routes; likely a profile/settings surface outside this unit -->)
+No other interactive controls exist on this surface. There is **no per-scope checkbox, no granular toggle, and no `aiDataConsent` toggle on this `/api/mcp/oauth/authorize` consent screen** — scope is the single coarse `mcp:user`, all-or-nothing. The `aiDataConsent` opt-in is **not** controlled by any profile/settings UI; it is read and written by the MCP identity tools `get_my_ai_consent` (identity.ts:124) and `set_my_ai_consent` (identity.ts:152), which read/write `users.aiDataConsent` (schema.ts:298) and `users.aiDataConsentAt` (schema.ts:299) for the calling user.
 
 ## States & presentations
 

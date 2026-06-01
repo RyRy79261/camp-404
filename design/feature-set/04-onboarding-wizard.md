@@ -180,7 +180,7 @@ Must agree with unit 29.
 
 ### Local (client) per-page validation — `validatePageLocally` (`wizard.tsx:79-101`)
 - Intro pages always pass (`p.kind === "intro" → true`).
-- For each question: value is "missing" if `undefined | null | "" ` (empty string). Missing + `required` → inline error `"This question is required"`.
+- For each question: value is "missing" if `undefined | null | ""` (empty string). Missing + `required` → inline error `"This question is required"`.
 - Cross-field ID check: when `q.id === "id.number"` and value is a non-empty string, calls `validateIdNumber(responses["id.type"], v)`; on failure sets that question's error to the returned message. Note: only runs when an ID number is typed; an empty `id.number` falls through to the generic required check.
 - Multi-select / arrays: NOT treated as missing here (arrays aren't `=== ""`); a `required` multi-select with `[]` would pass local validation but be caught by the server `validateOne` ("Pick at least one option").
 - Returns true only when the error map is empty; populates `errors` with whatever it found.

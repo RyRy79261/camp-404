@@ -4,6 +4,7 @@
 The doc is highly reliable end-to-end: every server-action, wizard, schema, validator, and PII-split claim was confirmed digit-for-digit against source. The one real defect is a repeated off-by-one in the page count — the catalogue has **12** pages, not 13 — which would mislead a rebuild on the most user-visible string ("Step N of 12"). Everything else is cosmetic.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | medium | "the 13 pages", "renders **13 pages** total ('Step N of 13')", section header "The live 13 pages (in order)" | The catalogue has exactly **12** top-level pages: 11 `kind:"questions"` + 1 `kind:"intro"`. `ProgressBar total={questionnaire.pages.length}` therefore renders "Step N of 12". | questionnaire.ts:62-386 (page `kind:` lines at 64,80,133,151,169,175,193,213,234,284,329,352); wizard.tsx:187,274 |
@@ -11,6 +12,7 @@ The doc is highly reliable end-to-end: every server-action, wizard, schema, vali
 | low | "Built from `COUNTRIES` … ~199 entries" (flagged low-confidence in doc) | `grep -c "value:"` = 199 in countries.ts; not hand-counted, but consistent with the doc's own caveat. | countries.ts (199 `value:` lines) |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | `idColumnsFor` default branch returns `{ passportEncrypted: value, saIdEncrypted: null }` for ANY non-`sa_id` type (including `null`/unknown) — doc says "default/unknown type → treated as passport", which is accurate, but the practical consequence (a `null` idType still writes the passport column) is worth noting since `splitIdNumber` can produce `idType:null` with a non-null `idNumber`. | id-documents.ts:43-50 |

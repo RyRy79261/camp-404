@@ -4,12 +4,14 @@
 This is an exceptionally reliable, digit-accurate catalog: every enum member list, every table column/default/index/FK, every cited file:line, and every helper-behaviour claim checks out against source. The lone defect is a self-contradicting enum **count** (says "24 pgEnums" but lists — and the source defines — 26); a couple of behavioural descriptions are mild simplifications. Nothing breaks a rebuild.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | medium | "Enum catalog … **24** `pgEnum`s" (line 36-37) and "Stored DB enums: the **24** `pgEnum`s above" (line 114) | There are **26** `pgEnum`s. The main schema block defines 23 (`rank` … `telegram_announcement_status`) and the MCP block defines 3 (`mcp_client_auth_method`, `mcp_code_challenge_method`, `mcp_audit_outcome`) = 26. The doc's own catalog (lines 38-63) correctly lists all 26 — so the prose count is internally contradicted by its own list. | `grep -c pgEnum( schema.ts` = 26; schema.ts:31-211 (23) + 1223-1237 (3) |
 | low | "`satisfyRequiredAction` flips a pending row to `completed` **only if** the completed version `meetsRequiredVersion` the required version" (line 77) | The version gate only fires when **both** `row.version` AND `completedVersion` are truthy; if either is null/absent it completes unconditionally. The doc's parenthetical "(older completion leaves gate open)" is right, but the unqualified "only if" overstates: a versionless gate or versionless completion always satisfies. | activations.ts:187-199 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The doc lists `findUserByAuthId`, `findUserById`, `createCampUser`, etc. under burner-profile.ts but omits `setUserTelegramHandle` / `recordTelegramUserId` (they live in telegram.ts, which the doc does cover under "Telegram bot data layer" — so not misattributed, just not enumerated). No correctness impact. | telegram.ts:138-161 |

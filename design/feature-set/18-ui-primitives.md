@@ -207,7 +207,7 @@ Consumers map domain data into these props; e.g. the questionnaire `combobox` fi
 
 ## Sub-components / variants
 - **Button:** exported `Button` + `buttonVariants` (CVA factory). Variants `default | destructive | outline | secondary | ghost | link`; sizes `default | sm | lg | icon | icon-lg`. `asChild` slot mode.
-  - **DEAD/ORPHANED:** size `icon-lg` (`h-14 w-14`) is defined (button.tsx:27) but has **no consumer** in `apps/web/**/*.tsx` (grep found none). Likely intended for the push-to-talk / large icon buttons but currently unused.
+  - **DEAD/ORPHANED:** size `icon-lg` (`h-14 w-14`) is defined (button.tsx:27) but has **no consumer** in `apps/web/**/*.tsx` (grep found none) and is omitted from `button.stories.tsx` (not in the `Sizes` story or `size` argTypes). Defined-but-unused — reserved for a future feature (e.g. the push-to-talk / large icon button) but currently unused.
   - **UNDER-DOCUMENTED:** `button.stories.tsx` argTypes omit `link` from variants and `icon-lg` from sizes, and the `Sizes` story shows only sm/default/lg — yet both `link` and `icon-lg` exist in code (and `link` is used in `invite-gate-form.tsx:63`).
 - **Input / Textarea / Label:** single component each, no variants. `labelVariants` is a CVA with only a base string (no variant axes) — effectively a no-op CVA (label.tsx:8-10).
 - **Checkbox:** single component; checked/unchecked/(indeterminate) via Radix data-state.

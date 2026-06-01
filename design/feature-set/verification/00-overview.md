@@ -4,6 +4,7 @@
 The overview is unusually reliable: every OKLCH token, enum, file:line citation, route, and primitive list I checked confirmed digit-for-digit against source. Defects cluster in two spots — (a) `control-grid.tsx` is presented as a live "desktop counterpart" but is Storybook-only/unused (the doc flags `quadrant-nav` as v0 but does not flag `control-grid`), and (b) the §4 "spinner in-button" grammar is cited to `wizard.tsx:255`, which only disables — no spinner lives in that file.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | medium | §3 / §4: "the grid is the desktop counterpart that shows all layers at once" and Captain-only-locked grammar cite `control-grid.tsx:50`/`:151` as live behaviour; `control-grid` is presented as a functional primitive with no prepared-but-unused caveat (only `quadrant-nav` is flagged v0). | `ControlGrid` is imported **only** by `control-grid.stories.tsx` — zero app consumers. It is Storybook-only/dead in production. `design-system.md` does not mention it at all (it documents `quadrant-nav` v0 and `control-panel`, but not `control-grid`). The doc's own §0 hint warns "control-grid / quadrant-nav are prepared-but-unused — verify"; this confirms control-grid is unused yet the prose treats it as live. | grep: only importer `packages/ui/src/components/control-grid.stories.tsx:13`; component `control-grid.tsx:50`,`:151` |
@@ -11,6 +12,7 @@ The overview is unusually reliable: every OKLCH token, enum, file:line citation,
 | low | §3 wizard: "top progress bar ('Step N of M', `wizard.tsx:263`)". | Line 263 is `function ProgressBar(...)`; the literal "Step {current} of {total}" string is at `:274`. Citation points at the component, not the string — off by ~11 lines. | `apps/web/components/questionnaire/wizard.tsx:263` vs `:274` |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | §1 "belt-and-braces" legacy gate. The doc names the gating spine (invite → required_actions → approval) but omits the legacy `completedAt` fallback that runs between `nextGate` and the approval gate — a second redirect to `/onboarding/questionnaire` when `!profile?.completedAt`. Harmless for a rebuild (it's a transitional safety net), but it is a real production gate step the §7 "ordered spine" doesn't list. | `apps/web/app/page.tsx:53-56` |

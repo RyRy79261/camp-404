@@ -4,12 +4,14 @@
 The doc is highly reliable: every code path, line citation, enum, schema field, literal string, and rate-limit constant I checked matched the real source verbatim. The only soft spots are (a) the production DB `findUsableInviteCode` being attributed to unspecified "other surfaces" when its sole real caller is the admin CLI, and (b) a self-flagged low-confidence note about `rejected → pending` re-redemption that is actually unreachable due to an earlier short-circuit. Neither breaks a rebuild.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | "`findUsableInviteCode` … this read-only validity check is for other surfaces" / "Used elsewhere" (implies web surfaces) | The production DB `findUsableInviteCode` (`@camp404/db/invite-codes`) has exactly one real caller: the founder-bootstrap admin CLI. No web route imports it (the `/api/tools/invite/check` and `/api/test/inspect` routes call the *test-store* method of the same name, not the DB one). "Other surfaces" is really "the admin CLI." | invite-codes.ts:26-50; consumer apps/admin-cli/src/index.ts:143 |
 | low | Low-confidence note (line 132): "rejected→pending is reachable on re-redemption" because the guard only excludes already-`pending` | Unreachable in practice: a `rejected` user necessarily already has `inviteCode` set (rejection presupposes a prior redemption), so the earlier short-circuit `isGodEmail(...) || existing?.inviteCode` returns `{ ok: true }` before the existing-row approval block runs. The `existing.approvalStatus !== "pending"` guard is never reached for a rejected user. (Doc self-tags this low-confidence, so impact is contained.) | users.ts:122-124 vs 135-137 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | `rateLimit` returns `retryAfterSeconds` in its result, but the action discards it and shows a static "wait a few minutes" message — doc describes the static message correctly but never notes the unused `retryAfterSeconds` field exists. Cosmetic. | rate-limit.ts:33-37, 53-59; actions.ts:30-34 |

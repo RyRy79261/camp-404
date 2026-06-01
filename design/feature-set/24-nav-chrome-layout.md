@@ -205,7 +205,7 @@ This unit reads/writes via `lib/notifications.ts` facade → `@camp404/db/broadc
 - **Dialog dismiss-while-sending**: blocked so the GitHub response/error is never lost; Cancel disabled while pending.
 - **Feedback empty-after-sanitize**: HTML-only or PII-only input that sanitizes to empty is rejected with "Please describe the issue." (never files a blank issue).
 - **PII redaction order**: secrets matched before generic patterns "before generic patterns split them apart"; international phone regex deliberately consumes all trailing digit groups so the last group can't leak.
-- **Markdown-injection hardening**: user/AI free text is fenced (`fenced`, backticks defused to `''' `), inline-coded (`inlineCode` strips backticks + newlines for reporter id/route), or `mdInline`'d (AI prose) so it can't inject headings/fences/blockquotes/lists; AI fields are re-sanitized because "the model can echo PII".
+- **Markdown-injection hardening**: user/AI free text is fenced (`fenced`, backticks defused to `'''`), inline-coded (`inlineCode` strips backticks + newlines for reporter id/route), or `mdInline`'d (AI prose) so it can't inject headings/fences/blockquotes/lists; AI fields are re-sanitized because "the model can echo PII".
 - **GitHub 201-shape validation**: response validated with `GithubIssueSchema` (`number` + `html_url` URL) rather than cast; malformed 201 → "filed, but we couldn't read GitHub's reply."
 - **Rate limiter caveat**: in-memory + per-instance, so "best-effort against a determined member"; the daily ceiling exists because the destination is a public tracker.
 - **Repo is PUBLIC**: issue bodies are world-readable — never put reporter name/email in the body, only the opaque camp id; the dialog also warns "please don't include personal details."

@@ -4,12 +4,14 @@
 The doc is unusually faithful: every hex mirror, OKLCH token value, line number, and consumption claim I spot-checked matched the source verbatim, including the "ugly truth" hex-inconsistency and the orphan-token analysis. The only real defect is a self-contradictory token count — the prose says "21 OKLCH colour tokens" while the table, the equality note, and the business-rules section all correctly say 19 (source has exactly 19). That single count error recurs in two places.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | medium | "It defines **21** OKLCH colour tokens (dark-only…)" (Purpose) and "**21** colour tokens, all expressed in OKLCH" (Features) | globals.css defines exactly **19** `--color-*` tokens (+1 `--radius`). The doc's own Enums table (line 85: "19 colour tokens above"), the table itself, and the business-rules section (line 127: "all 19 colour tokens + --radius") correctly say 19. "21" is wrong and internally contradicts the rest of the doc. | doc lines 15, 22 vs `packages/ui/src/styles/globals.css:12-38` (grep count = 19) |
 | low | og-image constants located at "lines 13–17" | Correct as written; constants are at lines 13–17. (No error — included only because line cites were exhaustively re-checked; this one passed.) | `apps/web/lib/og-image.tsx:13-17` |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The doc names `NeonAuthUIProvider` as the carrier of next-themes but does not note that `providers.tsx` passes it NO theme-related props at all (no `forcedTheme`/`defaultTheme`/`themeProps`) — so the "dark" class behavior is entirely internal to the `@neondatabase/auth` bundle and not observable from app code. The doc's hedge ("the dark class comes from the auth provider's bundled next-themes") is accurate but the total absence of any theme prop in app source is worth stating. | `apps/web/app/providers.tsx:14-23` |

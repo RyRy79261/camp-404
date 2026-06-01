@@ -9,6 +9,13 @@ raised and nothing was re-verified against source.
 
 ## 1. Executive Summary
 
+> **Verification timeline / phase marker.** Verification conducted 2026-05-31;
+> phase-5 fixes applied prior to PR #52 (commit `1b45568`). Several MEDIUM
+> findings in §4/§5 are ALREADY incorporated into the feature-set briefs — e.g.
+> unit 04 now states "12 pages", unit 28 "19 tokens", unit 29 "26 pgEnums".
+> Treat those §4/§5 mediums as HISTORICAL (pre-fix) unless re-flagged against the
+> current briefs.
+
 ### Aggregate metrics
 
 | Metric | Value |

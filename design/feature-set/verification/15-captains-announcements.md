@@ -4,12 +4,14 @@
 The doc is an exceptionally faithful, digit-exact transcription of the real source: every line citation I spot-checked (page.tsx, announcements-manager.tsx, actions.ts, broadcasts.ts, audience.ts, announcement.ts, schema.ts, test-store.ts) landed on the claimed code. No high- or medium-severity defects found; the only blemishes are one soft "convention" framing and one cosmetic line-range that is one line short.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | "wider than the global `max-w-lg` convention" (line 24) — framed as an established convention | `max-w-lg` appears in only 3 app files, `max-w-3xl` in 2; it is not a dominant, enforced convention. The factual part (this page uses `max-w-3xl`) IS correct. | apps/web/app/captains/announcements/page.tsx:35 |
 | low | "Single section card titled ... (`announcements-manager.tsx:166-183`)" — composer header range stated as 166-183 | The `<section>` opens at 166 and the header `<div>` closes at 183, but the composer fields (Title/Message/How-it-lands/error/notice/submit) run on through 273. The cited range only covers the title + Cancel-edit row, not the full "single section card". Effectively cosmetic — the title/cancel claim it backs is correct. | apps/web/app/captains/announcements/announcements-manager.tsx:166-183 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The published meta footer also guards the timestamp behind `a.publishedAt &&` before rendering `toLocaleString()`; doc states the timestamp unconditionally. Harmless (published rows always have `publishedAt`), but the conditional exists. | apps/web/app/captains/announcements/announcements-manager.tsx:356-358 |

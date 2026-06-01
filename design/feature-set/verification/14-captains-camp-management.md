@@ -4,12 +4,14 @@
 The doc is a faithful, digit-exact account of the captains' camp-management surface across all seven covered files plus the followed imports. Every gate, view-model rule, enum, status-precedence branch, dead-field, and crypto constant was confirmed against source. The only defects are two trivial line-number citations; no behavioral claim is wrong.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | "`CampManagementMember.duesPaid` and `.membershipTier` … fetched by `getCampManagementRoster` (roster.ts:58-59, **98-99**)" — implies the map lines are 98-99 | The SELECT lines 58-59 are correct (`duesPaid`, `membershipTier`); but in the `.map()` the assignments are `duesPaid: r.duesPaid` at line **101** and `membershipTier: r.membershipTier` at line **102**. Lines 98-99 are `approvalStatus`/`isLead`. The underlying claim (fetched-but-unread) is still correct. | roster.ts:58-59, 101-102 |
 | low | Cites `STATUS_LABEL` (camp-roster.ts:43-49) as if exported alongside the type — it is a module-private `const` (not exported); roster.tsx redefines its own `STATUS_STYLE`. | `const STATUS_LABEL` is private to camp-roster.ts (consumed only via `statusLabel` on the row); not an exported enum. Cosmetic — the values/lines are correct. | camp-roster.ts:43-49 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The Approve button shows the spinner (`Loader2`) on `isPending` but Reject does not swap its icon — doc says "Approve swaps its icon for a spinning `Loader2`" (correct) and that both are disabled (correct); it does not note Reject keeps its `X` icon while pending. Minor presentation detail. | camp-management-roster.tsx:467, 479-483 |

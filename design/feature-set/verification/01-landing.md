@@ -4,11 +4,13 @@
 The doc is an exceptionally faithful, digit-exact transcription of the landing surface; every structural, string, token, CSS line-number, and gating claim I checked confirmed against real source. The single defect is a cosmetic off-by-one in one line-range citation; no fabricated features, no dead-code-as-live, no wrong attribution.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | "(avoids the Next 16 `DYNAMIC_SERVER_USAGE` prerender trace — see comment `page.tsx:23-27`)" — cites the comment as spanning lines 23-27 | The explanatory comment occupies lines 23-26; line 27 is the `export const dynamic = "force-dynamic";` statement itself, not part of the comment. Off-by-one on the range end. | `apps/web/app/page.tsx:23-27` |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | (none material) | — | — |

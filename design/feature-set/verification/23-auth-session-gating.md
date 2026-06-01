@@ -4,12 +4,14 @@
 The doc is an exceptionally faithful map of the auth/gating spine: every file:line citation I checked resolved correctly, enum lists and table schemas are digit-exact, the gate ordering in `app/page.tsx` matches, and dead/transitional branches (legacy `completedAt` fallback, unmapped `ACTION_ROUTES` keys, `opt_in` TODO) are flagged exactly as source comments mark them. The only soft spots are two claims about upstream Neon Auth package internals (the ≥32-char secret throw) that can't be confirmed from this repo's code; no high- or medium-severity inaccuracies were found.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | `redeemInviteForUser` FIRST-TIME branch cited as "users.ts:144-151" | Row creation spans 144-150 and the `return { ok: true }` is at 152; the cited range stops one line short of the return. Cosmetic line-range drift, all described behavior present. | apps/web/lib/users.ts:144-152 |
 | low | test-store globalThis singleton cited "test-store.ts:97-126" | The explanatory comment is 97-105 and `globalState()` is 108-126; line 97 is the start of the comment, not the singleton itself. The behavior (state hung off `globalThis.__camp404TestStore__`, `GLOBAL_KEY` at :106) is accurate. | apps/web/lib/test-store.ts:106-126 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | `seedBurnerProfileAction`/`satisfyBurnerProfileAction`/`getPendingRequiredActions` call `ensureRequiredAction`/`dbSatisfy.../dbGet...` which internally use `createHttpDb()` (HTTP driver) — `openActivation` is the only producer using `createPooledDb()` for its transaction. Doc covers `openActivation`'s pooled transaction but doesn't note the single-row helpers are non-transactional HTTP. Not gating-relevant; minor. | packages/db/src/activations.ts:146,172,206 vs :88 |

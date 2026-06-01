@@ -4,11 +4,13 @@
 The doc is an exceptionally faithful mirror of the source: every file:line cite, enum member list, schema column, query predicate, icon mapping, and gate path was confirmed against real production code. The single non-confirmation is a self-flagged low-confidence aside about a "product-wide max-w-lg shell" that does not actually exist as a global shell — but the page's own `max-w-2xl` is correct, and the doc already hedged it. No high- or medium-severity defects.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | "this max-w-2xl deviates from the product-wide max-w-lg shell" (line 81, hedged low-confidence) | There is no global `max-w-lg` shell. `max-w-lg` appears only in `not-found.tsx`, `error.tsx`, and `camp-management-roster.tsx` (one occurrence each); the root layout enforces no fixed width. The `max-w-2xl` on the inbox page itself is correct. | `apps/web/app/notifications/page.tsx:40` (max-w-2xl correct); no global max-w-lg shell found in `app/layout.tsx` |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | (none material) | — | — |

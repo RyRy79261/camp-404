@@ -4,6 +4,7 @@
 The doc is highly reliable and digit-exact across gating, both server actions, the avatar pipeline, and the full `sanitiseAccount` erasure (field-for-field, including the NOT-NULL reimbursement scrub). The only defects are two cosmetic provenance mistakes in the closing "Sub-components" section (wrong importer of the actions; wrong location of the unit test) plus one prepared-but-unused `className` prop that the doc presents as a usable override. Nothing breaks a rebuild.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | "Server actions `updateProfile` + `deleteOwnAccount` live in the shared `app/profile/actions.ts` (**the `/profile` view also imports from here**)" | The only importers of either action are `edit-form.tsx` and `delete-account.tsx`. `app/profile/page.tsx` imports none of them (it imports `next/link`, `@/lib/auth`, `@/lib/users`, `@/lib/initials`, UI cards/button — no `../actions`). | doc:141 vs apps/web/app/profile/page.tsx:1-18; grep confirms no other importers |
@@ -11,6 +12,7 @@ The doc is highly reliable and digit-exact across gating, both server actions, t
 | low | "`AvatarUpload` … accepts a `className` diameter override (default `h-40 w-40`)" — framed as a usable variant lever | The `className` prop exists (avatar-upload.tsx:14) and is applied (avatar-upload.tsx:86), but **no real consumer passes it**: edit-form.tsx:31 and question.tsx:235 both call `<AvatarUpload value=… onChange=… />` with no `className`. Prepared-but-unused. | avatar-upload.tsx:14,86; edit-form.tsx:31; question.tsx:235 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The button's dashed-vs-solid border toggles on `value && "border-solid"` (solid only when a *saved* URL exists, not on local preview) — a minor visual detail the doc's empty-state description ("dashed border") does not fully capture. | avatar-upload.tsx:84 |

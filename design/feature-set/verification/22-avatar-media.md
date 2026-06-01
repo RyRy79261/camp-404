@@ -4,12 +4,14 @@
 This doc is highly reliable: the four core files (uploader, image preprocessor, POST upload route, GET proxy route) and every supporting file were confirmed line-for-line, including digit-exact constants, status codes, enum defaults, blob-API shapes, and the two-consumer wiring. The only defects are a file-attribution conflation in the questionnaire citations (medium, doesn't affect a rebuild's behaviour) and one slightly-loose "fallback" wording (low).
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | medium | The `profile.image` question definition — `id: "profile.image"`, `prompt: "Profile photo"`, `helper: "A clear photo of your face works best."`, page `profile_photo` / title "Add a profile photo" / subtitle — is cited as "(questionnaire.ts:62-77)" alongside the schema/validator, and "Supporting files read" lists only `packages/types/src/questionnaire.ts` for questionnaire. | Those strings actually live in **`apps/web/lib/questionnaire.ts:63-77`** (the live questionnaire config), a different file from `packages/types/src/questionnaire.ts`. The doc conflates two distinct files under one "questionnaire.ts" label and never names the lib file. The schema (`ImageQuestion`, 128-134) and validator (360-366, 430-433) are correctly in the types package. | apps/web/lib/questionnaire.ts:63-77 vs packages/types/src/questionnaire.ts:128-134 |
 | low | "`presentMemberDetail` reads `responses["profile.image"]` as a **fallback** source for the member card image." | Within `presentMemberDetail`, `profileImageUrl` is derived **solely** from `responses["profile.image"]` (typeof string ? : null) — there is no primary users-column read in this function for which the response would be a fallback. The "fallback" framing only holds at the broader system level (users column canonical for header/profile). | apps/web/lib/member-detail.ts:116-119, 33, 172 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The rate limiter has an additional production-relevant mechanic not mentioned: a periodic bucket sweep (`SWEEP_EVERY = 200`) that evicts expired buckets to cap Map growth. Doc describes the token-bucket refill math correctly but omits the sweep. | apps/web/lib/rate-limit.ts:13-24, 45 |

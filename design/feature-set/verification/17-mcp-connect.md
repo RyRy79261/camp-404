@@ -4,6 +4,7 @@
 The doc is a high-fidelity, digit-exact description of the MCP consent/bridge surface: line citations, enum values, error codes, TTLs, gate ordering, and schema fields all match production source. The only real defect is an Omission — four of the six `scope.ts` capability predicates plus `redactIdDocuments` are test-only (no production caller), yet the doc presents them as the live "what the granted token can do per call" surface without flagging them as orphaned the way it correctly flags `isAllowedRedirectUri` and `plain` PKCE.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | "Advertised as `scopes_supported: ["mcp:user"]` … (oauth-authorization-server/route.ts:23)" | `scopes_supported` is on line **22**; line 23 is `response_types_supported`. The protected-resource cite (route.ts:19) is correct. | apps/web/app/api/mcp/well-known/oauth-authorization-server/route.ts:22 |
@@ -12,6 +13,7 @@ The doc is a high-fidelity, digit-exact description of the MCP consent/bridge su
 | low | "CSP `form-action 'self'` silently drops cross-origin 302s … (route.ts:259-263)" stated as established fact | The `form-action 'self'` CSP is only referenced in a code **comment** in this route; no app-level CSP setting `form-action 'self'` is present in source (the only CSP in build artefacts is Next's metadata-route `script-src 'none'…sandbox`). The `htmlRedirect` technique itself is real; the CSP rationale is unverifiable from source. | apps/web/app/api/mcp/oauth/authorize/route.ts:261 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | medium | The doc presents `scope.ts` predicates `canReadTeamOps` / `canWriteTeam` / `canApproveCrossTeam` / `canAdmin` as the live capability surface ("defines what the granted token can do per call"), but **none of the four has any production caller** — they appear only in `scope.test.ts`. Only `getMcpScope` (via `tool-utils.ts:53`) and `canSeeIdDocuments` (via `people.ts:133`) are wired in. The doc's "Dead/orphaned" section flags `isAllowedRedirectUri` and `plain` PKCE but not these four. | apps/web/lib/mcp/scope.ts:70-90 (callers: only apps/web/lib/mcp/__tests__/scope.test.ts) |

@@ -4,11 +4,13 @@
 The doc is a faithful, line-accurate mirror of the real source across page gating, the Drizzle roster query, tree construction, search/ancestor-promotion, expand/collapse, branch rendering, schema columns, and the two orphaned helpers. Every cited file:line, enum literal, source string, and CSS constant I checked matched verbatim; the single defect is one cosmetic off-by-one in a Branch-rendering line citation.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | "Node card (`<Card>`, `family-tree.tsx:213-252`)" and "Highlight rings (`family-tree.tsx:213-218`)" — the `<Card>` opens at 213, but the card-content block that holds the avatar/name/badges/via-code/count spans 220-251, with the card element ending at 252. The 213-218 range cited for highlight rings covers only the `<Card className=[...]>` array; the description is correct, just the inclusive line span is slightly loose. | `<Card className={[...]}>` at 213-219, `ring-1 ring-primary` at 216, `border-amber-400/60` at 217, `CardContent` 220-251, `</Card>` 252. | family-tree.tsx:213-252 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The doc's "Empty (no accounts)" vs "Empty (no search matches)" split is real, but the doc does not note that the SAME `visibleTrees.length === 0` card distinguishes the two purely by `query ? "No matches." : "No accounts yet."` — i.e. a single ternary, one `<Card>`, not two branches. (Doc lists them as separate rows; minor over-segmentation, not wrong.) | family-tree.tsx:109-114 |

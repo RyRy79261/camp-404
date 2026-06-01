@@ -60,6 +60,7 @@ The token layer itself has no data lifecycle, so most global-states rows do not 
 ## Enums, options & configurable values
 
 ### Colour tokens — digit-exact (`globals.css` lines 12–38)
+
 | Token | OKLCH value | Role (from in-file comments) |
 |---|---|---|
 | `--color-background` | `oklch(0.15 0.05 295)` | midnight-violet base |
@@ -85,11 +86,13 @@ The token layer itself has no data lifecycle, so most global-states rows do not 
 (19 colour tokens above — note `card`/`popover` and `card-foreground`/`popover-foreground` are deliberately identical pairs; `border`/`input` identical; `ring`/`primary` identical.)
 
 ### Sizing token
+
 | Token | Value |
 |---|---|
 | `--radius` | `0.625rem` |
 
 ### Hex-mirror values (the literal copies maintained by hand)
+
 | Hex | Mirrors | Used in |
 |---|---|---|
 | `#0d061e` | `--color-background` / themeColor | og-image (`BACKGROUND`), manifest `background_color` + `theme_color`, layout `themeColor`, icon.svg base, global-error `background`, capacitor splash `backgroundColor` |

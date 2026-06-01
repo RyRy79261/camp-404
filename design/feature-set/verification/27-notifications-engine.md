@@ -4,6 +4,7 @@
 The doc is an exceptionally faithful description of the broadcast→delivery→inbox engine: every cited file, line range, enum member, schema default, error string, and control-flow branch was confirmed against production source. The single non-confirmation is a behavior the doc itself already flags as low-confidence (refType/refId deep-link wiring is built data-side but unread by any UI), so there is no high- or medium-severity defect.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | _(none)_ | — | — | — |
@@ -11,6 +12,7 @@ The doc is an exceptionally faithful description of the broadcast→delivery→i
 No inaccuracies found. Every spot-check (below) confirmed the doc digit-for-digit, including line ranges, which were unusually precise.
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | `broadcasts.team` column is typed `teamEnum`, not free text; doc's data-model row says "`team` `teamEnum`" so this is actually captured. No real omission. | packages/db/src/schema.ts:774 |

@@ -4,6 +4,7 @@
 The doc is highly reliable and digit-exact on enums, tokens, gating order, and component internals; nearly every cited fact reproduces against source. The single real defect cluster is the camp_member layer's navigation: two of its four "live" tile destinations (`/members`, `/meals`) point to routes that do not exist in the app, yet the doc presents them as working navigation without the 404 caveat it carefully applies elsewhere.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | medium | camp_member tiles navigate to live destinations: `My Teams` → `/members`, `My Tasks` → `/meals` (lines 91, 130 present these as working `<a href>` navigation, only team_lead/captain tiles flagged as inert) | No `app/members/page.tsx` and no `app/meals/page.tsx` exist anywhere under `apps/web` (no route group, no `route.ts`, and there is **no `middleware.ts`** to rewrite). Both hrefs hit Next's 404. So two of the four "working" camp_member tiles are dead links — the same ugly-truth caveat the doc gives team_lead/captain should apply here. | `apps/web/app/page.tsx:107-117` (hrefs) · routes absent (grep: no `members`/`meals` files) |
@@ -12,6 +13,7 @@ The doc is highly reliable and digit-exact on enums, tokens, gating order, and c
 | low | required_actions filter cited at `activations.ts:218-225` (line 144) | The WHERE `and(...)` block is `activations.ts:219-223`, ordered at `:225`; function spans `203-226`. Content (status='pending' AND blocking=true, ASC createdAt) is exactly right; line range drifts by a couple. | `packages/db/src/activations.ts:203-226` |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | `ControlPanelHeader` (the orphan default header) is in fact referenced once — by a Storybook story, not just "not referenced from page.tsx". The doc's low-confidence note ("whether used by any other route") resolves to: only `control-grid.stories.tsx`, never a real route. Strengthens, not weakens, the orphan claim. | `packages/ui/src/components/control-grid.stories.tsx:14,107` |

@@ -4,11 +4,13 @@
 The doc is a near-exact, digit-for-digit transcription of `app/tools/page.tsx` and its gate helpers; every route, line range, enum, source string, and E2E citation I checked confirmed against live code. The only soft spot is one self-flagged low-confidence styling note where the doc's framing ("product-wide `max-w-lg`") is actually contradicted by the broader codebase — but it is already marked low-confidence and is cosmetic.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | "this surface uses `max-w-2xl`, not the product-wide `max-w-lg` shell" (already self-flagged low-confidence) | `max-w-2xl` is in fact the dominant content-shell width across the app (`notifications/page.tsx:40`, `captains/tools/page.tsx:56`, `tools/forms/page.tsx:44`, `onboarding/questionnaire/page.tsx:43`, `acknowledgement-gate.tsx:114`); `max-w-lg` appears only on the centered error/empty shells (`error.tsx:29`, `not-found.tsx:14`). So `/tools` is consistent with peers, not an outlier; the "product-wide max-w-lg" premise is inverted. | tools/page.tsx:61; error.tsx:29; not-found.tsx:14 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The doc says a god account on first sign-in "calls `seedBurnerProfileAction`" (line 71) without noting that `seedBurnerProfileAction` is a **no-op under E2E test mode** (`if (isE2ETestMode()) return;`). Immaterial to the hub (it is `ensureCampUser`'s own side effect, correctly attributed), but the unqualified "calls" overstates the real-DB-only behavior. | users.ts:192-193 |

@@ -4,6 +4,7 @@
 The doc is highly reliable: line refs, copy strings, payloads, validation rules, callbackURL targets, cookie config and env vars are digit-exact against source. Defects cluster in the "Sub-components / variants" / "Auth shell chrome" sections, where two reuse-hook claims about `AuthShell` (`footer` orphaned, `hideBack` caller enumeration) and one helper-attribution claim are stale — `signup/required` and `pending-approval` are real `AuthShell` callers the doc omits, and `footer` is in fact passed by `signup/required`.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | medium | "`AuthShell`'s `footer` prop is **currently unused / orphaned** (no caller passes it)" (lines 62, 152) | `signup/required/page.tsx` passes `footer="Camp 404 is invite-only."` to `AuthShell`. The prop is live, not orphaned. | apps/web/app/signup/required/page.tsx:30 |
@@ -12,6 +13,7 @@ The doc is highly reliable: line refs, copy strings, payloads, validation rules,
 | low | "the Back button never renders **in the live flow today**" framed as auth-shell-specific (line 152) | Accurate today (all 4 callers pass `hideBack`), but it is a cross-unit invariant spanning pending-approval + signup/required, not just the two auth forms the section scopes it to. Flagged for completeness. | apps/web/components/auth-shell.tsx:35 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | `AuthShell` has two more live callers beyond the auth forms: `pending-approval/page.tsx` (hideBack) and `signup/required/page.tsx` (hideBack + footer). The doc's "Sub-components" treatment implies sign-in/sign-up are the only consumers. | apps/web/app/pending-approval/page.tsx:49 ; apps/web/app/signup/required/page.tsx:30 |

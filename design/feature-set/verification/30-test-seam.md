@@ -4,6 +4,7 @@
 This doc is highly reliable: every route handler, validation string, store method, enum, cookie option, and in-process consumer branch checks out digit-for-digit against the real source. Defects cluster in two spots — one repeated factual error ("13-page" wizard; the questionnaire defines 12 pages) and one self-contradicting claim about `invited_email` having "no schema column" (it does, on the very line range the doc cites). Schema line citations for the broadcasts/deliveries tables are off by ~14-20 lines (mid-table slices, not table starts) but still land on the right fields.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | medium | "skips the 13-page wizard walk" / "Shortcuts the 13-page burner-profile wizard" / "complete-onboarding ... skip the 13-page wizard" — repeated 3× (doc lines 9, 59, 169) | `QUESTIONNAIRE.pages` defines exactly **12** page objects (profile_photo, about_you, bio, burn_ideas, team_interests_intro, team_interests, cooking_competency, hardware_competency, leadership_logistics, burn_history, burn_intent, dietary). The wizard renders `questionnaire.pages.length` pages with no extra review/summary page. The "13" matches a stale source comment in `complete-onboarding/route.ts:6-8` but not the actual data. | questionnaire.ts:61-386 (12 pages); wizard.tsx:65,187 |
@@ -14,6 +15,7 @@ This doc is highly reliable: every route handler, validation string, store metho
 | low | "`lib/push.ts` — push **subscribe/notify** are no-ops in test mode (push.ts:23, 32)" | The functions are `registerPushToken` (line 23) and `unregisterPushToken` (line 32) — register/unregister, not "subscribe/notify". No "notify" no-op exists in push.ts. Line numbers and no-op behavior are correct. | push.ts:23,32 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The forms.ts test-mode branch lives in functions named `recordFormEdit` / `listFormEdits`, not `recordQuestionnaireEdit` / `listQuestionnaireEdits` (those are the testStore method names). Doc line 98 says "`recordQuestionnaireEdit` / `listQuestionnaireEdits` route to testStore" — conflates the consumer fn name with the store method name. Behavior + lines (144, 156-158) correct. | forms.ts:137,151 |
@@ -24,7 +26,7 @@ This doc is highly reliable: every route handler, validation string, store metho
 - `GLOBAL_KEY = "__camp404TestStore__"` (test-store.ts:106); `globalState()` lazily inits at 108-126; stable Map/array bindings + primitive `nextSerial` read through `S` (128-137); globalThis rationale comment verbatim (97-105). ✓
 - `nextId()` → `` `test-user-${S.nextSerial++}` `` (146-148); edit id `` `test-edit-${S.nextSerial++}` `` (289); broadcast uuid (363), delivery uuid (426) via `crypto.randomUUID()`. ✓
 - `nextSerial` starts at 1 (122), reset to 1 (566); `reset()` clears 4 maps + truncates 3 arrays via `.length = 0` (558-567). ✓
-- POST/DELETE /api/test/login: `runtime="nodejs"` (9), 404 guards (18-20, 40-42), `id ?? \`test-stack-${Date.now()}\``, `primaryEmail = body.email ?? null`, `displayName = body.displayName ?? body.email ?? null` (22-26), cookie `httpOnly:true, secure: NODE_ENV==="production", sameSite:"lax", path:"/", maxAge:60*60` (29-35), `encodeURIComponent(JSON.stringify(user))`, returns `{ok:true,user}` (36); DELETE deletes cookie, `{ok:true}` (43-45). ✓
+- POST/DELETE /api/test/login: `runtime="nodejs"` (9), 404 guards (18-20, 40-42), ``id ?? `test-stack-${Date.now()}` ``, `primaryEmail = body.email ?? null`, `displayName = body.displayName ?? body.email ?? null` (22-26), cookie `httpOnly:true, secure: NODE_ENV==="production", sameSite:"lax", path:"/", maxAge:60*60` (29-35), `encodeURIComponent(JSON.stringify(user))`, returns `{ok:true,user}` (36); DELETE deletes cookie, `{ok:true}` (43-45). ✓
 - /api/test/reset: runtime nodejs (8), 404 (11-13), `testStore.reset()` + cookie delete + `{ok:true}` (14-17). ✓
 - /api/test/seed-invite: runtime (8), SeedBody (10-18, NO `invitedEmail`), 404 (21-23), parse→{} (24), `code is required` 400 (25-30), maps `createdByUserId/note/maxUses ?? null`, `expiresAt ? new Date(...) : null`, `assignedRank ?? null`, `requiresApproval ?? false` (31-39), returns full row (40). ✓
 - /api/test/complete-onboarding: runtime (11), 404 (18-20), `authUserId is required` (22-27), `No user for authUserId ${...}` 404 (28-34), `upsertProfile({userId,version:"e2e-test",responses:{},markComplete:true})` (35-40). ✓

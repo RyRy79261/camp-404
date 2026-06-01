@@ -78,7 +78,7 @@ Supporting imports read for accuracy: `apps/web/app/layout.tsx` (mount point + `
 - `labelsFor(kind)`: bug → `["bug","from-app"]`; feature → `["enhancement","from-app"]`. `from-app` marks provenance; missing labels auto-created by the issues API (`:25-32`).
 - `redactPii(input)`: see Validation section for the full pattern list.
 - `sanitizeReportText(text, maxLength)`: `redactPii` → strip HTML tags `<[^>]*>` → trim → `slice(0, maxLength)`; empty input returns "" (`:79-85`).
-- `buildFeedbackIssue(input)`: assembles `{ title, body, labels }`. Footer is a PII-free provenance line; body sections come from `plainParts` or `structuredParts`; final body is `[...sections, "---", footer].join("\n\n").slice(0, ISSUE_BODY_MAX)` (`:178-200`). Markdown-escaping helpers: `fenced` (code-fence + defuse ``` ``` ``` → `''' `), `inlineCode` (strip backticks + collapse newlines, for footer reporter/route), `mdInline` (defuse fences + collapse newlines, for AI prose) (`:87-111`).
+- `buildFeedbackIssue(input)`: assembles `{ title, body, labels }`. Footer is a PII-free provenance line; body sections come from `plainParts` or `structuredParts`; final body is `[...sections, "---", footer].join("\n\n").slice(0, ISSUE_BODY_MAX)` (`:178-200`). Markdown-escaping helpers: `fenced` (code-fence + defuse ``` ``` ``` → `"''' "`), `inlineCode` (strip backticks + collapse newlines, for footer reporter/route), `mdInline` (defuse fences + collapse newlines, for AI prose) (`:87-111`).
 
 ### Error boundary (app/error.tsx)
 - Default-exported Next.js route-segment error boundary catching uncaught errors thrown while rendering a page or running a server action in the app tree (`:6-11` comment). Receives `{ error: Error & { digest?: string }, reset }` (`:11-17`).

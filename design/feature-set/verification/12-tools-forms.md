@@ -4,12 +4,14 @@
 The doc is a faithful, digit-exact map of the My-forms / form-replay surface: every file path, line range, copy string, enum, schema field, and registry fact checked out against live source, including the subtle ID-redaction and no-op-replay behaviours. The only blemishes are two trivial cosmetic citation slips; no high- or medium-severity defects, and the doc itself already self-flags the one genuine code-vs-comment contradiction (the `completedAt` overwrite).
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | Test-store serial pushed as `` `test-edit-${nextSerial++}` `` (`test-store.ts:281-297`). | Actual literal uses the module state object: `` `test-edit-${S.nextSerial++}` ``. The `S.` prefix is dropped in the doc. | apps/web/lib/test-store.ts:289 |
 | low | "ID type values … `id-documents.ts:15,43-49`". | `idColumnsFor` spans lines 43-50 (closing brace at 50); line 15 is the `idType` JSDoc on the `SplitId` interface. Off-by-one tail on the range; substance ("passport" default \| "sa_id" \| null) is correct. | packages/db/src/id-documents.ts:13-26,43-50 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The doc does not mention that `validateResponses` only iterates `page.questions` and *drops* unknown keys via the per-question loop (no per-page persistence of stray keys) — it is described accurately in prose under "Validation" but the mechanism (`responses[q.id] = result.value` only when defined; unknown keys never copied) is left implicit. Not misleading; behaviour is correctly summarised. | packages/types/src/questionnaire.ts:334-352 |

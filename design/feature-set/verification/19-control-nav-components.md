@@ -4,6 +4,7 @@
 The doc is a high-fidelity, digit-accurate description of the control-panel/control-grid/quadrant-nav surface and its sole live consumer. The only real defect is a wrong file:line + wrong-function attribution for `isTeamLead`'s SQL (the cited lines point at a different roster function); the claimed behaviour is still correct. Everything else — class strings, enums, render-mode ordering, prop defaults, the "PTT not wired on home" ugly truth, and the dead/orphaned status of ControlGrid + QuadrantNav — confirms against source.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | medium | `isTeamLead(campUser.id)` "resolves via `@camp404/db/roster`, whose SQL is `exists (… where tm.user_id = users.id and tm.is_lead = true)` (packages/db/src/roster.ts:21-22, 66-68)" | The cited lines are the WRONG function: roster.ts:21-22 is the `CampManagementMember.isLead` JSDoc and roster.ts:66-68 is the `exists(...)` subquery inside `getCampManagementRoster`, NOT `isTeamLead`. The real `isTeamLead` lives at roster.ts:204-217 and uses a Drizzle `select({team}).from(teamMemberships).where(and(eq(userId), eq(isLead,true))).limit(1)` — not a raw `exists` SQL string. Also, the live page calls `isTeamLead` from `@/lib/users` (a store wrapper), which routes to `dbIsTeamLead` only in the real backend; under E2E it returns `false`. | roster.ts:204-217; apps/web/lib/users.ts:244-247, 387-389, 448-450 |
@@ -11,6 +12,7 @@ The doc is a high-fidelity, digit-accurate description of the control-panel/cont
 | low | keyframe "(globals.css:58-68)" / "globals.css:58-68" | The `@keyframes cp-layer-in` block is lines 59-68; line 58 is the leading comment. One-line drift on the start. | globals.css:58-68 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | The live `viewerRank` derivation is wrapped through a store abstraction with an E2E test branch (`isE2ETestMode() ? testBackend : realBackend`) where the in-memory store always reports `isTeamLead → false`. The doc presents the derivation as a direct DB read; it does not mention the test-store path. Not user-facing, but relevant to "no fabricated/test-only behavior" diligence. | apps/web/lib/users.ts:244-247, 448-450 |

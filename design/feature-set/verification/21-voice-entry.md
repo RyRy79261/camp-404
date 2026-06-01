@@ -4,12 +4,14 @@
 The doc is a faithful, digit-exact account of the voice-dictation pipeline: every enum member, status code, byte cap, rate limit, MIME list, prompt string, and prop interface matches the real source, and the "orphaned DictateButton" / "two RecorderPanel consumers" / "no DB" structural claims all hold. The only defects are two cosmetic line-citation slips (one mislabels the short_text Input as the long_text Textarea; one LongTextField start-line is off by a few). Nothing would mislead a rebuild.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | "host field's textarea `maxLength` also enforces typed input — question.tsx:179, 449" | Line 179 is the **short_text** `<Input maxLength={question.maxLength}>`, not the long_text textarea. The long_text Textarea maxLength is line 449 (correct). The 179 citation points at the wrong field variant. | apps/web/components/questionnaire/question.tsx:179, 449 |
 | low | `LongTextField`, "lines 414–477" (Files covered) | `LongTextField` function declaration begins at line 418 (lines 405–417 are the JSDoc comment). End at 477 is correct. Off-by-a-few on the start line. | apps/web/components/questionnaire/question.tsx:418–477 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | low | Doc says bug-report `appendTranscript` "sets a `dictated` flag" but does not note the flag is read at submit time and forwarded into `submitFeedbackAction({...dictated})`; harmless, but the flag's downstream purpose is unstated. | apps/web/components/feedback/report-bug-dialog.tsx:78, 92 |

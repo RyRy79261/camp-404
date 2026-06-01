@@ -4,12 +4,14 @@
 The doc is a near line-perfect description of the profile surface: every cited file:line resolves, the gate spine, fallback chains, enums, avatar-proxy status codes, and shared-primitive defaults all match source. The only defects are two cosmetic nuances (a comment mis-attributed to "home gate" vs profile, and a CSS-token shorthand) — neither would mislead a rebuild.
 
 ## Inaccuracies
+
 | severity | doc claim | code reality | file:line |
 |---|---|---|---|
 | low | Doc line 62: "the comment at `users.ts:187-191` flags `completedAt` as the 'legacy' fallback that still gates **here**" (implying the profile page). | The comment actually says the legacy `completedAt` fallback is "still present in the **home gate**" — it references the home page gate, not the profile page. The profile page does independently gate on `completedAt` (page.tsx:31), but the cited comment is about a different surface. | users.ts:187-191 |
 | low | Doc lines 74/112/115 render the secondary tokens as `bg-[var(--color-secondary)]` / `text-[var(--color-secondary-foreground)]`. | Source uses the `[color:…]` prefix form: `bg-[color:var(--color-secondary)]` / `text-[color:var(--color-secondary-foreground)]`. Cosmetic shorthand; same token. | page.tsx:55, avatar.tsx:46 |
 
 ## Omissions
+
 | severity | missing behavior/state/enum | file:line |
 |---|---|---|
 | (none material) | — | — |

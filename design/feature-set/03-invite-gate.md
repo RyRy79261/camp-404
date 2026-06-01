@@ -26,7 +26,7 @@
 
 ### Invite-code form (`invite-gate-form.tsx`)
 - Wires `useActionState<SubmitInviteResult | null, FormData>(submitInviteCode, null)` → exposes `[state, formAction, isPending]` (form:15-18).
-- Renders heading "One more thing"; body copy that, when `email` is non-null, reads `You're signed in as <email>. ` followed by `Camp 404 is invite-only — drop your code below to come aboard.` When `email` is null, only the second sentence renders (form:22-36).
+- Renders heading "One more thing"; body copy that, when `email` is non-null, reads `You're signed in as <email>.` (with a literal trailing space) followed by `Camp 404 is invite-only — drop your code below to come aboard.` When `email` is null, only the second sentence renders (form:22-36).
 - Single text `<Input>` for the code: `id="invite-code"`, `name="code"`, `autoComplete="off"`, `spellCheck={false}`, `autoCapitalize="off"`, `autoCorrect="off"`, `required` (form:38-49), with a `<Label htmlFor="invite-code">Invite code</Label>`.
 - Inline error: when `state && !state.ok`, renders `<p role="alert">` styled `var(--color-destructive)` showing `state.error` (form:51-55).
 - Submit `<Button type="submit" className="w-full" disabled={isPending}>` — label `"Checking…"` while pending, `"Enter camp"` otherwise (form:57-59).
@@ -35,7 +35,7 @@
 ### `submitInviteCode` server action (`actions.ts`)
 - `"use server"`. Signature `(_prev: SubmitInviteResult | null, formData: FormData) => Promise<SubmitInviteResult>` — note: only ever *returns* on failure; on success it `redirect`s (so the resolved type is effectively never, but is typed `SubmitInviteResult`) (actions.ts:17-43).
 - `getAuthenticatedUserOrRedirect()` re-asserts auth server-side (actions.ts:21).
-- **Rate limit** (actions.ts:25-34): `rateLimit(\`invite-redeem:${authUser.id}\`, { limit: 10, windowMs: 10 * 60_000 })`. On exhaustion returns `{ ok: false, error: "Too many attempts — wait a few minutes and try again." }`. Per-user (not per-IP) because sign-up is open and an IP limit alone is evadable.
+- **Rate limit** (actions.ts:25-34): ``rateLimit(`invite-redeem:${authUser.id}`, { limit: 10, windowMs: 10 * 60_000 })``. On exhaustion returns `{ ok: false, error: "Too many attempts — wait a few minutes and try again." }`. Per-user (not per-IP) because sign-up is open and an IP limit alone is evadable.
 - Reads `formData.get("code")`; coerces non-string to `""` (actions.ts:36-37).
 - Calls `redeemInviteForUser(authUser, code)`; on `!result.ok` returns `{ ok: false, error: result.error }`; on success `redirect("/")` (actions.ts:39-42). The home gate (`app/page.tsx`) then routes onward to questionnaire / pending-approval.
 

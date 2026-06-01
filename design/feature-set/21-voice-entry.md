@@ -66,7 +66,7 @@
 - **Per-user rate limit**: key `voice-transcribe:${user.id}`, `limit: 30` (default 60s window); on fail → 429 `{error:"Rate limit exceeded", retryAfterSeconds}` + `Retry-After` header (route.ts:20–26).
 - **Per-IP rate limit** (defence in depth, comment: "user.id can be cheap to mint via repeated signups"): key `voice-transcribe-ip:${getClientIp(req.headers)}`, `limit: 60`; on fail → 429 `{error:"Rate limit exceeded"}` + `Retry-After` (route.ts:28–38).
 - **Form parse**: `req.formData()`; on throw → 400 `{error:"Invalid form data"}` (route.ts:40–45).
-- **File validation**: `form.get("audio")` must be a `File` → else 400 `{error:"Missing \`audio\` file"}`; `file.type` must start with `audio/` → else **415** `{error:"File must be audio/*"}`; `file.size > MAX_BYTES` → **413** `{error:"Audio too large"}` (route.ts:47–59).
+- **File validation**: `form.get("audio")` must be a `File` → else 400 ``{error:"Missing `audio` file"}``; `file.type` must start with `audio/` → else **415** `{error:"File must be audio/*"}`; `file.size > MAX_BYTES` → **413** `{error:"Audio too large"}` (route.ts:47–59).
 - **Prompt resolution**: `promptKey` from form; if in `ACCEPTED_PROMPT_KEYS` → use `QUESTIONNAIRE_PROMPT`, else `undefined` (unbiased) (route.ts:61–64).
 - **Transcribe**: `transcribeAudio(file, {prompt})` → 200 `{text}` (route.ts:66–68).
 - **Error handling**: logs server-side; returns **502**; message scrubbed to `"Voice not configured"` if the error mentions `GROQ_API_KEY`, otherwise generic `"Transcription failed"` — Groq internals are never leaked (route.ts:69–77, 71 comment).
@@ -116,7 +116,7 @@ Global-states rows that apply here:
 - **Success**: `onTranscript` fired with non-empty `data.text.trim()`; state → `idle`.
 - **Disabled**: record button disabled while `isBusy`; X/close disabled while recording or busy.
 - **Error**: see error matrix in **Validation** below.
-- **Gating states** (invite-gated / onboarding-incomplete / pending / rejected / captain-only-locked): NOT expressed inside the pipeline UI. The server route only enforces **authentication** (401 if unauthenticated, route.ts:15–18) — there is no rank/approval/onboarding check on `/api/voice/transcribe`. Gating happens upstream at the host surface (the questionnaire/onboarding flow and the feedback layer), not in the voice components. `<!-- low-confidence: whether an unauthenticated-but-onboarding-incomplete user could hit the route directly; route only checks getAuthenticatedUser() truthiness, not approval_status/nextGate. -->`
+- **Gating states** (invite-gated / onboarding-incomplete / pending / rejected / captain-only-locked): NOT expressed inside the pipeline UI. The server route only enforces **authentication** (401 if unauthenticated, route.ts:15–18) — there is no rank/approval/onboarding check on `/api/voice/transcribe`. Gating happens upstream at the host surface (the questionnaire/onboarding flow and the feedback layer), not in the voice components. **Edge case / gating asymmetry:** the route checks `getAuthenticatedUser()` truthiness ONLY — it does not read `approval_status`/`nextGate`, so any *authenticated* user (including an unapproved or mid-onboarding member) who reaches the endpoint directly can transcribe. This is asymmetric with the page-gating spine and may be intentional (the route is only reachable from already-gated host surfaces) or a gap (source bug — see verification report §6).
 
 ## Enums, options & configurable values
 - **RecorderState**: `"idle" | "requesting" | "recording" | "processing" | "error"` (use-voice-recorder.ts:5–10).
