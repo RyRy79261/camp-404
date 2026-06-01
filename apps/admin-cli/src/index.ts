@@ -43,12 +43,12 @@ async function main() {
 }
 
 async function seed() {
-  console.log("TODO: seed minimum viable camp data (Phase 1).");
+  throw new Error("Not implemented: seed minimum viable camp data (Phase 1).");
 }
 
 async function wipeTestData() {
-  console.log(
-    'TODO: wipe rows where email/name has a "test-" prefix (CI/Agent scope).',
+  throw new Error(
+    'Not implemented: wipe rows where email/name has a "test-" prefix (CI/Agent scope).',
   );
 }
 

@@ -107,19 +107,20 @@ export interface CompletedFormSummary {
 export async function listCompletedForms(
   userId: string,
 ): Promise<CompletedFormSummary[]> {
-  const out: CompletedFormSummary[] = [];
-  for (const form of REGISTRY) {
-    const state = await form.load(userId);
-    if (!state?.completedAt) continue;
-    out.push({
-      key: form.key,
-      title: form.title,
-      description: form.description,
-      completedAt: state.completedAt,
-      updatedAt: state.updatedAt,
-    });
-  }
-  return out;
+  const results = await Promise.all(
+    REGISTRY.map(async (form) => {
+      const state = await form.load(userId);
+      if (!state?.completedAt) return null;
+      return {
+        key: form.key,
+        title: form.title,
+        description: form.description,
+        completedAt: state.completedAt,
+        updatedAt: state.updatedAt,
+      };
+    }),
+  );
+  return results.filter((r): r is CompletedFormSummary => r !== null);
 }
 
 // --- Edit change log ----------------------------------------------------
