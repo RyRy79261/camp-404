@@ -231,7 +231,7 @@ Exits: close profile/dialog (in-place); Back → captain tools hub / `/`.
 
 ## Open questions / build reconciliations
 
-1. **Member email in plaintext (PII):** the profile renders the auth email unredacted to any captain. Raise with the data owner — redact/partial-mask, or gate behind an explicit reveal, or accept as captain-tier-visible? (decision carry).
+1. ⛔ **Member email in plaintext (PII) — must resolve before build (privacy).** The profile renders the auth email unredacted to any captain. Decide with the data owner — redact/partial-mask, gate behind an explicit reveal, or accept as captain-tier-visible — and **record the chosen mitigation + owner here once made** (don't ship with it open). (decision carry).
 2. **`@handle` source:** reuse `users.telegramHandle` (may be null / not unique) or derive a display slug? A dedicated roster-handle column is **not** added unless product asks. Confirm fallback when `telegramHandle` is null.
 3. **Promotion request lifecycle UI:** where does the *target* accept/decline (their own app — which surface)? Does the requesting captain see a pending-requests list, or only the per-member dialog step state? Need the acceptance surface specced (likely home rank-section / notifications).
 4. **Promotion + invite-code rank:** invite codes can already mint `assigned_rank='captain'`. Confirm the double-opt-in is the *only* in-app promotion path and that code-minted captains bypass it intentionally.

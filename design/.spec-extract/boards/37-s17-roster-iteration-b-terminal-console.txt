@@ -50,7 +50,7 @@
         ▸ "Outstanding" {gap:7 pad:[8,14] ai:center r:$radius fill:#e0a8001a stroke:#e0a800}
           ⊙ triangle-alert (#e0a800) [lucide]
           T "Outstanding 7"  [JetBrains Mono/13px/600/#e0a800]
-    ▸ "Table" {vertical w:fill_container r:$radius fill:$card,[object Object] stroke:$border}
+    ▸ "Table" {vertical w:fill_container r:$radius fill:$card+shader(scanlines3.glsl) stroke:$border}
       ▸ "HeaderRow" {w:fill_container fill:#00000033 stroke:$border}
         ▸ "barpad" {w:4 h:10}
         ▸ "hcontent" {w:fill_container gap:16 pad:[13,18] ai:center}
@@ -202,7 +202,7 @@
     ▸ "cap-profile" {gap:8 pad:[10,0,0,0] ai:center}
       T "//"  [JetBrains Mono/13px/700/$accent]
       T "Open member profile"  [JetBrains Mono/13px/700/$muted-foreground]
-    ▸ "MemberProfile" {vertical w:fill_container gap:20 pad:24 r:$radius fill:$card,[object Object] stroke:$border}
+    ▸ "MemberProfile" {vertical w:fill_container gap:20 pad:24 r:$radius fill:$card+shader(scanlines3.glsl) stroke:$border}
       ▸ "PanelBar" {w:fill_container gap:8 pad:[0,0,14,0] ai:center stroke:$border}
         T ">"  [JetBrains Mono/14px/700/$accent]
         T "nova reyes · profile"  [JetBrains Mono/12.5px/500/$muted-foreground]

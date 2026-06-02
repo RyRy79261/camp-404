@@ -40,7 +40,7 @@
       ▸ "Outstanding 7" {gap:7 pad:[8,14] jc:center ai:center r:$radius fill:#e0a8001a stroke:#e0a800}
         ⊙ triangle-alert (#e0a800) [lucide]
         T "Outstanding 7"  [JetBrains Mono/13px/600/#e0a800]
-  ▸ "Roster" {vertical w:fill_container r:$radius fill:$card,[object Object] stroke:$border}
+  ▸ "Roster" {vertical w:fill_container r:$radius fill:$card+shader(scanlines3.glsl) stroke:$border}
     ▸ "Nova Reyes" {w:fill_container h:58 ai:center stroke:$border}
       ▭ "bar" {w:4 h:fill_container fill:$accent}
       ▸ "content" {w:fill_container h:fill_container gap:11 pad:[12,13] ai:center fill:#00dcff1a}
@@ -137,7 +137,7 @@
             T "🇯🇵"  [Inter/13px/normal/#ffffff]
             T "Japan"  [Inter/12px/normal/$muted-foreground]
         T "🐱"  [Inter/19px/normal/#ffffff]
-  ▸ "MemberProfile" {vertical w:fill_container gap:18 pad:20 r:$radius fill:$card,[object Object] stroke:$border}
+  ▸ "MemberProfile" {vertical w:fill_container gap:18 pad:20 r:$radius fill:$card+shader(scanlines3.glsl) stroke:$border}
     ▸ "PanelBar" {w:fill_container gap:8 pad:[0,0,14,0] ai:center stroke:$border}
       T ">"  [JetBrains Mono/14px/700/$accent]
       T "nova reyes · profile"  [JetBrains Mono/12.5px/500/$muted-foreground]

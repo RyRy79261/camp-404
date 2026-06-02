@@ -20,7 +20,7 @@
     ▸ "POPULATED block" {vertical w:fill_container gap:14 ai:center}
       T "POPULATED"  [JetBrains Mono/11px/normal/$muted-foreground]
       ▸ "Avatar with remove" {none w:120 h:120}
-        ▸ "Avatar photo" {w:120 h:120 r:60 fill:[object Object] stroke:$primary}
+        ▸ "Avatar photo" {w:120 h:120 r:60 fill:image(https://images.unsplash.com/photo-1652549752260-829ce42eb245?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3ODAzNDIxODh8&ixlib=rb-4.1.0&q=80&w=1080) stroke:$primary}
         ▸ "Remove button" {vertical w:28 h:28 jc:center ai:center r:14 fill:$destructive}
           ⊙ x ($destructive-foreground) [lucide]
       ⟶ <Button-Outline> "Change button"  overrides:["Change photo"]

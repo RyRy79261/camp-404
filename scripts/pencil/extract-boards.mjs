@@ -28,6 +28,21 @@ const slug = (s) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
 
+// Render a paint value (fill/stroke), which may be a token string, an image/
+// shader/gradient object, or an array of layered paints — never "[object Object]".
+const renderPaint = (p) => {
+  if (p == null) return "";
+  if (typeof p === "string") return p;
+  if (Array.isArray(p)) return p.map(renderPaint).join("+");
+  if (typeof p === "object") {
+    if (p.type === "image") return `image(${p.url ?? "?"})`;
+    if (p.type === "shader") return `shader(${p.url ?? "?"})`;
+    if (p.type === "gradient") return `gradient(${(p.stops || []).map((s) => s.color ?? s).join(",")})`;
+    return `${p.type || "paint"}(…)`;
+  }
+  return String(p);
+};
+
 const layoutHints = (n) => {
   const h = [];
   if (n.layout) h.push(n.layout);
@@ -38,8 +53,8 @@ const layoutHints = (n) => {
   if (n.justifyContent) h.push(`jc:${n.justifyContent}`);
   if (n.alignItems) h.push(`ai:${n.alignItems}`);
   if (n.cornerRadius != null) h.push(`r:${n.cornerRadius}`);
-  if (n.fill) h.push(`fill:${n.fill}`);
-  if (n.stroke) h.push(`stroke:${n.stroke}`);
+  if (n.fill) h.push(`fill:${renderPaint(n.fill)}`);
+  if (n.stroke) h.push(`stroke:${renderPaint(n.stroke)}`);
   if (n.layoutPosition === "absolute") h.push(`abs(${n.x},${n.y})`);
   if (n.opacity != null) h.push(`op:${n.opacity}`);
   return h.length ? ` {${h.join(" ")}}` : "";

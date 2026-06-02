@@ -179,7 +179,7 @@ On-surface render states:
 - **Leaf nodes** cannot be toggled (button disabled, dot marker).
 - **Whole roster fetched + rendered every load** — no pagination, no lazy load; sized for the camp's ~30–80 people by design. `force-dynamic` re-queries each visit; no caching/invalidation concerns.
 - **No write path** → no validation errors, optimistic UI, or conflict handling.
-- **Cycle safety (KNOWN SOURCE BUG):** the `matchIds` ancestor-promotion walk follows `inviterId` via `while (cursor)` with **no visited-set guard**. A cyclic `inviterId` chain (A→B→A, e.g. via manual DB edits) makes the loop never terminate → infinite loop / hung client render on any search query. Cycles are presumed domain-impossible (you can't redeem a code before existing), but nothing defends against them. **Build reconciliation:** add a `visited` Set to the promotion walk (and guard `buildTree`) when this surface is rebuilt. Flagged, not silently inherited.
+- **Cycle safety (KNOWN SOURCE BUG):** the `matchIds` ancestor-promotion walk follows `inviterId` via `while (cursor)` with **no visited-set guard**. A cyclic `inviterId` chain (A→B→A, e.g. via manual DB edits) makes the loop never terminate → infinite loop / hung client render on any search query. Cycles are presumed domain-impossible (you can't redeem a code before existing), but nothing defends against them. **⛔ Must fix before shipping this surface (reliability — do not defer):** add a `visited` Set to the promotion walk (and guard `buildTree`). A cyclic chain hangs/crashes the client on any search; manual DB edits, migrations, or data corruption can introduce one, so "domain-impossible" is not a sufficient defence. Flagged, not silently inherited.
 
 ---
 
