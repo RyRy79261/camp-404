@@ -13,6 +13,7 @@
     "./invite-codes": "./src/invite-codes.ts",
     "./relations": "./src/relations.ts",
     "./roster": "./src/roster.ts",
+    "./captain-promotion": "./src/captain-promotion.ts",
     "./broadcasts": "./src/broadcasts.ts",
     "./audience": "./src/audience.ts",
     "./push": "./src/push.ts",

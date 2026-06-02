@@ -85,6 +85,13 @@
       "when": 1780169140133,
       "tag": "0011_far_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1780410791990,
+      "tag": "0012_calm_firebrand",
+      "breakpoints": true
     }
   ]
 }

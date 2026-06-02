@@ -44,6 +44,16 @@ export const approvalStatusEnum = pgEnum("approval_status", [
   "rejected",
 ]);
 
+// Two-sided captain-promotion handshake (captain_promotion_requests). A captain
+// SENDS a request; the target ACCEPTS in their own app before their rank flips
+// to `captain`. Keep in sync with PromotionRequestStatus in @camp404/types.
+export const promotionRequestStatusEnum = pgEnum("promotion_request_status", [
+  "sent",
+  "accepted",
+  "declined",
+  "cancelled",
+]);
+
 // The camp's working teams. Used wherever a row is scoped to a team:
 // memberships, budgets, reimbursements, broadcasts, questionnaires,
 // documents, tasks, inventory. Values are stable identifiers — the
@@ -458,6 +468,43 @@ export const teamMemberships = pgTable(
   (tm) => ({
     pk: primaryKey({ columns: [tm.userId, tm.team] }),
     teamIdx: index("team_memberships_team_idx").on(tm.team),
+  }),
+);
+
+// --- Captain-promotion requests ------------------------------------------
+// The durable pending state behind the two-sided "make captain" handshake —
+// the redesign's ONLY schema change. `setUserRank` is a one-sided write and
+// cannot model "captain sends → target accepts before rank flips", so the
+// `sent` row IS the pending request; rank flips to `captain` only on the
+// target's `accepted` transition (an explicit `setUserRank` call in the accept
+// action — this table carries no cross-table side effects). At most one OPEN
+// (`sent`) request per target is enforced by a partial unique index, which
+// backs the app's idempotent-send rule.
+export const captainPromotionRequests = pgTable(
+  "captain_promotion_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // Nullable + ON DELETE SET NULL so a request row SURVIVES as an audit
+    // record when a referenced user is removed. The normal account-deletion
+    // path is a soft SANITISE (the user row is kept, PII scrubbed), so the FK
+    // keeps pointing at the sanitised identity; SET NULL is the fallback for a
+    // true hard delete (event retained, identity dropped). Never cascade —
+    // that would destroy the audit record (OD3 → audit-retention).
+    targetUserId: uuid("target_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    requestedByUserId: uuid("requested_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    status: promotionRequestStatusEnum("status").notNull().default("sent"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    decidedAt: timestamp("decided_at", { mode: "date" }),
+  },
+  (t) => ({
+    openPerTarget: uniqueIndex("captain_promotion_open_per_target_idx")
+      .on(t.targetUserId)
+      .where(sql`${t.status} = 'sent'`),
+    targetIdx: index("captain_promotion_target_idx").on(t.targetUserId),
   }),
 );
 
