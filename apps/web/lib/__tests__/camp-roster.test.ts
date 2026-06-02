@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { CampManagementMember } from "@camp404/db/roster";
-import { rankLabel, toRosterRow } from "@/lib/camp-roster";
+import {
+  deriveRosterStats,
+  matchesChip,
+  matchesRosterQuery,
+  matchesTeam,
+  rankLabel,
+  toRosterRow,
+} from "@/lib/camp-roster";
 
 function member(
   overrides: Partial<CampManagementMember> = {},
@@ -127,5 +134,132 @@ describe("toRosterRow derivations", () => {
     expect(toRosterRow(member({ displayName: "   " })).displayName).toBe(
       "Unnamed burner",
     );
+  });
+});
+
+describe("matchesChip", () => {
+  const captain = toRosterRow(member({ rank: "captain" }));
+  const awaiting = toRosterRow(
+    member({ onboardingComplete: true, approvalStatus: "pending" }),
+  );
+  const outstanding = toRosterRow(
+    member({ onboardingComplete: true, pendingRequiredActions: 2 }),
+  );
+  const ready = toRosterRow(member({ onboardingComplete: true }));
+
+  it("'all' matches everyone", () => {
+    for (const row of [captain, awaiting, outstanding, ready]) {
+      expect(matchesChip(row, "all")).toBe(true);
+    }
+  });
+
+  it("'pending' matches only rows awaiting a vetting decision", () => {
+    expect(matchesChip(awaiting, "pending")).toBe(true);
+    expect(matchesChip(ready, "pending")).toBe(false);
+  });
+
+  it("'captains' matches only captains", () => {
+    expect(matchesChip(captain, "captains")).toBe(true);
+    expect(matchesChip(ready, "captains")).toBe(false);
+  });
+
+  it("'outstanding' matches only rows with blocking actions left", () => {
+    expect(matchesChip(outstanding, "outstanding")).toBe(true);
+    expect(matchesChip(ready, "outstanding")).toBe(false);
+  });
+});
+
+describe("matchesTeam", () => {
+  const row = toRosterRow(member({ teams: ["kitchen", "structures"] }));
+
+  it("matches a team the member belongs to", () => {
+    expect(matchesTeam(row, "kitchen")).toBe(true);
+    expect(matchesTeam(row, "structures")).toBe(true);
+  });
+
+  it("does not match a team the member isn't on", () => {
+    expect(matchesTeam(row, "sanitation_and_water")).toBe(false);
+    expect(matchesTeam(toRosterRow(member({ teams: [] })), "kitchen")).toBe(
+      false,
+    );
+  });
+});
+
+describe("matchesRosterQuery", () => {
+  const row = toRosterRow(
+    member({
+      displayName: "Dusty Boot",
+      handle: "dustyb",
+      country: "GB",
+      teams: ["kitchen"],
+    }),
+  );
+
+  it("matches everything for an empty/whitespace query", () => {
+    expect(matchesRosterQuery(row, "")).toBe(true);
+    expect(matchesRosterQuery(row, "   ")).toBe(true);
+  });
+
+  it("matches on name, handle, country, and team value (case-insensitive)", () => {
+    expect(matchesRosterQuery(row, "dusty")).toBe(true);
+    expect(matchesRosterQuery(row, "DUSTYB")).toBe(true);
+    expect(matchesRosterQuery(row, "united kingdom")).toBe(true);
+    expect(matchesRosterQuery(row, "kitchen")).toBe(true);
+  });
+
+  it("matches on rank label", () => {
+    expect(matchesRosterQuery(toRosterRow(member({ rank: "captain" })), "captain")).toBe(
+      true,
+    );
+  });
+
+  it("tolerates a null handle / null country", () => {
+    const bare = toRosterRow(
+      member({ displayName: "Nmeb", handle: null, country: null, teams: [] }),
+    );
+    expect(matchesRosterQuery(bare, "nmeb")).toBe(true);
+    expect(matchesRosterQuery(bare, "kitchen")).toBe(false);
+  });
+
+  it("returns false when nothing matches", () => {
+    expect(matchesRosterQuery(row, "zzz-nope")).toBe(false);
+  });
+});
+
+describe("deriveRosterStats", () => {
+  it("derives all six counts in one reconciling pass", () => {
+    const rows = [
+      // approved captain, all done
+      toRosterRow(
+        member({ rank: "captain", approvalStatus: "approved" }),
+      ),
+      // approved member with a blocking action left (incomplete/outstanding)
+      toRosterRow(
+        member({ approvalStatus: "approved", pendingRequiredActions: 2 }),
+      ),
+      // awaiting a vetting decision (pending)
+      toRosterRow(
+        member({ approvalStatus: "pending", onboardingComplete: true }),
+      ),
+    ];
+    expect(deriveRosterStats(rows)).toEqual({
+      members: 3,
+      approved: 2,
+      incomplete: 1,
+      pending: 1,
+      captains: 1,
+      outstanding: 1, // same predicate as incomplete (OQ#5)
+    });
+  });
+
+  it("is all-zero for an empty roster", () => {
+    expect(deriveRosterStats([])).toEqual({
+      members: 0,
+      approved: 0,
+      incomplete: 0,
+      pending: 0,
+      captains: 0,
+      outstanding: 0,
+    });
   });
 });
