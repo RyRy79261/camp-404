@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
@@ -59,6 +59,24 @@ export async function getOpenPromotionForTarget(
 }
 
 /**
+ * A promotion request by id, in ANY status (or null). Backs the accept / decline
+ * / cancel actions: they load the row to feed the participant ids + status into
+ * the pure `canDecidePromotion` guard, so a terminal row yields `request_not_open`
+ * rather than a generic "not found". Read-only — no rank side-effects.
+ */
+export async function getPromotionRequestById(
+  requestId: string,
+): Promise<CaptainPromotionRequestRow | null> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select()
+    .from(captainPromotionRequests)
+    .where(eq(captainPromotionRequests.id, requestId))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
  * Send a "make captain" request. Idempotent: if an open request already exists
  * for the target it is returned unchanged (the partial unique index
  * `captain_promotion_open_per_target_idx` is the concurrency backstop). Does
@@ -97,7 +115,10 @@ export async function sendCaptainPromotion(input: {
 /**
  * Resolve an OPEN request to a terminal status. Only stamps the promotion row
  * (status + decidedAt); the rank change for `accepted` is the caller's job.
- * Returns null if the request was not open (already decided / not found).
+ * Returns null if the request was not open (already decided / not found) OR if a
+ * participant was hard-deleted (SET NULL) — the IS NOT NULL guards make the write
+ * atomic with the precondition the app checked on read, so a delete racing
+ * between read and write can't flip an orphaned row (or promote a gone user).
  */
 export async function decideCaptainPromotion(input: {
   requestId: string;
@@ -111,6 +132,8 @@ export async function decideCaptainPromotion(input: {
       and(
         eq(captainPromotionRequests.id, input.requestId),
         eq(captainPromotionRequests.status, "sent"),
+        isNotNull(captainPromotionRequests.targetUserId),
+        isNotNull(captainPromotionRequests.requestedByUserId),
       ),
     )
     .returning();

@@ -1,6 +1,9 @@
 import "server-only";
 
-import type { QuestionnaireFieldChange } from "@camp404/types";
+import type {
+  IncomingPromotionRequest,
+  QuestionnaireFieldChange,
+} from "@camp404/types";
 
 // Process-scoped in-memory replacement for the Neon-backed user and
 // burner-profile tables. Only used when isE2ETestMode() is true.
@@ -83,6 +86,19 @@ interface TestDelivery {
   createdAt: Date;
 }
 
+// In-memory stand-in for `captain_promotion_requests`. Mirrors the db row +
+// semantics: one open (`sent`) row per target, only a `sent` row transitions.
+// Participant ids are nullable to match the real row (SET NULL on a hard delete
+// for audit retention) — `sendCaptainPromotion` always writes them non-null.
+interface TestPromotionRequest {
+  id: string;
+  targetUserId: string | null;
+  requestedByUserId: string | null;
+  status: "sent" | "accepted" | "declined" | "cancelled";
+  createdAt: Date;
+  decidedAt: Date | null;
+}
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -91,6 +107,7 @@ interface TestStoreState {
   questionnaireEdits: TestQuestionnaireEdit[];
   broadcasts: TestBroadcast[];
   deliveries: TestDelivery[];
+  promotionRequests: TestPromotionRequest[];
   nextSerial: number;
 }
 
@@ -119,6 +136,7 @@ function globalState(): TestStoreState {
       questionnaireEdits: [] as TestQuestionnaireEdit[],
       broadcasts: [] as TestBroadcast[],
       deliveries: [] as TestDelivery[],
+      promotionRequests: [] as TestPromotionRequest[],
       nextSerial: 1,
     } satisfies TestStoreState;
   }
@@ -135,6 +153,7 @@ const inviteCodes = S.inviteCodes;
 const questionnaireEdits = S.questionnaireEdits;
 const broadcasts = S.broadcasts;
 const deliveries = S.deliveries;
+const promotionRequests = S.promotionRequests;
 
 function findUserById(userId: string): TestUser | null {
   for (const user of usersByAuthId.values()) {
@@ -555,6 +574,77 @@ export const testStore = {
     }
   },
 
+  // --- captain-promotion handshake (mirrors @camp404/db/captain-promotion) ---
+
+  getOpenPromotionForTarget(targetUserId: string): TestPromotionRequest | null {
+    return (
+      promotionRequests.find(
+        (r) => r.targetUserId === targetUserId && r.status === "sent",
+      ) ?? null
+    );
+  },
+  getPromotionRequestById(requestId: string): TestPromotionRequest | null {
+    return promotionRequests.find((r) => r.id === requestId) ?? null;
+  },
+  sendCaptainPromotion(input: {
+    targetUserId: string;
+    requestedByUserId: string;
+  }): TestPromotionRequest {
+    // Idempotent via the open-per-target rule (the db's partial unique index).
+    // Single-threaded test store: no concurrent-send race is possible, so the
+    // pre-check suffices (the db additionally catches the unique-violation).
+    const existing = this.getOpenPromotionForTarget(input.targetUserId);
+    if (existing) return existing;
+    const row: TestPromotionRequest = {
+      id: crypto.randomUUID(),
+      targetUserId: input.targetUserId,
+      requestedByUserId: input.requestedByUserId,
+      status: "sent",
+      createdAt: new Date(),
+      decidedAt: null,
+    };
+    promotionRequests.push(row);
+    return row;
+  },
+  decideCaptainPromotion(input: {
+    requestId: string;
+    status: "accepted" | "declined" | "cancelled";
+  }): TestPromotionRequest | null {
+    // Only a `sent` row with both participants still present flips — so a
+    // double-decide (or a row orphaned by a hard delete) is a no-op (null),
+    // mirroring the db's status + IS NOT NULL WHERE clause.
+    const row = promotionRequests.find(
+      (r) =>
+        r.id === input.requestId &&
+        r.status === "sent" &&
+        r.targetUserId !== null &&
+        r.requestedByUserId !== null,
+    );
+    if (!row) return null;
+    row.status = input.status;
+    row.decidedAt = new Date();
+    return row;
+  },
+  getIncomingPromotionsForUser(userId: string): IncomingPromotionRequest[] {
+    return promotionRequests
+      .filter(
+        (r): r is TestPromotionRequest & { requestedByUserId: string } =>
+          r.targetUserId === userId &&
+          r.status === "sent" &&
+          // Mirror the db INNER JOIN on users: a null (orphaned) requester drops
+          // out of the incoming list rather than surfacing a nameless row.
+          r.requestedByUserId !== null,
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((r) => ({
+        id: r.id,
+        requestedByUserId: r.requestedByUserId,
+        requestedByName: findUserById(r.requestedByUserId)?.displayName ?? null,
+        status: r.status,
+        createdAt: r.createdAt,
+      }));
+  },
+
   reset(): void {
     usersByAuthId.clear();
     profilesByUserId.clear();
@@ -563,6 +653,7 @@ export const testStore = {
     questionnaireEdits.length = 0;
     broadcasts.length = 0;
     deliveries.length = 0;
+    promotionRequests.length = 0;
     S.nextSerial = 1;
   },
 };
@@ -572,4 +663,5 @@ export type {
   TestBurnerProfile,
   TestInviteCode,
   TestQuestionnaireEdit,
+  TestPromotionRequest,
 };
