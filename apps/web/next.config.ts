@@ -4,7 +4,12 @@ const isMobileBuild = process.env.MOBILE_BUILD === "1";
 
 const config: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@camp404/ui", "@camp404/types", "@camp404/ai-prompts"],
+  transpilePackages: [
+    "@camp404/ui",
+    "@camp404/types",
+    "@camp404/core",
+    "@camp404/ai-prompts",
+  ],
   typedRoutes: true,
   // Next's App Router refuses to route `.`-prefixed folders, so the
   // canonical `/.well-known/*` paths get rewritten into normal app
