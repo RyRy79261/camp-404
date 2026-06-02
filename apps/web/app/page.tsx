@@ -14,6 +14,7 @@ import {
   isTeamLead,
 } from "@/lib/users";
 import { nextGate } from "@/lib/required-actions";
+import { deriveViewerRank } from "@camp404/core";
 import { countUnread } from "@/lib/notifications";
 import { initialsFrom } from "@/lib/initials";
 import { HomeHeader } from "./home-header";
@@ -70,12 +71,10 @@ export default async function HomePage() {
   // Map the stored rank (+ derived team-lead) onto the control panel's three
   // layers. Captains unlock the captain layer (and Camp Management); a lead
   // of any team unlocks the team-lead layer; everyone else sees their own.
-  const viewerRank: ControlPanelLayer["rank"] =
-    campUser.rank === "captain"
-      ? "captain"
-      : (await isTeamLead(campUser.id))
-        ? "team_lead"
-        : "camp_member";
+  const viewerRank: ControlPanelLayer["rank"] = deriveViewerRank(
+    campUser.rank,
+    await isTeamLead(campUser.id),
+  );
 
   const unreadNotifications = await unreadPromise;
 

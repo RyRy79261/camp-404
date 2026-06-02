@@ -7,12 +7,12 @@
 // I/O. That is what keeps it testable without a DB or route harness and
 // reusable by apps/web, apps/admin-cli, apps/mobile, packages/ui, and tests.
 //
-// Phase-1 scaffold. The pure-logic extractions land here in Phase 3 (see
-// architecture.md §hybrid-extraction): access/clearance (hasCampAccess,
-// isApproved, nextGate, rankLevel, deriveViewerRank, requireClearance),
-// invites (generateInviteCode, isSyntacticallyValidCode), the questionnaire
-// catalogue + validateIdNumber, promotion guards/state-machine, family-tree
-// builders (+ cycle guards), mcp helpers, and platform utils.
+// Phase-3 extractions land here progressively (see architecture.md
+// §hybrid-extraction). Landed so far:
+//   - access/clearance: rankLevel, hasClearance, deriveViewerRank,
+//     hasCampAccess, isApproved, nextGate (./access)
+// Still to come: invites, the questionnaire catalogue + validateIdNumber,
+// promotion guards/state-machine, family-tree builders (+ cycle guards), mcp
+// helpers, and platform utils.
 
-/** Package marker — replaced by real exports as Phase-3 modules land. */
-export const CORE_PACKAGE = "@camp404/core" as const;
+export * from "./access";
