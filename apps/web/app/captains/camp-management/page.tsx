@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
+import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import { getCampManagementRoster } from "@camp404/db/roster";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
@@ -26,9 +27,13 @@ export default async function CampManagementPage() {
     redirect("/pending-approval");
   }
 
-  const isCaptain = campUser.rank === "captain";
-  // The locked view gets no data — clearance is enforced here, server-side.
-  const rows = isCaptain
+  // Preview-but-locked (D3) on the shared clearance comparator: the locked view
+  // gets no data — clearance is enforced here, server-side.
+  const { cleared } = requireClearance(
+    deriveViewerRank(campUser.rank, false),
+    "captain",
+  );
+  const rows = cleared
     ? (await getCampManagementRoster()).map(toRosterRow)
     : [];
 
@@ -48,7 +53,7 @@ export default async function CampManagementPage() {
         </p>
       </header>
 
-      <CampManagementRoster rows={rows} locked={!isCaptain} />
+      <CampManagementRoster rows={rows} locked={!cleared} />
     </main>
   );
 }

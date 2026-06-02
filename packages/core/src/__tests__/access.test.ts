@@ -7,6 +7,7 @@ import {
   isApproved,
   nextGate,
   rankLevel,
+  requireClearance,
 } from "../access";
 
 describe("rank ladder", () => {
@@ -69,5 +70,33 @@ describe("nextGate", () => {
 
   it("returns null when nothing is pending", () => {
     expect(nextGate([], routes)).toBeNull();
+  });
+});
+
+describe("requireClearance", () => {
+  it("a captain clears every required rank", () => {
+    for (const required of ["camp_member", "team_lead", "captain"] as const) {
+      expect(requireClearance("captain", required).cleared).toBe(true);
+    }
+  });
+
+  it("a team_lead clears team_lead and below, not captain", () => {
+    expect(requireClearance("team_lead", "camp_member").cleared).toBe(true);
+    expect(requireClearance("team_lead", "team_lead").cleared).toBe(true);
+    expect(requireClearance("team_lead", "captain").cleared).toBe(false);
+  });
+
+  it("a camp_member clears only camp_member", () => {
+    expect(requireClearance("camp_member", "camp_member").cleared).toBe(true);
+    expect(requireClearance("camp_member", "team_lead").cleared).toBe(false);
+    expect(requireClearance("camp_member", "captain").cleared).toBe(false);
+  });
+
+  it("echoes the ranks it compared (for CaptainLock / data-gate)", () => {
+    expect(requireClearance("team_lead", "captain")).toEqual({
+      cleared: false,
+      viewerRank: "team_lead",
+      requiredRank: "captain",
+    });
   });
 });
