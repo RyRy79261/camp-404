@@ -1,6 +1,6 @@
 {
-  "id": "dec04f1d-3a03-41cb-864a-b9345a46cdef",
-  "prevId": "cf582f76-6986-4a48-9b55-486e06c02585",
+  "id": "8c9103c3-ad37-4c4d-8168-5ebdd1a3ff66",
+  "prevId": "dec04f1d-3a03-41cb-864a-b9345a46cdef",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -518,13 +518,13 @@
           "name": "target_user_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "requested_by_user_id": {
           "name": "requested_by_user_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -592,7 +592,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "captain_promotion_requests_requested_by_user_id_users_id_fk": {
@@ -605,7 +605,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
