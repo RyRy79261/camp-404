@@ -1,8 +1,22 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import { AcknowledgementGate } from "./acknowledgement-gate";
 import { FeedbackGate } from "./feedback-gate";
 import "@camp404/ui/styles.css";
+
+// Brand faces, exposed as CSS vars consumed by --font-sans / --font-mono in
+// @camp404/ui globals.css. Inter = UI; JetBrains Mono = the data-console motif.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
 const SITE_URL = "https://camp-404.com";
 const SITE_DESCRIPTION = "A calm command centre for a chaotic desert.";
@@ -45,8 +59,12 @@ export default function RootLayout({
   // next-themes (via NeonAuthUIProvider) sets class="dark" on <html> on the
   // client; suppressHydrationWarning silences the resulting attribute mismatch.
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
+    >
+      <body className="font-sans">
         <Providers>
           {children}
           <AcknowledgementGate />
