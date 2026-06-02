@@ -5,7 +5,7 @@ import { Button } from "@camp404/ui/components/button";
 import { listAnnouncements } from "@/lib/notifications";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { CaptainLock } from "@/components/captain-lock";
+import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { AnnouncementsManager } from "./announcements-manager";
 
 export const dynamic = "force-dynamic";
