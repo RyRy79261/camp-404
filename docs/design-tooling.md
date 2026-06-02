@@ -49,6 +49,34 @@ codifies this so it can be pulled into planning on demand:
 4. Execution follows the skill: draft on the canvas → export a preview →
    generate code against `@camp404/ui`.
 
+## Board → functional spec extraction
+
+The Pencil canvas is the source of truth, but a `.pen` file is dense JSON. To make
+it reviewable and to drive the board-derived functional spec, the repo ships a
+deterministic extractor:
+
+```bash
+pnpm design:extract-boards          # node scripts/pencil/extract-boards.mjs design/app.pen design/.spec-extract
+```
+
+It reads `design/app.pen` and writes, for every top-level board, into
+`design/.spec-extract/`:
+
+- `boards/<NN>-<slug>.txt` — a readable, indented outline of the board (frames,
+  text content, icons, layout props), with `ref` **component instances resolved**
+  to their reusable component name + text overrides, and runs of identical
+  siblings collapsed (`× N`).
+- `boards-json/<NN>-<slug>.json` — the raw per-board JSON (for detail).
+- `index.md` — a board inventory + a reverse map of which boards instantiate each
+  reusable component.
+
+This snapshot is what the **functional spec** under [`design/spec/`](../design/spec/README.md)
+is built and cross-referenced against (see `design/spec/README.md`). The readable
+outlines + `index.md` are committed as the spec's cited provenance; the bulky
+`boards-json/` (a duplicate of `app.pen`) is gitignored — regenerate it any time
+with the command above. Re-running after editing the canvas refreshes the
+outlines; note that adding/removing boards shifts the `<NN>` index prefixes.
+
 ## Local setup (run on your machine)
 
 Pencil needs a GUI and a Pencil account, so it cannot run in a headless
