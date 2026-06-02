@@ -2,9 +2,17 @@
 
 import { useEffect, useRef } from "react";
 
+import { createShakeDetector } from "@camp404/core";
+
 // Shake detection, ported from RyRy79261/intake-tracker's use-shake-gesture.
-// Pure web DeviceMotion — no native Capacitor plugin. The detector is a pure
-// state machine so the algorithm can be unit-tested without the DOM.
+// Pure web DeviceMotion — no native Capacitor plugin. The pure detector state
+// machine now lives in @camp404/core (./shake); this file keeps the React hook
+// and the DOM/permission helpers.
+
+// Re-exported for backward compatibility with any call-site that imports the
+// detector/types from this path.
+export { createShakeDetector } from "@camp404/core";
+export type { ShakeSample, ShakeDetectorConfig } from "@camp404/core";
 
 /**
  * iOS 13+ Safari/WKWebView gate `devicemotion` behind a permission grant that
@@ -49,69 +57,6 @@ export async function requestMotionPermission(): Promise<MotionPermissionResult>
   } catch {
     return "denied";
   }
-}
-
-export interface ShakeSample {
-  x: number;
-  y: number;
-  z: number;
-}
-
-export interface ShakeDetectorConfig {
-  /**
-   * Change in total acceleration magnitude (m/s²) between samples that counts
-   * as a jolt. Magnitude is rotation-invariant: tilting the device
-   * redistributes gravity across the axes but leaves the magnitude near 9.8,
-   * so only real movement — not reorientation — registers.
-   */
-  threshold: number;
-  /** Number of jolts within the rolling window required to fire. */
-  requiredJolts: number;
-  /** Rolling window the jolts must fall within. */
-  windowMs: number;
-  /** Minimum gap between two consecutive detections. */
-  cooldownMs: number;
-}
-
-function magnitude(sample: ShakeSample): number {
-  return Math.sqrt(
-    sample.x * sample.x + sample.y * sample.y + sample.z * sample.z,
-  );
-}
-
-/**
- * Pure shake-detection state machine. Feed it accelerometer samples via
- * `process` and it returns `true` on the sample that completes a shake.
- * Kept free of React/DOM so the algorithm can be unit-tested directly.
- */
-export function createShakeDetector(config: ShakeDetectorConfig) {
-  let lastMagnitude: number | null = null;
-  let lastShakeAt = Number.NEGATIVE_INFINITY;
-  let jolts: number[] = [];
-
-  return {
-    process(sample: ShakeSample, now: number): boolean {
-      const mag = magnitude(sample);
-      if (lastMagnitude !== null) {
-        const delta = Math.abs(mag - lastMagnitude);
-        if (delta > config.threshold) jolts.push(now);
-      }
-      lastMagnitude = mag;
-
-      jolts = jolts.filter((t) => now - t <= config.windowMs);
-      if (
-        jolts.length >= config.requiredJolts &&
-        // `>=` so a gap of exactly cooldownMs counts — the field is a *minimum*
-        // gap, and this matches the inclusive (`<=`) window boundary above.
-        now - lastShakeAt >= config.cooldownMs
-      ) {
-        lastShakeAt = now;
-        jolts = [];
-        return true;
-      }
-      return false;
-    },
-  };
 }
 
 interface UseShakeGestureOptions {
