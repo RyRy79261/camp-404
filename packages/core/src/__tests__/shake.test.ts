@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createShakeDetector } from "../use-shake-gesture";
+import { createShakeDetector } from "../shake";
 
 // The detector fires when `requiredJolts` magnitude-deltas above `threshold`
 // land within `windowMs`, respecting `cooldownMs` between fires. Magnitude is

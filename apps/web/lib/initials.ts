@@ -1,17 +1,3 @@
-/**
- * Derive up to two uppercase initials from a name or email. Splits on
- * whitespace, "@", and ".". Returns "?" when there's nothing usable.
- * Shared by the home header avatar and the profile page.
- */
-export function initialsFrom(source: string | null): string {
-  if (!source) return "?";
-  const parts = source
-    .trim()
-    .split(/[\s@.]+/)
-    .filter(Boolean);
-  if (parts.length === 0) return "?";
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
+// Re-export shim: initialsFrom now lives in @camp404/core. Kept here so existing
+// call-sites importing "@/lib/initials" stay unchanged.
+export { initialsFrom } from "@camp404/core";
