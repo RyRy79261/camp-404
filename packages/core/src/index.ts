@@ -11,8 +11,10 @@
 // §hybrid-extraction). Landed so far:
 //   - access/clearance: rankLevel, hasClearance, deriveViewerRank,
 //     hasCampAccess, isApproved, nextGate (./access)
+//   - family tree: buildTree, computeMatchIds, subtreeHasMatch,
+//     descendantCountLabel (./family-tree) — all cycle-guarded (OD9)
 // Still to come: invites, the questionnaire catalogue + validateIdNumber,
-// promotion guards/state-machine, family-tree builders (+ cycle guards), mcp
-// helpers, and platform utils.
+// promotion guards/state-machine, mcp helpers, and platform utils.
 
 export * from "./access";
+export * from "./family-tree";

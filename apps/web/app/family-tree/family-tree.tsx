@@ -5,25 +5,14 @@ import { ChevronDown, ChevronRight, Search, User as UserIcon } from "lucide-reac
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { Input } from "@camp404/ui/components/input";
-
-export interface TreeUser {
-  id: string;
-  displayName: string | null;
-  rank: "captain" | "member";
-  inviteCode: string | null;
-  inviterId: string | null;
-}
-
-interface TreeNode {
-  user: TreeUser;
-  children: TreeNode[];
-}
+import { buildTree, computeMatchIds, subtreeHasMatch } from "@camp404/core";
+import type { ReferralUser, TreeNode } from "@camp404/types";
 
 export function FamilyTree({
   roster,
   viewerUserId,
 }: {
-  roster: TreeUser[];
+  roster: ReferralUser[];
   viewerUserId: string;
 }) {
   const [query, setQuery] = useState("");
@@ -34,25 +23,10 @@ export function FamilyTree({
 
   const trees = useMemo(() => buildTree(roster), [roster]);
 
-  const matchIds = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return null;
-    const matches = new Set<string>();
-    for (const u of roster) {
-      const hay = `${u.displayName ?? ""} ${u.inviteCode ?? ""}`.toLowerCase();
-      if (hay.includes(q)) matches.add(u.id);
-    }
-    // Promote ancestors of every match so the path stays visible.
-    const parentById = new Map(roster.map((u) => [u.id, u.inviterId]));
-    for (const id of [...matches]) {
-      let cursor = parentById.get(id) ?? null;
-      while (cursor) {
-        matches.add(cursor);
-        cursor = parentById.get(cursor) ?? null;
-      }
-    }
-    return matches;
-  }, [query, roster]);
+  const matchIds = useMemo(
+    () => computeMatchIds(roster, query),
+    [roster, query],
+  );
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -245,7 +219,7 @@ function Branch({
             </div>
             {hasChildren && (
               <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
-                {countDescendants(node)}
+                {node.descendantCount}
               </span>
             )}
           </CardContent>
@@ -272,31 +246,3 @@ function Branch({
   );
 }
 
-function buildTree(roster: TreeUser[]): TreeNode[] {
-  const byId = new Map<string, TreeNode>();
-  for (const u of roster) byId.set(u.id, { user: u, children: [] });
-  const roots: TreeNode[] = [];
-  for (const u of roster) {
-    const node = byId.get(u.id);
-    if (!node) continue;
-    const parent = u.inviterId ? byId.get(u.inviterId) : null;
-    if (parent) parent.children.push(node);
-    else roots.push(node);
-  }
-  return roots;
-}
-
-function subtreeHasMatch(node: TreeNode, matches: Set<string>): boolean {
-  if (matches.has(node.user.id)) return true;
-  return node.children.some((c) => subtreeHasMatch(c, matches));
-}
-
-function countDescendants(node: TreeNode): number {
-  let n = 0;
-  const walk = (t: TreeNode) => {
-    n += t.children.length;
-    for (const c of t.children) walk(c);
-  };
-  walk(node);
-  return n;
-}
