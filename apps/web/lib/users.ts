@@ -263,6 +263,20 @@ export async function decideUserApproval(input: {
   await store.setUserApproval(input);
 }
 
+/**
+ * Set a camp user's stored rank, through the real/test split. The captain-
+ * promotion accept action calls this (rank → "captain") only after the target
+ * accepts — the one explicit, app-orchestrated rank write (the db promotion
+ * module never touches `users.rank`).
+ */
+export async function setCampUserRank(
+  userId: string,
+  rank: Rank,
+): Promise<void> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  await store.setUserRank(userId, rank);
+}
+
 // --- Backends -----------------------------------------------------------
 
 interface UserBackend {

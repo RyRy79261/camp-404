@@ -59,6 +59,24 @@ export async function getOpenPromotionForTarget(
 }
 
 /**
+ * A promotion request by id, in ANY status (or null). Backs the accept / decline
+ * / cancel actions: they load the row to feed the participant ids + status into
+ * the pure `canDecidePromotion` guard, so a terminal row yields `request_not_open`
+ * rather than a generic "not found". Read-only — no rank side-effects.
+ */
+export async function getPromotionRequestById(
+  requestId: string,
+): Promise<CaptainPromotionRequestRow | null> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select()
+    .from(captainPromotionRequests)
+    .where(eq(captainPromotionRequests.id, requestId))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
  * Send a "make captain" request. Idempotent: if an open request already exists
  * for the target it is returned unchanged (the partial unique index
  * `captain_promotion_open_per_target_idx` is the concurrency backstop). Does

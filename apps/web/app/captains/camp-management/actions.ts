@@ -4,12 +4,14 @@ import { revalidatePath } from "next/cache";
 import { getCampMemberDetail } from "@camp404/db/roster";
 import { decryptOrNull } from "@camp404/db/crypto";
 import { mergeIdNumber } from "@camp404/db/id-documents";
+import { canSendPromotion, deriveViewerRank } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
   decideUserApproval,
   ensureCampUser,
   hasCampAccess,
 } from "@/lib/users";
+import { sendCaptainPromotion } from "@/lib/promotion";
 import {
   presentMemberDetail,
   type PresentedMember,
@@ -22,6 +24,17 @@ export type MemberDetailResult =
 export type ApprovalDecisionResult =
   | { ok: true }
   | { ok: false; error: string };
+
+export type PromotionActionResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+// Guard reason code → captain-facing copy for the assign-captain flow.
+const SEND_PROMOTION_COPY: Record<string, string> = {
+  viewer_not_captain: "Captain access only.",
+  cannot_promote_self: "You can't promote yourself.",
+  target_already_captain: "They're already a captain.",
+};
 
 /**
  * Captain-gate every camp-management action at the data layer. Returns the
@@ -90,6 +103,45 @@ export async function decideApprovalAction(
     userId,
     status: decision,
     decidedByUserId: gate.captainId,
+  });
+  revalidatePath("/captains/camp-management");
+  return { ok: true };
+}
+
+/**
+ * Send a "make captain" request to a roster member (captain → target side of
+ * the double-opt-in). Captain-gated; the pure `canSendPromotion` guard rejects
+ * self / already-captain. The target's rank does NOT change here — it flips only
+ * when the target accepts in their own app. Idempotent: a second send while a
+ * request is open returns the existing one (no duplicate).
+ */
+export async function sendCaptainPromotionAction(
+  targetUserId: string,
+): Promise<PromotionActionResult> {
+  const gate = await requireCaptain();
+  if (!gate.ok) return gate;
+
+  const target = await getCampMemberDetail(targetUserId);
+  if (!target) return { ok: false, error: "Member not found." };
+
+  // The viewer is a captain by construction (requireCaptain). team-lead is
+  // irrelevant to this guard (it only checks `=== "captain"`), so isLead=false.
+  const guard = canSendPromotion({
+    viewerRank: "captain",
+    viewerId: gate.captainId,
+    targetRank: deriveViewerRank(target.rank, false),
+    targetId: targetUserId,
+  });
+  if (!guard.ok) {
+    return {
+      ok: false,
+      error: SEND_PROMOTION_COPY[guard.reason] ?? "Couldn't send the request.",
+    };
+  }
+
+  await sendCaptainPromotion({
+    targetUserId,
+    requestedByUserId: gate.captainId,
   });
   revalidatePath("/captains/camp-management");
   return { ok: true };
