@@ -1,0 +1,63 @@
+# S15 My forms
+# kind: BOARD  |  size: 430x1300  |  pos: (6398,5010)
+# reusable components used: EmptyState
+========================================================================
+▸ "S15 My forms" {vertical w:430 h:1300 fill:$background}
+  ▸ "LIST view" {vertical w:fill_container}
+    ▸ "GhostBack" {gap:4 pad:[14,12] ai:center}
+      ⊙ chevron-left ($muted-foreground) [lucide]
+      T "Tools"  [Inter/15px/500/$muted-foreground]
+    ▸ "Content" {vertical w:fill_container gap:16 pad:[4,16,24,16]}
+      ▸ "Intro" {vertical w:fill_container gap:6}
+        T "My forms"  [Inter/24px/700/$foreground]
+        T "Questionnaires you've completed this year. Open one to review and update your answers — we'll keep a log of what you change."  [Inter/14px/normal/$muted-foreground]
+      ▸ "FormCard" {w:fill_container gap:14 pad:18 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Text" {vertical w:fill_container gap:4}
+          T "Burner profile"  [Inter/15px/700/$foreground]
+          T "The onboarding questionnaire — who you are in the dust, your teams, skills and logistics."  [Inter/13px/normal/$muted-foreground]
+          T "Last edited 12 May 2026"  [Inter/12px/500/$muted-foreground]
+        ⊙ chevron-right ($muted-foreground) [lucide]
+      ▸ "EmptyVariant" {vertical w:fill_container gap:6 pad:[8,0,0,0]}
+        T "empty"  [Inter/11px/500/$muted-foreground]
+        ⟶ <EmptyState> "EmptyForms" {w:fill_container}  overrides:["No forms yet", "You haven't completed any forms yet."]
+  ▸ "ViewDivider" {w:fill_container h:8 fill:$muted}
+  ▸ "DETAIL view" {vertical w:fill_container}
+    ▸ "GhostBack" {gap:4 pad:[14,12] ai:center}
+      ⊙ chevron-left ($muted-foreground) [lucide]
+      T "My forms"  [Inter/15px/500/$muted-foreground]
+    ▸ "Content" {vertical w:fill_container gap:16 pad:[4,16,24,16]}
+      ▸ "Intro" {vertical w:fill_container gap:6}
+        T "Burner profile"  [Inter/24px/700/$foreground]
+        T "Step back through the form and update anything that's changed. Last edited 12 May 2026."  [Inter/14px/normal/$muted-foreground]
+      ▸ "SavedBanner" {w:fill_container gap:10 pad:14 r:$radius fill:#00dcff26 stroke:$border}
+        ⊙ circle-check-big ($accent) [lucide]
+        T "Saved. Your answers — and the change log below — are up to date."  [Inter/13px/normal/$foreground]
+      ▸ "ChangeLog" {vertical w:fill_container gap:12 pad:[6,0,0,0]}
+        T "Change log"  [Inter/17px/700/$foreground]
+        T "Every time you update this form we record what changed. We don't keep old versions — just this running history."  [Inter/13px/normal/$muted-foreground]
+        ▸ "Entries" {vertical w:fill_container gap:12 pad:[4,0,0,0]}
+          ▸ "Camp role" {vertical w:fill_container gap:6 pad:14 r:$radius fill:$card stroke:$border}
+            T "12 May 2026, 18:42"  [Inter/11px/500/$muted-foreground]
+            T "Camp role"  [Inter/14px/700/$foreground]
+            ▸ "Diff" {w:fill_container gap:8 ai:center}
+              T "Greeter"  [Inter/13px/normal/$muted-foreground]
+              T "→"  [Inter/13px/normal/$muted-foreground]
+              T "Kitchen lead"  [Inter/13px/500/$foreground]
+          ▸ "Arrival date" {vertical w:fill_container gap:6 pad:14 r:$radius fill:$card stroke:$border}
+            T "28 Apr 2026, 09:15"  [Inter/11px/500/$muted-foreground]
+            T "Arrival date"  [Inter/14px/700/$foreground]
+            ▸ "Diff" {w:fill_container gap:8 ai:center}
+              T "Aug 24"  [Inter/13px/normal/$muted-foreground]
+              T "→"  [Inter/13px/normal/$muted-foreground]
+              T "Aug 22"  [Inter/13px/500/$foreground]
+          ▸ "Dietary needs" {vertical w:fill_container gap:6 pad:14 r:$radius fill:$card stroke:$border}
+            T "28 Apr 2026, 09:14"  [Inter/11px/500/$muted-foreground]
+            T "Dietary needs"  [Inter/14px/700/$foreground]
+            ▸ "Diff" {w:fill_container gap:8 ai:center}
+              T "—"  [Inter/13px/normal/$muted-foreground]
+              T "→"  [Inter/13px/normal/$muted-foreground]
+              T "Vegetarian"  [Inter/13px/500/$foreground]
+        ▸ "EmptyLogVariant" {vertical w:fill_container gap:6 pad:[8,0,0,0]}
+          T "empty change-log"  [Inter/11px/500/$muted-foreground]
+          ▸ "EmptyLog" {vertical w:fill_container gap:6 pad:[20,16] jc:center ai:center r:$radius fill:$muted}
+            T "No edits yet. Changes you make here will show up in this list."  [Inter/13px/normal/$muted-foreground]

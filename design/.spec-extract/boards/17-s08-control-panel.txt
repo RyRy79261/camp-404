@@ -1,0 +1,110 @@
+# S08 Control panel
+# kind: BOARD  |  size: 430x-  |  pos: (5218,2849)
+# reusable components used: TopChrome, GridTile, Button-Outline
+========================================================================
+▸ "S08 Control panel" {vertical w:430 fill:$background}
+  ⟶ <TopChrome> "Header" {w:fill_container}
+  ▸ "Content" {vertical w:fill_container gap:20 pad:[20,16]}
+    ▸ "TitleRow" {w:fill_container jc:space_between ai:center}
+      ▸ "l" {vertical gap:2}
+        T "Control panel"  [Inter/20px/700/$foreground]
+        T "Everything you can run. Captain first."  [Inter/12px/$muted-foreground]
+      ▸ "Customize" {gap:6 pad:[8,12] ai:center r:999 fill:$muted stroke:$border}
+        ⊙ sliders-horizontal ($foreground) [lucide]
+        T "Customize"  [Inter/13px/600/$foreground]
+    ▸ "Captain Group" {vertical w:fill_container gap:14 pad:14 r:$radius fill:$muted stroke:$border}
+      ▸ "GroupHead" {w:fill_container jc:space_between ai:center}
+        ▸ "l" {gap:10 ai:center}
+          ▸ "chip" {w:30 h:30 jc:center ai:center r:8 fill:#ff008c26}
+            ⊙ shield ($primary) [lucide]
+          T "Captain"  [Inter/15px/700/$foreground]
+        T "4 tools"  [Inter/12px/500/$muted-foreground]
+      ▸ "Grid" {vertical w:fill_container gap:12}
+        ▸ "Row" {w:fill_container gap:12}
+          ⟶ <GridTile> "Camp Management" {w:fill_container}  overrides:["Camp Management", "Roster & statuses"]
+          ⟶ <GridTile> "Camp Tasks" {w:fill_container}  overrides:["12", "Camp Tasks", "Camp-wide work board"]
+        ▸ "Row" {w:fill_container gap:12}
+          ⟶ <GridTile> "Finances" {w:fill_container}  overrides:["Finances", "Dues & reimbursements"]
+          ⟶ <GridTile> "Camp Tools" {w:fill_container}  overrides:["Camp Tools", "Announcements, admin…"]
+    ▸ "Team Lead Group" {vertical w:fill_container gap:14 pad:14 r:$radius fill:$muted stroke:$border}
+      ▸ "GroupHead" {w:fill_container jc:space_between ai:center}
+        ▸ "l" {gap:10 ai:center}
+          ▸ "chip" {w:30 h:30 jc:center ai:center r:8 fill:#00dcff26}
+            ⊙ user-cog ($accent) [lucide]
+          T "Team Lead"  [Inter/15px/700/$foreground]
+        T "4 tools"  [Inter/12px/500/$muted-foreground]
+      ▸ "Grid" {vertical w:fill_container gap:12}
+        ▸ "Row" {w:fill_container gap:12}
+          ⟶ <GridTile> "Crew Roster" {w:fill_container}  overrides:["Crew Roster", "Your crew’s statuses"]
+          ⟶ <GridTile> "Crew Tasks" {w:fill_container}  overrides:["4", "Crew Tasks", "Assign & track work"]
+        ▸ "Row" {w:fill_container gap:12}
+          ⟶ <GridTile> "Crew Forms" {w:fill_container}  overrides:["Crew Forms", "Questionnaire responses"]
+          ⟶ <GridTile> "Crew Announcements" {w:fill_container}  overrides:["Crew Announcements", "Post to your crew"]
+    ▸ "Team Member Group" {vertical w:fill_container gap:14 pad:14 r:$radius fill:$muted stroke:$border}
+      ▸ "GroupHead" {w:fill_container jc:space_between ai:center}
+        ▸ "l" {gap:10 ai:center}
+          ▸ "chip" {w:30 h:30 jc:center ai:center r:8 fill:#75188840}
+            ⊙ user ($secondary-foreground) [lucide]
+          T "Team Member"  [Inter/15px/700/$foreground]
+        T "4 tools"  [Inter/12px/500/$muted-foreground]
+      ▸ "Grid" {vertical w:fill_container gap:12}
+        ▸ "Row" {w:fill_container gap:12}
+          ⟶ <GridTile> "My Teams" {w:fill_container}  overrides:["3", "My Teams", "Your crews"]
+          ⟶ <GridTile> "My Tasks" {w:fill_container}  overrides:["5", "My Tasks", "What’s on you"]
+        ▸ "Row" {w:fill_container gap:12}
+          ⟶ <GridTile> "My Profile" {w:fill_container}  overrides:["My Profile", "You & your data"]
+          ⟶ <GridTile> "Tools" {w:fill_container}  overrides:["Tools", "Meals, expenses…"]
+    ▸ "Divider" {w:fill_container h:1 fill:$border}
+    ▸ "CustomizeMode" {vertical w:fill_container gap:12 pad:14 r:$radius fill:$muted stroke:$border}
+      ▸ "hd" {w:fill_container jc:space_between ai:center}
+        ▸ "l" {gap:7 ai:center}
+          ⊙ sliders-horizontal ($accent) [lucide]
+          T "Customize layout"  [Inter/15px/700/$foreground]
+        ▸ "Done" {pad:[7,14] r:999 fill:$primary}
+          T "Done"  [Inter/13px/600/$primary-foreground]
+      T "Grab a tile by its handle and drag it to a new spot, or drop it into a group."  [Inter/12px/$muted-foreground]
+      T "DRAG TO REORDER"  [Inter/11px/600/$muted-foreground]
+      ▸ "ReorderDemo" {vertical w:fill_container gap:9}
+        ▸ "Camp Tasks" {w:fill_container gap:9 pad:[11,12] ai:center r:8 fill:$card stroke:$accent op:0.97}
+          ⊙ grip-vertical ($accent) [lucide]
+          ⊙ clipboard-list ($primary) [lucide]
+          T "Camp Tasks"  [Inter/13px/600/$foreground]
+          ▸ "Moving" {pad:[3,8] r:999 fill:#00dcff26}
+            T "MOVING"  [Inter/10px/700/$accent]
+        ▸ "List" {vertical w:fill_container gap:8}
+          ▸ "Camp Management" {w:fill_container gap:9 pad:[11,12] ai:center r:8 fill:$card stroke:$border}
+            ⊙ grip-vertical ($muted-foreground) [lucide]
+            ⊙ shield ($primary) [lucide]
+            T "Camp Management"  [Inter/13px/600/$foreground]
+          ▸ "DropSlot" {w:fill_container gap:6 pad:[10,0] jc:center ai:center r:8 fill:#00dcff14 stroke:$accent}
+            ⊙ corner-left-down ($accent) [lucide]
+            T "Drop here"  [Inter/12px/600/$accent]
+          ▸ "Finances" {w:fill_container gap:9 pad:[11,12] ai:center r:8 fill:$card stroke:$border}
+            ⊙ grip-vertical ($muted-foreground) [lucide]
+            ⊙ wallet ($primary) [lucide]
+            T "Finances"  [Inter/13px/600/$foreground]
+          ▸ "Camp Tools" {w:fill_container gap:9 pad:[11,12] ai:center r:8 fill:$card stroke:$border}
+            ⊙ grip-vertical ($muted-foreground) [lucide]
+            ⊙ megaphone ($primary) [lucide]
+            T "Camp Tools"  [Inter/13px/600/$foreground]
+      T "DRAG INTO A GROUP"  [Inter/11px/600/$muted-foreground]
+      ▸ "PinnedGroup" {vertical w:fill_container gap:8 pad:12 r:8 fill:#00dcff1f stroke:$accent}
+        ▸ "hd" {w:fill_container gap:7 ai:center}
+          ⊙ star ($accent) [lucide]
+          T "Pinned"  [Inter/14px/700/$foreground]
+          T "2"  [Inter/12px/600/$accent]
+        ▸ "My Teams" {w:fill_container gap:9 pad:[11,12] ai:center r:8 fill:$card stroke:$border}
+          ⊙ grip-vertical ($muted-foreground) [lucide]
+          ⊙ users ($primary) [lucide]
+          T "My Teams"  [Inter/13px/600/$foreground]
+        ▸ "My Tasks" {w:fill_container gap:9 pad:[11,12] ai:center r:8 fill:$card stroke:$border}
+          ⊙ grip-vertical ($muted-foreground) [lucide]
+          ⊙ list-checks ($primary) [lucide]
+          T "My Tasks"  [Inter/13px/600/$foreground]
+        ▸ "DropZone" {w:fill_container gap:7 pad:[12,0] jc:center ai:center r:7 fill:#00dcff26 stroke:$accent}
+          ⊙ plus ($accent) [lucide]
+          T "Release to add to Pinned"  [Inter/12px/600/$accent]
+      ▸ "NewGroup" {w:fill_container gap:7 pad:[11,0] jc:center ai:center r:8 fill:#00000000 stroke:$muted-foreground op:0.8}
+        ⊙ plus ($muted-foreground) [lucide]
+        T "New group"  [Inter/13px/600/$muted-foreground]
+    ⟶ <Button-Outline> "Enable notifications" {w:fill_container}  overrides:["Enable notifications"]

@@ -1,0 +1,6 @@
+# Button-Outline
+# kind: COMPONENT (reusable)  |  size: -x-  |  pos: (1998,0)
+# reusable components used: none
+========================================================================
+▸ "Button-Outline" {gap:8 pad:[13,22] jc:center ai:center r:$radius fill:#00000000 stroke:$border}
+  T "Button"  [Inter/15px/600/$foreground]

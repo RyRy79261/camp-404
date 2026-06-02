@@ -1,0 +1,27 @@
+# S25 Questionnaire gate
+# kind: BOARD  |  size: 430x932  |  pos: (4038,8700)
+# reusable components used: none
+========================================================================
+▸ "S25 Questionnaire gate" {vertical w:430 h:932 fill:$background}
+  ▭ "scan" {w:430 h:932 fill:#00dcff08 abs(0,0)}
+  ▸ "Content" {vertical w:fill_container h:fill_container gap:16 pad:28 jc:center ai:center}
+    ▸ "ic" {w:60 h:60 jc:center ai:center r:999 fill:#ff008c2e}
+      ⊙ clipboard-list ($primary) [lucide]
+    T "REQUIRED QUESTIONNAIRE"  [JetBrains Mono/11px/700/$accent]
+    T "Before you go any further"  [Inter/26px/700/$foreground]
+    T "A captain needs this from you. You can’t use Camp 404 until it’s done."  [Inter/15px/$muted-foreground]
+    ▸ "QCard" {vertical w:fill_container gap:10 pad:16 r:$radius fill:$card stroke:$border}
+      T "Safety & logistics"  [Inter/16px/700/$foreground]
+      ▸ "meta" {gap:14 ai:center}
+        ▸ "8 questions" {gap:6 ai:center}
+          ⊙ list-checks ($muted-foreground) [lucide]
+          T "8 questions"  [Inter/12px/500/$muted-foreground]
+        ▸ "about 3 minutes" {gap:6 ai:center}
+          ⊙ timer ($muted-foreground) [lucide]
+          T "about 3 minutes"  [Inter/12px/500/$muted-foreground]
+    ▸ "Start" {w:fill_container pad:[14,0] jc:center r:$radius fill:$primary}
+      T "Start questionnaire"  [Inter/15px/700/$primary-foreground]
+    ▸ "lock" {gap:6 ai:center}
+      ⊙ lock ($muted-foreground) [lucide]
+      T "This can’t be skipped."  [Inter/12px/500/$muted-foreground]
+    T "Sign out"  [Inter/13px/600/$muted-foreground]

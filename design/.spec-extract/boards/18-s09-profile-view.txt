@@ -1,0 +1,18 @@
+# S09 Profile view
+# kind: BOARD  |  size: 430x-  |  pos: (6398,2849)
+# reusable components used: none
+========================================================================
+▸ "S09 Profile view" {vertical w:430 pad:[0,20] jc:center ai:center fill:$background}
+  ▸ "Profile Card" {vertical w:fill_container gap:14 pad:28 ai:center r:$radius fill:$card stroke:$border}
+    ▸ "Avatar" {w:96 h:96 jc:center ai:center r:999 fill:$secondary}
+      T "JR"  [Inter/32px/700/$secondary-foreground]
+    T "Jordan Rivera"  [Inter/24px/700/$foreground]
+    ▸ "RankPill" {pad:[4,12] ai:center r:999 fill:#ff008c2e}
+      T "Captain"  [Inter/12px/600/$primary]
+    T "jordan.rivera@camp404.org"  [Inter/14px/normal/$muted-foreground]
+    ▸ "EditProfileBtn" {w:fill_container gap:8 pad:[13,22] jc:center ai:center r:$radius fill:$primary}
+      ⊙ pencil ($primary-foreground) [lucide]
+      T "Edit profile"  [Inter/15px/600/$primary-foreground]
+    T "Want to update your burner questionnaire answers?"  [Inter/13px/normal/$muted-foreground]
+    T "Review them here"  [Inter/13px/normal/$accent]
+    T "Sign out"  [Inter/14px/500/$muted-foreground]

@@ -1,0 +1,9 @@
+# CaptainLock
+# kind: COMPONENT (reusable)  |  size: 360x-  |  pos: (3538,0)
+# reusable components used: none
+========================================================================
+▸ "CaptainLock" {vertical w:360 gap:10 pad:24 ai:center r:$radius fill:$card stroke:$border}
+  ▸ "LockCircle" {w:48 h:48 jc:center ai:center r:999 fill:#ff008c2e}
+    ⊙ lock ($primary) [lucide]
+  T "Captain access only"  [Inter/15px/700/$foreground]
+  T "This data is visible to captains. Your rank doesn’t have clearance for this view."  [Inter/12px/normal/$muted-foreground]

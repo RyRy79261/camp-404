@@ -1,0 +1,105 @@
+# S24 Primitive kit
+# kind: BOARD  |  size: 430x-  |  pos: (9938,6540)
+# reusable components used: Button-Primary, Button-Outline, InputField, Card, EmptyState
+========================================================================
+▸ "S24 Primitive kit" {vertical w:430 fill:$background}
+  ▸ "Content" {vertical w:fill_container gap:18 pad:[16,16,28,16] fill:$background}
+    T "UI PRIMITIVE KIT"  [JetBrains Mono/11px/700/$accent]
+    T "Design system"  [Inter/22px/700/$foreground]
+    T "shadcn/ui (new-york) primitives on the Camp 404 dark theme. Every screen composes from these."  [Inter/13px/$muted-foreground]
+    ▸ "Typography sec" {vertical w:fill_container gap:12 pad:[16,0,0,0]}
+      T "Typography"  [Inter/13px/700/$muted-foreground]
+      T "Display / 32 bold"  [Inter/32px/700/$foreground]
+      T "Heading / 22 bold"  [Inter/22px/700/$foreground]
+      T "Body / 14 regular"  [Inter/14px/$foreground]
+      T "Muted / 13"  [Inter/13px/$muted-foreground]
+      T "Mono / 13 — terminal"  [JetBrains Mono/13px/500/$foreground]
+    ▸ "Colour tokens sec" {vertical w:fill_container gap:12 pad:[16,0,0,0]}
+      T "Colour tokens"  [Inter/13px/700/$muted-foreground]
+      ▸ "swatches" {vertical w:fill_container gap:8}
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "background" {w:fill_container gap:8 pad:8 ai:center r:8 fill:$muted}
+            ▭ "chip" {w:28 h:28 r:6 fill:$background stroke:$border}
+            T "background"  [Inter/12px/500/$foreground]
+          ▸ "card" {w:fill_container gap:8 pad:8 ai:center r:8 fill:$muted}
+            ▭ "chip" {w:28 h:28 r:6 fill:$card stroke:$border}
+            T "card"  [Inter/12px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "primary" {w:fill_container gap:8 pad:8 ai:center r:8 fill:$muted}
+            ▭ "chip" {w:28 h:28 r:6 fill:$primary stroke:$border}
+            T "primary"  [Inter/12px/500/$foreground]
+          ▸ "secondary" {w:fill_container gap:8 pad:8 ai:center r:8 fill:$muted}
+            ▭ "chip" {w:28 h:28 r:6 fill:$secondary stroke:$border}
+            T "secondary"  [Inter/12px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "accent" {w:fill_container gap:8 pad:8 ai:center r:8 fill:$muted}
+            ▭ "chip" {w:28 h:28 r:6 fill:$accent stroke:$border}
+            T "accent"  [Inter/12px/500/$foreground]
+          ▸ "muted" {w:fill_container gap:8 pad:8 ai:center r:8 fill:$muted}
+            ▭ "chip" {w:28 h:28 r:6 fill:$muted stroke:$border}
+            T "muted"  [Inter/12px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "destructive" {w:fill_container gap:8 pad:8 ai:center r:8 fill:$muted}
+            ▭ "chip" {w:28 h:28 r:6 fill:$destructive stroke:$border}
+            T "destructive"  [Inter/12px/500/$foreground]
+          ▸ "border" {w:fill_container gap:8 pad:8 ai:center r:8 fill:$muted}
+            ▭ "chip" {w:28 h:28 r:6 fill:$border stroke:$border}
+            T "border"  [Inter/12px/500/$foreground]
+    ▸ "Buttons sec" {vertical w:fill_container gap:12 pad:[16,0,0,0]}
+      T "Buttons"  [Inter/13px/700/$muted-foreground]
+      ▸ "row" {w:fill_container gap:10}
+        ⟶ <Button-Primary> "Primary" {w:fill_container}  overrides:["Primary"]
+        ⟶ <Button-Outline> "Outline" {w:fill_container}  overrides:["Outline"]
+      ▸ "row2" {w:fill_container gap:10}
+        ▸ "Ghost" {w:fill_container pad:[12,0] jc:center r:$radius fill:#00000000}
+          T "Ghost"  [Inter/14px/600/$foreground]
+        ▸ "Destructive" {w:fill_container pad:[12,0] jc:center r:$radius fill:$destructive}
+          T "Delete"  [Inter/14px/600/$destructive-foreground]
+    ▸ "Inputs sec" {vertical w:fill_container gap:12 pad:[16,0,0,0]}
+      T "Inputs"  [Inter/13px/700/$muted-foreground]
+      ⟶ <InputField> "Field" {w:fill_container}  overrides:["Email", "you@camp-404.com"]
+      ▸ "Segmented" {w:fill_container pad:4 r:$radius fill:$muted}
+        ▸ "Day" {w:fill_container pad:[8,0] jc:center r:7 fill:$primary}
+          T "Day"  [Inter/13px/600/$primary-foreground]
+        ▸ "Week" {w:fill_container pad:[8,0] jc:center r:7 fill:#00000000}
+          T "Week"  [Inter/13px/600/$muted-foreground]
+        ▸ "Month" {w:fill_container pad:[8,0] jc:center r:7 fill:#00000000}
+          T "Month"  [Inter/13px/600/$muted-foreground]
+      ▸ "Toggles" {w:fill_container gap:14 ai:center}
+        ▸ "sw" {w:44 h:26 pad:3 jc:end ai:center r:999 fill:$primary}
+          ◯ "knob" {w:20 h:20 fill:#ffffff}
+        T "Switch — on"  [Inter/13px/500/$foreground]
+        ▸ "cb" {w:20 h:20 jc:center ai:center r:6 fill:$primary}
+          ⊙ check ($primary-foreground) [lucide]
+        T "Checkbox"  [Inter/13px/500/$foreground]
+    ▸ "Badges & pills sec" {vertical w:fill_container gap:12 pad:[16,0,0,0]}
+      T "Badges & pills"  [Inter/13px/700/$muted-foreground]
+      ▸ "row" {w:fill_container gap:8 ai:center}
+        ▸ "pill" {pad:[3,10] r:999 fill:$muted}
+          T "Default"  [Inter/11px/600/$muted-foreground]
+        ▸ "pill" {pad:[3,10] r:999 fill:#ff008c2e}
+          T "Primary"  [Inter/11px/600/$primary]
+        ▸ "pill" {pad:[3,10] r:999 fill:#00dcff26}
+          T "Accent"  [Inter/11px/600/$accent]
+        ▸ "pill" {pad:[3,10] r:999 fill:#75188840}
+          T "Captain"  [Inter/11px/600/$secondary-foreground]
+        ▸ "pill" {pad:[3,10] r:999 fill:#f83e5a1f}
+          T "Error"  [Inter/11px/600/$destructive]
+    ▸ "Card sec" {vertical w:fill_container gap:12 pad:[16,0,0,0]}
+      T "Card"  [Inter/13px/700/$muted-foreground]
+      ⟶ <Card> "CardSample" {w:fill_container}  overrides:["Your crew", "6 members · 2 captains. Everyone’s confirmed for build week."]
+    ▸ "Empty state sec" {vertical w:fill_container gap:12 pad:[16,0,0,0]}
+      T "Empty state"  [Inter/13px/700/$muted-foreground]
+      ⟶ <EmptyState> "EmptySample" {w:fill_container}  overrides:["Nothing here yet", "When there’s something to show, it’ll appear here."]
+    ▸ "Alerts sec" {vertical w:fill_container gap:12 pad:[16,0,0,0]}
+      T "Alerts"  [Inter/13px/700/$muted-foreground]
+      ▸ "Heads up" {w:fill_container gap:10 pad:12 r:$radius fill:#00dcff1a stroke:$accent}
+        ⊙ info ($accent) [lucide]
+        ▸ "m" {vertical w:fill_container gap:2}
+          T "Heads up"  [Inter/13px/700/$foreground]
+          T "Invites expire after 7 days."  [Inter/12px/$muted-foreground]
+      ▸ "Couldn’t save" {w:fill_container gap:10 pad:12 r:$radius fill:#f83e5a1a stroke:$destructive}
+        ⊙ triangle-alert ($destructive) [lucide]
+        ▸ "m" {vertical w:fill_container gap:2}
+          T "Couldn’t save"  [Inter/13px/700/$foreground]
+          T "Check your connection and try again."  [Inter/12px/$muted-foreground]

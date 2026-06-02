@@ -1,0 +1,368 @@
+{
+ "surfaces": [
+  {
+   "surface": "Landing (unauthenticated splash)",
+   "route": "/ (unauth)",
+   "canonicalBoard": "S01 Landing",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Sole landing board; no iterations. Maps cleanly to the unauthenticated / branch. CRT scanlines drawn as 140 lines; contract wants 3 CRT layers + 5-layer Glitch404 \u2014 additive at build time, not a design fork.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Auth (sign-in / sign-up)",
+   "route": "/auth/sign-in + /auth/sign-up",
+   "canonicalBoard": "S02 Auth",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Single canonical two-screen + states-annotation board. or-divider and Google OAuth button duplicated identically across both cards \u2014 extract as reusables.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Invite gate (code redemption)",
+   "route": "/signup/required",
+   "canonicalBoard": "S03 Invite gate",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Clean 5-state collection (empty/submitting/3 errors). CAMP-XXXX-XXXX slug placeholder aligns with the human-readable invite-code redesign intent. Note: this is the GATE (consume a code); the named/multi-use/pre-approve MINTING redesign lives on S14, not here.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Onboarding questionnaire wizard",
+   "route": "/onboarding/questionnaire",
+   "canonicalBoard": "OB Step 01\u201311 series (boards 39\u201349)",
+   "supersededBoards": [
+    "S04 Onboarding wizard"
+   ],
+   "supportingBoards": [
+    "S05 Field kinds"
+   ],
+   "rationale": "S04 is the OLD all-pages-on-one-tall-canvas annotation board; the per-step OB Step 01\u201311 frames are the known redesign (per-step pages). OB series wins. S04 retains unique value as the only place the full footer-state matrix (page-0 / middle / last / submitting / error-banner / inline-error / save-failed) is documented \u2014 port those states onto the per-step pages at build. S05 Field kinds is the field-renderer source of truth feeding both onboarding and the questionnaire runner. UNRESOLVED (implementation, not a design choice): OB shows 'Step N of 11' while contract+S04 say 12 pages. OB Step 05 IS the intro page, so 11 likely just omits the intro from the visible counter.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Field-kind renderer (questionnaire controls)",
+   "route": "n/a (shared component sheet)",
+   "canonicalBoard": "S05 Field kinds",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Designer reference sheet for all 10 question kinds; not routable. Two genuine design-vs-code mismatches to resolve at build: toggle drawn as independent binary switches (code = segmented radiogroup) and scale drawn as segmented buttons (code = Radix slider). These are spec reconciliations, not competing iterations.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Approval gate (pending / rejected)",
+   "route": "/pending-approval",
+   "canonicalBoard": "S06 Approval gate",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Canonical two-state (pending/rejected) collection. Sign out is the only action \u2014 matches the dead-end intent. No iterations.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Home (control panel)",
+   "route": "/ (authed)",
+   "canonicalBoard": "S08 Control panel",
+   "supersededBoards": [
+    "S07 Home dashboard"
+   ],
+   "supportingBoards": [],
+   "rationale": "S08 and S07 share the same stacked rank-section layout, the same tile labels (incl. the Crew Roster/Tasks/Forms/Announcements set that diverges from contract), and both drop the old quadrant + TALK + tab-bar. S08 is strictly the more developed successor: it adds rank-coloured group chips, per-group tool-count, a Customize/drag-to-reorder mode with DropSlot, a Pinned group + DropZone, and a New Group affordance \u2014 a superset of S07. S07 is the simpler precursor and is superseded. ORPHAN: neither board has a TALK/push-to-talk centre, so voice loses its home entry point (see orphanRisks). Both home boards omit the contract's visible-but-locked treatment for higher ranks (S07 uses opacity+VIEW ONLY; S08 shows all groups full-opacity) \u2014 reconcile the rank-lock affordance at build.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Profile view",
+   "route": "/profile",
+   "canonicalBoard": "S09 Profile view",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Single canonical populated snapshot with all three nav actions (edit / questionnaire review / sign out). RankPill fill token (#ff008c2e) diverges from contract's $secondary \u2014 token fix, not a fork.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Profile edit + delete account",
+   "route": "/profile/edit",
+   "canonicalBoard": "S10 Profile edit",
+   "supersededBoards": [],
+   "supportingBoards": [
+    "S11 Avatar upload"
+   ],
+   "rationale": "Single canonical two-card screen (profile + danger zone). S11 Avatar upload is the embedded avatar sub-component's state showcase (empty/uploading/populated/error) consumed here and in onboarding step 1 \u2014 supporting, not a route.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Avatar upload (embedded sub-component)",
+   "route": "n/a (embedded in /profile/edit and onboarding step 1)",
+   "canonicalBoard": "S11 Avatar upload",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Component state showcase, not a page. AvatarUpload also appears inline on OB Step 01 \u2014 formalise as one shared component. ERROR block omits the re-upload button that the coded component keeps; add it back.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Notifications inbox",
+   "route": "/notifications",
+   "canonicalBoard": "S12 Notifications",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Single canonical inbox showing all 3 broadcast presentations (acknowledge/popup/feed) in unread+read, plus inline empty state. Uses DetailHeader. No iterations.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Tools hub",
+   "route": "/tools",
+   "canonicalBoard": "S13 Tools hub",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Unique canonical hub, 3 NavCards (Invite / My forms / Family tree). Stale 'single-use' invite copy must be updated to reflect the multi-use named-slug redesign. NavCard pattern repeats here, S14, S19 \u2014 extract.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Invite tool (mint codes)",
+   "route": "/tools/invite",
+   "canonicalBoard": "S14 Invite tool",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Single canonical board carrying the invite-code redesign: human-readable slug (neon-toaster-mongoose), note field, captain-only pre-approve checkbox + multi-use stepper, member notice, live availability hint (available/invalid/taken/submitting), and a success card. This is where the named/multi-use/pre-approve intent actually lands. GAP to reconcile at build: contract's email field is entirely absent; member (non-captain) variant with CaptainOptions hidden is not drawn.",
+   "confidence": "high"
+  },
+  {
+   "surface": "My forms (list + replay)",
+   "route": "/tools/forms + /tools/forms/[key]",
+   "canonicalBoard": "S15 My forms",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Single canonical board showing list (FormCard + EmptyState) and detail (SavedBanner + ChangeLog populated/empty). Notable omission: the questionnaire wizard replay shell itself is not mocked \u2014 it reuses the S05/runner field machine, so not a separate design.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Family tree (referral graph)",
+   "route": "/family-tree",
+   "canonicalBoard": "S16 Family tree",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Single canonical 720px board (wider shell is intentional per contract). Recursive collapsible tree with via-slug lines, captain/you pills, descendant counts, match-highlight + two empty states. This IS the family-tree rework intent (no competing iteration on the canvas). Captain/match-highlight use $accent vs contract's amber \u2014 token reconciliation.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Captain roster & member detail",
+   "route": "/captains/camp-management",
+   "canonicalBoard": "S17 Roster \u2014 Iteration B (responsive: terminal-console desktop + mobile)",
+   "supersededBoards": [
+    "S17 Captain mgmt"
+   ],
+   "supportingBoards": [
+    "S17 Roster \u2014 Iteration B (terminal console)"
+   ],
+   "rationale": "[RESOLVED by LOCKED decision 2 \u2014 Iteration B is canonical & responsive: desktop = terminal-console board, mobile = mobile board; S17 Captain mgmt (Iteration A) is DROPPED, not a companion. Triage note retained below for provenance.] Three iterations of one surface. Given Camp 404's mobile-first 430px mandate, the mobile Iteration B is the natural canonical: it carries the full feature superset (stats strip, multi-chip filters, inline member profile, two-sided Assign-captain flow, reject confirm) at the target width AND instantiates the shared CaptainLock component for the locked state. S17 Captain mgmt (1040px) and the terminal-console (1040px) are desktop-wide tables that violate the mobile-first constraint and are kept as supporting references \u2014 BUT the terminal-console's distinct JetBrains-Mono art direction is a real aesthetic choice escalated as a fork. The 1040px table is not dead: a captain on desktop benefits from it, so treat Captain mgmt as the desktop-wide companion to the mobile canonical. ALL THREE add the Assign-captain double-opt-in flow and drop the contract's Questionnaires/Driver/In-SA boolean columns \u2014 that captain-promotion feature needs a new captain_promotion_request entity at build.",
+   "confidence": "medium"
+  },
+  {
+   "surface": "Captain announcements (broadcast composer)",
+   "route": "/captains/announcements",
+   "canonicalBoard": "S18 Announcements",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Sole board for the surface: composer + drafts list + published list, presentation selector open to document all 3 delivery modes. Canonical, not an iteration.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Captain tools hub",
+   "route": "/captains/tools",
+   "canonicalBoard": "S19 Captain tools",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Unique canonical hub. Board proposes a locked/dimmed CaptainLock view for non-captains \u2014 diverges from contract's hard redirect-to-/. This soft-lock matches the S17 roster locked treatment, so it is a coherent product decision worth adopting. Implies a planned second tool (Roster & approvals) in the TOOLS array.",
+   "confidence": "high"
+  },
+  {
+   "surface": "MCP connect / consent",
+   "route": "/mcp/connect + /api/mcp/oauth/authorize",
+   "canonicalBoard": "S20 MCP connect",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Single board collapsing the bridge page + consent prompt + 403 pending gate into one frame. Canonical; additional denial branches (onboarding-incomplete, no-camp-access) and loading/expired states need designing at build.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Voice dictation",
+   "route": "n/a (RecorderPanel embedded in long_text fields + bug dialog; possible /\u2026/dictate modal)",
+   "canonicalBoard": "S21 Voice dictation",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "State showcase for all recorder states (idle/requesting/recording/processing/error) plus a NEW transcript-review step (Re-record / Use this text) not in the contract's silent-append behaviour. This is the ONLY remaining home for voice after the home TALK centre was removed (see orphanRisks). The DictatePill affordance on OB Step 03/04 is the entry trigger that launches this panel \u2014 wire them together.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Global overlays (system-level)",
+   "route": "n/a (mounted app-wide)",
+   "canonicalBoard": "S22 Global overlays",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Showcase of 5 floating surfaces: AckTakeover, QuestionnaireBlock, ShakeReporter, ErrorBoundary, Toast. ShakeReporter is drawn at lower fidelity than the coded ReportBugDialog (no kind toggle, no voice, no AI checkbox, no success view) \u2014 enrich at build. QuestionnaireBlock overlaps S25 gate conceptually; treat S25 as the routed gate and this as the app-blocking overlay variant.",
+   "confidence": "medium"
+  },
+  {
+   "surface": "Enable push (opt-in)",
+   "route": "n/a (mounted on authed home)",
+   "canonicalBoard": "S23 Enable push",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "State-machine doc for the EnablePush component: one visible state (default) + four null-render states. Carried unchanged into both home boards. Supporting component, not a route.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Design-system primitive kit",
+   "route": "n/a (style guide)",
+   "canonicalBoard": "S24 Primitive kit",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Pure design-system reference; the single source for type/colour tokens and three patterns that appear nowhere else (segmented-control, inline-alert, ghost/destructive button variants). Not a screen.",
+   "confidence": "high"
+  },
+  {
+   "surface": "Questionnaire gate (blocking interstitial)",
+   "route": "/onboarding/questionnaire (pre-wizard intro)",
+   "canonicalBoard": "S25 Questionnaire gate",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Entry of the S25 gate \u2192 S26 runner \u2192 S27 complete trio. A NEW pre-wizard interstitial not in the contract (which routes straight into the wizard). Decide at build whether to keep it as a distinct intro step or fold into the wizard's page 0; it is not a competing iteration of any other board.",
+   "confidence": "medium"
+  },
+  {
+   "surface": "Questionnaire runner (blocking required form)",
+   "route": "/onboarding/questionnaire (runner) \u2014 required-action variant",
+   "canonicalBoard": "S26 Questionnaire runner",
+   "supersededBoards": [],
+   "supportingBoards": [
+    "S05 Field kinds"
+   ],
+   "rationale": "The blocking-gate runner with BlockingTopBar, BlockingNotice, progress, and a docs section cataloguing question-kind + interaction states. Distinct from the onboarding wizard (OB Step series) by its required-action blocking chrome. Shares the field machine with S05. Scale-as-segments vs Radix-slider mismatch carries over from S05.",
+   "confidence": "medium"
+  },
+  {
+   "surface": "Questionnaire complete & queue",
+   "route": "/onboarding/questionnaire/complete (or /queue)",
+   "canonicalBoard": "S27 Questionnaire complete & queue",
+   "supersededBoards": [],
+   "supportingBoards": [],
+   "rationale": "Post-submission landing closing the S25\u2192S26\u2192S27 trio. Introduces a multi-questionnaire sequential-unlock queue (Safety/Dietary/Agreements) beyond the contract's single burner_profile \u2014 a scope expansion to confirm, not a competing iteration. success-hero is a strong shared-component candidate.",
+   "confidence": "medium"
+  }
+ ],
+ "forks": [
+  {
+   "surface": "Captain roster & member detail (/captains/camp-management)",
+   "question": "[RESOLVED \u2014 LOCKED decision 2: Iteration B responsive (terminal-console desktop + mobile); Iteration A (S17 Captain mgmt) dropped.] Which roster iteration is canonical \u2014 the mobile-first card list, the desktop-wide standard table, or the desktop-wide terminal-console aesthetic? This is the explicit '3 roster iterations' decision and it carries a genuine art-direction split.",
+   "options": [
+    {
+     "board": "S17 Roster \u2014 Iteration B (mobile)",
+     "summary": "430px mobile-first card list: stats strip, multi-chip filters, inline expandable member profile, two-sided Assign-captain flow, reject confirm, CaptainLock for the locked state.",
+     "pros": "Matches the camp's mobile-first 430px mandate exactly; reuses the shared CaptainLock component; carries the full feature superset; one-handed phone-in-the-desert ergonomics from the north-star.",
+     "cons": "Inline-expand profile is less scannable than a wide table for a captain triaging 42 people; loses the at-a-glance multi-column comparison."
+    },
+    {
+     "board": "S17 Captain mgmt",
+     "summary": "1040px standard shadcn-style wide table (Member/Handle/Country/Role/Status/View), inline member profile panel, Assign-captain + reject dialogs, CaptainLock locked state.",
+     "pros": "Best information density for triaging a whole roster at once; closest to the contract's wide-table intent (max-w-5xl); uses CaptainLock; calm neutral styling consistent with the rest of the app.",
+     "cons": "1040px breaks the mobile-first constraint as the PRIMARY surface; needs a separate mobile layout anyway, so cannot be the sole canonical."
+    },
+    {
+     "board": "S17 Roster \u2014 Iteration B (terminal console)",
+     "summary": "1040px wide table with a full JetBrains-Mono terminal aesthetic: TermBar address widget, '>' prompts, blinking carets, per-row status bars; rolls its own read-only panel instead of CaptainLock.",
+     "pros": "Strong, memorable art direction that leans into the 'Camp 404' / glitch brand; richest stats + filter affordances; reads as a power-user captain console.",
+     "cons": "Heaviest divergence from the calm-command-centre north-star and the rest of the app's Inter-based styling; 1040px breaks mobile-first; does NOT use the shared CaptainLock (duplicate read-only pattern); highest build cost."
+    }
+   ],
+   "recommendation": "Adopt S17 Roster \u2014 Iteration B (mobile) as the canonical surface (mobile-first mandate + shared CaptainLock), and keep S17 Captain mgmt as the desktop-wide companion layout for the same route. Drop the terminal-console aesthetic for the production roster UNLESS the camp wants the terminal art direction as the app-wide identity \u2014 that is the human call. All three agree on the Assign-captain double-opt-in flow and the dropped boolean columns, so the feature set is settled regardless of which skin wins."
+  },
+  {
+   "surface": "Captain-only surfaces \u2014 non-captain gating treatment",
+   "question": "[RESOLVED — LOCKED decision 3: preview-but-locked CaptainLock — navigable, structure renders, NO data, inert controls; replaces the hard redirect.] When a non-captain reaches a captain-only surface, do they get a hard redirect to / (contract) or a visible-but-locked CaptainLock view (boards)?",
+   "options": [
+    {
+     "board": "S19 Captain tools",
+     "summary": "Render the captain surface dimmed with a CaptainLock card ('captains only / your rank doesn't include it') instead of bouncing the user. Same pattern used on the S17 roster boards.",
+     "pros": "Matches the north-star 'rank is clearance, not a wall \u2014 layers stay visible but locked'; consistent across roster + tools + home rank sections; lets a member see that captain tooling exists.",
+     "cons": "Diverges from the contract's documented hard redirect on /captains/* ; shows the existence of captain features to members (minor info disclosure)."
+    },
+    {
+     "board": "S17 Captain mgmt",
+     "summary": "feature-set contract behaviour: rank !== captain \u2192 redirect('/'); no locked view is ever rendered on captain routes.",
+     "pros": "Simplest to implement; zero info disclosure; already the coded behaviour today.",
+     "cons": "Contradicts the canvas's consistent soft-lock language AND the overview \u00a74 captain-only-locked global state, which itself prescribes 'visible but locked'."
+    }
+   ],
+   "recommendation": "Adopt the boards' visible-but-locked CaptainLock pattern. The \u00a74 global-states matrix in the overview prescribes 'render the surface visible but locked' for captain-only-locked, so the boards are more aligned with the stated invariant than the current redirect code. Update the captain routes to soft-lock rather than redirect."
+  }
+ ],
+ "componentInventory": [
+  "TopChrome",
+  "SectionHeader",
+  "DetailHeader",
+  "GridTile",
+  "Button-Primary",
+  "Button-Outline",
+  "InputField",
+  "Card",
+  "EmptyState",
+  "CaptainLock",
+  "NavCard (icon-chip + title + description + chevron; S13/S14/S19/S15)",
+  "IconChip / IconBadge (bordered tinted icon container; tools + gate screens)",
+  "RankPill / status-pill (rank + approval-status badges; profile/roster/header)",
+  "Avatar (initials-fallback circle/square; profile/roster/header/tree)",
+  "AvatarUpload (avatar circle + camera placeholder + upload/remove; S10/S11/OB Step 01)",
+  "ProgressBar (Step N of M label + track/fill; all OB steps + S04 + S26)",
+  "WizardHeader (Build-your-burner-profile title+subtitle; all OB steps)",
+  "segmented-control (Day/Week/Month, ID-type, scale; S24/S05/OB Step 02/06)",
+  "toggle-switch (on/off pill switch; S05/S24)",
+  "checkbox / checkbox-pill (S05/S24/OB multi-selects)",
+  "radio-option-row (single-select pill row; S26/OB Step 07/10)",
+  "combobox-field (searchable popover with flag rows; S04/S05/OB Step 02)",
+  "date-picker-control (calendar trigger; S04/S05/OB Step 02)",
+  "slider-field (track+fill+knob+labels; S04/S05)",
+  "interest segmented-scale (0\u20136 / 1\u20135 segments; OB Step 06/S26/S05)",
+  "DictatePill (mic + 'Dictate instead'; OB Step 03/04, launches S21)",
+  "textarea-field (long_text input; multiple OB steps/S05/S26)",
+  "Alert / inline-alert (destructive + info variants; S02/S03/S10/S24/S26)",
+  "or-divider (S02)",
+  "Google-OAuth-button (S02/S20)",
+  "AvailabilityHint (available/invalid/taken/checking; S14)",
+  "Stepper (minus/plus numeric; S14)",
+  "CodeField (mono code + shuffle; S14)",
+  "SuccessHero / completion-hero (tinted circle + check; S27/S15/S14)",
+  "SavedBanner / SuccessBanner (S15/S18/S14)",
+  "notification-row (icon-circle + text + New pill + attribution; S12)",
+  "new-pill (S12)",
+  "filter-chip (active/inactive pill; S17 all three)",
+  "roster-row (avatar + name + handle + country + role; S17 all three)",
+  "stat-tile (label + big mono number; S17 mobile/terminal)",
+  "two-step progress tracker (Assign-captain double opt-in; S17 all three)",
+  "RedactedField (lock + hidden PII; S17 terminal)",
+  "tree-row (avatar + pills + via-code + count + toggle; S16)",
+  "captain-pill / you-pill / count-pill (S16)",
+  "mic-ring (S21)",
+  "waveform-bars (S21)",
+  "recorder-state-card (S21)",
+  "role-group-card (chip + label + tool-count + tile grid; S08)",
+  "reorder-row (grip + icon + label; S08)",
+  "drop-slot / drop-zone (S08)",
+  "QCard / questionnaire-meta-card (title + count + duration; S25)",
+  "blocking-notice-banner (required-action lock banner; S26)",
+  "RequiredChip (lock + 'Required'; S26)",
+  "colour-swatch-chip (S24)",
+  "CRT/scanlines overlay (S01/S22)",
+  "AckTakeover / QuestionnaireBlock / ShakeReporter / ErrorBoundary / Toast overlays (S22)",
+  "EnablePush (S23 \u2014 Button-Outline + null-render states)"
+ ],
+ "orphanRisks": [
+  "VOICE LOST ITS HOME: the old home push-to-talk TALK centre is removed from BOTH home iterations (S07 and S08). The contract calls voice 'the centre of the home control panel' and a first-class input. After redesign, voice survives only as (a) the RecorderPanel/S21 reached via the DictatePill on long_text fields (OB Step 03/04, S05) and (b) the bug-report dialog. There is NO standalone voice entry on home. DECISION NEEDED at build: is field-level dictation a sufficient home for voice, or does home need a re-homed mic affordance? The \u00a77 contract is functionally satisfied ('voice input must remain reachable'), but the design intent of voice-as-hero is lost.",
+  "S21 Voice dictation has no firm route \u2014 documented as an embedded panel but drawn as a full page with its own back-nav and a new transcript-review step; needs a host (inline panel vs modal route) decided.",
+  "S25 Questionnaire gate and S22's QuestionnaireBlock overlay both gate on questionnaire completion with no clear single owner \u2014 one is a routed interstitial, the other an app-wide overlay; risk of two parallel implementations of the same gate.",
+  "S04 Onboarding wizard's footer-state matrix (page-0 / middle / last / submitting / error-banner / inline-error / save-failed) has no home once S04 is superseded \u2014 these states are NOT collectively redrawn on the per-step OB boards and could be dropped silently.",
+  "S17 Captain mgmt (1040px) and S17 terminal-console (1040px) become orphaned screens if the mobile iteration is chosen as sole canonical and no desktop-wide layout is retained for the captain roster route.",
+  "Tools hub (S13) Invite card still reads 'single-use' \u2014 a stale copy route-in that contradicts the multi-use named-slug redesign on the S14 destination; entry-point and destination disagree.",
+  "Several home tiles (Camp Tasks, Crew Tasks, Finances, Crew Forms, Crew Announcements) point to surfaces with NO board on the canvas \u2014 tiles with no destination screen (tasks, finances, team-scoped forms/announcements are undrawn).",
+  "S20 MCP consent's onboarding-incomplete and no-camp-access 403 branches are referenced but undrawn \u2014 gated states with no page."
+ ],
+ "notes": "Census is 50 boards: 10 reusable components, plus primitive/component showcases (S05, S24, S11, S23) and the rest page-screens or state collections. Net result: 26 logical surfaces, exactly two genuine human forks (roster art-direction; non-captain gating), and a short list of build-time reconciliations that are NOT forks (token mismatches, scale/toggle render kind, step-count 11-vs-12, missing email field on invite, enriching ShakeReporter). Redesign intents are all accounted for: (a) quadrant+TALK removed \u2192 S08 canonical home, voice flagged as orphan; (b) per-step onboarding \u2192 OB Step 01\u201311 supersedes S04; (c) named/multi-use/pre-approve invites \u2192 S14 (gate S03 only consumes a code); (d) roster \u2192 3 iterations escalated as the one real fork; (e) family tree \u2192 S16 is the sole rework, no competing take. Zero truly redundant screens remain after S07\u2192S08 and S04\u2192OB collapses; the two 1040px rosters are reframed as a desktop companion rather than discarded so the route keeps both a mobile and a desktop layout. Confidence is high on everything except the questionnaire trio (S25/S26/S27 add scope beyond the single-burner-profile contract and need a product confirmation) and the roster fork (genuine human call). Key build reconciliations: design-token drift ($accent vs amber on tree/announcements; #ff008c2e RankPill vs $secondary; raw hex tints vs semantic tokens on GridTile), and the home rank-lock affordance (S07 opacity vs S08 full-opacity vs contract visible-but-locked) \u2014 adopt the \u00a74 visible-but-locked grammar.\""
+}

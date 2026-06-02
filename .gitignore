@@ -50,3 +50,9 @@ test-results/
 design/exports/
 # working renders from in-progress Pencil generations
 design/**/*-wip-*.png
+# local verify renders (temporary)
+design/.tmp-verify/
+# board-spec extraction: raw per-board JSON duplicates app.pen (regenerate via
+# scripts/pencil/extract-boards.mjs); the readable outlines + index ARE committed
+# as the spec's cited provenance.
+design/.spec-extract/boards-json/

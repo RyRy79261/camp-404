@@ -1,0 +1,259 @@
+# S17 Captain mgmt
+# kind: BOARD  |  size: 1040x-  |  pos: (10468,0)
+# reusable components used: Button-Primary, Button-Outline, CaptainLock
+========================================================================
+▸ "S17 Captain mgmt" {vertical w:1040 fill:$background}
+  ▸ "Content" {vertical w:fill_container gap:24 pad:[28,32,40,32] fill:$background}
+    ▸ "Header" {vertical w:fill_container gap:8}
+      ▸ "Back" {gap:4 ai:center}
+        ⊙ chevron-left ($muted-foreground) [lucide]
+        T "Camp tools"  [Inter/13px/500/$muted-foreground]
+      T "Camp management"  [Inter/30px/700/$foreground]
+      T "The full roster. Open a member to read their profile, approve or reject pending sign-ups, and — captain to captain — assign captain rank."  [Inter/14px/normal/$muted-foreground]
+    ▸ "Toolbar" {w:fill_container gap:16 ai:center}
+      ▸ "Search" {w:fill_container gap:8 pad:[12,14] ai:center r:$radius fill:$muted stroke:$border}
+        ⊙ search ($muted-foreground) [lucide]
+        T "Search by name, handle or email"  [Inter/14px/normal/$muted-foreground]
+      ▸ "Chips" {gap:8 ai:center}
+        ▸ "All 42" {pad:[9,16] jc:center ai:center r:999 fill:$primary}
+          T "All 42"  [Inter/13px/600/$primary-foreground]
+        ▸ "Pending 3" {pad:[9,16] jc:center ai:center r:999 fill:$muted stroke:$border}
+          T "Pending 3"  [Inter/13px/600/$muted-foreground]
+        ▸ "Captains 4" {pad:[9,16] jc:center ai:center r:999 fill:$muted stroke:$border}
+          T "Captains 4"  [Inter/13px/600/$muted-foreground]
+    ▸ "Table" {vertical w:fill_container r:$radius fill:$card stroke:$border}
+      ▸ "HeaderRow" {w:fill_container gap:16 pad:[16,20] ai:center fill:$muted}
+        ▸ "h-Member" {w:fill_container gap:5 ai:center}
+          T "Member"  [Inter/12px/700/$muted-foreground]
+          ⊙ chevron-down ($muted-foreground) [lucide]
+        ▸ "h-Handle" {w:170 gap:5 ai:center}
+          T "Handle"  [Inter/12px/700/$muted-foreground]
+        ▸ "h-Country" {w:190 gap:5 ai:center}
+          T "Country"  [Inter/12px/700/$muted-foreground]
+        ▸ "h-Role" {w:140 gap:5 ai:center}
+          T "Role"  [Inter/12px/700/$muted-foreground]
+        ▸ "h-Status" {w:140 gap:5 ai:center}
+          T "Status"  [Inter/12px/700/$muted-foreground]
+        ▸ "h-" {w:90 gap:5 ai:center}
+          T ""  [Inter/12px/700/$muted-foreground]
+      ▸ "Nova Reyes" {w:fill_container gap:16 pad:[16,20] ai:center fill:#00000000 stroke:$border}
+        ▸ "Member" {w:fill_container gap:12 ai:center}
+          ▸ "Avatar" {w:38 h:38 jc:center ai:center r:999 fill:#ff008c}
+            T "NR"  [Inter/14px/700/#ffffff]
+          T "Nova Reyes"  [Inter/15px/600/$foreground]
+        ▸ "Handle" {w:170 ai:center}
+          T "@novareyes"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Country" {w:190 gap:8 ai:center}
+          T "🇿🇦"  [Inter/18px/normal/#ffffff]
+          T "South Africa"  [Inter/14px/normal/$foreground]
+        ▸ "Role" {w:140 ai:center}
+          T "member"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Status" {w:140 ai:center}
+          ▸ "pill" {pad:[5,12] jc:center ai:center r:999 fill:#e0a80026}
+            T "Pending"  [Inter/12px/700/#e0a800]
+        ▸ "View" {w:90 gap:4 ai:center}
+          T "View"  [Inter/13px/600/$accent]
+          ⊙ chevron-right ($accent) [lucide]
+      ▸ "Jules Okafor" {w:fill_container gap:16 pad:[16,20] ai:center fill:#ffffff08 stroke:$border}
+        ▸ "Member" {w:fill_container gap:12 ai:center}
+          ▸ "Avatar" {w:38 h:38 jc:center ai:center r:999 fill:#751888}
+            T "JO"  [Inter/14px/700/#ffffff]
+          T "Jules Okafor"  [Inter/15px/600/$foreground]
+        ▸ "Handle" {w:170 ai:center}
+          T "@juleso"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Country" {w:190 gap:8 ai:center}
+          T "🇰🇪"  [Inter/18px/normal/#ffffff]
+          T "Kenya"  [Inter/14px/normal/$foreground]
+        ▸ "Role" {w:140 ai:center}
+          ▸ "pill" {pad:[4,11] jc:center ai:center r:999 fill:$secondary}
+            T "team lead"  [Inter/12px/700/$secondary-foreground]
+        ▸ "Status" {w:140 ai:center}
+          ▸ "pill" {pad:[5,12] jc:center ai:center r:999 fill:#e0a80026}
+            T "Pending"  [Inter/12px/700/#e0a800]
+        ▸ "View" {w:90 gap:4 ai:center}
+          T "View"  [Inter/13px/600/$accent]
+          ⊙ chevron-right ($accent) [lucide]
+      ▸ "Sam Tran" {w:fill_container gap:16 pad:[16,20] ai:center fill:#00000000 stroke:$border}
+        ▸ "Member" {w:fill_container gap:12 ai:center}
+          ▸ "Avatar" {w:38 h:38 jc:center ai:center r:999 fill:#00b3d6}
+            T "ST"  [Inter/14px/700/#ffffff]
+          T "Sam Tran"  [Inter/15px/600/$foreground]
+        ▸ "Handle" {w:170 ai:center}
+          T "@samtran"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Country" {w:190 gap:8 ai:center}
+          T "🇦🇺"  [Inter/18px/normal/#ffffff]
+          T "Australia"  [Inter/14px/normal/$foreground]
+        ▸ "Role" {w:140 ai:center}
+          T "member"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Status" {w:140 ai:center}
+          ▸ "pill" {pad:[5,12] jc:center ai:center r:999 fill:#e0a80026}
+            T "Pending"  [Inter/12px/700/#e0a800]
+        ▸ "View" {w:90 gap:4 ai:center}
+          T "View"  [Inter/13px/600/$accent]
+          ⊙ chevron-right ($accent) [lucide]
+      ▸ "Ada Lovelace" {w:fill_container gap:16 pad:[16,20] ai:center fill:#ffffff08 stroke:$border}
+        ▸ "Member" {w:fill_container gap:12 ai:center}
+          ▸ "Avatar" {w:38 h:38 jc:center ai:center r:999 fill:#e0a800}
+            T "AL"  [Inter/14px/700/#ffffff]
+          T "Ada Lovelace"  [Inter/15px/600/$foreground]
+        ▸ "Handle" {w:170 ai:center}
+          T "@ada"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Country" {w:190 gap:8 ai:center}
+          T "🇬🇧"  [Inter/18px/normal/#ffffff]
+          T "United Kingdom"  [Inter/14px/normal/$foreground]
+        ▸ "Role" {w:140 ai:center}
+          ▸ "pill" {pad:[4,11] jc:center ai:center r:999 fill:$primary}
+            T "Captain"  [Inter/12px/700/$primary-foreground]
+        ▸ "Status" {w:140 ai:center}
+          ▸ "pill" {pad:[5,12] jc:center ai:center r:999 fill:#2fbf7126}
+            T "Accepted"  [Inter/12px/700/#2fbf71]
+        ▸ "View" {w:90 gap:4 ai:center}
+          T "View"  [Inter/13px/600/$accent]
+          ⊙ chevron-right ($accent) [lucide]
+      ▸ "Mara Vance" {w:fill_container gap:16 pad:[16,20] ai:center fill:#00000000 stroke:$border}
+        ▸ "Member" {w:fill_container gap:12 ai:center}
+          ▸ "Avatar" {w:38 h:38 jc:center ai:center r:999 fill:#2fbf71}
+            T "MV"  [Inter/14px/700/#ffffff]
+          T "Mara Vance"  [Inter/15px/600/$foreground]
+        ▸ "Handle" {w:170 ai:center}
+          T "@maravance"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Country" {w:190 gap:8 ai:center}
+          T "🇺🇸"  [Inter/18px/normal/#ffffff]
+          T "United States"  [Inter/14px/normal/$foreground]
+        ▸ "Role" {w:140 ai:center}
+          T "member"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Status" {w:140 ai:center}
+          ▸ "pill" {pad:[5,12] jc:center ai:center r:999 fill:#2fbf7126}
+            T "Accepted"  [Inter/12px/700/#2fbf71]
+        ▸ "View" {w:90 gap:4 ai:center}
+          T "View"  [Inter/13px/600/$accent]
+          ⊙ chevron-right ($accent) [lucide]
+      ▸ "Kit Soto" {w:fill_container gap:16 pad:[16,20] ai:center fill:#ffffff08 stroke:$border}
+        ▸ "Member" {w:fill_container gap:12 ai:center}
+          ▸ "Avatar" {w:38 h:38 jc:center ai:center r:999 fill:#7c5cff}
+            T "KS"  [Inter/14px/700/#ffffff]
+          T "Kit Soto"  [Inter/15px/600/$foreground]
+        ▸ "Handle" {w:170 ai:center}
+          T "@kitsoto"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Country" {w:190 gap:8 ai:center}
+          T "🇧🇷"  [Inter/18px/normal/#ffffff]
+          T "Brazil"  [Inter/14px/normal/$foreground]
+        ▸ "Role" {w:140 ai:center}
+          ▸ "pill" {pad:[4,11] jc:center ai:center r:999 fill:$secondary}
+            T "team lead"  [Inter/12px/700/$secondary-foreground]
+        ▸ "Status" {w:140 ai:center}
+          ▸ "pill" {pad:[5,12] jc:center ai:center r:999 fill:#2fbf7126}
+            T "Accepted"  [Inter/12px/700/#2fbf71]
+        ▸ "View" {w:90 gap:4 ai:center}
+          T "View"  [Inter/13px/600/$accent]
+          ⊙ chevron-right ($accent) [lucide]
+      ▸ "Lena Fischer" {w:fill_container gap:16 pad:[16,20] ai:center fill:#00000000 stroke:$border}
+        ▸ "Member" {w:fill_container gap:12 ai:center}
+          ▸ "Avatar" {w:38 h:38 jc:center ai:center r:999 fill:#d65a8c}
+            T "LF"  [Inter/14px/700/#ffffff]
+          T "Lena Fischer"  [Inter/15px/600/$foreground]
+        ▸ "Handle" {w:170 ai:center}
+          T "@lenaf"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Country" {w:190 gap:8 ai:center}
+          T "🇩🇪"  [Inter/18px/normal/#ffffff]
+          T "Germany"  [Inter/14px/normal/$foreground]
+        ▸ "Role" {w:140 ai:center}
+          T "member"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Status" {w:140 ai:center}
+          ▸ "pill" {pad:[5,12] jc:center ai:center r:999 fill:#2fbf7126}
+            T "Accepted"  [Inter/12px/700/#2fbf71]
+        ▸ "View" {w:90 gap:4 ai:center}
+          T "View"  [Inter/13px/600/$accent]
+          ⊙ chevron-right ($accent) [lucide]
+      ▸ "Hiro Tanaka" {w:fill_container gap:16 pad:[16,20] ai:center fill:#ffffff08 stroke:$border}
+        ▸ "Member" {w:fill_container gap:12 ai:center}
+          ▸ "Avatar" {w:38 h:38 jc:center ai:center r:999 fill:#3a7bd5}
+            T "HT"  [Inter/14px/700/#ffffff]
+          T "Hiro Tanaka"  [Inter/15px/600/$foreground]
+        ▸ "Handle" {w:170 ai:center}
+          T "@hirotanaka"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Country" {w:190 gap:8 ai:center}
+          T "🇯🇵"  [Inter/18px/normal/#ffffff]
+          T "Japan"  [Inter/14px/normal/$foreground]
+        ▸ "Role" {w:140 ai:center}
+          T "member"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Status" {w:140 ai:center}
+          ▸ "pill" {pad:[5,12] jc:center ai:center r:999 fill:#f83e5a26}
+            T "Rejected"  [Inter/12px/700/#f83e5a]
+        ▸ "View" {w:90 gap:4 ai:center}
+          T "View"  [Inter/13px/600/$accent]
+          ⊙ chevron-right ($accent) [lucide]
+    T "Open member profile"  [Inter/13px/700/$muted-foreground]
+    ▸ "MemberProfile" {vertical w:680 gap:20 pad:28 r:$radius fill:$card stroke:$border}
+      ▸ "ProfileHead" {w:fill_container gap:16 ai:center}
+        ▸ "Avatar" {w:68 h:68 jc:center ai:center r:999 fill:#ff008c}
+          T "NR"  [Inter/24px/700/#ffffff]
+        ▸ "NameCol" {vertical w:fill_container gap:4}
+          T "Nova Reyes"  [Inter/24px/700/$foreground]
+          T "@novareyes"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Tags" {gap:8 ai:center}
+          ▸ "Status" {pad:[6,13] jc:center ai:center r:999 fill:#e0a80026}
+            T "Pending"  [Inter/12px/700/#e0a800]
+          ▸ "Role" {pad:[6,13] jc:center ai:center r:999 fill:$muted stroke:$border}
+            T "member"  [Inter/12px/600/$muted-foreground]
+      T "Nova runs a community darkroom in Cape Town and has been part of the last two camps as a volunteer. She's applying to join the build crew and wants to help run the analog photo station this year."  [Inter/14px/normal/$muted-foreground]
+      ▸ "Fields" {vertical w:fill_container gap:18}
+        ▸ "r1" {w:fill_container gap:24}
+          ▸ "Country" {vertical w:fill_container gap:5}
+            T "Country"  [Inter/12px/600/$muted-foreground]
+            T "🇿🇦  South Africa"  [Inter/14px/normal/$foreground]
+          ▸ "Email" {vertical w:fill_container gap:5}
+            T "Email"  [Inter/12px/600/$muted-foreground]
+            T "nova.reyes@gmail.com"  [Inter/14px/normal/$foreground]
+        ▸ "r2" {w:fill_container gap:24}
+          ▸ "Dietary needs" {vertical w:fill_container gap:5}
+            T "Dietary needs"  [Inter/12px/600/$muted-foreground]
+            T "Vegetarian, no nuts"  [Inter/14px/normal/$foreground]
+          ▸ "Emergency contact" {vertical w:fill_container gap:5}
+            T "Emergency contact"  [Inter/12px/600/$muted-foreground]
+            T "Listed ✓"  [Inter/14px/normal/$foreground]
+        ▸ "r3" {w:fill_container gap:24}
+          ▸ "Arrival date" {vertical w:fill_container gap:5}
+            T "Arrival date"  [Inter/12px/600/$muted-foreground]
+            T "12 Aug 2026"  [Inter/14px/normal/$foreground]
+          ▸ "spacer" {vertical w:fill_container gap:5}
+            T ""  [Inter/12px/600/$muted-foreground]
+            T ""  [Inter/14px/normal/$foreground]
+        ▸ "Bring" {vertical w:fill_container gap:5}
+          T "What do you bring to camp?"  [Inter/12px/600/$muted-foreground]
+          T "A full analog photo lab, two years of darkroom teaching, and a very large supply of instant film for the whole camp to use."  [Inter/14px/normal/$foreground]
+      ▸ "Divider" {w:fill_container h:1 fill:$border}
+      ▸ "Actions" {vertical w:fill_container gap:10}
+        ▸ "ApproveReject" {gap:10}
+          ⟶ <Button-Primary> "Approve"  overrides:["Approve"]
+          ⟶ <Button-Outline> "Reject"  overrides:["Reject"]
+        ▸ "AssignCaptain" {w:fill_container gap:8 pad:[13,0] jc:center ai:center r:$radius fill:#00000000 stroke:$secondary}
+          ⊙ shield ($secondary) [lucide]
+          T "Assign captain rank"  [Inter/15px/600/$secondary-foreground]
+    T "Double opt-in — assign captain"  [Inter/13px/700/$muted-foreground]
+    ▸ "DialogScrim" {vertical w:680 pad:40 jc:center ai:center r:$radius fill:#05030fdb}
+      ▸ "Dialog" {vertical w:420 gap:16 pad:24 r:$radius fill:$popover stroke:$border}
+        T "Make Nova Reyes a captain?"  [Inter/19px/700/$foreground]
+        T "Captain is the highest rank in camp. They must accept the request in their own app before it takes effect — this is a two-sided agreement, so you can't assign it for them."  [Inter/14px/normal/$muted-foreground]
+        ▸ "Steps" {vertical w:fill_container gap:12 pad:14 r:$radius fill:$muted}
+          ▸ "You send the request" {w:fill_container gap:10 ai:center}
+            ⊙ circle-check ($accent) [lucide]
+            T "You send the request"  [Inter/14px/500/$foreground]
+            T "Done"  [Inter/12px/700/$accent]
+          ▸ "They accept in their app" {w:fill_container gap:10 ai:center}
+            ⊙ circle ($muted-foreground) [lucide]
+            T "They accept in their app"  [Inter/14px/500/$foreground]
+            T "Pending"  [Inter/12px/700/$muted-foreground]
+        ▸ "Actions" {w:fill_container gap:10 pad:[4,0,0,0]}
+          ⟶ <Button-Outline> "Cancel" {w:fill_container}  overrides:["Cancel"]
+          ⟶ <Button-Primary> "Send request" {w:fill_container}  overrides:["Send request"]
+    T "Reject — confirm"  [Inter/13px/700/$muted-foreground]
+    ▸ "RejectScrim" {vertical w:680 pad:40 jc:center ai:center r:$radius fill:#05030fdb}
+      ▸ "RejectConfirm" {vertical w:420 gap:14 pad:24 r:$radius fill:$popover stroke:$destructive}
+        T "Reject Nova Reyes's application?"  [Inter/19px/700/$foreground]
+        T "They'll be told the application wasn't approved. This can't be undone here."  [Inter/14px/normal/$muted-foreground]
+        ▸ "Actions" {w:fill_container gap:10 pad:[4,0,0,0]}
+          ⟶ <Button-Outline> "Keep pending" {w:fill_container}  overrides:["Keep pending"]
+          ⟶ <Button-Primary> "Reject" {w:fill_container fill:$destructive}  overrides:["Reject"]
+    T "Non-captain view (visible, locked)"  [Inter/13px/700/$muted-foreground]
+    ⟶ <CaptainLock> {w:680}  overrides:["Captains only", "Camp management is visible to captains. Your rank doesn't include it."]

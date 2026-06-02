@@ -1,0 +1,83 @@
+# S14 Invite tool
+# kind: BOARD  |  size: 430x1400  |  pos: (5218,5010)
+# reusable components used: Button-Primary, Button-Outline
+========================================================================
+▸ "S14 Invite tool" {vertical w:430 h:1400 fill:$background}
+  ▸ "GhostBack" {gap:4 pad:[14,12] ai:center}
+    ⊙ chevron-left ($muted-foreground) [lucide]
+    T "Tools"  [Inter/15px/500/$muted-foreground]
+  ▸ "Content" {vertical w:fill_container gap:18 pad:[4,16,24,16]}
+    T "Invite a member"  [Inter/24px/700/$foreground]
+    ▸ "NoteField" {vertical w:fill_container gap:6}
+      T "Why you're inviting them (optional)"  [Inter/13px/500/$foreground]
+      ▸ "Textarea" {vertical w:fill_container h:84 pad:[12,14] r:$radius fill:$muted stroke:$border}
+        T "Kitchen lead from last burn; great with sourdough."  [Inter/14px/normal/$muted-foreground]
+    ▸ "CaptainOptions" {vertical w:fill_container gap:14 pad:16 r:$radius fill:#00dcff26 stroke:$border}
+      ▸ "CapHead" {gap:8 ai:center}
+        ⊙ shield ($accent) [lucide]
+        T "Captain options"  [Inter/13px/700/$accent]
+      ▸ "PreApprove" {w:fill_container gap:10 ai:center}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:$primary}
+          ⊙ check ($primary-foreground) [lucide]
+        T "Pre-approve whoever signs up"  [Inter/14px/500/$foreground]
+      ▸ "UseCount" {vertical w:fill_container gap:6}
+        T "How many people can use this code"  [Inter/13px/500/$foreground]
+        ▸ "NumberInput" {w:fill_container h:46 pad:[0,14] jc:space_between ai:center r:$radius fill:$muted stroke:$border}
+          T "1"  [Inter/14px/normal/$foreground]
+          ▸ "Stepper" {gap:10 ai:center}
+            ⊙ minus ($muted-foreground) [lucide]
+            ⊙ plus ($muted-foreground) [lucide]
+    ▸ "MemberNote" {w:fill_container gap:10 pad:14 r:$radius fill:$muted}
+      ⊙ info ($muted-foreground) [lucide]
+      T "Anyone who signs up with this code will need a captain's approval before they can use the app."  [Inter/13px/normal/$muted-foreground]
+    ▸ "CodeField" {vertical w:fill_container gap:6}
+      T "Invite code"  [Inter/13px/500/$foreground]
+      ▸ "CodeRow" {w:fill_container gap:10 ai:center}
+        ▸ "CodeInput" {w:fill_container h:46 pad:[0,14] ai:center r:$radius fill:$muted stroke:$border}
+          T "neon-toaster-mongoose"  [JetBrains Mono/14px/normal/$foreground]
+        ▸ "ShuffleBtn" {w:46 h:46 jc:center ai:center r:$radius fill:$muted stroke:$border}
+          ⊙ shuffle ($foreground) [lucide]
+      ▸ "AvailHint" {gap:6 ai:center}
+        ⊙ circle-check (#3fd07a) [lucide]
+        T "neon-toaster-mongoose is available."  [Inter/13px/normal/#3fd07a]
+    ⟶ <Button-Primary> "CreateBtn" {w:fill_container}  overrides:["Create invite"]
+    ▸ "StatesSection" {vertical w:fill_container gap:14 pad:[20,0,0,0]}
+      ▸ "Divider" {w:fill_container h:1 fill:$border}
+      T "AVAILABILITY HINT — STATES"  [Inter/11px/600/$muted-foreground]
+      ▸ "available" {vertical w:fill_container gap:6}
+        T "available"  [Inter/11px/500/$muted-foreground]
+        ▸ "Hint" {w:fill_container gap:6 ai:center}
+          ⊙ circle-check (#3fd07a) [lucide]
+          T "neon-toaster-mongoose is available."  [Inter/13px/normal/#3fd07a]
+      ▸ "invalid" {vertical w:fill_container gap:6}
+        T "invalid"  [Inter/11px/500/$muted-foreground]
+        ▸ "Hint" {w:fill_container gap:6 ai:center}
+          ⊙ circle-x ($destructive) [lucide]
+          T "3–48 chars, lowercase letters / digits / hyphens."  [Inter/13px/normal/$destructive]
+      ▸ "taken" {vertical w:fill_container gap:6}
+        T "taken"  [Inter/11px/500/$muted-foreground]
+        ▸ "Hint" {w:fill_container gap:6 ai:center}
+          ⊙ circle-x ($destructive) [lucide]
+          T "neon-toaster-mongoose is already taken — pick another."  [Inter/13px/normal/$destructive]
+      ▸ "submitting" {vertical w:fill_container gap:6}
+        T "submitting"  [Inter/11px/500/$muted-foreground]
+        ⟶ <Button-Primary> "SubmittingBtn" {w:fill_container op:0.7}  overrides:["Creating…"]
+    ▸ "SuccessVariant" {vertical w:fill_container gap:6 pad:[8,0,0,0]}
+      T "success"  [Inter/11px/500/$muted-foreground]
+      ▸ "SuccessCard" {vertical w:fill_container gap:12 pad:20 r:$radius fill:$card stroke:$border}
+        ▸ "Head" {gap:10 ai:center}
+          ⊙ circle-check (#3fd07a) [lucide]
+          T "Invite ready"  [Inter/17px/700/$foreground]
+        T "Share this code with whoever you’re inviting."  [Inter/14px/normal/$muted-foreground]
+        ▸ "Meta" {vertical w:fill_container gap:6}
+          ▸ "Can be used by 1 person." {w:fill_container gap:8 ai:center}
+            ⊙ users ($muted-foreground) [lucide]
+            T "Can be used by 1 person."  [Inter/13px/normal/$muted-foreground]
+          ▸ "They'll be pre-approved — no captain sign-off needed." {w:fill_container gap:8 ai:center}
+            ⊙ shield-check ($muted-foreground) [lucide]
+            T "They'll be pre-approved — no captain sign-off needed."  [Inter/13px/normal/$muted-foreground]
+        ▸ "CodeBox" {w:fill_container h:50 pad:[0,16] jc:center ai:center r:$radius fill:$muted stroke:$border}
+          T "neon-toaster-mongoose"  [JetBrains Mono/16px/500/$foreground]
+        ▸ "Actions" {w:fill_container gap:10 pad:[4,0,0,0]}
+          ⟶ <Button-Primary> "CopyBtn" {w:fill_container}  overrides:["Copy"]
+          ⟶ <Button-Outline> "SendAnotherBtn" {w:fill_container}  overrides:["Send another"]

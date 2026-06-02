@@ -1,0 +1,59 @@
+# OB Step 09 Burn history
+# kind: BOARD  |  size: 600x-  |  pos: (10518,11500)
+# reusable components used: Button-Outline, Button-Primary
+========================================================================
+▸ "OB Step 09 Burn history" {vertical w:600 gap:22 pad:[22,18,30,18] fill:$background}
+  ▸ "Header" {vertical w:fill_container gap:8}
+    T "Build your burner profile"  [Inter/24px/700/$foreground]
+    T "A few questions so the camp knows who’s arriving in the dust. Takes about two minutes."  [Inter/14px/normal/$muted-foreground]
+  ▸ "Progress" {vertical w:fill_container gap:8}
+    T "Step 9 of 11"  [Inter/13px/normal/$muted-foreground]
+    ▸ "Track" {w:fill_container h:6 r:999 fill:$muted}
+      ▸ "Fill" {w:442 h:fill_container r:999 fill:$primary}
+  T "Burn history"  [Inter/18px/700/$foreground]
+  ▸ "Question" {vertical w:fill_container gap:10}
+    T "Which Camp 404 years were you part of?"  [Inter/15px/600/$foreground]
+    ▸ "Options" {vertical w:fill_container gap:10}
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:#00000000 stroke:$border}
+        T "2019"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:#00000000 stroke:$border}
+        T "2022"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:#00000000 stroke:$border}
+        T "2023"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$primary}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:$primary stroke:$primary}
+          ⊙ check ($primary-foreground) [lucide]
+        T "2024"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$primary}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:$primary stroke:$primary}
+          ⊙ check ($primary-foreground) [lucide]
+        T "2025"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:#00000000 stroke:$border}
+        T "2026"  [Inter/14px/normal/$foreground]
+  ▸ "Question" {vertical w:fill_container gap:10}
+    T "How many AfrikaBurns have you been to?"  [Inter/15px/600/$foreground]
+    ▸ "Options" {vertical w:fill_container gap:10}
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$primary}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$primary}
+          ◯ "Dot" {w:8 h:8 fill:$primary}
+        T "None — first one"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$border}
+        T "1–2"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$border}
+        T "3–5"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$border}
+        T "6 or more"  [Inter/14px/normal/$foreground]
+  ▸ "Question" {vertical w:fill_container gap:10}
+    T "Other burns?"  [Inter/15px/600/$foreground]
+    ▸ "Textarea" {vertical w:fill_container h:120 pad:14 r:$radius fill:$muted stroke:$border}
+      T "Tell us about other burns you’ve been to…"  [Inter/14px/normal/$muted-foreground]
+  ▸ "Footer" {w:fill_container jc:space_between ai:center}
+    ⟶ <Button-Outline> "Back"  overrides:["Back"]
+    ⟶ <Button-Primary> "Next"  overrides:["Next"]

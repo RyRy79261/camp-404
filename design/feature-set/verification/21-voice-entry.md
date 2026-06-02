@@ -1,0 +1,47 @@
+# Verification — 21 voice-entry
+
+**Verdict:** accurate  ·  checked 78 claims, verified 76.
+The doc is a faithful, digit-exact account of the voice-dictation pipeline: every enum member, status code, byte cap, rate limit, MIME list, prompt string, and prop interface matches the real source, and the "orphaned DictateButton" / "two RecorderPanel consumers" / "no DB" structural claims all hold. The only defects are two cosmetic line-citation slips (one mislabels the short_text Input as the long_text Textarea; one LongTextField start-line is off by a few). Nothing would mislead a rebuild.
+
+## Inaccuracies
+
+| severity | doc claim | code reality | file:line |
+|---|---|---|---|
+| low | "host field's textarea `maxLength` also enforces typed input — question.tsx:179, 449" | Line 179 is the **short_text** `<Input maxLength={question.maxLength}>`, not the long_text textarea. The long_text Textarea maxLength is line 449 (correct). The 179 citation points at the wrong field variant. | apps/web/components/questionnaire/question.tsx:179, 449 |
+| low | `LongTextField`, "lines 414–477" (Files covered) | `LongTextField` function declaration begins at line 418 (lines 405–417 are the JSDoc comment). End at 477 is correct. Off-by-a-few on the start line. | apps/web/components/questionnaire/question.tsx:418–477 |
+
+## Omissions
+
+| severity | missing behavior/state/enum | file:line |
+|---|---|---|
+| low | Doc says bug-report `appendTranscript` "sets a `dictated` flag" but does not note the flag is read at submit time and forwarded into `submitFeedbackAction({...dictated})`; harmless, but the flag's downstream purpose is unstated. | apps/web/components/feedback/report-bug-dialog.tsx:78, 92 |
+
+## Spot-confirmed
+- RecorderState enum `"idle" | "requesting" | "recording" | "processing" | "error"` — exact (use-voice-recorder.ts:5–10).
+- `isRecording`/`isBusy` derivation exact (recorder-panel.tsx:47–48); panel container classes `rounded-md border ... bg-[color:var(--color-card)] p-4` exact (recorder-panel.tsx:76).
+- X close button: `variant="ghost" size="sm"`, `aria-label="Close dictation"`, `disabled={isRecording || isBusy}` (recorder-panel.tsx:79–88).
+- Record button `h-16 w-16 rounded-full`, `variant={isRecording ? "destructive" : "default"}`, `disabled={isBusy}`, icons Loader2/Square(`fill-current`)/Mic, aria-label "Stop recording"/"Start recording" (recorder-panel.tsx:91–107).
+- mm:ss timer rendered only `{isRecording && ...}`, mono/muted (recorder-panel.tsx:110–114); error line `role="alert"` destructive (recorder-panel.tsx:115–122).
+- Status labels: "Allow microphone…"/"Transcribing…"/"Recording"/"Tap to retry"/"Tap to record" (recorder-panel.tsx:59–68).
+- DictateButton ORPHANED: zero source imports of `DictateButton`/`dictate-button` outside its own file (grep). `w-24` column, `size="sm"`, outline/destructive, labels "Allow mic"/"Transcribing"/"Stop"/"Try again"/"Dictate", `aria-pressed={isRecording}`, `10px` error line (dictate-button.tsx:48–88).
+- RecorderPanel has exactly two consumers: questionnaire LongTextField with `promptKey="questionnaire"` (question.tsx:458–462) and bug-report dialog with NO promptKey (report-bug-dialog.tsx:217–220) — the latter carries the "no bug-report prompt / unbiased" comment (report-bug-dialog.tsx:214–216).
+- Waveform: `<canvas>` `h-6 w-full`, `aria-hidden`, `opacity-40` when inactive, `text-[color:var(--color-primary)]` (waveform.tsx:86–96); pixel dims `clientW/H * dpr`, `ctx.scale(dpr,dpr)` (waveform.tsx:29–33); `new Uint8Array(analyser.fftSize)` (waveform.tsx:36); drawIdle centre line `color-mix(... 25%, transparent)` lineWidth 1 (waveform.tsx:38–48); draw `getByteTimeDomainData` lineWidth 1.5 (waveform.tsx:50–73); `v=(buffer[i]??128)/128.0`, `y=v*clientHeight/2`, `x += clientWidth/buffer.length` (waveform.tsx:64–72); animates only `if (active && analyser)` else idle, cleanup `cancelAnimationFrame` (waveform.tsx:77–84).
+- useVoiceRecorder: start() guard `if (state === "recording" || state === "requesting") return` (use-voice-recorder.ts:101); getUserMedia constraints `echoCancellation/noiseSuppression/autoGainControl: true` (use-voice-recorder.ts:109–115); `webkitAudioContext` fallback (use-voice-recorder.ts:121–124); `node.fftSize = 1024` (use-voice-recorder.ts:128); ondataavailable pushes non-empty, onerror→"Recording failed"+error+teardown, onstop→handleStop (use-voice-recorder.ts:138–148); `setTimeout(() => stop(), maxDurationMs)` (use-voice-recorder.ts:152); TODO(capacitor) comment present (use-voice-recorder.ts:105–107).
+- handleStop: sets processing; blob from chunks; `if (blob.size === 0)` → idle, no upload (use-voice-recorder.ts:184–187); File named `clip.${mimeType.includes("mp4") ? "m4a" : "webm"}` (use-voice-recorder.ts:192); appends `promptKey` only if present (use-voice-recorder.ts:196); non-ok parses `{error}`, throws `Transcription failed (${res.status})` fallback (use-voice-recorder.ts:202–205); `if (data.text.trim()) onTranscript(data.text)` (use-voice-recorder.ts:207); throw → error message + error state (use-voice-recorder.ts:209–215).
+- Unmount cleanup detaches ondataavailable/onstop/onerror BEFORE stop(), stops tracks, closes ctx, clears timeout (use-voice-recorder.ts:69–86); `safeSet` gated on `mountedRef` (use-voice-recorder.ts:88–90); `reset()` clears error → idle (use-voice-recorder.ts:218–221); returns `{ state, error, start, stop, reset, analyser }` (use-voice-recorder.ts:223).
+- SUPPORTED_MIME_TYPES order `audio/webm;codecs=opus`, `audio/webm`, `audio/mp4` (iOS Safari 14.3+ comment), `audio/ogg;codecs=opus`; no mimeType option if none supported (use-voice-recorder.ts:25–30, 134).
+- Error messages: NotAllowedError→"Microphone permission denied", NotFoundError→"No microphone found", else "Couldn't access microphone" (use-voice-recorder.ts:154–160).
+- Route: `runtime = "nodejs"` (route.ts:12); 401 "Unauthorized" on null user (route.ts:15–18); per-user `voice-transcribe:${user.id}` `limit: 30`, 429 `{error,retryAfterSeconds}` + Retry-After (route.ts:20–26); per-IP `voice-transcribe-ip:${getClientIp}` `limit: 60`, 429 `{error}` (no retryAfterSeconds in body) + Retry-After header (route.ts:30–38) — doc's "no retryAfterSeconds in IP body" distinction is correct; IP comment "user.id can be cheap to mint via repeated signups" verbatim (route.ts:28–29).
+- 400 "Invalid form data" on formData throw (route.ts:40–45); `form.get("audio")` not File → 400 "Missing `audio` file" (route.ts:47–50); `!file.type.startsWith("audio/")` → 415 "File must be audio/*" (route.ts:51–56); `file.size > MAX_BYTES` → 413 "Audio too large" (route.ts:57–59).
+- `MAX_BYTES = 10 * 1024 * 1024` with "~10 minutes of speech" comment (route.ts:7–9); `ACCEPTED_PROMPT_KEYS = new Set(["questionnaire"])` (route.ts:10); promptKey resolution → QUESTIONNAIRE_PROMPT or undefined (route.ts:61–64).
+- Error masking: console.error server-side, 502, `"Voice not configured"` if message includes "GROQ_API_KEY" else "Transcription failed" (route.ts:69–77).
+- groq.ts: lazy singleton, throws "GROQ_API_KEY is not set" if missing (groq.ts:5–12); `transcribeAudio` calls `audio.transcriptions.create` with `model:"whisper-large-v3-turbo"`, `response_format:"json"`, `temperature:0`, spread `prompt` only when provided, returns `res.text` (groq.ts:31–38); header comment "~216x real-time speed, $0.04/audio-hour" verbatim (groq.ts:24–25); `TranscribeOptions { prompt?: string }` (groq.ts:14–21).
+- QUESTIONNAIRE_PROMPT string matches verbatim including "Dance of 1000 Flames", "Now Now Meow Meow", "DDT ticket", "Ministry of Vibes, Ministry of Memes" and 224-token comment (voice-prompts.ts:1–13).
+- rate-limit.ts: in-memory `Map<string, Bucket{tokens,updatedAt}>`, default `windowMs = 60_000`, `SWEEP_EVERY = 200` sweep (rate-limit.ts:6–24, 44); `getClientIp` reads x-forwarded-for first split, then x-real-ip, then "unknown" (rate-limit.ts:66–70).
+- Consumers' appendTranscript: trim, ignore empty, joiner `value && !/\n\s*$/.test(value) ? "\n" : ""`, `.slice(0, maxLength/DESCRIPTION_MAX)` (question.tsx:433–438; report-bug-dialog.tsx:75–83). `fullScreen` textarea `min-h-[40dvh] flex-1` (question.tsx:454).
+- `DESCRIPTION_MAX = 5000` (lib/github-feedback.ts:21); `LongTextQuestion` `kind:"long_text"`, `maxLength` default 1000 (questionnaire.ts:55–63); long_text validation `raw.length > q.maxLength` → `Max ${q.maxLength} characters` (questionnaire.ts:393–396).
+- `getAuthenticatedUser()` exists and returns `AuthenticatedUser | null` (lib/auth.ts:25).
+
+## Low-confidence / could-not-verify
+- The doc's own embedded low-confidence note (line 119) about whether an authenticated-but-onboarding-incomplete user could hit `/api/voice/transcribe` directly is accurate: the route gates ONLY on `getAuthenticatedUser()` truthiness (route.ts:14–18) — there is no approval_status / nextGate / rank check in the handler. Whether upstream middleware blocks such a request is outside this file set and was not traced.
+- Doc's "iOS Safari 14.3+" and "~216x real-time / $0.04/hr" figures are copied verbatim from source comments; their real-world accuracy is an upstream/vendor claim, not code-verifiable here.

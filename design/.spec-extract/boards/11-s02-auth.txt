@@ -1,0 +1,60 @@
+# S02 Auth
+# kind: BOARD  |  size: 430x-  |  pos: (5218,0)
+# reusable components used: InputField, Button-Primary, Button-Outline
+========================================================================
+▸ "S02 Auth" {vertical w:430 gap:24 pad:28 ai:center fill:$muted}
+  ▸ "Sign In block" {vertical w:fill_container gap:8}
+    T "AUTH / SIGN IN"  [JetBrains Mono/9px/500/$muted-foreground]
+    ▸ "Sign In Card" {vertical w:fill_container gap:14 pad:20 r:$radius fill:$card stroke:$border}
+      ▸ "Header" {vertical w:fill_container gap:4}
+        T "Welcome back"  [Inter/18px/700/$card-foreground]
+        T "Sign in to your Camp 404 account."  [Inter/13px/normal/$muted-foreground]
+      ⟶ <InputField> "Email field" {w:fill_container}  overrides:["Email", "you@example.com"]
+      ⟶ <InputField> "Password field" {w:fill_container}  overrides:["Password", "••••••••"]
+      ▸ "Forgot row" {w:fill_container jc:end}
+        T "Forgot your password?"  [Inter/13px/500/$accent]
+      ⟶ <Button-Primary> "Sign in btn" {w:fill_container}  overrides:["Sign in"]
+      ▸ "Divider" {w:fill_container gap:10 ai:center}
+        ▭ "line-l" {w:fill_container h:1 fill:$border}
+        T "Or continue with"  [Inter/11px/normal/$muted-foreground]
+        ▭ "line-r" {w:fill_container h:1 fill:$border}
+      ⟶ <Button-Outline> "Google btn" {w:fill_container}
+        ▸ "Google label" {gap:10 ai:center}
+          T "G"  [JetBrains Mono/15px/700/$accent]
+          T "Continue with Google"  [Inter/15px/600/$foreground]
+  ▸ "Sign Up block" {vertical w:fill_container gap:8}
+    T "AUTH / SIGN UP"  [JetBrains Mono/9px/500/$muted-foreground]
+    ▸ "Sign Up Card" {vertical w:fill_container gap:14 pad:20 r:$radius fill:$card stroke:$border}
+      ▸ "Header" {vertical w:fill_container gap:4}
+        T "Create your account"  [Inter/18px/700/$card-foreground]
+        T "Set a password or continue with Google. We'll ask the rest in the questionnaire."  [Inter/13px/normal/$muted-foreground]
+      ⟶ <InputField> "Email field" {w:fill_container}  overrides:["Email", "you@example.com"]
+      ⟶ <InputField> "Password field" {w:fill_container}  overrides:["Password", "••••••••"]
+      ⟶ <InputField> "Confirm field" {w:fill_container}  overrides:["Confirm password", "••••••••"]
+      ⟶ <Button-Primary> "Create btn" {w:fill_container}  overrides:["Create account"]
+      ▸ "Divider" {w:fill_container gap:10 ai:center}
+        ▭ "line-l" {w:fill_container h:1 fill:$border}
+        T "Or continue with"  [Inter/11px/normal/$muted-foreground]
+        ▭ "line-r" {w:fill_container h:1 fill:$border}
+      ⟶ <Button-Outline> "Google btn" {w:fill_container}
+        ▸ "Google label" {gap:10 ai:center}
+          T "G"  [JetBrains Mono/15px/700/$accent]
+          T "Continue with Google"  [Inter/15px/600/$foreground]
+      ▸ "Footer" {w:fill_container gap:5 jc:center}
+        T "Already have an account?"  [Inter/13px/normal/$muted-foreground]
+        T "Sign in"  [Inter/13px/500/$accent]
+  ▸ "States block" {vertical w:fill_container gap:12}
+    T "AUTH / STATES"  [JetBrains Mono/9px/500/$muted-foreground]
+    ▸ "States Card" {vertical w:fill_container gap:16 pad:20 r:$radius fill:$card stroke:$border}
+      ▸ "Submitting - sign in" {vertical w:fill_container gap:6}
+        T "SUBMITTING — SIGN IN (DISABLED)"  [JetBrains Mono/9px/500/$muted-foreground]
+        ⟶ <Button-Primary> "btn" {w:fill_container op:0.6}  overrides:["Signing in…"]
+      ▸ "Submitting - create" {vertical w:fill_container gap:6}
+        T "SUBMITTING — CREATE (DISABLED)"  [JetBrains Mono/9px/500/$muted-foreground]
+        ⟶ <Button-Primary> "btn" {w:fill_container op:0.6}  overrides:["Creating account…"]
+      ▸ "Validation error" {vertical w:fill_container gap:6}
+        T "VALIDATION ERROR — ROLE=ALERT"  [JetBrains Mono/9px/500/$muted-foreground]
+        ▸ "Alert" {w:fill_container gap:8 pad:[10,12] ai:center r:$radius fill:#f83e5a1f stroke:$destructive}
+          ⊙ triangle-alert ($destructive) [lucide]
+          T "Passwords do not match"  [Inter/13px/500/$destructive]
+        T "Other messages: “Email is required” · “Password is required”"  [JetBrains Mono/9px/normal/$muted-foreground]

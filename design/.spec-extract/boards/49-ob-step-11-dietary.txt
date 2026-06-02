@@ -1,0 +1,115 @@
+# OB Step 11 Dietary
+# kind: BOARD  |  size: 600x-  |  pos: (11958,11500)
+# reusable components used: Button-Outline, Button-Primary
+========================================================================
+▸ "OB Step 11 Dietary" {vertical w:600 fill:$background}
+  ▸ "Shell" {vertical w:fill_container gap:22 pad:[22,18,30,18] fill:$background}
+    ▸ "Header" {vertical w:fill_container gap:8}
+      T "Build your burner profile"  [Inter/24px/700/$foreground]
+      T "A few questions so the camp knows who’s arriving in the dust. Takes about two minutes."  [Inter/14px/$muted-foreground]
+    ▸ "Progress" {vertical w:fill_container gap:6}
+      T "Step 11 of 11"  [Inter/12px/600/$muted-foreground]
+      ▸ "track" {w:fill_container h:6 r:999 fill:$muted}
+        ▸ "fill" {w:540 h:6 r:999 fill:$primary}
+    T "Dietary"  [Inter/20px/700/$foreground]
+    ▸ "Dislikes" {vertical w:fill_container gap:10}
+      T "Anything you’d rather not eat?"  [Inter/15px/600/$foreground]
+      ▸ "grid" {vertical w:fill_container gap:8}
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Dairy / lactose" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Dairy / lactose"  [Inter/13px/500/$foreground]
+          ▸ "Gluten / wheat" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Gluten / wheat"  [Inter/13px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Eggs" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Eggs"  [Inter/13px/500/$foreground]
+          ▸ "Soy" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Soy"  [Inter/13px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Peanuts" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Peanuts"  [Inter/13px/500/$foreground]
+          ▸ "Tree nuts" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Tree nuts"  [Inter/13px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Shellfish" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Shellfish"  [Inter/13px/500/$foreground]
+          ▸ "Fish" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Fish"  [Inter/13px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Sesame" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Sesame"  [Inter/13px/500/$foreground]
+          ▸ "Onion / garlic" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:#ff008c14 stroke:$primary}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:$primary stroke:$primary}
+              ⊙ check ($primary-foreground) [lucide]
+            T "Onion / garlic"  [Inter/13px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Nightshades (tomato, pepper, aubergine)" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Nightshades (tomato, pepper, aubergine)"  [Inter/13px/500/$foreground]
+          ▸ "Chilli / heat" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:#ff008c14 stroke:$primary}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:$primary stroke:$primary}
+              ⊙ check ($primary-foreground) [lucide]
+            T "Chilli / heat"  [Inter/13px/500/$foreground]
+    ▸ "Allergies" {vertical w:fill_container gap:10}
+      T "Any allergies?"  [Inter/15px/600/$foreground]
+      ▸ "grid" {vertical w:fill_container gap:8}
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Dairy / lactose" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Dairy / lactose"  [Inter/13px/500/$foreground]
+          ▸ "Gluten / wheat" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Gluten / wheat"  [Inter/13px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Eggs" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Eggs"  [Inter/13px/500/$foreground]
+          ▸ "Soy" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Soy"  [Inter/13px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Peanuts" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:#ff008c14 stroke:$primary}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:$primary stroke:$primary}
+              ⊙ check ($primary-foreground) [lucide]
+            T "Peanuts"  [Inter/13px/500/$foreground]
+          ▸ "Tree nuts" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Tree nuts"  [Inter/13px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Shellfish" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:#ff008c14 stroke:$primary}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:$primary stroke:$primary}
+              ⊙ check ($primary-foreground) [lucide]
+            T "Shellfish"  [Inter/13px/500/$foreground]
+          ▸ "Fish" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Fish"  [Inter/13px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Sesame" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Sesame"  [Inter/13px/500/$foreground]
+          ▸ "Onion / garlic" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Onion / garlic"  [Inter/13px/500/$foreground]
+        ▸ "r" {w:fill_container gap:8}
+          ▸ "Nightshades (tomato, pepper, aubergine)" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Nightshades (tomato, pepper, aubergine)"  [Inter/13px/500/$foreground]
+          ▸ "Chilli / heat" {w:fill_container gap:9 pad:[10,12] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "box" {w:18 h:18 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Chilli / heat"  [Inter/13px/500/$foreground]
+    ▸ "Notes" {vertical w:fill_container gap:10}
+      T "Anything else we should know?"  [Inter/15px/600/$foreground]
+      ▸ "Textarea" {vertical w:fill_container h:120 pad:[12,14] r:$radius fill:$muted stroke:$border}
+        T "Allergies, intolerances, or anything our kitchen crew should plan around…"  [Inter/14px/$muted-foreground]
+    ▸ "Footer" {w:fill_container pad:[4,0,0,0] jc:space_between ai:center}
+      ⟶ <Button-Outline> "Back"  overrides:["Back"]
+      ⟶ <Button-Primary> "Finish"  overrides:["Finish"]

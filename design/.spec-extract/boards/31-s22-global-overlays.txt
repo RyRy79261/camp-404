@@ -1,0 +1,78 @@
+# S22 Global overlays
+# kind: BOARD  |  size: 430x-  |  pos: (7578,6540)
+# reusable components used: none
+========================================================================
+▸ "S22 Global overlays" {vertical w:430 fill:$background}
+  ▸ "Content" {vertical w:fill_container gap:16 pad:[16,16,28,16] fill:$background}
+    T "Global overlays"  [Inter/22px/700/$foreground]
+    T "System-level surfaces that appear on top of any screen. Shown here as labelled states."  [Inter/13px/$muted-foreground]
+    T "Announcement takeover — must acknowledge"  [Inter/13px/700/$muted-foreground]
+    ▸ "AckTakeover" {vertical w:fill_container h:520 gap:18 pad:28 jc:center ai:center r:$radius fill:$background}
+      ▭ "scan" {w:398 h:520 fill:#00dcff08 abs(0,0)}
+      ▸ "ic" {w:60 h:60 jc:center ai:center r:999 fill:#ff008c2e}
+        ⊙ megaphone ($primary) [lucide]
+      T "CAMP ANNOUNCEMENT"  [JetBrains Mono/11px/700/$accent]
+      T "Burn-night briefing"  [Inter/26px/700/$foreground]
+      T "Gates open at sundown. Bring goggles — dust storm forecast. Meet at the effigy for the safety walk-through at 19:00."  [Inter/15px/$muted-foreground]
+      T "From Ada · 28 May, 14:02"  [Inter/12px/$muted-foreground]
+      ▸ "AckBtn" {w:fill_container pad:[14,0] jc:center r:$radius fill:$primary}
+        T "Acknowledge"  [Inter/15px/700/$primary-foreground]
+      T "You can’t dismiss this until you acknowledge."  [Inter/11px/$muted-foreground]
+    T "Questionnaire block — must complete"  [Inter/13px/700/$muted-foreground]
+    ▸ "QuestionnaireBlock" {vertical w:fill_container h:480 gap:14 pad:26 jc:center ai:center r:$radius fill:$background}
+      ▭ "scan" {w:398 h:480 fill:#00dcff08 abs(0,0)}
+      ▸ "ic" {w:56 h:56 jc:center ai:center r:999 fill:#ff008c2e}
+        ⊙ clipboard-list ($primary) [lucide]
+      T "REQUIRED QUESTIONNAIRE"  [JetBrains Mono/11px/700/$accent]
+      T "Before you go any further"  [Inter/22px/700/$foreground]
+      T "A captain needs this from you. You can’t use Camp 404 until it’s done."  [Inter/14px/$muted-foreground]
+      ▸ "QCard" {vertical w:fill_container gap:8 pad:14 r:$radius fill:$card stroke:$border}
+        T "Safety & logistics"  [Inter/15px/700/$foreground]
+        ▸ "meta" {gap:14 ai:center}
+          ▸ "8 questions" {gap:6 ai:center}
+            ⊙ list-checks ($muted-foreground) [lucide]
+            T "8 questions"  [Inter/12px/500/$muted-foreground]
+          ▸ "about 3 minutes" {gap:6 ai:center}
+            ⊙ timer ($muted-foreground) [lucide]
+            T "about 3 minutes"  [Inter/12px/500/$muted-foreground]
+      ▸ "Start" {w:fill_container pad:[13,0] jc:center r:$radius fill:$primary}
+        T "Start questionnaire"  [Inter/15px/700/$primary-foreground]
+      ▸ "lock" {gap:6 ai:center}
+        ⊙ lock ($muted-foreground) [lucide]
+        T "Can’t be skipped · Sign out"  [Inter/12px/500/$muted-foreground]
+    T "Shake to report a problem"  [Inter/13px/700/$muted-foreground]
+    ▸ "ShakeReporter" {vertical w:fill_container gap:14 pad:18 r:$radius fill:$card stroke:$border}
+      ▸ "hd" {w:fill_container gap:10 ai:center}
+        ▸ "ic" {w:40 h:40 jc:center ai:center r:999 fill:#00dcff26}
+          ⊙ bug ($accent) [lucide]
+        ▸ "m" {vertical w:fill_container gap:2}
+          T "Something feel off?"  [Inter/15px/700/$foreground]
+          T "You shook your phone — want to report it?"  [Inter/12px/$muted-foreground]
+      ▸ "box" {vertical w:fill_container h:84 pad:[11,12] r:$radius fill:$muted stroke:$border}
+        T "What happened?"  [Inter/14px/$muted-foreground]
+      ▸ "chk" {gap:8 ai:center}
+        ▸ "bx" {w:18 h:18 jc:center ai:center r:5 fill:$primary}
+        T "Attach a screenshot of this screen"  [Inter/13px/500/$foreground]
+      ▸ "acts" {w:fill_container gap:8}
+        ▸ "Not now" {w:fill_container pad:[11,0] jc:center r:$radius fill:#00000000 stroke:$border}
+          T "Not now"  [Inter/14px/600/$foreground]
+        ▸ "Send report" {w:fill_container pad:[11,0] jc:center r:$radius fill:$primary}
+          T "Send report"  [Inter/14px/600/$primary-foreground]
+    T "Error boundary — something broke"  [Inter/13px/700/$muted-foreground]
+    ▸ "ErrorBoundary" {vertical w:fill_container gap:14 pad:28 ai:center r:$radius fill:$card stroke:$border}
+      ▸ "ic" {w:56 h:56 jc:center ai:center r:999 fill:#f83e5a1f}
+        ⊙ triangle-alert ($destructive) [lucide]
+      T "404 — that wasn’t supposed to happen"  [JetBrains Mono/18px/700/$foreground]
+      T "The screen hit an error and stopped. Reloading usually fixes it. If it keeps happening, shake to report."  [Inter/14px/$muted-foreground]
+      ▸ "code" {pad:[6,12] r:6 fill:$muted}
+        T "ERR_RENDER · trace 8f3a2"  [JetBrains Mono/11px/500/$muted-foreground]
+      ▸ "acts" {w:fill_container gap:8 pad:[6,0,0,0]}
+        ▸ "Report" {w:fill_container pad:[12,0] jc:center r:$radius fill:#00000000 stroke:$border}
+          T "Report"  [Inter/14px/600/$foreground]
+        ▸ "Reload" {w:fill_container pad:[12,0] jc:center r:$radius fill:$primary}
+          T "Reload"  [Inter/14px/600/$primary-foreground]
+    T "Toast"  [Inter/13px/700/$muted-foreground]
+    ▸ "Toast" {w:fill_container gap:10 pad:[12,14] ai:center r:$radius fill:$popover stroke:$border}
+      ⊙ check ($accent) [lucide]
+      T "Saved."  [Inter/14px/500/$foreground]
+      T "Undo"  [Inter/13px/600/$accent]

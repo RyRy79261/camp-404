@@ -1,0 +1,186 @@
+# S04 Onboarding wizard
+# kind: BOARD  |  size: 620x-  |  pos: (7578,0)
+# reusable components used: InputField, Button-Outline, Button-Primary
+========================================================================
+▸ "S04 Onboarding wizard" {vertical w:620 gap:28 pad:[28,28,40,28] fill:$background}
+  ▸ "WizardHeader" {vertical w:fill_container gap:14}
+    ▸ "TitleBlock" {vertical w:fill_container gap:8}
+      T "Build your burner profile"  [Inter/26px/700/$foreground]
+      T "A few questions so the camp knows who's arriving in the dust. Takes about two minutes."  [Inter/14px/normal/$muted-foreground]
+    ▸ "Progress" {vertical w:fill_container gap:8}
+      ▸ "ProgressLabelRow" {w:fill_container jc:space_between ai:center}
+        T "Step 2 of 12"  [JetBrains Mono/12px/normal/$muted-foreground]
+        T "17%"  [JetBrains Mono/12px/normal/$accent]
+      ▸ "Track" {w:fill_container h:8 r:999 fill:$muted}
+        ▸ "Fill" {w:104 h:8 r:999 fill:$primary}
+  ▸ "PagesStack" {vertical w:fill_container gap:24}
+    ▸ "Page0_Photo" {vertical w:fill_container gap:16 pad:24 r:$radius fill:$card stroke:$border}
+      ▸ "VariantTag" {pad:[4,10] r:999 fill:#00dcff26}
+        T "PAGE 0 — profile photo"  [JetBrains Mono/11px/normal/$accent]
+      ▸ "PhotoBody" {vertical w:fill_container gap:14 pad:[12,0] ai:center}
+        ▸ "PhotoCircle" {vertical w:132 h:132 gap:6 jc:center ai:center r:999 fill:$muted stroke:$border}
+          ⊙ camera ($muted-foreground) [lucide]
+          T "Add a profile photo"  [Inter/12px/normal/$muted-foreground]
+        T "A clear photo of your face works best."  [Inter/13px/normal/$muted-foreground]
+    ▸ "Page_About" {vertical w:fill_container gap:16 pad:24 r:$radius fill:$card stroke:$border}
+      ▸ "VariantTag" {pad:[4,10] r:999 fill:#00dcff26}
+        T "ABOUT YOU"  [JetBrains Mono/11px/normal/$accent]
+      T "About you"  [Inter/18px/700/$foreground]
+      ▸ "Field_Birthday" {vertical w:fill_container gap:6}
+        ▸ "LabelRow" {gap:2 ai:center}
+          T "Birthday"  [Inter/13px/500/$foreground]
+        ▸ "DateControl" {w:fill_container h:46 pad:[0,14] jc:space_between ai:center r:$radius fill:$muted stroke:$border}
+          T "1994-07-12"  [Inter/14px/normal/$foreground]
+          ⊙ calendar ($muted-foreground) [lucide]
+      ⟶ <InputField> "Field_Phone" {w:fill_container}  overrides:["Phone", "+27 82 000 0000"]
+      ▸ "Field_Country" {vertical w:fill_container gap:6}
+        ▸ "LabelRow" {gap:2 ai:center}
+          T "Country"  [Inter/13px/500/$foreground]
+        ▸ "CountryControl" {w:fill_container h:46 pad:[0,14] jc:space_between ai:center r:$radius fill:$muted stroke:$border}
+          T "Pick your country…"  [Inter/14px/normal/$muted-foreground]
+          ⊙ chevron-down ($muted-foreground) [lucide]
+        ▸ "CountryPopover" {vertical w:fill_container r:$radius fill:$popover stroke:$border}
+          ▸ "SearchRow" {w:fill_container h:42 gap:8 pad:[0,12] ai:center fill:$muted}
+            ⊙ search ($muted-foreground) [lucide]
+            T "Search countries…"  [Inter/13px/normal/$muted-foreground]
+          ▸ "OptionRow" {w:fill_container h:40 gap:8 pad:[0,12] ai:center}
+            T "🇿🇦"  [Inter/16px/normal/$foreground]
+            T "South Africa"  [Inter/14px/normal/$foreground]
+      ▸ "Field_IdType" {vertical w:fill_container gap:6}
+        ▸ "LabelRow" {gap:2 ai:center}
+          T "ID type"  [Inter/13px/500/$foreground]
+        ▸ "IdTypeToggle" {w:fill_container pad:3 r:$radius fill:$muted stroke:$border}
+          ▸ "SegPassport" {w:fill_container h:36 jc:center ai:center r:8 fill:$primary}
+            T "Passport"  [Inter/14px/600/$primary-foreground]
+          ▸ "SegSAID" {w:fill_container h:36 jc:center ai:center r:8}
+            T "South African ID"  [Inter/14px/500/$muted-foreground]
+      ⟶ <InputField> "Field_IdNumber" {w:fill_container}  overrides:["ID number", "Passport number"]
+    ▸ "Page_Interests" {vertical w:fill_container gap:16 pad:24 r:$radius fill:$card stroke:$border}
+      ▸ "VariantTag" {pad:[4,10] r:999 fill:#00dcff26}
+        T "TEAM INTERESTS"  [JetBrains Mono/11px/normal/$accent]
+      T "Team interests"  [Inter/18px/700/$foreground]
+      ▸ "SlidersList" {vertical w:fill_container gap:18}
+        ▸ "Slider_Kitchen" {vertical w:fill_container gap:8}
+          ▸ "SliderHead" {w:fill_container jc:space_between ai:center}
+            T "Kitchen"  [Inter/14px/500/$foreground]
+            T "4"  [JetBrains Mono/13px/normal/$accent]
+          ▸ "STrack" {none w:fill_container h:6 r:999 fill:$muted}
+            ▸ "SFill" {w:413 h:6 r:999 fill:$primary abs(0,0)}
+            ▸ "SKnob" {w:16 h:16 r:999 fill:$primary-foreground stroke:$primary abs(405,-5)}
+          ▸ "SLabelsRow" {w:fill_container jc:space_between}
+            T "Not for me"  [Inter/11px/normal/$muted-foreground]
+            T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+        ▸ "Slider_Structures" {vertical w:fill_container gap:8}
+          ▸ "SliderHead" {w:fill_container jc:space_between ai:center}
+            T "Structures"  [Inter/14px/500/$foreground]
+            T "2"  [JetBrains Mono/13px/normal/$accent]
+          ▸ "STrack" {none w:fill_container h:6 r:999 fill:$muted}
+            ▸ "SFill" {w:206 h:6 r:999 fill:$primary abs(0,0)}
+            ▸ "SKnob" {w:16 h:16 r:999 fill:$primary-foreground stroke:$primary abs(198,-5)}
+          ▸ "SLabelsRow" {w:fill_container jc:space_between}
+            T "Not for me"  [Inter/11px/normal/$muted-foreground]
+            T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+        ▸ "Slider_Power & Lighting" {vertical w:fill_container gap:8}
+          ▸ "SliderHead" {w:fill_container jc:space_between ai:center}
+            T "Power & Lighting"  [Inter/14px/500/$foreground]
+            T "5"  [JetBrains Mono/13px/normal/$accent]
+          ▸ "STrack" {none w:fill_container h:6 r:999 fill:$muted}
+            ▸ "SFill" {w:516 h:6 r:999 fill:$primary abs(0,0)}
+            ▸ "SKnob" {w:16 h:16 r:999 fill:$primary-foreground stroke:$primary abs(500,-5)}
+          ▸ "SLabelsRow" {w:fill_container jc:space_between}
+            T "Not for me"  [Inter/11px/normal/$muted-foreground]
+            T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+        ▸ "Slider_Sanitation & Water" {vertical w:fill_container gap:8}
+          ▸ "SliderHead" {w:fill_container jc:space_between ai:center}
+            T "Sanitation & Water"  [Inter/14px/500/$foreground]
+            T "1"  [JetBrains Mono/13px/normal/$accent]
+          ▸ "STrack" {none w:fill_container h:6 r:999 fill:$muted}
+            ▸ "SFill" {w:103 h:6 r:999 fill:$primary abs(0,0)}
+            ▸ "SKnob" {w:16 h:16 r:999 fill:$primary-foreground stroke:$primary abs(95,-5)}
+          ▸ "SLabelsRow" {w:fill_container jc:space_between}
+            T "Not for me"  [Inter/11px/normal/$muted-foreground]
+            T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+        ▸ "Slider_Health & Safety" {vertical w:fill_container gap:8}
+          ▸ "SliderHead" {w:fill_container jc:space_between ai:center}
+            T "Health & Safety"  [Inter/14px/500/$foreground]
+            T "3"  [JetBrains Mono/13px/normal/$accent]
+          ▸ "STrack" {none w:fill_container h:6 r:999 fill:$muted}
+            ▸ "SFill" {w:310 h:6 r:999 fill:$primary abs(0,0)}
+            ▸ "SKnob" {w:16 h:16 r:999 fill:$primary-foreground stroke:$primary abs(302,-5)}
+          ▸ "SLabelsRow" {w:fill_container jc:space_between}
+            T "Not for me"  [Inter/11px/normal/$muted-foreground]
+            T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+        ▸ "Slider_Art & Activities" {vertical w:fill_container gap:8}
+          ▸ "SliderHead" {w:fill_container jc:space_between ai:center}
+            T "Art & Activities"  [Inter/14px/500/$foreground]
+            T "5"  [JetBrains Mono/13px/normal/$accent]
+          ▸ "STrack" {none w:fill_container h:6 r:999 fill:$muted}
+            ▸ "SFill" {w:516 h:6 r:999 fill:$primary abs(0,0)}
+            ▸ "SKnob" {w:16 h:16 r:999 fill:$primary-foreground stroke:$primary abs(500,-5)}
+          ▸ "SLabelsRow" {w:fill_container jc:space_between}
+            T "Not for me"  [Inter/11px/normal/$muted-foreground]
+            T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+        ▸ "Slider_Ministry of Memes" {vertical w:fill_container gap:8}
+          ▸ "SliderHead" {w:fill_container jc:space_between ai:center}
+            T "Ministry of Memes"  [Inter/14px/500/$foreground]
+            T "0"  [JetBrains Mono/13px/normal/$accent]
+          ▸ "STrack" {none w:fill_container h:6 r:999 fill:$muted}
+            ▸ "SKnob" {w:16 h:16 r:999 fill:$primary-foreground stroke:$primary abs(0,-5)}
+          ▸ "SLabelsRow" {w:fill_container jc:space_between}
+            T "Not for me"  [Inter/11px/normal/$muted-foreground]
+            T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+        ▸ "Slider_Ministry of Vibes" {vertical w:fill_container gap:8}
+          ▸ "SliderHead" {w:fill_container jc:space_between ai:center}
+            T "Ministry of Vibes"  [Inter/14px/500/$foreground]
+            T "5"  [JetBrains Mono/13px/normal/$accent]
+          ▸ "STrack" {none w:fill_container h:6 r:999 fill:$muted}
+            ▸ "SFill" {w:516 h:6 r:999 fill:$primary abs(0,0)}
+            ▸ "SKnob" {w:16 h:16 r:999 fill:$primary-foreground stroke:$primary abs(500,-5)}
+          ▸ "SLabelsRow" {w:fill_container jc:space_between}
+            T "Not for me"  [Inter/11px/normal/$muted-foreground]
+            T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+  ▸ "FooterAndStates" {vertical w:fill_container gap:24}
+    T "Footer & states"  [Inter/18px/700/$foreground]
+    ▸ "FV_page 0" {vertical w:fill_container gap:8}
+      ▸ "Tag" {pad:[3,9] r:999 fill:$muted}
+        T "page 0"  [JetBrains Mono/11px/normal/$muted-foreground]
+      ▸ "FooterBar" {w:fill_container pad:[14,0,0,0] jc:space_between ai:center stroke:$border}
+        ⟶ <Button-Outline> "SignOut"  overrides:["Sign out"]
+        ⟶ <Button-Primary> "Next0"  overrides:["Next"]
+    ▸ "FV_middle page" {vertical w:fill_container gap:8}
+      ▸ "Tag" {pad:[3,9] r:999 fill:$muted}
+        T "middle page"  [JetBrains Mono/11px/normal/$muted-foreground]
+      ▸ "FooterBar" {w:fill_container pad:[14,0,0,0] jc:space_between ai:center stroke:$border}
+        ⟶ <Button-Outline> "Back"  overrides:["Back"]
+        ▸ "MidRight" {gap:10 ai:center}
+          T "Skip"  [Inter/14px/500/$muted-foreground]
+          ⟶ <Button-Primary> "Next1"  overrides:["Next"]
+    ▸ "FV_last page" {vertical w:fill_container gap:8}
+      ▸ "Tag" {pad:[3,9] r:999 fill:$muted}
+        T "last page"  [JetBrains Mono/11px/normal/$muted-foreground]
+      ▸ "FooterBar" {w:fill_container pad:[14,0,0,0] jc:space_between ai:center stroke:$border}
+        ⟶ <Button-Outline> "Back2"  overrides:["Back"]
+        ⟶ <Button-Primary> "Finish"  overrides:["Finish"]
+    ▸ "FV_submitting (disabled)" {vertical w:fill_container gap:8}
+      ▸ "Tag" {pad:[3,9] r:999 fill:$muted}
+        T "submitting (disabled)"  [JetBrains Mono/11px/normal/$muted-foreground]
+      ▸ "FooterBar" {w:fill_container pad:[14,0,0,0] jc:space_between ai:center stroke:$border}
+        ⟶ <Button-Outline> "Back3" {op:0.5}  overrides:["Back"]
+        ⟶ <Button-Primary> "Saving" {op:0.6}  overrides:["Saving…"]
+    ▸ "Tag_page-level error banner — role=alert" {pad:[3,9] r:999 fill:$muted}
+      T "page-level error banner — role=alert"  [JetBrains Mono/11px/normal/$muted-foreground]
+    ▸ "ErrorBanner" {w:fill_container gap:10 pad:14 r:$radius fill:#f83e5a2e stroke:$destructive}
+      ⊙ triangle-alert ($destructive) [lucide]
+      T "Some answers need a look before you continue."  [Inter/14px/500/$destructive]
+    ▸ "Tag_inline field error" {pad:[3,9] r:999 fill:$muted}
+      T "inline field error"  [JetBrains Mono/11px/normal/$muted-foreground]
+    ▸ "InlineErrorField" {vertical w:fill_container gap:6}
+      ⟶ <InputField> "FieldErrored" {w:fill_container}  overrides:["ID number", "Passport number"]
+      ▸ "FieldErrRow" {gap:6 ai:center}
+        ⊙ circle-alert ($destructive) [lucide]
+        T "This question is required"  [Inter/13px/normal/$destructive]
+    ▸ "Tag_save-failed banner" {pad:[3,9] r:999 fill:$muted}
+      T "save-failed banner"  [JetBrains Mono/11px/normal/$muted-foreground]
+    ▸ "SaveFailedBanner" {w:fill_container gap:10 pad:14 r:$radius fill:#f83e5a2e stroke:$destructive}
+      ⊙ cloud-off ($destructive) [lucide]
+      T "We couldn't save your answers just now. Please try again — if it keeps happening, let a camp captain know."  [Inter/14px/normal/$destructive]

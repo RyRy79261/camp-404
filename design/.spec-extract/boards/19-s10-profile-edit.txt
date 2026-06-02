@@ -1,0 +1,11 @@
+# S10 Profile edit
+# kind: BOARD  |  size: 430x-  |  pos: (7578,2849)
+# reusable components used: Card
+========================================================================
+▸ "S10 Profile edit" {vertical w:430 fill:$background}
+  ▸ "Header" {vertical w:fill_container gap:6 pad:[20,16,8,16]}
+    T "Edit profile"  [Inter/22px/700/$foreground]
+    T "Update your photo and how your name shows up around camp."  [Inter/13px/normal/$muted-foreground]
+  ▸ "Content" {vertical w:fill_container gap:16 pad:[4,16,20,16]}
+    ⟶ <Card> "Card Profile" {w:fill_container gap:16}
+    ⟶ <Card> "Card Danger" {w:fill_container gap:12 stroke:$destructive}

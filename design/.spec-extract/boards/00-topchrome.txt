@@ -1,0 +1,15 @@
+# TopChrome
+# kind: COMPONENT (reusable)  |  size: 430x-  |  pos: (0,0)
+# reusable components used: none
+========================================================================
+▸ "TopChrome" {w:430 pad:16 jc:space_between ai:center fill:$background}
+  ▸ "Wordmark" {gap:1 ai:center}
+    T "Camp"  [Inter/20px/700/$foreground]
+    T "404"  [JetBrains Mono/20px/700/$primary]
+  ▸ "Actions" {gap:10 ai:center}
+    ▸ "Bell" {w:40 h:40 jc:center ai:center r:999 fill:$muted}
+      ⊙ bell ($foreground) [lucide]
+      ▸ "Badge" {w:16 h:16 jc:center ai:center r:999 fill:$primary stroke:$background abs(23,6)}
+        T "3"  [Inter/9px/700/$primary-foreground]
+    ▸ "Avatar" {w:40 h:40 jc:center ai:center r:999 fill:$secondary}
+      T "JR"  [Inter/14px/700/$secondary-foreground]
