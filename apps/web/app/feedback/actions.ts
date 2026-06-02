@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
 import {
   buildFeedbackIssue,
@@ -53,14 +53,14 @@ export async function submitFeedbackAction(
   // Burst + daily caps. In-memory + per-instance (the app-wide limiter), so
   // best-effort against a determined member — but the destination is a public
   // tracker, so a daily ceiling is worth the cheap second check.
-  const burst = rateLimit(`feedback:${user.id}`, { limit: 3 });
+  const burst = await rateLimiter.limit(`feedback:${user.id}`, { limit: 3 });
   if (!burst.ok) {
     return {
       ok: false,
       error: "You're sending these quickly — give it a minute and try again.",
     };
   }
-  const daily = rateLimit(`feedback-day:${user.id}`, {
+  const daily = await rateLimiter.limit(`feedback-day:${user.id}`, {
     limit: 20,
     windowMs: 86_400_000,
   });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { transcribeAudio } from "@/lib/groq";
-import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { QUESTIONNAIRE_PROMPT } from "@/lib/voice-prompts";
 
 // 10 MB hard cap. webm/opus at typical mobile bitrates is ~16 KB/s, so this
@@ -17,7 +17,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const limit = rateLimit(`voice-transcribe:${user.id}`, { limit: 30 });
+  const limit = await rateLimiter.limit(`voice-transcribe:${user.id}`, {
+    limit: 30,
+  });
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded", retryAfterSeconds: limit.retryAfterSeconds },
@@ -27,9 +29,10 @@ export async function POST(req: Request) {
 
   // Defence in depth — rate-limit by IP too, since user.id can be cheap to
   // mint via repeated signups.
-  const ipLimit = rateLimit(`voice-transcribe-ip:${getClientIp(req.headers)}`, {
-    limit: 60,
-  });
+  const ipLimit = await rateLimiter.limit(
+    `voice-transcribe-ip:${getClientIp(req.headers)}`,
+    { limit: 60 },
+  );
   if (!ipLimit.ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded" },

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { getClientIp, rateLimiter } from "@/lib/rate-limit";
+import { deleteAvatarBlobs } from "@/lib/avatar-blob";
 import { isE2ETestMode } from "@/lib/test-mode";
 
 // 5 MB hard cap. The client already centre-crops + downscales to ~512px
@@ -27,7 +28,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const limit = rateLimit(`avatar-upload:${user.id}`, { limit: 20 });
+  const limit = await rateLimiter.limit(`avatar-upload:${user.id}`, {
+    limit: 20,
+  });
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded", retryAfterSeconds: limit.retryAfterSeconds },
@@ -37,9 +40,10 @@ export async function POST(req: Request) {
 
   // Defence in depth — rate-limit by IP too, since user.id can be cheap to
   // mint via repeated signups.
-  const ipLimit = rateLimit(`avatar-upload-ip:${getClientIp(req.headers)}`, {
-    limit: 40,
-  });
+  const ipLimit = await rateLimiter.limit(
+    `avatar-upload-ip:${getClientIp(req.headers)}`,
+    { limit: 40 },
+  );
   if (!ipLimit.ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded" },
@@ -83,6 +87,14 @@ export async function POST(req: Request) {
       contentType: file.type,
       token,
     });
+    // Prune the member's previous avatar object(s) — `addRandomSuffix` means
+    // each upload writes a new path, orphaning the old one. Best-effort: a
+    // cleanup failure must not fail an otherwise-successful upload.
+    try {
+      await deleteAvatarBlobs(user.id, blob.pathname);
+    } catch (err) {
+      console.error("avatar-cleanup error", err);
+    }
     // Never hand the raw private blob URL to the client — it isn't readable
     // without the store token. Persist + render through the gated proxy.
     return NextResponse.json({ url: avatarProxyUrl(blob.pathname) });

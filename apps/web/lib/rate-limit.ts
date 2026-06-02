@@ -62,6 +62,24 @@ export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult 
   return { ok: true, retryAfterSeconds: 0 };
 }
 
+/**
+ * The limiter seam. Call-sites depend on this interface rather than the concrete
+ * `rateLimit` function, so a multi-region deployment can drop in an Upstash
+ * adapter (same shape, async) without touching any caller. `limit` is allowed to
+ * return a Promise so an async backend fits — callers `await` it. (The interface
+ * + a future adapter belong in a shared package once a second implementation
+ * exists; until then they live with the only implementation.)
+ */
+export interface RateLimiter {
+  limit(
+    key: string,
+    opts: RateLimitOptions,
+  ): RateLimitResult | Promise<RateLimitResult>;
+}
+
+/** The default in-process limiter — the in-memory token bucket above. */
+export const rateLimiter: RateLimiter = { limit: rateLimit };
+
 /** Best-effort IP extraction from a Next.js request. */
 export function getClientIp(headers: Headers): string {
   const fwd = headers.get("x-forwarded-for");

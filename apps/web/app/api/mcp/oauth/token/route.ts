@@ -7,7 +7,7 @@ import {
   rotateRefreshToken,
   verifyClientSecret,
 } from "@/lib/mcp/oauth";
-import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { rateLimiter, getClientIp } from "@/lib/rate-limit";
 
 // RFC 6749 §5.1 requires no-store on every response, success or error.
 const NO_STORE_HEADERS = {
@@ -40,10 +40,10 @@ const RefreshBody = z.object({
 });
 
 export async function POST(req: Request) {
-  const limited = rateLimit(`mcp-token:${getClientIp(req.headers)}`, {
-    limit: 30,
-    windowMs: 60_000,
-  });
+  const limited = await rateLimiter.limit(
+    `mcp-token:${getClientIp(req.headers)}`,
+    { limit: 30, windowMs: 60_000 },
+  );
   if (!limited.ok) {
     return NextResponse.json(
       { error: "rate_limited", error_description: "Too many token requests." },

@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { redeemInviteForUser } from "@/lib/users";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimiter } from "@/lib/rate-limit";
 
 export type SubmitInviteResult = { ok: false; error: string };
 
@@ -22,7 +22,7 @@ export async function submitInviteCode(
 
   // Throttle brute-forcing of invite codes (esp. the short env bootstrap
   // codes). Per-user — sign-up is open, so an IP limit alone is evadable.
-  const limited = rateLimit(`invite-redeem:${authUser.id}`, {
+  const limited = await rateLimiter.limit(`invite-redeem:${authUser.id}`, {
     limit: 10,
     windowMs: 10 * 60_000,
   });

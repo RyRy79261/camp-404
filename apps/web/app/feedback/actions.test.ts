@@ -9,7 +9,7 @@ vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({ findCampUserByAuthId: vi.fn() }));
 vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));
 vi.mock("@/lib/rate-limit", () => ({
-  rateLimit: vi.fn(() => ({ ok: true, retryAfterSeconds: 0 })),
+  rateLimiter: { limit: vi.fn(() => ({ ok: true, retryAfterSeconds: 0 })) },
 }));
 vi.mock("@/lib/feedback-ai", () => ({ structureWithAi: vi.fn() }));
 
@@ -17,7 +17,7 @@ import { submitFeedbackAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
 import { isE2ETestMode } from "@/lib/test-mode";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimiter } from "@/lib/rate-limit";
 import { structureWithAi } from "@/lib/feedback-ai";
 
 const VALID = { kind: "bug" as const, description: "The publish button does nothing" };
@@ -42,7 +42,7 @@ describe("submitFeedbackAction", () => {
     } as never);
     vi.mocked(findCampUserByAuthId).mockResolvedValue({ id: "camp-1" } as never);
     vi.mocked(isE2ETestMode).mockReturnValue(false);
-    vi.mocked(rateLimit).mockReturnValue({ ok: true, retryAfterSeconds: 0 });
+    vi.mocked(rateLimiter.limit).mockReturnValue({ ok: true, retryAfterSeconds: 0 });
     vi.mocked(structureWithAi).mockResolvedValue(null);
     process.env.GITHUB_FEEDBACK_TOKEN = "test-token";
     delete process.env.GITHUB_FEEDBACK_REPO;
@@ -62,14 +62,14 @@ describe("submitFeedbackAction", () => {
   });
 
   it("rejects when the burst rate limit trips", async () => {
-    vi.mocked(rateLimit).mockReturnValueOnce({ ok: false, retryAfterSeconds: 30 });
+    vi.mocked(rateLimiter.limit).mockReturnValueOnce({ ok: false, retryAfterSeconds: 30 });
     const res = await submitFeedbackAction(VALID);
     expect(res).toMatchObject({ ok: false });
     if (!res.ok) expect(res.error).toMatch(/give it a minute/i);
   });
 
   it("rejects when the daily cap trips", async () => {
-    vi.mocked(rateLimit)
+    vi.mocked(rateLimiter.limit)
       .mockReturnValueOnce({ ok: true, retryAfterSeconds: 0 })
       .mockReturnValueOnce({ ok: false, retryAfterSeconds: 0 });
     const res = await submitFeedbackAction(VALID);
