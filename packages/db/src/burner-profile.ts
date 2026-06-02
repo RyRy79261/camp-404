@@ -153,8 +153,11 @@ export async function upsertBurnerProfile(input: {
         version: input.version,
         responses: input.responses,
         updatedAt: now,
+        // Preserve the ORIGINAL completion timestamp on replay (OD10): stamp
+        // `now` only when it was never completed; otherwise keep the existing
+        // value so completedAt doesn't drift to the most-recent edit.
         completedAt: input.markComplete
-          ? now
+          ? sql`coalesce(${schema.burnerProfiles.completedAt}, ${now})`
           : sql`${schema.burnerProfiles.completedAt}`,
       },
     });

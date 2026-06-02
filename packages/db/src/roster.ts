@@ -15,6 +15,8 @@ import * as schema from "./schema";
 export interface CampManagementMember {
   id: string;
   displayName: string | null;
+  /** Display handle (reuses telegram_handle; null if unset). */
+  handle: string | null;
   rank: "captain" | "member";
   /** Captain-approval lifecycle: pending vetting, approved, or rejected. */
   approvalStatus: "pending" | "approved" | "rejected";
@@ -53,6 +55,7 @@ export async function getCampManagementRoster(): Promise<
     .select({
       id: schema.users.id,
       displayName: schema.users.displayName,
+      handle: schema.users.telegramHandle,
       rank: schema.users.rank,
       approvalStatus: schema.users.approvalStatus,
       duesPaid: schema.users.duesPaid,
@@ -94,6 +97,7 @@ export async function getCampManagementRoster(): Promise<
   return rows.map((r) => ({
     id: r.id,
     displayName: r.displayName,
+    handle: r.handle,
     rank: r.rank,
     approvalStatus: r.approvalStatus,
     isLead: r.isLead,
