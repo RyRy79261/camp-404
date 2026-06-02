@@ -29,4 +29,15 @@ describe("error boundary page", () => {
       screen.getByRole("link", { name: /back to camp/i }).getAttribute("href"),
     ).toBe("/");
   });
+
+  it("surfaces the digest as a trace code when present", () => {
+    const error = Object.assign(new Error("boom"), { digest: "abc123xyz" });
+    render(<ErrorPage error={error} reset={() => {}} />);
+    expect(screen.getByText(/Trace: abc123xyz/)).toBeTruthy();
+  });
+
+  it("omits the trace code when there is no digest", () => {
+    render(<ErrorPage error={new Error("boom")} reset={() => {}} />);
+    expect(screen.queryByText(/Trace:/)).toBeNull();
+  });
 });

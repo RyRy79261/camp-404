@@ -50,6 +50,20 @@ export default function GlobalError({
           Something failed before the page could load. Try again &mdash; if it
           persists, let a camp captain know.
         </p>
+        {error.digest && (
+          // Trace code for the server logs — quote it when reporting.
+          <p
+            style={{
+              fontFamily:
+                "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+              fontSize: "0.75rem",
+              opacity: 0.6,
+              margin: 0,
+            }}
+          >
+            Trace: {error.digest}
+          </p>
+        )}
         <button
           onClick={reset}
           style={{

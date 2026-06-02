@@ -39,6 +39,13 @@ export default function Error({
           An unexpected error tripped us up. Try again &mdash; if it keeps
           happening, let a camp captain know.
         </p>
+        {error.digest && (
+          // Trace code: correlates this error with the server logs. Quote it
+          // when reporting so a captain can find the matching entry.
+          <p className="mt-1 font-mono text-xs text-[color:var(--color-muted-foreground)]">
+            Trace: {error.digest}
+          </p>
+        )}
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3">
         <Button onClick={reset}>Try again</Button>

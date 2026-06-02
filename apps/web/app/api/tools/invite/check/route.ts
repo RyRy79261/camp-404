@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { findInviteCodeByCode } from "@camp404/db/invite-codes";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimiter } from "@/lib/rate-limit";
 import {
   CODE_RULES_HINT,
   isSyntacticallyValidCode,
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   }
 
   // Throttle the existence oracle so a signed-in account can't enumerate codes.
-  const limited = rateLimit(`invite-check:${user.id}`, {
+  const limited = await rateLimiter.limit(`invite-check:${user.id}`, {
     limit: 30,
     windowMs: 60_000,
   });
