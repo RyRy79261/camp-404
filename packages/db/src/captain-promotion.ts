@@ -12,6 +12,20 @@ import type { IncomingPromotionRequest } from "@camp404/types";
 
 const { captainPromotionRequests, users } = schema;
 
+// Postgres unique_violation (SQLSTATE 23505). Here it means the partial unique
+// index captain_promotion_open_per_target_idx tripped because a concurrent send
+// created the open request first.
+function isOpenRequestUniqueViolation(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as { code?: string; constraint?: string; message?: string };
+  return (
+    e.code === "23505" ||
+    e.constraint === "captain_promotion_open_per_target_idx" ||
+    (typeof e.message === "string" &&
+      e.message.includes("captain_promotion_open_per_target_idx"))
+  );
+}
+
 export interface CaptainPromotionRequestRow {
   id: string;
   // Nullable for audit retention: SET NULL on a hard delete of the referenced
@@ -58,15 +72,26 @@ export async function sendCaptainPromotion(input: {
   if (existing) return existing;
 
   const db = createHttpDb();
-  const [row] = await db
-    .insert(captainPromotionRequests)
-    .values({
-      targetUserId: input.targetUserId,
-      requestedByUserId: input.requestedByUserId,
-    })
-    .returning();
-  if (!row) throw new Error("Failed to insert captain promotion request");
-  return row;
+  try {
+    const [row] = await db
+      .insert(captainPromotionRequests)
+      .values({
+        targetUserId: input.targetUserId,
+        requestedByUserId: input.requestedByUserId,
+      })
+      .returning();
+    if (!row) throw new Error("Failed to insert captain promotion request");
+    return row;
+  } catch (err) {
+    // Lost the read-before-insert race: a concurrent send created the open
+    // request first and tripped the partial unique index. Return that existing
+    // request so send stays idempotent; re-throw anything else.
+    if (isOpenRequestUniqueViolation(err)) {
+      const existing = await getOpenPromotionForTarget(input.targetUserId);
+      if (existing) return existing;
+    }
+    throw err;
+  }
 }
 
 /**
