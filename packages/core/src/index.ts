@@ -13,8 +13,11 @@
 //     hasCampAccess, isApproved, nextGate (./access)
 //   - family tree: buildTree, computeMatchIds, subtreeHasMatch,
 //     descendantCountLabel (./family-tree) — all cycle-guarded (OD9)
-// Still to come: invites, the questionnaire catalogue + validateIdNumber,
-// promotion guards/state-machine, mcp helpers, and platform utils.
+//   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
+//     (./invites)
+// Still to come: the questionnaire catalogue + validateIdNumber, promotion
+// guards/state-machine, mcp helpers, and platform utils.
 
 export * from "./access";
 export * from "./family-tree";
+export * from "./invites";
