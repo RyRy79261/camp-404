@@ -19,6 +19,7 @@ Verified against the live tree (`grep`/`ls`/`cat`). The redesign for this surfac
 - **NOT mounted:** the error boundaries (Next file-convention) and — because they don't exist yet — `QuestionnaireBlock` and `ToastProvider`.
 
 ### Existing overlay files (all verified present)
+
 | File | What it is today | Redesign |
 |---|---|---|
 | `apps/web/app/acknowledgement-gate.tsx` | `"use client"` AckTakeover. Polls `GET /api/notifications/pending` (`POLL_INTERVAL_MS=45_000`), monotonic `requestIdRef` de-race, `visibilitychange`/`focus` refetch, body-scroll-lock (restores *previous* overflow), `current=queue[0]`, `if(!current) return null`, POST `/api/notifications/acknowledge` → filter + `router.refresh()`. | **EXTEND (presentation only)** — drop nothing. |

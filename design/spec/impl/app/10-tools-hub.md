@@ -69,7 +69,7 @@ All rendering is server-side (RSC). No `"use client"` islands on this surface.
 | Component | Plan | Render context | Props on this surface |
 |---|---|---|---|
 | `DetailHeader` | [`molecule-detailheader.md`](../components/molecule-detailheader.md) | Server (RSC) | `title="Tools"` `backHref="/"` |
-| `NavCard` | [`molecule-navcard.md`](../components/molecule-navcard.md) | Server (RSC) | `icon={Mail|ClipboardList|GitBranch}` `title` `description` `href`; no `meta`, no `disabled` |
+| `NavCard` | [`molecule-navcard.md`](../components/molecule-navcard.md) | Server (RSC) | `icon={Mail\|ClipboardList\|GitBranch}` `title` `description` `href`; no `meta`, no `disabled` |
 | `IconBadge` | [`atom-iconbadge.md`](../components/atom-iconbadge.md) | Server (RSC, composed inside NavCard) | `size="md"` `shape="rounded"` `tone="muted"` — applied by `NavCard` internally; not called directly from this page |
 
 Lucide icons (`Mail`, `ClipboardList`, `GitBranch`, `ChevronRight`) are passed as component references through `NavCard`'s `icon` prop and rendered inside `NavCard`/`IconBadge` — they are not imported directly into `page.tsx` after the refactor (the `ChevronRight` import is removed from the page; `NavCard` owns it internally).

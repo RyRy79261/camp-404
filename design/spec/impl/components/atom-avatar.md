@@ -192,9 +192,11 @@ token-derived hues. Proposed canonical palette (5 entries, cycle by
 A pure helper `avatarTintFor(userId: string): AvatarTint` (zero deps, deterministic
 cycle) should live in `@camp404/core` alongside `initialsFrom`. It returns one of the
 five canonical token names. The component maps the token name to a CSS variable via
-an inline style or a Tailwind arbitrary value. **White text is always safe on all five
-filled hues** (confirmed against the dark palette — all have OKLCH lightness ≤ 0.80 at
-full opacity).
+an inline style or a Tailwind arbitrary value. **White text is confirmed safe on `primary`, `accent`, and `secondary`** (dark-palette
+OKLCH lightness ≤ 0.80 at full opacity). White-on-fill contrast for `success` and
+`warning` **must be verified once their OKLCH values are locked** — those tokens are not
+yet finalised (see open decision OD8 / design-tokens §5); do not assume white text is
+safe on them until that check passes.
 
 ### Type-scale roles
 

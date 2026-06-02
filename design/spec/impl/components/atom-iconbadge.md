@@ -172,7 +172,7 @@ From the merge map entry in `component-library.md`:
 | **EmptyState circle** | `08-emptystate.txt` — `EsCircle w:64 h:64 r:999 fill:$muted` | EmptyState molecule uses `<IconBadge size="lg" shape="circle" tone="muted">` |
 | **completion-hero circle** | `36-s27-questionnaire-complete-queue.txt` — `Check Circle w:88 h:88` | CompletionHero molecule uses `<IconBadge size="lg" shape="circle" tone="accent" icon={Check}>` |
 | **notification icon-circle** | `31-s22-global-overlays.txt` — multiple `ic` wrappers | AckTakeover, QuestionnaireBlock, ErrorBoundary, ShakeReporter all use `<IconBadge>` |
-| **S06 status circle** | `15-s06-approval-gate.txt` — two `Badge` divs (64×64) | `apps/web/app/pending-approval/page.tsx` L54–63 inline div → replaced by `<IconBadge size="lg" shape="circle" tone="destructive|warning">` |
+| **S06 status circle** | `15-s06-approval-gate.txt` — two `Badge` divs (64×64) | `apps/web/app/pending-approval/page.tsx` L54–63 inline div → replaced by `<IconBadge size="lg" shape="circle" tone="destructive&#124;warning">` |
 | **MCP scope icon wrap** | `29-s20-mcp-connect.txt` — `Scope Icon Wrap w:34 h:34 r:8 fill:#00dcff26` | MCPConsent uses `<IconBadge size="sm" shape="rounded" tone="accent" icon={Shield}>` |
 | **MCP user avatar circle** | `29-s20-mcp-connect.txt` — `Avatar w:32 h:32 r:16 fill:#ff008c2e` | MCPConsent uses `<IconBadge size="sm" shape="circle" tone="primary" icon={User}>` |
 
@@ -184,7 +184,7 @@ No other component in `packages/ui/src/components/` overlaps with this shape —
 
 ### Storybook stories (`packages/ui/src/components/icon-badge.stories.tsx`)
 
-```
+```text
 AllTones         — renders one IconBadge per tone (7 tones), size="md", shape="circle", icon=Lock
 AllSizes         — renders sm/md/lg for tone="primary", shape="circle"
 AllShapes        — renders shape="circle" and shape="rounded" side by side, tone="accent"

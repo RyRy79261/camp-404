@@ -71,7 +71,7 @@ No new files. No deletions. No `/api` route handlers or `error.tsx`/`not-found.t
 |---|---|---|
 | `getAuthenticatedUserOrRedirect()` | `apps/web/lib/auth.ts` | Asserts a valid Neon Auth session; redirects to `/auth/sign-in` if none. Returns `AuthenticatedUser` (`{ id, primaryEmail, displayName, … }`). |
 | `ensureCampUser(authUser)` | `apps/web/lib/users.ts` | Resolves or creates (for god emails) a `CampUser`. For non-god, no-invite users returns a synthetic row (`id: ""`; never written to DB). No DB write for the invite-gate surface itself. |
-| `hasCampAccess(campUser, authUser.primaryEmail)` | `apps/web/lib/users.ts` (→ `@camp404/core` post-extraction) | Pure: `isGodEmail(email) || !!user.inviteCode`. If true → `redirect("/")` before the form renders. |
+| `hasCampAccess(campUser, authUser.primaryEmail)` | `apps/web/lib/users.ts` (→ `@camp404/core` post-extraction) | Pure: `isGodEmail(email) \|\| !!user.inviteCode`. If true → `redirect("/")` before the form renders. |
 
 All three calls are server-side only. `authUser.primaryEmail` is the only value passed down to the client as a prop (`InviteGateForm email={authUser.primaryEmail}`).
 

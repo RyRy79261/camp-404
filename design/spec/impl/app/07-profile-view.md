@@ -77,7 +77,7 @@ This surface is **read-only**. No server actions are called from the page. No mu
 | `getAuthenticatedUserOrRedirect()` | `apps/web/lib/auth.ts` | `AuthenticatedUser` (`primaryEmail`, `displayName`) or redirects | Auth gate G0; provides `primaryEmail` for display name fallback and email line |
 | `ensureCampUser(authUser)` | `apps/web/lib/users.ts` | `CampUser` (`id`, `displayName`, `profileImageUrl`, `inviteCode`, `rank`, `approvalStatus`) | Invite gate G1 + profile data source |
 | `hasCampAccess(campUser, authUser.primaryEmail)` | `apps/web/lib/users.ts` (thin shim over `@camp404/core` post-extraction) | `boolean` | Gate G1 — redirect to `/signup/required` if false |
-| `getBurnerProfile(campUser.id)` | `apps/web/lib/users.ts` | `BurnerProfileSummary | null` (`{ completedAt }`) | Gate G2b — redirect to `/onboarding/questionnaire` if `completedAt` is null |
+| `getBurnerProfile(campUser.id)` | `apps/web/lib/users.ts` | `BurnerProfileSummary \| null` (`{ completedAt }`) | Gate G2b — redirect to `/onboarding/questionnaire` if `completedAt` is null |
 | `isApproved(campUser, authUser.primaryEmail)` | `apps/web/lib/users.ts` (thin shim over `@camp404/core` post-extraction) | `boolean` | Gate G3 — redirect to `/pending-approval` if false |
 | `initialsFrom(campUser.displayName ?? authUser.primaryEmail)` | `apps/web/lib/initials.ts` (target: `@camp404/core`) | `string` (never empty; `"?"` on bad input) | `AvatarFallback` initials |
 

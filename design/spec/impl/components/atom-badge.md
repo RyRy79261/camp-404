@@ -195,7 +195,7 @@ The following candidate names from `component-library.md` merge map are replaced
 | **count-pill** | `apps/web/app/family-tree/family-tree.tsx:247` inline span; bell unread `home-header.tsx:39` | `tone="default"` (count) or `tone="primary" variant="solid" size="xs"` (bell) |
 | **new-pill** | `apps/web/app/notifications/page.tsx:78` inline span | `tone="primary" variant="solid"` |
 | **RequiredChip** | board-only (questionnaire runner `BlockingTopBar`), not yet built | `tone="destructive" variant="soft-tint" icon={Lock}` |
-| **presentation-pill** | `apps/web/app/captains/announcements/announcements-manager.tsx:380` inline span | `tone="default" variant="outline" icon={Megaphone|MessagesSquare}` |
+| **presentation-pill** | `apps/web/app/captains/announcements/announcements-manager.tsx:380` inline span | `tone="default" variant="outline" icon={Megaphone\|MessagesSquare}` |
 | **MOVING chip** | board-only (customize mode), not yet built | `tone="accent" variant="soft-tint"` |
 | **role-badge** | `camp-management-roster.tsx:228,242` STATUS_STYLE span | `tone="success/warning/info/destructive" variant="soft-tint"` |
 | **team-badge** | not yet built (referenced in `MemberProfile`) | `tone="accent" variant="soft-tint"` |

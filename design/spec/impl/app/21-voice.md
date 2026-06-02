@@ -48,14 +48,14 @@ Fully functional `POST` handler. Auth via `getAuthenticatedUser()` (truthiness o
 ### Host consumers (current wiring)
 
 **`apps/web/components/questionnaire/question.tsx`** (line 458):
-```
+```text
 dictating === true  → <RecorderPanel onTranscript={appendTranscript} onDismiss={() => setDictating(false)} promptKey="questionnaire" />
 dictating === false → <Button variant="outline" size="lg" …> Dictate instead </Button>
 ```
 `appendTranscript` (lines 433–439): trims; no-ops on empty; `\n` joiner when `value` doesn't end in `\n\s*`; `.slice(0, question.maxLength)`.
 
 **`apps/web/components/feedback/report-bug-dialog.tsx`** (line 217):
-```
+```text
 dictating === true  → <RecorderPanel onTranscript={appendTranscript} onDismiss={() => setDictating(false)} />
 dictating === false → <Button variant="outline" size="sm" …> Dictate instead </Button>
 ```
@@ -194,7 +194,7 @@ X close: disabled while `state === "recording" || state === "requesting" || stat
 | **Populated (transcript ready)** | `pendingTranscript` non-null → `transcript-review` state; panel stays open for further recordings after commit |
 | **Validation error** | Transcript clamped to `maxLength` on append in the host's `appendTranscript`; no inline error banner inside the panel itself |
 | **Transcription success** | Non-empty `data.text.trim()` → `transcript-review` state; `onTranscript` deferred to user confirm |
-| **Disabled** | Record button: disabled while `isBusy`. X close: disabled while `isRecording || isBusy`. "Stop & transcribe": enabled only during `recording` |
+| **Disabled** | Record button: disabled while `isBusy`. X close: disabled while `isRecording \|\| isBusy`. "Stop & transcribe": enabled only during `recording` |
 | **Error** | Permission denied / hardware error / API error / 429 → `error` state; `role="alert"` message + "Try again" outline button |
 | **Rate-limited (429)** | `handleStop` throws with server's `error` string; panel enters `error` state. `retryAfterSeconds` available in body but not currently surfaced as a countdown (open question #3) |
 | **Auth (401)** | `handleStop` throws "Unauthorized"; panel enters `error` state. Route is auth-gated; 401 only reachable if session expired mid-recording |
@@ -307,7 +307,7 @@ Update `RecorderPanelProps` to add `maxDurationMs?: number`. Thread it to `useVo
 
 Introduce local state `pendingTranscript: string | null` and `editedTranscript: string`. Wire the hook's new API:
 
-```
+```ts
 const { state, error, start, stop, reset, analyser, transcript, accept, discard } = useVoiceRecorder({
   onTranscript: /* unused — hook now exposes accept/discard */,
   promptKey,

@@ -415,11 +415,11 @@ import { Divider } from "@camp404/ui/components/divider";              // consum
 import { Alert } from "@camp404/ui/components/alert";                  // consumed inside SignInForm/SignUpForm
 ```
 
-Note: these imports are strictly for TypeScript resolution — the leaf components are
-actually consumed inside the form components, not by the page server component directly.
-The page itself only composes `AuthShell`, `SignInForm`, `SignUpForm`, and `AuthView`.
-If the bundler resolves these transitively without explicit page imports, this step is
-a no-op. Confirm at build time.
+Add these imports as an explicit safety-net for TypeScript resolution — the leaf
+components are actually consumed inside the form components, not by the page server
+component directly. The page itself only composes `AuthShell`, `SignInForm`,
+`SignUpForm`, and `AuthView`. If the bundler already resolves them transitively, the
+imports are harmless no-ops kept for explicitness.
 
 The page's branching logic (`path === "sign-up"` / `path === "sign-in"` / fallback)
 is preserved unchanged.

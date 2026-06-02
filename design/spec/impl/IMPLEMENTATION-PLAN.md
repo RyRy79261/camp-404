@@ -30,7 +30,7 @@ Everything else is app-layer / presentation, and most of the service layer is RE
 
 | Doc / dir | Role |
 |---|---|
-| `architecture.md` | **Authoritative root.** Package map, layering `types ← {db,core} ← ui ← apps`, the one schema change (migration 0012), the 6-phase service build order, the hybrid-extraction list, the 8 open architectural decisions. |
+| `architecture.md` | **Authoritative root.** Package map, layering `types ← {db,core} ← ui ← apps`, the one schema change (migration 0012), the 6-phase service build order, the hybrid-extraction list, the 11 open architectural decisions (8 architectural + 3 elevated). |
 | `foundations-tokens.md` | Phase-0 design-system foundations: `@theme` token set, `next/font` wiring, the 29 §4 codemod reconciliations. **Gates everything downstream.** |
 | `service-layer/01`–`09` | The 9 service domains (identity/gating, invites, questionnaire, broadcasts, roster+promotion, family-tree, voice, MCP, platform). Overwhelmingly REUSE + EXTRACT-to-`core`. |
 | `components/` | 66 component plans (12 atom · 30 molecule · 24 organism), each with `mapsTo` REUSE/PROMOTE/NEW + target package. |
@@ -45,7 +45,7 @@ service domains, foundations, and architecture (per `coverage-check.md` §4).
 ## Build phases
 
 ONE master dependency-ordered sequence. It **nests the architecture's service phases
-(P0–P6) inside the spec README's surface sequence** — service APIs land first, then the
+(P0–P5) inside the spec README's surface sequence** — service APIs land first, then the
 surfaces that consume them are built in gate-spine order. `‖` marks parallelizable items.
 The MEMORY green-CI rule governs every box: each change must be independently CI-green;
 the biggest single churns land alone.

@@ -19,7 +19,7 @@ The pattern is hand-rolled inline in one confirmed app file and implied by the s
 
 **Board source:** `design/.spec-extract/boards/09-captainlock.txt` (canvas reusable #09).  
 Board anatomy:
-```
+```text
 CaptainLock  {vertical w:360 gap:10 pad:24 ai:center r:$radius fill:$card stroke:$border}
   LockCircle {w:48 h:48 jc:center ai:center r:999 fill:#ff008c2e}
     lock  [$primary]
@@ -167,7 +167,7 @@ Additional candidates that `CaptainLock` itself replaces (the bespoke inline han
 
 ### Storybook stories (`packages/ui/src/components/captain-lock.stories.tsx`)
 
-```
+```text
 Default          — scope="surface" skin="default"; default title + body (mirrors board 09)
 TitleBodyOverride — scope="surface" skin="default"; overrides title="Captains only" body="Camp management is visible to captains. Your rank doesn't include it." (mirrors S17)
 ToolingOverride   — scope="surface" skin="default"; body="This tooling is captain-only. Your rank doesn't have clearance for these tools." (mirrors S19)
@@ -205,7 +205,7 @@ GroupConsoleSkin  — scope="group" skin="console"; "CAPTAIN · VIEW ONLY" eyebr
 
 ### Step 0 — Prerequisite check: `IconBadge` exists
 
-Confirm `packages/ui/src/components/icon-badge.tsx` is built and exported (atom-iconbadge plan, step 1–2). `CaptainLock` composes it; if `IconBadge` has not landed yet, stub the lock circle as `<span className="flex size-[46px] items-center justify-center rounded-full bg-primary/18 text-primary"><Lock className="size-5 aria-hidden" /></span>` and mark a TODO comment for the `IconBadge` swap.
+Confirm `packages/ui/src/components/icon-badge.tsx` is built and exported (atom-iconbadge plan, step 1–2). `CaptainLock` composes it; if `IconBadge` has not landed yet, stub the lock circle as `<span className="flex size-[46px] items-center justify-center rounded-full bg-primary/18 text-primary"><Lock className="size-5" aria-hidden /></span>` and mark a TODO comment for the `IconBadge` swap.
 
 **Acceptance:** `import { IconBadge } from "@camp404/ui"` resolves, OR a stub is documented.
 
@@ -214,7 +214,7 @@ Confirm `packages/ui/src/components/icon-badge.tsx` is built and exported (atom-
 - Define `CaptainLockScope`, `CaptainLockSkin`, `CaptainLockProps` types (as above).
 - Implement `scope="surface"` anatomy: a centred column `<div>` with `cn("flex flex-col items-center gap-2.5 rounded-[--radius] border bg-card p-6 text-center", className)`.
 - Implement `scope="group"` anatomy: same column but without the `bg-card border rounded-[--radius] p-6` shell (bare `flex flex-col items-center gap-2.5`).
-- `skin="console"` adds a `<p className="font-mono text-[11px] font-bold uppercase tracking-[2px] text-accent aria-hidden">VIEW ONLY · no data for your rank</p>` eyebrow above the title.
+- `skin="console"` adds a `<p className="font-mono text-[11px] font-bold uppercase tracking-[2px] text-accent" aria-hidden>VIEW ONLY · no data for your rank</p>` eyebrow above the title.
 - `<IconBadge icon={Lock} tone="primary" size="md" shape="circle" aria-hidden />` renders the lock circle.
 - Title: `<p className="text-[15px] font-bold text-foreground">{title ?? "Captain access only"}</p>`.
 - Body: `<p className="text-xs text-muted-foreground leading-relaxed">{body ?? "This data is visible to captains. Your rank doesn't have clearance for this view."}</p>`.

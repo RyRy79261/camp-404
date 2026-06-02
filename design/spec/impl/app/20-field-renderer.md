@@ -101,6 +101,7 @@ All render **client-side** — `QuestionField` is `"use client"` and is mounted 
 `question` (one member of the union), `value={responses[q.id]}`, `onChange={(v) => setResponse(q.id, v)}`, `error={errors[q.id]}`, `fullScreen={isFullScreen}`. The field forwards a typed value back: `slider`→`number`; `multi_select`→`string[]`; `image`→`string|null`; all others→`string`.
 
 ### Service-layer functions / server-actions / core helpers in the wiring (named, by owner)
+
 | Symbol | Where it runs | Plan | Role for this unit |
 |---|---|---|---|
 | `saveBurnerProfile(raw, final)` | `apps/web/app/onboarding/questionnaire/actions.ts` (`"use server"`) | service 03 | The page `action` the wizard calls on Next/Finish; validates (`validateResponses`), splits PII (`splitIdNumber`), upserts (`upsertBurnerProfile`), encrypts (`setIdDocuments`), satisfies the gate, `redirect("/")`. **REUSE** (imports shift to `@camp404/core`). |

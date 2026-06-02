@@ -125,7 +125,7 @@ client component layer to support the review step.
 | `RecorderState` | union incl. new `"transcript-review"` | `apps/web/components/voice/use-voice-recorder.ts` | apps/web (client) | **EXTEND** |
 | `RecorderPanel` | `({ onTranscript, onDismiss, promptKey? }) → JSX` | `apps/web/components/voice/recorder-panel.tsx` | apps/web (client) | **EXTEND** (props unchanged; add review UI) |
 | `TranscriptResult` | `({ value, onChange, onAccept, onRediscard }) → JSX` (sub-component or inline section) | inside `recorder-panel.tsx` | apps/web (client) | **NEW** |
-| `pickMimeType` (+ MIME list) | `() → string | undefined` | `use-voice-recorder.ts` | apps/web (client; touches `MediaRecorder`) | **REUSE** |
+| `pickMimeType` (+ MIME list) | `() → string \| undefined` | `use-voice-recorder.ts` | apps/web (client; touches `MediaRecorder`) | **REUSE** |
 | `appendTranscript` (per host) | `(text: string) → void` | host files (question.tsx, report-bug-dialog.tsx) | apps/web (client) | **REUSE** (candidate to dedupe; see Hybrid) |
 | `DictateButton` | — | `apps/web/components/voice/dictate-button.tsx` | apps/web (client) | **DELETE** (optional) |
 | `voiceIntentPrompt`, `VoiceIntent` | (existing) | `packages/ai-prompts`, `packages/types` | shared | **REUSE / untouched** (not in pipeline) |
