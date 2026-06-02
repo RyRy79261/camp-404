@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { canDecidePromotion, type PromotionParticipants } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, setCampUserRank } from "@/lib/users";
@@ -12,6 +13,10 @@ import {
 export type PromotionDecisionResult =
   | { ok: true }
   | { ok: false; error: string };
+
+// Opaque-id boundary schema: a non-empty string (NOT .uuid() — the E2E test
+// store uses ids like "test-user-1"). AGENTS.md: validate external input with Zod.
+const RequestId = z.string().min(1);
 
 // Guard reason code → recipient-facing copy for the acceptance surface.
 const DECIDE_PROMOTION_COPY: Record<string, string> = {
@@ -31,6 +36,10 @@ type LoadedActor =
  * and SET NULL) is treated as gone rather than fed to the guard.
  */
 async function loadActorAndRequest(requestId: string): Promise<LoadedActor> {
+  if (!RequestId.safeParse(requestId).success) {
+    return { ok: false, error: "Invalid request." };
+  }
+
   const authUser = await getAuthenticatedUser();
   if (!authUser) return { ok: false, error: "Not signed in." };
   const campUser = await ensureCampUser(authUser);

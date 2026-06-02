@@ -212,6 +212,14 @@ describe("acceptCaptainPromotionAction", () => {
     expect(getPromotionRequestById).not.toHaveBeenCalled();
   });
 
+  it("rejects a malformed (empty) request id at the boundary, before any work", async () => {
+    signInAs(TARGET);
+    const res = await acceptCaptainPromotionAction("");
+    expect(res).toEqual({ ok: false, error: "Invalid request." });
+    expect(getAuthenticatedUser).not.toHaveBeenCalled();
+    expect(getPromotionRequestById).not.toHaveBeenCalled();
+  });
+
   it("rejects when the request id doesn't resolve", async () => {
     signInAs(TARGET);
     vi.mocked(getPromotionRequestById).mockResolvedValue(null);

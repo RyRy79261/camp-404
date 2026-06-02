@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
@@ -115,7 +115,10 @@ export async function sendCaptainPromotion(input: {
 /**
  * Resolve an OPEN request to a terminal status. Only stamps the promotion row
  * (status + decidedAt); the rank change for `accepted` is the caller's job.
- * Returns null if the request was not open (already decided / not found).
+ * Returns null if the request was not open (already decided / not found) OR if a
+ * participant was hard-deleted (SET NULL) — the IS NOT NULL guards make the write
+ * atomic with the precondition the app checked on read, so a delete racing
+ * between read and write can't flip an orphaned row (or promote a gone user).
  */
 export async function decideCaptainPromotion(input: {
   requestId: string;
@@ -129,6 +132,8 @@ export async function decideCaptainPromotion(input: {
       and(
         eq(captainPromotionRequests.id, input.requestId),
         eq(captainPromotionRequests.status, "sent"),
+        isNotNull(captainPromotionRequests.targetUserId),
+        isNotNull(captainPromotionRequests.requestedByUserId),
       ),
     )
     .returning();

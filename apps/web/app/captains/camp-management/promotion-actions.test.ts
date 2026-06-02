@@ -132,4 +132,14 @@ describe("sendCaptainPromotionAction", () => {
     expect(res).toEqual({ ok: false, error: "Not signed in." });
     expect(sendCaptainPromotion).not.toHaveBeenCalled();
   });
+
+  it("rejects a malformed (empty) target id at the boundary", async () => {
+    signInAsCaptain();
+
+    const res = await sendCaptainPromotionAction("");
+
+    expect(res).toEqual({ ok: false, error: "Invalid member." });
+    expect(getCampMemberDetail).not.toHaveBeenCalled();
+    expect(sendCaptainPromotion).not.toHaveBeenCalled();
+  });
 });

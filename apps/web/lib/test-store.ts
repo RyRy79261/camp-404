@@ -610,9 +610,15 @@ export const testStore = {
     requestId: string;
     status: "accepted" | "declined" | "cancelled";
   }): TestPromotionRequest | null {
-    // Only a `sent` row flips — so a double-decide is a no-op (returns null).
+    // Only a `sent` row with both participants still present flips — so a
+    // double-decide (or a row orphaned by a hard delete) is a no-op (null),
+    // mirroring the db's status + IS NOT NULL WHERE clause.
     const row = promotionRequests.find(
-      (r) => r.id === input.requestId && r.status === "sent",
+      (r) =>
+        r.id === input.requestId &&
+        r.status === "sent" &&
+        r.targetUserId !== null &&
+        r.requestedByUserId !== null,
     );
     if (!row) return null;
     row.status = input.status;

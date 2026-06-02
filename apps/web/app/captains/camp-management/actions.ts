@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { getCampMemberDetail } from "@camp404/db/roster";
 import { decryptOrNull } from "@camp404/db/crypto";
 import { mergeIdNumber } from "@camp404/db/id-documents";
@@ -28,6 +29,11 @@ export type ApprovalDecisionResult =
 export type PromotionActionResult =
   | { ok: true }
   | { ok: false; error: string };
+
+// Opaque-id boundary schema: a non-empty string. Deliberately NOT .uuid() — the
+// E2E test store uses ids like "test-user-1"; a bad id otherwise fails the
+// downstream lookup anyway. (AGENTS.md: validate external input with Zod.)
+const UserId = z.string().min(1);
 
 // Guard reason code → captain-facing copy for the assign-captain flow.
 const SEND_PROMOTION_COPY: Record<string, string> = {
@@ -120,6 +126,10 @@ export async function sendCaptainPromotionAction(
 ): Promise<PromotionActionResult> {
   const gate = await requireCaptain();
   if (!gate.ok) return gate;
+
+  if (!UserId.safeParse(targetUserId).success) {
+    return { ok: false, error: "Invalid member." };
+  }
 
   const target = await getCampMemberDetail(targetUserId);
   if (!target) return { ok: false, error: "Member not found." };
