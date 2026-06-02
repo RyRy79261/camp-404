@@ -85,6 +85,20 @@
       "when": 1780169140133,
       "tag": "0011_far_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1780409765665,
+      "tag": "0012_broken_sunspot",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1780415605605,
+      "tag": "0013_robust_runaways",
+      "breakpoints": true
     }
   ]
 }
