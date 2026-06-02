@@ -8,7 +8,7 @@ import type { IncomingPromotionRequest } from "@camp404/types";
 // (captain_promotion_requests). This module is side-effect-free with respect to
 // other tables: it never changes a user's rank. Rank flips to `captain` only
 // when the target accepts — the app accept action calls `setUserRank` after a
-// successful `decideCaptainPromotion(..., "accepted")`.
+// successful `decideCaptainPromotion({ requestId, status: "accepted" })`.
 
 const { captainPromotionRequests, users } = schema;
 
@@ -100,16 +100,16 @@ export async function sendCaptainPromotion(input: {
  * Returns null if the request was not open (already decided / not found).
  */
 export async function decideCaptainPromotion(input: {
-  id: string;
-  decision: "accepted" | "declined" | "cancelled";
+  requestId: string;
+  status: "accepted" | "declined" | "cancelled";
 }): Promise<CaptainPromotionRequestRow | null> {
   const db = createHttpDb();
   const [row] = await db
     .update(captainPromotionRequests)
-    .set({ status: input.decision, decidedAt: new Date() })
+    .set({ status: input.status, decidedAt: new Date() })
     .where(
       and(
-        eq(captainPromotionRequests.id, input.id),
+        eq(captainPromotionRequests.id, input.requestId),
         eq(captainPromotionRequests.status, "sent"),
       ),
     )

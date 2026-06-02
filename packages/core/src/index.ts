@@ -20,11 +20,14 @@
 //   - shake detector: createShakeDetector + ShakeSample/ShakeDetectorConfig
 //     (./shake); the React hook + DOM permission helpers stay in apps/web
 //   - id validation: validateIdNumber, IdValidationResult (./id-validation)
+//   - promotion: canSendPromotion, canDecidePromotion, nextPromotionStatus,
+//     promotionStepState — the captain-handshake guards + state machine
+//     (./promotion)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
-// Still to come: the questionnaire catalogue, promotion guards/state-machine,
-// and the mcp consent helpers (blocked on deciding McpScope's type home).
+// Still to come: the questionnaire catalogue, and the mcp consent helpers
+// (blocked on deciding McpScope's type home).
 
 export * from "./access";
 export * from "./family-tree";
@@ -33,3 +36,4 @@ export * from "./text-utils";
 export * from "./text-redaction";
 export * from "./shake";
 export * from "./id-validation";
+export * from "./promotion";
