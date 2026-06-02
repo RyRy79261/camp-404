@@ -9,6 +9,7 @@ import {
   canSendPromotion,
   deriveViewerRank,
   promotionStepState,
+  requireClearance,
 } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
@@ -69,7 +70,12 @@ async function requireCaptain(): Promise<
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     return { ok: false, error: "Your account isn't camp-active yet." };
   }
-  if (campUser.rank !== "captain") {
+  // Same preview-but-locked comparator the captain pages gate on (D3).
+  const { cleared } = requireClearance(
+    deriveViewerRank(campUser.rank, false),
+    "captain",
+  );
+  if (!cleared) {
     return { ok: false, error: "Captain access only." };
   }
   return { ok: true, captainId: campUser.id };

@@ -26,6 +26,31 @@ export function hasClearance(viewer: ViewerRank, required: ViewerRank): boolean 
   return rankLevel(viewer) >= rankLevel(required);
 }
 
+/** The decision a preview-but-locked surface makes: cleared + the ranks it
+ *  compared, so the page can gate its data fetch and feed a CaptainLock. */
+export interface ClearanceResult {
+  cleared: boolean;
+  viewerRank: ViewerRank;
+  requiredRank: ViewerRank;
+}
+
+/**
+ * The single preview-but-locked decision (D3), uniform across every captain
+ * surface so they withhold data identically instead of via bespoke gates:
+ * `cleared = viewer ≥ required`. The returned shape is what a page passes to
+ * its data-fetch guard and to `CaptainLock`.
+ */
+export function requireClearance(
+  viewerRank: ViewerRank,
+  requiredRank: ViewerRank,
+): ClearanceResult {
+  return {
+    cleared: hasClearance(viewerRank, requiredRank),
+    viewerRank,
+    requiredRank,
+  };
+}
+
 /** Derive the viewer clearance rank from the stored rank + derived team-lead. */
 export function deriveViewerRank(rank: StoredRank, isLead: boolean): ViewerRank {
   if (rank === "captain") return "captain";
