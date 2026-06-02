@@ -1,3 +1,5 @@
+import { nextGate as coreNextGate } from "@camp404/core";
+
 // Maps a required_actions.action_key to the bespoke route that satisfies its
 // gate — the code-side registry AGENTS.md describes (the DB stores the key,
 // never the component). Only keys with a built page appear here; a pending
@@ -21,10 +23,5 @@ export interface PendingAction {
  * nothing blocks the user — or when no pending action maps to a route yet.
  */
 export function nextGate(actions: PendingAction[]): string | null {
-  for (const action of actions) {
-    if (!action.blocking) continue;
-    const route = ACTION_ROUTES[action.actionKey];
-    if (route) return route;
-  }
-  return null;
+  return coreNextGate(actions, ACTION_ROUTES);
 }

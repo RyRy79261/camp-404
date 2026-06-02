@@ -24,6 +24,10 @@ import {
   type PendingRequiredAction,
 } from "@camp404/db/activations";
 import { claimInviteCode, isGodEmail } from "./access-control";
+import {
+  hasCampAccess as coreHasCampAccess,
+  isApproved as coreIsApproved,
+} from "@camp404/core";
 import { QUESTIONNAIRE } from "./questionnaire";
 import type { AuthenticatedUser } from "./auth";
 import { isE2ETestMode } from "./test-mode";
@@ -220,7 +224,7 @@ export function hasCampAccess(
   user: { inviteCode: string | null },
   email: string | null,
 ): boolean {
-  return isGodEmail(email) || !!user.inviteCode;
+  return coreHasCampAccess(user, isGodEmail(email));
 }
 
 /**
@@ -232,7 +236,7 @@ export function isApproved(
   user: { approvalStatus: ApprovalStatus },
   email: string | null,
 ): boolean {
-  return isGodEmail(email) || user.approvalStatus === "approved";
+  return coreIsApproved(user, isGodEmail(email));
 }
 
 /**

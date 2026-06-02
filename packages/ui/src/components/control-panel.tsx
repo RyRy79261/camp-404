@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Lock, Mic, Settings, UserRound } from "lucide-react";
 import { cn } from "../lib/utils";
+import { rankLevel } from "@camp404/core";
 
 /**
  * Rank model for the control panel. UI-local on purpose: the app derives a
@@ -11,9 +12,6 @@ import { cn } from "../lib/utils";
  * from the `Role` enum in `@camp404/types` until that derivation is settled.
  */
 export type ControlPanelRank = "camp_member" | "team_lead" | "captain";
-
-/** Ordered low → high. The index doubles as the rank's clearance level. */
-const RANK_ORDER: ControlPanelRank[] = ["camp_member", "team_lead", "captain"];
 
 export const RANK_LABEL: Record<ControlPanelRank, string> = {
   camp_member: "Camp Member",
@@ -28,9 +26,9 @@ const RANK_TAB_LABEL: Record<ControlPanelRank, string> = {
   captain: "Captain",
 };
 
-export function rankLevel(rank: ControlPanelRank): number {
-  return RANK_ORDER.indexOf(rank);
-}
+// rankLevel now lives in @camp404/core (shared with the server-side clearance
+// ladder); re-exported so existing importers (control-grid) keep resolving it.
+export { rankLevel };
 
 export type ControlPanelCorner = "tl" | "tr" | "bl" | "br";
 
