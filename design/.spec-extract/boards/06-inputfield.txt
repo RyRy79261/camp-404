@@ -1,0 +1,8 @@
+# InputField
+# kind: COMPONENT (reusable)  |  size: 360x-  |  pos: (2278,0)
+# reusable components used: none
+========================================================================
+▸ "InputField" {vertical w:360 gap:6}
+  T "Label"  [Inter/13px/500/$foreground]
+  ▸ "Input" {w:fill_container h:46 pad:[0,14] ai:center r:$radius fill:$muted stroke:$border}
+    T "you@example.com"  [Inter/14px/normal/$muted-foreground]

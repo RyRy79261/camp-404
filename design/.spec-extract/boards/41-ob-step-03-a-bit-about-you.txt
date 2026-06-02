@@ -1,0 +1,24 @@
+# OB Step 03 A bit about you
+# kind: BOARD  |  size: 600x800  |  pos: (5478,11500)
+# reusable components used: Button-Outline, Button-Primary
+========================================================================
+▸ "OB Step 03 A bit about you" {vertical w:600 h:800 gap:22 pad:[22,18,30,18] fill:$background}
+  ▸ "Header" {vertical w:fill_container gap:8}
+    T "Build your burner profile"  [Inter/24px/700/$foreground]
+    T "A few questions so the camp knows who’s arriving in the dust. Takes about two minutes."  [Inter/14px/normal/$muted-foreground]
+  ▸ "Progress" {vertical w:fill_container gap:8}
+    T "Step 3 of 11"  [Inter/12px/600/$muted-foreground]
+    ▸ "Track" {w:fill_container h:6 r:999 fill:$muted}
+      ▭ "Fill" {w:147 h:6 r:999 fill:$primary}
+  ▸ "QuestionBlock" {vertical w:fill_container h:fill_container gap:18 jc:center}
+    T "A bit about you"  [Inter/22px/700/$foreground]
+    ▸ "Field" {vertical w:fill_container gap:8}
+      ▸ "PillRow" {w:fill_container jc:end}
+        ▸ "DictatePill" {gap:6 pad:[6,10] ai:center r:999 fill:$muted stroke:$border}
+          ⊙ mic ($muted-foreground) [lucide]
+          T "Dictate instead"  [Inter/12px/normal/$muted-foreground]
+      ▸ "Textarea" {vertical w:fill_container h:210 pad:[12,14] r:$radius fill:$muted stroke:$border}
+        T "Tell the camp who you are…"  [Inter/14px/normal/$muted-foreground]
+  ▸ "Footer" {w:fill_container jc:space_between ai:center}
+    ⟶ <Button-Outline> "Back"  overrides:["Back"]
+    ⟶ <Button-Primary> "Next"  overrides:["Next"]

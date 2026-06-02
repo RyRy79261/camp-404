@@ -1,0 +1,7 @@
+# Card
+# kind: COMPONENT (reusable)  |  size: 360x-  |  pos: (2698,0)
+# reusable components used: none
+========================================================================
+▸ "Card" {vertical w:360 gap:8 pad:20 r:$radius fill:$card stroke:$border}
+  T "Card title"  [Inter/16px/700/$card-foreground]
+  T "Card description."  [Inter/13px/normal/$muted-foreground]

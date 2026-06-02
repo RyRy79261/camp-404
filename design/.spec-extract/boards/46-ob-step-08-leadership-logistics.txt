@@ -1,0 +1,84 @@
+# OB Step 08 Leadership & logistics
+# kind: BOARD  |  size: 600x-  |  pos: (9798,11500)
+# reusable components used: Button-Outline, Button-Primary
+========================================================================
+▸ "OB Step 08 Leadership & logistics" {vertical w:600 gap:22 pad:[22,18,30,18] fill:$background}
+  ▸ "Header" {vertical w:fill_container gap:8}
+    T "Build your burner profile"  [Inter/24px/700/$foreground]
+    T "A few questions so the camp knows who’s arriving in the dust. Takes about two minutes."  [Inter/14px/normal/$muted-foreground]
+  ▸ "Progress" {vertical w:fill_container gap:8}
+    T "Step 8 of 11"  [Inter/13px/normal/$muted-foreground]
+    ▸ "Track" {w:fill_container h:6 r:999 fill:$muted}
+      ▸ "Fill" {w:393 h:fill_container r:999 fill:$primary}
+  T "Leadership & logistics"  [Inter/18px/700/$foreground]
+  ▸ "Question" {vertical w:fill_container gap:10}
+    T "Which teams would you be up for leading?"  [Inter/15px/600/$foreground]
+    ▸ "Options" {vertical w:fill_container gap:10}
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$primary}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:$primary stroke:$primary}
+          ⊙ check ($primary-foreground) [lucide]
+        T "Kitchen"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$primary}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:$primary stroke:$primary}
+          ⊙ check ($primary-foreground) [lucide]
+        T "Structures"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:#00000000 stroke:$border}
+        T "Power & Lighting"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:#00000000 stroke:$border}
+        T "Sanitation & Water"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:#00000000 stroke:$border}
+        T "Health & Safety"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:#00000000 stroke:$border}
+        T "Art & Activities"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:#00000000 stroke:$border}
+        T "Ministry of Memes"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Checkbox" {w:20 h:20 jc:center ai:center r:6 fill:#00000000 stroke:$border}
+        T "Ministry of Vibes"  [Inter/14px/normal/$foreground]
+  ▸ "Question" {vertical w:fill_container gap:10}
+    T "Can you help with driving?"  [Inter/15px/600/$foreground]
+    ▸ "Options" {vertical w:fill_container gap:10}
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$primary}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$primary}
+          ◯ "Dot" {w:8 h:8 fill:$primary}
+        T "Yes"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$border}
+        T "No"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$border}
+        T "Maybe — still working it out"  [Inter/14px/normal/$foreground]
+  ▸ "Question" {vertical w:fill_container gap:10}
+    T "On site before the burn?"  [Inter/15px/600/$foreground]
+    ▸ "Options" {vertical w:fill_container gap:10}
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$primary}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$primary}
+          ◯ "Dot" {w:8 h:8 fill:$primary}
+        T "Yes — the whole build week"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$border}
+        T "Some of build week"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$border}
+        T "No — I’ll arrive on opening day"  [Inter/14px/normal/$foreground]
+  ▸ "Question" {vertical w:fill_container gap:10}
+    T "Staying after?"  [Inter/15px/600/$foreground]
+    ▸ "Options" {vertical w:fill_container gap:10}
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$primary}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$primary}
+          ◯ "Dot" {w:8 h:8 fill:$primary}
+        T "Yes — through to MOOP sweep"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$border}
+        T "A day or two"  [Inter/14px/normal/$foreground]
+      ▸ "Row" {w:fill_container gap:12 pad:14 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "Radio" {w:20 h:20 jc:center ai:center r:999 stroke:$border}
+        T "No — I’m out the morning after"  [Inter/14px/normal/$foreground]
+  ▸ "Footer" {w:fill_container jc:space_between ai:center}
+    ⟶ <Button-Outline> "Back"  overrides:["Back"]
+    ⟶ <Button-Primary> "Next"  overrides:["Next"]

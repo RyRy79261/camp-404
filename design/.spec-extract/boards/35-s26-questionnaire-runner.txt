@@ -1,0 +1,131 @@
+# S26 Questionnaire runner
+# kind: BOARD  |  size: 430x-  |  pos: (5218,8700)
+# reusable components used: Button-Outline, Button-Primary
+========================================================================
+▸ "S26 Questionnaire runner" {vertical w:430 fill:$background}
+  ▸ "BlockingTopBar" {vertical w:fill_container gap:14 pad:[16,20] fill:$card stroke:$border}
+    ▸ "TitleRow" {w:fill_container gap:10 ai:center}
+      ▸ "TitleWrap" {w:fill_container gap:10 ai:center}
+        T "Safety & logistics"  [Inter/17px/600/$foreground]
+        ▸ "RequiredChip" {gap:5 pad:[4,9] ai:center r:999 fill:$muted stroke:$border}
+          ⊙ lock ($muted-foreground) [lucide]
+          T "Required"  [Inter/11px/600/$muted-foreground]
+      ▸ "SignOut" {pad:[4,2] ai:center}
+        T "Sign out"  [Inter/13px/500/$accent]
+    ▸ "ProgressRow" {vertical w:fill_container gap:8}
+      T "Question 3 of 8"  [Inter/12px/500/$muted-foreground]
+      ▸ "ProgressTrack" {w:fill_container h:6 r:3 fill:$muted}
+        ▸ "ProgressFill" {w:148 h:fill_container r:3 fill:$primary}
+  ▸ "BlockingNotice" {w:fill_container gap:10 pad:[12,20] ai:center fill:#f83e5a1a stroke:$destructive}
+    ⊙ lock ($destructive) [lucide]
+    T "You can’t use the app until this is finished."  [Inter/13px/500/$foreground]
+  ▸ "Body" {vertical w:fill_container gap:24 pad:20}
+    ▸ "CurrentQuestionCard" {vertical w:fill_container gap:14 pad:18 r:$radius fill:$card stroke:$border}
+      T "Have you read the safety briefing?"  [Inter/16px/600/$foreground]
+      T "This covers fire safety, dust storms, and emergency contacts."  [Inter/13px/normal/$muted-foreground]
+      ▸ "Options" {vertical w:fill_container gap:10}
+        ▸ "Radio-Yes, fully" {w:fill_container gap:12 pad:[13,14] ai:center r:$radius fill:#ff008c1a stroke:$primary}
+          ⊙ circle-dot ($primary) [lucide]
+          T "Yes, fully"  [Inter/14px/600/$foreground]
+        ▸ "Radio-Skimmed it" {w:fill_container gap:12 pad:[13,14] ai:center r:$radius fill:$muted stroke:$border}
+          ⊙ circle ($muted-foreground) [lucide]
+          T "Skimmed it"  [Inter/14px/normal/$foreground]
+        ▸ "Radio-Not yet" {w:fill_container gap:12 pad:[13,14] ai:center r:$radius fill:$muted stroke:$border}
+          ⊙ circle ($muted-foreground) [lucide]
+          T "Not yet"  [Inter/14px/normal/$foreground]
+    ▸ "Footer" {w:fill_container gap:12}
+      ⟶ <Button-Outline> "BackBtn" {w:fill_container}  overrides:["Back"]
+      ⟶ <Button-Primary> "NextBtn" {w:fill_container}  overrides:["Next"]
+  ▸ "DocsSection" {vertical w:fill_container gap:24 pad:[8,20,24,20]}
+    ▸ "DocsHeader" {vertical w:fill_container gap:4}
+      T "Other question kinds & states"  [Inter/13px/700/$muted-foreground]
+      ▸ "DocsRule" {w:fill_container h:1 fill:$border}
+    ▸ "Block-VALIDATION ERROR" {vertical w:fill_container gap:8}
+      T "VALIDATION ERROR"  [Inter/11px/700/$accent]
+      ▸ "Card" {vertical w:fill_container gap:14 pad:18 r:$radius fill:$card stroke:$border}
+        T "Have you read the safety briefing?"  [Inter/16px/600/$foreground]
+        ▸ "InlineAlert" {w:fill_container gap:8 pad:[10,12] ai:center r:$radius fill:#f83e5a1a stroke:$destructive}
+          ⊙ circle-alert ($destructive) [lucide]
+          T "Please answer to continue."  [Inter/13px/500/$destructive]
+        ▸ "Options" {vertical w:fill_container gap:10}
+          ▸ "Radio-Yes, fully" {w:fill_container gap:12 pad:[13,14] ai:center r:$radius fill:$muted stroke:$border}
+            ⊙ circle ($muted-foreground) [lucide]
+            T "Yes, fully"  [Inter/14px/normal/$foreground]
+          ▸ "Radio-Skimmed it" {w:fill_container gap:12 pad:[13,14] ai:center r:$radius fill:$muted stroke:$border}
+            ⊙ circle ($muted-foreground) [lucide]
+            T "Skimmed it"  [Inter/14px/normal/$foreground]
+          ▸ "Radio-Not yet" {w:fill_container gap:12 pad:[13,14] ai:center r:$radius fill:$muted stroke:$border}
+            ⊙ circle ($muted-foreground) [lucide]
+            T "Not yet"  [Inter/14px/normal/$foreground]
+        ▸ "Footer" {w:fill_container gap:12}
+          ⟶ <Button-Outline> "BackBtn" {w:fill_container}  overrides:["Back"]
+          ⟶ <Button-Primary> "PrimaryBtn" {w:fill_container op:1}  overrides:["Next"]
+    ▸ "Block-MULTI-SELECT" {vertical w:fill_container gap:8}
+      T "MULTI-SELECT"  [Inter/11px/700/$accent]
+      ▸ "Card" {vertical w:fill_container gap:14 pad:18 r:$radius fill:$card stroke:$border}
+        T "Which crews can you help with?"  [Inter/16px/600/$foreground]
+        T "Select all that apply."  [Inter/13px/normal/$muted-foreground]
+        ▸ "Options" {vertical w:fill_container gap:10}
+          ▸ "Check-Kitchen" {w:fill_container gap:12 pad:[13,14] ai:center r:$radius fill:#ff008c1a stroke:$primary}
+            ▸ "Box" {w:20 h:20 jc:center ai:center r:5 fill:$primary stroke:$primary}
+              ⊙ check ($primary-foreground) [lucide]
+            T "Kitchen"  [Inter/14px/600/$foreground]
+          ▸ "Check-Structures" {w:fill_container gap:12 pad:[13,14] ai:center r:$radius fill:#ff008c1a stroke:$primary}
+            ▸ "Box" {w:20 h:20 jc:center ai:center r:5 fill:$primary stroke:$primary}
+              ⊙ check ($primary-foreground) [lucide]
+            T "Structures"  [Inter/14px/600/$foreground]
+          ▸ "Check-Power" {w:fill_container gap:12 pad:[13,14] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "Box" {w:20 h:20 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Power"  [Inter/14px/normal/$foreground]
+          ▸ "Check-Sanitation" {w:fill_container gap:12 pad:[13,14] ai:center r:$radius fill:$muted stroke:$border}
+            ▸ "Box" {w:20 h:20 jc:center ai:center r:5 fill:#00000000 stroke:$muted-foreground}
+            T "Sanitation"  [Inter/14px/normal/$foreground]
+        ▸ "Footer" {w:fill_container gap:12}
+          ⟶ <Button-Outline> "BackBtn" {w:fill_container}  overrides:["Back"]
+          ⟶ <Button-Primary> "PrimaryBtn" {w:fill_container op:1}  overrides:["Next"]
+    ▸ "Block-LONG-TEXT" {vertical w:fill_container gap:8}
+      T "LONG-TEXT"  [Inter/11px/700/$accent]
+      ▸ "Card" {vertical w:fill_container gap:14 pad:18 r:$radius fill:$card stroke:$border}
+        T "Any medical needs we should know about?"  [Inter/16px/600/$foreground]
+        ▸ "Textarea" {vertical w:fill_container h:96 pad:[12,14] r:$radius fill:$muted stroke:$border}
+          T "Allergies, medication, mobility — anything our medics should know."  [Inter/14px/normal/$muted-foreground]
+        ▸ "Footer" {w:fill_container gap:12}
+          ⟶ <Button-Outline> "BackBtn" {w:fill_container}  overrides:["Back"]
+          ⟶ <Button-Primary> "PrimaryBtn" {w:fill_container op:1}  overrides:["Next"]
+    ▸ "Block-SCALE (1–5)" {vertical w:fill_container gap:8}
+      T "SCALE (1–5)"  [Inter/11px/700/$accent]
+      ▸ "Card" {vertical w:fill_container gap:14 pad:18 r:$radius fill:$card stroke:$border}
+        T "How confident are you driving in deep dust? (1–5)"  [Inter/16px/600/$foreground]
+        ▸ "Segments" {w:fill_container gap:8}
+          ▸ "Seg-1" {w:fill_container h:48 jc:center ai:center r:$radius fill:$muted stroke:$border}
+            T "1"  [Inter/16px/600/$foreground]
+          ▸ "Seg-2" {w:fill_container h:48 jc:center ai:center r:$radius fill:$muted stroke:$border}
+            T "2"  [Inter/16px/600/$foreground]
+          ▸ "Seg-3" {w:fill_container h:48 jc:center ai:center r:$radius fill:$primary stroke:$primary}
+            T "3"  [Inter/16px/600/$primary-foreground]
+          ▸ "Seg-4" {w:fill_container h:48 jc:center ai:center r:$radius fill:$muted stroke:$border}
+            T "4"  [Inter/16px/600/$foreground]
+          ▸ "Seg-5" {w:fill_container h:48 jc:center ai:center r:$radius fill:$muted stroke:$border}
+            T "5"  [Inter/16px/600/$foreground]
+        ▸ "ScaleLabels" {w:fill_container jc:space_between}
+          T "Not at all"  [Inter/12px/normal/$muted-foreground]
+          T "Very"  [Inter/12px/normal/$muted-foreground]
+        ▸ "Footer" {w:fill_container gap:12}
+          ⟶ <Button-Outline> "BackBtn" {w:fill_container}  overrides:["Back"]
+          ⟶ <Button-Primary> "PrimaryBtn" {w:fill_container op:1}  overrides:["Next"]
+    ▸ "Block-LAST QUESTION" {vertical w:fill_container gap:8}
+      T "LAST QUESTION"  [Inter/11px/700/$accent]
+      ▸ "Card" {vertical w:fill_container gap:14 pad:18 r:$radius fill:$card stroke:$border}
+        T "Anything else we should know before camp?"  [Inter/16px/600/$foreground]
+        T "This is the final question — review your answers, then submit."  [Inter/13px/normal/$muted-foreground]
+        ▸ "Footer" {w:fill_container gap:12}
+          ⟶ <Button-Outline> "BackBtn" {w:fill_container}  overrides:["Back"]
+          ⟶ <Button-Primary> "PrimaryBtn" {w:fill_container op:1}  overrides:["Submit"]
+    ▸ "Block-SUBMITTING" {vertical w:fill_container gap:8}
+      T "SUBMITTING"  [Inter/11px/700/$accent]
+      ▸ "Card" {vertical w:fill_container gap:14 pad:18 r:$radius fill:$card stroke:$border}
+        T "Anything else we should know before camp?"  [Inter/16px/600/$foreground]
+        T "Sending your answers — please wait."  [Inter/13px/normal/$muted-foreground]
+        ▸ "Footer" {w:fill_container gap:12}
+          ⟶ <Button-Outline> "BackBtn" {w:fill_container}  overrides:["Back"]
+          ⟶ <Button-Primary> "PrimaryBtn" {w:fill_container op:0.6}  overrides:["Submitting…"]

@@ -1,0 +1,21 @@
+# S06 Approval gate
+# kind: BOARD  |  size: 430x-  |  pos: (9938,0)
+# reusable components used: Button-Outline
+========================================================================
+▸ "S06 Approval gate" {vertical w:430 gap:20 pad:28 ai:center fill:$muted}
+  ▸ "APPROVAL GATE / PENDING block" {vertical w:fill_container gap:8}
+    T "APPROVAL GATE / PENDING"  [JetBrains Mono/9px/500/$muted-foreground]
+    ▸ "card" {vertical w:fill_container gap:18 pad:28 ai:center r:$radius fill:$card stroke:$border}
+      ▸ "Badge" {w:64 h:64 jc:center ai:center r:999 fill:#00dcff26}
+        ⊙ clock-3 ($accent) [lucide]
+      T "Application submitted"  [Inter/18px/700/$card-foreground]
+      T "Thanks, Alex — your profile is in. A captain needs to approve your access before you can use the rest of the app. We'll let you in as soon as they do; just check back here."  [Inter/13px/normal/$muted-foreground]
+      ⟶ <Button-Outline> "Sign out btn" {w:fill_container}  overrides:["Sign out"]
+  ▸ "APPROVAL GATE / REJECTED block" {vertical w:fill_container gap:8}
+    T "APPROVAL GATE / REJECTED"  [JetBrains Mono/9px/500/$muted-foreground]
+    ▸ "card" {vertical w:fill_container gap:18 pad:28 ai:center r:$radius fill:$card stroke:$border}
+      ▸ "Badge" {w:64 h:64 jc:center ai:center r:999 fill:#f83e5a1f}
+        ⊙ shield-x ($destructive) [lucide]
+      T "Application not approved"  [Inter/18px/700/$card-foreground]
+      T "A captain has reviewed your application and it wasn't approved for camp access this time. If you think this is a mistake, reach out to whoever invited you."  [Inter/13px/normal/$muted-foreground]
+      ⟶ <Button-Outline> "Sign out btn" {w:fill_container}  overrides:["Sign out"]

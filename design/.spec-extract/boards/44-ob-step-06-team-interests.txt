@@ -1,0 +1,176 @@
+# OB Step 06 Team interests
+# kind: BOARD  |  size: 600x-  |  pos: (7638,11500)
+# reusable components used: Button-Outline, Button-Primary
+========================================================================
+▸ "OB Step 06 Team interests" {vertical w:600 gap:22 pad:[22,18,30,18] fill:$background}
+  ▸ "Header" {vertical w:fill_container gap:8}
+    T "Build your burner profile"  [Inter/24px/700/$foreground]
+    T "A few questions so the camp knows who’s arriving in the dust. Takes about two minutes."  [Inter/14px/normal/$muted-foreground]
+  ▸ "Progress" {vertical w:fill_container gap:8}
+    T "Step 6 of 11"  [Inter/13px/normal/$muted-foreground]
+    ▸ "Track" {w:fill_container h:6 r:999 fill:$muted}
+      ▸ "Fill" {w:295 h:fill_container r:999 fill:$primary}
+  ▸ "Question Block" {vertical w:fill_container gap:20}
+    ▸ "Kitchen Row" {vertical w:fill_container gap:8}
+      T "Kitchen"  [Inter/14px/600/$foreground]
+      ▸ "Scale" {w:fill_container gap:6}
+        ▸ "Seg 0" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "0"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 1" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "1"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 2" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "2"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 3" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "3"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 4" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "4"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 5" {w:fill_container h:40 jc:center ai:center r:$radius fill:$primary}
+          T "5"  [Inter/14px/600/$primary-foreground]
+        ▸ "Seg 6" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "6"  [Inter/14px/600/$muted-foreground]
+      ▸ "Labels" {w:fill_container jc:space_between}
+        T "Not for me"  [Inter/11px/normal/$muted-foreground]
+        T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+    ▸ "Structures Row" {vertical w:fill_container gap:8}
+      T "Structures"  [Inter/14px/600/$foreground]
+      ▸ "Scale" {w:fill_container gap:6}
+        ▸ "Seg 0" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "0"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 1" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "1"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 2" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "2"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 3" {w:fill_container h:40 jc:center ai:center r:$radius fill:$primary}
+          T "3"  [Inter/14px/600/$primary-foreground]
+        ▸ "Seg 4" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "4"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 5" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "5"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 6" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "6"  [Inter/14px/600/$muted-foreground]
+      ▸ "Labels" {w:fill_container jc:space_between}
+        T "Not for me"  [Inter/11px/normal/$muted-foreground]
+        T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+    ▸ "Power & Lighting Row" {vertical w:fill_container gap:8}
+      T "Power & Lighting"  [Inter/14px/600/$foreground]
+      ▸ "Scale" {w:fill_container gap:6}
+        ▸ "Seg 0" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "0"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 1" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "1"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 2" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "2"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 3" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "3"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 4" {w:fill_container h:40 jc:center ai:center r:$radius fill:$primary}
+          T "4"  [Inter/14px/600/$primary-foreground]
+        ▸ "Seg 5" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "5"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 6" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "6"  [Inter/14px/600/$muted-foreground]
+      ▸ "Labels" {w:fill_container jc:space_between}
+        T "Not for me"  [Inter/11px/normal/$muted-foreground]
+        T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+    ▸ "Sanitation & Water Row" {vertical w:fill_container gap:8}
+      T "Sanitation & Water"  [Inter/14px/600/$foreground]
+      ▸ "Scale" {w:fill_container gap:6}
+        ▸ "Seg 0" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "0"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 1" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "1"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 2" {w:fill_container h:40 jc:center ai:center r:$radius fill:$primary}
+          T "2"  [Inter/14px/600/$primary-foreground]
+        ▸ "Seg 3" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "3"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 4" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "4"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 5" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "5"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 6" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "6"  [Inter/14px/600/$muted-foreground]
+      ▸ "Labels" {w:fill_container jc:space_between}
+        T "Not for me"  [Inter/11px/normal/$muted-foreground]
+        T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+    ▸ "Health & Safety Row" {vertical w:fill_container gap:8}
+      T "Health & Safety"  [Inter/14px/600/$foreground]
+      ▸ "Scale" {w:fill_container gap:6}
+        ▸ "Seg 0" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "0"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 1" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "1"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 2" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "2"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 3" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "3"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 4" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "4"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 5" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "5"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 6" {w:fill_container h:40 jc:center ai:center r:$radius fill:$primary}
+          T "6"  [Inter/14px/600/$primary-foreground]
+      ▸ "Labels" {w:fill_container jc:space_between}
+        T "Not for me"  [Inter/11px/normal/$muted-foreground]
+        T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+    ▸ "Art & Activities Row" {vertical w:fill_container gap:8}
+      T "Art & Activities"  [Inter/14px/600/$foreground]
+      ▸ "Scale" {w:fill_container gap:6}
+        ▸ "Seg 0" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "0"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 1" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "1"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 2" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "2"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 3" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "3"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 4" {w:fill_container h:40 jc:center ai:center r:$radius fill:$primary}
+          T "4"  [Inter/14px/600/$primary-foreground]
+        ▸ "Seg 5" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "5"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 6" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "6"  [Inter/14px/600/$muted-foreground]
+      ▸ "Labels" {w:fill_container jc:space_between}
+        T "Not for me"  [Inter/11px/normal/$muted-foreground]
+        T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+    ▸ "Ministry of Memes Row" {vertical w:fill_container gap:8}
+      T "Ministry of Memes"  [Inter/14px/600/$foreground]
+      ▸ "Scale" {w:fill_container gap:6}
+        ▸ "Seg 0" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "0"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 1" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "1"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 2" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "2"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 3" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "3"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 4" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "4"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 5" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "5"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 6" {w:fill_container h:40 jc:center ai:center r:$radius fill:$primary}
+          T "6"  [Inter/14px/600/$primary-foreground]
+      ▸ "Labels" {w:fill_container jc:space_between}
+        T "Not for me"  [Inter/11px/normal/$muted-foreground]
+        T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+    ▸ "Ministry of Vibes Row" {vertical w:fill_container gap:8}
+      T "Ministry of Vibes"  [Inter/14px/600/$foreground]
+      ▸ "Scale" {w:fill_container gap:6}
+        ▸ "Seg 0" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "0"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 1" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "1"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 2" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "2"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 3" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "3"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 4" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "4"  [Inter/14px/600/$muted-foreground]
+        ▸ "Seg 5" {w:fill_container h:40 jc:center ai:center r:$radius fill:$primary}
+          T "5"  [Inter/14px/600/$primary-foreground]
+        ▸ "Seg 6" {w:fill_container h:40 jc:center ai:center r:$radius fill:$muted}
+          T "6"  [Inter/14px/600/$muted-foreground]
+      ▸ "Labels" {w:fill_container jc:space_between}
+        T "Not for me"  [Inter/11px/normal/$muted-foreground]
+        T "Sign me up"  [Inter/11px/normal/$muted-foreground]
+  ▸ "Footer" {w:fill_container jc:space_between ai:center}
+    ⟶ <Button-Outline> "Back"  overrides:["Back"]
+    ⟶ <Button-Primary> "Next"  overrides:["Next"]

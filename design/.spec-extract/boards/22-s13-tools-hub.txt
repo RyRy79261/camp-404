@@ -1,0 +1,32 @@
+# S13 Tools hub
+# kind: BOARD  |  size: 430x560  |  pos: (4038,5010)
+# reusable components used: DetailHeader
+========================================================================
+▸ "S13 Tools hub" {vertical w:430 h:560 fill:$background}
+  ⟶ <DetailHeader> {w:fill_container}  overrides:["Tools"]
+  ▸ "Content" {vertical w:fill_container gap:16 pad:[8,16,24,16]}
+    ▸ "Intro" {vertical w:fill_container gap:6}
+      T "Tools"  [Inter/26px/700/$foreground]
+      T "Uncategorised tooling for camp members. We'll move tools into dedicated sections as we group them."  [Inter/14px/normal/$muted-foreground]
+    ▸ "NavCards" {vertical w:fill_container gap:12}
+      ▸ "Invite a member" {w:fill_container gap:14 pad:16 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "IconChip" {w:44 h:44 jc:center ai:center r:$radius fill:$muted stroke:$border}
+          ⊙ mail ($primary) [lucide]
+        ▸ "Text" {vertical w:fill_container gap:4}
+          T "Invite a member"  [Inter/15px/700/$foreground]
+          T "Mint a single-use code to bring someone onto Camp 404."  [Inter/13px/normal/$muted-foreground]
+        ⊙ chevron-right ($muted-foreground) [lucide]
+      ▸ "My forms" {w:fill_container gap:14 pad:16 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "IconChip" {w:44 h:44 jc:center ai:center r:$radius fill:$muted stroke:$border}
+          ⊙ clipboard-list ($primary) [lucide]
+        ▸ "Text" {vertical w:fill_container gap:4}
+          T "My forms"  [Inter/15px/700/$foreground]
+          T "Revisit a questionnaire you've already completed, update your answers, and see what changed."  [Inter/13px/normal/$muted-foreground]
+        ⊙ chevron-right ($muted-foreground) [lucide]
+      ▸ "Family tree" {w:fill_container gap:14 pad:16 ai:center r:$radius fill:$card stroke:$border}
+        ▸ "IconChip" {w:44 h:44 jc:center ai:center r:$radius fill:$muted stroke:$border}
+          ⊙ git-branch ($primary) [lucide]
+        ▸ "Text" {vertical w:fill_container gap:4}
+          T "Family tree"  [Inter/15px/700/$foreground]
+          T "See who brought who onto camp."  [Inter/13px/normal/$muted-foreground]
+        ⊙ chevron-right ($muted-foreground) [lucide]

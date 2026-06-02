@@ -1,0 +1,35 @@
+# S11 Avatar upload
+# kind: BOARD  |  size: 430x-  |  pos: (8758,2849)
+# reusable components used: Button-Outline
+========================================================================
+▸ "S11 Avatar upload" {vertical w:430 fill:$background}
+  ▸ "Content" {vertical w:fill_container gap:28 pad:20}
+    T "Avatar upload"  [Inter/24px/700/$foreground]
+    ▸ "EMPTY block" {vertical w:fill_container gap:14 ai:center}
+      T "EMPTY"  [JetBrains Mono/11px/normal/$muted-foreground]
+      ▸ "Avatar circle" {vertical w:120 h:120 gap:6 jc:center ai:center r:60 fill:#00000000 stroke:$border}
+        ⊙ camera ($muted-foreground) [lucide]
+        T "Add photo"  [Inter/12px/normal/$muted-foreground]
+      ⟶ <Button-Outline> "Upload button"  overrides:["Upload a photo"]
+    ▸ "UPLOADING block" {vertical w:fill_container gap:14 ai:center}
+      T "UPLOADING"  [JetBrains Mono/11px/normal/$muted-foreground]
+      ▸ "Avatar circle" {vertical w:120 h:120 r:60 fill:$muted}
+        ▸ "Overlay" {vertical w:fill_container h:fill_container jc:center ai:center fill:#00000080}
+          ⊙ loader ($foreground) [lucide]
+      ⟶ <Button-Outline> "Uploading button" {op:0.5}  overrides:["Uploading…"]
+    ▸ "POPULATED block" {vertical w:fill_container gap:14 ai:center}
+      T "POPULATED"  [JetBrains Mono/11px/normal/$muted-foreground]
+      ▸ "Avatar with remove" {none w:120 h:120}
+        ▸ "Avatar photo" {w:120 h:120 r:60 fill:[object Object] stroke:$primary}
+        ▸ "Remove button" {vertical w:28 h:28 jc:center ai:center r:14 fill:$destructive}
+          ⊙ x ($destructive-foreground) [lucide]
+      ⟶ <Button-Outline> "Change button"  overrides:["Change photo"]
+    ▸ "ERROR block" {vertical w:fill_container gap:14 ai:center}
+      T "ERROR"  [JetBrains Mono/11px/normal/$muted-foreground]
+      ▸ "Avatar circle" {vertical w:120 h:120 gap:6 jc:center ai:center r:60 fill:#00000000 stroke:$border}
+        ⊙ camera ($muted-foreground) [lucide]
+        T "Add photo"  [Inter/12px/normal/$muted-foreground]
+      ▸ "Alert" {vertical gap:4 ai:center}
+        T "Upload failed"  [Inter/13px/600/$destructive]
+        T "Could not load image"  [Inter/13px/normal/$destructive]
+    T "A clear photo of your face works best."  [Inter/13px/normal/$muted-foreground]

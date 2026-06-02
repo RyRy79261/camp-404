@@ -1,0 +1,232 @@
+# S17 Roster — Iteration B (mobile)
+# kind: BOARD  |  size: 430x-  |  pos: (14135,0)
+# reusable components used: Button-Primary, Button-Outline, CaptainLock
+========================================================================
+▸ "S17 Roster — Iteration B (mobile)" {vertical w:430 gap:22 pad:[20,16,40,16] fill:$background}
+  ▸ "Header" {vertical w:fill_container gap:12}
+    ▸ "Back" {gap:5 ai:center}
+      ⊙ chevron-left ($muted-foreground) [lucide]
+      T "Camp tools"  [JetBrains Mono/13px/500/$muted-foreground]
+    T "Camp management"  [Inter/25px/700/$foreground]
+  ▸ "Stats" {vertical w:fill_container gap:8}
+    ▸ "Strip" {w:fill_container gap:10}
+      ▸ "MEMBERS" {vertical w:fill_container gap:3 pad:[12,14] r:$radius fill:$card stroke:$border}
+        T "42"  [JetBrains Mono/24px/700/$accent]
+        T "MEMBERS"  [Inter/10.5px/600/$muted-foreground]
+      ▸ "APPROVED" {vertical w:fill_container gap:3 pad:[12,14] r:$radius fill:$card stroke:$border}
+        T "39"  [JetBrains Mono/24px/700/$accent]
+        T "APPROVED"  [Inter/10.5px/600/$muted-foreground]
+      ▸ "INCOMPLETE" {vertical w:fill_container gap:3 pad:[12,14] r:$radius fill:$card stroke:$border}
+        T "7"  [JetBrains Mono/24px/700/$accent]
+        T "INCOMPLETE"  [Inter/10.5px/600/$muted-foreground]
+  ▸ "Toolbar" {vertical w:fill_container gap:12}
+    ▸ "Search" {w:fill_container gap:10 pad:[12,14] ai:center r:$radius fill:$muted stroke:$accent}
+      T ">"  [JetBrains Mono/16px/700/$accent]
+      T "Search by name, handle or email"  [JetBrains Mono/13.5px/normal/$muted-foreground]
+      ▭ "cursor" {w:9 h:18 fill:$accent}
+    ▸ "Chips" {gap:8}
+      ▸ "All 42" {gap:7 pad:[8,14] jc:center ai:center r:$radius fill:#00dcff1f stroke:$accent}
+        ◯ "dot" {w:7 h:7 fill:$accent}
+        T "All 42"  [JetBrains Mono/13px/600/$accent]
+      ▸ "Pending 3" {gap:7 pad:[8,14] jc:center ai:center r:$radius fill:$muted stroke:$border}
+        ◯ "dot" {w:7 h:7 fill:$muted-foreground}
+        T "Pending 3"  [JetBrains Mono/13px/600/$muted-foreground]
+      ▸ "Captains 4" {gap:7 pad:[8,14] jc:center ai:center r:$radius fill:$muted stroke:$border}
+        ◯ "dot" {w:7 h:7 fill:$muted-foreground}
+        T "Captains 4"  [JetBrains Mono/13px/600/$muted-foreground]
+      ▸ "Team: All" {gap:7 pad:[8,14] jc:center ai:center r:$radius fill:$muted stroke:$border}
+        T "Team: All"  [JetBrains Mono/13px/600/$muted-foreground]
+        ⊙ chevron-down ($muted-foreground) [lucide]
+      ▸ "Outstanding 7" {gap:7 pad:[8,14] jc:center ai:center r:$radius fill:#e0a8001a stroke:#e0a800}
+        ⊙ triangle-alert (#e0a800) [lucide]
+        T "Outstanding 7"  [JetBrains Mono/13px/600/#e0a800]
+  ▸ "Roster" {vertical w:fill_container r:$radius fill:$card,[object Object] stroke:$border}
+    ▸ "Nova Reyes" {w:fill_container h:58 ai:center stroke:$border}
+      ▭ "bar" {w:4 h:fill_container fill:$accent}
+      ▸ "content" {w:fill_container h:fill_container gap:11 pad:[12,13] ai:center fill:#00dcff1a}
+        ▸ "Avatar" {w:34 h:34 jc:center ai:center r:4 fill:#ff008c}
+          T "NR"  [JetBrains Mono/12.5px/700/#ffffff]
+        ▸ "NameCol" {vertical w:fill_container gap:3}
+          T "Nova Reyes"  [Inter/14.5px/600/$accent]
+          ▸ "sub" {gap:7 ai:center}
+            T "@nova"  [JetBrains Mono/12.5px/normal/$muted-foreground]
+            T "🇿🇦"  [Inter/13px/normal/#ffffff]
+            T "South Africa"  [Inter/12px/normal/$muted-foreground]
+        T "🐱"  [Inter/19px/normal/#ffffff]
+    ▸ "Jules Okafor" {w:fill_container h:58 ai:center stroke:$border}
+      ▭ "bar" {w:3 h:fill_container fill:$accent}
+      ▸ "content" {w:fill_container h:fill_container gap:11 pad:[12,13] ai:center fill:#00000000}
+        ▸ "Avatar" {w:34 h:34 jc:center ai:center r:4 fill:#751888}
+          T "JO"  [JetBrains Mono/12.5px/700/#ffffff]
+        ▸ "NameCol" {vertical w:fill_container gap:3}
+          T "Jules Okafor"  [Inter/14.5px/600/$foreground]
+          ▸ "sub" {gap:7 ai:center}
+            T "@jules"  [JetBrains Mono/12.5px/normal/$muted-foreground]
+            T "🇺🇸"  [Inter/13px/normal/#ffffff]
+            T "United States"  [Inter/12px/normal/$muted-foreground]
+        T "🐱"  [Inter/19px/normal/#ffffff]
+    ▸ "Sam Tran" {w:fill_container h:58 ai:center stroke:$border}
+      ▭ "bar" {w:3 h:fill_container fill:$accent}
+      ▸ "content" {w:fill_container h:fill_container gap:11 pad:[12,13] ai:center fill:#00000000}
+        ▸ "Avatar" {w:34 h:34 jc:center ai:center r:4 fill:#00b3d6}
+          T "ST"  [JetBrains Mono/12.5px/700/#ffffff]
+        ▸ "NameCol" {vertical w:fill_container gap:3}
+          T "Sam Tran"  [Inter/14.5px/600/$foreground]
+          ▸ "sub" {gap:7 ai:center}
+            T "@sam"  [JetBrains Mono/12.5px/normal/$muted-foreground]
+            T "🇦🇺"  [Inter/13px/normal/#ffffff]
+            T "Australia"  [Inter/12px/normal/$muted-foreground]
+        T "🐱"  [Inter/19px/normal/#ffffff]
+    ▸ "Ada Lovelace" {w:fill_container h:58 ai:center stroke:$border}
+      ▭ "bar" {w:3 h:fill_container fill:#3fd07a}
+      ▸ "content" {w:fill_container h:fill_container gap:11 pad:[12,13] ai:center fill:#00000000}
+        ▸ "Avatar" {w:34 h:34 jc:center ai:center r:4 fill:#e0a800}
+          T "AL"  [JetBrains Mono/12.5px/700/#ffffff]
+        ▸ "NameCol" {vertical w:fill_container gap:3}
+          T "Ada Lovelace"  [Inter/14.5px/600/$foreground]
+          ▸ "sub" {gap:7 ai:center}
+            T "@ada"  [JetBrains Mono/12.5px/normal/$muted-foreground]
+            T "🇬🇧"  [Inter/13px/normal/#ffffff]
+            T "United Kingdom"  [Inter/12px/normal/$muted-foreground]
+        T "🦩"  [Inter/19px/normal/#ffffff]
+    ▸ "Mara Vance" {w:fill_container h:58 ai:center stroke:$border}
+      ▭ "bar" {w:3 h:fill_container fill:#3fd07a}
+      ▸ "content" {w:fill_container h:fill_container gap:11 pad:[12,13] ai:center fill:#00000000}
+        ▸ "Avatar" {w:34 h:34 jc:center ai:center r:4 fill:#2fbf71}
+          T "MV"  [JetBrains Mono/12.5px/700/#ffffff]
+        ▸ "NameCol" {vertical w:fill_container gap:3}
+          T "Mara Vance"  [Inter/14.5px/600/$foreground]
+          ▸ "sub" {gap:7 ai:center}
+            T "@mara"  [JetBrains Mono/12.5px/normal/$muted-foreground]
+            T "🇺🇸"  [Inter/13px/normal/#ffffff]
+            T "United States"  [Inter/12px/normal/$muted-foreground]
+        T "🐱"  [Inter/19px/normal/#ffffff]
+    ▸ "Kit Soto" {w:fill_container h:58 ai:center stroke:$border}
+      ▭ "bar" {w:3 h:fill_container fill:#3fd07a}
+      ▸ "content" {w:fill_container h:fill_container gap:11 pad:[12,13] ai:center fill:#00000000}
+        ▸ "Avatar" {w:34 h:34 jc:center ai:center r:4 fill:#7c5cff}
+          T "KS"  [JetBrains Mono/12.5px/700/#ffffff]
+        ▸ "NameCol" {vertical w:fill_container gap:3}
+          T "Kit Soto"  [Inter/14.5px/600/$foreground]
+          ▸ "sub" {gap:7 ai:center}
+            T "@kit"  [JetBrains Mono/12.5px/normal/$muted-foreground]
+            T "🇧🇷"  [Inter/13px/normal/#ffffff]
+            T "Brazil"  [Inter/12px/normal/$muted-foreground]
+        T "🐱"  [Inter/19px/normal/#ffffff]
+    ▸ "Lena Fischer" {w:fill_container h:58 ai:center stroke:$border}
+      ▭ "bar" {w:3 h:fill_container fill:#3fd07a}
+      ▸ "content" {w:fill_container h:fill_container gap:11 pad:[12,13] ai:center fill:#00000000}
+        ▸ "Avatar" {w:34 h:34 jc:center ai:center r:4 fill:#d65a8c}
+          T "LF"  [JetBrains Mono/12.5px/700/#ffffff]
+        ▸ "NameCol" {vertical w:fill_container gap:3}
+          T "Lena Fischer"  [Inter/14.5px/600/$foreground]
+          ▸ "sub" {gap:7 ai:center}
+            T "@lena"  [JetBrains Mono/12.5px/normal/$muted-foreground]
+            T "🇩🇪"  [Inter/13px/normal/#ffffff]
+            T "Germany"  [Inter/12px/normal/$muted-foreground]
+        T "🪄"  [Inter/19px/normal/#ffffff]
+    ▸ "Hiro Tanaka" {w:fill_container h:58 ai:center stroke:$border}
+      ▭ "bar" {w:3 h:fill_container fill:$destructive}
+      ▸ "content" {w:fill_container h:fill_container gap:11 pad:[12,13] ai:center fill:#00000000}
+        ▸ "Avatar" {w:34 h:34 jc:center ai:center r:4 fill:#3a7bd5}
+          T "HT"  [JetBrains Mono/12.5px/700/#ffffff]
+        ▸ "NameCol" {vertical w:fill_container gap:3}
+          T "Hiro Tanaka"  [Inter/14.5px/600/$foreground]
+          ▸ "sub" {gap:7 ai:center}
+            T "@hiro"  [JetBrains Mono/12.5px/normal/$muted-foreground]
+            T "🇯🇵"  [Inter/13px/normal/#ffffff]
+            T "Japan"  [Inter/12px/normal/$muted-foreground]
+        T "🐱"  [Inter/19px/normal/#ffffff]
+  ▸ "MemberProfile" {vertical w:fill_container gap:18 pad:20 r:$radius fill:$card,[object Object] stroke:$border}
+    ▸ "PanelBar" {w:fill_container gap:8 pad:[0,0,14,0] ai:center stroke:$border}
+      T ">"  [JetBrains Mono/14px/700/$accent]
+      T "nova reyes · profile"  [JetBrains Mono/12.5px/500/$muted-foreground]
+      T "#01"  [JetBrains Mono/12px/600/$accent]
+    ▸ "ProfileHead" {w:fill_container gap:14 ai:center}
+      ▸ "Avatar" {w:56 h:56 jc:center ai:center r:8 fill:#ff008c}
+        T "NR"  [JetBrains Mono/20px/700/#ffffff]
+      ▸ "NameCol" {vertical w:fill_container gap:5}
+        T "Nova Reyes"  [Inter/20px/700/$foreground]
+        T "@nova"  [JetBrains Mono/13px/normal/$muted-foreground]
+        ▸ "TeamBadges" {gap:6 ai:center}
+          ▸ "Build" {gap:6 pad:[3,9] ai:center r:999 fill:#ff8c4222}
+            ◯ "dot" {w:6 h:6 fill:#ff8c42}
+            T "Build"  [JetBrains Mono/11px/700/#ff8c42]
+          ▸ "Art" {gap:6 pad:[3,9] ai:center r:999 fill:#ff008c22}
+            ◯ "dot" {w:6 h:6 fill:#ff008c}
+            T "Art"  [JetBrains Mono/11px/700/#ff008c]
+        ▸ "RankBadge" {gap:6 pad:[6,10] ai:center r:$radius fill:$muted stroke:$border}
+          T "🐱"  [Inter/13px/normal/#ffffff]
+          T "Member"  [Inter/12.5px/600/$foreground]
+    T "Nova runs a community darkroom in Cape Town and has been part of the last two camps as a volunteer. She's applying to join the build crew and wants to help run the analog photo station this year."  [Inter/14px/normal/$muted-foreground]
+    ▸ "Fields" {vertical w:fill_container gap:16}
+      ▸ "r1" {w:fill_container gap:16}
+        ▸ "Country" {vertical w:fill_container gap:5}
+          T "Country"  [Inter/11px/600/$muted-foreground]
+          T "🇿🇦  South Africa"  [Inter/14px/normal/$foreground]
+        ▸ "Email" {vertical w:fill_container gap:5}
+          T "Email"  [Inter/11px/600/$muted-foreground]
+          T "nova.reyes@gmail.com"  [JetBrains Mono/13.5px/normal/$foreground]
+      ▸ "r2" {w:fill_container gap:16}
+        ▸ "Dietary needs" {vertical w:fill_container gap:5}
+          T "Dietary needs"  [Inter/11px/600/$muted-foreground]
+          T "Not provided yet — we’ll show it here once Nova adds it."  [Inter/14px/normal/$muted-foreground]
+        ▸ "Emergency contact" {vertical w:fill_container gap:5}
+          T "Emergency contact"  [Inter/11px/600/$muted-foreground]
+          T "Listed ✓"  [Inter/14px/normal/$foreground]
+      ▸ "What do you bring to camp?" {vertical w:fill_container gap:5}
+        T "What do you bring to camp?"  [Inter/11px/600/$muted-foreground]
+        T "A full analog photo lab, two years of darkroom teaching, and a very large supply of instant film for the whole camp to use."  [Inter/14px/normal/$foreground]
+    ▸ "Divider" {w:fill_container h:1 fill:$border}
+    ▸ "Actions" {vertical w:fill_container gap:10}
+      ▸ "ApproveReject" {w:fill_container gap:10}
+        ⟶ <Button-Primary> "Approve" {w:fill_container}  overrides:["Approve"]
+        ⟶ <Button-Outline> "Reject" {w:fill_container}  overrides:["Reject"]
+      ▸ "AssignCaptain" {w:fill_container gap:8 pad:[13,0] jc:center ai:center r:$radius fill:#7518881f stroke:$secondary}
+        ⊙ shield ($secondary-foreground) [lucide]
+        T "Assign captain rank"  [Inter/14.5px/600/$secondary-foreground]
+  ▸ "cap-Assign captain · confirm" {gap:6 pad:[6,0,0,0] ai:center}
+    T "▸"  [JetBrains Mono/12px/700/$accent]
+    T "Assign captain · confirm"  [JetBrains Mono/12px/600/$muted-foreground]
+  ▸ "AssignCaptainModal" {vertical w:fill_container r:$radius fill:$popover stroke:$secondary}
+    ▸ "TitleBar" {w:fill_container gap:8 pad:[10,12] ai:center fill:#00000033 stroke:$border}
+      ⊙ shield ($secondary-foreground) [lucide]
+      T "Assign captain"  [JetBrains Mono/12.5px/600/$muted-foreground]
+      ▸ "WinControls" {gap:6 ai:center}
+        ▸ "x" {w:20 h:18 jc:center ai:center r:3 fill:#f83e5a22}
+          ⊙ x ($destructive) [lucide]
+    ▸ "Body" {vertical w:fill_container gap:14 pad:18}
+      T "Make Nova a captain?"  [Inter/18px/700/$foreground]
+      T "Captain is the highest rank in camp. They must accept the request in their own app before it takes effect — this is a two-sided agreement, so you can't assign it for them."  [Inter/14px/normal/$muted-foreground]
+      ▸ "Steps" {vertical w:fill_container gap:12 pad:14 r:$radius fill:$muted stroke:$border}
+        ▸ "You send the request" {w:fill_container gap:10 ai:center}
+          ▸ "n" {w:22 h:22 jc:center ai:center r:999 fill:$secondary}
+            T "1"  [JetBrains Mono/12px/700/$secondary-foreground]
+          T "You send the request"  [Inter/13.5px/normal/$foreground]
+        ▸ "They accept in their app" {w:fill_container gap:10 ai:center}
+          ▸ "n" {w:22 h:22 jc:center ai:center r:999 fill:$secondary}
+            T "2"  [JetBrains Mono/12px/700/$secondary-foreground]
+          T "They accept in their app"  [Inter/13.5px/normal/$foreground]
+      ▸ "Actions" {w:fill_container gap:10 pad:[4,0,0,0]}
+        ⟶ <Button-Outline> "Cancel" {w:fill_container}  overrides:["Cancel"]
+        ⟶ <Button-Primary> "Send request" {w:fill_container}  overrides:["Send request"]
+  ▸ "cap-Reject · confirm" {gap:6 pad:[6,0,0,0] ai:center}
+    T "▸"  [JetBrains Mono/12px/700/$accent]
+    T "Reject · confirm"  [JetBrains Mono/12px/600/$muted-foreground]
+  ▸ "RejectModal" {vertical w:fill_container r:$radius fill:$popover stroke:$destructive}
+    ▸ "TitleBar" {w:fill_container gap:8 pad:[10,12] ai:center fill:#f83e5a14 stroke:$border}
+      ⊙ triangle-alert ($destructive) [lucide]
+      T "Reject application"  [JetBrains Mono/12.5px/600/$muted-foreground]
+      ▸ "WinControls" {gap:6 ai:center}
+        ▸ "x" {w:20 h:18 jc:center ai:center r:3 fill:#f83e5a22}
+          ⊙ x ($destructive) [lucide]
+    ▸ "Body" {vertical w:fill_container gap:14 pad:18}
+      T "Reject Nova's application?"  [Inter/18px/700/$foreground]
+      T "They'll be told the application wasn't approved. This can't be undone here."  [Inter/14px/normal/$muted-foreground]
+      ▸ "Actions" {w:fill_container gap:10 pad:[4,0,0,0]}
+        ⟶ <Button-Outline> "Keep pending" {w:fill_container}  overrides:["Keep pending"]
+        ⟶ <Button-Primary> "Reject" {w:fill_container fill:$destructive}  overrides:["Reject"]
+  ▸ "cap-lock" {gap:6 pad:[6,0,0,0] ai:center}
+    T "▸"  [JetBrains Mono/12px/700/$accent]
+    T "Non-captain view (locked)"  [JetBrains Mono/12px/600/$muted-foreground]
+  ⟶ <CaptainLock> {w:fill_container}  overrides:["Captains only", "Camp management is visible to captains. Your rank doesn't include it."]

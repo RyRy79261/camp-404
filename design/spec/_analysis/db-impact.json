@@ -1,0 +1,70 @@
+{
+ "changes": [
+  {
+   "entity": "invite_codes",
+   "change": "NO schema change. The redesigned invite tool (S14) needs human-readable named slug codes (e.g. 'neon-toaster-mongoose'), multi-use with a uses-remaining count, an optional note, and a captain pre-approve flag \u2014 every one of these is ALREADY a column: code (free-text PK, any slug works), note (text), max_uses (int) + use_count (int, atomic consume via consumeInviteCode), requires_approval (bool). findInviteCodeByCode already powers the board's availability hint. The redesign is satisfied entirely at the app layer (slug-format validation '3-48 chars, lowercase letters/digits/hyphens' per the board's 'invalid' state, friendly-name generation, the shuffle button).",
+   "reason": "The brief flags invite codes 'becoming' human-readable multi-use named slugs with note + pre-approve as the headline redesign, but the live schema already models all of it. The only board feature with NO column is per-redemption rank stamping \u2014 and even that exists (assigned_rank). Nothing to migrate.",
+   "breaking": false,
+   "boardEvidence": "23-s14-invite-tool.txt: NoteField textarea, CaptainOptions block with a 'Pre-approve whoever signs up' checkbox + 'How many people can use this code' stepper (value 1), CodeInput shows 'neon-toaster-mongoose' in JetBrains Mono with a shuffle button, AvailHint 'is available.'/'already taken'/'3\u201348 chars, lowercase letters / digits / hyphens.' SuccessCard meta 'Can be used by 1 person.' + 'They'll be pre-approved \u2014 no captain sign-off needed.' 12-s03-invite-gate.txt placeholder 'CAMP-XXXX-XXXX' is the OLD format; the redesign moves to word-slugs but the column is format-agnostic."
+  },
+  {
+   "entity": "invite_codes.code",
+   "change": "OPTIONAL/app-layer only: the gate board (S03) still shows the legacy 'CAMP-XXXX-XXXX' placeholder while the tool board (S14) mints word-slugs. No column change \u2014 both are valid text PKs. Reconcile the gate placeholder copy to the slug format. Flag only because the two boards diverge on the displayed format, not the storage.",
+   "reason": "Detecting iteration drift is part of the pass: the invite-gate board predates the slug redesign. This is a copy reconciliation, not a data-model change.",
+   "breaking": false,
+   "boardEvidence": "12-s03-invite-gate.txt InputField overrides ['Invite code','CAMP-XXXX-XXXX'] and sample 'CAMP-7F3A-K92B' vs 23-s14-invite-tool.txt code 'neon-toaster-mongoose'."
+  },
+  {
+   "entity": "burner_profiles.responses (jsonb) / questionnaire catalogue",
+   "change": "NO schema change. All 11 OB-step boards (39\u201349) map 1:1 onto the EXISTING burner_profile catalogue in apps/web/lib/questionnaire.ts (version 2026.05.29-v8): page ids profile_photo, about_you, bio, burn_ideas, team_interests_intro (intro), team_interests, cooking_competency, hardware_competency, leadership_logistics, burn_history, burn_intent, dietary \u2014 and every question id (profile.image, birthday, phone, country, id.type, id.number, bio.statement, ideas.this_year, team_interest.*, competency.cooking/hardware, team_lead.interests, logistics.driving/onsite_before/onsite_after, history.camp404_years/afrikaburn_count/other_burns, intent.this_year, dietary.dislikes/allergies/notes) plus option text matches verbatim. Answers persist as a flat jsonb map on burner_profiles.responses. The onboarding question set does NOT diverge from the questionnaire catalogue.",
+   "reason": "The brief asks whether OB Step 01\u201311 match the questionnaire catalogue \u2014 they match exactly. The redesign is a per-step page LAYOUT change (one question-group per full-height frame) with no new question data, so the data substrate is untouched.",
+   "breaking": false,
+   "boardEvidence": "Boards 39\u201349 prompts/options match questionnaire.ts lines 60\u2013390 line-for-line, e.g. 45-ob-step-07 'Good cook \u2014 I can create recipes'/'I might burn recipes' == competency.cooking steps; 46-ob-step-08 team-lead checkboxes == team_lead.interests multi_select over TEAMS; 48-ob-step-10 six intent labels == intent.this_year scale steps; 49-ob-step-11 12 DIETARY_INGREDIENTS == dietary.dislikes/allergies."
+  },
+  {
+   "entity": "burner_profiles.responses \u2014 team_interest.* values",
+   "change": "NO schema change (jsonb stores a number regardless). NOTE the only OB-step divergence: OB Step 06 renders the team-interest control as a 7-segment 0\u20136 scale, but the catalogue defines team_interest.* as a slider min:0 max:5 step:1 (range 0\u20135). Reconcile the board to 0\u20135 OR widen the catalogue's max to 6 \u2014 a code/config change in questionnaire.ts, not a Postgres migration.",
+   "reason": "validateResponses enforces slider value in [min,max]=[0,5]; a stored 6 would be rejected. This is a catalogue-vs-board mismatch to resolve before build, but it is a code constant, not a schema column.",
+   "breaking": false,
+   "boardEvidence": "44-ob-step-06-team-interests.txt draws 'Seg 0'\u2026'Seg 6' (7 segments, selected Seg 5/Seg 3) vs questionnaire.ts:184-186 min:0 max:5 step:1."
+  },
+  {
+   "entity": "users.approval_status (enum approval_status)",
+   "change": "NO schema change for the data. The roster status pills 'Pending / Accepted / Rejected' map onto the existing approval_status enum [pending, approved, rejected] \u2014 'Accepted' is a display relabel of 'approved'. The roster filter chips (All/Pending/Captains) and stat tiles (MEMBERS/APPROVED/INCOMPLETE) are all derived counts over approval_status + rank, not new columns. No roster status FIELD is required.",
+   "reason": "The brief asks specifically about roster status fields. The board's three states are exactly the three enum members; 'Accepted' vs 'approved' is a label-only divergence handled in code. No migration.",
+   "breaking": false,
+   "boardEvidence": "26-s17-captain-mgmt.txt Status pills 'Pending' (#e0a800), 'Accepted' (#2fbf71), 'Rejected' (#f83e5a); chips 'All 42 / Pending 3 / Captains 4'. 38-s17-roster-mobile.txt stat tiles MEMBERS 42 / APPROVED 39 / INCOMPLETE 7 (INCOMPLETE = derived from pending required_actions, not a stored field)."
+  },
+  {
+   "entity": "captain_promotion_requests (NEW table) + promotion_request_status (NEW enum)",
+   "change": "ADD a new table to back the double-opt-in 'Assign captain rank' flow shown on all three S17 roster boards. Minimum shape: id uuid PK, target_user_id uuid FK\u2192users, requested_by_user_id uuid FK\u2192users, status enum ['sent','accepted','declined','cancelled'] default 'sent', created_at, decided_at. The existing setUserRank is a one-sided direct write and CANNOT model a two-sided handshake (captain sends \u2192 target accepts in their OWN app before rank flips).",
+   "reason": "This is the single genuinely new persisted concept in the redesign with NO backing table. The contract has no captain-promotion flow at all. Rank can only flip to 'captain' once the target accepts, so the pending request must be durable state, not a transient action.",
+   "breaking": false,
+   "boardEvidence": "26-s17-captain-mgmt.txt DialogScrim 'Make Nova Reyes a captain?' with a two-step tracker ('You send the request' Done / 'They accept in their app' Pending) and copy 'two-sided agreement, so you can't assign it for them'. Same flow on 37-terminal-console and 38-mobile roster iterations."
+  },
+  {
+   "entity": "required_actions / questionnaire_activations",
+   "change": "LIKELY NO schema change. The S27 'required queue' (multiple named questionnaires: Safety, Dietary, Agreements, one shown 'locked' at op:0.55, '1 more required before you're unlocked') is already expressible via the generic required_actions engine (one pending+blocking row per obligation, getPendingRequiredActions returns them oldest-first as the gate order) fed by questionnaire_activations. The member-facing 'queue list' and sequential 'Start next questionnaire' are a NEW read/UX over existing rows. The only soft gap is a 'locked / not-yet-available' state for a queue item \u2014 required_action_status has no 'locked' member; today an item is simply pending or absent. If sequential UNLOCK (item N hidden until N-1 done) is required, that ordering/lock is best modelled in app logic, not a new enum value.",
+   "reason": "The brief flags whether roster/queue introduces status fields. The queue is satisfied by existing required_actions; only the 'locked' visual MIGHT imply a new status, but it is more naturally a derived/app concern than a column. Flagging as a watch-item, not a required migration.",
+   "breaking": false,
+   "boardEvidence": "36-s27-questionnaire-complete-queue.txt 'Required Queue List' three Card rows (Safety, Dietary, Agreements) with the third at op:0.55 (locked), 'Variant More Required' shows '1 more required before you're unlocked' + 'Start next questionnaire'."
+  },
+  {
+   "entity": "users (handle / @username)",
+   "change": "OPTIONAL, app-layer or minor add. The roster boards render an '@handle' per member (@novareyes, @nova). The existing telegram_handle column can serve this, OR it is a derived slug of display_name. Only add a dedicated users.handle text column if product wants a first-class, editable, unique username distinct from the Telegram handle. Not depicted as editable anywhere (no profile-edit handle field), so most likely reuse telegram_handle / derive \u2014 no migration.",
+   "reason": "Handle appears only as read-only roster decoration with no edit surface, so it does not clearly demand a new column. Flagged so the choice (reuse telegram_handle vs new field) is made deliberately.",
+   "breaking": false,
+   "boardEvidence": "26-s17-captain-mgmt.txt Handle column '@novareyes'/'@juleso' etc.; 38-s17-roster-mobile.txt '@nova'/'@jules'. No handle field on 18-s09-profile-view.txt or the profile-edit board."
+  },
+  {
+   "entity": "invite_codes.expires_at (7-day default)",
+   "change": "OPTIONAL, app-layer. The primitive kit surfaces 'Invites expire after 7 days'. The expires_at column already exists; a 7-day default is set at creation time in createInviteCode, not a schema default. No migration; just decide whether the invite tool stamps expires_at = now + 7d on mint.",
+   "reason": "A business rule surfaced on a board (S24) that the schema already accommodates via an existing nullable column. Listed for completeness; not a structural change.",
+   "breaking": false,
+   "boardEvidence": "33-s24-primitive-kit alert copy 'Invites expire after 7 days' (per board census). invite_codes.expires_at column exists (schema.ts:322)."
+  }
+ ],
+ "nukeRecommended": false,
+ "nukeRationale": "A clean DB reset is NOT warranted \u2014 the delta is small and almost entirely additive. The two headline redesign intents the brief worried about (invite codes \u2192 human-readable, multi-use, named slugs with note + pre-approve; the OB Step 01\u201311 onboarding question set) require ZERO schema changes: the live invite_codes table already has code (free-slug PK), note, max_uses, use_count (atomic consume), requires_approval, and assigned_rank; and the 11 onboarding step boards map 1:1 onto the existing burner_profile questionnaire catalogue (v8) persisting to burner_profiles.responses jsonb. Roster status pills are just the existing approval_status enum with one label rename (approved\u2192'Accepted'). The ONLY genuinely new persisted concept is one additive table+enum for the captain-promotion double-opt-in (captain_promotion_requests). Everything else is either already-present columns, derived counts, app-layer validation/copy, or new read-models over existing rows. One additive table plus a couple of optional/deferred columns is a trivial forward migration with no destructive column drops or enum-member removals \u2014 there is nothing to gain from nuking, and a reset would needlessly discard god accounts, lineage (users.invite_code), and audit history that the schema is explicitly designed to preserve across the yearly reset.",
+ "notes": "Headline: the redesign is far less schema-disruptive than the brief implies. Confirmed against live code, not just docs: (1) packages/db/src/invite-codes.ts already implements multi-use named-slug invites with note + requires_approval + atomic consume + an availability-check (findInviteCodeByCode) that exactly powers the board's available/taken hint \u2014 the invite redesign is 100% app-layer. (2) apps/web/lib/questionnaire.ts (version 2026.05.29-v8) already defines every page/question/option the OB Step boards show; the boards are a per-step LAYOUT redesign of an unchanged question set. The 11-vs-12 step-counter difference is a display artifact (the intro page isn't counted), NOT a data change. (3) The single real schema gap is the captain-promotion double-opt-in (S17 roster boards) which needs a new captain_promotion_requests table + status enum because setUserRank is a one-sided write that can't model a two-sided handshake. Watch-items (not migrations): team_interest scale 0\u20136 on the board vs 0\u20135 in the catalogue (fix one constant), an S27 'locked' queue-item state (better as app logic over required_actions than a new enum member), the roster @handle (reuse telegram_handle or derive), and a 7-day invite expiry default (set at mint via existing expires_at). Stale schema note worth fixing while in there: schema.ts:454 still claims a team-lead 'should carry rank=team_lead', but team_lead is not a rank enum member (derived only) \u2014 the roster boards correctly show 'team lead' as a derived pill, reinforcing that the stored rank stays {captain, member}. PII flag: roster boards show member email in plaintext in the detail panel (26-s17-captain-mgmt.txt 'nova.reyes@gmail.com'); email is not a screened/encrypted field, so this is a presentation/privacy decision rather than a schema one, but worth raising with the data owner."
+}

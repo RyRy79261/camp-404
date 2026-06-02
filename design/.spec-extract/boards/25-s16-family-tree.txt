@@ -1,0 +1,139 @@
+# S16 Family tree
+# kind: BOARD  |  size: 720x1000  |  pos: (7578,5010)
+# reusable components used: Button-Outline
+========================================================================
+▸ "S16 Family tree" {vertical w:720 h:1000 fill:$background}
+  ▸ "GhostBack" {gap:4 pad:[14,12] ai:center}
+    ⊙ chevron-left ($muted-foreground) [lucide]
+    T "Tools"  [Inter/15px/500/$muted-foreground]
+  ▸ "Content" {vertical w:fill_container gap:18 pad:[4,20,28,20]}
+    ▸ "Intro" {vertical w:fill_container gap:6}
+      T "Family tree"  [Inter/26px/700/$foreground]
+      T "Who brought who onto Camp 404. Roots are accounts that pre-date the invite system; every other branch is one invite-code redemption."  [Inter/14px/normal/$muted-foreground]
+    ▸ "Search" {w:fill_container h:46 gap:10 pad:[0,14] ai:center r:$radius fill:$muted stroke:$border}
+      ⊙ search ($muted-foreground) [lucide]
+      T "Search by name or invite code…"  [Inter/14px/normal/$muted-foreground]
+    ▸ "Controls" {w:fill_container gap:10}
+      ⟶ <Button-Outline> "ExpandAll" {pad:[9,16]}  overrides:["Expand all"]
+      ⟶ <Button-Outline> "Collapse" {pad:[9,16]}  overrides:["Collapse"]
+    ▸ "Tree" {vertical w:fill_container gap:8 pad:[6,0,0,0]}
+      ▸ "Marlo Vex" {w:fill_container ai:center}
+        ▸ "Toggle" {w:22 h:44 jc:center ai:center}
+          ⊙ chevron-down ($muted-foreground) [lucide]
+        ▸ "Card" {w:fill_container gap:10 pad:[8,12] ai:center r:$radius fill:$card stroke:$border}
+          ▸ "Avatar" {w:30 h:30 jc:center ai:center r:999 fill:$muted}
+            ⊙ user ($muted-foreground) [lucide]
+          ▸ "NameRow" {w:fill_container gap:8 ai:center}
+            T "Marlo Vex"  [Inter/14px/600/$foreground]
+            ▸ "CaptainPill" {pad:[3,8] r:999 fill:#00dcff26}
+              T "Captain"  [Inter/11px/600/$accent]
+          T "root"  [JetBrains Mono/12px/normal/$muted-foreground]
+          ▸ "CountPill" {pad:[3,9] r:999 fill:$muted}
+            T "5 descendants"  [Inter/11px/500/$muted-foreground]
+      ▸ "Sara Quinn" {w:fill_container ai:center}
+        ▸ "Guides" {w:20 h:1}
+          ▸ "seg" {w:20 h:44 jc:center}
+            ▸ "line" {w:1 h:44 fill:$border}
+        ▸ "Toggle" {w:22 h:44 jc:center ai:center}
+          ⊙ chevron-down ($muted-foreground) [lucide]
+        ▸ "Card" {w:fill_container gap:10 pad:[8,12] ai:center r:$radius fill:$card stroke:$border}
+          ▸ "Avatar" {w:30 h:30 jc:center ai:center r:999 fill:$muted}
+            ⊙ user ($muted-foreground) [lucide]
+          ▸ "NameRow" {w:fill_container gap:8 ai:center}
+            T "Sara Quinn"  [Inter/14px/600/$foreground]
+          T "via neon-toaster-mongoose"  [JetBrains Mono/12px/normal/$muted-foreground]
+          ▸ "CountPill" {pad:[3,9] r:999 fill:$muted}
+            T "2 descendants"  [Inter/11px/500/$muted-foreground]
+      ▸ "Dust Pham" {w:fill_container ai:center}
+        ▸ "Guides" {w:40 h:1}
+          ▸ "seg" {w:20 h:44 jc:center}
+            ▸ "line" {w:1 h:44 fill:$border}
+          ▸ "seg" {w:20 h:44 jc:center}
+            ▸ "line" {w:1 h:44 fill:$border}
+        ▸ "Toggle" {w:22 h:44 jc:center ai:center}
+          ⊙ chevron-down ($muted-foreground) [lucide]
+        ▸ "Card" {w:fill_container gap:10 pad:[8,12] ai:center r:$radius fill:$card stroke:$border}
+          ▸ "Avatar" {w:30 h:30 jc:center ai:center r:999 fill:$muted}
+            ⊙ user ($muted-foreground) [lucide]
+          ▸ "NameRow" {w:fill_container gap:8 ai:center}
+            T "Dust Pham"  [Inter/14px/600/$foreground]
+          T "via velvet-anvil-otter"  [JetBrains Mono/12px/normal/$muted-foreground]
+          ▸ "CountPill" {pad:[3,9] r:999 fill:$muted}
+            T "1 descendant"  [Inter/11px/500/$muted-foreground]
+      ▸ "(no name)" {w:fill_container ai:center}
+        ▸ "Guides" {w:60 h:1}
+          ▸ "seg" {w:20 h:44 jc:center}
+            ▸ "line" {w:1 h:44 fill:$border}   × 3
+        ▸ "Toggle" {w:22 h:44 jc:center ai:center}
+          ◯ "dot" {w:5 h:5 fill:$muted-foreground}
+        ▸ "Card" {w:fill_container gap:10 pad:[8,12] ai:center r:$radius fill:$card stroke:$border}
+          ▸ "Avatar" {w:30 h:30 jc:center ai:center r:999 fill:$muted}
+            ⊙ user ($muted-foreground) [lucide]
+          ▸ "NameRow" {w:fill_container gap:8 ai:center}
+            T "(no name)"  [Inter/14px/600/$foreground]
+          T "via brass-pickle-lynx"  [JetBrains Mono/12px/normal/$muted-foreground]
+      ▸ "Iris Cole" {w:fill_container ai:center}
+        ▸ "Guides" {w:40 h:1}
+          ▸ "seg" {w:20 h:44 jc:center}
+            ▸ "line" {w:1 h:44 fill:$border}
+          ▸ "seg" {w:20 h:44 jc:center}
+            ▸ "line" {w:1 h:44 fill:$border}
+        ▸ "Toggle" {w:22 h:44 jc:center ai:center}
+          ◯ "dot" {w:5 h:5 fill:$muted-foreground}
+        ▸ "Card" {w:fill_container gap:10 pad:[8,12] ai:center r:$radius fill:$card stroke:$border}
+          ▸ "Avatar" {w:30 h:30 jc:center ai:center r:999 fill:$muted}
+            ⊙ user ($muted-foreground) [lucide]
+          ▸ "NameRow" {w:fill_container gap:8 ai:center}
+            T "Iris Cole"  [Inter/14px/600/$foreground]
+          T "via glass-hammer-newt"  [JetBrains Mono/12px/normal/$muted-foreground]
+      ▸ "Theo Mars" {w:fill_container ai:center}
+        ▸ "Guides" {w:20 h:1}
+          ▸ "seg" {w:20 h:44 jc:center}
+            ▸ "line" {w:1 h:44 fill:$border}
+        ▸ "Toggle" {w:22 h:44 jc:center ai:center}
+          ◯ "dot" {w:5 h:5 fill:$muted-foreground}
+        ▸ "Card" {w:fill_container gap:10 pad:[8,12] ai:center r:$radius fill:$card stroke:$primary}
+          ▸ "Avatar" {w:30 h:30 jc:center ai:center r:999 fill:$muted}
+            ⊙ user ($muted-foreground) [lucide]
+          ▸ "NameRow" {w:fill_container gap:8 ai:center}
+            T "Theo Mars"  [Inter/14px/600/$foreground]
+            ▸ "YouPill" {pad:[3,8] r:999 fill:$primary}
+              T "You"  [Inter/11px/600/$primary-foreground]
+          T "via copper-llama-fern"  [JetBrains Mono/12px/normal/$muted-foreground]
+      ▸ "June Park" {w:fill_container ai:center}
+        ▸ "Guides" {w:20 h:1}
+          ▸ "seg" {w:20 h:44 jc:center}
+            ▸ "line" {w:1 h:44 fill:$border}
+        ▸ "Toggle" {w:22 h:44 jc:center ai:center}
+          ⊙ chevron-right ($muted-foreground) [lucide]
+        ▸ "Card" {w:fill_container gap:10 pad:[8,12] ai:center r:$radius fill:$card stroke:$border}
+          ▸ "Avatar" {w:30 h:30 jc:center ai:center r:999 fill:$muted}
+            ⊙ user ($muted-foreground) [lucide]
+          ▸ "NameRow" {w:fill_container gap:8 ai:center}
+            T "June Park"  [Inter/14px/600/$foreground]
+            ▸ "CaptainPill" {pad:[3,8] r:999 fill:#00dcff26}
+              T "Captain"  [Inter/11px/600/$accent]
+          T "via amber-socket-vole"  [JetBrains Mono/12px/normal/$muted-foreground]
+          ▸ "CountPill" {pad:[3,9] r:999 fill:$muted}
+            T "3 descendants"  [Inter/11px/500/$muted-foreground]
+    ▸ "MatchVariant" {vertical w:fill_container gap:6 pad:[4,0,0,0]}
+      T "search match-highlight"  [Inter/11px/500/$muted-foreground]
+      ▸ "row" {w:fill_container ai:center}
+        ▸ "Toggle" {w:22 h:44 jc:center ai:center}
+          ◯ "dot" {w:5 h:5 fill:$muted-foreground}
+        ▸ "Card" {w:fill_container gap:10 pad:[8,12] ai:center r:$radius fill:$card stroke:$accent}
+          ▸ "Avatar" {w:30 h:30 jc:center ai:center r:999 fill:$muted}
+            ⊙ user ($muted-foreground) [lucide]
+          ▸ "NameRow" {w:fill_container gap:8 ai:center}
+            T "Sara Quinn"  [Inter/14px/600/$foreground]
+          T "via neon-toaster-mongoose"  [JetBrains Mono/12px/normal/$muted-foreground]
+    ▸ "EmptyStates" {vertical w:fill_container gap:14 pad:[18,0,0,0]}
+      ▸ "Divider" {w:fill_container h:1 fill:$border}
+      ▸ "empty — no accounts" {vertical w:fill_container gap:6}
+        T "empty — no accounts"  [Inter/11px/500/$muted-foreground]
+        ▸ "Box" {w:fill_container pad:[24,16] jc:center ai:center r:$radius fill:$muted}
+          T "No accounts yet."  [Inter/14px/normal/$muted-foreground]
+      ▸ "empty — no matches" {vertical w:fill_container gap:6}
+        T "empty — no matches"  [Inter/11px/500/$muted-foreground]
+        ▸ "Box" {w:fill_container pad:[24,16] jc:center ai:center r:$radius fill:$muted}
+          T "No matches."  [Inter/14px/normal/$muted-foreground]

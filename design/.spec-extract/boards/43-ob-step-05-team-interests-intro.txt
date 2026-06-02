@@ -1,0 +1,20 @@
+# OB Step 05 Team interests intro
+# kind: BOARD  |  size: 600x800  |  pos: (6918,11500)
+# reusable components used: Button-Outline, Button-Primary
+========================================================================
+▸ "OB Step 05 Team interests intro" {vertical w:600 h:800 gap:22 pad:[22,18,30,18] fill:$background}
+  ▸ "Header" {vertical w:fill_container gap:8}
+    T "Build your burner profile"  [Inter/24px/700/$foreground]
+    T "A few questions so the camp knows who’s arriving in the dust. Takes about two minutes."  [Inter/14px/normal/$muted-foreground]
+  ▸ "Progress" {vertical w:fill_container gap:8}
+    T "Step 5 of 11"  [Inter/12px/600/$muted-foreground]
+    ▸ "Track" {w:fill_container h:6 r:999 fill:$muted}
+      ▸ "Fill" {w:245 h:6 r:999 fill:$primary}
+  ▸ "QuestionBlock" {vertical w:fill_container h:fill_container gap:18 jc:center ai:center}
+    ▸ "IconBadge" {w:72 h:72 jc:center ai:center r:999 fill:#ff008c14}
+      ⊙ sparkles ($primary) [lucide]
+    T "Indicate your interest in whichever teams you want."  [Inter/24px/700/$foreground]
+    T "There are no wrong answers — tell us where you’d like to pitch in and we’ll match you up. Rate as many teams as you like on the next screen."  [Inter/15px/normal/$muted-foreground]
+  ▸ "Footer" {w:fill_container jc:space_between ai:center}
+    ⟶ <Button-Outline> "Back"  overrides:["Back"]
+    ⟶ <Button-Primary> "Next"  overrides:["Next"]

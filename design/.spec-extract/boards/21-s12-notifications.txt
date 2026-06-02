@@ -1,0 +1,45 @@
+# S12 Notifications
+# kind: BOARD  |  size: 430x-  |  pos: (9938,2849)
+# reusable components used: DetailHeader
+========================================================================
+▸ "S12 Notifications" {vertical w:430 fill:$background}
+  ⟶ <DetailHeader> "Back to Home" {w:fill_container}  overrides:["Home"]
+  ▸ "Header Block" {vertical w:fill_container gap:6 pad:[12,16,8,16]}
+    T "Notifications"  [Inter/22px/700/$foreground]
+    T "Everything that's been sent your way."  [Inter/13px/normal/$muted-foreground]
+  ▸ "List" {vertical w:fill_container gap:12 pad:[8,16,20,16]}
+    ▸ "Row 1 Acknowledge" {w:fill_container gap:12 pad:14 r:$radius fill:#ff008c14 stroke:$primary}
+      ▸ "Icon Circle" {w:40 h:40 jc:center ai:center r:999 fill:$muted}
+        ⊙ megaphone ($foreground) [lucide]
+      ▸ "Text Column" {vertical w:fill_container gap:4}
+        ▸ "Top Row" {w:fill_container gap:8 jc:space_between ai:center}
+          ▸ "Left Sub" {gap:8 ai:center}
+            T "Camp dues are due Friday"  [Inter/14px/600/$foreground]
+            ▸ "New Pill" {pad:[2,8] ai:center r:999 fill:$primary}
+              T "New"  [Inter/10px/700/$primary-foreground]
+          T "Just now"  [Inter/12px/normal/$muted-foreground]
+        T "Reminder: please submit your camp dues before the burn. Tap to acknowledge."  [Inter/13px/normal/$muted-foreground]
+        T "From Captain Mreen · awaiting acknowledgement"  [Inter/12px/normal/$muted-foreground]
+    ▸ "Row 2 Popup" {w:fill_container gap:12 pad:14 r:$radius fill:$card stroke:$border}
+      ▸ "Icon Circle" {w:40 h:40 jc:center ai:center r:999 fill:$muted}
+        ⊙ message-square ($foreground) [lucide]
+      ▸ "Text Column" {vertical w:fill_container gap:4}
+        ▸ "Top Row" {w:fill_container gap:8 jc:space_between ai:center}
+          ▸ "Left Sub" {gap:8 ai:center}
+            T "Welcome to the playa"  [Inter/14px/600/$foreground]
+          T "2d ago"  [Inter/12px/normal/$muted-foreground]
+        T "Your popup message from camp leadership. Glad you made it."  [Inter/13px/normal/$muted-foreground]
+        T "From Captain Mreen · acknowledged"  [Inter/12px/normal/$muted-foreground]
+    ▸ "Row 3 Feed" {w:fill_container gap:12 pad:14 r:$radius fill:$card stroke:$border}
+      ▸ "Icon Circle" {w:40 h:40 jc:center ai:center r:999 fill:$muted}
+        ⊙ bell ($foreground) [lucide]
+      ▸ "Text Column" {vertical w:fill_container gap:4}
+        ▸ "Top Row" {w:fill_container gap:8 jc:space_between ai:center}
+          ▸ "Left Sub" {gap:8 ai:center}
+            T "Schedule posted"  [Inter/14px/600/$foreground]
+          T "3d ago"  [Inter/12px/normal/$muted-foreground]
+        T "The camp build schedule for the week is now available in the feed."  [Inter/13px/normal/$muted-foreground]
+  ▸ "Empty Variant" {vertical w:fill_container gap:12 pad:[40,24] ai:center}
+    ▸ "Empty Circle" {w:64 h:64 jc:center ai:center r:999 fill:$muted}
+      ⊙ bell-off ($muted-foreground) [lucide]
+    T "No notifications yet."  [Inter/15px/600/$foreground]

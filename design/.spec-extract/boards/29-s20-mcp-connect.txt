@@ -1,0 +1,40 @@
+# S20 MCP connect
+# kind: BOARD  |  size: 430x675  |  pos: (5218,6540)
+# reusable components used: Button-Outline, Button-Primary
+========================================================================
+▸ "S20 MCP connect" {vertical w:430 h:675 fill:$background}
+  ▸ "Content" {vertical w:fill_container gap:24 pad:20}
+    T "Connect Claude"  [Inter/28px/700/$foreground]
+    ▸ "Bridge Card" {vertical w:fill_container gap:16 pad:20 r:$radius fill:$card stroke:$border}
+      T "You'll see exactly what you're approving before anything connects."  [Inter/14px/normal/$card-foreground]
+      ▸ "Google Button" {w:fill_container gap:10 pad:[13,22] jc:center ai:center r:$radius fill:#00000000 stroke:$border}
+        ▸ "G Badge" {w:18 h:18 jc:center ai:center}
+          T "G"  [Inter/15px/700/#4285F4]
+        T "Sign in with Google"  [Inter/15px/600/$foreground]
+      ▸ "Error Region" {w:fill_container gap:8 pad:[10,12] ai:center r:$radius fill:#f83e5a1f}
+        ⊙ triangle-alert ($destructive) [lucide]
+        T "Something went wrong. Please try again."  [Inter/13px/normal/$destructive]
+      ▸ "Footnote" {gap:5 ai:center}
+        T "New to Camp 404?"  [Inter/13px/normal/$muted-foreground]
+        T "Sign in"  [Inter/13px/600/$accent]
+    ▸ "Consent Card" {vertical w:fill_container gap:16 pad:20 r:$radius fill:$card stroke:$border}
+      ▸ "Identity Row" {w:fill_container gap:10 ai:center}
+        ▸ "Avatar" {w:32 h:32 jc:center ai:center r:16 fill:#ff008c2e}
+          ⊙ user ($primary) [lucide]
+        T "Signed in as Dust Rabbit"  [Inter/16px/700/$card-foreground]
+      ▸ "Requesting Row" {w:fill_container gap:8 jc:space_between ai:center}
+        T "Requesting access"  [Inter/13px/normal/$muted-foreground]
+        T "Claude"  [Inter/14px/600/$card-foreground]
+      ▸ "Scope Row" {w:fill_container gap:12 pad:12 ai:center r:$radius fill:$muted}
+        ▸ "Scope Icon Wrap" {w:34 h:34 jc:center ai:center r:8 fill:#00dcff26}
+          ⊙ shield ($accent) [lucide]
+        ▸ "Scope Text" {vertical w:fill_container gap:2}
+          T "mcp:user"  [JetBrains Mono/13px/600/$card-foreground]
+          T "Read your basic profile"  [Inter/12px/normal/$muted-foreground]
+      ▸ "Footer Buttons" {w:fill_container gap:12}
+        ⟶ <Button-Outline> "Deny Button" {w:fill_container}  overrides:["Deny"]
+        ⟶ <Button-Primary> "Approve Button" {w:fill_container}  overrides:["Approve"]
+    ▸ "403 Gate Card" {w:fill_container gap:14 pad:16 ai:center r:$radius fill:$muted stroke:$border}
+      ▸ "Lock Wrap" {w:40 h:40 jc:center ai:center r:20 fill:$card}
+        ⊙ lock ($muted-foreground) [lucide]
+      T "A captain still needs to approve your account before you can connect Claude."  [Inter/13px/normal/$card-foreground]

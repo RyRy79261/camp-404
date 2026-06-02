@@ -1,0 +1,66 @@
+# S03 Invite gate
+# kind: BOARD  |  size: 430x-  |  pos: (6398,0)
+# reusable components used: InputField, Button-Primary
+========================================================================
+▸ "S03 Invite gate" {vertical w:430 gap:20 pad:28 ai:center fill:$muted}
+  ▸ "INVITE GATE / EMPTY block" {vertical w:fill_container gap:8}
+    T "INVITE GATE / EMPTY"  [JetBrains Mono/9px/500/$muted-foreground]
+    ▸ "card" {vertical w:fill_container gap:16 pad:24 r:$radius fill:$card stroke:$border}
+      ▸ "Header" {vertical w:fill_container gap:6}
+        T "One more thing"  [Inter/18px/700/$card-foreground]
+        T "You're signed in as you@example.com. Camp 404 is invite-only — drop your code below to come aboard."  [Inter/13px/normal/$muted-foreground]
+      ⟶ <InputField> "Invite field" {w:fill_container}  overrides:["Invite code", "CAMP-XXXX-XXXX"]
+      ⟶ <Button-Primary> "Enter btn" {w:fill_container}  overrides:["Enter camp"]
+      ▸ "Signout row" {w:fill_container jc:center}
+        T "Sign out"  [Inter/13px/500/$accent]
+  ▸ "INVITE GATE / SUBMITTING block" {vertical w:fill_container gap:8}
+    T "INVITE GATE / SUBMITTING"  [JetBrains Mono/9px/500/$muted-foreground]
+    ▸ "card" {vertical w:fill_container gap:16 pad:24 r:$radius fill:$card stroke:$border}
+      ▸ "Header" {vertical w:fill_container gap:6}
+        T "One more thing"  [Inter/18px/700/$card-foreground]
+        T "You're signed in as you@example.com. Camp 404 is invite-only — drop your code below to come aboard."  [Inter/13px/normal/$muted-foreground]
+      ⟶ <InputField> "Invite field" {w:fill_container}  overrides:["Invite code", "CAMP-7F3A-K92B"]
+      ⟶ <Button-Primary> "Enter btn" {w:fill_container op:0.6}  overrides:["Checking…"]
+      ▸ "Signout row" {w:fill_container jc:center}
+        T "Sign out"  [Inter/13px/500/$accent]
+  ▸ "INVITE GATE / ERROR — EMPTY block" {vertical w:fill_container gap:8}
+    T "INVITE GATE / ERROR — EMPTY"  [JetBrains Mono/9px/500/$muted-foreground]
+    ▸ "card" {vertical w:fill_container gap:16 pad:24 r:$radius fill:$card stroke:$border}
+      ▸ "Header" {vertical w:fill_container gap:6}
+        T "One more thing"  [Inter/18px/700/$card-foreground]
+        T "You're signed in as you@example.com. Camp 404 is invite-only — drop your code below to come aboard."  [Inter/13px/normal/$muted-foreground]
+      ⟶ <InputField> "Invite field" {w:fill_container}  overrides:["Invite code", "CAMP-XXXX-XXXX"]
+      ▸ "Alert" {w:fill_container gap:8 pad:[10,12] ai:center r:$radius fill:#f83e5a1f stroke:$destructive}
+        ⊙ triangle-alert ($destructive) [lucide]
+        T "Please enter an invite code."  [Inter/13px/500/$destructive]
+      ⟶ <Button-Primary> "Enter btn" {w:fill_container}  overrides:["Enter camp"]
+      ▸ "Signout row" {w:fill_container jc:center}
+        T "Sign out"  [Inter/13px/500/$accent]
+  ▸ "INVITE GATE / ERROR — INVALID block" {vertical w:fill_container gap:8}
+    T "INVITE GATE / ERROR — INVALID"  [JetBrains Mono/9px/500/$muted-foreground]
+    ▸ "card" {vertical w:fill_container gap:16 pad:24 r:$radius fill:$card stroke:$border}
+      ▸ "Header" {vertical w:fill_container gap:6}
+        T "One more thing"  [Inter/18px/700/$card-foreground]
+        T "You're signed in as you@example.com. Camp 404 is invite-only — drop your code below to come aboard."  [Inter/13px/normal/$muted-foreground]
+      ⟶ <InputField> "Invite field" {w:fill_container}  overrides:["Invite code", "CAMP-0000-0000"]
+      ▸ "Alert" {w:fill_container gap:8 pad:[10,12] ai:center r:$radius fill:#f83e5a1f stroke:$destructive}
+        ⊙ triangle-alert ($destructive) [lucide]
+        T "That invite code isn't valid."  [Inter/13px/500/$destructive]
+      ⟶ <Button-Primary> "Enter btn" {w:fill_container}  overrides:["Enter camp"]
+      ▸ "Signout row" {w:fill_container jc:center}
+        T "Sign out"  [Inter/13px/500/$accent]
+  ▸ "INVITE GATE / ERROR — RATE LIMIT block" {vertical w:fill_container gap:8}
+    T "INVITE GATE / ERROR — RATE LIMIT"  [JetBrains Mono/9px/500/$muted-foreground]
+    ▸ "card" {vertical w:fill_container gap:16 pad:24 r:$radius fill:$card stroke:$border}
+      ▸ "Header" {vertical w:fill_container gap:6}
+        T "One more thing"  [Inter/18px/700/$card-foreground]
+        T "You're signed in as you@example.com. Camp 404 is invite-only — drop your code below to come aboard."  [Inter/13px/normal/$muted-foreground]
+      ⟶ <InputField> "Invite field" {w:fill_container}  overrides:["Invite code", "CAMP-7F3A-K92B"]
+      ▸ "Alert" {w:fill_container gap:8 pad:[10,12] ai:center r:$radius fill:#f83e5a1f stroke:$destructive}
+        ⊙ triangle-alert ($destructive) [lucide]
+        T "Too many attempts — wait a few minutes and try again."  [Inter/13px/500/$destructive]
+      ⟶ <Button-Primary> "Enter btn" {w:fill_container}  overrides:["Enter camp"]
+      ▸ "Signout row" {w:fill_container jc:center}
+        T "Sign out"  [Inter/13px/500/$accent]
+  ▸ "Footer" {w:fill_container pad:[4,0] jc:center}
+    T "Camp 404 is invite-only."  [JetBrains Mono/11px/normal/$muted-foreground]

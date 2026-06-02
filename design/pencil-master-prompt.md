@@ -4,6 +4,7 @@ This single prompt asks Pencil to design **every screen of the Camp 404 app** as
 
 ## How to use this prompt
 
+- **Build the design system FIRST — before any screen.** Step 1 is the foundation, and every screen is designed *from* it: (a) wire the **Tailwind theme tokens** below (the single dark `@theme`); (b) establish the **typography** system — a neutral geometric **sans** for body + headings and a **monospace** (ui-monospace / JetBrains-class) for the terminal/command motif (landing hero, code-like labels, invite codes, cursors, timers), on a consistent type scale; (c) build the **shadcn/ui ("new-york" style) + Tailwind component primitives** of surface #24 (buttons, inputs, labels, checkboxes, selects, sliders, cards, dialogs, popovers, command palettes, comboboxes, avatars). Every screen that follows MUST be composed from these shared primitives and tokens — no bespoke one-off controls. Only once the design system exists do you design the screens, in the order given.
 - Design each `###` surface below as its **own frame/screen** (or component sheet, for the primitive kit), in the order given.
 - **Preserve every listed action, state, option, enum, and validation rule** for each surface — these are the load-bearing functional contract, not suggestions. Re-style freely; never drop a capability. If a surface lists five states, design five states; if it lists three error messages, show three; if a control has an exact label, use that label.
 - This is **mobile-first, single-column (~430px), DARK only**. Do not invent phone chrome (no iOS status bar, no "9:41" clock, no battery/signal, no bezel, no OS tab bar).
@@ -11,7 +12,7 @@ This single prompt asks Pencil to design **every screen of the Camp 404 app** as
 
 ## Global rules (apply to EVERY screen)
 
-- **Theme & form factor:** mobile-first, single column (~430px), **DARK only**. No invented phone chrome.
+- **Theme & form factor:** mobile-first, single column (~430px), **DARK only**. No invented phone chrome. The one exception is the home dashboard: its action-tile grid is **2 columns on mobile and expands to multiple columns on desktop** — every other surface stays single-column.
 - **Identity:** Camp 404 is a desert-burn camp with a hacker/terminal soul. Base is a **midnight-violet** field; **magenta** is the primary action colour; **electric-blue/cyan** is the accent. The brand motif is **terminal + glitch**: CRT scanlines, RGB-split "chromatic aberration", a sweeping scanbeam, blinking monospace cursors, and the signature glitchy **"404 — camp not found"** identity. It should feel like a dusty neon command console at night — playful, a little broken-on-purpose, never corporate. Lean on the motif for the landing + accents, not every screen.
 - **DROP-NO-FUNCTIONALITY contract — two halves:**
   - *You may freely change:* layout & spacing, colour application within the token set, type scale & pairing, icon choices, motion & transitions, the navigation metaphor, and input styling — **so long as the input *kind* survives** (a slider stays a slider, a toggle stays a segmented control, a combobox stays a searchable select).
@@ -71,7 +72,7 @@ There are **NO offline/sync states** and **NO budget/over-target states** anywhe
 | Onboarding-incomplete | No completed `burner_profile` | Redirect to `/onboarding/questionnaire` |
 | Pending-approval | Redeemed an approval-required invite, awaiting a captain | Redirect to `/pending-approval` (Clock branch); exit only via approval or sign-out |
 | Rejected | A captain rejected the application (terminal) | Redirect to `/pending-approval` (ShieldX branch); no app access |
-| Captain-only-locked | Viewer rank below the surface's required rank | Either a **visible-but-locked** dimmed view with a `Lock` glyph (home / control-panel / camp-management) **or** a hard redirect to `/` (captain tools hub & announcements) — follow each surface's note exactly |
+| Captain-only-locked | Viewer rank below the surface's required rank | Always a **visible-but-locked** view — the surface still opens for any signed-in member, but a viewer below the required rank sees **no data**: a dimmed/blurred layout with a `Lock` glyph and a "Captain access only" note, never the real records. No captain surface hard-redirects a member away for rank (applies to home, control-panel, camp-management, captain tools hub, and announcements alike) |
 
 ## Screens & components to design
 
@@ -80,7 +81,25 @@ Design each of the following as its own frame. Real labels and copy are quoted; 
 
 ### 1. Landing (signed-out hero)
 **Purpose:** The single signed-out splash that leans into the "404 — camp not found" terminal/glitch identity and routes a visitor toward sign-in.
-**Layout & elements:** Mobile single column (centered, narrower than the product default), top→bottom: heading "Camp 404"; tagline "Error 404 — Camp not found"; a giant decorative glitched "404" glyph stack; a full-width CTA button labeled "Are you lost?"; a blinking decorative cursor line "$ awaiting input_". Ambient full-bleed CRT overlays (scanlines, dot-noise, sweeping scanbeam) sit behind everything.
+**⚠️ THIS SCREEN ALREADY EXISTS and is live at https://www.camp-404.com — DUPLICATE it faithfully.** Match its layout, copy, colours, type sizing, and every glitch/CRT animation to the spec below — this is a reproduction, not a reinterpretation. (Landing is the one place the glitch CSS is bespoke and authoritative; preserve the exact values. The rest of the app still composes from the shared token/primitive system.)
+**Layout & elements:** Full-bleed dark `--color-background` panel — `min-h-[100dvh]`, `overflow-hidden`. A single **centered** column (`max-w-md`, `sm:max-w-xl`, ~24px side padding, top padding 56→80px, bottom 40px) holds three vertically space-between groups (gap-10), top→bottom:
+  1. **Eyebrow + tagline** (centered, gap-3): a tiny uppercase **"Camp 404"** wordmark — `~10px`, `letter-spacing 0.5em`, `--color-muted-foreground` (this is the accessible `<h1>`); beneath it the **"Error 404 — Camp not found"** tagline in **monospace**, `~11px`, uppercase, `letter-spacing 0.3em`, `--color-foreground`, with chromatic RGB-split aberration (see Glitch detail).
+  2. **Giant glitched "404"** glyph stack — the centered hero element (see Glitch detail).
+  3. **CTA group** (`max-w-xs`, centered): a full-width **primary** Button (size `lg`) labeled **"Are you lost?"** → `/auth/sign-in`; below it (mt-4) a blinking **monospace** cursor line **"$ awaiting input_"** — `~10px`, uppercase, `letter-spacing 0.3em`, `--color-muted-foreground`, `aria-hidden`.
+Three ambient full-bleed layers sit behind everything (`absolute inset-0`, `pointer-events-none`, `aria-hidden`, `z-0`): **scanlines**, **dot-noise** (layer opacity ~0.06), and a sweeping **scanbeam** bar (pinned top, `h-24`). Foreground content is `z-10`.
+**Glitch / CRT motion (EXACT — reproduce faithfully; all decorative layers `aria-hidden`):**
+- **Chromatic tagline:** `text-shadow: -1.5px 0 rgba(255,0,128,0.8), 1.5px 0 rgba(0,200,255,0.8)` — magenta-left / cyan-right split. Static.
+- **Scanlines:** repeating horizontal `linear-gradient` — transparent 0→2px, then `rgba(255,255,255,0.045)` 2→3px (fine ~3px CRT lines). Static.
+- **Dot-noise:** two tiled `radial-gradient` dot fields (`3px` and `7px` grids, white ~0.4–0.6α), `mix-blend-mode: overlay`, layer opacity `~0.06`.
+- **Scanbeam:** a vertical gradient bar (transparent → violet `rgba(180,100,255,0.05)` → magenta core `rgba(255,0,200,0.1)` → violet → transparent) sweeping top→bottom — `translateY(-100% → 2200%)`, **7s linear infinite**.
+- **The "404" glyph:** monospace, `font-weight 900`, `font-size clamp(7rem, 30vw, 14rem)`, `letter-spacing -0.05em`, `line-height 0.9`, centered — rendered as **FIVE stacked copies** of "404":
+   - **base** in `--color-foreground`;
+   - **RGB-split magenta** copy `rgba(255,0,140,0.85)`, `mix-blend screen`, jittering LEFT (`translate` −2→−5px) on a **3.7s steps(1) infinite** cycle;
+   - **RGB-split cyan** copy `rgba(0,220,255,0.85)`, `mix-blend screen`, jittering RIGHT (+2→+5px) on a **3.7s steps(1) infinite** cycle;
+   - **two "tear" layers** (`--color-foreground`, `mix-blend screen`) that `clip-path: inset(...)` slice the glyph into horizontal bands and yank each band sideways (±5→12px) for a single frame, on independent **4.3s** and **5.1s** `steps(1)` cycles — this is the broken-display feel;
+   - the whole stack also **shakes** ±1–2px on a **5s steps(1) infinite** cycle.
+- **Cursor blink:** opacity toggles `1 ↔ 0.35` on a **1.05s steps(1) infinite** cycle.
+- **No `prefers-reduced-motion` fallback** — every animation runs unconditionally; keep the CTA usable regardless.
 **Every action (preserve all):**
 - Tap/click "Are you lost?" → navigates to `/auth/sign-in` (plain server-rendered anchor; works without JS; never disabled here).
 - No other interactions: no forms, inputs, toggles, hover/scroll logic, or client state.
@@ -96,7 +115,7 @@ Design each of the following as its own frame. Real labels and copy are quoted; 
 - CTA cannot fail to render (server anchor, no JS guard, no error path).
 - Decorative elements (overlays, "404" stack, cursor) must stay aria-hidden; keep an accessible heading + accessible CTA link to `/auth/sign-in`.
 - No `prefers-reduced-motion` fallback exists; animations run unconditionally — keep CTA usable regardless of motion.
-**Do-not-drop:** One accessible CTA link to `/auth/sign-in` plus accessible heading; the "404 broken-display" art is identity, not a per-entity hue table. No dead/orphaned variants in this unit.
+**Do-not-drop:** One accessible CTA link to `/auth/sign-in` plus accessible heading; faithful reproduction of the live camp-404.com glitch/CRT stack (chromatic tagline, scanlines, dot-noise, sweeping scanbeam, the 5-layer RGB-split/tear/shake "404", blinking cursor) — the "404 broken-display" art is identity, not a per-entity hue table. No dead/orphaned variants in this unit.
 
 
 ### 2. Sign in / Sign up / Recovery
@@ -235,61 +254,58 @@ Design each of the following as its own frame. Real labels and copy are quoted; 
 
 
 ### 7. Home — role dashboard
-**Purpose:** The `/` route is Camp 404's role-based command centre — a single layered 2×2 quadrant panel answering "what do I need to do, who needs what from me?" after the auth/access/onboarding/approval gating spine passes.
-**Layout & elements:** Mobile single column, full-bleed (`w-full`, `h-[100dvh]`, no `max-w-lg`). Top→bottom: header bar (left brand title "Camp 404"; right slot = bell link to `/notifications` with unread badge + avatar link to `/profile` showing photo or initials, "?" fallback) → 2×2 quadrant grid with hairline grid-line gaps and an absolutely-centred circular "TALK" button (`Mic` icon) → bottom layer tab bar (nav "Switch rank view") with tabs "Me" / "Team Lead" / "Captain". Below the panel: best-effort "Enable notifications" button. Signed-out: `<LandingHero>` glitch "404" art, "Camp 404", "Error 404 — Camp not found", CTA "Are you lost?" → `/auth/sign-in`, "$ awaiting input_".
+**Purpose:** The `/` route is Camp 404's role-based command centre — a single layered grid of action tiles (**2 columns on mobile, multiple columns on desktop**) answering "what do I need to do, who needs what from me?" after the auth/access/onboarding/approval gating spine passes.
+**Layout & elements:** Full-bleed (`w-full`, `min-h-[100dvh]`, no `max-w-lg`); a responsive grid of action tiles (**2 columns on mobile, multiple columns on desktop**). Top→bottom: header bar (left brand title "Camp 404"; right slot = bell link to `/notifications` with unread badge + avatar link to `/profile` showing photo or initials, "?" fallback) → the action-tile grid with hairline grid-line gaps → bottom layer tab bar (nav "Switch rank view") with tabs "Me" / "Team Lead" / "Captain". Below the panel: best-effort "Enable notifications" button. Signed-out: `<LandingHero>` glitch "404" art, "Camp 404", "Error 404 — Camp not found", CTA "Are you lost?" → `/auth/sign-in`, "$ awaiting input_".
 **Every action (preserve all):**
 - Tap unlocked tile with href → plain `<a>` full-page nav to destination.
 - Tap unlocked hrefless tile → inert (no handler passed).
 - Tap locked tile → nothing (`aria-disabled`).
 - Tap layer tab (locked or not) → switch visible layer (browse-only); replays 200ms entry animation.
-- Press/hold TALK → inert on home (no `onPress`/`onRelease` wired).
 - Tap bell → `/notifications`; tap avatar → `/profile`.
 - Tap "Enable notifications" (push `default` only) → request browser permission, register FCM token (`platform: "web"`).
 - Signed-out tap "Are you lost?" → `/auth/sign-in`.
 **States to design:**
 - Empty: unread `0`/falsy → no badge; no avatar image → initials.
 - Loading: server-rendered, no client loading; push has internal "loading" rendering nothing.
-- Populated: header + viewer's unlocked layer + locked higher layers + TALK + tabs.
+- Populated: header + viewer's unlocked layer + locked higher layers + tabs.
 - Validation-error / submitting / success: N/A (no forms); push grant silently registers token, button vanishes.
 - Disabled/locked: higher-rank layers visible but locked — tiles `opacity-45` + `Lock` glyph, tabs "(locked, view only)" + `Lock`.
 - Invite-gated → redirect `/signup/required`; onboarding-incomplete → `/onboarding/questionnaire`; pending OR rejected → `/pending-approval`; signed-out → inline `<LandingHero>`.
-**Options & exact values:** Ranks `camp_member`/`team_lead`/`captain`; labels "Camp Member"/"Team Lead"/"Captain"; tab labels "Me"/"Team Lead"/"Captain"; corners tl/tr/bl/br. Unread cap "99+". camp_member tiles: My Teams "Your crews" →`/members`; My Tasks "What's on you" →`/meals`; My Profile "You & your data" →`/onboarding/questionnaire`; Tools "Meals, expenses…" →`/tools`. team_lead: Team Roster "Members in your team"; Team Tasks "Assign & track work"; Lead Profile "Your team setup"; Team Tools "Shifts, notices…" (no hrefs). captain: Camp Management "Roster & statuses" →`/captains/camp-management`; Camp Tasks "Camp-wide work board"; Finances "Dues & reimbursements"; Camp Tools "Announcements, ops…" →`/captains/tools`. Push states loading/unavailable/default/granted/denied. Defaults: title "Camp 404", initialLayer 0, viewerRank camp_member.
+**Options & exact values:** Ranks `camp_member`/`team_lead`/`captain`; labels "Camp Member"/"Team Lead"/"Captain"; tab labels "Me"/"Team Lead"/"Captain"; 4 tiles per rank layer (grid order). Unread cap "99+". camp_member tiles: My Teams "Your crews" →`/members`; My Tasks "What's on you" →`/meals`; My Profile "You & your data" →`/onboarding/questionnaire`; Tools "Meals, expenses…" →`/tools`. team_lead: Team Roster "Members in your team"; Team Tasks "Assign & track work"; Lead Profile "Your team setup"; Team Tools "Planning, notices…" (no hrefs). captain: Camp Management "Roster & statuses" →`/captains/camp-management`; Camp Tasks "Camp-wide work board"; Finances "Dues & reimbursements"; Camp Tools "Announcements, admin…" →`/captains/tools`. Push states loading/unavailable/default/granted/denied. Defaults: title "Camp 404", initialLayer 0, viewerRank camp_member.
 **Validation & rules:**
 - Gate order load-bearing: auth → invite → required-actions → legacy-profile → approval.
 - Layer interactive iff `rankLevel(viewerRank) >= rankLevel(layer.rank)`; higher layers browsable but locked.
 - God accounts bypass invite + approval gates; rejected and pending both route to `/pending-approval`.
 - Badge shows unless null/""/0 (unused on home).
-**Do-not-drop:** The rank-layered 2×2 quadrant nav with browse-but-locked higher layers, plus the gating spine that bounces unqualified users. DEAD/ORPHAN flags: TALK button inert (no voice wiring); team_lead tiles + captain Camp Tasks/Finances hrefless no-ops; camp_member My Teams (`/members`) & My Tasks (`/meals`) are dead links (404); `ControlPanelHeader` orphan unused on this path.
+**Do-not-drop:** The rank-layered responsive tile grid (2 columns on mobile → multiple on desktop) with browse-but-locked higher layers, plus the gating spine that bounces unqualified users. DEAD/ORPHAN flags: team_lead tiles + captain Camp Tasks/Finances hrefless no-ops; camp_member My Teams (`/members`) & My Tasks (`/meals`) are dead links (404); `ControlPanelHeader` orphan unused on this path.
 
 
-### 8. Control Panel / quadrant nav component
-**Purpose:** Camp 404's home command-centre nav: a 2×2 grid of action tiles ("quadrants") shown one rank layer at a time, with a circular push-to-talk centre and a bottom tab bar switching between camp member → team lead → captain layers.
-**Layout & elements:** Mobile single column, full-viewport: header bar (top) with brand title "Camp 404" left + header slot right (notifications bell with unread badge → `/notifications`, avatar link → `/profile`); the 2×2 quadrant grid (flex-1) with hairline gaps; a circular centre button labelled "TALK" (Mic icon) overlaid on the grid centre; bottom tab bar (aria-label "Switch rank view") with one tab per layer using short labels "Me" / "Team Lead" / "Captain".
+### 8. Control Panel / tile-grid nav component
+**Purpose:** Camp 404's home command-centre nav: a responsive grid of action tiles — **2 columns on mobile, multiple columns on desktop** — shown one rank layer at a time, with a bottom tab bar switching between camp member → team lead → captain layers.
+**Layout & elements:** Full-viewport: header bar (top) with brand title "Camp 404" left + header slot right (notifications bell with unread badge → `/notifications`, avatar link → `/profile`); the action-tile grid (flex-1) — **2 columns on mobile, multiple columns on desktop** — with hairline gaps; bottom tab bar (aria-label "Switch rank view") with one tab per layer using short labels "Me" / "Team Lead" / "Captain".
 **Every action (preserve all):**
 - Tap a tab → switches visible layer (allowed even for locked layers; browse-only); fires onLayerChange.
-- Tap an unlocked tile → navigates via its href and/or fires onQuadrantSelect. Locked tiles are inert (aria-disabled, no handler/href).
-- Press-and-hold centre → onPress on pointer-down; onRelease on pointer-up, pointer-leave, AND pointer-cancel (no stuck recording). Live home supplies label only, no handlers yet.
+- Tap an unlocked tile → navigates via its href and/or fires the tile-select callback. Locked tiles are inert (aria-disabled, no handler/href).
 - Tap bell → notifications; tap avatar → own profile.
 **States to design:**
 - Populated: layer resolves; tiles show icon/label/optional hint/optional badge.
 - Empty: no layer at index → renders nothing (no placeholder).
 - Disabled / Captain-only-locked (headline): layer above viewer rank is visible-but-locked — tab shows Lock icon + "(locked, view only)"; tiles dimmed (opacity-45) with Lock glyph, non-interactive.
 - Active-tab: bold/primary with underline pill. Layer-switch: 200ms fade+scale entrance.
-- Press feedback: centre scales on press; tiles/tabs hover shift.
+- Press feedback: tiles and tabs respond to hover/press.
 - Notification badge hidden when zero; shows count or "99+" above 99. Avatar shows photo or initials.
 - No submitting/success/validation-error (pure nav; gating handled upstream by redirects before render).
-**Options & exact values:** Ranks (low→high): "camp_member"|"team_lead"|"captain". Long labels "Camp Member"/"Team Lead"/"Captain"; tab labels "Me"/"Team Lead"/"Captain". Corners tl/tr/bl/br. Centre default label "TALK". Defaults: viewerRank "camp_member", initialLayer 0, title "Camp 404". Badge cap "99+". Live homeLayers (label/hint→href):
+**Options & exact values:** Ranks (low→high): "camp_member"|"team_lead"|"captain". Long labels "Camp Member"/"Team Lead"/"Captain"; tab labels "Me"/"Team Lead"/"Captain". 4 tiles per rank layer (grid order). Defaults: viewerRank "camp_member", initialLayer 0, title "Camp 404". Badge cap "99+". Live homeLayers (label/hint→href):
 - camp_member: My Teams/"Your crews"→/members; My Tasks/"What's on you"→/meals; My Profile/"You & your data"→/onboarding/questionnaire; Tools/"Meals, expenses…"→/tools.
-- team_lead: Team Roster/"Members in your team"; Team Tasks/"Assign & track work"; Lead Profile/"Your team setup"; Team Tools/"Shifts, notices…" (no hrefs → inert).
-- captain: Camp Management/"Roster & statuses"→/captains/camp-management; Camp Tasks/"Camp-wide work board"; Finances/"Dues & reimbursements"; Camp Tools/"Announcements, ops…"→/captains/tools.
+- team_lead: Team Roster/"Members in your team"; Team Tasks/"Assign & track work"; Lead Profile/"Your team setup"; Team Tools/"Planning, notices…" (no hrefs → inert).
+- captain: Camp Management/"Roster & statuses"→/captains/camp-management; Camp Tasks/"Camp-wide work board"; Finances/"Dues & reimbursements"; Camp Tools/"Announcements, admin…"→/captains/tools.
 **Validation & rules:**
 - initialLayer clamped to [0, max(layers.length-1, 0)].
 - Lock rule: tile interactive iff viewer rank >= layer rank; locked branch wins even if href present (non-navigable). Browsing locked layers always allowed; only tiles inert.
-- Quadrant badge suppressed for null/undefined/""/0.
-- Centre release bound to pointer-up+leave+cancel.
+- Tile badge suppressed for null/undefined/""/0.
 - Rank model decoupled from 2-rank DB enum; team_lead derived at call site, never stored.
 - Accessibility: aria-pressed tabs, aria-disabled locked tiles, explicit aria-labels, aria-hidden decorative icons.
-**Do-not-drop:** Rank-layered visible-but-locked gating (browse locked layers, inert locked tiles) plus the press-and-hold PTT centre and its pointer-up/leave/cancel release contract so the voice pipeline can attach later. Note: desktop ControlGrid and the v0 QuadrantNav are dead/orphaned (Storybook-only, not on any route).
+**Do-not-drop:** Rank-layered visible-but-locked gating (browse locked layers, inert locked tiles) across the responsive tile grid (2 columns on mobile → multiple on desktop). Note: the desktop ControlGrid and the v0 tile-grid nav are dead/orphaned (Storybook-only, not on any route).
 
 
 ### 9. Profile view
@@ -401,7 +417,7 @@ Design each of the following as its own frame. Real labels and copy are quoted; 
 
 ### 13. Tools hub
 **Purpose:** A flat, link-only landing page at `/tools` that gates camp members through auth/invite/approval, then indexes uncategorised camp utilities as navigation cards.
-**Layout & elements:** Single column, centered container. Top: heading "Tools"; subtext "Uncategorised tooling for camp members. We'll move tools into dedicated quadrants as we group them." Below: a vertical list of exactly 3 cards, each with a bordered icon chip, a title, a description, and a trailing `ChevronRight` affordance. Reached from the home control panel's bottom-right "Tools" tile (Wrench icon, hint "Meals, expenses…").
+**Layout & elements:** Single column, centered container. Top: heading "Tools"; subtext "Uncategorised tooling for camp members. We'll move tools into dedicated sections as we group them." Below: a vertical list of exactly 3 cards, each with a bordered icon chip, a title, a description, and a trailing `ChevronRight` affordance. Reached from the home control panel's bottom-right "Tools" tile (Wrench icon, hint "Meals, expenses…").
 **Every action (preserve all):**
 - Tap "Invite a member" card → navigate to `/tools/invite`.
 - Tap "My forms" card → navigate to `/tools/forms`.
@@ -565,19 +581,19 @@ Design each of the following as its own frame. Real labels and copy are quoted; 
 - Submitting: spinner on submit, all disabled.
 - Success: emerald notice (suppressed if error set).
 - Disabled: submit on blank/pending; row buttons on pending.
-- Invite-gated → /signup/required; pending-approval/rejected → /pending-approval; non-captain → redirect home (no locked view); action errors "Captain access only." etc.
+- Invite-gated → /signup/required; pending-approval/rejected → /pending-approval; non-captain → page still opens but shows **no data**: a dimmed/locked composer with empty "Drafts"/"Published" lists behind a `Lock` glyph + "Captain access only" notice; every mutation stays server-blocked ("Captain access only." etc.).
 **Options & exact values:** Presentation: acknowledge (default; label "Full-screen — must acknowledge", pill "Acknowledge"), popup (label "Pop-up — dismissable", pill "Pop-up"), feed (label "Quiet — inbox only", pill "Inbox"). Title max 120; body max 5000; textarea rows 6. Scope always everyone; channel both; kind announcement.
 **Validation & rules:**
 - Title/body trimmed min 1, capped 120/5000.
 - Drafts are author-private: edit/delete/publish only succeed on own unpublished announcement rows; else "Draft not found or already published."
 - Publish fans one delivery per real member except author (system/sanitised excluded); zero recipients still succeeds at 0; idempotent (no double fan-out).
 - No edit/recall/unpublish after publishing; acknowledged roll-up shown only for acknowledge.
-**Do-not-drop:** Draft→edit→publish lifecycle with per-presentation delivery and the acknowledge-only roll-up; publishing is irreversible and author-private. No dead/404 flags in this unit.
+**Do-not-drop:** Draft→edit→publish lifecycle with per-presentation delivery and the acknowledge-only roll-up; publishing is irreversible and author-private. Non-captains may open the page but see a locked, data-less view (never the real drafts/published rows), not a redirect. No dead/404 flags in this unit.
 
 
 ### 19. Captain tools hub
-**Purpose:** A captain-clearance, read-only index page listing captain-only tooling as tappable cards, reached from the "Camp Tools" quadrant tile on the captain control panel.
-**Layout & elements:** Mobile single column inside a `max-w-2xl` main container. Top→bottom: a ghost back button labelled "Captains" with a leading left-chevron (returns to `/`); an `<h1>` "Camp tools"; a subtitle "Captain-only tooling for running the camp."; then a list of tool cards. Each card has a bordered icon square, a title, a description, and a trailing right-chevron. The one current card: icon `Megaphone`, title "Announcements & notifications", description "Compose a camp-wide announcement, save it as a draft, then publish it to everyone. Choose how hard it lands — a full-screen note members must acknowledge, a pop-up, or a quiet inbox entry."
+**Purpose:** A captain-clearance, read-only index page listing captain-only tooling as tappable cards, reached from the "Camp Tools" tile on the captain control panel.
+**Layout & elements:** Mobile single column inside a `max-w-2xl` main container. Top→bottom: a ghost back button labelled "Captains" with a leading left-chevron (returns to `/`); an `<h1>` "Camp tools"; a subtitle "Captain-only tooling for organising the camp."; then a list of tool cards. Each card has a bordered icon square, a title, a description, and a trailing right-chevron. The one current card: icon `Megaphone`, title "Announcements & notifications", description "Compose a camp-wide announcement, save it as a draft, then publish it to everyone. Choose how hard it lands — a full-screen note members must acknowledge, a pop-up, or a quiet inbox entry."
 **Every action (preserve all):**
 - Tap a tool card → navigate to that tool's href; the whole card is the link. Today's only card → `/captains/announcements`.
 - Tap "Captains" back button → navigate to `/` (home control panel).
@@ -587,14 +603,14 @@ Design each of the following as its own frame. Real labels and copy are quoted; 
 - Populated → gated captain sees header + card list (today exactly one card).
 - Empty → if the tool list were emptied, a bare list renders; no dedicated empty-state copy or placeholder exists (dead branch today).
 - Loading / validation-error / submitting / success / disabled → none on this surface (server-rendered, no controls).
-- Unauthenticated → redirect to `/auth/sign-in`. Invite-gated (no invite, non-god) → redirect to `/signup/required`. Pending or rejected approval (non-god) → redirect to `/pending-approval`. Non-captain rank → hard redirect to `/` (bounce home, NOT a visible locked layer). Onboarding-incomplete is NOT enforced here.
-**Options & exact values:** Rank enum: "captain" | "member" (gates on "captain"). ApprovalStatus enum: "pending" | "approved" | "rejected" (passes on "approved"). Redirect targets: `/auth/sign-in`, `/signup/required`, `/pending-approval`, `/`. Metadata title: "Camp tools — Camp 404". Layout width: `max-w-2xl`. No sliders, ranges, or numeric thresholds.
+- Unauthenticated → redirect to `/auth/sign-in`. Invite-gated (no invite, non-god) → redirect to `/signup/required`. Pending or rejected approval (non-god) → redirect to `/pending-approval`. Non-captain rank → the page still opens but shows **no data**: the tool cards render dimmed/locked behind a `Lock` glyph + "Captain access only" notice, never navigable (NOT a redirect). Onboarding-incomplete is NOT enforced here.
+**Options & exact values:** Rank enum: "captain" | "member" (gates on "captain"). ApprovalStatus enum: "pending" | "approved" | "rejected" (passes on "approved"). Redirect targets: `/auth/sign-in`, `/signup/required`, `/pending-approval` (a rank shortfall does NOT redirect — it renders a locked, data-less view). Metadata title: "Camp tools — Camp 404". Layout width: `max-w-2xl`. No sliders, ranges, or numeric thresholds.
 **Validation & rules:**
-- Strict ordered gate chain: auth → invite → approval → rank; first failure wins its redirect, later gates never run.
-- God-email bypass clears invite + approval gates but NOT the rank gate (a god row defaults to "member" and is bounced home).
-- Non-captains are bounced to `/`, never shown a locked view (explicit product decision).
+- Strict ordered gate chain: auth → invite → approval → rank; the first three redirect on failure, while a rank shortfall instead renders the locked, data-less view.
+- God-email bypass clears invite + approval gates but NOT the rank gate (a god row defaults to "member" and sees the locked, data-less view).
+- Non-captains still reach the page but see a locked, data-less view (`Lock` glyph + "Captain access only") — no real tool list is ever exposed.
 - Tool href must point to a real built route; today's only target `/captains/announcements` exists and back-links here.
-**Do-not-drop:** The exhaustive captain-only gate chain (auth → invite → approval → captain-rank, with non-captains hard-redirected home) plus the extensible tool-card list. Latent dead/orphaned branch to carry: an empty tool list renders a bare list with no empty-state placeholder.
+**Do-not-drop:** The exhaustive captain-only gate chain (auth → invite → approval → captain-rank, with non-captains shown a locked, data-less view rather than redirected) plus the extensible tool-card list. Latent dead/orphaned branch to carry: an empty tool list renders a bare list with no empty-state placeholder.
 
 
 ### 20. MCP connect / consent screen
@@ -708,7 +724,7 @@ Design each of the following as its own frame. Real labels and copy are quoted; 
 
 ### 24. Shared UI primitive kit
 **Purpose:** The restyleable, presentational shadcn-style ("new-york") primitive layer every Camp 404 screen reuses — buttons, inputs, labels, checkboxes, selects, sliders, cards, dialogs, popovers, command palettes, comboboxes, and avatars — owning no data, server calls, routing, or gating.
-**Layout & elements:** Mobile single column. Button; Input (native, with file-pick styling); Textarea (`min-h-[80px]`); Label (dims with disabled peer); Checkbox (lucide `Check`); Select family (trigger with `ChevronDown`, portalled content, item `Check`, scroll up/down `ChevronUp`/`ChevronDown`); Slider (1+ thumbs, horizontal/vertical); Card / CardHeader / CardTitle / CardDescription / CardContent / CardFooter; Dialog (centered, top-right `XIcon` + sr-only "Close", optional footer "Close" button, overlay); Popover (`w-72`); Command palette (leading `Search`, list, empty, group, item, shortcut, separator); Combobox (outline trigger with selected `label` or muted placeholder + `ChevronsUpDown`, search field, `Check` row); Avatar / AvatarImage / AvatarFallback (initials).
+**Layout & elements:** Mobile single column. Button; Input (native, with file-pick styling); Textarea (`min-h-[80px]`); Label (dims with disabled peer); Checkbox (lucide `Check`); Select family (trigger with `ChevronDown`, portalled content, item `Check`, scroll up/down `ChevronUp`/`ChevronDown`); Slider (1+ thumbs, horizontal); Card / CardHeader / CardTitle / CardDescription / CardContent / CardFooter; Dialog (centered, top-right `XIcon` + sr-only "Close", optional footer "Close" button, overlay); Popover (`w-72`); Command palette (leading `Search`, list, empty, group, item, shortcut, separator); Combobox (outline trigger with selected `label` or muted placeholder + `ChevronsUpDown`, search field, `Check` row); Avatar / AvatarImage / AvatarFallback (initials).
 **Every action (preserve all):**
 - Button click/keyboard activate → fires action; `disabled` blocks pointer events; `asChild` routes activation to wrapped element (e.g. link).
 - Input/Textarea type/focus/blur/paste/file-pick → native; no debounce/masking.

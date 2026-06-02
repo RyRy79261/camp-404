@@ -1,0 +1,70 @@
+# S21 Voice dictation
+# kind: BOARD  |  size: 430x-  |  pos: (6398,6540)
+# reusable components used: none
+========================================================================
+▸ "S21 Voice dictation" {vertical w:430 fill:$background}
+  ▸ "Content" {vertical w:fill_container gap:16 pad:[16,16,28,16] fill:$background}
+    ▸ "Back" {gap:4 ai:center}
+      ⊙ chevron-left ($muted-foreground) [lucide]
+      T "New form field"  [Inter/13px/500/$muted-foreground]
+    T "Voice dictation"  [Inter/22px/700/$foreground]
+    T "Speak instead of type. Tap the mic, talk, and we drop the transcript into the field. You can edit it after."  [Inter/13px/$muted-foreground]
+    ▸ "IDLE" {vertical w:fill_container gap:14 pad:22 ai:center r:$radius fill:$card stroke:$border}
+      T "IDLE"  [Inter/12px/700/$muted-foreground]
+      ▸ "ring" {w:96 h:96 jc:center ai:center r:999 fill:$muted stroke:$border}
+        ⊙ mic ($foreground) [lucide]
+      T "Tap to start"  [Inter/14px/500/$muted-foreground]
+      T "Mic ready"  [Inter/12px/$muted-foreground]
+    ▸ "REQUESTING ACCESS" {vertical w:fill_container gap:14 pad:22 ai:center r:$radius fill:$card stroke:$border}
+      T "REQUESTING ACCESS"  [Inter/12px/700/$muted-foreground]
+      ▸ "ring" {w:96 h:96 jc:center ai:center r:999 fill:$muted stroke:$accent}
+        ⊙ mic ($accent) [lucide]
+      T "Allow microphone access"  [Inter/14px/600/$foreground]
+      T "Your browser is asking permission to use the mic."  [Inter/12px/$muted-foreground]
+    ▸ "RECORDING" {vertical w:fill_container gap:14 pad:22 ai:center r:$radius fill:$card stroke:$border}
+      T "RECORDING"  [Inter/12px/700/$muted-foreground]
+      ▸ "ring" {w:96 h:96 jc:center ai:center r:999 fill:#ff008c26 stroke:$primary}
+        ⊙ mic ($primary) [lucide]
+      ▸ "wave" {h:28 gap:4 ai:center}
+        ▭ "bar" {w:3 h:10 r:2 fill:$primary}
+        ▭ "bar" {w:3 h:20 r:2 fill:$primary}
+        ▭ "bar" {w:3 h:28 r:2 fill:$primary}
+        ▭ "bar" {w:3 h:16 r:2 fill:$primary}
+        ▭ "bar" {w:3 h:24 r:2 fill:$primary}
+        ▭ "bar" {w:3 h:12 r:2 fill:$primary}
+        ▭ "bar" {w:3 h:22 r:2 fill:$primary}
+        ▭ "bar" {w:3 h:14 r:2 fill:$primary}
+        ▭ "bar" {w:3 h:26 r:2 fill:$primary}
+        ▭ "bar" {w:3 h:18 r:2 fill:$primary}
+        ▭ "bar" {w:3 h:8 r:2 fill:$primary}
+      T "0:14 · Listening…"  [Inter/14px/600/$primary]
+      ▸ "stop" {w:fill_container gap:8 pad:[12,0] jc:center ai:center r:$radius fill:$primary}
+        ⊙ square ($primary-foreground) [lucide]
+        T "Stop & transcribe"  [Inter/14px/600/$primary-foreground]
+    ▸ "PROCESSING" {vertical w:fill_container gap:14 pad:22 ai:center r:$radius fill:$card stroke:$border}
+      T "PROCESSING"  [Inter/12px/700/$muted-foreground]
+      ▸ "ring" {w:96 h:96 jc:center ai:center r:999 fill:$muted stroke:$accent}
+        ⊙ loader ($accent) [lucide]
+      T "Transcribing…"  [Inter/14px/600/$accent]
+      T "Turning your audio into text."  [Inter/12px/$muted-foreground]
+    ▸ "ERROR" {vertical w:fill_container gap:14 pad:22 ai:center r:$radius fill:$card stroke:$destructive}
+      T "ERROR"  [Inter/12px/700/$destructive]
+      ▸ "ring" {w:96 h:96 jc:center ai:center r:999 fill:#f83e5a1f stroke:$destructive}
+        ⊙ mic-off ($destructive) [lucide]
+      T "Couldn’t reach the mic"  [Inter/14px/600/$destructive]
+      T "Check that Camp 404 has microphone permission, then try again."  [Inter/12px/$muted-foreground]
+      ▸ "retry" {gap:8 pad:[10,18] jc:center ai:center r:$radius fill:#00000000 stroke:$border}
+        ⊙ rotate-ccw ($foreground) [lucide]
+        T "Try again"  [Inter/14px/600/$foreground]
+    T "Transcript → field"  [Inter/13px/700/$muted-foreground]
+    ▸ "TranscriptResult" {vertical w:fill_container gap:10 pad:16 r:$radius fill:$card stroke:$border}
+      ▸ "hd" {gap:6 ai:center}
+        ⊙ check ($accent) [lucide]
+        T "Transcript ready — review & edit"  [Inter/13px/600/$foreground]
+      ▸ "box" {vertical w:fill_container pad:12 r:8 fill:$muted stroke:$border}
+        T "I can bring a 4-person tent and a propane stove. Arriving Thursday afternoon."  [Inter/14px/$foreground]
+      ▸ "acts" {w:fill_container gap:8}
+        ▸ "Re-record" {w:fill_container pad:[11,0] jc:center r:$radius fill:#00000000 stroke:$border}
+          T "Re-record"  [Inter/14px/600/$foreground]
+        ▸ "Use this text" {w:fill_container pad:[11,0] jc:center r:$radius fill:$primary}
+          T "Use this text"  [Inter/14px/600/$primary-foreground]

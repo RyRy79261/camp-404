@@ -1,0 +1,123 @@
+# S05 Field kinds
+# kind: BOARD  |  size: 430x1696  |  pos: (8758,0)
+# reusable components used: InputField
+========================================================================
+▸ "S05 Field kinds" {vertical w:430 h:1696 fill:$background}
+  ▸ "Content" {vertical w:fill_container gap:24 pad:[24,18]}
+    T "Field kinds"  [Inter/26px/700/$foreground]
+    T "All 10 field-kind controls"  [Inter/13px/normal/$muted-foreground]
+    ▸ "Kind/slider" {vertical w:fill_container gap:8}
+      ▸ "LabelRow" {ai:center}
+        T "Confidence level"  [Inter/14px/700/$foreground]
+      T "Drag to set how confident you feel."  [Inter/12px/normal/$muted-foreground]
+      ▸ "Track" {w:fill_container h:6 ai:center r:3 fill:$muted}
+        ▸ "Filled" {w:150 h:6 jc:end ai:center r:3 fill:$primary}
+          ◯ "Knob" {w:18 h:18 fill:$primary-foreground stroke:$primary}
+      ▸ "Scale" {w:fill_container jc:space_between}
+        T "0"  [Inter/12px/normal/$muted-foreground]
+        T "42"  [Inter/13px/700/$foreground]
+        T "100"  [Inter/12px/normal/$muted-foreground]
+    ▸ "Kind/single_select" {vertical w:fill_container gap:8}
+      ▸ "LabelRow" {ai:center}
+        T "Camp role"  [Inter/14px/700/$foreground]
+        T " *"  [Inter/14px/700/$destructive]
+      ▸ "Select" {w:fill_container h:46 pad:[0,14] jc:space_between ai:center r:$radius fill:$muted stroke:$border}
+        T "Choose one…"  [Inter/14px/normal/$muted-foreground]
+        ⊙ chevron-down ($muted-foreground) [lucide]
+    ▸ "Kind/multi_select" {vertical w:fill_container gap:8}
+      ▸ "LabelRow" {ai:center}
+        T "Supplies you can bring"  [Inter/14px/700/$foreground]
+      T "Select all that apply."  [Inter/12px/normal/$muted-foreground]
+      ▸ "List" {vertical w:fill_container gap:12}
+        ▸ "Opt Tent" {w:fill_container gap:10 ai:center}
+          ▸ "Box" {w:22 h:22 jc:center ai:center r:6 fill:$primary}
+            ⊙ check ($primary-foreground) [lucide]
+          T "Tent"  [Inter/14px/normal/$foreground]
+        ▸ "Opt Cooler" {w:fill_container gap:10 ai:center}
+          ▸ "Box" {w:22 h:22 jc:center ai:center r:6 fill:$muted stroke:$border}
+          T "Cooler"  [Inter/14px/normal/$foreground]
+        ▸ "Opt Firewood" {w:fill_container gap:10 ai:center}
+          ▸ "Box" {w:22 h:22 jc:center ai:center r:6 fill:$primary}
+            ⊙ check ($primary-foreground) [lucide]
+          T "Firewood"  [Inter/14px/normal/$foreground]
+        ▸ "Opt First-aid kit" {w:fill_container gap:10 ai:center}
+          ▸ "Box" {w:22 h:22 jc:center ai:center r:6 fill:$muted stroke:$border}
+          T "First-aid kit"  [Inter/14px/normal/$foreground]
+    ▸ "Kind/short_text" {vertical w:fill_container gap:8}
+      ▸ "LabelRow" {ai:center}
+        T "Display name"  [Inter/14px/700/$foreground]
+        T " *"  [Inter/14px/700/$destructive]
+      ⟶ <InputField> "ShortText" {w:fill_container}  overrides:["Trailblazer Sam"]
+    ▸ "Kind/long_text" {vertical w:fill_container gap:8}
+      ▸ "LabelRow" {ai:center}
+        T "Why do you want to join?"  [Inter/14px/700/$foreground]
+      T "A sentence or two is plenty."  [Inter/12px/normal/$muted-foreground]
+      ▸ "Textarea" {vertical w:fill_container h:96 pad:[12,14] r:$radius fill:$muted stroke:$border}
+        T "Tell us a little about yourself…"  [Inter/14px/normal/$muted-foreground]
+      ▸ "DictateWrap" {w:fill_container}
+        ▸ "Dictate" {gap:8 pad:[10,16] jc:center ai:center r:$radius fill:#00000000 stroke:$border}
+          ⊙ mic ($foreground) [lucide]
+          T "Dictate instead"  [Inter/14px/600/$foreground]
+    ▸ "Kind/date" {vertical w:fill_container gap:8}
+      ▸ "LabelRow" {ai:center}
+        T "Arrival date"  [Inter/14px/700/$foreground]
+        T " *"  [Inter/14px/700/$destructive]
+      ▸ "DateInput" {w:fill_container h:46 pad:[0,14] jc:space_between ai:center r:$radius fill:$muted stroke:$destructive}
+        T "yyyy-mm-dd"  [Inter/14px/normal/$muted-foreground]
+        ⊙ calendar ($muted-foreground) [lucide]
+      T "This question is required"  [Inter/12px/normal/$destructive]
+    ▸ "Kind/scale" {vertical w:fill_container gap:8}
+      ▸ "LabelRow" {ai:center}
+        T "Rate the trail difficulty"  [Inter/14px/700/$foreground]
+      T "1 = easy, 5 = expert."  [Inter/12px/normal/$muted-foreground]
+      ▸ "Segmented" {w:fill_container r:$radius stroke:$border}
+        ▸ "Seg 1" {w:fill_container h:44 jc:center ai:center fill:$muted}
+          T "1"  [Inter/15px/700/$foreground]
+        ▸ "Seg 2" {w:fill_container h:44 jc:center ai:center fill:$muted stroke:$border}
+          T "2"  [Inter/15px/700/$foreground]
+        ▸ "Seg 3" {w:fill_container h:44 jc:center ai:center fill:$primary stroke:$border}
+          T "3"  [Inter/15px/700/$primary-foreground]
+        ▸ "Seg 4" {w:fill_container h:44 jc:center ai:center fill:$muted stroke:$border}
+          T "4"  [Inter/15px/700/$foreground]
+        ▸ "Seg 5" {w:fill_container h:44 jc:center ai:center fill:$muted stroke:$border}
+          T "5"  [Inter/15px/700/$foreground]
+    ▸ "Kind/toggle" {vertical w:fill_container gap:8}
+      ▸ "LabelRow" {ai:center}
+        T "Notifications"  [Inter/14px/700/$foreground]
+      T "Tap to turn each channel on or off."  [Inter/12px/normal/$muted-foreground]
+      ▸ "ToggleList" {vertical w:fill_container gap:14}
+        ▸ "Row Email updates" {w:fill_container jc:space_between ai:center}
+          T "Email updates"  [Inter/14px/normal/$foreground]
+          ▸ "Switch" {w:48 h:28 pad:[0,3] jc:end ai:center r:14 fill:$primary}
+            ◯ "Knob" {w:22 h:22 fill:$primary-foreground}
+        ▸ "Row SMS alerts" {w:fill_container jc:space_between ai:center}
+          T "SMS alerts"  [Inter/14px/normal/$foreground]
+          ▸ "Switch" {w:48 h:28 pad:[0,3] ai:center r:14 fill:$muted stroke:$border}
+            ◯ "Knob" {w:22 h:22 fill:$foreground}
+    ▸ "Kind/combobox" {vertical w:fill_container gap:8}
+      ▸ "LabelRow" {ai:center}
+        T "Home town"  [Inter/14px/700/$foreground]
+      ▸ "Combo" {w:fill_container h:46 pad:[0,14] jc:space_between ai:center r:$radius fill:$muted stroke:$border}
+        T "Select…"  [Inter/14px/normal/$muted-foreground]
+        ⊙ chevron-down ($muted-foreground) [lucide]
+      ▸ "Popover" {vertical w:fill_container r:$radius fill:$popover stroke:$border}
+        ▸ "Search" {w:fill_container h:44 gap:10 pad:[0,12] ai:center stroke:$border}
+          ⊙ search ($muted-foreground) [lucide]
+          T "Search…"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Empty" {w:fill_container pad:[20,12] jc:center}
+          T "Nothing found."  [Inter/13px/normal/$muted-foreground]
+    ▸ "Kind/image" {vertical w:fill_container gap:8}
+      ▸ "LabelRow" {ai:center}
+        T "Add a photo"  [Inter/14px/700/$foreground]
+      T "JPG or PNG, up to 10 MB."  [Inter/12px/normal/$muted-foreground]
+      ▸ "Dropzone" {vertical w:fill_container h:120 gap:8 jc:center ai:center r:$radius fill:#00dcff26 stroke:$border}
+        ⊙ camera ($accent) [lucide]
+        T "Add photo"  [Inter/14px/600/$foreground]
+      ▸ "States" {w:fill_container gap:12}
+        ▸ "Uploading" {vertical w:fill_container h:96 gap:8 jc:center ai:center r:$radius fill:$muted stroke:$border}
+          ⊙ loader-circle ($accent) [lucide]
+          T "Uploading…"  [Inter/13px/normal/$muted-foreground]
+        ▸ "Thumb" {none w:96 h:96 r:$radius fill:$muted}
+          ⊙ image ($muted-foreground) [lucide]
+          ▸ "Remove" {w:24 h:24 jc:center ai:center r:12 fill:$destructive stroke:$background abs(80,-8)}
+            ⊙ x ($destructive-foreground) [lucide]

@@ -1,0 +1,8 @@
+# DetailHeader
+# kind: COMPONENT (reusable)  |  size: 430x-  |  pos: (948,0)
+# reusable components used: none
+========================================================================
+▸ "DetailHeader" {w:430 gap:6 pad:[14,12] ai:center fill:$background}
+  ▸ "BackBtn" {w:40 h:40 jc:center ai:center r:999 fill:$muted}
+    ⊙ chevron-left ($foreground) [lucide]
+  T "Title"  [Inter/18px/700/$foreground]

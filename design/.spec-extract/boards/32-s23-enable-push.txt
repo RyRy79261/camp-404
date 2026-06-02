@@ -1,0 +1,12 @@
+# S23 Enable push
+# kind: BOARD  |  size: 430x-  |  pos: (8758,6540)
+# reusable components used: Button-Outline
+========================================================================
+▸ "S23 Enable push" {vertical w:430 pad:20 jc:center ai:center fill:$background}
+  ▸ "Content" {vertical w:fill_container gap:28 jc:center ai:center}
+    ⟶ <Button-Outline> "Enable button" {pad:[9,16]}  overrides:["Enable notifications"]
+    ▸ "Invisible states" {vertical gap:6 ai:center}
+      T "// loading → renders nothing"  [JetBrains Mono/11px/normal/$muted-foreground]
+      T "// unavailable → renders nothing"  [JetBrains Mono/11px/normal/$muted-foreground]
+      T "// granted → renders nothing"  [JetBrains Mono/11px/normal/$muted-foreground]
+      T "// denied → renders nothing"  [JetBrains Mono/11px/normal/$muted-foreground]

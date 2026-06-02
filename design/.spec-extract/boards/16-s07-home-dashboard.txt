@@ -1,0 +1,37 @@
+# S07 Home dashboard
+# kind: BOARD  |  size: 430x-  |  pos: (4038,2849)
+# reusable components used: TopChrome, SectionHeader, GridTile, Button-Outline
+========================================================================
+▸ "S07 Home dashboard" {vertical w:430 fill:$background}
+  ⟶ <TopChrome> "Header" {w:fill_container}
+  ▸ "Content" {vertical w:fill_container gap:24 pad:[20,16]}
+    ▸ "Member Section" {vertical w:fill_container gap:12}
+      ⟶ <SectionHeader> "Header Your Tools" {w:fill_container}  overrides:["YOUR TOOLS"]
+      ▸ "Grid" {vertical w:fill_container gap:12}
+        ▸ "Row 1" {w:fill_container gap:12}
+          ⟶ <GridTile> "My Teams" {w:fill_container}  overrides:["3", "My Teams", "Your crews"]
+          ⟶ <GridTile> "My Tasks" {w:fill_container}  overrides:["5", "My Tasks", "What’s on you"]
+        ▸ "Row 2" {w:fill_container gap:12}
+          ⟶ <GridTile> "My Profile" {w:fill_container}  overrides:["My Profile", "You & your data"]
+          ⟶ <GridTile> "Tools" {w:fill_container}  overrides:["Tools", "Meals, expenses…"]
+    ▸ "Team Lead Section" {vertical w:fill_container gap:12 op:0.45}
+      ⟶ <SectionHeader> "Header Team Lead Section" {w:fill_container}  overrides:["TEAM LEAD · VIEW ONLY"]
+      T "Open to preview — no data for your rank."  [Inter/12px/normal/$muted-foreground]
+      ▸ "Grid" {vertical w:fill_container gap:12}
+        ▸ "Row 1" {w:fill_container gap:12}
+          ⟶ <GridTile> "Crew Roster" {w:fill_container}  overrides:["Crew Roster", "Your crew’s statuses"]
+          ⟶ <GridTile> "Crew Tasks" {w:fill_container}  overrides:["Crew Tasks", "Assign & track work"]
+        ▸ "Row 2" {w:fill_container gap:12}
+          ⟶ <GridTile> "Crew Forms" {w:fill_container}  overrides:["Crew Forms", "Questionnaire responses"]
+          ⟶ <GridTile> "Crew Announcements" {w:fill_container}  overrides:["Crew Announcements", "Post to your crew"]
+    ▸ "Captain Section" {vertical w:fill_container gap:12 op:0.45}
+      ⟶ <SectionHeader> "Header Captain Section" {w:fill_container}  overrides:["CAPTAIN · VIEW ONLY"]
+      T "Open to preview — no data for your rank."  [Inter/12px/normal/$muted-foreground]
+      ▸ "Grid" {vertical w:fill_container gap:12}
+        ▸ "Row 1" {w:fill_container gap:12}
+          ⟶ <GridTile> "Camp Management" {w:fill_container}  overrides:["Camp Management", "Roster & statuses"]
+          ⟶ <GridTile> "Camp Tasks" {w:fill_container}  overrides:["Camp Tasks", "Camp-wide work board"]
+        ▸ "Row 2" {w:fill_container gap:12}
+          ⟶ <GridTile> "Finances" {w:fill_container}  overrides:["Finances", "Dues & reimbursements"]
+          ⟶ <GridTile> "Camp Tools" {w:fill_container}  overrides:["Camp Tools", "Announcements, admin…"]
+    ⟶ <Button-Outline> "Enable notifications" {w:fill_container}  overrides:["Enable notifications"]

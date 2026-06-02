@@ -1,0 +1,13 @@
+# S01 Landing
+# kind: BOARD  |  size: 430x980  |  pos: (4038,0)
+# reusable components used: Button-Primary
+========================================================================
+▸ "S01 Landing" {vertical w:430 h:980 pad:[0,28] jc:center ai:center fill:$background}
+  ▸ "Hero Column" {vertical w:fill_container gap:18 ai:center}
+    T "CAMP 404"  [JetBrains Mono/10px/500/$muted-foreground]
+    T "ERROR 404 — CAMP NOT FOUND"  [JetBrains Mono/12px/500/$foreground]
+    T "404"  [JetBrains Mono/150px/800/$foreground]
+    ⟶ <Button-Primary> "Are you lost button" {w:fill_container}  overrides:["Are you lost?"]
+    T "$ AWAITING INPUT_"  [JetBrains Mono/10px/500/$muted-foreground]
+  ▸ "CRT Scanlines" {vertical w:430 h:980 gap:3 abs(0,0) op:0.5}
+    ▭ "line" {w:fill_container h:1 fill:#00000033}   × 140

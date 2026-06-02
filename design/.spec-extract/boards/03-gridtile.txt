@@ -1,0 +1,13 @@
+# GridTile
+# kind: COMPONENT (reusable)  |  size: 200x-  |  pos: (1438,0)
+# reusable components used: none
+========================================================================
+▸ "GridTile" {vertical w:200 gap:14 pad:16 r:$radius fill:$card stroke:$border}
+  ▸ "Head" {w:fill_container jc:space_between}
+    ▸ "IconBox" {w:46 h:46 jc:center ai:center r:12 fill:#ff008c2e}
+      ⊙ users ($primary) [lucide]
+    ▸ "Badge" {pad:[3,9] r:999 fill:#ff008c2e}
+      T "42"  [Inter/12px/600/$primary]
+  ▸ "TextCol" {vertical w:fill_container gap:4}
+    T "My Teams"  [Inter/16px/600/$foreground]
+    T "Your crews"  [Inter/12px/normal/$muted-foreground]

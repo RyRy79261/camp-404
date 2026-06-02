@@ -1,0 +1,6 @@
+# Button-Primary
+# kind: COMPONENT (reusable)  |  size: -x-  |  pos: (1718,0)
+# reusable components used: none
+========================================================================
+▸ "Button-Primary" {gap:8 pad:[13,22] jc:center ai:center r:$radius fill:$primary}
+  T "Button"  [Inter/15px/600/$primary-foreground]

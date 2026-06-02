@@ -1,0 +1,9 @@
+# EmptyState
+# kind: COMPONENT (reusable)  |  size: 360x-  |  pos: (3118,0)
+# reusable components used: none
+========================================================================
+▸ "EmptyState" {vertical w:360 gap:12 pad:[32,24] ai:center}
+  ▸ "EsCircle" {w:64 h:64 jc:center ai:center r:999 fill:$muted}
+    ⊙ inbox ($muted-foreground) [lucide]
+  T "Nothing here yet"  [Inter/16px/700/$foreground]
+  T "A calm placeholder."  [Inter/13px/normal/$muted-foreground]

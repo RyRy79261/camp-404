@@ -1,0 +1,71 @@
+# S18 Announcements
+# kind: BOARD  |  size: 430x-  |  pos: (9938,5010)
+# reusable components used: none
+========================================================================
+▸ "S18 Announcements" {vertical w:430 fill:$background}
+  ▸ "Content" {vertical w:fill_container gap:18 pad:[16,16,28,16] fill:$background}
+    ▸ "Back" {gap:4 ai:center}
+      ⊙ chevron-left ($muted-foreground) [lucide]
+      T "Camp tools"  [Inter/13px/500/$muted-foreground]
+    T "Announcements & notifications"  [Inter/22px/700/$foreground]
+    T "Compose a message, save it as a draft, then publish it to the whole camp. Everyone but you receives it. A full-screen announcement takes over each member’s screen until they acknowledge it."  [Inter/13px/$muted-foreground]
+    ▸ "Composer" {vertical w:fill_container gap:14 pad:16 r:$radius fill:$card stroke:$border}
+      T "New announcement"  [Inter/16px/700/$foreground]
+      ▸ "Title" {vertical w:fill_container gap:6}
+        T "Title"  [Inter/13px/600/$foreground]
+        ▸ "box" {vertical w:fill_container pad:[11,12] r:$radius fill:$muted stroke:$border}
+          T "Burn-night briefing"  [Inter/14px/$muted-foreground]
+      ▸ "Message" {vertical w:fill_container gap:6}
+        T "Message"  [Inter/13px/600/$foreground]
+        ▸ "box" {vertical w:fill_container h:96 pad:[11,12] r:$radius fill:$muted stroke:$border}
+          T "What does everyone need to know?"  [Inter/14px/$muted-foreground]
+      ▸ "HowItLands" {vertical w:fill_container gap:6}
+        T "How it lands"  [Inter/13px/600/$foreground]
+        ▸ "select" {w:fill_container pad:[11,12] jc:space_between ai:center r:$radius fill:$muted stroke:$border}
+          ▸ "r" {gap:8 ai:center}
+            ⊙ megaphone ($accent) [lucide]
+            T "Full-screen — must acknowledge"  [Inter/14px/500/$foreground]
+          ⊙ chevron-down ($muted-foreground) [lucide]
+        ▸ "Options" {vertical w:fill_container gap:2 pad:6 r:$radius fill:$popover stroke:$border}
+          ▸ "Full-screen — must acknowledge" {w:fill_container gap:8 pad:8 ai:center}
+            ⊙ megaphone ($muted-foreground) [lucide]
+            T "Full-screen — must acknowledge"  [Inter/13px/500/$foreground]
+          ▸ "Pop-up — dismissable" {w:fill_container gap:8 pad:8 ai:center}
+            ⊙ message-square ($muted-foreground) [lucide]
+            T "Pop-up — dismissable"  [Inter/13px/500/$foreground]
+          ▸ "Quiet — inbox only" {w:fill_container gap:8 pad:8 ai:center}
+            ⊙ inbox ($muted-foreground) [lucide]
+            T "Quiet — inbox only"  [Inter/13px/500/$foreground]
+      ▸ "ErrorBanner" {w:fill_container gap:8 pad:[10,12] ai:center r:$radius fill:#f83e5a1f stroke:$destructive}
+        ⊙ triangle-alert ($destructive) [lucide]
+        T "Give it a title."  [Inter/13px/500/$destructive]
+      ▸ "Success" {w:fill_container gap:8 pad:[10,12] ai:center r:$radius fill:#00dcff1f}
+        ⊙ check ($accent) [lucide]
+        T "Draft saved."  [Inter/13px/500/$accent]
+      ▸ "SaveDraft" {w:fill_container pad:[13,0] jc:center ai:center r:$radius fill:$primary}
+        T "Save draft"  [Inter/15px/600/$primary-foreground]
+    T "Drafts (1)"  [Inter/15px/700/$foreground]
+    ▸ "DraftCard" {vertical w:fill_container gap:10 pad:14 r:$radius fill:$card stroke:$border}
+      ▸ "hd" {w:fill_container jc:space_between ai:center}
+        T "Burn-night briefing"  [Inter/15px/700/$foreground]
+        ▸ "pill" {pad:[3,10] r:999 fill:#ff008c2e}
+          T "Acknowledge"  [Inter/11px/600/$primary]
+      T "Gates open at sundown. Bring goggles — dust storm forecast."  [Inter/13px/$muted-foreground]
+      ▸ "actions" {w:fill_container gap:8}
+        ▸ "Edit" {pad:[9,14] jc:center r:8 fill:#00000000 stroke:$border}
+          T "Edit"  [Inter/13px/600/$foreground]
+        ▸ "Delete" {pad:[9,14] jc:center r:8 fill:#00000000 stroke:$destructive}
+          T "Delete"  [Inter/13px/600/$destructive]
+        ▸ "Publish to camp" {pad:[9,14] jc:center r:8 fill:$primary}
+          T "Publish to camp"  [Inter/13px/600/$primary-foreground]
+    T "Published (1)"  [Inter/15px/700/$foreground]
+    ▸ "PublishedCard" {vertical w:fill_container gap:10 pad:14 r:$radius fill:$card stroke:$border}
+      ▸ "hd" {w:fill_container jc:space_between ai:center}
+        T "Water points & first aid"  [Inter/15px/700/$foreground]
+        ▸ "pill" {pad:[3,10] r:999 fill:#00dcff26}
+          T "Inbox"  [Inter/11px/600/$accent]
+      T "Map and locations are pinned in the camp guide."  [Inter/13px/$muted-foreground]
+      ▸ "foot" {w:fill_container jc:space_between ai:center}
+        T "Sent to 42 member(s) · by you"  [Inter/12px/$muted-foreground]
+        T "5/42 acknowledged"  [Inter/12px/600/$accent]
+      T "Published 28 May 2026, 14:02"  [Inter/11px/$muted-foreground]

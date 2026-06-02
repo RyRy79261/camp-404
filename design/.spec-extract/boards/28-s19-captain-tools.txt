@@ -1,0 +1,39 @@
+# S19 Captain tools
+# kind: BOARD  |  size: 430x690  |  pos: (4038,6540)
+# reusable components used: CaptainLock
+========================================================================
+▸ "S19 Captain tools" {vertical w:430 h:690 fill:$background}
+  ▸ "GhostBack" {gap:4 pad:[14,12] ai:center}
+    ⊙ chevron-left ($muted-foreground) [lucide]
+    T "Captains"  [Inter/15px/500/$muted-foreground]
+  ▸ "Content" {vertical w:fill_container gap:16 pad:[4,16,24,16]}
+    ▸ "Intro" {vertical w:fill_container gap:6}
+      T "Camp tools"  [Inter/26px/700/$foreground]
+      T "Captain-only tooling for organising the camp."  [Inter/14px/normal/$muted-foreground]
+    ▸ "ToolCard" {w:fill_container gap:14 pad:18 ai:center r:$radius fill:$card stroke:$border}
+      ▸ "IconChip" {w:44 h:44 jc:center ai:center r:$radius fill:$muted stroke:$border}
+        ⊙ megaphone ($primary) [lucide]
+      ▸ "Text" {vertical w:fill_container gap:4}
+        T "Announcements & notifications"  [Inter/15px/700/$foreground]
+        T "Compose a camp-wide announcement, save it as a draft, then publish it to everyone. Choose how hard it lands — a full-screen note members must acknowledge, a pop-up, or a quiet inbox entry."  [Inter/13px/normal/$muted-foreground]
+      ⊙ chevron-right ($muted-foreground) [lucide]
+    ▸ "LockedVariant" {vertical w:fill_container gap:10 pad:[18,0,0,0]}
+      ▸ "Divider" {w:fill_container h:1 fill:$border}
+      T "LOCKED — non-captain view"  [Inter/11px/600/$muted-foreground]
+      ▸ "Stack" {none w:fill_container h:300}
+        ▸ "DimmedList" {vertical w:398 gap:12 abs(0,0) op:0.35}
+          ▸ "ToolCard dimmed" {w:fill_container gap:14 pad:18 ai:center r:$radius fill:$card stroke:$border}
+            ▸ "IconChip" {w:44 h:44 jc:center ai:center r:$radius fill:$muted stroke:$border}
+              ⊙ megaphone ($primary) [lucide]
+            ▸ "Text" {vertical w:fill_container gap:4}
+              T "Announcements & notifications"  [Inter/15px/700/$foreground]
+              T "Compose a camp-wide announcement, save it as a draft, then publish it to everyone. Choose how hard it lands — a full-screen note members must acknowledge, a pop-up, or a quiet inbox entry."  [Inter/13px/normal/$muted-foreground]
+            ⊙ chevron-right ($muted-foreground) [lucide]
+          ▸ "ToolCard dimmed 2" {w:fill_container gap:14 pad:18 ai:center r:$radius fill:$card stroke:$border}
+            ▸ "IconChip" {w:44 h:44 jc:center ai:center r:$radius fill:$muted stroke:$border}
+              ⊙ users ($primary) [lucide]
+            ▸ "Text" {vertical w:fill_container gap:4}
+              T "Roster & approvals"  [Inter/15px/700/$foreground]
+              T "Review pending members, approve or decline sign-ups, and manage who's on camp."  [Inter/13px/normal/$muted-foreground]
+            ⊙ chevron-right ($muted-foreground) [lucide]
+        ⟶ <CaptainLock> {w:300 abs(65,70)}  overrides:["This tooling is captain-only. Your rank doesn't have clearance for these tools."]

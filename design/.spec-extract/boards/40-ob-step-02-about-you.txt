@@ -1,0 +1,63 @@
+# OB Step 02 About you
+# kind: BOARD  |  size: 600x-  |  pos: (4758,11500)
+# reusable components used: InputField, Button-Outline, Button-Primary
+========================================================================
+▸ "OB Step 02 About you" {vertical w:600 gap:22 pad:[22,18,30,18] fill:$background}
+  ▸ "Header" {vertical w:fill_container gap:8}
+    T "Build your burner profile"  [Inter/24px/700/$foreground]
+    T "A few questions so the camp knows who’s arriving in the dust. Takes about two minutes."  [Inter/14px/normal/$muted-foreground]
+  ▸ "Progress" {vertical w:fill_container gap:8}
+    T "Step 2 of 11"  [Inter/12px/600/$muted-foreground]
+    ▸ "Track" {w:fill_container h:6 r:999 fill:$muted}
+      ▸ "Fill" {w:98 h:6 r:999 fill:$primary}
+  ▸ "QuestionBlock" {vertical w:fill_container gap:18}
+    T "About you"  [Inter/18px/700/$foreground]
+    ▸ "Birthday Field" {vertical w:fill_container gap:6}
+      T "Birthday"  [Inter/13px/500/$foreground]
+      ▸ "Input" {w:fill_container h:46 pad:[0,14] jc:space_between ai:center r:$radius fill:$muted stroke:$border}
+        T "dd / mm / yyyy"  [Inter/14px/normal/$foreground]
+        ⊙ calendar ($muted-foreground) [lucide]
+    ⟶ <InputField> "Phone Field" {w:fill_container}  overrides:["Phone", "+27 82 000 0000"]
+    ▸ "Country Field" {vertical w:fill_container gap:8}
+      T "Country"  [Inter/13px/500/$foreground]
+      ▸ "Combobox" {w:fill_container h:46 pad:[0,14] jc:space_between ai:center r:$radius fill:$muted stroke:$border}
+        T "Pick your country…"  [Inter/14px/normal/$muted-foreground]
+        ⊙ chevron-down ($muted-foreground) [lucide]
+      ▸ "Popover" {vertical w:fill_container gap:2 pad:6 r:$radius fill:$popover stroke:$border}
+        ▸ "SearchRow" {w:fill_container h:40 gap:8 pad:[0,10] ai:center r:$radius fill:$muted}
+          ⊙ search ($muted-foreground) [lucide]
+          T "Search countries…"  [Inter/14px/normal/$muted-foreground]
+        ▸ "Option South Africa" {w:fill_container h:40 pad:[0,10] jc:space_between ai:center r:$radius fill:#ff008c22}
+          ▸ "Left" {gap:10 ai:center}
+            T "🇿🇦"  [Inter/18px/normal/$foreground]
+            T "South Africa"  [Inter/14px/600/$foreground]
+          ⊙ check ($primary) [lucide]
+        ▸ "Option Namibia" {w:fill_container h:40 pad:[0,10] jc:space_between ai:center r:$radius fill:#00000000}
+          ▸ "Left" {gap:10 ai:center}
+            T "🇳🇦"  [Inter/18px/normal/$foreground]
+            T "Namibia"  [Inter/14px/normal/$foreground]
+        ▸ "Option United Kingdom" {w:fill_container h:40 pad:[0,10] jc:space_between ai:center r:$radius fill:#00000000}
+          ▸ "Left" {gap:10 ai:center}
+            T "🇬🇧"  [Inter/18px/normal/$foreground]
+            T "United Kingdom"  [Inter/14px/normal/$foreground]
+        ▸ "Option United States" {w:fill_container h:40 pad:[0,10] jc:space_between ai:center r:$radius fill:#00000000}
+          ▸ "Left" {gap:10 ai:center}
+            T "🇺🇸"  [Inter/18px/normal/$foreground]
+            T "United States"  [Inter/14px/normal/$foreground]
+        ▸ "Option Germany" {w:fill_container h:40 pad:[0,10] jc:space_between ai:center r:$radius fill:#00000000}
+          ▸ "Left" {gap:10 ai:center}
+            T "🇩🇪"  [Inter/18px/normal/$foreground]
+            T "Germany"  [Inter/14px/normal/$foreground]
+    ▸ "ID Type Field" {vertical w:fill_container gap:6}
+      T "ID type"  [Inter/13px/500/$foreground]
+      ▸ "Segmented" {w:fill_container h:46 gap:4 pad:4 r:$radius fill:$muted}
+        ▸ "Seg Passport" {w:fill_container h:fill_container jc:center ai:center r:6 fill:$primary}
+          T "Passport"  [Inter/14px/600/$primary-foreground]
+        ▸ "Seg South African ID" {w:fill_container h:fill_container jc:center ai:center r:6 fill:#00000000}
+          T "South African ID"  [Inter/14px/600/$muted-foreground]
+    ▸ "ID Number Field" {vertical w:fill_container gap:6}
+      ⟶ <InputField> "ID Number Input" {w:fill_container}  overrides:["ID / Passport number", "e.g. A01234567"]
+      T "Encrypted — stored securely."  [Inter/12px/normal/$muted-foreground]
+  ▸ "Footer" {w:fill_container jc:space_between ai:center}
+    ⟶ <Button-Outline> "Btn Back"  overrides:["Back"]
+    ⟶ <Button-Primary> "Btn Next"  overrides:["Next"]

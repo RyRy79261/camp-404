@@ -1,0 +1,32 @@
+# S27 Questionnaire complete & queue
+# kind: BOARD  |  size: 430x-  |  pos: (6398,8700)
+# reusable components used: Button-Primary, Card
+========================================================================
+▸ "S27 Questionnaire complete & queue" {vertical w:430 gap:24 pad:24 fill:$background}
+  T "SECTION A — COMPLETION"  [Inter/11px/700/$muted-foreground]
+  ▸ "Completion Success" {vertical w:fill_container gap:14 pad:[8,0] ai:center}
+    ▸ "Check Circle" {w:88 h:88 jc:center ai:center r:44 fill:#00dcff24}
+      ⊙ check ($accent) [lucide]
+    T "Questionnaire complete"  [Inter/22px/700/$foreground]
+    T "Thanks — that’s logged with the captains."  [Inter/14px/normal/$muted-foreground]
+    ▸ "Variant All Done" {vertical w:fill_container gap:8 pad:[16,0,0,0] ai:center}
+      T "VARIANT — ALL DONE"  [Inter/10px/700/$accent]
+      ⟶ <Button-Primary> "Back to camp Btn" {w:fill_container}  overrides:["Back to camp"]
+      T "You’re all caught up."  [Inter/12px/normal/$muted-foreground]
+    ▸ "Variant More Required" {vertical w:fill_container gap:8 pad:[16,0,0,0] ai:center}
+      T "VARIANT — MORE REQUIRED"  [Inter/10px/700/$accent]
+      T "1 more required before you’re unlocked"  [Inter/13px/600/$foreground]
+      ⟶ <Button-Primary> "Start next Btn" {w:fill_container}  overrides:["Start next questionnaire"]
+  ▭ "Divider" {w:fill_container h:1 fill:$border}
+  ▸ "Section B Header" {vertical w:fill_container gap:6}
+    T "SECTION B — REQUIRED QUEUE"  [Inter/11px/700/$muted-foreground]
+    T "Finish these to unlock the app"  [Inter/20px/700/$foreground]
+    T "A captain needs all of these from you."  [Inter/13px/normal/$muted-foreground]
+  ▸ "Required Queue List" {vertical w:fill_container gap:12}
+    ⟶ <Card> "Row Safety" {w:fill_container}
+    ⟶ <Card> "Row Dietary" {w:fill_container}
+    ⟶ <Card> "Row Agreements" {w:fill_container op:0.55}
+  ▸ "Queue Footer" {vertical w:fill_container gap:14 pad:[4,0,0,0] ai:center}
+    T "You can’t use Camp 404 until every required questionnaire is done."  [Inter/12px/normal/$muted-foreground]
+    ▸ "Sign out Link" {pad:[8,12] jc:center ai:center}
+      T "Sign out"  [Inter/14px/600/$muted-foreground]
