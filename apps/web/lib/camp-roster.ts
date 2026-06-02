@@ -15,6 +15,8 @@ export type RosterStatus =
 export interface RosterRow {
   id: string;
   displayName: string;
+  /** Display handle (reuses telegram_handle); null when unset. */
+  handle: string | null;
   /** Highest rank label: Captain > Team Lead > Member. */
   rankLabel: string;
   rank: "captain" | "member";
@@ -73,6 +75,7 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
   return {
     id: member.id,
     displayName: member.displayName?.trim() || "Unnamed burner",
+    handle: member.handle,
     rankLabel: rankLabel(member.rank, member.isLead),
     rank: member.rank,
     isLead: member.isLead,
@@ -98,4 +101,98 @@ export function rankLabel(rank: "captain" | "member", isLead: boolean): string {
   if (rank === "captain") return "Captain";
   if (isLead) return "Team Lead";
   return "Member";
+}
+
+// --- Roster filtering + stats (pure; P7 wires these to the client's chips,
+// search box, and counts strip — service-layer plan 05). ----------------------
+
+/** The roster filter chips (the parameterised "Team:" filter is `matchesTeam`). */
+export type RosterChip = "all" | "pending" | "captains" | "outstanding";
+
+/**
+ * Headline counts for the roster stats strip + chip badges, all from one pass so
+ * they reconcile (plan 05 §Validation). Per the OQ#5 reconciliation: Incomplete
+ * (stat) and Outstanding (chip) are the same predicate — still has a blocking
+ * required action (`pendingRequiredActions > 0`).
+ */
+export interface RosterStats {
+  members: number;
+  approved: number;
+  incomplete: number;
+  pending: number;
+  captains: number;
+  outstanding: number;
+}
+
+/**
+ * Whether a row belongs under a filter chip. `pending` = awaiting a captain's
+ * vetting decision; `captains` = current captains; `outstanding` = still has a
+ * blocking required action. Total over every chip.
+ */
+export function matchesChip(row: RosterRow, chip: RosterChip): boolean {
+  switch (chip) {
+    case "all":
+      return true;
+    case "pending":
+      return row.awaitingApproval;
+    case "captains":
+      return row.rank === "captain";
+    case "outstanding":
+      return !row.requiredComplete;
+    default: {
+      const _exhaustive: never = chip;
+      return _exhaustive;
+    }
+  }
+}
+
+/** Whether a row is a member of the given team (the parameterised Team filter). */
+export function matchesTeam(row: RosterRow, team: string): boolean {
+  return row.teams.includes(team);
+}
+
+/**
+ * Free-text roster search over name, handle, country, and team values. Pure +
+ * two-arg (plan 05 line 239). Email search is intentionally absent until the PII
+ * decision lands (spec OQ#1) — there's no email on the row yet. Empty/whitespace
+ * query matches everything.
+ */
+export function matchesRosterQuery(row: RosterRow, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    row.displayName.toLowerCase().includes(q) ||
+    (row.handle?.toLowerCase().includes(q) ?? false) ||
+    row.rankLabel.toLowerCase().includes(q) ||
+    (row.country?.toLowerCase().includes(q) ?? false) ||
+    row.teams.some((t) => t.toLowerCase().includes(q))
+  );
+}
+
+/**
+ * All the roster counts the stats strip and chip badges need, in one pass so
+ * they reconcile (plan 05 line 321): Members = all; Approved = approved;
+ * Incomplete/Outstanding = a blocking action remains; Pending = awaiting a
+ * vetting decision; Captains = current captains.
+ */
+export function deriveRosterStats(rows: readonly RosterRow[]): RosterStats {
+  let approved = 0;
+  let incomplete = 0;
+  let pending = 0;
+  let captains = 0;
+  for (const row of rows) {
+    if (row.approvalStatus === "approved") approved++;
+    if (!row.requiredComplete) incomplete++;
+    if (row.awaitingApproval) pending++;
+    if (row.rank === "captain") captains++;
+  }
+  // Incomplete and Outstanding are the same predicate per OQ#5.
+  return {
+    members: rows.length,
+    approved,
+    incomplete,
+    pending,
+    captains,
+    outstanding: incomplete,
+  };
 }

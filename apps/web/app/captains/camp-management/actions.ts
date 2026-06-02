@@ -5,21 +5,35 @@ import { z } from "zod";
 import { getCampMemberDetail } from "@camp404/db/roster";
 import { decryptOrNull } from "@camp404/db/crypto";
 import { mergeIdNumber } from "@camp404/db/id-documents";
-import { canSendPromotion, deriveViewerRank } from "@camp404/core";
+import {
+  canSendPromotion,
+  deriveViewerRank,
+  promotionStepState,
+} from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
   decideUserApproval,
   ensureCampUser,
   hasCampAccess,
 } from "@/lib/users";
-import { sendCaptainPromotion } from "@/lib/promotion";
+import {
+  getOpenPromotionForTarget,
+  sendCaptainPromotion,
+} from "@/lib/promotion";
 import {
   presentMemberDetail,
   type PresentedMember,
 } from "@/lib/member-detail";
 
 export type MemberDetailResult =
-  | { ok: true; member: PresentedMember }
+  | {
+      ok: true;
+      member: PresentedMember;
+      /** Whether the viewing captain may send this member a promotion request. */
+      canAssignCaptain: boolean;
+      /** In-flight two-step tracker for an open request (drives the dialog). */
+      promotionStep: { sent: boolean; accepted: boolean };
+    }
   | { ok: false; error: string };
 
 export type ApprovalDecisionResult =
@@ -83,7 +97,25 @@ export async function getMemberDetailAction(
       : { idType: null, idNumber: null };
   const responses = mergeIdNumber(detail.responses, id);
 
-  return { ok: true, member: presentMemberDetail({ ...detail, responses }) };
+  // Assign-captain affordance for the modal: reuse the pure send-guard for
+  // visibility (captain viewer, target not already a captain, not self) and the
+  // pure step-state over the member's open request (if any).
+  const canAssignCaptain = canSendPromotion({
+    viewerRank: "captain",
+    viewerId: gate.captainId,
+    targetRank: deriveViewerRank(detail.rank, false),
+    targetId: userId,
+  }).ok;
+  const promotionStep = promotionStepState(
+    await getOpenPromotionForTarget(userId),
+  );
+
+  return {
+    ok: true,
+    member: presentMemberDetail({ ...detail, responses }),
+    canAssignCaptain,
+    promotionStep,
+  };
 }
 
 /**
