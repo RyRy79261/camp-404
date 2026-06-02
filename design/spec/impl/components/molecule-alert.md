@@ -199,7 +199,7 @@ merge map is exhaustive for this entry.
 
 ### Storybook stories
 
-```
+```text
 Alert.stories.tsx (packages/ui/src/components/)
 
 Story: AllTones
@@ -234,7 +234,7 @@ Story: InteractivePlayground (args table)
 
 ### Vitest / RTL test cases
 
-```
+```text
 alert.test.tsx (co-located or packages/ui/src/components/__tests__/)
 
 — renders nothing unusual when shown (smoke)

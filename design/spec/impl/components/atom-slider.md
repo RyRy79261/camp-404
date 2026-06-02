@@ -149,7 +149,7 @@ The value-badge and label row are caller-side composition (`question.tsx`).
 
 ## Composition & deps — atoms/primitives + @camp404/core helpers
 
-```
+```text
 Slider
   └── @radix-ui/react-slider   (SliderPrimitive.Root/Track/Range/Thumb)
   └── cn (packages/ui/src/lib/utils)
@@ -178,7 +178,7 @@ There is no bespoke inline slider in `apps/web` outside `question.tsx` consuming
 
 ### Storybook stories
 
-```
+```text
 Slider.stories.tsx
 ├── Horizontal            value=[42] min=0 max=100 step=1
 ├── HorizontalAtMin       value=[0]  min=0 max=100 — untouched default
@@ -192,7 +192,7 @@ Slider.stories.tsx
 
 ### Vitest / RTL test cases
 
-```
+```text
 slider.test.tsx
 ├── renders track and thumb
 ├── thumb has aria role="slider"

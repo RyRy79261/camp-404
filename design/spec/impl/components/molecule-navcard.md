@@ -165,7 +165,7 @@ No other file in `packages/ui/src/components/` overlaps. The `card.tsx` primitiv
 
 ### Storybook stories (`packages/ui/src/components/nav-card.stories.tsx`)
 
-```
+```text
 Default          — icon=Mail, title="Invite a member", description="Mint a named invite link…", href="#"
 WithMeta         — icon omitted, title="Burner profile", description="The onboarding questionnaire…",
                    meta="Last edited 12 May 2026", href="#"
@@ -211,7 +211,7 @@ AllIconTones     — three cards side by side: Mail, ClipboardList, GitBranch (m
 - Import `IconBadge` from `./icon-badge`, `cn` from `../lib/utils`, `ChevronRight` from `lucide-react`, `Slot` from `@radix-ui/react-slot`, and `Card`, `CardHeader` from `./card`.
 - Implement `NavCardProps` interface as specified above.
 - Render structure:
-  ```
+  ```text
   <Slot asChild?> → <a href={href}>
     <Card className={cn("transition-colors hover:bg-accent/30", disabled && "opacity-[0.35] pointer-events-none", className)}>
       <CardHeader className="flex flex-row items-center gap-3.5 space-y-0 p-4">

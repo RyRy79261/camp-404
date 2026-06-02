@@ -142,7 +142,7 @@ No JetBrains Mono usage — combobox is a UI control, not a data-console surface
 
 ## Composition & deps — atoms/primitives + @camp404/core helpers
 
-```
+```text
 Combobox
 ├── Button (@camp404/ui/button.tsx)           — trigger, variant="outline", role="combobox"
 ├── Popover / PopoverTrigger / PopoverContent  — Radix popover, width-tracking CSS var
@@ -185,7 +185,7 @@ No `.stories.tsx` file exists for `Combobox` today (`ls packages/ui/src/componen
 
 These are the required test cases (new `packages/ui/src/components/combobox.test.tsx`):
 
-```
+```text
 describe("Combobox")
   ✓ renders trigger with placeholder when no value selected
   ✓ renders trigger with selected label when value matches an option
@@ -279,7 +279,7 @@ Create `packages/ui/src/components/combobox.test.tsx` covering the 11 cases list
 ### Step 4 — Validate e2e path (no new spec needed)
 
 Run the existing e2e spec:
-```
+```bash
 pnpm --filter @camp404/web e2e onboarding-questionnaire
 ```
 

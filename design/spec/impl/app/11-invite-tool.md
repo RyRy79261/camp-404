@@ -33,7 +33,7 @@ No behaviour is removed: the rank-branched form, the `idle|checking|available|ta
 
 ## File structure — target files in apps/web (CREATE/MODIFY/DELETE vs current)
 
-```
+```text
 apps/web/app/tools/invite/
 ├── page.tsx                  MODIFY  server component (gating spine; mounts InviteForm)
 ├── invite-form.tsx           MODIFY  "use client" island (the organism shell; decomposed)

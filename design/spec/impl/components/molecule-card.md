@@ -120,7 +120,7 @@ Card uses `--radius` (10px / `0.625rem`), the default container radius per `desi
 
 Card is a **pure presentational primitive** — no @camp404/core helpers, no domain logic, no data.
 
-```
+```text
 Card
   └─ cn()  ← @camp404/ui/lib/utils (already imported in card.tsx)
 ```
@@ -147,7 +147,7 @@ No inventory candidates collapse into `Card` itself. The existing six sub-compon
 
 ### Storybook stories
 
-```
+```text
 Card.stories.tsx
   Default          — standard card with CardHeader/CardTitle/CardDescription/CardContent
   Danger           — variant="danger", "Danger zone" heading, destructive button
@@ -161,7 +161,7 @@ Card.stories.tsx
 
 ### Vitest / RTL test cases
 
-```
+```text
 card.test.tsx
 
 Rendering

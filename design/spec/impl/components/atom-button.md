@@ -150,7 +150,7 @@ Notes:
 
 ## Composition & deps
 
-```
+```text
 button.tsx
   ├── @radix-ui/react-slot  (Slot — asChild polymorphism)
   ├── class-variance-authority  (cva, VariantProps)
@@ -201,7 +201,7 @@ Sizes`. Add:
 
 ### Vitest / RTL tests (`button.test.tsx`)
 
-```
+```text
 Button — atom
   ✓ renders children
   ✓ applies variant class for each of the 6 variants (data-driven)

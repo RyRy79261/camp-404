@@ -46,7 +46,7 @@ and writing `animate-spin` inline. No shared abstraction exists today.
 
 ## API — props, variants, sizes, states
 
-```typescript
+```ts
 interface SpinnerProps {
   /**
    * Named size step. Defaults to "sm".
@@ -158,7 +158,7 @@ controls size via `[&_svg]:size-4` pass no size prop (inherits from Button conte
 
 ### Storybook stories (`spinner.stories.tsx`)
 
-```
+```text
 - Default          — variant="inline" size="sm"; no args
 - AllSizes         — row: xs / sm / md / lg, inline variant
 - AllVariants      — columns: inline (on dark card), overlay (on relative box), centred

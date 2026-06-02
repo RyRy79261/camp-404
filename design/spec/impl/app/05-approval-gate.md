@@ -100,7 +100,7 @@ After `service-layer/01-identity-access-gating.md` Phase 3 lands, `hasCampAccess
 
 Gate re-validation order on every request (confirmed `page.tsx:28-44`):
 
-```
+```text
 getAuthenticatedUserOrRedirect()  →  unauthenticated → redirect /auth/sign-in
 hasCampAccess(campUser, email)    →  false           → redirect /signup/required   (G1)
 isApproved(campUser, email)       →  true            → redirect /                  (G3 cleared)
@@ -153,7 +153,7 @@ else → render pending or rejected branch
 1. Import `IconBadge` from `@camp404/ui/components/icon-badge` (once `atom-iconbadge.md` Steps 1-2 land). Remove the inline conditional-`div` (`:53-63`).
 
 2. Replace the inline icon-badge div with:
-   ```
+   ```tsx
    <IconBadge
      size="lg"
      shape="circle"

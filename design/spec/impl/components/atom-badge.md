@@ -168,7 +168,7 @@ every pill node in `33-s24-primitive-kit.txt`.
 
 ## Composition & deps
 
-```
+```text
 badge.tsx
   ├── cva (class-variance-authority) — variant resolution, already a dep of @camp404/ui
   ├── cn (packages/ui/src/lib/utils.ts) — className merge, already used by all ui components
@@ -207,7 +207,7 @@ The following candidate names from `component-library.md` merge map are replaced
 
 ### Storybook stories (`badge.stories.tsx`)
 
-```
+```text
 Story: AllTones — renders one sm soft-tint Badge for each of the 7 tones side-by-side
 Story: AllVariants — soft-tint / solid / outline for primary tone
 Story: Sizes — xs (with numeral "5") + sm side-by-side
@@ -222,7 +222,7 @@ Story: Composition/BellCount — Badge absolutely positioned over a Bell icon, m
 
 ### Vitest / RTL test cases (`badge.test.tsx`)
 
-```
+```text
 renders children text
 applies tone class — each of 7 tones produces correct bg/text utility
 applies variant — solid / soft-tint / outline produce distinct className sets

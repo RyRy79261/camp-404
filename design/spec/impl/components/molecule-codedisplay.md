@@ -137,7 +137,7 @@ All values from design-tokens.md. No raw hex in built code.
 
 ## Composition & deps — atoms, primitives, helpers
 
-```
+```text
 CodeDisplay
 ├── Input                (@camp404/ui/input)          — editable variant only
 ├── Button (size="icon") (@camp404/ui/button)          — Shuffle + Copy buttons
@@ -173,7 +173,7 @@ After `CodeDisplay` ships, the inline code in `invite-form.tsx` is replaced with
 
 ### Storybook stories (`packages/ui/src/components/code-display.stories.tsx`)
 
-```
+```text
 CodeDisplay.stories.tsx
 ├── EditableShuffle      — value="neon-toaster-mongoose", onChange+onShuffle wired
 ├── ReadonlyCopy         — value="iron-parrot-sunrise", onCopy only; click → "Copied" flip

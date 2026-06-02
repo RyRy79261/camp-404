@@ -196,7 +196,7 @@ Changes:
 
 **Layout structure (target JSX):**
 
-```
+```tsx
 <main className="mx-auto max-w-2xl">
   <DetailHeader title="Tools" backHref="/" />
   <div className="flex flex-col gap-4 px-4 pt-2 pb-6">
@@ -261,7 +261,7 @@ These pass on the unmodified gate chain (the gate chain itself is REUSE — no c
 
 **New E2E case to add (or note as a follow-on):** approved user navigating to `/tools` sees all three NavCards with correct titles ("Invite a member", "My forms", "Family tree") and `href`s. This is a low-risk canary for the static list not being accidentally emptied or re-ordered. Add to `authenticated.spec.ts` in the same describe block:
 
-```
+```tsx
 test("approved member sees all three tool nav-cards", async ({ page, request }) => {
   await login(page, { email: "god@example.com" });
   await completeOnboarding(request, "god-auth");

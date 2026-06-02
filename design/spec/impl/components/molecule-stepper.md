@@ -13,7 +13,7 @@ The invite-tool currently renders a plain `<Input type="number" min={1} max={100
 
 **Gap vs spec (board `23-s14-invite-tool.txt`, line 27–29):**
 
-```
+```text
 ▸ "NumberInput" {w:fill_container h:46 pad:[0,14] jc:space_between ai:center r:$radius fill:$muted stroke:$border}
   T "1"  [Inter/14px/normal/$foreground]
   ▸ "Stepper" {gap:10 ai:center}
@@ -33,7 +33,7 @@ The board draws an explicit −/+ stepper right-docked inside the `NumberInput` 
 
 ### TS prop interface
 
-```typescript
+```ts
 interface StepperProps {
   /** Controlled integer value. */
   value: number;

@@ -88,7 +88,7 @@ function LongTextField({
 
 ### State flow
 
-```
+```text
 user types  → Textarea onChange → onChange(e.currentTarget.value) → wizard setResponse → responses[id]
                                                                                       ↑ (re-render) value
 tap pill    → DictatePill onActivate → setDictating(true) → RecorderPanel mounts (pill unmounts)

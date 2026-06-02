@@ -116,7 +116,7 @@ Card container inherits `--radius` (10px / `0.625rem`) from the base `Card` prim
 
 ## Composition & deps — atoms/primitives + @camp404/core helpers
 
-```
+```text
 QueueCard
   ├─ Card (packages/ui/src/components/card.tsx)
   │   └─ CardContent (p-4 override for compact row density)
@@ -156,7 +156,7 @@ No candidates from the 57-item inventory fold into QueueCard.
 
 ### Storybook stories
 
-```
+```text
 QueueCard.stories.tsx
   (app-local storybook if configured; else document-only until promoted)
 
@@ -175,7 +175,7 @@ QueueCard.stories.tsx
 
 ### Vitest / RTL test cases
 
-```
+```text
 queue-card.test.tsx
 
 Rendering

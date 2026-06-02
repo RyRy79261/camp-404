@@ -180,7 +180,7 @@ function AnnouncementsManager({
   owns the `POST /api/voice/transcribe` round-trip (voice domain / S21).
 
 ### State flow
-```
+```text
 type title/body         → InputField/Textarea onChange → setForm → composer re-render
 pick mode               → PresentationSelect onValueChange → setForm.presentation → hint updates
 tap DictatePill         → setDictating(true) → RecorderPanel mounts (pill unmounts)

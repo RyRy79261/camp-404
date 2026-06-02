@@ -35,7 +35,7 @@ The component is a private unexported function inside `invite-form.tsx` — same
 
 ### TS prop interface
 
-```typescript
+```ts
 /** Client-only state machine for invite-code availability. */
 export type Availability =
   | { state: "idle" }

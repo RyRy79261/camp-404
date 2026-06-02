@@ -20,7 +20,7 @@
   Same pattern at the Published section. No trailing "See all" action. Count is appended inline with a ternary, not as a distinct prop.
 
 **Board 01 (`01-sectionheader.txt`) is the canonical authority.** The board renders:
-```
+```text
 ▸ "SectionHeader" {w:398 pad:[0,2] jc:space_between ai:center}
   T "SECTION"  [Inter/12px/600/$muted-foreground]
   T "See all"  [Inter/12px/500/$accent]

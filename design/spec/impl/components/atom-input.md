@@ -119,7 +119,7 @@ host), not here.
 The atom has **zero runtime dependencies** beyond React. It does not import Radix, CVA,
 or any other library.
 
-```
+```text
 input.tsx
 └── cn()   ← packages/ui/src/lib/utils.ts  (className merge)
 ```

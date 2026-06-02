@@ -211,7 +211,7 @@ framework-agnostic.
 
 The single allowed direction is **leaf-to-app, never backward**:
 
-```
+```text
                        ┌─────────────────────────────────────────────┐
                        │                  apps/*                      │
                        │   apps/web (Next)   apps/admin-cli   apps/mobile │
@@ -242,7 +242,7 @@ The single allowed direction is **leaf-to-app, never backward**:
 Canonical chain for the new package: **`types ← core ← ui ← app`**, with `db`
 sitting beside `core` (both depend only on `types`; neither imports the other):
 
-```
+```text
 types  ←  db          (db depends on types; data-access)
 types  ←  core         (core depends on types ONLY; pure logic — NEVER imports db)
 types, core  ←  ui     (ui may use core for pure helpers; presentation)

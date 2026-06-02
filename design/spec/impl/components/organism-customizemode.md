@@ -139,7 +139,7 @@ export interface CustomizeLayout {
 
 ### State flow
 
-```
+```text
 page.tsx (server)
   └─ derive viewerRank (core.deriveViewerRank) + default tiles/groups
   └─ HomeClient ("use client" island)

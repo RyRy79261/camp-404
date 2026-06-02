@@ -160,7 +160,7 @@ After the Phase 3 catalogue extraction lands, the following import paths shift (
 
 ### Gate chain (both pages)
 
-```
+```text
 getAuthenticatedUserOrRedirect()
   └─ unauthenticated → redirect to sign-in
 ensureCampUser(authUser)
@@ -174,7 +174,7 @@ isApproved(campUser, authUser.primaryEmail)
 
 ### Detail page additional gates (after the shared chain)
 
-```
+```text
 getReplayableForm(key)
   └─ undefined → notFound()  [→ 404]
 form.load(campUser.id).completedAt
@@ -183,7 +183,7 @@ form.load(campUser.id).completedAt
 
 ### Save action gate (lighter — re-checks auth + access only)
 
-```
+```text
 getAuthenticatedUserOrRedirect()
 hasCampAccess(campUser, authUser.primaryEmail)
   └─ false → redirect("/signup/required")

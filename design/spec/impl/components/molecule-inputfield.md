@@ -40,7 +40,7 @@ with the same structural pattern. Confirmed usages of the inline pattern:
 
 ## API — props, variants, sizes, states
 
-```typescript
+```ts
 interface InputFieldProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "id"> {
   /** Visible label text. Required — every field must have a label. */

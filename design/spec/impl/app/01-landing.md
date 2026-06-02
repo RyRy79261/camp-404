@@ -76,7 +76,7 @@ That is the only service-layer function called on this surface. `LandingHero` it
 
 ### Data flow
 
-```
+```text
 GET /
   → page.tsx (server component, force-dynamic)
       → getAuthenticatedUser()   [apps/web/lib/auth.ts]

@@ -165,7 +165,7 @@ at `question.tsx:166` so consumers stop overriding the atom's base style.
 
 ### Storybook stories
 
-```
+```text
 Label/Default            — <Label htmlFor="demo">Email address</Label>
 Label/WithRequired       — required={true}; confirm * renders with text-primary colour
 Label/Dimmed             — disabled={true}; confirm opacity-70
@@ -177,7 +177,7 @@ Label/InInputField       — composed inside InputField stencil (Label + Input w
 
 ### Vitest / RTL test cases
 
-```
+```text
 ✓ renders children as label text
 ✓ passes htmlFor to the underlying <label> element
 ✓ required=true renders a <span aria-hidden> containing "*"

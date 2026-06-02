@@ -187,7 +187,7 @@ wires the concrete server action (03-questionnaire-forms.md §Consumers):
 
 ### Props / inputs (current contract — REUSE, EXTEND with chrome slot)
 
-```
+```text
 questionnaire   : Questionnaire                       // catalogue (from @camp404/core)
 initialResponses: QuestionnaireResponses              // server-prefilled (incl. merged decrypted id.number)
 action          : (responses: unknown, final: boolean) => Promise<SaveResult>
@@ -199,7 +199,7 @@ nextLabel?      : string                              // per component-library.m
 ```
 
 EXTEND (NEW props for the blocking-runner variant, surface 24):
-```
+```text
 variant?        : "onboarding" | "runner" | "replay"  // selects chrome + progress copy + alert placement
 blockingTitle?  : string                              // runner: BlockingTopBar / RequiredChip title (from required_actions.title)
 // OR: accept a `chrome` render slot the host fills with <BlockingTopBar/> + <BlockingNotice/>.
@@ -221,7 +221,7 @@ server is the source of truth only across reloads (progress saves rehydrate via 
 
 ### How state flows
 
-```
+```text
 host (server) ── initialResponses, questionnaire, action, variant ──▶ wizard (client)
 wizard: useState(responses) ⇄ QuestionField.onChange → setResponse → clears field error
 Next  → validatePageLocally → (persistProgress) action(responses,false) → advance | errors | _form

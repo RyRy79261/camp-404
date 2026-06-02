@@ -83,7 +83,7 @@ This surface is **read-only**. No server actions are called from the page. No mu
 
 ### Data derivations (pure, in the Server Component body)
 
-```
+```ts
 name      = campUser.displayName ?? authUser.primaryEmail ?? "Burner"
 initials  = initialsFrom(campUser.displayName ?? authUser.primaryEmail)
 rankLabel = campUser.rank === "captain" ? "Captain" : "Member"

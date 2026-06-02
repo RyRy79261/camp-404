@@ -95,7 +95,7 @@ export interface RosterToolbarProps {
 **Inputs vs fetches:** RosterToolbar **fetches nothing**. It receives `query`/`filter`/`teamFilter`/`counts`/`locked` and emits `onQuery`/`onToggleFilter`/`onTeamFilter`.
 
 **State flow (round trip):**
-```
+```text
 page.tsx (server) — getCampManagementRoster() → toRosterRow[] (captain) | [] (non-captain)
   → CampManagementRoster (client) owns: query, filter (RosterChip), teamFilter
        counts = deriveRosterStats(rows)         // pure, lib/camp-roster

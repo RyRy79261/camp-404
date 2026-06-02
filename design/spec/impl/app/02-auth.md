@@ -277,7 +277,7 @@ File: `apps/web/app/auth/sign-in-form.tsx`.
 Replace the two `<div className="grid gap-2"><Label htmlFor="…"/><Input …/></div>` blocks
 with `InputField`:
 
-```
+```tsx
 // email
 <InputField
   id="signin-email"
@@ -333,7 +333,7 @@ validation fires correctly; no remaining `grid gap-2` + bare `<Input>` block.
 Files: `apps/web/app/auth/sign-in-form.tsx`, `apps/web/app/auth/sign-up-form.tsx`.
 
 Replace:
-```
+```tsx
 {error && (
   <p className="text-sm text-[color:var(--color-destructive)]" role="alert">
     {error}
@@ -341,7 +341,7 @@ Replace:
 )}
 ```
 with:
-```
+```tsx
 {error && <Alert tone="destructive">{error}</Alert>}
 ```
 
@@ -357,7 +357,7 @@ Files: `apps/web/app/auth/sign-in-form.tsx`, `apps/web/app/auth/sign-up-form.tsx
 
 Replace the `<div className="relative text-center text-sm"> … border-t … <span> …
 Or continue with</span></div>` blocks in both files with:
-```
+```tsx
 <Divider label="Or continue with" />
 ```
 
@@ -370,14 +370,14 @@ verbose-token classes in either form; visual parity confirmed.
 Files: `apps/web/app/auth/sign-in-form.tsx`, `apps/web/app/auth/sign-up-form.tsx`.
 
 Replace each:
-```
+```tsx
 <Button type="button" variant="outline" className="w-full" onClick={handleGoogle} disabled={loading}>
   <GoogleMark />
   Continue with Google
 </Button>
 ```
 with:
-```
+```tsx
 <OAuthButton onClick={handleGoogle} disabled={loading} />
 ```
 
@@ -408,7 +408,7 @@ returns empty; `pnpm build` + `pnpm lint` green.
 File: `apps/web/app/auth/[path]/page.tsx`.
 
 Add imports for the four new leaf components:
-```
+```ts
 import { InputField } from "@camp404/ui/components/input-field";      // consumed inside SignInForm/SignUpForm
 import { OAuthButton } from "@camp404/ui/components/google-button";    // consumed inside SignInForm/SignUpForm
 import { Divider } from "@camp404/ui/components/divider";              // consumed inside SignInForm/SignUpForm

@@ -155,7 +155,7 @@ to be replaced by consumers once EmptyState ships. See Build steps.
 
 ### Storybook stories (`packages/ui/src/components/empty-state.stories.tsx`)
 
-```
+```text
 Default          — variant="full" heading="Nothing here yet"
                    body="When there's something to show, it'll appear here."
                    icon=Inbox (matches board 08 / S24 specimen)

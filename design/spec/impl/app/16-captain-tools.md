@@ -94,7 +94,7 @@ All rendering is inlined in `page.tsx` (no separate child component file). No da
 
 ### `TOOLS` array — in-file constant, not DB-backed
 
-```
+```ts
 TOOLS: ToolEntry[]  (type: { href: string; title: string; description: string; icon: LucideIcon })
 ```
 
@@ -126,7 +126,7 @@ New tools added by appending to `TOOLS` in code. No admin UI or DB backing is pl
 
 When `isCaptain === false`:
 
-```
+```text
 render:
   GhostBack (functional — navigates to /)
   <h1>Camp tools</h1>

@@ -52,7 +52,7 @@ the biggest single churns land alone.
 
 ### The spine at a glance
 
-```
+```text
 P0 tokens/fonts ─┬─► P1 scaffold @camp404/core + types deltas
                  │        │
                  │        ├─► P2 db migration 0012 + db EXTENDs  ──┐

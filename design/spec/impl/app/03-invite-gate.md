@@ -86,7 +86,7 @@ All three calls are server-side only. `authUser.primaryEmail` is the only value 
 
 ### Data flow summary
 
-```
+```text
 page.tsx (server)
   ├── getAuthenticatedUserOrRedirect() → AuthenticatedUser
   ├── ensureCampUser(authUser) → CampUser (synthetic if no invite)

@@ -181,7 +181,7 @@ sufficient and the strip has no reuse outside the roster surface.
 
 ### Storybook stories
 
-```
+```text
 StatTile.stories.tsx
 ```
 
@@ -199,7 +199,7 @@ StatTile.stories.tsx
 
 ### Vitest / RTL tests
 
-```
+```text
 stat-tile.test.tsx
 ```
 
@@ -259,7 +259,7 @@ Implement the component using the prop interface above. No external dependencies
 beyond `cn` from `@camp404/ui/lib/utils`.
 
 Layout (terminal variant):
-```
+```text
 <div class="flex flex-col gap-[7px] rounded-[var(--radius)] border border-border
             bg-muted px-[18px] py-[16px]">
   <span class="font-mono text-[11px] font-bold uppercase tracking-[2px]
@@ -270,7 +270,7 @@ Layout (terminal variant):
 ```
 
 Layout (compact variant):
-```
+```text
 <div class="flex flex-col gap-[3px] rounded-[var(--radius)] border border-border
             bg-card px-[14px] py-[12px]">
   <span class="font-mono text-2xl font-bold leading-none {toneClass}">{value}</span>

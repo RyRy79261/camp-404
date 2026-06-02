@@ -17,7 +17,7 @@ three app-layer consumers, all importing from `@camp404/ui/components/checkbox`:
 
 **Confirmed current implementation** (`checkbox.tsx`):
 
-```
+```text
 Radix CheckboxPrimitive.Root + Indicator
 Box: h-4 w-4 (16×16px), rounded-sm, border-primary (unchecked border)
 Checked: bg-primary / text-primary-foreground
@@ -85,7 +85,7 @@ Indicator icon: Lucide <Check className="h-4 w-4" />
 
 ### Prop interface sketch
 
-```typescript
+```ts
 import * as CheckboxPrimitive from "@radix-ui/react-checkbox"
 
 export interface CheckboxProps
@@ -174,7 +174,7 @@ Label atom concern, not a Checkbox concern.
 
 ## Composition & deps — atoms/primitives + @camp404/core helpers
 
-```
+```text
 @radix-ui/react-checkbox   — Radix Root + Indicator primitives
 lucide-react               — <Check> (checked state) + <Minus> (indeterminate state)
 ../lib/utils               — cn() for className merging
@@ -186,7 +186,7 @@ service layer and are consumer concerns.
 
 **Dependency direction (architecture.md layering):**
 
-```
+```text
 @camp404/ui/checkbox  ←  Radix primitive  (UI only, no db, no next)
 ```
 
@@ -223,7 +223,7 @@ wrapper.
 
 The existing file has `Default` (checked) and `Unchecked`. Extend:
 
-```
+```text
 Default          — size="md", defaultChecked, with Label "Vegan brunch"  (exists)
 Unchecked        — size="md", with Label "Fire performer"                 (exists)
 Disabled         — disabled, unchecked + Label                           (ADD)

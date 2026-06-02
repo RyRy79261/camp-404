@@ -211,7 +211,7 @@ After PROMOTE, both consumers import from `@camp404/ui`.
 
 ### Storybook stories
 
-```
+```text
 AvatarUpload.stories.tsx (packages/ui/src/components/)
 
 Story: Empty
@@ -246,7 +246,7 @@ Story: InteractivePlayground (args table)
 
 ### Vitest / RTL test cases
 
-```
+```text
 avatar-upload.test.tsx (packages/ui/src/components/__tests__/ or co-located)
 
 — renders Camera icon and "Add photo" when value is null (EMPTY state)

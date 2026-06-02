@@ -196,7 +196,7 @@ export interface RosterRowProps {
 
 ### How state flows
 
-```
+```text
 page.tsx (server)
   getCampManagementRoster()  →  toRosterRow[]   (or []  ⟵ non-captain, preview-but-locked)
         │ passes rows + locked

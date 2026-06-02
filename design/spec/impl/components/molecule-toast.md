@@ -27,7 +27,7 @@ Classification: **NEW** — build from scratch inside `packages/ui`.
 
 Board draw (exact extract from `design/.spec-extract/boards/31-s22-global-overlays.txt`):
 
-```
+```text
 ▸ "Toast" {w:fill_container gap:10 pad:[12,14] ai:center r:$radius fill:$popover stroke:$border}
   ⊙ check ($accent) [lucide]
   T "Saved."  [Inter/14px/500/$foreground]
@@ -247,7 +247,7 @@ The only candidates that could have overlapped Toast are:
 
 ### Storybook stories
 
-```
+```text
 Toast.stories.tsx (packages/ui/src/components/)
 
 Story: AllTones
@@ -277,7 +277,7 @@ Story: InteractivePlayground (args table)
 
 ### Vitest / RTL test cases
 
-```
+```text
 toast.test.tsx
 (packages/ui/src/components/__tests__/ or co-located)
 

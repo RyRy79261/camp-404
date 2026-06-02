@@ -51,7 +51,7 @@ the board's drawn pill.
 
 Both boards draw the component by name:
 
-```
+```text
 ▸ "DictatePill" {gap:6 pad:[6,10] ai:center r:999 fill:$muted stroke:$border}
   ⊙ mic ($muted-foreground) [lucide]
   T "Dictate instead"  [Inter/12px/normal/$muted-foreground]
@@ -213,7 +213,7 @@ element.
 parent/child. The host (`LongTextField`, `ReportBugDialog`, `AnnouncementsManager`)
 owns a `dictating: boolean` state:
 
-```
+```text
 dictating === false → render <DictatePill onActivate={() => setDictating(true)} />
 dictating === true  → render <RecorderPanel onTranscript={…} onDismiss={() => setDictating(false)} />
 ```

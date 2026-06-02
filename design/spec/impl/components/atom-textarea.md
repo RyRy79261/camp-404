@@ -145,7 +145,7 @@ Once the `variant` prop ships, consumers remove that ad-hoc `className` injectio
 
 ### Vitest / RTL test cases
 
-```
+```text
 describe("Textarea", () => {
   it("renders a <textarea> element")
   it("forwards ref to the underlying textarea")

@@ -205,7 +205,7 @@ Ring common: `w-24 h-24 rounded-full flex items-center justify-center`.
 
 Siblings in the host render tree. The host (`LongTextField`, `ReportBugDialog`, `AnnouncementsManager`) owns `dictating: boolean`:
 
-```
+```text
 dictating === false → <DictatePill onActivate={() => setDictating(true)} />
 dictating === true  → <RecorderPanel onTranscript={…} onDismiss={() => setDictating(false)} />
 ```

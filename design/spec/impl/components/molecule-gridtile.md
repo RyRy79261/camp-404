@@ -37,7 +37,7 @@ There is also no GridTile anywhere in `apps/web` — no hand-rolled version exis
 
 ### Board 03 anatomy (canonical)
 
-```
+```text
 GridTile {vertical w:200 gap:14 pad:16 r:$radius fill:$card stroke:$border}
   Head {w:fill_container jc:space_between}
     IconBox {w:46 h:46 jc:center ai:center r:12 fill:#ff008c2e}

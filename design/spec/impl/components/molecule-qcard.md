@@ -133,7 +133,7 @@ once token wiring lands per `foundations-tokens.md`).
 
 QCard is a **pure presentational molecule** — no domain logic, no data fetching.
 
-```
+```text
 QCard
   ├─ cn()             ← packages/ui/src/lib/utils (already in the package)
   └─ Lucide icons     ← lucide-react peer dep (already used across packages/ui)
@@ -169,7 +169,7 @@ collision with any existing or planned component.
 
 ### Storybook stories
 
-```
+```text
 QCard.stories.tsx
 
   Default
@@ -198,7 +198,7 @@ QCard.stories.tsx
 
 ### Vitest / RTL test cases
 
-```
+```text
 qcard.test.tsx
 
 Rendering

@@ -251,7 +251,7 @@ Avatar ships:
 
 ### Storybook stories
 
-```
+```text
 Avatar.stories.tsx
   - Default (initials, "RN", h-10 w-10)
   - With photo (src set, 40px)
@@ -267,7 +267,7 @@ Avatar.stories.tsx
 
 ### Test cases (vitest + RTL)
 
-```
+```text
 avatar.test.tsx
   rendering
   - renders AvatarImage when src is truthy

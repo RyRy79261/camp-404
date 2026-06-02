@@ -103,7 +103,7 @@ HTML response outside the React component tree and outside this molecule's scope
 
 ## Composition & deps — atoms/primitives + `@camp404/core` helpers
 
-```
+```text
 OAuthButton
 ├── Button            (packages/ui/src/components/button.tsx — REUSE atom)
 │   └── Slot          (@radix-ui/react-slot — existing dep)

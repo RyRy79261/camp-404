@@ -104,7 +104,7 @@ All service-layer functions are **REUSE — no changes to the service layer**.
 
 ### Server-side data flow (all in `page.tsx` RSC body)
 
-```
+```text
 1. getAuthenticatedUserOrRedirect()  →  apps/web/lib/auth.ts        REUSE
 2. ensureCampUser(authUser)          →  apps/web/lib/users.ts        REUSE
 3. hasCampAccess(campUser, email)    →  apps/web/lib/users.ts        REUSE  (pure; @camp404/core extraction candidate — architecture Phase 3)

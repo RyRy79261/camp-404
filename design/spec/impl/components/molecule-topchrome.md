@@ -24,7 +24,7 @@ implementation of the canonical board 00 spec:
 
 **Board 00 anatomy (canonical):**
 
-```
+```text
 TopChrome {w:430 pad:16 jc:space_between ai:center fill:$background}
   Wordmark {gap:1 ai:center}
     T "Camp"  [Inter/20px/700/$foreground]
