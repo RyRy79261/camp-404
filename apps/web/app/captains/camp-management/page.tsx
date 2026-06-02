@@ -2,9 +2,9 @@ import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
-import { getCampManagementRoster } from "@camp404/db/roster";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { getCampManagementRoster } from "@/lib/roster";
 import { toRosterRow } from "@/lib/camp-roster";
 import { CampManagementRoster } from "./camp-management-roster";
 

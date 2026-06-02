@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { CampManagementMember } from "@camp404/db/roster";
 import type {
   IncomingPromotionRequest,
   QuestionnaireFieldChange,
@@ -572,6 +573,41 @@ export const testStore = {
         d.readAt = now;
       }
     }
+  },
+
+  // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
+  // The test store models users + burner profiles, not teams / driver profiles /
+  // required-actions, so those facets default (empty / false / 0) — enough for
+  // the captain roster to render in E2E without touching Neon.
+  getCampManagementRoster(): CampManagementMember[] {
+    return Array.from(usersByAuthId.values())
+      .map((u): CampManagementMember => {
+        const profile = profilesByUserId.get(u.id) ?? null;
+        const country =
+          profile && typeof profile.responses["country"] === "string"
+            ? (profile.responses["country"] as string)
+            : null;
+        return {
+          id: u.id,
+          displayName: u.displayName,
+          handle: null,
+          rank: u.rank,
+          approvalStatus: u.approvalStatus,
+          isLead: false,
+          teams: [],
+          duesPaid: false,
+          membershipTier: null,
+          onboardingComplete: profile?.completedAt != null,
+          pendingRequiredActions: 0,
+          intendsToDrive: false,
+          driverProfileComplete: false,
+          country,
+          createdAt: u.createdAt,
+        };
+      })
+      .sort((a, b) =>
+        (a.displayName ?? "").localeCompare(b.displayName ?? ""),
+      );
   },
 
   // --- captain-promotion handshake (mirrors @camp404/db/captain-promotion) ---
