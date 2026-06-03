@@ -1,12 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@camp404/ui/components/card";
+import { EmptyState } from "@camp404/ui/components/empty-state";
+import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -15,6 +9,7 @@ import {
   isApproved,
 } from "@/lib/users";
 import { listCompletedForms } from "@/lib/forms";
+import { FormCard } from "./form-card";
 
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
@@ -41,53 +36,41 @@ export default async function FormsListPage() {
   const forms = await listCompletedForms(campUser.id);
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 py-8">
-      <Link
-        href="/tools"
-        className="mb-6 inline-flex items-center gap-1 text-sm text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]"
-      >
-        <ChevronLeft className="h-4 w-4" />
+    <main className="mx-auto w-full max-w-lg px-4 py-4">
+      <GhostBack href="/tools" className="-ml-2">
         Tools
-      </Link>
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">My forms</h1>
-        <p className="mt-1 text-sm text-[color:var(--color-muted-foreground)]">
-          Questionnaires you've completed this year. Open one to review and
-          update your answers — we'll keep a log of what you change.
-        </p>
-      </header>
+      </GhostBack>
 
-      {forms.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-[color:var(--color-muted-foreground)]">
-          You haven't completed any forms yet.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {forms.map((form) => {
-            const lastEdited = form.updatedAt ?? form.completedAt;
-            return (
-              <Link
+      <div className="flex flex-col gap-4 pt-2">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-2xl font-bold">My forms</h1>
+          <p className="text-sm text-muted-foreground">
+            Questionnaires you&apos;ve completed this year. Open one to review
+            and update your answers — we&apos;ll keep a log of what you change.
+          </p>
+        </div>
+
+        {forms.length === 0 ? (
+          <EmptyState
+            title="No forms yet"
+            description="You haven't completed any forms yet."
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {forms.map((form) => (
+              <FormCard
                 key={form.key}
                 href={`/tools/forms/${form.key}`}
-                className="block"
-              >
-                <Card className="transition-colors hover:border-[color:var(--color-primary)]">
-                  <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-                    <div className="flex flex-col gap-1.5">
-                      <CardTitle className="text-lg">{form.title}</CardTitle>
-                      <CardDescription>{form.description}</CardDescription>
-                      <p className="text-xs text-[color:var(--color-muted-foreground)]">
-                        Last edited {dateFmt.format(lastEdited)}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-[color:var(--color-muted-foreground)]" />
-                  </CardHeader>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
-      )}
+                title={form.title}
+                description={form.description}
+                lastEdited={dateFmt.format(
+                  new Date(form.updatedAt ?? form.completedAt),
+                )}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </main>
   );
 }

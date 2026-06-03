@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 import type { QuestionnaireResponses } from "@camp404/types";
+import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -9,8 +8,9 @@ import {
   hasCampAccess,
   isApproved,
 } from "@/lib/users";
-import { getReplayableForm, listFormEdits, type FormEdit } from "@/lib/forms";
+import { getReplayableForm, listFormEdits } from "@/lib/forms";
 import { FormReplay } from "./form-replay";
+import { ChangeLog } from "./change-log";
 
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
@@ -54,73 +54,28 @@ export default async function FormReplayPage({
   const lastEdited = state.updatedAt ?? state.completedAt;
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 py-8">
-      <Link
-        href="/tools/forms"
-        className="mb-6 inline-flex items-center gap-1 text-sm text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]"
-      >
-        <ChevronLeft className="h-4 w-4" />
+    <main className="mx-auto w-full max-w-lg px-4 py-4">
+      <GhostBack href="/tools/forms" className="-ml-2">
         My forms
-      </Link>
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">{form.title}</h1>
-        <p className="mt-1 text-sm text-[color:var(--color-muted-foreground)]">
-          Step back through the form and update anything that's changed. Last
-          edited {dateFmt.format(lastEdited)}.
-        </p>
-      </header>
+      </GhostBack>
 
-      <FormReplay
-        formKey={form.key}
-        questionnaire={form.questionnaire}
-        initialResponses={state.responses as QuestionnaireResponses}
-      />
+      <div className="flex flex-col gap-4 pt-2">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-2xl font-bold">{form.title}</h1>
+          <p className="text-sm text-muted-foreground">
+            Step back through the form and update anything that&apos;s changed.
+            Last edited {dateFmt.format(new Date(lastEdited))}.
+          </p>
+        </div>
 
-      <ChangeLog edits={edits} />
+        <FormReplay
+          formKey={form.key}
+          questionnaire={form.questionnaire}
+          initialResponses={state.responses as QuestionnaireResponses}
+        />
+
+        <ChangeLog edits={edits} />
+      </div>
     </main>
-  );
-}
-
-function ChangeLog({ edits }: { edits: FormEdit[] }) {
-  return (
-    <section className="mt-10 border-t pt-6">
-      <h2 className="text-lg font-semibold">Change log</h2>
-      <p className="mt-1 text-sm text-[color:var(--color-muted-foreground)]">
-        Every time you update this form we record what changed. We don't keep
-        old versions — just this running history.
-      </p>
-      {edits.length === 0 ? (
-        <p className="mt-4 text-sm text-[color:var(--color-muted-foreground)]">
-          No edits yet. Changes you make here will show up in this list.
-        </p>
-      ) : (
-        <ol className="mt-4 flex flex-col gap-4">
-          {edits.map((edit) => (
-            <li
-              key={edit.id}
-              className="rounded-lg border bg-[color:var(--color-card)] p-4"
-            >
-              <p className="text-sm font-medium">
-                {dateFmt.format(edit.createdAt)}
-              </p>
-              <ul className="mt-2 flex flex-col gap-1.5">
-                {edit.changes.map((change) => (
-                  <li key={change.fieldId} className="text-sm">
-                    <span className="font-medium">{change.label}</span>
-                    <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[color:var(--color-muted-foreground)]">
-                      <span className="line-through">{change.from}</span>
-                      <span aria-hidden>→</span>
-                      <span className="text-[color:var(--color-foreground)]">
-                        {change.to}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
   );
 }
