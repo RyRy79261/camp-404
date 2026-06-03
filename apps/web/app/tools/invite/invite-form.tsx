@@ -1,31 +1,34 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { Check, Copy, Loader2, Shuffle, X } from "lucide-react";
-import { Button } from "@camp404/ui/components/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@camp404/ui/components/card";
+  CircleCheck,
+  Copy,
+  Info,
+  Loader2,
+  Shield,
+  ShieldCheck,
+  Shuffle,
+  TriangleAlert,
+  Users,
+} from "lucide-react";
+import { Alert } from "@camp404/ui/components/alert";
+import { Button } from "@camp404/ui/components/button";
 import { Checkbox } from "@camp404/ui/components/checkbox";
+import { CodeDisplay } from "@camp404/ui/components/code-display";
 import { Input } from "@camp404/ui/components/input";
+import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
 import { Textarea } from "@camp404/ui/components/textarea";
 import {
+  CODE_RULES_HINT,
   generateInviteCode,
   isSyntacticallyValidCode,
 } from "@/lib/invite-words";
 import { createInviteAction, type CreateInviteResult } from "./actions";
-
-type Availability =
-  | { state: "idle" }
-  | { state: "checking" }
-  | { state: "available" }
-  | { state: "taken" }
-  | { state: "invalid"; hint: string };
+import { AvailabilityHint } from "./availability-hint";
+import { Stepper } from "./stepper";
+import type { Availability } from "./types";
 
 export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
   const [code, setCode] = useState<string>(() => generateInviteCode());
@@ -51,10 +54,7 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
       return;
     }
     if (!isSyntacticallyValidCode(code)) {
-      setAvailability({
-        state: "invalid",
-        hint: "3–48 chars, lowercase letters / digits / hyphens.",
-      });
+      setAvailability({ state: "invalid", hint: CODE_RULES_HINT });
       return;
     }
     setAvailability({ state: "checking" });
@@ -71,12 +71,11 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
           hint?: string;
         };
         if (body.available) setAvailability({ state: "available" });
-        else if (body.reason === "taken")
-          setAvailability({ state: "taken" });
+        else if (body.reason === "taken") setAvailability({ state: "taken" });
         else if (body.reason === "invalid")
           setAvailability({
             state: "invalid",
-            hint: body.hint ?? "Invalid code.",
+            hint: body.hint ?? CODE_RULES_HINT,
           });
         else setAvailability({ state: "idle" });
       } catch (err) {
@@ -102,159 +101,108 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Invite a member</CardTitle>
-        <CardDescription>
-          {isCaptain
-            ? "Mint an invite code for Camp 404. As a captain you can pre-approve the people who sign up, or leave them for a captain to vet. Codes are recorded against your account for the family tree."
-            : "Mint a single-use code that lets one person sign up for Camp 404. A captain will review and approve them before they get access. Codes are recorded against your account so the family tree picks up who you brought on."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form action={formAction} className="space-y-5">
-          <div className="space-y-2">
-            <Label htmlFor="email">
-              {multiUse ? "Lead recipient's email (optional)" : "Their email address"}
-            </Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              required={!multiUse}
-              autoComplete="off"
-              placeholder="sara@example.com"
-            />
-          </div>
+    <form action={formAction} className="flex flex-col gap-[18px]">
+      <h1 className="text-2xl font-bold text-foreground">Invite a member</h1>
 
-          <div className="space-y-2">
-            <Label htmlFor="note">Why you're inviting them (optional)</Label>
-            <Textarea
-              id="note"
-              name="note"
-              rows={3}
-              placeholder="Kitchen lead from last burn; great with sourdough."
-            />
-          </div>
+      <InputField
+        id="email"
+        name="email"
+        type="email"
+        required={!multiUse}
+        autoComplete="off"
+        placeholder="sara@example.com"
+        label={
+          multiUse ? "Lead recipient's email (optional)" : "Their email address"
+        }
+      />
 
-          {isCaptain ? (
-            <CaptainOptions
-              preApprove={preApprove}
-              onPreApproveChange={setPreApprove}
-              maxUses={maxUses}
-              onMaxUsesChange={setMaxUses}
-            />
-          ) : (
-            <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              Anyone who signs up with this code will need a captain&apos;s
-              approval before they can use the app.
-            </p>
-          )}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="note">Why you&apos;re inviting them (optional)</Label>
+        <Textarea
+          id="note"
+          name="note"
+          rows={3}
+          placeholder="Kitchen lead from last burn; great with sourdough."
+        />
+      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="code">Invite code</Label>
-            <div className="flex gap-2">
-              <Input
-                id="code"
-                name="code"
-                value={code}
-                onChange={(e) => setCode(e.target.value.toLowerCase())}
-                spellCheck={false}
-                autoComplete="off"
-                className="font-mono"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Generate a new silly code"
-                onClick={() => setCode(generateInviteCode())}
-              >
-                <Shuffle />
-              </Button>
-            </div>
-            <AvailabilityHint availability={availability} code={code} />
-          </div>
+      {isCaptain ? (
+        <CaptainOptions
+          preApprove={preApprove}
+          onPreApproveChange={setPreApprove}
+          maxUses={maxUses}
+          onMaxUsesChange={setMaxUses}
+        />
+      ) : (
+        // Board S14 draws this as a quiet muted note (fill:$muted), not an
+        // accent Alert — keeps it tonally distinct from Captain options.
+        <div className="flex items-start gap-2.5 rounded-xl bg-muted p-3.5 text-label text-muted-foreground">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <span>
+            Anyone who signs up with this code will need a captain&apos;s
+            approval before they can use the app.
+          </span>
+        </div>
+      )}
 
-          {result && !result.ok && (
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            >
-              {result.error}
-            </p>
-          )}
-
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="code">Invite code</Label>
+        <div className="flex gap-2.5">
+          <Input
+            id="code"
+            name="code"
+            value={code}
+            onChange={(e) => setCode(e.target.value.toLowerCase())}
+            spellCheck={false}
+            autoComplete="off"
+            required
+            className="font-mono"
+          />
           <Button
-            type="submit"
-            disabled={
-              isPending ||
-              availability.state === "checking" ||
-              availability.state === "taken" ||
-              availability.state === "invalid"
-            }
-            className="w-full"
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Generate a new silly code"
+            onClick={() => setCode(generateInviteCode())}
           >
-            {isPending ? (
-              <>
-                <Loader2 className="animate-spin" /> Creating…
-              </>
-            ) : (
-              "Create invite"
-            )}
+            <Shuffle />
           </Button>
-        </form>
-      </CardContent>
-    </Card>
+        </div>
+        <AvailabilityHint availability={availability} code={code} />
+      </div>
+
+      {result && !result.ok && (
+        <Alert variant="error">
+          <TriangleAlert />
+          <span>{result.error}</span>
+        </Alert>
+      )}
+
+      <Button
+        type="submit"
+        // Block in-flight / failed checks; idle stays enabled (impl-plan gating
+        // matrix) and the required code input guards the empty case natively.
+        disabled={
+          isPending ||
+          availability.state === "checking" ||
+          availability.state === "taken" ||
+          availability.state === "invalid"
+        }
+        className="w-full"
+      >
+        {isPending ? (
+          <>
+            <Loader2 className="animate-spin" /> Creating…
+          </>
+        ) : (
+          "Create invite"
+        )}
+      </Button>
+    </form>
   );
 }
 
-function AvailabilityHint({
-  availability,
-  code,
-}: {
-  availability: Availability;
-  code: string;
-}) {
-  if (!code) return null;
-  if (availability.state === "checking") {
-    return (
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" /> Checking availability…
-      </p>
-    );
-  }
-  if (availability.state === "available") {
-    return (
-      <p className="flex items-center gap-1.5 text-xs text-emerald-400">
-        <Check className="h-3 w-3" />{" "}
-        <span>
-          <span className="font-mono">{code}</span> is available.
-        </span>
-      </p>
-    );
-  }
-  if (availability.state === "taken") {
-    return (
-      <p className="flex items-center gap-1.5 text-xs text-destructive">
-        <X className="h-3 w-3" />{" "}
-        <span>
-          <span className="font-mono">{code}</span> is already taken — pick another.
-        </span>
-      </p>
-    );
-  }
-  if (availability.state === "invalid") {
-    return (
-      <p className="flex items-center gap-1.5 text-xs text-destructive">
-        <X className="h-3 w-3" /> {availability.hint}
-      </p>
-    );
-  }
-  return null;
-}
-
-/** Captain-only invite controls: pre-approve toggle + use cap. */
+/** Captain-only invite controls: pre-approve toggle + multi-use cap. */
 function CaptainOptions({
   preApprove,
   onPreApproveChange,
@@ -267,12 +215,13 @@ function CaptainOptions({
   onMaxUsesChange: (v: string) => void;
 }) {
   return (
-    <div className="space-y-4 rounded-md border bg-muted/30 p-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Captain options
-      </p>
+    <div className="flex flex-col gap-3.5 rounded-xl border border-border bg-accent/15 p-4">
+      <div className="flex items-center gap-2">
+        <Shield className="h-4 w-4 text-accent" aria-hidden />
+        <span className="text-label font-bold text-accent">Captain options</span>
+      </div>
 
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2.5">
         <Checkbox
           id="preApprove"
           name="preApprove"
@@ -280,7 +229,7 @@ function CaptainOptions({
           onCheckedChange={(v) => onPreApproveChange(v === true)}
           className="mt-0.5"
         />
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1">
           <Label htmlFor="preApprove" className="font-normal">
             Pre-approve whoever signs up
           </Label>
@@ -292,17 +241,15 @@ function CaptainOptions({
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="maxUses">How many people can use this code</Label>
-        <Input
+        <Stepper
           id="maxUses"
           name="maxUses"
-          type="number"
+          value={maxUses}
+          onChange={onMaxUsesChange}
           min={1}
           max={100}
-          value={maxUses}
-          onChange={(e) => onMaxUsesChange(e.target.value)}
-          className="w-28"
         />
         <p className="text-xs text-muted-foreground">
           {Number(maxUses) > 1
@@ -326,43 +273,66 @@ function SuccessPanel({
   requiresApproval: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+
+  // Flip "Copied" back after a beat; clear the timer on unmount so a fast
+  // navigate-away can't setState on an unmounted component.
+  useEffect(() => {
+    if (!copied) return;
+    const handle = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(handle);
+  }, [copied]);
+
   const usesLine =
     maxUses === 1
-      ? "It's single-use — once they sign up with it, nobody else can."
-      : `Up to ${maxUses} people can sign up with it.`;
+      ? "Can be used by 1 person."
+      : `Can be used by ${maxUses} people.`;
   const approvalLine = requiresApproval
-    ? " They'll need a captain's approval before they get access."
-    : " They're pre-approved — straight in after onboarding.";
+    ? "They'll need a captain's approval before they get access."
+    : "They'll be pre-approved — no captain sign-off needed.";
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Invite ready</CardTitle>
-        <CardDescription>
-          {email ? `Share this code with ${email}. ` : "Share this code. "}
-          {usesLine}
-          {approvalLine}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 p-3 font-mono text-lg">
-          <span>{code}</span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              await navigator.clipboard.writeText(code);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1500);
-            }}
-          >
-            <Copy className="h-4 w-4" /> {copied ? "Copied" : "Copy"}
-          </Button>
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center gap-2.5">
+        <CircleCheck className="h-5 w-5 text-success" aria-hidden />
+        <h2 className="text-lg font-bold text-foreground">Invite ready</h2>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {email
+          ? `Share this code with ${email}.`
+          : "Share this code with whoever you’re inviting."}
+      </p>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Users className="h-4 w-4 shrink-0" aria-hidden />
+          <span>{usesLine}</span>
         </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
+          <span>{approvalLine}</span>
+        </div>
+      </div>
+
+      <CodeDisplay
+        code={code}
+        className="flex h-12 w-full justify-center border-border bg-muted text-base"
+      />
+
+      <div className="flex flex-col gap-2.5 pt-1">
+        <Button
+          type="button"
+          className="w-full"
+          onClick={async () => {
+            await navigator.clipboard.writeText(code);
+            setCopied(true);
+          }}
+        >
+          <Copy /> {copied ? "Copied" : "Copy"}
+        </Button>
         <Button asChild variant="outline" className="w-full">
           <a href="/tools/invite">Send another</a>
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
