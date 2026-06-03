@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
+import { TriangleAlert } from "lucide-react";
+import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
-import { Input } from "@camp404/ui/components/input";
-import { Label } from "@camp404/ui/components/label";
+import { InputField } from "@camp404/ui/components/input-field";
 import { submitInviteCode, type SubmitInviteResult } from "./actions";
 
 /**
@@ -18,53 +19,53 @@ export function InviteGateForm({ email }: { email: string | null }) {
   >(submitInviteCode, null);
 
   return (
-    <form action={formAction} className="flex flex-col gap-6">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-2xl font-bold">One more thing</h1>
-        <p className="text-balance text-sm text-[color:var(--color-muted-foreground)]">
+    <form action={formAction} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-subtitle-hero font-bold text-card-foreground">
+          One more thing
+        </h1>
+        <p className="text-label text-muted-foreground">
           {email ? (
             <>
-              You're signed in as{" "}
-              <span className="font-medium text-[color:var(--color-foreground)]">
-                {email}
-              </span>
-              .{" "}
+              You&apos;re signed in as{" "}
+              <span className="font-medium text-foreground">{email}</span>.{" "}
             </>
           ) : null}
           Camp 404 is invite-only — drop your code below to come aboard.
         </p>
       </div>
 
-      <div className="grid gap-2">
-        <Label htmlFor="invite-code">Invite code</Label>
-        <Input
-          id="invite-code"
-          name="code"
-          autoComplete="off"
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          required
-        />
-      </div>
+      <InputField
+        id="invite-code"
+        name="code"
+        label="Invite code"
+        placeholder="CAMP-XXXX-XXXX"
+        autoComplete="off"
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        required
+      />
 
       {state && !state.ok && (
-        <p className="text-sm text-[color:var(--color-destructive)]" role="alert">
-          {state.error}
-        </p>
+        <Alert variant="error">
+          <TriangleAlert />
+          <span>{state.error}</span>
+        </Alert>
       )}
 
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? "Checking…" : "Enter camp"}
       </Button>
 
-      <Button
-        asChild
-        variant="link"
-        className="text-[color:var(--color-muted-foreground)]"
-      >
-        <a href="/auth/sign-out">Sign out</a>
-      </Button>
+      <div className="flex justify-center">
+        <a
+          href="/auth/sign-out"
+          className="text-label font-medium text-accent hover:underline"
+        >
+          Sign out
+        </a>
+      </div>
     </form>
   );
 }
