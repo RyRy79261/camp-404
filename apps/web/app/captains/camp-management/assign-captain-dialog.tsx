@@ -89,15 +89,17 @@ export function AssignCaptainDialog({
     });
   }
 
+  // Single close path (Esc / overlay / close icon / Cancel button) so the
+  // transient error is always cleared on the way out and never lingers to the
+  // next open.
+  function requestOpenChange(next: boolean) {
+    if (isPending) return;
+    if (!next) setError(null);
+    onOpenChange(next);
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (isPending) return;
-        if (!o) setError(null);
-        onOpenChange(o);
-      }}
-    >
+    <Dialog open={open} onOpenChange={requestOpenChange}>
       <DialogContent className="border-secondary sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -132,7 +134,7 @@ export function AssignCaptainDialog({
             variant="outline"
             className="w-full sm:w-auto"
             disabled={isPending}
-            onClick={() => onOpenChange(false)}
+            onClick={() => requestOpenChange(false)}
           >
             Cancel
           </Button>

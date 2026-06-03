@@ -83,19 +83,26 @@ export function MemberProfile({
     setRejectOpen(false);
     setAssignOpen(false);
     setDetail({ state: "loading" });
-    void getMemberDetailAction(row.id).then((res) => {
-      if (cancelled) return;
-      setDetail(
-        res.ok
-          ? {
-              state: "loaded",
-              member: res.member,
-              canAssignCaptain: res.canAssignCaptain,
-              promotionStep: res.promotionStep,
-            }
-          : { state: "error", message: res.error },
-      );
-    });
+    void getMemberDetailAction(row.id)
+      .then((res) => {
+        if (cancelled) return;
+        setDetail(
+          res.ok
+            ? {
+                state: "loaded",
+                member: res.member,
+                canAssignCaptain: res.canAssignCaptain,
+                promotionStep: res.promotionStep,
+              }
+            : { state: "error", message: res.error },
+        );
+      })
+      .catch(() => {
+        // A thrown/rejected action (network drop, server error) must fall into
+        // the error state, not leave the panel stuck on the spinner.
+        if (cancelled) return;
+        setDetail({ state: "error", message: "Couldn't load this member." });
+      });
     return () => {
       cancelled = true;
     };

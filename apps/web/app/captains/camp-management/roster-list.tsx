@@ -76,6 +76,7 @@ export function RosterList({
                 <span aria-hidden className="text-xl leading-none">
                   {role.emoji}
                 </span>
+                <span className="sr-only">{role.label}</span>
               </span>
             </button>
           </li>

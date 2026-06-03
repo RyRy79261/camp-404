@@ -70,8 +70,10 @@ export function CampManagementRoster({
     );
   }
 
+  // "Nobody is awaiting approval." only when there genuinely are no pending
+  // members — not when a search/team filter merely narrowed them out.
   const emptyTitle =
-    chip === "pending"
+    chip === "pending" && stats.pending === 0
       ? "Nobody is awaiting approval."
       : rows.length === 0
         ? "No members have signed up yet."
