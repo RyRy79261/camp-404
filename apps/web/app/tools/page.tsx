@@ -1,12 +1,12 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight, ClipboardList, GitBranch, Mail } from "lucide-react";
 import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@camp404/ui/components/card";
+  ChevronLeft,
+  ClipboardList,
+  GitBranch,
+  Mail,
+} from "lucide-react";
+import { DetailHeader } from "@camp404/ui/components/detail-header";
+import { NavCard } from "@camp404/ui/components/nav-card";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 
@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Tools — Camp 404" };
 
 // Uncategorised toolbox for camp members — everything that doesn't yet
-// live under a more specific quadrant goes here. Reachable from the
-// "Tools" quadrant on the home control panel.
+// live under a more specific section goes here. Reachable from the
+// "Tools" tile on the home control panel.
 
 interface ToolEntry {
   href: string;
@@ -30,20 +30,20 @@ const TOOLS: ToolEntry[] = [
     href: "/tools/invite",
     title: "Invite a member",
     description: "Mint a single-use code to bring someone onto Camp 404.",
-    icon: <Mail className="h-5 w-5" />,
+    icon: <Mail className="text-primary" />,
   },
   {
     href: "/tools/forms",
     title: "My forms",
     description:
       "Revisit a questionnaire you've already completed, update your answers, and see what changed.",
-    icon: <ClipboardList className="h-5 w-5" />,
+    icon: <ClipboardList className="text-primary" />,
   },
   {
     href: "/family-tree",
     title: "Family tree",
     description: "See who brought who onto camp.",
-    icon: <GitBranch className="h-5 w-5" />,
+    icon: <GitBranch className="text-primary" />,
   },
 ];
 
@@ -58,37 +58,45 @@ export default async function ToolsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold">Tools</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Uncategorised tooling for camp members. We'll move tools into
-          dedicated quadrants as we group them.
-        </p>
-      </header>
+    <main className="mx-auto w-full max-w-lg">
+      {/* Back-nav bar labelled by its destination (matches /notifications), so
+          the page's single h1 is the "Tools" hero below — no duplicate heading. */}
+      <DetailHeader
+        as="h2"
+        title="Home"
+        className="px-3 py-3.5"
+        leading={
+          <a
+            href="/"
+            aria-label="Back to home"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden />
+          </a>
+        }
+      />
 
-      <ul className="space-y-3">
-        {TOOLS.map((tool) => (
-          <li key={tool.href}>
-            <Link href={tool.href} className="block focus:outline-none">
-              <Card className="transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring">
-                <CardHeader className="flex flex-row items-center gap-4 space-y-0">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-md border bg-muted/40">
-                    {tool.icon}
-                  </span>
-                  <div className="flex-1">
-                    <CardTitle className="text-base">{tool.title}</CardTitle>
-                    <CardDescription className="mt-0.5">
-                      {tool.description}
-                    </CardDescription>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                </CardHeader>
-              </Card>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <div className="flex flex-col gap-4 px-4 pb-6 pt-2">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-2xl font-bold">Tools</h1>
+          <p className="text-sm text-muted-foreground">
+            Uncategorised tooling for camp members. We&apos;ll move tools into
+            dedicated sections as we group them.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {TOOLS.map((tool) => (
+            <NavCard
+              key={tool.href}
+              href={tool.href}
+              icon={tool.icon}
+              title={tool.title}
+              description={tool.description}
+            />
+          ))}
+        </div>
+      </div>
     </main>
   );
 }
