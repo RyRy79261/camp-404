@@ -10,6 +10,7 @@ import {
   type LucideIcon,
   Megaphone,
   MessageSquare,
+  Mic,
   Pencil,
   Send,
   Trash2,
@@ -35,12 +36,14 @@ import {
 } from "@camp404/ui/components/select";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { cn } from "@camp404/ui/lib/utils";
+import { RecorderPanel } from "@/components/voice/recorder-panel";
 import {
   deleteDraftAction,
   publishAction,
   saveDraftAction,
   updateDraftAction,
 } from "./actions";
+import { appendTranscript } from "./transcript";
 
 // Captain composer + list (board S18). Compose a draft up top; below, drafts can
 // be edited / published / deleted and published announcements show their delivery
@@ -118,6 +121,7 @@ export function AnnouncementsManager({
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [dictating, setDictating] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const drafts = announcements.filter((a) => a.publishedAt === null);
@@ -126,7 +130,14 @@ export function AnnouncementsManager({
   const reset = () => {
     setForm(EMPTY_FORM);
     setError(null);
+    setDictating(false);
   };
+
+  // Append a dictated transcript to the message body (mirrors the questionnaire
+  // LongTextField), so the captain can mix typing and dictation freely.
+  function appendToBody(text: string) {
+    setForm((f) => ({ ...f, body: appendTranscript(f.body, text, 5000) }));
+  }
 
   const handleSave = () => {
     setError(null);
@@ -226,7 +237,7 @@ export function AnnouncementsManager({
           disabled={pending}
         />
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="announcement-body">Message</Label>
           <Textarea
             id="announcement-body"
@@ -237,6 +248,25 @@ export function AnnouncementsManager({
             onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
             disabled={pending}
           />
+          {/* Voice dictation — same pattern as the questionnaire long-text
+              fields: tap to swap in the recorder, each transcript appends. */}
+          {dictating ? (
+            <RecorderPanel
+              onTranscript={appendToBody}
+              onDismiss={() => setDictating(false)}
+            />
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2 self-end"
+              onClick={() => setDictating(true)}
+              disabled={pending}
+            >
+              <Mic className="h-4 w-4" /> Dictate instead
+            </Button>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
