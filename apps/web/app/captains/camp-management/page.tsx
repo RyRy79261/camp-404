@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
-import { Button } from "@camp404/ui/components/button";
+import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getCampManagementRoster } from "@/lib/roster";
@@ -12,10 +11,10 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Camp management — Camp 404" };
 
-// Captains' camp-management roster. Access is rank-gated at the data layer,
-// not by redirect: non-captains can reach this page but see a locked, empty
-// shell — the server never sends them roster data. Only `rank = 'captain'`
-// loads the real rows.
+// Captains' camp-management roster. Access is rank-gated at the data layer, not
+// by redirect: non-captains reach this page but the server withholds the rows
+// (rows=[], locked) and the island shows a CaptainLock — preview-but-locked
+// (D3). Only `rank = 'captain'` loads the real roster.
 
 export default async function CampManagementPage() {
   const authUser = await getAuthenticatedUserOrRedirect();
@@ -38,18 +37,37 @@ export default async function CampManagementPage() {
     : [];
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <Button asChild variant="ghost" size="sm" className="mb-4 gap-1.5">
-        <a href="/">
-          <ChevronLeft className="h-4 w-4" /> Captains
-        </a>
-      </Button>
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Camp management</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Everyone who has signed up, their rank and status, whether
-          they&apos;ve completed their required questionnaires, registered as a
-          driver, and whether they&apos;re in South Africa.
+    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
+      <GhostBack href="/captains/tools" className="-ml-2 mb-3">
+        Camp tools
+      </GhostBack>
+
+      <header className="mb-6 flex flex-col gap-3">
+        {/* TermBar — terminal chrome, ≥ sm only. */}
+        <div className="hidden items-center gap-2.5 self-start rounded-lg border bg-muted px-3.5 py-2 sm:inline-flex">
+          <span className="font-mono text-caption font-medium text-muted-foreground">
+            camp404 · roster
+          </span>
+          <span className="font-mono text-caption font-medium text-accent">
+            {rows.length} {rows.length === 1 ? "record" : "records"}
+          </span>
+        </div>
+
+        <h1 className="flex items-center gap-2.5 text-2xl font-bold text-foreground sm:font-mono">
+          <span aria-hidden className="hidden text-accent sm:inline">
+            {">"}
+          </span>
+          Camp management
+          <span
+            aria-hidden
+            className="hidden h-6 w-3 animate-pulse bg-accent sm:inline-block"
+          />
+        </h1>
+
+        <p className="hidden max-w-2xl text-sm text-muted-foreground sm:block">
+          The full roster. Open a member to read their profile, approve or
+          reject pending sign-ups, and — captain to captain — assign captain
+          rank.
         </p>
       </header>
 
