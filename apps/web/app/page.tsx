@@ -15,7 +15,7 @@ import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { countUnread } from "@/lib/notifications";
 import { initialsFrom } from "@/lib/initials";
 import { LandingHero } from "./landing-hero";
-import { RankGroupCard } from "./home/rank-group-card";
+import { HomeClient } from "./home/home-client";
 import { TILE_CATALOGUE } from "./home/tile-catalogue";
 import { EnablePush } from "@/components/push/enable-push";
 
@@ -76,6 +76,15 @@ export default async function HomePage() {
 
   const unreadNotifications = await unreadPromise;
 
+  // Per-group preview-but-locked gate, enforced server-side: the locked group
+  // ids are computed here (the security decision, D3) and passed to the client
+  // island, which renders those groups' CaptainLock with no tiles. The static
+  // tile catalogue itself is non-sensitive; the real data gate is each
+  // destination route.
+  const lockedGroupIds = TILE_CATALOGUE.filter(
+    (group) => !requireClearance(viewerRank, group.rank).cleared,
+  ).map((group) => group.id);
+
   return (
     <>
       <TopChrome
@@ -85,32 +94,7 @@ export default async function HomePage() {
       />
       {/* The root layout applies no width cap, so the surface owns its shell. */}
       <main className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 py-5">
-        <div className="flex flex-col gap-0.5">
-          <h1 className="text-section font-bold text-foreground">
-            Control panel
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            Everything you can run. Captain first.
-          </p>
-        </div>
-
-        {/* Per-group preview-but-locked gate, enforced server-side: a locked
-            group is sent no tiles — only its head + the CaptainLock render
-            (decision D3 — withhold data, don't dim a populated render). */}
-        {TILE_CATALOGUE.map((group) => {
-          const { cleared } = requireClearance(viewerRank, group.rank);
-          return (
-            <RankGroupCard
-              key={group.id}
-              name={group.name}
-              icon={group.groupIcon}
-              chipTone={group.chipTone}
-              locked={!cleared}
-              tiles={cleared ? group.tiles : []}
-              toolCount={cleared ? group.tiles.length : undefined}
-            />
-          );
-        })}
+        <HomeClient lockedGroupIds={lockedGroupIds} />
 
         <Divider />
         {/* Web push opt-in — only for authenticated members; renders nothing
