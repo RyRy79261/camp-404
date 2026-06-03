@@ -3,9 +3,10 @@
 import * as React from "react";
 import { useActionState } from "react";
 import Link from "next/link";
+import { TriangleAlert } from "lucide-react";
+import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
-import { Input } from "@camp404/ui/components/input";
-import { Label } from "@camp404/ui/components/label";
+import { InputField } from "@camp404/ui/components/input-field";
 import { AvatarUpload } from "@/components/profile/avatar-upload";
 import { updateProfile, type UpdateProfileResult } from "../actions";
 
@@ -27,26 +28,25 @@ export function ProfileEditForm({
   >(updateProfile, null);
 
   return (
-    <form action={formAction} className="flex flex-col gap-6">
+    <form action={formAction} className="flex flex-col gap-4">
       <AvatarUpload value={imageUrl} onChange={setImageUrl} />
       <input type="hidden" name="profileImageUrl" value={imageUrl ?? ""} />
 
-      <div className="grid gap-2">
-        <Label htmlFor="displayName">Display name</Label>
-        <Input
-          id="displayName"
-          name="displayName"
-          defaultValue={initialDisplayName}
-          maxLength={80}
-          required
-          disabled={isPending}
-        />
-      </div>
+      <InputField
+        id="displayName"
+        name="displayName"
+        label="Display name"
+        defaultValue={initialDisplayName}
+        maxLength={80}
+        required
+        disabled={isPending}
+      />
 
       {state && !state.ok && (
-        <p className="text-sm text-[color:var(--color-destructive)]" role="alert">
-          {state.error}
-        </p>
+        <Alert variant="error">
+          <TriangleAlert />
+          <span>{state.error}</span>
+        </Alert>
       )}
 
       <div className="flex items-center justify-between">

@@ -31,30 +31,33 @@ export default async function ProfileEditPage() {
     campUser.displayName ?? authUser.primaryEmail ?? "";
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col px-4 py-8">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Edit profile</h1>
-        <p className="mt-1 text-sm text-[color:var(--color-muted-foreground)]">
+    <main className="mx-auto w-full max-w-md">
+      <header className="flex flex-col gap-1.5 px-4 pb-2 pt-5">
+        <h1 className="text-2xl font-bold">Edit profile</h1>
+        <p className="text-label text-muted-foreground">
           Update your photo and how your name shows up around camp.
         </p>
       </header>
-      <Card className="overflow-hidden">
-        <CardContent className="p-6">
-          <ProfileEditForm
-            initialDisplayName={initialDisplayName}
-            initialImageUrl={campUser.profileImageUrl}
-          />
-        </CardContent>
-      </Card>
 
-      <Card className="mt-6 overflow-hidden">
-        <CardContent className="p-6">
-          <h2 className="mb-3 text-lg font-semibold text-[color:var(--color-destructive)]">
-            Danger zone
-          </h2>
-          <DeleteAccountForm />
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-4 px-4 pb-5 pt-1">
+        <Card className="overflow-hidden">
+          <CardContent className="p-6">
+            <ProfileEditForm
+              initialDisplayName={initialDisplayName}
+              initialImageUrl={campUser.profileImageUrl}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden border-destructive">
+          <CardContent className="p-6">
+            <h2 className="mb-3 text-lg font-semibold text-destructive">
+              Danger zone
+            </h2>
+            <DeleteAccountForm />
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }
