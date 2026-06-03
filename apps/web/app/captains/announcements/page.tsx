@@ -1,11 +1,10 @@
 import { redirect } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
-import { Button } from "@camp404/ui/components/button";
+import { CaptainLock } from "@camp404/ui/components/captain-lock";
+import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { listAnnouncements } from "@/lib/notifications";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { AnnouncementsManager } from "./announcements-manager";
 
 export const dynamic = "force-dynamic";
@@ -35,14 +34,12 @@ export default async function AnnouncementsPage() {
   const announcements = cleared ? await listAnnouncements() : [];
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
-      <Button asChild variant="ghost" size="sm" className="mb-4 gap-1.5">
-        <a href="/captains/tools">
-          <ChevronLeft className="h-4 w-4" /> Camp tools
-        </a>
-      </Button>
+    <main className="mx-auto max-w-lg px-4 py-6">
+      <GhostBack href="/captains/tools" className="-ml-2 mb-4">
+        Camp tools
+      </GhostBack>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-2xl font-bold">
           Announcements &amp; notifications
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
