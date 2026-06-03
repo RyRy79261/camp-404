@@ -99,27 +99,27 @@ export function EnablePush() {
 
   if (state !== "default") return null;
 
+  // Full-width outline CTA per board S08 (`Button-Outline {w:fill_container}`);
+  // the home shell's flex gap handles spacing, so no wrapper/margin here.
   return (
-    <div className="mt-4 flex justify-center">
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={async () => {
-          try {
-            const permission = await Notification.requestPermission();
-            if (permission !== "granted") {
-              setState(permission === "denied" ? "denied" : "default");
-              return;
-            }
-            await registerToken();
-            setState("granted");
-          } catch {
-            setState("unavailable");
+    <Button
+      variant="outline"
+      className="w-full"
+      onClick={async () => {
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission !== "granted") {
+            setState(permission === "denied" ? "denied" : "default");
+            return;
           }
-        }}
-      >
-        Enable notifications
-      </Button>
-    </div>
+          await registerToken();
+          setState("granted");
+        } catch {
+          setState("unavailable");
+        }
+      }}
+    >
+      Enable notifications
+    </Button>
   );
 }
