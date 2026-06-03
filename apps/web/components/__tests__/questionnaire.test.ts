@@ -11,7 +11,6 @@ const validResponses: Record<string, unknown> = {
   "id.type": "sa_id",
   "id.number": "1234567890123",
   "competency.cooking": "teach",
-  "competency.hardware": "assist",
   "logistics.driving": "yes",
   "logistics.onsite_before": "yes_full",
   "logistics.onsite_after": "yes_partial",

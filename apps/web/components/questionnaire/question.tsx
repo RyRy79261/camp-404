@@ -5,15 +5,14 @@ import type {
   LongTextQuestion,
   Question,
   QuestionnaireResponseValue,
-  ScaleQuestion,
-  ToggleQuestion,
 } from "@camp404/types";
-import { cn } from "@camp404/ui/lib/utils";
 import { Button } from "@camp404/ui/components/button";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { Combobox } from "@camp404/ui/components/combobox";
+import { DateControl } from "@camp404/ui/components/date-control";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
+import { OptionCardGroup } from "@camp404/ui/components/option-card-group";
 import {
   Select,
   SelectContent,
@@ -21,11 +20,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@camp404/ui/components/select";
+import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { Slider } from "@camp404/ui/components/slider";
 import { Textarea } from "@camp404/ui/components/textarea";
-import { Mic } from "lucide-react";
+import { CircleAlert, Mic } from "lucide-react";
 import { RecorderPanel } from "../voice/recorder-panel";
 import { AvatarUpload } from "../profile/avatar-upload";
+
+// Per-kind questionnaire field renderer, recomposed onto the S05 field-kind
+// board affordances + the shared @camp404/ui primitives. The data model is
+// unchanged: every kind emits the same QuestionnaireResponseValue it always did
+// (scale/toggle emit the chosen option's string value; slider a number; …).
 
 interface QuestionFieldProps {
   question: Question;
@@ -34,8 +39,8 @@ interface QuestionFieldProps {
   error?: string;
   /**
    * Page-level hint that this question owns the full viewport (single
-   * scale, single long_text). Lets the LongTextField grow vertically
-   * instead of sitting at a fixed 4-row height.
+   * long_text / image). Lets the field grow vertically instead of sitting at a
+   * fixed height.
    */
   fullScreen?: boolean;
 }
@@ -50,23 +55,15 @@ export function QuestionField({
   const fieldId = `q-${question.id}`;
 
   return (
-    <div
-      className={
-        fullScreen
-          ? "flex flex-1 flex-col gap-2"
-          : "flex flex-col gap-2"
-      }
-    >
+    <div className={fullScreen ? "flex flex-1 flex-col gap-2" : "flex flex-col gap-2"}>
       <Label htmlFor={fieldId}>
         {question.prompt}
         {"required" in question && question.required && (
-          <span className="ml-1 text-[color:var(--color-primary)]">*</span>
+          <span className="ml-1 text-primary">*</span>
         )}
       </Label>
       {question.helper && (
-        <p className="text-xs text-[color:var(--color-muted-foreground)]">
-          {question.helper}
-        </p>
+        <p className="text-xs text-muted-foreground">{question.helper}</p>
       )}
       <FieldInput
         id={fieldId}
@@ -76,7 +73,11 @@ export function QuestionField({
         fullScreen={fullScreen}
       />
       {error && (
-        <p className="text-xs text-destructive" role="alert">
+        <p
+          role="alert"
+          className="flex items-center gap-1.5 text-xs text-destructive"
+        >
+          <CircleAlert aria-hidden className="h-3.5 w-3.5 shrink-0" />
           {error}
         </p>
       )}
@@ -99,27 +100,31 @@ function FieldInput({
 }) {
   switch (question.kind) {
     case "slider": {
-      // Default to the min when the user hasn't touched it yet — the
-      // most honest "no preference" position for an interest slider.
+      // Default to the min when the user hasn't touched it yet — the most
+      // honest "no preference" position for an interest slider.
       const current = typeof value === "number" ? value : question.min;
       return (
         <div className="flex flex-col gap-2">
+          {/* S04 slider head: the live value sits top-right, accent mono. */}
+          <div className="flex justify-end">
+            <span
+              aria-live="polite"
+              className="font-mono text-sm font-medium text-accent"
+            >
+              {current}
+            </span>
+          </div>
           <Slider
             id={id}
+            aria-label={question.prompt}
             value={[current]}
             onValueChange={(v) => onChange(v[0] ?? current)}
             min={question.min}
             max={question.max}
             step={question.step}
           />
-          <div className="flex justify-between text-xs text-[color:var(--color-muted-foreground)]">
+          <div className="flex justify-between text-xs text-muted-foreground">
             <span>{question.minLabel ?? question.min}</span>
-            <span
-              aria-live="polite"
-              className="font-medium text-[color:var(--color-foreground)]"
-            >
-              {current}
-            </span>
             <span>{question.maxLabel ?? question.max}</span>
           </div>
         </div>
@@ -148,11 +153,16 @@ function FieldInput({
         ? new Set(value as string[])
         : new Set<string>();
       return (
-        <div className="flex flex-col gap-2">
+        <div
+          id={id}
+          role="group"
+          aria-label={question.prompt}
+          className="flex flex-col gap-3"
+        >
           {question.options.map((o) => {
             const checkboxId = `${id}-${o.value}`;
             return (
-              <div key={o.value} className="flex items-center gap-2">
+              <div key={o.value} className="flex items-center gap-2.5">
                 <Checkbox
                   id={checkboxId}
                   checked={selected.has(o.value)}
@@ -193,29 +203,35 @@ function FieldInput({
       );
     case "date":
       return (
-        <Input
+        <DateControl
           id={id}
-          type="date"
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.currentTarget.value)}
         />
       );
     case "scale":
+      // Catalogue scales are labelled categorical steps (not a numeric 1–N
+      // range), so they render as labelled option cards — single-select,
+      // emitting the step's string value (S04/S05 reconciliation).
       return (
-        <ScaleField
+        <OptionCardGroup
           id={id}
-          question={question}
+          aria-label={question.prompt}
+          options={question.steps.map((s) => ({ value: s.value, label: s.label }))}
           value={typeof value === "string" ? value : undefined}
-          onChange={onChange}
+          onValueChange={onChange}
         />
       );
     case "toggle":
+      // The only toggle is the 2-option id.type pick, which S04 draws as a
+      // segmented control (not the S05 switch-list — that's for multi on/off).
       return (
-        <ToggleField
+        <SegmentedControl
           id={id}
-          question={question}
+          aria-label={question.prompt}
+          options={question.options}
           value={typeof value === "string" ? value : undefined}
-          onChange={onChange}
+          onValueChange={onChange}
         />
       );
     case "combobox":
@@ -242,178 +258,12 @@ function FieldInput({
 }
 
 /**
- * Segmented-control renderer for the `toggle` question kind. A row of
- * equal-width buttons; the selected one carries the primary colour, the
- * others are bordered ghosts. Wraps to multiple rows if a label is long.
- */
-function ToggleField({
-  id,
-  question,
-  value,
-  onChange,
-}: {
-  id: string;
-  question: ToggleQuestion;
-  value: string | undefined;
-  onChange: (value: QuestionnaireResponseValue) => void;
-}) {
-  return (
-    <div
-      id={id}
-      role="radiogroup"
-      className="inline-flex w-full rounded-md border border-[color:var(--color-border)] p-1"
-    >
-      {question.options.map((o) => {
-        const selected = value === o.value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={() => onChange(o.value)}
-            className={cn(
-              "flex-1 rounded-sm px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)]",
-              selected
-                ? "bg-[color:var(--color-primary)] text-[color:var(--color-primary-foreground)] shadow-sm"
-                : "text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]",
-            )}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * Discrete labelled scale. On mobile this fills the viewport height as a
- * vertical column (top = highest level, bottom = lowest) with a vertical
- * slider running alongside the labels. On md+ it falls back to a
- * horizontal slider with labels above each tick. The underlying value is
- * the index of the chosen step in `steps`.
- */
-function ScaleField({
-  id,
-  question,
-  value,
-  onChange,
-}: {
-  id: string;
-  question: ScaleQuestion;
-  value: string | undefined;
-  onChange: (value: QuestionnaireResponseValue) => void;
-}) {
-  const steps = question.steps;
-  // `steps` is ordered top→bottom for the vertical UI; the slider's
-  // numeric axis runs bottom→top so the top label corresponds to the
-  // highest value.
-  const indexOfValue =
-    value !== undefined ? steps.findIndex((s) => s.value === value) : -1;
-  const currentIndex = indexOfValue >= 0 ? indexOfValue : Math.floor(steps.length / 2);
-  const sliderValue = steps.length - 1 - currentIndex;
-
-  function commitFromSlider(next: number[]) {
-    const v = next[0];
-    if (v === undefined) return;
-    const idx = steps.length - 1 - v;
-    const step = steps[idx];
-    if (step) onChange(step.value);
-  }
-
-  return (
-    <>
-      {/* Mobile: full-height vertical scale.
-        * Three-column grid puts the slider track dead-centre with
-        * equal-width gutters on either side. Left column is empty for
-        * now — reserved for a future secondary label set. Right column
-        * carries the step labels, distributed top-to-bottom matching
-        * the slider's max-at-top / min-at-bottom orientation.
-        */}
-      <div
-        id={id}
-        className="grid h-[70dvh] grid-cols-[1fr_auto_1fr] items-stretch gap-4 md:hidden"
-      >
-        <div aria-hidden />
-        <Slider
-          orientation="vertical"
-          value={[sliderValue]}
-          onValueChange={commitFromSlider}
-          min={0}
-          max={steps.length - 1}
-          step={1}
-          aria-labelledby={`${id}-label`}
-        />
-        <ol
-          className="flex h-full flex-col justify-between py-1"
-          aria-hidden="true"
-        >
-          {steps.map((s, i) => {
-            const selected = i === currentIndex;
-            return (
-              <li
-                key={s.value}
-                className={
-                  "text-sm leading-tight transition-colors " +
-                  (selected
-                    ? "font-semibold text-[color:var(--color-foreground)]"
-                    : "text-[color:var(--color-muted-foreground)]")
-                }
-              >
-                {s.label}
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-
-      {/* Desktop: horizontal scale with labels above each tick */}
-      <div className="hidden md:block">
-        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
-          {[...steps].reverse().map((s, i) => {
-            const reversedIdx = steps.length - 1 - i;
-            const selected = reversedIdx === currentIndex;
-            return (
-              <p
-                key={s.value}
-                className={
-                  "text-center text-xs leading-tight " +
-                  (selected
-                    ? "font-semibold text-[color:var(--color-foreground)]"
-                    : "text-[color:var(--color-muted-foreground)]")
-                }
-              >
-                {s.label}
-              </p>
-            );
-          })}
-        </div>
-        <Slider
-          value={[sliderValue]}
-          onValueChange={commitFromSlider}
-          min={0}
-          max={steps.length - 1}
-          step={1}
-          className="mt-3"
-        />
-      </div>
-    </>
-  );
-}
-
-/**
- * Long-form textarea with optional dictation revealed on demand —
- * pattern mirrored from RyRy79261/intake-tracker's bug-report dialog.
- * Textarea is the primary input; "Dictate instead" sits beneath as a
- * compact button. Tapping it swaps the button for a bordered recorder
- * panel (big circular mic, waveform, timer). Each completed recording
- * appends to whatever's already in the textarea, so the user can mix
- * typing and dictation freely.
- *
- * In `fullScreen` mode (single long_text on its own page — bio, this
- * year's ideas) the textarea grows to fill the viewport instead of
- * sitting at a fixed row count.
+ * Long-form textarea with optional dictation revealed on demand (S05
+ * long_text). Textarea is the primary input; "Dictate instead" sits beneath as
+ * a bordered pill. Tapping it swaps the button for the recorder panel; each
+ * completed recording appends to whatever's already in the textarea, so the
+ * user can mix typing and dictation. In `fullScreen` mode (a lone long_text on
+ * its own page) the textarea grows to fill the viewport.
  */
 function LongTextField({
   id,
@@ -439,20 +289,14 @@ function LongTextField({
   }
 
   return (
-    <div
-      className={
-        fullScreen ? "flex flex-1 flex-col gap-3" : "flex flex-col gap-3"
-      }
-    >
+    <div className={fullScreen ? "flex flex-1 flex-col gap-3" : "flex flex-col gap-3"}>
       <Textarea
         id={id}
         maxLength={question.maxLength}
         value={value}
         onChange={(e) => onChange(e.currentTarget.value)}
         rows={fullScreen ? undefined : 6}
-        className={
-          fullScreen ? "min-h-[40dvh] flex-1 resize-none" : undefined
-        }
+        className={fullScreen ? "min-h-[40dvh] flex-1 resize-none" : undefined}
       />
       {dictating ? (
         <RecorderPanel
@@ -464,11 +308,10 @@ function LongTextField({
         <Button
           type="button"
           variant="outline"
-          size="lg"
           onClick={() => setDictating(true)}
-          className="h-auto gap-3 self-end px-8 py-4"
+          className="gap-2 self-center"
         >
-          <Mic className="h-5 w-5" />
+          <Mic className="h-4 w-4" />
           Dictate instead
         </Button>
       )}

@@ -57,7 +57,7 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 export const QUESTIONNAIRE: Questionnaire = {
-  version: "2026.05.29-v8",
+  version: "2026.06.04-v9",
   pages: [
     {
       id: "profile_photo",
@@ -181,7 +181,7 @@ export const QUESTIONNAIRE: Questionnaire = {
         kind: "slider" as const,
         prompt: t.label,
         min: 0,
-        max: 5,
+        max: 6,
         step: 1,
         minLabel: "Not for me",
         maxLabel: "Sign me up",
@@ -203,27 +203,6 @@ export const QUESTIONNAIRE: Questionnaire = {
             { value: "teach", label: "Adequate — I can teach recipes" },
             { value: "follow", label: "I can follow recipes" },
             { value: "burn", label: "I might burn recipes" },
-          ],
-          required: true,
-        },
-      ],
-    },
-    {
-      id: "hardware_competency",
-      kind: "questions",
-      title: "Hardware competency",
-      subtitle:
-        "Building, wiring, fixing — the camp lives or dies on this stuff.",
-      questions: [
-        {
-          id: "competency.hardware",
-          kind: "scale",
-          prompt: "How would you describe your hardware skills?",
-          steps: [
-            { value: "design", label: "I design and build rigs from scratch" },
-            { value: "build", label: "I can build to a plan" },
-            { value: "assist", label: "I can hold the torch and pass tools" },
-            { value: "novice", label: "I'd rather not be near the power tools" },
           ],
           required: true,
         },
