@@ -21,6 +21,7 @@ import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
 import { Textarea } from "@camp404/ui/components/textarea";
 import {
+  CODE_RULES_HINT,
   generateInviteCode,
   isSyntacticallyValidCode,
 } from "@/lib/invite-words";
@@ -53,10 +54,7 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
       return;
     }
     if (!isSyntacticallyValidCode(code)) {
-      setAvailability({
-        state: "invalid",
-        hint: "3–48 chars, lowercase letters / digits / hyphens.",
-      });
+      setAvailability({ state: "invalid", hint: CODE_RULES_HINT });
       return;
     }
     setAvailability({ state: "checking" });
@@ -77,7 +75,7 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
         else if (body.reason === "invalid")
           setAvailability({
             state: "invalid",
-            hint: body.hint ?? "Invalid code.",
+            hint: body.hint ?? CODE_RULES_HINT,
           });
         else setAvailability({ state: "idle" });
       } catch (err) {
@@ -182,9 +180,14 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
 
       <Button
         type="submit"
-        // Only mint once the code is confirmed available — that also blocks the
-        // idle/empty state (the action requires a code).
-        disabled={isPending || availability.state !== "available"}
+        // Block in-flight / failed checks; idle stays enabled (impl-plan gating
+        // matrix) and the required code input guards the empty case natively.
+        disabled={
+          isPending ||
+          availability.state === "checking" ||
+          availability.state === "taken" ||
+          availability.state === "invalid"
+        }
         className="w-full"
       >
         {isPending ? (

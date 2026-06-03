@@ -29,9 +29,10 @@ export function Stepper({
 }: StepperProps) {
   const current = Number(value);
   const safe = Number.isFinite(current) ? current : min;
-  // Never emit "NaN": a non-numeric/empty value falls back to min.
+  // Always emit a whole number in [min, max] — the action takes an integer
+  // count, and a non-numeric/empty value falls back to min (never "NaN").
   const clamp = (n: number) =>
-    String(Math.min(max, Math.max(min, Number.isFinite(n) ? n : min)));
+    String(Math.round(Math.min(max, Math.max(min, Number.isFinite(n) ? n : min))));
 
   const stepButton =
     "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&>svg]:h-4 [&>svg]:w-4";
@@ -48,6 +49,7 @@ export function Stepper({
         name={name}
         type="number"
         inputMode="numeric"
+        step={1}
         min={min}
         max={max}
         value={value}
