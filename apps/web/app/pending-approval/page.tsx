@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Clock, ShieldX } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
+import { IconBadge } from "@camp404/ui/components/icon-badge";
 import { AuthShell } from "@/components/auth-shell";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
@@ -13,8 +14,10 @@ import {
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
 
+// Static export — Next can't branch this on the runtime approval status, so it
+// stays neutral rather than reading "pending" on the rejected branch too.
 export const metadata = {
-  title: "Application pending — Camp 404",
+  title: "Camp access — Camp 404",
 };
 
 /**
@@ -48,24 +51,16 @@ export default async function PendingApprovalPage() {
   return (
     <AuthShell hideBack>
       <div className="flex flex-col items-center gap-6 text-center">
-        <div
-          className={
-            rejected
-              ? "flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive"
-              : "flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/15 text-amber-400"
-          }
-        >
-          {rejected ? (
-            <ShieldX className="h-7 w-7" aria-hidden />
-          ) : (
-            <Clock className="h-7 w-7" aria-hidden />
-          )}
-        </div>
+        <IconBadge size="lg" tone={rejected ? "destructive" : "accent"}>
+          {rejected ? <ShieldX aria-hidden /> : <Clock aria-hidden />}
+        </IconBadge>
 
         {rejected ? (
           <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-bold">Application not approved</h1>
-            <p className="text-balance text-sm text-[color:var(--color-muted-foreground)]">
+            <h1 className="text-subtitle-hero font-bold text-card-foreground">
+              Application not approved
+            </h1>
+            <p className="text-balance text-label text-muted-foreground">
               A captain has reviewed your application and it wasn&apos;t
               approved for camp access this time. If you think this is a
               mistake, reach out to whoever invited you.
@@ -73,8 +68,10 @@ export default async function PendingApprovalPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-bold">Application submitted</h1>
-            <p className="text-balance text-sm text-[color:var(--color-muted-foreground)]">
+            <h1 className="text-subtitle-hero font-bold text-card-foreground">
+              Application submitted
+            </h1>
+            <p className="text-balance text-label text-muted-foreground">
               Thanks{campUser.displayName ? `, ${campUser.displayName}` : ""} —
               your profile is in. A captain needs to approve your access before
               you can use the rest of the app. We&apos;ll let you in as soon as

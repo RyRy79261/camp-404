@@ -17,8 +17,10 @@ const iconBadgeVariants = cva(
       tone: {
         muted: "bg-muted/40 text-muted-foreground",
         primary: "border-transparent bg-primary/15 text-primary",
+        accent: "border-transparent bg-accent/15 text-accent",
         success: "border-transparent bg-success/15 text-success",
         warning: "border-transparent bg-warning/15 text-warning",
+        destructive: "border-transparent bg-destructive/15 text-destructive",
       },
     },
     defaultVariants: { size: "default", tone: "muted" },
