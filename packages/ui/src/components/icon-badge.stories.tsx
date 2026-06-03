@@ -24,6 +24,9 @@ export const Tones: Story = {
       <IconBadge tone="accent">
         <ShieldCheck />
       </IconBadge>
+      <IconBadge tone="secondary">
+        <ShieldCheck />
+      </IconBadge>
       <IconBadge tone="success" size="lg">
         <ShieldCheck />
       </IconBadge>
@@ -31,6 +34,27 @@ export const Tones: Story = {
         <ShieldCheck />
       </IconBadge>
       <IconBadge tone="destructive">
+        <ShieldCheck />
+      </IconBadge>
+    </div>
+  ),
+};
+
+// The control-panel group heads (rounded `sm`) and tool-tile icon boxes
+// (rounded `md`) — the shapes/sizes the home dashboard composes.
+export const RoundedChips: Story = {
+  render: () => (
+    <div className="flex items-center gap-3">
+      <IconBadge shape="rounded" size="sm" tone="primary">
+        <ShieldCheck />
+      </IconBadge>
+      <IconBadge shape="rounded" size="sm" tone="accent">
+        <ShieldCheck />
+      </IconBadge>
+      <IconBadge shape="rounded" size="sm" tone="secondary">
+        <ShieldCheck />
+      </IconBadge>
+      <IconBadge shape="rounded" size="md" tone="primary">
         <ShieldCheck />
       </IconBadge>
     </div>

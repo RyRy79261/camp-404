@@ -1,9 +1,6 @@
 import { redirect } from "next/navigation";
-import { ListChecks, UserRound, Users, Wrench } from "lucide-react";
-import {
-  ControlPanel,
-  type ControlPanelLayer,
-} from "@camp404/ui/components/control-panel";
+import { Divider } from "@camp404/ui/components/divider";
+import { TopChrome } from "@camp404/ui/components/top-chrome";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -14,11 +11,12 @@ import {
   isTeamLead,
 } from "@/lib/users";
 import { nextGate } from "@/lib/required-actions";
-import { deriveViewerRank } from "@camp404/core";
+import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { countUnread } from "@/lib/notifications";
 import { initialsFrom } from "@/lib/initials";
-import { HomeHeader } from "./home-header";
 import { LandingHero } from "./landing-hero";
+import { RankGroupCard } from "./home/rank-group-card";
+import { TILE_CATALOGUE } from "./home/tile-catalogue";
 import { EnablePush } from "@/components/push/enable-push";
 
 // Reads the Neon Auth session cookie on every request, so can't be
@@ -68,10 +66,10 @@ export default async function HomePage() {
   // serially before it.
   const unreadPromise = countUnread(campUser.id);
 
-  // Map the stored rank (+ derived team-lead) onto the control panel's three
-  // layers. Captains unlock the captain layer (and Camp Management); a lead
-  // of any team unlocks the team-lead layer; everyone else sees their own.
-  const viewerRank: ControlPanelLayer["rank"] = deriveViewerRank(
+  // Map the stored rank (+ derived team-lead) onto the viewer clearance ladder.
+  // Captains clear every group; a lead of any team clears their own + member
+  // groups; everyone else clears only the member group.
+  const viewerRank = deriveViewerRank(
     campUser.rank,
     await isTeamLead(campUser.id),
   );
@@ -80,99 +78,45 @@ export default async function HomePage() {
 
   return (
     <>
-      <ControlPanel
-        layers={homeLayers}
-        viewerRank={viewerRank}
-        header={
-          <HomeHeader
-            initials={initials}
-            imageUrl={campUser.profileImageUrl}
-            notifications={unreadNotifications}
-          />
-        }
-        centre={{ label: "TALK" }}
+      <TopChrome
+        avatarInitials={initials}
+        avatarImageUrl={campUser.profileImageUrl}
+        unreadCount={unreadNotifications}
       />
-      {/* Web push opt-in — only for authenticated members; renders nothing
-          unless notifications are supported and undecided. */}
-      <EnablePush />
+      {/* The root layout applies no width cap, so the surface owns its shell. */}
+      <main className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 py-5">
+        <div className="flex flex-col gap-0.5">
+          <h1 className="text-section font-bold text-foreground">
+            Control panel
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Everything you can run. Captain first.
+          </p>
+        </div>
+
+        {/* Per-group preview-but-locked gate, enforced server-side: a locked
+            group is sent no tiles — only its head + the CaptainLock render
+            (decision D3 — withhold data, don't dim a populated render). */}
+        {TILE_CATALOGUE.map((group) => {
+          const { cleared } = requireClearance(viewerRank, group.rank);
+          return (
+            <RankGroupCard
+              key={group.id}
+              name={group.name}
+              icon={group.groupIcon}
+              chipTone={group.chipTone}
+              locked={!cleared}
+              tiles={cleared ? group.tiles : []}
+              toolCount={cleared ? group.tiles.length : undefined}
+            />
+          );
+        })}
+
+        <Divider />
+        {/* Web push opt-in — only for authenticated members; renders nothing
+            unless notifications are supported and undecided. */}
+        <EnablePush />
+      </main>
     </>
   );
 }
-
-const homeLayers: ControlPanelLayer[] = [
-  {
-    rank: "camp_member",
-    topLeft: {
-      label: "My Teams",
-      hint: "Your crews",
-      href: "/members",
-      icon: <Users className="h-5 w-5" />,
-    },
-    topRight: {
-      label: "My Tasks",
-      hint: "What's on you",
-      href: "/meals",
-      icon: <ListChecks className="h-5 w-5" />,
-    },
-    bottomLeft: {
-      label: "My Profile",
-      hint: "You & your data",
-      href: "/onboarding/questionnaire",
-      icon: <UserRound className="h-5 w-5" />,
-    },
-    bottomRight: {
-      label: "Tools",
-      hint: "Meals, expenses…",
-      href: "/tools",
-      icon: <Wrench className="h-5 w-5" />,
-    },
-  },
-  {
-    rank: "team_lead",
-    topLeft: {
-      label: "Team Roster",
-      hint: "Members in your team",
-      icon: <Users className="h-5 w-5" />,
-    },
-    topRight: {
-      label: "Team Tasks",
-      hint: "Assign & track work",
-      icon: <ListChecks className="h-5 w-5" />,
-    },
-    bottomLeft: {
-      label: "Lead Profile",
-      hint: "Your team setup",
-      icon: <UserRound className="h-5 w-5" />,
-    },
-    bottomRight: {
-      label: "Team Tools",
-      hint: "Shifts, notices…",
-      icon: <Wrench className="h-5 w-5" />,
-    },
-  },
-  {
-    rank: "captain",
-    topLeft: {
-      label: "Camp Management",
-      hint: "Roster & statuses",
-      href: "/captains/camp-management",
-      icon: <Users className="h-5 w-5" />,
-    },
-    topRight: {
-      label: "Camp Tasks",
-      hint: "Camp-wide work board",
-      icon: <ListChecks className="h-5 w-5" />,
-    },
-    bottomLeft: {
-      label: "Finances",
-      hint: "Dues & reimbursements",
-      icon: <UserRound className="h-5 w-5" />,
-    },
-    bottomRight: {
-      label: "Camp Tools",
-      hint: "Announcements, ops…",
-      href: "/captains/tools",
-      icon: <Wrench className="h-5 w-5" />,
-    },
-  },
-];

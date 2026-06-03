@@ -64,8 +64,15 @@ test.describe("authenticated flow (test-mode)", () => {
 
     await page.goto("/");
     await expect(page).toHaveURL("/");
-    // Home now shows the layered ControlPanel instead of the sign-in CTA.
-    await expect(page.getByRole("link", { name: /My Teams/ })).toBeVisible();
+    // Home now shows the control panel instead of the sign-in CTA: the
+    // heading plus the always-cleared Team Member group's live "My Profile"
+    // tile (a link, unlike the coming-soon tiles which are inert).
+    await expect(
+      page.getByRole("heading", { name: "Control panel" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /My Profile/ }),
+    ).toBeVisible();
   });
 
   test("a pending member is held at /pending-approval after onboarding", async ({
