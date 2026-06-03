@@ -30,17 +30,17 @@ export function AuthShell({
   const router = useRouter();
 
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center bg-[color:var(--color-muted)] p-6 md:p-10">
+    <div className="flex min-h-svh flex-col items-center justify-center bg-muted p-6 md:p-10">
       <div className={cn("w-full max-w-sm", className)}>
         {!hideBack && (
           <div className="mb-2">
             <Button
               variant="ghost"
               size="sm"
-              className="gap-1.5 text-[color:var(--color-muted-foreground)]"
+              className="gap-1.5 text-muted-foreground"
               onClick={() => router.back()}
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
           </div>
@@ -49,7 +49,7 @@ export function AuthShell({
           <CardContent className="p-6 md:p-8">{children}</CardContent>
         </Card>
         {footer && (
-          <p className="px-6 pt-4 text-center text-xs text-[color:var(--color-muted-foreground)]">
+          <p className="px-6 pt-4 text-center font-mono text-brand-label font-medium text-muted-foreground">
             {footer}
           </p>
         )}

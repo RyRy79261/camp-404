@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { TriangleAlert } from "lucide-react";
+import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
-import { Input } from "@camp404/ui/components/input";
-import { Label } from "@camp404/ui/components/label";
+import { Divider } from "@camp404/ui/components/divider";
+import { InputField } from "@camp404/ui/components/input-field";
+import { OAuthButton } from "@camp404/ui/components/google-button";
 import { authClient } from "@/lib/auth-client";
 
 /**
@@ -94,95 +97,69 @@ export function SignInForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-2xl font-bold">Welcome back</h1>
-        <p className="text-balance text-sm text-[color:var(--color-muted-foreground)]">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-subtitle-hero font-bold text-card-foreground">
+          Welcome back
+        </h1>
+        <p className="text-label text-muted-foreground">
           Sign in to your Camp 404 account.
         </p>
       </div>
 
-      <div className="grid gap-2">
-        <Label htmlFor="signin-email">Email</Label>
-        <Input
-          id="signin-email"
-          type="email"
-          placeholder="you@example.com"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={loading}
-        />
-      </div>
+      <InputField
+        id="signin-email"
+        label="Email"
+        type="email"
+        placeholder="you@example.com"
+        autoComplete="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={loading}
+      />
 
-      <div className="grid gap-2">
-        <div className="flex items-center">
-          <Label htmlFor="signin-password">Password</Label>
-          <Link
-            href="/auth/forgot-password"
-            className="ml-auto text-sm underline-offset-2 hover:underline"
-          >
-            Forgot your password?
-          </Link>
-        </div>
-        <Input
-          id="signin-password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={loading}
-        />
+      <InputField
+        id="signin-password"
+        label="Password"
+        type="password"
+        placeholder="••••••••"
+        autoComplete="current-password"
+        required
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        disabled={loading}
+      />
+
+      <div className="flex justify-end">
+        <Link
+          href="/auth/forgot-password"
+          className="text-label font-medium text-accent hover:underline"
+        >
+          Forgot your password?
+        </Link>
       </div>
 
       {error && (
-        <p className="text-sm text-[color:var(--color-destructive)]" role="alert">
-          {error}
-        </p>
+        <Alert variant="error">
+          <TriangleAlert />
+          <span>{error}</span>
+        </Alert>
       )}
 
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Signing in…" : "Sign in"}
       </Button>
 
-      <div className="relative text-center text-sm">
-        <div
-          className="absolute inset-0 top-1/2 border-t border-[color:var(--color-border)]"
-          aria-hidden
-        />
-        <span className="relative z-10 bg-[color:var(--color-card)] px-2 text-[color:var(--color-muted-foreground)]">
+      <div className="flex items-center gap-2.5">
+        <Divider className="flex-1" />
+        <span className="text-micro text-muted-foreground">
           Or continue with
         </span>
+        <Divider className="flex-1" />
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={handleGoogle}
-        disabled={loading}
-      >
-        <GoogleMark />
-        Continue with Google
-      </Button>
+      <OAuthButton onClick={handleGoogle} disabled={loading} />
     </form>
-  );
-}
-
-function GoogleMark() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      className="h-4 w-4 shrink-0"
-      aria-hidden
-    >
-      <path
-        d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
-        fill="currentColor"
-      />
-    </svg>
   );
 }
