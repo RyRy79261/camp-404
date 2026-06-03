@@ -2,10 +2,14 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { TriangleAlert } from "lucide-react";
+import { Alert } from "@camp404/ui/components/alert";
+import { Card } from "@camp404/ui/components/card";
+import { OAuthButton } from "@camp404/ui/components/google-button";
 import { authClient } from "@/lib/auth-client";
 
 /**
- * Sign-in bridge for the MCP OAuth authorize flow.
+ * Sign-in bridge for the MCP OAuth authorize flow (board S20 — Bridge Card).
  *
  * `/api/mcp/oauth/authorize` redirects unauthenticated callers here with
  * `?next=<authorize-url>`. We sign the user in (Better Auth's `signIn`
@@ -27,6 +31,7 @@ function MCPConnectInner() {
   const next = safeNext(params.get("next"));
   const { data: session, isPending } = authClient.useSession();
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isPending || !session?.user) return;
@@ -37,11 +42,16 @@ function MCPConnectInner() {
 
   const onGoogle = async () => {
     setError(null);
+    setLoading(true);
     const { error: err } = await authClient.signIn.social({
       provider: "google",
       callbackURL: typeof window !== "undefined" ? window.location.href : "/",
     });
-    if (err) setError(err.message ?? "Sign-in failed.");
+    // On success the browser navigates to Google; we only land here on failure.
+    if (err) {
+      setError(err.message ?? "Sign-in failed.");
+      setLoading(false);
+    }
   };
 
   if (isPending) {
@@ -54,37 +64,40 @@ function MCPConnectInner() {
 
   return (
     <Shell>
-      <h1 className="text-xl font-semibold">Connect Claude to Camp 404</h1>
-      <p className="text-sm text-[color:var(--color-muted-foreground)]">
-        Sign in to grant Claude access to your camp data. You'll see what
-        you're approving before the connection completes.
-      </p>
-      <button
-        type="button"
-        onClick={onGoogle}
-        className="mt-4 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-4 py-2 text-sm font-medium"
-      >
-        Sign in with Google
-      </button>
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
+      <h1 className="text-title font-bold text-foreground">Connect Claude</h1>
+      <Card className="flex flex-col gap-4 p-5">
+        <p className="text-sm text-card-foreground">
+          You&apos;ll see exactly what you&apos;re approving before anything
+          connects.
         </p>
-      )}
-      <p className="mt-4 text-xs text-[color:var(--color-muted-foreground)]">
-        New to Camp 404?{" "}
-        <a className="underline" href="/auth/sign-in">
-          Sign in first
-        </a>{" "}
-        — you'll enter your invite code once you're in.
-      </p>
+        <OAuthButton
+          label="Sign in with Google"
+          onClick={onGoogle}
+          disabled={loading}
+        />
+        {error && (
+          <Alert variant="error">
+            <TriangleAlert />
+            <span>{error}</span>
+          </Alert>
+        )}
+        <p className="text-center text-sm text-muted-foreground">
+          New to Camp 404?{" "}
+          <a
+            className="font-semibold text-accent hover:underline"
+            href="/auth/sign-in"
+          >
+            Sign in
+          </a>
+        </p>
+      </Card>
     </Shell>
   );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col justify-center gap-4 px-6 py-12">
+    <main className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col justify-center gap-6 px-6 py-12">
       {children}
     </main>
   );
