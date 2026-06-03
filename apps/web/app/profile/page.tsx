@@ -40,55 +40,53 @@ export default async function ProfilePage() {
   const rankLabel = campUser.rank === "captain" ? "Captain" : "Member";
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-xl flex-col px-4 py-8">
+    <main className="mx-auto flex min-h-[100dvh] w-full max-w-sm flex-col justify-center px-5 py-8">
       <Card className="overflow-hidden">
-        <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
-          <Avatar className="h-32 w-32 text-3xl">
+        <CardContent className="flex flex-col items-center gap-3.5 p-7 text-center">
+          <Avatar className="h-24 w-24 text-3xl">
             {campUser.profileImageUrl ? (
               <AvatarImage src={campUser.profileImageUrl} alt={name} />
             ) : null}
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
 
-          <div className="flex flex-col items-center gap-1">
-            <h1 className="text-2xl font-bold">{name}</h1>
-            <span className="rounded-full bg-[color:var(--color-secondary)] px-3 py-0.5 text-xs font-semibold text-[color:var(--color-secondary-foreground)]">
-              {rankLabel}
-            </span>
-            {authUser.primaryEmail && (
-              <p className="text-sm text-[color:var(--color-muted-foreground)]">
-                {authUser.primaryEmail}
-              </p>
-            )}
-          </div>
+          <h1 className="text-2xl font-bold">{name}</h1>
 
-          <Button asChild className="mt-2 gap-2">
+          <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">
+            {rankLabel}
+          </span>
+
+          {authUser.primaryEmail && (
+            <p className="text-sm text-muted-foreground">
+              {authUser.primaryEmail}
+            </p>
+          )}
+
+          <Button asChild className="w-full gap-2">
             <Link href="/profile/edit">
               <Pencil className="h-4 w-4" aria-hidden />
               Edit profile
             </Link>
           </Button>
+
+          <p className="text-label text-muted-foreground">
+            Want to update your burner questionnaire answers?
+          </p>
+          <Link
+            href="/onboarding/questionnaire"
+            className="text-label font-medium text-accent hover:underline"
+          >
+            Review them here
+          </Link>
+
+          <a
+            href="/auth/sign-out"
+            className="text-sm font-medium text-muted-foreground hover:underline"
+          >
+            Sign out
+          </a>
         </CardContent>
       </Card>
-
-      <p className="mt-6 text-center text-sm text-[color:var(--color-muted-foreground)]">
-        Want to update your burner questionnaire answers?{" "}
-        <Link
-          href="/onboarding/questionnaire"
-          className="underline underline-offset-4"
-        >
-          Review them here
-        </Link>
-        .
-      </p>
-      <p className="mt-3 text-center text-sm">
-        <a
-          href="/auth/sign-out"
-          className="text-[color:var(--color-muted-foreground)] underline underline-offset-4"
-        >
-          Sign out
-        </a>
-      </p>
     </main>
   );
 }
