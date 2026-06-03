@@ -58,9 +58,10 @@ function getServerSnapshot() {
   return EMPTY
 }
 
-/** The current toast stack — read-only (for tests / introspection). */
+/** The current toast stack — a defensive copy so callers can't mutate the store
+ *  out-of-band (mutations must go through toast()/dismiss() to notify subscribers). */
 export function getToasts(): readonly ToastRecord[] {
-  return toasts
+  return toasts.slice()
 }
 
 /** Dismiss one toast by id, or all of them when called with no id. */
