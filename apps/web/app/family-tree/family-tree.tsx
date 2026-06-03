@@ -51,23 +51,24 @@ export function FamilyTree({
     : trees;
 
   return (
-    <>
-      <div className="mb-6 flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name or invite code…"
-            className="pl-8"
-          />
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="relative">
+        <Search
+          className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by name or invite code…"
+          className="h-12 pl-10"
+        />
+      </div>
+      <div className="flex gap-2.5">
         <Button
           variant="outline"
           size="sm"
-          onClick={() =>
-            setExpanded(new Set(roster.map((u) => u.id)))
-          }
+          onClick={() => setExpanded(new Set(roster.map((u) => u.id)))}
         >
           Expand all
         </Button>
@@ -81,13 +82,11 @@ export function FamilyTree({
       </div>
 
       {visibleTrees.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            {query ? "No matches." : "No accounts yet."}
-          </CardContent>
-        </Card>
+        <div className="rounded-xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
+          {query ? "No matches." : "No accounts yet."}
+        </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="flex flex-col gap-2">
           {visibleTrees.map((node) => (
             <Branch
               key={node.user.id}
@@ -102,7 +101,7 @@ export function FamilyTree({
           ))}
         </ul>
       )}
-    </>
+    </div>
   );
 }
 
@@ -187,39 +186,45 @@ function Branch({
         <Card
           className={[
             "flex-1 transition-colors",
-            isViewer ? "ring-1 ring-primary" : "",
-            isMatch && matchIds ? "border-amber-400/60" : "",
+            // A search match (accent) wins over the viewer's own border
+            // (primary) so the two never fight; the "You" pill still marks self.
+            isMatch && matchIds
+              ? "border-accent"
+              : isViewer
+                ? "border-primary"
+                : "",
           ].join(" ")}
         >
-          <CardContent className="flex items-center gap-3 p-3">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full border bg-muted/40">
-              <UserIcon className="h-3.5 w-3.5 text-muted-foreground" />
+          <CardContent className="flex items-center gap-2.5 px-3 py-2">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+              <UserIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <div className="flex items-baseline gap-2">
-                <span className="truncate text-sm font-medium">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-semibold text-foreground">
                   {node.user.displayName ?? "(no name)"}
                 </span>
                 {node.user.rank === "captain" && (
-                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-300">
+                  <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-micro font-semibold text-accent">
                     Captain
                   </span>
                 )}
                 {isViewer && (
-                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                  <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-micro font-semibold text-primary-foreground">
                     You
                   </span>
                 )}
               </div>
-              {node.user.inviteCode && (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  via <span className="font-mono">{node.user.inviteCode}</span>
-                </p>
-              )}
+              <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                {node.user.inviteCode
+                  ? `via ${node.user.inviteCode}`
+                  : "root"}
+              </p>
             </div>
             {hasChildren && (
-              <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
-                {node.descendantCount}
+              <span className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-micro font-medium text-muted-foreground">
+                {node.descendantCount} descendant
+                {node.descendantCount === 1 ? "" : "s"}
               </span>
             )}
           </CardContent>
