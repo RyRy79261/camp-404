@@ -21,10 +21,16 @@ export const Tones: Story = {
       <IconBadge tone="primary">
         <ShieldCheck />
       </IconBadge>
+      <IconBadge tone="accent">
+        <ShieldCheck />
+      </IconBadge>
       <IconBadge tone="success" size="lg">
         <ShieldCheck />
       </IconBadge>
       <IconBadge tone="warning" size="sm">
+        <ShieldCheck />
+      </IconBadge>
+      <IconBadge tone="destructive">
         <ShieldCheck />
       </IconBadge>
     </div>
