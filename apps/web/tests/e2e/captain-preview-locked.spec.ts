@@ -38,6 +38,9 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
       page.getByRole("heading", { name: "Camp tools" }),
     ).toBeVisible();
     await expect(page.getByText("VIEW ONLY")).toBeVisible();
+    await expect(
+      page.getByText(/this tooling is captain-only/i),
+    ).toBeVisible();
     // The tool list is withheld — no tool cards rendered.
     await expect(
       page.getByRole("link", { name: /Announcements & notifications/ }),

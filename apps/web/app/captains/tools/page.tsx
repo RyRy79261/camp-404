@@ -1,27 +1,21 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight, Megaphone } from "lucide-react";
+import { Megaphone } from "lucide-react";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@camp404/ui/components/card";
-import { Button } from "@camp404/ui/components/button";
+import { CaptainLock } from "@camp404/ui/components/captain-lock";
+import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { NavCard } from "@camp404/ui/components/nav-card";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { CaptainLock } from "@camp404/ui/components/captain-lock";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Camp tools — Camp 404" };
 
-// Captains' tool hub — the "Camp Tools" quadrant on the captain control
-// layer. Like the members' /tools page, it's an index of captain-only
-// tooling; new captain tools slot in here as cards. Preview-but-locked (D3):
-// non-captains see the chrome + a CaptainLock instead of a redirect — the tool
-// list is withheld server-side, never sent.
+// Captains' tool hub — the "Camp Tools" tile on the captain control panel.
+// Like the members' /tools page, it's an index of captain-only tooling; new
+// captain tools slot in here as cards. Preview-but-locked (D3): non-captains
+// see the chrome + a CaptainLock instead of a redirect — the tool list is
+// withheld server-side, never sent.
 
 interface ToolEntry {
   href: string;
@@ -36,7 +30,7 @@ const TOOLS: ToolEntry[] = [
     title: "Announcements & notifications",
     description:
       "Compose a camp-wide announcement, save it as a draft, then publish it to everyone. Choose how hard it lands — a full-screen note members must acknowledge, a pop-up, or a quiet inbox entry.",
-    icon: <Megaphone className="h-5 w-5" />,
+    icon: <Megaphone className="text-primary" />,
   },
 ];
 
@@ -57,48 +51,35 @@ export default async function CaptainToolsPage() {
   );
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
-      <Button asChild variant="ghost" size="sm" className="mb-4 gap-1.5">
-        <a href="/">
-          <ChevronLeft className="h-4 w-4" /> Captains
-        </a>
-      </Button>
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold">Camp tools</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Captain-only tooling for running the camp.
-        </p>
-      </header>
+    <main className="mx-auto w-full max-w-lg px-4 py-4">
+      <GhostBack href="/" className="-ml-2">
+        Captains
+      </GhostBack>
 
-      {cleared ? (
-        <ul className="space-y-3">
-          {TOOLS.map((tool) => (
-            <li key={tool.href}>
-              <Link
+      <div className="flex flex-col gap-4 pt-2">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-2xl font-bold">Camp tools</h1>
+          <p className="text-sm text-muted-foreground">
+            Captain-only tooling for organising the camp.
+          </p>
+        </div>
+
+        {cleared ? (
+          <div className="flex flex-col gap-3">
+            {TOOLS.map((tool) => (
+              <NavCard
+                key={tool.href}
                 href={tool.href}
-                className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Card className="transition-colors hover:bg-accent/30">
-                  <CardHeader className="flex flex-row items-center gap-4 space-y-0">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-md border bg-muted/40">
-                      {tool.icon}
-                    </span>
-                    <div className="flex-1">
-                      <CardTitle className="text-base">{tool.title}</CardTitle>
-                      <CardDescription className="mt-0.5">
-                        {tool.description}
-                      </CardDescription>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                  </CardHeader>
-                </Card>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <CaptainLock />
-      )}
+                icon={tool.icon}
+                title={tool.title}
+                description={tool.description}
+              />
+            ))}
+          </div>
+        ) : (
+          <CaptainLock message="This tooling is captain-only. Your rank doesn't have clearance for these tools." />
+        )}
+      </div>
     </main>
   );
 }
