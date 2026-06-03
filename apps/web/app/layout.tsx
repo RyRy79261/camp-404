@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { Toaster } from "@camp404/ui/components/toast";
 import { Providers } from "./providers";
 import { AcknowledgementGate } from "./acknowledgement-gate";
 import { FeedbackGate } from "./feedback-gate";
@@ -71,6 +72,8 @@ export default function RootLayout({
           {/* The gate self-gates on the live client session; aiAvailable is a
               server-only env check passed down for the "Improve with AI" toggle. */}
           <FeedbackGate aiAvailable={!!process.env.ANTHROPIC_API_KEY} />
+          {/* App-wide toast outlet. Inert until something calls toast(). */}
+          <Toaster />
         </Providers>
       </body>
     </html>
