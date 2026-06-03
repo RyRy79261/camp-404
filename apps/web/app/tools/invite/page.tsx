@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
-import { Button } from "@camp404/ui/components/button";
+import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { InviteForm } from "./invite-form";
@@ -20,12 +19,10 @@ export default async function InviteToolPage() {
   }
 
   return (
-    <main className="mx-auto max-w-xl px-6 py-10">
-      <Button asChild variant="ghost" size="sm" className="mb-4 gap-1.5">
-        <a href="/tools">
-          <ChevronLeft className="h-4 w-4" /> Tools
-        </a>
-      </Button>
+    <main className="mx-auto flex w-full max-w-lg flex-col gap-4 px-4 py-4">
+      <GhostBack href="/tools" className="-ml-2 self-start">
+        Tools
+      </GhostBack>
       <InviteForm isCaptain={campUser.rank === "captain"} />
     </main>
   );
