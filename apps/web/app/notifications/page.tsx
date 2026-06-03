@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
-import { Bell, ChevronLeft, Megaphone, MessageSquare } from "lucide-react";
-import { Button } from "@camp404/ui/components/button";
-import { listInbox, markRead, type InboxItem } from "@/lib/notifications";
+import { BellOff, ChevronLeft } from "lucide-react";
+import { DetailHeader } from "@camp404/ui/components/detail-header";
+import { EmptyState } from "@camp404/ui/components/empty-state";
+import { listInbox, markRead } from "@/lib/notifications";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { NotificationRow } from "./notification-row";
 
 export const dynamic = "force-dynamic";
 
@@ -14,13 +16,6 @@ export const metadata = { title: "Notifications — Camp 404" };
 // ones that were still unread on arrival. Opening the inbox clears the unread
 // badge (marks everything read) — acknowledgements are handled separately by
 // the full-screen gate, so reading here never counts as acknowledging.
-
-function presentationIcon(p: InboxItem["presentation"]) {
-  if (p === "acknowledge") return <Megaphone className="h-4 w-4" aria-hidden />;
-  if (p === "popup") return <MessageSquare className="h-4 w-4" aria-hidden />;
-  return <Bell className="h-4 w-4" aria-hidden />;
-}
-
 export default async function NotificationsPage() {
   const authUser = await getAuthenticatedUserOrRedirect();
   const campUser = await ensureCampUser(authUser);
@@ -37,69 +32,51 @@ export default async function NotificationsPage() {
   );
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
-      <Button asChild variant="ghost" size="sm" className="mb-4 gap-1.5">
-        <a href="/">
-          <ChevronLeft className="h-4 w-4" /> Home
-        </a>
-      </Button>
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Notifications</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <main className="mx-auto w-full max-w-lg">
+      <DetailHeader
+        as="h2"
+        title="Home"
+        className="px-3 py-3.5"
+        leading={
+          <a
+            href="/"
+            aria-label="Back to home"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden />
+          </a>
+        }
+      />
+
+      <div className="flex flex-col gap-1.5 px-4 pb-2 pt-3">
+        <h1 className="text-2xl font-bold">Notifications</h1>
+        <p className="text-label text-muted-foreground">
           Everything that&apos;s been sent your way.
         </p>
-      </header>
+      </div>
 
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No notifications yet.</p>
+        <div className="px-4 py-6">
+          <EmptyState
+            icon={<BellOff className="h-5 w-5" aria-hidden />}
+            title="No notifications yet."
+            description="Everything sent your way will appear here."
+          />
+        </div>
       ) : (
-        <ul className="space-y-3">
-          {items.map((item) => {
-            const isNew = item.readAt === null;
-            return (
-              <li
-                key={item.id}
-                className={
-                  "rounded-lg border p-4 " +
-                  (isNew
-                    ? "border-[color:var(--color-primary)]/40 bg-accent/20"
-                    : "")
-                }
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">
-                      {presentationIcon(item.presentation)}
-                    </span>
-                    <h2 className="text-sm font-semibold leading-tight">
-                      {item.title}
-                    </h2>
-                    {isNew && (
-                      <span className="rounded-full bg-[color:var(--color-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-[color:var(--color-primary-foreground)]">
-                        New
-                      </span>
-                    )}
-                  </div>
-                  <time className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(item.createdAt).toLocaleDateString()}
-                  </time>
-                </div>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-                  {item.body}
-                </p>
-                {item.senderName && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    From {item.senderName}
-                    {item.acknowledgedAt
-                      ? " · acknowledged"
-                      : item.presentation === "acknowledge"
-                        ? " · awaiting acknowledgement"
-                        : ""}
-                  </p>
-                )}
-              </li>
-            );
-          })}
+        <ul className="flex flex-col gap-3 px-4 pb-5 pt-2">
+          {items.map((item) => (
+            <NotificationRow
+              key={item.id}
+              presentation={item.presentation}
+              title={item.title}
+              body={item.body}
+              senderName={item.senderName}
+              isNew={item.readAt === null}
+              acknowledgedAt={item.acknowledgedAt}
+              createdAt={item.createdAt}
+            />
+          ))}
         </ul>
       )}
     </main>
