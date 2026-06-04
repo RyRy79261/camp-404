@@ -3,14 +3,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Check,
   CheckCircle2,
   Inbox,
   Loader2,
   type LucideIcon,
   Megaphone,
   MessageSquare,
-  Mic,
   Pencil,
   Send,
   Trash2,
@@ -23,6 +21,7 @@ import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { Card } from "@camp404/ui/components/card";
+import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
@@ -35,6 +34,7 @@ import {
   SelectValue,
 } from "@camp404/ui/components/select";
 import { Textarea } from "@camp404/ui/components/textarea";
+import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
 import { RecorderPanel } from "@/components/voice/recorder-panel";
 import {
@@ -120,7 +120,6 @@ export function AnnouncementsManager({
   const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [dictating, setDictating] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -141,21 +140,21 @@ export function AnnouncementsManager({
 
   const handleSave = () => {
     setError(null);
-    setNotice(null);
+    const editing = form.editingId;
     const payload = {
       title: form.title,
       body: form.body,
       presentation: form.presentation,
     };
     startTransition(async () => {
-      const result = form.editingId
-        ? await updateDraftAction(form.editingId, payload)
+      const result = editing
+        ? await updateDraftAction(editing, payload)
         : await saveDraftAction(payload);
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      setNotice(form.editingId ? "Draft updated." : "Draft saved.");
+      toast.success(editing ? "Draft updated" : "Draft saved");
       reset();
       router.refresh();
     });
@@ -163,7 +162,6 @@ export function AnnouncementsManager({
 
   const handleEdit = (a: AnnouncementSummary) => {
     setError(null);
-    setNotice(null);
     setForm({
       editingId: a.id,
       title: a.title,
@@ -174,7 +172,6 @@ export function AnnouncementsManager({
 
   const handleDelete = (id: string) => {
     setError(null);
-    setNotice(null);
     startTransition(async () => {
       const result = await deleteDraftAction(id);
       if (!result.ok) {
@@ -182,14 +179,13 @@ export function AnnouncementsManager({
         return;
       }
       if (form.editingId === id) reset();
-      setNotice("Draft deleted.");
+      toast.success("Draft deleted");
       router.refresh();
     });
   };
 
   const handlePublish = (id: string) => {
     setError(null);
-    setNotice(null);
     startTransition(async () => {
       const result = await publishAction(id);
       if (!result.ok) {
@@ -198,7 +194,7 @@ export function AnnouncementsManager({
       }
       if (form.editingId === id) reset();
       const n = result.data.recipientCount;
-      setNotice(`Published to ${n} member${n === 1 ? "" : "s"}.`);
+      toast.success(`Published to ${n} member${n === 1 ? "" : "s"}`);
       router.refresh();
     });
   };
@@ -256,16 +252,11 @@ export function AnnouncementsManager({
               onDismiss={() => setDictating(false)}
             />
           ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2 self-end"
-              onClick={() => setDictating(true)}
+            <DictatePill
+              onActivate={() => setDictating(true)}
               disabled={pending}
-            >
-              <Mic className="h-4 w-4" /> Dictate instead
-            </Button>
+              className="self-end"
+            />
           )}
         </div>
 
@@ -307,12 +298,6 @@ export function AnnouncementsManager({
           <Alert variant="error">
             <TriangleAlert aria-hidden />
             <span>{error}</span>
-          </Alert>
-        )}
-        {notice && !error && (
-          <Alert variant="success">
-            <Check aria-hidden />
-            <span>{notice}</span>
           </Alert>
         )}
 

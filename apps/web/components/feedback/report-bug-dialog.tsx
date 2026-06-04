@@ -19,8 +19,8 @@ import {
   ExternalLink,
   Lightbulb,
   Loader2,
-  Mic,
 } from "lucide-react";
+import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { RecorderPanel } from "../voice/recorder-panel";
 import {
   submitFeedbackAction,
@@ -219,16 +219,10 @@ export function ReportBugDialog({
                   onDismiss={() => setDictating(false)}
                 />
               ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 self-start"
-                  onClick={() => setDictating(true)}
-                >
-                  <Mic className="h-4 w-4" />
-                  Dictate instead
-                </Button>
+                <DictatePill
+                  onActivate={() => setDictating(true)}
+                  className="self-start"
+                />
               )}
 
               {/* Improve with AI — only when the server has a Claude key. */}
