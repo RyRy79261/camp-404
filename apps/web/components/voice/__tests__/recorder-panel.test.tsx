@@ -118,6 +118,11 @@ describe("RecorderPanel — board S21", () => {
   it("reviews a transcript: editable, commits edited text, or discards", () => {
     renderPanel({ state: "transcript-review", transcript: "bring a tent" });
     expect(screen.getByText(/Transcript ready — review/)).toBeDefined();
+    // Close stays ENABLED during review — the member may bail without
+    // committing the transcript (review is not a busy/recording state).
+    expect(
+      screen.getByRole("button", { name: "Close dictation" }),
+    ).toHaveProperty("disabled", false);
     const box = screen.getByLabelText("Edit transcript") as HTMLTextAreaElement;
     expect(box.value).toBe("bring a tent");
     expect(box.className).toContain("border-border");

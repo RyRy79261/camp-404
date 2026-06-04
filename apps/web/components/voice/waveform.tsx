@@ -75,11 +75,12 @@ export function Waveform({ analyser, active, className }: WaveformProps) {
     }
 
     // Respect prefers-reduced-motion: paint a single static flat line instead
-    // of spinning up the RAF loop.
-    const animates =
-      active &&
-      analyser &&
+    // of spinning up the RAF loop. Guard matchMedia — some embedded webviews
+    // (e.g. the Capacitor native path) don't ship it, and calling it would throw.
+    const allowsMotion =
+      typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
+    const animates = Boolean(active && analyser && allowsMotion);
     if (animates) {
       frame = requestAnimationFrame(draw);
     } else {
