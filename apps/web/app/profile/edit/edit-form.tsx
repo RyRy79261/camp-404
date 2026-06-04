@@ -7,7 +7,8 @@ import { TriangleAlert } from "lucide-react";
 import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
 import { InputField } from "@camp404/ui/components/input-field";
-import { AvatarUpload } from "@/components/profile/avatar-upload";
+import { AvatarUpload } from "@camp404/ui/components/avatar-upload";
+import { cropResizeToSquare } from "@/lib/image";
 import { updateProfile, type UpdateProfileResult } from "../actions";
 
 interface ProfileEditFormProps {
@@ -29,7 +30,11 @@ export function ProfileEditForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <AvatarUpload value={imageUrl} onChange={setImageUrl} />
+      <AvatarUpload
+        value={imageUrl}
+        onChange={setImageUrl}
+        preprocessImage={cropResizeToSquare}
+      />
       <input type="hidden" name="profileImageUrl" value={imageUrl ?? ""} />
 
       <InputField
