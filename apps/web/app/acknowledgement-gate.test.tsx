@@ -17,7 +17,8 @@ import { AcknowledgementGate } from "./acknowledgement-gate";
 const fetchMock = vi.fn();
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 const ITEM = {
-  deliveryId: "d1",
+  // A real UUID — the acknowledge route validates deliveryId as z.string().uuid().
+  deliveryId: "7f5e2f7a-6f50-4c89-8df9-2f7b8f3dc31e",
   title: "Burn-night briefing",
   body: "Gates open at sundown.",
   senderName: "Ada",
