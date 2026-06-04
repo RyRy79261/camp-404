@@ -19,3 +19,10 @@ if (typeof window !== "undefined" && !window.matchMedia) {
     dispatchEvent: () => false,
   })) as never;
 }
+
+// JSDOM doesn't implement Element.scrollTo. The AcknowledgementGate resets the
+// takeover's scroll position on each new item; stub it to a no-op so mounting
+// scrollable overlays doesn't throw under test.
+if (typeof Element !== "undefined" && !Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = (() => {}) as never;
+}

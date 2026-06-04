@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Megaphone } from "lucide-react";
+import { Megaphone } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
+import { IconBadge } from "@camp404/ui/components/icon-badge";
+import { Spinner } from "@camp404/ui/components/spinner";
 
 // App-wide gate for the full-screen "acknowledge" notification variant. It
 // polls for the signed-in member's unacknowledged acknowledge-deliveries and,
@@ -107,28 +109,31 @@ export function AcknowledgementGate() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="ack-title"
-      className="fixed inset-0 z-[100] bg-[color:var(--color-background)]"
+      className="fixed inset-0 z-[100] overflow-hidden bg-background"
     >
+      {/* Faint scan-line wash (board S22 #00dcff08) behind the content. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-0 bg-accent/5" />
       <div
         ref={scrollRef}
-        className="mx-auto flex h-full max-w-2xl flex-col overflow-y-auto px-6 py-10"
+        className="relative z-10 mx-auto flex h-full max-w-2xl flex-col overflow-y-auto px-6 py-10"
       >
-        <div className="mb-6 flex items-center gap-2 text-[color:var(--color-primary)]">
-          <Megaphone className="h-5 w-5" aria-hidden />
-          <span className="text-xs font-semibold uppercase tracking-[0.15em]">
-            Camp announcement
-          </span>
-        </div>
+        {/* Board S22 draws the disc at 60px; nudge the lg (56px) rung to match. */}
+        <IconBadge size="lg" tone="primary" className="mb-4 h-[60px] w-[60px]">
+          <Megaphone aria-hidden />
+        </IconBadge>
+        <span className="font-mono text-micro font-bold uppercase tracking-wide text-accent">
+          Camp announcement
+        </span>
 
-        <h1 id="ack-title" className="text-2xl font-semibold">
+        <h1 id="ack-title" className="mt-2 text-title font-bold">
           {current.title}
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-caption text-muted-foreground">
           {current.senderName ? `From ${current.senderName} · ` : ""}
           {new Date(current.createdAt).toLocaleString()}
         </p>
 
-        <div className="mt-6 flex-1 whitespace-pre-wrap text-base leading-relaxed">
+        <div className="mt-6 flex-1 whitespace-pre-wrap text-subtitle-dense leading-relaxed">
           {current.body}
         </div>
 
@@ -136,7 +141,7 @@ export function AcknowledgementGate() {
             scrolls through the message to reach it. */}
         <div className="mt-10 border-t pt-6">
           {queue.length > 1 && (
-            <p className="mb-3 text-xs text-muted-foreground">
+            <p className="mb-3 text-caption text-muted-foreground">
               {queue.length - 1} more after this.
             </p>
           )}
@@ -147,9 +152,18 @@ export function AcknowledgementGate() {
             onClick={acknowledge}
             disabled={acking}
           >
-            {acking && <Loader2 className="h-4 w-4 animate-spin" />}
+            {acking && (
+              <Spinner
+                size="sm"
+                label="Acknowledging…"
+                className="text-primary-foreground"
+              />
+            )}
             Acknowledge
           </Button>
+          <p className="mt-3 text-micro text-muted-foreground">
+            You can&rsquo;t dismiss this until you acknowledge.
+          </p>
         </div>
       </div>
     </div>

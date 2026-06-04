@@ -12,12 +12,12 @@ export const metadata: Metadata = { title: "Page not found" };
 export default function NotFound() {
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col items-center justify-center gap-6 px-4 py-12 text-center">
-      <p className="text-7xl font-bold tracking-tight text-[color:var(--color-primary)]">
+      <p className="text-7xl font-bold tracking-tight text-primary">
         404
       </p>
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">You&rsquo;re properly lost.</h1>
-        <p className="text-sm text-[color:var(--color-muted-foreground)]">
+        <p className="text-sm text-muted-foreground">
           This page wandered off into the dust. There&rsquo;s nothing here &mdash;
           but the camp&rsquo;s still standing.
         </p>
