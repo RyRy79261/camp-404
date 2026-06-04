@@ -6,7 +6,6 @@ import type {
   Question,
   QuestionnaireResponseValue,
 } from "@camp404/types";
-import { Button } from "@camp404/ui/components/button";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { Combobox } from "@camp404/ui/components/combobox";
 import { DateControl } from "@camp404/ui/components/date-control";
@@ -23,7 +22,8 @@ import {
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { Slider } from "@camp404/ui/components/slider";
 import { Textarea } from "@camp404/ui/components/textarea";
-import { CircleAlert, Mic } from "lucide-react";
+import { CircleAlert } from "lucide-react";
+import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { RecorderPanel } from "../voice/recorder-panel";
 import { AvatarUpload } from "@camp404/ui/components/avatar-upload";
 import { cropResizeToSquare } from "@/lib/image";
@@ -307,15 +307,10 @@ function LongTextField({
           promptKey="questionnaire"
         />
       ) : (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setDictating(true)}
-          className="gap-2 self-center"
-        >
-          <Mic className="h-4 w-4" />
-          Dictate instead
-        </Button>
+        <DictatePill
+          onActivate={() => setDictating(true)}
+          className="self-end"
+        />
       )}
     </div>
   );
