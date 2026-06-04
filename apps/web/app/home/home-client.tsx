@@ -3,25 +3,34 @@
 import { useEffect, useRef, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { CustomizeMode } from "./customize-mode";
+import { type Section, sectionKey } from "./home-layout";
+import { LooseTiles } from "./loose-tiles";
 import { RankGroupCard } from "./rank-group-card";
-import { TILE_CATALOGUE, type RankGroupSpec } from "./tile-catalogue";
-import { applyOrder, useHomeLayout } from "./use-home-layout";
+import { TILE_CATALOGUE } from "./tile-catalogue";
+import {
+  CUSTOM_GROUP_ICON,
+  CUSTOM_GROUP_TONE,
+  LAYOUT_CATALOGUE,
+  rankIdentity,
+  resolveTiles,
+} from "./tile-lookup";
+import { useHomeLayout } from "./use-home-layout";
 
 // Home control-panel client island (board S08). Owns the Customize toggle and
-// the localStorage layout overlay; renders the captain-first RankGroupCard stack
-// when off, the CustomizeMode editor when on. The server (page.tsx) computes
-// clearance and passes the locked group ids — locked groups render the
-// CaptainLock with NO tiles (the catalogue is static, non-sensitive; the real
-// data gate is each destination route).
+// the localStorage layout; renders the customizable sections (rank / custom /
+// loose) in saved order, then the locked rank groups pinned at the bottom. The
+// server (page.tsx) computes clearance and passes the locked group ids; locked
+// tiles are never stored in the layout (security boundary preserved).
 
 export function HomeClient({ lockedGroupIds }: { lockedGroupIds: string[] }) {
   const [customizeActive, setCustomizeActive] = useState(false);
-  const { mounted, order, setGroupOrder } = useHomeLayout();
-  const lockedSet = new Set(lockedGroupIds);
+  const { sections, setSections } = useHomeLayout(
+    LAYOUT_CATALOGUE,
+    lockedGroupIds,
+  );
 
-  // Return focus to the Customize pill when the editor closes (CustomizeMode
-  // focuses its own heading on open). Skip the initial mount so we never steal
-  // focus on first paint.
+  // Return focus to the Customize pill when the editor closes; skip the initial
+  // mount so we never steal focus on first paint.
   const pillRef = useRef<HTMLButtonElement>(null);
   const firstRun = useRef(true);
   useEffect(() => {
@@ -32,18 +41,44 @@ export function HomeClient({ lockedGroupIds }: { lockedGroupIds: string[] }) {
     if (!customizeActive) pillRef.current?.focus();
   }, [customizeActive]);
 
-  // Saved order applies only after mount (SSR/first paint use the default so
-  // the hydrated tree matches the server's).
-  const orderedTiles = (group: RankGroupSpec) =>
-    mounted ? applyOrder(group.tiles, order[group.id]) : group.tiles;
+  // The seed (catalogue order) renders on SSR + first paint so hydration
+  // matches; the saved overlay applies post-mount (inside the hook). Locked
+  // groups are re-derived from the catalogue and pinned at the bottom.
+  const lockedGroups = TILE_CATALOGUE.filter((g) => lockedGroupIds.includes(g.id));
 
-  const editableGroups = TILE_CATALOGUE.filter(
-    (group) => !lockedSet.has(group.id),
-  ).map((group) => ({
-    id: group.id,
-    name: group.name,
-    tiles: orderedTiles(group),
-  }));
+  function renderSection(section: Section) {
+    const tiles = resolveTiles(section.tiles);
+    if (section.kind === "loose") {
+      return <LooseTiles key="loose" tiles={tiles} />;
+    }
+    if (tiles.length === 0) return null; // empty sections aren't shown when off
+    if (section.kind === "custom") {
+      return (
+        <RankGroupCard
+          key={sectionKey(section)}
+          name={section.title}
+          icon={CUSTOM_GROUP_ICON}
+          chipTone={CUSTOM_GROUP_TONE}
+          locked={false}
+          tiles={tiles}
+          toolCount={tiles.length}
+        />
+      );
+    }
+    const identity = rankIdentity(section.id);
+    if (!identity) return null;
+    return (
+      <RankGroupCard
+        key={sectionKey(section)}
+        name={identity.name}
+        icon={identity.icon}
+        chipTone={identity.chipTone}
+        locked={false}
+        tiles={tiles}
+        toolCount={tiles.length}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -71,25 +106,25 @@ export function HomeClient({ lockedGroupIds }: { lockedGroupIds: string[] }) {
 
       {customizeActive ? (
         <CustomizeMode
-          groups={editableGroups}
-          onReorder={setGroupOrder}
+          sections={sections}
+          setSections={setSections}
+          lockedGroupIds={lockedGroupIds}
           onDone={() => setCustomizeActive(false)}
         />
       ) : (
-        TILE_CATALOGUE.map((group) => {
-          const locked = lockedSet.has(group.id);
-          return (
+        <>
+          {sections.map(renderSection)}
+          {lockedGroups.map((group) => (
             <RankGroupCard
               key={group.id}
               name={group.name}
               icon={group.groupIcon}
               chipTone={group.chipTone}
-              locked={locked}
-              tiles={locked ? [] : orderedTiles(group)}
-              toolCount={locked ? undefined : group.tiles.length}
+              locked
+              tiles={[]}
             />
-          );
-        })
+          ))}
+        </>
       )}
     </div>
   );

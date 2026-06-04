@@ -1,101 +1,76 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  type HomeLayout,
+  type LayoutGroup,
+  type Section,
+  isHomeLayout,
+  reconcileLayout,
+  seedLayout,
+} from "./home-layout";
 
-// Client-only home layout persistence (board S08 Customize, decision 4:
-// localStorage ONLY — no server write, no table). Stores a per-group tile order;
-// the saved order is reconciled against the live catalogue on read so tiles
-// added/removed across releases don't break a stale layout.
+// Client-only persistence for the home Customize v2 layout (localStorage ONLY —
+// no server write, decision 4). The pure model + reducers live in
+// home-layout.ts; this hook owns the storage round-trip, the seed/reconcile on
+// read, and the mounted-gate that keeps SSR (default catalogue order) matching
+// the first client paint before the saved overlay applies.
 
-const KEY = "camp404:home-layout:v1";
+const KEY = "camp404:home-layout:v2";
 
-interface LayoutState {
-  /** groupId → ordered tile ids. */
-  order: Record<string, string[]>;
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((v) => typeof v === "string");
-}
-
-function read(): LayoutState {
+function read(): HomeLayout | null {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { order: {} };
+    if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && "order" in parsed) {
-      const rawOrder = (parsed as { order: unknown }).order;
-      if (rawOrder && typeof rawOrder === "object") {
-        // Validate every value is a string[] — drop malformed/tampered entries
-        // so a bad payload can't feed a non-iterable to applyOrder.
-        const order: Record<string, string[]> = {};
-        for (const [key, value] of Object.entries(
-          rawOrder as Record<string, unknown>,
-        )) {
-          if (isStringArray(value)) order[key] = value;
-        }
-        return { order };
-      }
-    }
+    return isHomeLayout(parsed) ? parsed : null;
   } catch {
-    // Private-mode / disabled storage / malformed value — fall back to default.
+    return null;
   }
-  return { order: {} };
 }
 
-function write(state: LayoutState): void {
+function write(layout: HomeLayout): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    localStorage.setItem(KEY, JSON.stringify(layout));
   } catch {
-    // Best-effort; private mode keeps the in-memory order for the session.
+    // Private mode / disabled storage — keep the in-memory layout for the session.
   }
 }
 
-/**
- * Reorder `tiles` by a saved id list, dropping ids no longer present and
- * appending any new tiles (in their catalogue order) at the end. Pure.
- */
-export function applyOrder<T extends { id: string }>(
-  tiles: T[],
-  savedIds: string[] | undefined,
-): T[] {
-  if (!savedIds || savedIds.length === 0) return tiles;
-  const byId = new Map(tiles.map((t) => [t.id, t]));
-  const ordered: T[] = [];
-  for (const id of savedIds) {
-    const tile = byId.get(id);
-    if (tile) {
-      ordered.push(tile);
-      byId.delete(id);
-    }
-  }
-  // Any tiles not named in the saved order (new since it was saved) keep their
-  // original relative order at the end.
-  for (const tile of tiles) {
-    if (byId.has(tile.id)) ordered.push(tile);
-  }
-  return ordered;
-}
+export function useHomeLayout(
+  catalogue: LayoutGroup[],
+  lockedGroupIds: string[],
+) {
+  // The lazy seed runs identically on SSR + first client render (so hydration
+  // matches); the post-mount effect then swaps in the reconciled saved layout.
+  const [sections, setSectionsState] = useState<Section[]>(
+    () => seedLayout(catalogue, lockedGroupIds).sections,
+  );
 
-export function useHomeLayout() {
-  // SSR + first client paint render the default order; the saved overlay is
-  // applied only after mount so the hydrated tree matches the server's (the
-  // one-frame reconcile is accepted, decision 4 / plan §States).
-  const [mounted, setMounted] = useState(false);
-  const [order, setOrder] = useState<Record<string, string[]>>({});
-
+  // Catalogue is static and lockedGroupIds is server-stable for the session, so
+  // seed/reconcile once on mount (the values from first render are captured).
   useEffect(() => {
-    setOrder(read().order);
-    setMounted(true);
+    const saved = read();
+    setSectionsState(
+      saved
+        ? reconcileLayout(saved, catalogue, lockedGroupIds).sections
+        : seedLayout(catalogue, lockedGroupIds).sections,
+    );
   }, []);
 
-  const setGroupOrder = useCallback((groupId: string, ids: string[]) => {
-    setOrder((prev) => {
-      const next = { ...prev, [groupId]: ids };
-      write({ order: next });
-      return next;
-    });
-  }, []);
+  const setSections = useCallback(
+    (updater: Section[] | ((prev: Section[]) => Section[])) => {
+      setSectionsState((prev) => {
+        const next =
+          typeof updater === "function"
+            ? (updater as (p: Section[]) => Section[])(prev)
+            : updater;
+        write({ v: 2, sections: next });
+        return next;
+      });
+    },
+    [],
+  );
 
-  return { mounted, order, setGroupOrder };
+  return { sections, setSections };
 }
