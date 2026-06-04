@@ -25,7 +25,8 @@ import { Slider } from "@camp404/ui/components/slider";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { CircleAlert, Mic } from "lucide-react";
 import { RecorderPanel } from "../voice/recorder-panel";
-import { AvatarUpload } from "../profile/avatar-upload";
+import { AvatarUpload } from "@camp404/ui/components/avatar-upload";
+import { cropResizeToSquare } from "@/lib/image";
 
 // Per-kind questionnaire field renderer, recomposed onto the S05 field-kind
 // board affordances + the shared @camp404/ui primitives. The data model is
@@ -251,6 +252,7 @@ function FieldInput({
           <AvatarUpload
             value={typeof value === "string" ? value : null}
             onChange={(url) => onChange(url)}
+            preprocessImage={cropResizeToSquare}
           />
         </div>
       );
