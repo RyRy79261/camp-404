@@ -7,7 +7,10 @@ import type {
   QuestionnaireResponses,
   QuestionnaireResponseValue,
 } from "@camp404/types";
+import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
+import { ProgressBar } from "@camp404/ui/components/progress-bar";
+import { CloudOff, TriangleAlert } from "lucide-react";
 import { QuestionField } from "./question";
 import { validateIdNumber } from "@/lib/id-validation";
 import type { SaveResult } from "@/app/onboarding/questionnaire/actions";
@@ -150,8 +153,7 @@ export function QuestionnaireWizard({
     page.kind === "intro" ||
     (page.kind === "questions" &&
       page.questions.length === 1 &&
-      (page.questions[0]?.kind === "scale" ||
-        page.questions[0]?.kind === "long_text" ||
+      (page.questions[0]?.kind === "long_text" ||
         page.questions[0]?.kind === "image"));
 
   // A lone optional question with no answer yet (e.g. the profile photo
@@ -184,15 +186,20 @@ export function QuestionnaireWizard({
       }}
       className="flex flex-1 flex-col gap-6"
     >
-      <ProgressBar current={pageIndex + 1} total={questionnaire.pages.length} />
+      <WizardProgress
+        current={pageIndex + 1}
+        total={questionnaire.pages.length}
+      />
 
       {formError && (
-        <p
-          role="alert"
-          className="rounded-md border border-[color:var(--color-destructive)] bg-[color:var(--color-destructive)]/10 px-3 py-2 text-sm text-[color:var(--color-destructive)]"
-        >
-          {formError}
-        </p>
+        <Alert variant="error">
+          {formError === SAVE_FAILED ? (
+            <CloudOff aria-hidden />
+          ) : (
+            <TriangleAlert aria-hidden />
+          )}
+          <span className="text-destructive">{formError}</span>
+        </Alert>
       )}
 
       {page.kind === "intro" ? (
@@ -200,7 +207,7 @@ export function QuestionnaireWizard({
           <h2 className="text-3xl font-bold leading-tight md:text-4xl">
             {page.heading}
           </h2>
-          <p className="max-w-prose text-balance text-lg leading-relaxed text-[color:var(--color-muted-foreground)] md:text-xl">
+          <p className="max-w-prose text-balance text-lg leading-relaxed text-muted-foreground md:text-xl">
             {page.body}
           </p>
         </section>
@@ -209,9 +216,7 @@ export function QuestionnaireWizard({
           <section className="flex flex-col gap-1">
             <h2 className="text-lg font-semibold">{page.title}</h2>
             {page.subtitle && (
-              <p className="text-sm text-[color:var(--color-muted-foreground)]">
-                {page.subtitle}
-              </p>
+              <p className="text-sm text-muted-foreground">{page.subtitle}</p>
             )}
           </section>
           <div
@@ -253,26 +258,24 @@ export function QuestionnaireWizard({
           </Button>
         )}
         <Button type="submit" disabled={isPending}>
-          {isLast ? submitLabel : nextLabel}
+          {isPending ? "Saving…" : isLast ? submitLabel : nextLabel}
         </Button>
       </div>
     </form>
   );
 }
 
-function ProgressBar({ current, total }: { current: number; total: number }) {
+function WizardProgress({ current, total }: { current: number; total: number }) {
   const pct = Math.round((current / total) * 100);
   return (
-    <div className="flex flex-col gap-1">
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[color:var(--color-muted)]">
-        <div
-          className="h-full bg-[color:var(--color-primary)] transition-[width]"
-          style={{ width: `${pct}%` }}
-        />
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-xs text-muted-foreground">
+          Step {current} of {total}
+        </span>
+        <span className="font-mono text-xs text-accent">{pct}%</span>
       </div>
-      <p className="text-xs text-[color:var(--color-muted-foreground)]">
-        Step {current} of {total}
-      </p>
+      <ProgressBar value={current} max={total} label="Onboarding progress" />
     </div>
   );
 }
