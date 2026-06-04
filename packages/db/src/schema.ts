@@ -11,6 +11,7 @@ import {
   primaryKey,
   index,
   uniqueIndex,
+  check,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -1384,5 +1385,28 @@ export const mcpAuditLog = pgTable(
       t.userId,
       t.createdAt,
     ),
+  }),
+);
+
+// --- Camp settings (singleton) -------------------------------------------
+// Exactly one row per camp. Holds the first-time-setup latch: `bootstrappedAt`
+// is stamped when the /setup wizard elects the first captain, so the wizard
+// runs once on a fresh system and never again. The PK is a boolean pinned to
+// TRUE (+ a CHECK), so the table can physically hold at most one row.
+// Future camp-wide config (e.g. the editable team list) will hang off this row.
+export const campSettings = pgTable(
+  "camp_settings",
+  {
+    id: boolean("id").primaryKey().default(true),
+    bootstrappedAt: timestamp("bootstrapped_at", { mode: "date" }),
+    bootstrappedByUserId: uuid("bootstrapped_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    singleton: check("camp_settings_singleton", sql`${t.id}`),
   }),
 );
