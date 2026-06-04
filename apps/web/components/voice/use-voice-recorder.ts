@@ -7,10 +7,15 @@ export type RecorderState =
   | "requesting"
   | "recording"
   | "processing"
+  | "transcript-review"
   | "error";
 
 export interface UseVoiceRecorderOptions {
-  /** Called once a transcript is back. */
+  /**
+   * Called with the *committed* transcript — fired by `accept(text)` once the
+   * member has reviewed (and possibly edited) the Whisper output, not the
+   * instant transcription returns.
+   */
   onTranscript: (text: string) => void;
   /**
    * Server-known prompt domain key. Echoed to `/api/voice/transcribe` which
@@ -58,6 +63,9 @@ export function useVoiceRecorder({
   const [state, setState] = React.useState<RecorderState>("idle");
   const [error, setError] = React.useState<string | null>(null);
   const [analyser, setAnalyser] = React.useState<AnalyserNode | null>(null);
+  // The raw Whisper text, held while the member reviews/edits it. Committed
+  // to `onTranscript` only on `accept`; never auto-fired.
+  const [transcript, setTranscript] = React.useState<string | null>(null);
 
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const chunksRef = React.useRef<Blob[]>([]);
@@ -204,8 +212,14 @@ export function useVoiceRecorder({
         throw new Error(data.error ?? `Transcription failed (${res.status})`);
       }
       const data = (await res.json()) as { text: string };
-      if (data.text.trim()) onTranscript(data.text);
-      safeSet(setState, "idle");
+      // Hold the transcript for review instead of auto-committing it; a silent
+      // (empty) clip falls straight back to idle without a review step.
+      if (data.text.trim()) {
+        safeSet(setTranscript, data.text);
+        safeSet(setState, "transcript-review");
+      } else {
+        safeSet(setState, "idle");
+      }
     } catch (err) {
       safeSet(
         setError,
@@ -217,8 +231,20 @@ export function useVoiceRecorder({
 
   function reset() {
     setError(null);
+    safeSet(setTranscript, null);
     safeSet(setState, "idle");
   }
 
-  return { state, error, start, stop, reset, analyser };
+  /** Commit the (reviewed/edited) transcript and return to idle. */
+  function accept(text: string) {
+    onTranscript(text);
+    reset();
+  }
+
+  /** Throw away the pending transcript and return to idle — never commits. */
+  function discard() {
+    reset();
+  }
+
+  return { state, error, start, stop, reset, accept, discard, analyser, transcript };
 }

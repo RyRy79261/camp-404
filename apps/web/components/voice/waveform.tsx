@@ -74,7 +74,14 @@ export function Waveform({ analyser, active, className }: WaveformProps) {
       frame = requestAnimationFrame(draw);
     }
 
-    if (active && analyser) {
+    // Respect prefers-reduced-motion: paint a single static flat line instead
+    // of spinning up the RAF loop. Guard matchMedia — some embedded webviews
+    // (e.g. the Capacitor native path) don't ship it, and calling it would throw.
+    const allowsMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
+    const animates = Boolean(active && analyser && allowsMotion);
+    if (animates) {
       frame = requestAnimationFrame(draw);
     } else {
       drawIdle();
@@ -88,7 +95,7 @@ export function Waveform({ analyser, active, className }: WaveformProps) {
       ref={canvasRef}
       aria-hidden
       className={cn(
-        "h-6 w-full text-[color:var(--color-primary)]",
+        "h-6 w-full text-primary",
         !active && "opacity-40",
         className,
       )}
