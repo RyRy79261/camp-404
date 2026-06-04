@@ -49,6 +49,20 @@ leaves your Neon Auth login, the schema, and the migration history intact —
 only Camp 404 domain rows are cleared. **Run against a Neon branch/fork, not
 production, unless you really mean it.**
 
+**Preflight — run this first and confirm you're on the fork, not production.**
+The Neon SQL editor can't prompt interactively, so this is your manual gate:
+check the database/branch you're connected to before running the destructive
+block below. If it's your production branch, **stop**.
+
+```sql
+-- Which database / role / schema am I about to nuke?
+SELECT current_database(), current_user, current_schema();
+-- Also confirm the Neon branch selector (top of the SQL editor) shows the
+-- per-PR fork — NOT main/production — before continuing.
+```
+
+Once you've confirmed it's the throwaway fork:
+
 ```sql
 BEGIN;
 TRUNCATE TABLE
