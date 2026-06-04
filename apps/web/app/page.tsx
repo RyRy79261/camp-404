@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Divider } from "@camp404/ui/components/divider";
 import { TopChrome } from "@camp404/ui/components/top-chrome";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { isCampBootstrapped } from "@/lib/bootstrap";
 import {
   ensureCampUser,
   getBurnerProfile,
@@ -30,6 +31,14 @@ export default async function HomePage() {
 
   if (!user) {
     return <LandingHero />;
+  }
+
+  // First-time setup — on a fresh system (no captain yet) the first signed-in
+  // person is routed to the setup wizard to become the founding captain,
+  // before any invite/onboarding gating. This is the universal bootstrap path
+  // (god accounts included), so a fresh deploy never needs hand-run SQL.
+  if (!(await isCampBootstrapped())) {
+    redirect("/setup");
   }
 
   // Invite gate — god accounts (GOD_EMAILS) bypass; everyone else must have
