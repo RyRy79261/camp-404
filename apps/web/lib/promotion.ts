@@ -37,6 +37,7 @@ interface PromotionBackend {
   decideCaptainPromotion(input: {
     requestId: string;
     status: "accepted" | "declined" | "cancelled";
+    actorUserId?: string;
   }): Promise<CaptainPromotionRequestRow | null>;
   getOpenPromotionForTarget(
     targetUserId: string,
@@ -89,6 +90,7 @@ export function sendCaptainPromotion(input: {
 export function decideCaptainPromotion(input: {
   requestId: string;
   status: "accepted" | "declined" | "cancelled";
+  actorUserId?: string;
 }): Promise<CaptainPromotionRequestRow | null> {
   return backend().decideCaptainPromotion(input);
 }

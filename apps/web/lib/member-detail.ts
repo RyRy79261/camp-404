@@ -29,6 +29,9 @@ export interface PresentedMember {
   rankLabel: string;
   approvalStatus: "pending" | "approved" | "rejected";
   approvalSummary: string;
+  /** Free-text bio (`bio.statement`), promoted out of the grouped sections to
+   * lead the profile per board S17. Null when unanswered. */
+  bio: string | null;
   /** The profile photo URL, if the member uploaded one. */
   profileImageUrl: string | null;
   overview: DetailItem[];
@@ -39,6 +42,10 @@ export interface PresentedMember {
 const COUNTRY_NAME = new Map(COUNTRIES.map((c) => [c.value, c.label]));
 
 const dateFmt = new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium" });
+
+// The bio answer is promoted to its own lead paragraph (board S17), so it is
+// pulled out separately and skipped when grouping the remaining answers (no dupe).
+const BIO_QUESTION_ID = "bio.statement";
 
 /** Resolve a stored answer to a human label, mapping option values where the
  * question carries a label set. Returns null for empty/absent answers so the
@@ -113,6 +120,10 @@ export function presentMemberDetail(
 ): PresentedMember {
   const responses = detail.responses;
 
+  const bioRaw = responses[BIO_QUESTION_ID];
+  const bio =
+    typeof bioRaw === "string" && bioRaw.trim() !== "" ? bioRaw : null;
+
   const profileImageUrl =
     typeof responses["profile.image"] === "string"
       ? (responses["profile.image"] as string)
@@ -155,6 +166,8 @@ export function presentMemberDetail(
     if (page.kind !== "questions") continue;
     const items: DetailItem[] = [];
     for (const question of page.questions) {
+      // The bio is rendered as the lead paragraph, not as a grouped field.
+      if (question.id === BIO_QUESTION_ID) continue;
       const value = renderAnswer(question, responses[question.id]);
       if (value != null) items.push({ label: question.prompt, value });
     }
@@ -169,6 +182,7 @@ export function presentMemberDetail(
     rankLabel: detail.rank === "captain" ? "Captain" : "Member",
     approvalStatus: detail.approvalStatus,
     approvalSummary: describeApproval(detail),
+    bio,
     profileImageUrl,
     overview,
     profileSections,

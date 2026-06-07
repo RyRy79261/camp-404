@@ -1,5 +1,5 @@
 import { cn } from "@camp404/ui/lib/utils";
-import type { RosterRow } from "@/lib/camp-roster";
+import type { RosterDisplayRow } from "@/lib/camp-roster";
 import {
   RosterAvatar,
   countryFlag,
@@ -9,7 +9,9 @@ import {
 
 // Mobile roster list (board S17 mobile, < sm). Each member is a full-width
 // button row — status bar, avatar, name + sub-line (@handle · flag · country)
-// and a trailing role emoji. Buttons make every row keyboard-reachable.
+// and a trailing role emoji. Buttons make every row keyboard-reachable. Serves
+// both the captain view (coloured status bar) and the member view (no `status`
+// → a neutral bar, no approval signal).
 
 export function RosterList({
   rows,
@@ -17,7 +19,7 @@ export function RosterList({
   onSelect,
   className,
 }: {
-  rows: RosterRow[];
+  rows: RosterDisplayRow[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   className?: string;
@@ -36,15 +38,20 @@ export function RosterList({
           <li key={r.id}>
             <button
               type="button"
+              data-roster-trigger={r.id}
+              aria-current={selected ? "true" : undefined}
               onClick={() => onSelect(r.id)}
               aria-label={`Open ${r.displayName}'s profile`}
               className="flex w-full items-stretch text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
             >
               <span
                 aria-hidden
-                className={cn("w-1 shrink-0", statusBarClass(r.status))}
+                className={cn(
+                  "w-1 shrink-0",
+                  r.status ? statusBarClass(r.status) : "bg-border",
+                )}
               />
-              <span className="sr-only">{r.statusLabel}</span>
+              {r.statusLabel && <span className="sr-only">{r.statusLabel}</span>}
               <span
                 className={cn(
                   "flex flex-1 items-center gap-3 px-3 py-2.5 transition-colors",

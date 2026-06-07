@@ -6,6 +6,7 @@ import { getCampMemberDetail } from "@camp404/db/roster";
 import { decryptOrNull } from "@camp404/db/crypto";
 import { mergeIdNumber } from "@camp404/db/id-documents";
 import {
+  canDecidePromotion,
   canSendPromotion,
   deriveViewerRank,
   promotionStepState,
@@ -16,15 +17,22 @@ import {
   decideUserApproval,
   ensureCampUser,
   hasCampAccess,
+  isApproved,
 } from "@/lib/users";
 import {
+  decideCaptainPromotion,
   getOpenPromotionForTarget,
+  getPromotionRequestById,
   sendCaptainPromotion,
 } from "@/lib/promotion";
 import {
   presentMemberDetail,
   type PresentedMember,
 } from "@/lib/member-detail";
+import {
+  presentPublicMember,
+  type PublicMemberProfile,
+} from "@/lib/public-member";
 
 export type MemberDetailResult =
   | {
@@ -34,7 +42,16 @@ export type MemberDetailResult =
       canAssignCaptain: boolean;
       /** In-flight two-step tracker for an open request (drives the dialog). */
       promotionStep: { sent: boolean; accepted: boolean };
+      /** The open `sent` request's id, for the dialog's cancel action (or null). */
+      promotionRequestId: string | null;
+      /** Whether the open request was sent by THIS captain — only the requester
+       * may cancel it, so this gates the dialog's cancel affordance. */
+      promotionRequestIsMine: boolean;
     }
+  | { ok: false; error: string };
+
+export type PublicMemberProfileResult =
+  | ({ ok: true } & PublicMemberProfile)
   | { ok: false; error: string };
 
 export type ApprovalDecisionResult =
@@ -43,6 +60,10 @@ export type ApprovalDecisionResult =
 
 export type PromotionActionResult =
   | { ok: true }
+  | { ok: false; error: string };
+
+export type SendPromotionResult =
+  | { ok: true; requestId: string }
   | { ok: false; error: string };
 
 // Opaque-id boundary schema: a non-empty string. Deliberately NOT .uuid() — the
@@ -55,6 +76,12 @@ const SEND_PROMOTION_COPY: Record<string, string> = {
   viewer_not_captain: "Captain access only.",
   cannot_promote_self: "You can't promote yourself.",
   target_already_captain: "They're already a captain.",
+};
+
+// Guard reason code → captain-facing copy for cancelling an in-flight request.
+const CANCEL_PROMOTION_COPY: Record<string, string> = {
+  request_not_open: "This request is no longer open.",
+  only_requester_may_cancel: "Only the captain who sent it can cancel it.",
 };
 
 /**
@@ -79,6 +106,33 @@ async function requireCaptain(): Promise<
     return { ok: false, error: "Captain access only." };
   }
   return { ok: true, captainId: campUser.id };
+}
+
+/**
+ * Gate a member-facing camp-management read: authenticated, camp-active, and
+ * approved — but NOT captain-gated. Backs the public member profile (decision:
+ * any approved member may browse the roster + public cards). Returns the viewer's
+ * id and whether they are a captain (so a captain hitting the public path is
+ * still recognised).
+ */
+async function requireApprovedMember(): Promise<
+  | { ok: true; userId: string; isCaptain: boolean }
+  | { ok: false; error: string }
+> {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) return { ok: false, error: "Not signed in." };
+  const campUser = await ensureCampUser(authUser);
+  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+    return { ok: false, error: "Your account isn't camp-active yet." };
+  }
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    return { ok: false, error: "Your account isn't approved yet." };
+  }
+  const { cleared } = requireClearance(
+    deriveViewerRank(campUser.rank, false),
+    "captain",
+  );
+  return { ok: true, userId: campUser.id, isCaptain: cleared };
 }
 
 /** Load the full burner detail behind a roster row, for the modal. */
@@ -112,16 +166,41 @@ export async function getMemberDetailAction(
     targetRank: deriveViewerRank(detail.rank, false),
     targetId: userId,
   }).ok;
-  const promotionStep = promotionStepState(
-    await getOpenPromotionForTarget(userId),
-  );
+  const openRequest = await getOpenPromotionForTarget(userId);
+  const promotionStep = promotionStepState(openRequest);
 
   return {
     ok: true,
     member: presentMemberDetail({ ...detail, responses }),
     canAssignCaptain,
     promotionStep,
+    promotionRequestId: openRequest?.id ?? null,
+    promotionRequestIsMine: openRequest?.requestedByUserId === gate.captainId,
   };
+}
+
+/**
+ * Load the PUBLIC member card behind a roster row for a non-captain viewer.
+ * Gated to approved camp members (not captains). Returns an allowlisted
+ * projection — bio + this-year ideas only — so approval status, contact details,
+ * government ID and invite provenance never reach a member. The decrypt path and
+ * `getMemberDetailAction` stay captain-only.
+ */
+export async function getPublicMemberProfileAction(
+  userId: string,
+): Promise<PublicMemberProfileResult> {
+  const gate = await requireApprovedMember();
+  if (!gate.ok) return gate;
+
+  if (!UserId.safeParse(userId).success) {
+    return { ok: false, error: "Invalid member." };
+  }
+
+  const detail = await getCampMemberDetail(userId);
+  if (!detail) return { ok: false, error: "Member not found." };
+
+  // Allowlist projection (no decrypt, no status, no email, no provenance).
+  return { ok: true, ...presentPublicMember(detail) };
 }
 
 /**
@@ -161,7 +240,7 @@ export async function decideApprovalAction(
  */
 export async function sendCaptainPromotionAction(
   targetUserId: string,
-): Promise<PromotionActionResult> {
+): Promise<SendPromotionResult> {
   const gate = await requireCaptain();
   if (!gate.ok) return gate;
 
@@ -187,9 +266,60 @@ export async function sendCaptainPromotionAction(
     };
   }
 
-  await sendCaptainPromotion({
+  const created = await sendCaptainPromotion({
     targetUserId,
     requestedByUserId: gate.captainId,
+  });
+  revalidatePath("/captains/camp-management");
+  return { ok: true, requestId: created.id };
+}
+
+/**
+ * Cancel an in-flight "make captain" request the viewing captain sent. Captain-
+ * gated; the pure `canDecidePromotion` guard enforces that only the requester can
+ * cancel and only while the row is still `sent`. No rank ever changes.
+ */
+export async function cancelCaptainPromotionAction(
+  requestId: string,
+): Promise<PromotionActionResult> {
+  const gate = await requireCaptain();
+  if (!gate.ok) return gate;
+
+  if (!UserId.safeParse(requestId).success) {
+    return { ok: false, error: "Invalid request." };
+  }
+
+  const request = await getPromotionRequestById(requestId);
+  if (
+    !request ||
+    request.targetUserId === null ||
+    request.requestedByUserId === null
+  ) {
+    return { ok: false, error: "Request not found." };
+  }
+
+  const guard = canDecidePromotion({
+    actorId: gate.captainId,
+    request: {
+      status: request.status,
+      targetUserId: request.targetUserId,
+      requestedByUserId: request.requestedByUserId,
+    },
+    action: "cancel",
+  });
+  if (!guard.ok) {
+    return {
+      ok: false,
+      error: CANCEL_PROMOTION_COPY[guard.reason] ?? "Couldn't cancel the request.",
+    };
+  }
+
+  // Bind the actor in the write predicate too (defense in depth): the cancel
+  // only flips a row this captain actually requested.
+  await decideCaptainPromotion({
+    requestId,
+    status: "cancelled",
+    actorUserId: gate.captainId,
   });
   revalidatePath("/captains/camp-management");
   return { ok: true };

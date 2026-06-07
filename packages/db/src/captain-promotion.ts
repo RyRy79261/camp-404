@@ -119,23 +119,36 @@ export async function sendCaptainPromotion(input: {
  * participant was hard-deleted (SET NULL) — the IS NOT NULL guards make the write
  * atomic with the precondition the app checked on read, so a delete racing
  * between read and write can't flip an orphaned row (or promote a gone user).
+ *
+ * Pass `actorUserId` to also bind the actor to the side they act from IN THE
+ * UPDATE predicate — `cancelled` requires the requester, `accepted`/`declined`
+ * the target. The app guard (`canDecidePromotion`) already checks this on read;
+ * folding it into the WHERE makes the write fail closed (returns null) if the row
+ * doesn't match, rather than trusting the read-then-write window.
  */
 export async function decideCaptainPromotion(input: {
   requestId: string;
   status: "accepted" | "declined" | "cancelled";
+  actorUserId?: string;
 }): Promise<CaptainPromotionRequestRow | null> {
   const db = createHttpDb();
+  const conditions = [
+    eq(captainPromotionRequests.id, input.requestId),
+    eq(captainPromotionRequests.status, "sent"),
+    isNotNull(captainPromotionRequests.targetUserId),
+    isNotNull(captainPromotionRequests.requestedByUserId),
+  ];
+  if (input.actorUserId !== undefined) {
+    conditions.push(
+      input.status === "cancelled"
+        ? eq(captainPromotionRequests.requestedByUserId, input.actorUserId)
+        : eq(captainPromotionRequests.targetUserId, input.actorUserId),
+    );
+  }
   const [row] = await db
     .update(captainPromotionRequests)
     .set({ status: input.status, decidedAt: new Date() })
-    .where(
-      and(
-        eq(captainPromotionRequests.id, input.requestId),
-        eq(captainPromotionRequests.status, "sent"),
-        isNotNull(captainPromotionRequests.targetUserId),
-        isNotNull(captainPromotionRequests.requestedByUserId),
-      ),
-    )
+    .where(and(...conditions))
     .returning();
   return row ?? null;
 }

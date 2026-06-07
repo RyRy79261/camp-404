@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Shield, X } from "lucide-react";
 import { Badge } from "@camp404/ui/components/badge";
@@ -27,6 +27,8 @@ type DetailState =
       member: PresentedMember;
       canAssignCaptain: boolean;
       promotionStep: { sent: boolean; accepted: boolean };
+      promotionRequestId: string | null;
+      promotionRequestIsMine: boolean;
     }
   | { state: "error"; message: string };
 
@@ -69,6 +71,7 @@ export function MemberProfile({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const panelRef = useRef<HTMLElement>(null);
   const [detail, setDetail] = useState<DetailState>({ state: "loading" });
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -93,6 +96,8 @@ export function MemberProfile({
                 member: res.member,
                 canAssignCaptain: res.canAssignCaptain,
                 promotionStep: res.promotionStep,
+                promotionRequestId: res.promotionRequestId,
+                promotionRequestIsMine: res.promotionRequestIsMine,
               }
             : { state: "error", message: res.error },
         );
@@ -106,6 +111,12 @@ export function MemberProfile({
     return () => {
       cancelled = true;
     };
+  }, [row.id]);
+
+  // Move focus into the panel on open (a11y); the island returns focus to the
+  // triggering row on close.
+  useEffect(() => {
+    panelRef.current?.focus();
   }, [row.id]);
 
   function decide(decision: "approved" | "rejected") {
@@ -131,10 +142,30 @@ export function MemberProfile({
     });
   }
 
-  function markPromotionSent() {
+  function markPromotionSent(requestId: string) {
     setDetail((prev) =>
       prev.state === "loaded"
-        ? { ...prev, promotionStep: { ...prev.promotionStep, sent: true } }
+        ? {
+            ...prev,
+            promotionStep: { ...prev.promotionStep, sent: true },
+            promotionRequestId: requestId,
+            // This captain just sent it, so it's theirs to cancel.
+            promotionRequestIsMine: true,
+          }
+        : prev,
+    );
+    router.refresh();
+  }
+
+  function markPromotionCancelled() {
+    setDetail((prev) =>
+      prev.state === "loaded"
+        ? {
+            ...prev,
+            promotionStep: { sent: false, accepted: false },
+            promotionRequestId: null,
+            promotionRequestIsMine: false,
+          }
         : prev,
     );
     router.refresh();
@@ -147,6 +178,10 @@ export function MemberProfile({
     detail.state === "loaded"
       ? detail.promotionStep
       : { sent: false, accepted: false };
+  const promotionRequestId =
+    detail.state === "loaded" ? detail.promotionRequestId : null;
+  const promotionRequestIsMine =
+    detail.state === "loaded" ? detail.promotionRequestIsMine : false;
   const isAwaiting = member?.approvalStatus === "pending";
   const status = member ? STATUS_BADGE[member.approvalStatus] : null;
 
@@ -165,8 +200,10 @@ export function MemberProfile({
 
   return (
     <section
+      ref={panelRef}
+      tabIndex={-1}
       aria-label={`${row.displayName} profile`}
-      className="flex flex-col gap-5 rounded-lg border bg-card p-5 sm:p-6"
+      className="flex flex-col gap-5 rounded-lg border bg-card p-5 outline-none sm:p-6"
     >
       {/* PanelBar: console prompt + record index + close. */}
       <div className="flex items-center gap-2 border-b pb-3.5">
@@ -239,6 +276,12 @@ export function MemberProfile({
 
       {member && (
         <>
+          {member.bio && (
+            <p className="whitespace-pre-line text-sm text-foreground">
+              {member.bio}
+            </p>
+          )}
+
           <p className="font-mono text-caption text-muted-foreground">
             {member.approvalSummary}
           </p>
@@ -325,7 +368,10 @@ export function MemberProfile({
               open={assignOpen}
               onOpenChange={setAssignOpen}
               step={promotionStep}
+              requestId={promotionRequestId}
+              requestIsMine={promotionRequestIsMine}
               onSent={markPromotionSent}
+              onCancelled={markPromotionCancelled}
             />
           )}
         </>

@@ -13,12 +13,16 @@ import {
 } from "@camp404/ui/components/dialog";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { cn } from "@camp404/ui/lib/utils";
-import { sendCaptainPromotionAction } from "./actions";
+import {
+  cancelCaptainPromotionAction,
+  sendCaptainPromotionAction,
+} from "./actions";
 
 // Assign-captain double-opt-in dialog (board S17 AssignCaptain). Captain rank is
 // two-sided: sending a request never flips rank — only the target accepting in
-// their own app does (on the home / notifications surface). This dialog only
-// sends; the step tracker reflects the live `{ sent, accepted }` state.
+// their own app does (on the home / notifications surface). This dialog sends and
+// (while the request is still open) can cancel; the step tracker reflects the
+// live `{ sent, accepted }` state.
 
 /** The two-step "you send → they accept" contract indicator. */
 function OptInStepTracker({
@@ -64,14 +68,23 @@ export function AssignCaptainDialog({
   open,
   onOpenChange,
   step,
+  requestId,
+  requestIsMine,
   onSent,
+  onCancelled,
 }: {
   targetUserId: string;
   name: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   step: { sent: boolean; accepted: boolean };
-  onSent: () => void;
+  /** The open request's id, needed to cancel it (null until one is sent). */
+  requestId: string | null;
+  /** Only the captain who sent the request may cancel it — the server enforces
+   * this; gating the affordance keeps the button from being a dead-end. */
+  requestIsMine: boolean;
+  onSent: (requestId: string) => void;
+  onCancelled: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -84,23 +97,42 @@ export function AssignCaptainDialog({
         setError(res.error);
         return;
       }
-      // Optimistically flip step 1 to "Done"; the parent revalidates the row.
-      onSent();
+      // The parent records the new request id and flips step 1 to "Done".
+      onSent(res.requestId);
+    });
+  }
+
+  function cancelRequest() {
+    if (!requestId) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await cancelCaptainPromotionAction(requestId);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      onCancelled();
     });
   }
 
   // Single close path (Esc / overlay / close icon / Cancel button) so the
   // transient error is always cleared on the way out and never lingers to the
-  // next open.
+  // next open. Suppressed mid-send so a request can't be abandoned half-done.
   function requestOpenChange(next: boolean) {
     if (isPending) return;
     if (!next) setError(null);
     onOpenChange(next);
   }
 
+  const canCancel =
+    step.sent && !step.accepted && requestId !== null && requestIsMine;
+
   return (
     <Dialog open={open} onOpenChange={requestOpenChange}>
-      <DialogContent className="border-secondary sm:max-w-md">
+      <DialogContent
+        className="border-secondary sm:max-w-md"
+        showCloseButton={!isPending}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldPlus
@@ -136,17 +168,30 @@ export function AssignCaptainDialog({
             disabled={isPending}
             onClick={() => requestOpenChange(false)}
           >
-            Cancel
+            {step.sent ? "Close" : "Cancel"}
           </Button>
-          <Button
-            type="button"
-            className="w-full sm:w-auto"
-            disabled={isPending || step.sent}
-            onClick={send}
-          >
-            {isPending && <Spinner size="sm" />}
-            {step.sent ? "Request sent" : "Send request"}
-          </Button>
+          {!step.sent ? (
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              disabled={isPending}
+              onClick={send}
+            >
+              {isPending && <Spinner size="sm" />}
+              Send request
+            </Button>
+          ) : canCancel ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              disabled={isPending}
+              onClick={cancelRequest}
+            >
+              {isPending && <Spinner size="sm" />}
+              Cancel request
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

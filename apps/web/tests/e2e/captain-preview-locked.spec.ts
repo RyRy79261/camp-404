@@ -90,11 +90,14 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await expect(page.getByText("VIEW ONLY")).toHaveCount(0);
   });
 
-  // camp-management keeps its own inline blurred-table lock (not CaptainLock);
-  // it was aligned onto requireClearance here, so guard both ranks. The roster
-  // read now flows through lib/roster.ts (test-store-backed under E2E_TEST_MODE),
-  // so the unlocked captain path renders without touching Neon.
-  test("/captains/camp-management: a non-captain sees the locked roster shell", async ({
+  // camp-management is NOT preview-but-locked any more: any approved member may
+  // browse a PUBLIC roster (names, handles, country, role, teams) and open a
+  // public card. The captain-only facets — approval status/stats, the Pending /
+  // Outstanding chips, and approve/reject/assign — are withheld SERVER-SIDE
+  // (members receive the redacted PublicRosterRow projection). The roster read
+  // flows through lib/roster.ts (test-store-backed under E2E_TEST_MODE), so both
+  // ranks render without touching Neon.
+  test("/captains/camp-management: a non-captain browses the public roster (no captain chrome)", async ({
     page,
     request,
   }) => {
@@ -106,12 +109,20 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await expect(
       page.getByRole("heading", { name: "Camp management" }),
     ).toBeVisible();
-    await expect(page.getByText("Captain access only")).toBeVisible();
-    // The roster controls are withheld for the locked view.
-    await expect(page.getByLabel("Search the roster")).toHaveCount(0);
+    // Members CAN now browse + search the roster.
+    await expect(page.getByLabel("Search the roster")).toBeVisible();
+    // …and rows actually render (browse-positive: catch a zero-rows / error
+    // regression that would otherwise look "locked down" yet be broken).
+    await expect(
+      page.getByRole("button", { name: /Open .*profile/ }).first(),
+    ).toBeVisible();
+    // …but the captain-only chrome is withheld: no Pending filter chip, and the
+    // old "Captain access only" lock is gone.
+    await expect(page.getByRole("button", { name: /Pending/ })).toHaveCount(0);
+    await expect(page.getByText("Captain access only")).toHaveCount(0);
   });
 
-  test("/captains/camp-management: a captain sees the roster controls", async ({
+  test("/captains/camp-management: a captain sees the full triage surface", async ({
     page,
     request,
   }) => {
@@ -120,6 +131,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await page.goto("/captains/camp-management");
 
     await expect(page.getByLabel("Search the roster")).toBeVisible();
-    await expect(page.getByText("Captain access only")).toHaveCount(0);
+    // The captain-only Pending filter chip is present.
+    await expect(page.getByRole("button", { name: /Pending/ })).toBeVisible();
   });
 });

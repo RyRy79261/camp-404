@@ -4,17 +4,21 @@ import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getCampManagementRoster } from "@/lib/roster";
-import { toRosterRow } from "@/lib/camp-roster";
+import { rosterForViewer } from "@/lib/camp-roster";
 import { CampManagementRoster } from "./camp-management-roster";
+import { MemberRoster } from "./member-roster";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Camp management — Camp 404" };
 
-// Captains' camp-management roster. Access is rank-gated at the data layer, not
-// by redirect: non-captains reach this page but the server withholds the rows
-// (rows=[], locked) and the island shows a CaptainLock — preview-but-locked
-// (D3). Only `rank = 'captain'` loads the real roster.
+// Captains' camp-management roster. Every approved camp member may browse the
+// roster (names, handles, country, role, teams) and open a public member card;
+// the captain-only facets — approval status, join date, contact details,
+// government ID, and the approve/reject/assign actions — are withheld
+// SERVER-SIDE for non-captains. Captains get the full triage surface, members a
+// privacy-redacted projection (`toPublicRosterRow`), so private fields never
+// cross the wire for a member.
 
 export default async function CampManagementPage() {
   const authUser = await getAuthenticatedUserOrRedirect();
@@ -26,15 +30,16 @@ export default async function CampManagementPage() {
     redirect("/pending-approval");
   }
 
-  // Preview-but-locked (D3) on the shared clearance comparator: the locked view
-  // gets no data — clearance is enforced here, server-side.
-  const { cleared } = requireClearance(
+  const { cleared: isCaptain } = requireClearance(
     deriveViewerRank(campUser.rank, false),
     "captain",
   );
-  const rows = cleared
-    ? (await getCampManagementRoster()).map(toRosterRow)
-    : [];
+
+  // Fetch once; project to the captain (full) or member (public) row shape.
+  // The public projection carries no approval/onboarding/driver facets, so the
+  // member branch literally has no private data to leak.
+  const members = await getCampManagementRoster();
+  const roster = rosterForViewer(members, isCaptain);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
@@ -49,7 +54,7 @@ export default async function CampManagementPage() {
             camp404 · roster
           </span>
           <span className="font-mono text-caption font-medium text-accent">
-            {rows.length} {rows.length === 1 ? "record" : "records"}
+            {members.length} {members.length === 1 ? "record" : "records"}
           </span>
         </div>
 
@@ -60,18 +65,22 @@ export default async function CampManagementPage() {
           Camp management
           <span
             aria-hidden
-            className="hidden h-6 w-3 animate-pulse bg-accent sm:inline-block"
+            className="hidden h-6 w-3 motion-safe:animate-pulse bg-accent sm:inline-block"
           />
         </h1>
 
         <p className="hidden max-w-2xl text-sm text-muted-foreground sm:block">
-          The full roster. Open a member to read their profile, approve or
-          reject pending sign-ups, and — captain to captain — assign captain
-          rank.
+          {isCaptain
+            ? "The full roster. Open a member to read their profile, approve or reject pending sign-ups, and — captain to captain — assign captain rank."
+            : "Browse who's at camp — names, teams, and what folks are bringing. Approval status and contact details stay captain-only."}
         </p>
       </header>
 
-      <CampManagementRoster rows={rows} locked={!cleared} />
+      {roster.isCaptain ? (
+        <CampManagementRoster rows={roster.rows} />
+      ) : (
+        <MemberRoster rows={roster.rows} />
+      )}
     </main>
   );
 }

@@ -138,3 +138,51 @@ describe("getMemberDetailAction — promotion surfacing", () => {
     expect(res).toEqual({ ok: false, error: "Member not found." });
   });
 });
+
+describe("getMemberDetailAction — open request id", () => {
+  it("surfaces the open request id + ownership for the dialog's cancel action", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+    vi.mocked(getOpenPromotionForTarget).mockResolvedValue({
+      id: "req-9",
+      status: "sent",
+      requestedByUserId: CAPTAIN,
+    } as never);
+
+    const res = await getMemberDetailAction("member-1");
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.promotionRequestId).toBe("req-9");
+    expect(res.promotionRequestIsMine).toBe(true);
+    expect(res.promotionStep).toEqual({ sent: true, accepted: false });
+  });
+
+  it("flags a request another captain sent as not mine", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+    vi.mocked(getOpenPromotionForTarget).mockResolvedValue({
+      id: "req-9",
+      status: "sent",
+      requestedByUserId: "other-captain",
+    } as never);
+
+    const res = await getMemberDetailAction("member-1");
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.promotionRequestIsMine).toBe(false);
+  });
+
+  it("is null / not-mine when there is no open request", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+
+    const res = await getMemberDetailAction("member-1");
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.promotionRequestId).toBeNull();
+    expect(res.promotionRequestIsMine).toBe(false);
+  });
+});

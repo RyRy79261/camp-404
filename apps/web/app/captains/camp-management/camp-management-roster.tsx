@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { StatTile } from "@camp404/ui/components/stat-tile";
 import {
@@ -14,24 +13,20 @@ import {
   type RosterRow,
 } from "@/lib/camp-roster";
 import { MemberProfile } from "./member-profile";
+import { focusRosterTrigger } from "./roster-presentation";
 import { RosterList } from "./roster-list";
 import { RosterTable } from "./roster-table";
 import { RosterToolbar } from "./roster-toolbar";
 
 // Captains' camp-management roster (board S17, iteration B — terminal console).
-// Renders the live roster for captains; for everyone else the page withholds the
-// rows (rows=[], locked) and this renders a CaptainLock in place of the data —
-// preview-but-locked (D3), not a redirect and not a blurred overlay. All the
-// island LOGIC (filter/search/chip state, row→profile selection) is here; the
-// detail fetch + decisions + promotion live in MemberProfile and the dialogs.
+// Captain-only triage surface: full rows + the approval stats strip + the
+// approve/reject/assign actions. Non-captain members are routed to the public
+// `MemberRoster` by the page (server-side), so this island always renders the
+// captain view. All the island LOGIC (filter/search/chip state, row→profile
+// selection) is here; the detail fetch + decisions + promotion live in
+// MemberProfile and the dialogs.
 
-export function CampManagementRoster({
-  rows,
-  locked,
-}: {
-  rows: RosterRow[];
-  locked: boolean;
-}) {
+export function CampManagementRoster({ rows }: { rows: RosterRow[] }) {
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<RosterChip>("all");
   const [team, setTeam] = useState<string | null>(null);
@@ -50,25 +45,18 @@ export function CampManagementRoster({
     [rows, query, chip, team],
   );
 
+  // Resolve the open profile from the FILTERED rows, so narrowing the list to
+  // exclude the selected member closes the panel (no orphaned profile). The
+  // record index stays the member's position in the FULL roster — a stable
+  // per-member "#NN", not a position that shifts as filters change.
   const selectedRow = useMemo(
-    () => rows.find((r) => r.id === selectedId) ?? null,
-    [rows, selectedId],
+    () => filtered.find((r) => r.id === selectedId) ?? null,
+    [filtered, selectedId],
   );
   const selectedIndex = useMemo(
     () => (selectedId ? rows.findIndex((r) => r.id === selectedId) + 1 : 0),
     [rows, selectedId],
   );
-
-  // Preview-but-locked: the server sent no rows; explain why, render nothing
-  // interactive (the search controls are withheld, asserted by the e2e gate).
-  if (locked) {
-    return (
-      <CaptainLock
-        title="Captain access only"
-        message="Camp management is visible to captains. Your rank doesn't include it."
-      />
-    );
-  }
 
   // "Nobody is awaiting approval." only when there genuinely are no pending
   // members — not when a search/team filter merely narrowed them out.
@@ -81,25 +69,45 @@ export function CampManagementRoster({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Stats strip. */}
+      {/* Stats strip — captain-only (approval-derived counts). Desktop:
+          label-over-number with a hint (board 37); mobile: compact
+          number-over-label, no hint (board 38). */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <StatTile
+          className="hidden bg-muted sm:block"
           label="Members"
           value={<span className="font-mono text-foreground">{stats.members}</span>}
           hint="All sign-ups"
-          className="bg-muted"
         />
         <StatTile
+          className="bg-muted sm:hidden"
+          compact
+          label="Members"
+          value={<span className="font-mono text-foreground">{stats.members}</span>}
+        />
+        <StatTile
+          className="hidden bg-muted sm:block"
           label="Approved"
           value={<span className="font-mono text-success">{stats.approved}</span>}
           hint="Cleared to camp"
-          className="bg-muted"
         />
         <StatTile
+          className="bg-muted sm:hidden"
+          compact
+          label="Approved"
+          value={<span className="font-mono text-success">{stats.approved}</span>}
+        />
+        <StatTile
+          className="hidden bg-muted sm:block"
           label="Incomplete"
           value={<span className="font-mono text-warning">{stats.incomplete}</span>}
           hint="Notices & questionnaires unfinished"
-          className="bg-muted"
+        />
+        <StatTile
+          className="bg-muted sm:hidden"
+          compact
+          label="Incomplete"
+          value={<span className="font-mono text-warning">{stats.incomplete}</span>}
         />
       </div>
 
@@ -140,7 +148,11 @@ export function CampManagementRoster({
           key={selectedRow.id}
           row={selectedRow}
           index={selectedIndex}
-          onClose={() => setSelectedId(null)}
+          onClose={() => {
+            const id = selectedId;
+            setSelectedId(null);
+            if (id) focusRosterTrigger(id);
+          }}
         />
       )}
     </div>

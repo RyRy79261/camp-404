@@ -25,7 +25,7 @@ export function CaptainLock({
       )}
     >
       <span className="flex h-10 w-10 items-center justify-center rounded-full border bg-muted/40">
-        <Lock className="h-5 w-5 text-muted-foreground" />
+        <Lock aria-hidden className="h-5 w-5 text-muted-foreground" />
       </span>
       <p className="text-sm font-semibold uppercase tracking-wide text-foreground">
         {title}
