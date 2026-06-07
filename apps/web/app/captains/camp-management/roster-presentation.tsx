@@ -185,3 +185,18 @@ export function RoleBadge({
     </span>
   );
 }
+
+/**
+ * Return keyboard focus to the roster row control that opened a profile panel,
+ * after the panel unmounts (a11y: focus must not fall to `<body>`). The row
+ * controls carry `data-roster-trigger={id}`; called from the island's close
+ * handler once selection clears.
+ */
+export function focusRosterTrigger(id: string): void {
+  if (typeof document === "undefined") return;
+  requestAnimationFrame(() => {
+    document
+      .querySelector<HTMLElement>(`[data-roster-trigger="${CSS.escape(id)}"]`)
+      ?.focus();
+  });
+}

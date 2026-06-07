@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { cn } from "@camp404/ui/lib/utils";
-import type { RosterRow } from "@/lib/camp-roster";
+import type { RosterDisplayRow } from "@/lib/camp-roster";
 import {
   RoleBadge,
   RosterAvatar,
@@ -12,7 +12,8 @@ import {
 // colour bar, mono-tinted avatar, name, @handle, country (flag + name), the
 // three-rank role badge and a chevron open affordance. The chevron is a real
 // focusable button so the row is keyboard-reachable; the whole row is also
-// clickable for pointer users.
+// clickable for pointer users. Serves both the captain view (coloured status
+// bar) and the member view (no `status` → a neutral bar, no approval signal).
 
 export function RosterTable({
   rows,
@@ -20,7 +21,7 @@ export function RosterTable({
   onSelect,
   className,
 }: {
-  rows: RosterRow[];
+  rows: RosterDisplayRow[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   className?: string;
@@ -62,7 +63,9 @@ export function RosterTable({
                 onClick={() => onSelect(r.id)}
                 className={cn(
                   "cursor-pointer border-b transition-colors last:border-0",
-                  selected ? "bg-accent/10" : "hover:bg-white/[0.03]",
+                  selected
+                    ? "bg-accent/10"
+                    : "even:bg-white/[0.025] hover:bg-white/[0.04]",
                 )}
               >
                 <td className="relative w-1 p-0">
@@ -70,10 +73,12 @@ export function RosterTable({
                     aria-hidden
                     className={cn(
                       "absolute inset-y-0 left-0 w-1",
-                      statusBarClass(r.status),
+                      r.status ? statusBarClass(r.status) : "bg-border",
                     )}
                   />
-                  <span className="sr-only">{r.statusLabel}</span>
+                  {r.statusLabel && (
+                    <span className="sr-only">{r.statusLabel}</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -104,6 +109,8 @@ export function RosterTable({
                 <td className="px-2 py-3 text-right">
                   <button
                     type="button"
+                    data-roster-trigger={r.id}
+                    aria-current={selected ? "true" : undefined}
                     aria-label={`Open ${r.displayName}'s profile`}
                     onClick={(e) => {
                       e.stopPropagation();

@@ -154,6 +154,35 @@ describe("presentMemberDetail — profile sections", () => {
   });
 });
 
+describe("presentMemberDetail — bio promotion", () => {
+  it("promotes bio.statement to the lead bio and drops it from the sections", () => {
+    const m = presentMemberDetail(
+      detail({
+        responses: {
+          "bio.statement": "Runs a community darkroom in Cape Town.",
+          birthday: "1990-01-01",
+        },
+      }),
+    );
+    expect(m.bio).toBe("Runs a community darkroom in Cape Town.");
+    // The "A bit about you" page (whose only question is bio.statement) drops out.
+    expect(m.profileSections.map((s) => s.title)).not.toContain(
+      "A bit about you",
+    );
+    const allValues = m.profileSections.flatMap((s) =>
+      s.items.map((i) => i.value),
+    );
+    expect(allValues).not.toContain("Runs a community darkroom in Cape Town.");
+  });
+
+  it("leaves bio null when unanswered or blank", () => {
+    expect(presentMemberDetail(detail({ responses: {} })).bio).toBeNull();
+    expect(
+      presentMemberDetail(detail({ responses: { "bio.statement": "   " } })).bio,
+    ).toBeNull();
+  });
+});
+
 describe("presentMemberDetail — approval summary", () => {
   it("describes a pending applicant", () => {
     const m = presentMemberDetail(detail({ approvalStatus: "pending" }));

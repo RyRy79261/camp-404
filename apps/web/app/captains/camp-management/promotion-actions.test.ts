@@ -11,18 +11,29 @@ vi.mock("@/lib/users", () => ({
   hasCampAccess: vi.fn(() => true),
   decideUserApproval: vi.fn(),
 }));
-vi.mock("@/lib/promotion", () => ({ sendCaptainPromotion: vi.fn() }));
+vi.mock("@/lib/promotion", () => ({
+  sendCaptainPromotion: vi.fn(),
+  getPromotionRequestById: vi.fn(),
+  decideCaptainPromotion: vi.fn(),
+}));
 vi.mock("@camp404/db/roster", () => ({ getCampMemberDetail: vi.fn() }));
 vi.mock("@camp404/db/crypto", () => ({ decryptOrNull: vi.fn() }));
 vi.mock("@camp404/db/id-documents", () => ({ mergeIdNumber: vi.fn() }));
 vi.mock("@/lib/member-detail", () => ({ presentMemberDetail: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { sendCaptainPromotionAction } from "./actions";
+import {
+  cancelCaptainPromotionAction,
+  sendCaptainPromotionAction,
+} from "./actions";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
-import { sendCaptainPromotion } from "@/lib/promotion";
+import {
+  decideCaptainPromotion,
+  getPromotionRequestById,
+  sendCaptainPromotion,
+} from "@/lib/promotion";
 import { getCampMemberDetail } from "@camp404/db/roster";
 
 const CAPTAIN = "captain-1";
@@ -56,7 +67,7 @@ describe("sendCaptainPromotionAction", () => {
 
     const res = await sendCaptainPromotionAction("member-1");
 
-    expect(res).toEqual({ ok: true });
+    expect(res).toEqual({ ok: true, requestId: "req-1" });
     expect(sendCaptainPromotion).toHaveBeenCalledExactlyOnceWith({
       targetUserId: "member-1",
       requestedByUserId: CAPTAIN,
@@ -141,5 +152,106 @@ describe("sendCaptainPromotionAction", () => {
     expect(res).toEqual({ ok: false, error: "Invalid member." });
     expect(getCampMemberDetail).not.toHaveBeenCalled();
     expect(sendCaptainPromotion).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelCaptainPromotionAction", () => {
+  beforeEach(() => {
+    vi.mocked(decideCaptainPromotion).mockResolvedValue({
+      id: "req-1",
+      status: "cancelled",
+    } as never);
+  });
+
+  it("cancels an open request the captain sent", async () => {
+    signInAsCaptain();
+    vi.mocked(getPromotionRequestById).mockResolvedValue({
+      id: "req-1",
+      status: "sent",
+      targetUserId: "member-1",
+      requestedByUserId: CAPTAIN,
+    } as never);
+
+    const res = await cancelCaptainPromotionAction("req-1");
+
+    expect(res).toEqual({ ok: true });
+    expect(decideCaptainPromotion).toHaveBeenCalledExactlyOnceWith({
+      requestId: "req-1",
+      status: "cancelled",
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/captains/camp-management");
+  });
+
+  it("refuses a non-captain viewer", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-m",
+      primaryEmail: "m@example.com",
+      displayName: "M",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({
+      id: "member-x",
+      rank: "member",
+    } as never);
+
+    const res = await cancelCaptainPromotionAction("req-1");
+
+    expect(res).toEqual({ ok: false, error: "Captain access only." });
+    expect(getPromotionRequestById).not.toHaveBeenCalled();
+    expect(decideCaptainPromotion).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed (empty) request id", async () => {
+    signInAsCaptain();
+
+    const res = await cancelCaptainPromotionAction("");
+
+    expect(res).toEqual({ ok: false, error: "Invalid request." });
+    expect(getPromotionRequestById).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the request isn't found", async () => {
+    signInAsCaptain();
+    vi.mocked(getPromotionRequestById).mockResolvedValue(null as never);
+
+    const res = await cancelCaptainPromotionAction("ghost");
+
+    expect(res).toEqual({ ok: false, error: "Request not found." });
+    expect(decideCaptainPromotion).not.toHaveBeenCalled();
+  });
+
+  it("refuses cancelling a request another captain sent", async () => {
+    signInAsCaptain();
+    vi.mocked(getPromotionRequestById).mockResolvedValue({
+      id: "req-1",
+      status: "sent",
+      targetUserId: "member-1",
+      requestedByUserId: "other-captain",
+    } as never);
+
+    const res = await cancelCaptainPromotionAction("req-1");
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Only the captain who sent it can cancel it.",
+    });
+    expect(decideCaptainPromotion).not.toHaveBeenCalled();
+  });
+
+  it("refuses cancelling a request that is no longer open", async () => {
+    signInAsCaptain();
+    vi.mocked(getPromotionRequestById).mockResolvedValue({
+      id: "req-1",
+      status: "accepted",
+      targetUserId: "member-1",
+      requestedByUserId: CAPTAIN,
+    } as never);
+
+    const res = await cancelCaptainPromotionAction("req-1");
+
+    expect(res).toEqual({
+      ok: false,
+      error: "This request is no longer open.",
+    });
+    expect(decideCaptainPromotion).not.toHaveBeenCalled();
   });
 });

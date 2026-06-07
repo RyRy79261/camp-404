@@ -12,7 +12,13 @@ export type RosterStatus =
   | "rejected"
   | "pending";
 
-export interface RosterRow {
+/**
+ * The member-safe subset of a roster row: identity + team context that any
+ * approved camp member may see. The page sends ONLY this shape to non-captains
+ * (server-enforced redaction) — the captain-only facets on `RosterRow` never
+ * cross the wire for a member.
+ */
+export interface PublicRosterRow {
   id: string;
   displayName: string;
   /** Display handle (reuses telegram_handle); null when unset. */
@@ -22,6 +28,17 @@ export interface RosterRow {
   rank: "captain" | "member";
   isLead: boolean;
   teams: string[];
+  /** Resolved home-country name, or NULL when unanswered. */
+  country: string | null;
+  inSouthAfrica: boolean;
+}
+
+/**
+ * A full roster row — the captain view. Extends the public row with the
+ * approval / onboarding / driver facets a captain triages by. Every added field
+ * is captain-only and must never be mapped for a non-captain viewer.
+ */
+export interface RosterRow extends PublicRosterRow {
   /** Overall signup standing, for the status pill. */
   status: RosterStatus;
   statusLabel: string;
@@ -35,10 +52,18 @@ export interface RosterRow {
   requiredComplete: boolean;
   isDriver: boolean;
   driverProfileComplete: boolean;
-  /** Resolved home-country name, or NULL when unanswered. */
-  country: string | null;
-  inSouthAfrica: boolean;
 }
+
+/**
+ * The row shape the responsive table/list render. The captain-only `status` is
+ * OPTIONAL so the same components serve both the member view (no status bar) and
+ * the captain view (coloured status bar) — a `RosterRow` widens to it, a
+ * `PublicRosterRow` satisfies it with `status` simply absent.
+ */
+export type RosterDisplayRow = PublicRosterRow & {
+  status?: RosterStatus;
+  statusLabel?: string;
+};
 
 const COUNTRY_NAME = new Map(COUNTRIES.map((c) => [c.value, c.label]));
 
@@ -73,13 +98,7 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
           : "pending";
 
   return {
-    id: member.id,
-    displayName: member.displayName?.trim() || "Unnamed burner",
-    handle: member.handle,
-    rankLabel: rankLabel(member.rank, member.isLead),
-    rank: member.rank,
-    isLead: member.isLead,
-    teams: member.teams,
+    ...toPublicRosterRow(member),
     status,
     statusLabel: STATUS_LABEL[status],
     approvalStatus: member.approvalStatus,
@@ -89,6 +108,25 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
     requiredComplete,
     isDriver: member.intendsToDrive,
     driverProfileComplete: member.driverProfileComplete,
+  };
+}
+
+/**
+ * Map a member to the member-safe PUBLIC row — identity + team context only.
+ * This is the projection the page sends to non-captain viewers; it carries none
+ * of the approval / onboarding / driver facets, so those private fields are
+ * impossible to leak to a member through the row. Single-sourced by `toRosterRow`
+ * (the captain row spreads this), so the public columns can never drift apart.
+ */
+export function toPublicRosterRow(member: CampManagementMember): PublicRosterRow {
+  return {
+    id: member.id,
+    displayName: member.displayName?.trim() || "Unnamed burner",
+    handle: member.handle,
+    rankLabel: rankLabel(member.rank, member.isLead),
+    rank: member.rank,
+    isLead: member.isLead,
+    teams: member.teams,
     country: member.country
       ? (COUNTRY_NAME.get(member.country) ?? member.country)
       : null,
@@ -147,7 +185,7 @@ export function matchesChip(row: RosterRow, chip: RosterChip): boolean {
 }
 
 /** Whether a row is a member of the given team (the parameterised Team filter). */
-export function matchesTeam(row: RosterRow, team: string): boolean {
+export function matchesTeam(row: PublicRosterRow, team: string): boolean {
   return row.teams.includes(team);
 }
 
@@ -157,7 +195,7 @@ export function matchesTeam(row: RosterRow, team: string): boolean {
  * decision lands (spec OQ#1) — there's no email on the row yet. Empty/whitespace
  * query matches everything.
  */
-export function matchesRosterQuery(row: RosterRow, query: string): boolean {
+export function matchesRosterQuery(row: PublicRosterRow, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   return (
@@ -195,4 +233,38 @@ export function deriveRosterStats(rows: readonly RosterRow[]): RosterStats {
     captains,
     outstanding: incomplete,
   };
+}
+
+/**
+ * The member-view chip counts: total members + captains only. The approval-
+ * derived counts (approved / incomplete / pending / outstanding) are captain-
+ * only, so they are deliberately absent here — a member's toolbar only shows the
+ * All and Captains chips, computed from public fields.
+ */
+export function derivePublicRosterStats(
+  rows: readonly PublicRosterRow[],
+): { members: number; captains: number } {
+  let captains = 0;
+  for (const row of rows) if (row.rank === "captain") captains++;
+  return { members: rows.length, captains };
+}
+
+/** The viewer-scoped roster the page hands its island. */
+export type RosterForViewer =
+  | { isCaptain: true; rows: RosterRow[] }
+  | { isCaptain: false; rows: PublicRosterRow[] };
+
+/**
+ * The page's captain-vs-member fork, centralised + discriminated so the member
+ * branch can ONLY ever carry the redacted public projection — the one place a
+ * private field could reach a non-captain, made explicit and unit-testable. The
+ * caller narrows on `isCaptain` to render the matching island.
+ */
+export function rosterForViewer(
+  members: CampManagementMember[],
+  isCaptain: boolean,
+): RosterForViewer {
+  return isCaptain
+    ? { isCaptain: true, rows: members.map(toRosterRow) }
+    : { isCaptain: false, rows: members.map(toPublicRosterRow) };
 }

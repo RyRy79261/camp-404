@@ -2,20 +2,34 @@
 
 import { ChevronDown, TriangleAlert } from "lucide-react";
 import { cn } from "@camp404/ui/lib/utils";
-import type { RosterChip, RosterStats } from "@/lib/camp-roster";
+import type { RosterChip } from "@/lib/camp-roster";
 import { TEAMS, teamLabel } from "./roster-presentation";
 
 // Search + multi-chip filter row for the roster (board S17 toolbar). Controlled:
 // it owns no data, it reports query / chip / team changes up to the island. The
 // status chips (All / Pending / Captains / Outstanding) are single-select; the
-// "Team:" dropdown is an independent narrowing filter.
+// "Team:" dropdown is an independent narrowing filter. In `publicOnly` mode (the
+// member view) the approval-derived chips (Pending / Outstanding) are withheld —
+// members filter by All / Captains / Team only.
 
-const STATUS_CHIPS: { chip: RosterChip; label: string; key: keyof RosterStats }[] =
-  [
-    { chip: "all", label: "All", key: "members" },
-    { chip: "pending", label: "Pending", key: "pending" },
-    { chip: "captains", label: "Captains", key: "captains" },
-  ];
+const STATUS_CHIPS: {
+  chip: RosterChip;
+  label: string;
+  key: "members" | "pending" | "captains";
+}[] = [
+  { chip: "all", label: "All", key: "members" },
+  { chip: "pending", label: "Pending", key: "pending" },
+  { chip: "captains", label: "Captains", key: "captains" },
+];
+
+/** The counts the toolbar reads; captains pass the full RosterStats, the member
+ * view passes just members + captains (the approval counts are captain-only). */
+interface ToolbarStats {
+  members: number;
+  captains: number;
+  pending?: number;
+  outstanding?: number;
+}
 
 export function RosterToolbar({
   query,
@@ -25,6 +39,7 @@ export function RosterToolbar({
   team,
   onTeamChange,
   stats,
+  publicOnly = false,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
@@ -32,7 +47,8 @@ export function RosterToolbar({
   onChipChange: (chip: RosterChip) => void;
   team: string | null;
   onTeamChange: (team: string | null) => void;
-  stats: RosterStats;
+  stats: ToolbarStats;
+  publicOnly?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -52,7 +68,7 @@ export function RosterToolbar({
         {query.length === 0 && (
           <span
             aria-hidden
-            className="h-[18px] w-[9px] shrink-0 animate-pulse bg-accent"
+            className="h-[18px] w-[9px] shrink-0 motion-safe:animate-pulse bg-accent"
           />
         )}
       </div>
@@ -63,7 +79,9 @@ export function RosterToolbar({
         aria-label="Filter the roster"
         className="flex flex-wrap items-center gap-2"
       >
-        {STATUS_CHIPS.map(({ chip: value, label, key }) => {
+        {STATUS_CHIPS.filter(
+          (c) => !publicOnly || c.chip !== "pending",
+        ).map(({ chip: value, label, key }) => {
           const active = chip === value;
           return (
             <button
@@ -85,7 +103,7 @@ export function RosterToolbar({
                   active ? "bg-accent" : "bg-muted-foreground",
                 )}
               />
-              {label} {stats[key]}
+              {label} {stats[key] ?? 0}
             </button>
           );
         })}
@@ -116,21 +134,23 @@ export function RosterToolbar({
           <ChevronDown aria-hidden className="h-3.5 w-3.5" />
         </span>
 
-        {/* Outstanding — always warning-toned (the "needs attention" facet). */}
-        <button
-          type="button"
-          aria-pressed={chip === "outstanding"}
-          onClick={() =>
-            onChipChange(chip === "outstanding" ? "all" : "outstanding")
-          }
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg border border-warning px-3.5 py-2 font-mono text-label font-semibold text-warning transition-colors",
-            chip === "outstanding" ? "bg-warning/20" : "bg-warning/10",
-          )}
-        >
-          <TriangleAlert aria-hidden className="h-3.5 w-3.5" />
-          Outstanding {stats.outstanding}
-        </button>
+        {/* Outstanding — captain-only (an approval-derived facet). */}
+        {!publicOnly && (
+          <button
+            type="button"
+            aria-pressed={chip === "outstanding"}
+            onClick={() =>
+              onChipChange(chip === "outstanding" ? "all" : "outstanding")
+            }
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border border-warning px-3.5 py-2 font-mono text-label font-semibold text-warning transition-colors",
+              chip === "outstanding" ? "bg-warning/20" : "bg-warning/10",
+            )}
+          >
+            <TriangleAlert aria-hidden className="h-3.5 w-3.5" />
+            Outstanding {stats.outstanding ?? 0}
+          </button>
+        )}
       </div>
     </div>
   );

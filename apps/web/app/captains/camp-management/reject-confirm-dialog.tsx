@@ -40,7 +40,10 @@ export function RejectConfirmDialog({
         if (!pending) onOpenChange(o);
       }}
     >
-      <DialogContent className="border-destructive sm:max-w-md">
+      <DialogContent
+        className="border-destructive sm:max-w-md"
+        showCloseButton={!pending}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <TriangleAlert
