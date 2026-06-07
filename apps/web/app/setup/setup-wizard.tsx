@@ -41,8 +41,10 @@ export function SetupWizard({
         <h1 className="text-title font-bold text-foreground">Set up Camp 404</h1>
         <p className="text-subtitle-dense text-muted-foreground">
           You&rsquo;re the first one here, {displayName}. This makes you the
-          founding <strong className="text-foreground">captain</strong> and
-          creates your camp&rsquo;s root invite code to bring everyone else in.
+          founding{" "}
+          <strong className="text-foreground">captain</strong>{" "}
+          and creates your camp&rsquo;s root invite code to bring everyone else
+          in.
         </p>
       </div>
 
