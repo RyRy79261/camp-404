@@ -195,8 +195,17 @@ export function RoleBadge({
 export function focusRosterTrigger(id: string): void {
   if (typeof document === "undefined") return;
   requestAnimationFrame(() => {
-    document
-      .querySelector<HTMLElement>(`[data-roster-trigger="${CSS.escape(id)}"]`)
-      ?.focus();
+    // Both the ≥sm table and the <sm list render a trigger with this id; only one
+    // is visible per breakpoint. Focus the VISIBLE one — focusing the hidden
+    // (display:none) variant is a silent no-op that drops focus to <body>.
+    const selector = `[data-roster-trigger="${CSS.escape(id)}"]`;
+    const candidates = Array.from(
+      document.querySelectorAll<HTMLElement>(selector),
+    );
+    const target =
+      candidates.find((el) => el.getClientRects().length > 0) ??
+      candidates[0] ??
+      null;
+    target?.focus();
   });
 }

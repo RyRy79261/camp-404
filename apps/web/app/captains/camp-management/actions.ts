@@ -314,7 +314,13 @@ export async function cancelCaptainPromotionAction(
     };
   }
 
-  await decideCaptainPromotion({ requestId, status: "cancelled" });
+  // Bind the actor in the write predicate too (defense in depth): the cancel
+  // only flips a row this captain actually requested.
+  await decideCaptainPromotion({
+    requestId,
+    status: "cancelled",
+    actorUserId: gate.captainId,
+  });
   revalidatePath("/captains/camp-management");
   return { ok: true };
 }

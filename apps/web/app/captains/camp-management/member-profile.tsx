@@ -164,6 +164,7 @@ export function MemberProfile({
             ...prev,
             promotionStep: { sent: false, accepted: false },
             promotionRequestId: null,
+            promotionRequestIsMine: false,
           }
         : prev,
     );

@@ -178,6 +178,7 @@ describe("cancelCaptainPromotionAction", () => {
     expect(decideCaptainPromotion).toHaveBeenCalledExactlyOnceWith({
       requestId: "req-1",
       status: "cancelled",
+      actorUserId: CAPTAIN,
     });
     expect(revalidatePath).toHaveBeenCalledWith("/captains/camp-management");
   });

@@ -77,4 +77,20 @@ describe("MemberRoster — member view", () => {
     // The member path must never reach the captain decrypt-everything action.
     expect(getMemberDetailAction).not.toHaveBeenCalled();
   });
+
+  it("closes an open profile when a filter excludes the selected member", async () => {
+    vi.mocked(getPublicMemberProfileAction).mockResolvedValue({
+      ok: true,
+      bio: "Bio.",
+      contribution: null,
+    });
+    render(<MemberRoster rows={rows} />);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /Open Nova Reyes/ })[0]!,
+    );
+    await waitFor(() => expect(screen.getByText("Captains only.")).toBeTruthy());
+    // Narrow to captains — Nova (a member) drops out, so her panel closes.
+    fireEvent.click(screen.getByRole("button", { name: /Captains 1/ }));
+    expect(screen.queryByText("Captains only.")).toBeNull();
+  });
 });

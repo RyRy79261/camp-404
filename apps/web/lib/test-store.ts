@@ -645,16 +645,23 @@ export const testStore = {
   decideCaptainPromotion(input: {
     requestId: string;
     status: "accepted" | "declined" | "cancelled";
+    actorUserId?: string;
   }): TestPromotionRequest | null {
     // Only a `sent` row with both participants still present flips — so a
     // double-decide (or a row orphaned by a hard delete) is a no-op (null),
-    // mirroring the db's status + IS NOT NULL WHERE clause.
+    // mirroring the db's status + IS NOT NULL WHERE clause. When `actorUserId` is
+    // given, also bind the actor to their side (cancel→requester, accept/decline
+    // →target), mirroring the db's atomic actor predicate.
     const row = promotionRequests.find(
       (r) =>
         r.id === input.requestId &&
         r.status === "sent" &&
         r.targetUserId !== null &&
-        r.requestedByUserId !== null,
+        r.requestedByUserId !== null &&
+        (input.actorUserId === undefined ||
+          (input.status === "cancelled"
+            ? r.requestedByUserId === input.actorUserId
+            : r.targetUserId === input.actorUserId)),
     );
     if (!row) return null;
     row.status = input.status;

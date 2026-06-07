@@ -43,9 +43,13 @@ export function MemberRoster({ rows }: { rows: PublicRosterRow[] }) {
     [rows, query, chip, team],
   );
 
+  // Resolve the open profile from the FILTERED rows, so narrowing the list to
+  // exclude the selected member closes the panel (no orphaned profile). The
+  // record index stays the member's position in the FULL roster — a stable
+  // per-member "#NN", not a position that shifts as filters change.
   const selectedRow = useMemo(
-    () => rows.find((r) => r.id === selectedId) ?? null,
-    [rows, selectedId],
+    () => filtered.find((r) => r.id === selectedId) ?? null,
+    [filtered, selectedId],
   );
   const selectedIndex = useMemo(
     () => (selectedId ? rows.findIndex((r) => r.id === selectedId) + 1 : 0),
