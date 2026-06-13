@@ -15,6 +15,7 @@
     "./roster": "./src/roster.ts",
     "./captain-promotion": "./src/captain-promotion.ts",
     "./bootstrap": "./src/bootstrap.ts",
+    "./camp-config": "./src/camp-config.ts",
     "./broadcasts": "./src/broadcasts.ts",
     "./audience": "./src/audience.ts",
     "./push": "./src/push.ts",
