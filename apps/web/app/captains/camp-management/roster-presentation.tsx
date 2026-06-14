@@ -9,19 +9,10 @@ import { COUNTRIES } from "@/lib/countries";
 // the row/list/profile components stay thin. Identity colours (avatar tints,
 // team dots) are intentional brand hex, not semantic status tokens.
 
-// The camp's working teams. Mirror of `teamEnum` in @camp404/db's schema.ts /
-// `Team` in @camp404/types — the database is the source of truth; kept inline so
-// the client bundle doesn't pull the zod schema just to render a filter list.
-export const TEAMS = [
-  "kitchen",
-  "structures",
-  "power_and_lighting",
-  "sanitation_and_water",
-  "health_and_safety",
-  "art_and_activities",
-  "ministry_of_memes",
-  "ministry_of_vibes",
-] as const;
+// The active team list is no longer hardcoded here — it comes from the camp
+// config (`getTeamsConfig`), resolved server-side and threaded into the toolbar
+// filter. `teamLabel` below stays as the humanizer for rendering a stored enum
+// key as a chip (and it seeds the config's default labels).
 
 /** Humanise a team enum value: "art_and_activities" → "Art and Activities". */
 export function teamLabel(team: string): string {

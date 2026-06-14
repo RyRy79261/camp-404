@@ -26,7 +26,13 @@ import { RosterToolbar } from "./roster-toolbar";
 // selection) is here; the detail fetch + decisions + promotion live in
 // MemberProfile and the dialogs.
 
-export function CampManagementRoster({ rows }: { rows: RosterRow[] }) {
+export function CampManagementRoster({
+  rows,
+  teams,
+}: {
+  rows: RosterRow[];
+  teams: readonly { key: string; label: string }[];
+}) {
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<RosterChip>("all");
   const [team, setTeam] = useState<string | null>(null);
@@ -118,6 +124,7 @@ export function CampManagementRoster({ rows }: { rows: RosterRow[] }) {
         onChipChange={setChip}
         team={team}
         onTeamChange={setTeam}
+        teams={teams}
         stats={stats}
       />
 

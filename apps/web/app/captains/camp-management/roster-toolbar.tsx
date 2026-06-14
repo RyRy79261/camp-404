@@ -3,7 +3,6 @@
 import { ChevronDown, TriangleAlert } from "lucide-react";
 import { cn } from "@camp404/ui/lib/utils";
 import type { RosterChip } from "@/lib/camp-roster";
-import { TEAMS, teamLabel } from "./roster-presentation";
 
 // Search + multi-chip filter row for the roster (board S17 toolbar). Controlled:
 // it owns no data, it reports query / chip / team changes up to the island. The
@@ -38,6 +37,7 @@ export function RosterToolbar({
   onChipChange,
   team,
   onTeamChange,
+  teams,
   stats,
   publicOnly = false,
 }: {
@@ -47,6 +47,8 @@ export function RosterToolbar({
   onChipChange: (chip: RosterChip) => void;
   team: string | null;
   onTeamChange: (team: string | null) => void;
+  /** Active teams (key + label), order-resolved from the camp config. */
+  teams: readonly { key: string; label: string }[];
   stats: ToolbarStats;
   publicOnly?: boolean;
 }) {
@@ -125,9 +127,9 @@ export function RosterToolbar({
             className="cursor-pointer appearance-none bg-transparent pr-1 font-mono font-semibold focus:outline-none focus-visible:underline"
           >
             <option value="">All</option>
-            {TEAMS.map((t) => (
-              <option key={t} value={t}>
-                {teamLabel(t)}
+            {teams.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.label}
               </option>
             ))}
           </select>

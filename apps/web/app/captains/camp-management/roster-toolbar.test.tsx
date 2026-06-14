@@ -3,6 +3,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { RosterToolbar } from "./roster-toolbar";
 
 const baseStats = { members: 42, captains: 4, pending: 3, outstanding: 7 };
+const baseTeams = [
+  { key: "kitchen", label: "Kitchen" },
+  { key: "structures", label: "Structures" },
+];
 
 function setup(props: Record<string, unknown> = {}) {
   const onChipChange = vi.fn();
@@ -16,6 +20,7 @@ function setup(props: Record<string, unknown> = {}) {
       onChipChange={onChipChange}
       team={null}
       onTeamChange={onTeamChange}
+      teams={baseTeams}
       stats={baseStats}
       {...props}
     />,
