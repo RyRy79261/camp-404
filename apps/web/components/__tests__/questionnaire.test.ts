@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { Questionnaire, validateResponses } from "@camp404/types";
-import { QUESTIONNAIRE } from "@/lib/questionnaire";
+import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
+import { buildQuestionnaire } from "@/lib/questionnaire";
+
+// Phase 3: the catalogue is built from team config. Tests build it from the
+// seeded defaults — the same teams the test store serves under E2E.
+const QUESTIONNAIRE = buildQuestionnaire(
+  DEFAULT_TEAMS.map((t) => ({ value: t.key, label: t.label })),
+);
 
 // Minimum set of answers that satisfies every required question in the
 // current catalogue. Update alongside questionnaire.ts.

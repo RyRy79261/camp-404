@@ -10,7 +10,8 @@ import {
   recordQuestionnaireEdit as recordEditDb,
 } from "@camp404/db/questionnaire-edits";
 import { splitIdNumber, mergeIdNumber } from "@camp404/db/id-documents";
-import { QUESTIONNAIRE } from "./questionnaire";
+import { QUESTIONNAIRE_VERSION } from "./questionnaire";
+import { getQuestionnaireForPicker } from "./questionnaire-config";
 import {
   getBurnerProfile,
   getIdDocuments,
@@ -46,12 +47,15 @@ export interface ReplayableForm {
   save(userId: string, responses: QuestionnaireResponses): Promise<void>;
 }
 
-const BURNER_PROFILE: ReplayableForm = {
+// The static half of a form (everything except its config-derived catalogue).
+// getReplayableForm attaches `questionnaire` per-request from the live config.
+type ReplayableFormDef = Omit<ReplayableForm, "questionnaire">;
+
+const BURNER_PROFILE: ReplayableFormDef = {
   key: "burner_profile",
   title: "Burner profile",
   description:
     "The onboarding questionnaire — who you are in the dust, your teams, skills and logistics.",
-  questionnaire: QUESTIONNAIRE,
   async load(userId) {
     const profile = await getBurnerProfile(userId);
     if (!profile) return null;
@@ -73,7 +77,7 @@ const BURNER_PROFILE: ReplayableForm = {
     const { cleaned, idType, idNumber } = splitIdNumber(responses);
     await upsertBurnerProfile({
       userId,
-      version: QUESTIONNAIRE.version,
+      version: QUESTIONNAIRE_VERSION,
       responses: cleaned,
       // A replay only happens on an already-completed form, so it stays
       // complete. markComplete is idempotent on completedAt.
@@ -86,10 +90,17 @@ const BURNER_PROFILE: ReplayableForm = {
   },
 };
 
-const REGISTRY: ReplayableForm[] = [BURNER_PROFILE];
+const REGISTRY: ReplayableFormDef[] = [BURNER_PROFILE];
 
-export function getReplayableForm(key: string): ReplayableForm | undefined {
-  return REGISTRY.find((f) => f.key === key);
+export async function getReplayableForm(
+  key: string,
+): Promise<ReplayableForm | undefined> {
+  const def = REGISTRY.find((f) => f.key === key);
+  if (!def) return undefined;
+  // The replay picker shows ACTIVE teams (config labels). Validating a re-submit
+  // against all teams — so an archived pick isn't silently dropped — is the
+  // replay action's job (it builds the full catalogue itself).
+  return { ...def, questionnaire: await getQuestionnaireForPicker() };
 }
 
 export interface CompletedFormSummary {

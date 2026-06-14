@@ -228,9 +228,9 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
       </Card>
 
       <p className="text-caption text-muted-foreground">
-        Renaming, reordering, or archiving a team updates the roster right away.
-        The sign-up questionnaire keeps its current team names until a later
-        update.
+        Renaming, reordering, or archiving a team updates the roster and the
+        sign-up questionnaire right away. Archived teams stay valid on existing
+        profiles; at least two teams must stay active.
       </p>
     </div>
   );

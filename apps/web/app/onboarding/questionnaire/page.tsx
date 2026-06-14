@@ -7,7 +7,7 @@ import {
   hasCampAccess,
 } from "@/lib/users";
 import { mergeIdNumber } from "@camp404/db/id-documents";
-import { QUESTIONNAIRE } from "@/lib/questionnaire";
+import { getQuestionnaireForPicker } from "@/lib/questionnaire-config";
 import { QuestionnaireWizard } from "@/components/questionnaire/wizard";
 import { saveBurnerProfile } from "./actions";
 import type { QuestionnaireResponses } from "@camp404/types";
@@ -39,6 +39,10 @@ export default async function QuestionnairePage() {
     id,
   ) as QuestionnaireResponses;
 
+  // Team sliders + the team-lead multi-select come from the live camp config
+  // (active teams only) — a fresh sign-up never sees an archived team.
+  const questionnaire = await getQuestionnaireForPicker();
+
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 py-8">
       <header className="mb-6">
@@ -49,7 +53,7 @@ export default async function QuestionnairePage() {
         </p>
       </header>
       <QuestionnaireWizard
-        questionnaire={QUESTIONNAIRE}
+        questionnaire={questionnaire}
         initialResponses={initialResponses}
         action={saveBurnerProfile}
         firstStepSignOut

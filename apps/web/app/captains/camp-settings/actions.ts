@@ -19,11 +19,14 @@ import { mutateTeamsConfig } from "@/lib/camp-config";
 
 export type TeamSettingsResult = { ok: true } | { ok: false; error: string };
 
-// Thrown from inside the locked transform when an archive would leave zero
-// active teams, so the invariant is checked against the freshly-locked config
-// (not a stale pre-read) — a concurrent double-archive can't slip past it. The
-// throw rolls the transaction back; the action catches it for a friendly error.
-class LastActiveTeamError extends Error {}
+// A camp must keep at least TWO active teams: the roster filter needs one, and
+// the onboarding "team lead of…" multi-select (Phase 3) requires ≥2 options
+// (the questionnaire schema's multi_select minimum). Thrown from inside the
+// locked transform so the check runs against the freshly-locked config (not a
+// stale pre-read) — a concurrent double-archive can't slip past it. The throw
+// rolls the transaction back; the action catches it for a friendly error.
+const MIN_ACTIVE_TEAMS = 2;
+class TooFewActiveTeamsError extends Error {}
 
 const TeamKey = z.string().min(1);
 const TeamLabel = z
@@ -59,12 +62,14 @@ async function requireCaptain(): Promise<TeamSettingsResult> {
   return { ok: true };
 }
 
-// Relabelling, reordering, or archiving a team changes the roster's team filter
-// too, so revalidate both surfaces. (The onboarding questionnaire still reads
-// its static list until Phase 3 — that drift is known and accepted for now.)
+// Relabelling, reordering, or archiving a team changes every surface that reads
+// team config: the settings page, the roster (filter + chips), and — since
+// Phase 3 — the onboarding questionnaire + the burner-profile replay form.
 function revalidateTeamSurfaces(): void {
   revalidatePath("/captains/camp-settings");
   revalidatePath("/captains/camp-management");
+  revalidatePath("/onboarding/questionnaire");
+  revalidatePath("/tools/forms/burner_profile");
 }
 
 export async function renameTeamAction(
@@ -119,22 +124,22 @@ export async function setTeamArchivedAction(
     return { ok: false, error: "Invalid request." };
   }
 
-  // The roster (and, later, the questionnaire) needs at least one active team,
-  // so refuse to archive the last one. Checked INSIDE the locked transform
-  // against the freshly-locked config, so two captains archiving the final two
-  // teams at once can't both slip through (the second's transform throws and
-  // rolls back). Recoverable by unarchiving regardless.
+  // Refuse to archive below MIN_ACTIVE_TEAMS. Checked INSIDE the locked
+  // transform against the freshly-locked config, so concurrent archives can't
+  // both slip through (the one that would breach throws and rolls back).
+  // Recoverable by unarchiving regardless.
   try {
     await mutateTeamsConfig((config) => {
       const next = setTeamArchived(config, parsedKey.data, parsedArchived.data);
-      if (!next.teams.some((team) => !team.archived)) {
-        throw new LastActiveTeamError();
+      const active = next.teams.filter((team) => !team.archived).length;
+      if (active < MIN_ACTIVE_TEAMS) {
+        throw new TooFewActiveTeamsError();
       }
       return next;
     });
   } catch (error) {
-    if (error instanceof LastActiveTeamError) {
-      return { ok: false, error: "At least one team must stay active." };
+    if (error instanceof TooFewActiveTeamsError) {
+      return { ok: false, error: "At least two teams must stay active." };
     }
     throw error;
   }

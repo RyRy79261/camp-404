@@ -20,6 +20,12 @@ vi.mock("@camp404/db/id-documents", () => ({ mergeIdNumber: vi.fn(() => ({})) })
 vi.mock("@/lib/member-detail", () => ({
   presentMemberDetail: vi.fn(() => ({ id: "member-1" })),
 }));
+vi.mock("@/lib/questionnaire-config", () => ({
+  getQuestionnaireForResponses: vi.fn(async () => ({
+    version: "test",
+    pages: [],
+  })),
+}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { getMemberDetailAction } from "./actions";

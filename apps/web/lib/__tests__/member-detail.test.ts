@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { CampMemberDetail } from "@camp404/db/roster";
-import { presentMemberDetail } from "@/lib/member-detail";
+import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
+import { presentMemberDetail as presentWithCatalogue } from "@/lib/member-detail";
+import { buildQuestionnaire } from "@/lib/questionnaire";
+
+// Phase 3: presentMemberDetail now takes the (config-built) catalogue so team
+// picks resolve to config labels. These tests build it from the seeded defaults
+// (labels "Kitchen", "Structures", …) and inject it via a 1-arg wrapper so the
+// existing call sites read unchanged.
+const DEFAULT_QUESTIONNAIRE = buildQuestionnaire(
+  DEFAULT_TEAMS.map((t) => ({ value: t.key, label: t.label })),
+);
+const presentMemberDetail = (d: CampMemberDetail) =>
+  presentWithCatalogue(d, DEFAULT_QUESTIONNAIRE);
 
 function detail(overrides: Partial<CampMemberDetail> = {}): CampMemberDetail {
   return {
@@ -117,6 +129,26 @@ describe("presentMemberDetail — profile sections", () => {
     expect(
       valueOf(cooking!.items, "How would you describe your cooking?"),
     ).toBe("Good cook — I can create recipes");
+  });
+
+  it("resolves a since-archived team pick to its label (archive invariant)", () => {
+    // The server builds the display catalogue from ALL config teams (incl.
+    // archived), so a member who picked a now-archived team still sees its
+    // label here — not the raw enum key.
+    const catalogue = buildQuestionnaire([
+      { value: "kitchen", label: "Kitchen" },
+      { value: "ministry_of_memes", label: "Ministry of Memes" },
+    ]);
+    const m = presentWithCatalogue(
+      detail({ responses: { "team_lead.interests": ["ministry_of_memes"] } }),
+      catalogue,
+    );
+    const logistics = m.profileSections.find(
+      (s) => s.title === "Leadership & logistics",
+    );
+    expect(
+      valueOf(logistics!.items, "I would like to be a team lead of…"),
+    ).toBe("Ministry of Memes");
   });
 
   it("surfaces the profile photo as an image, never as a profile row", () => {
