@@ -140,8 +140,12 @@ export function RosterAvatar({
   );
 }
 
-/** A team membership chip — coloured dot + humanised name. */
-export function TeamBadge({ team }: { team: string }) {
+/**
+ * A team membership chip — coloured dot + name. Prefers the camp config's label
+ * (so a captain's relabel shows here too); falls back to the humanizer for keys
+ * the caller didn't resolve (e.g. a profile rendered without the label map).
+ */
+export function TeamBadge({ team, label }: { team: string; label?: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 font-mono text-micro font-bold text-foreground">
       <span
@@ -149,7 +153,7 @@ export function TeamBadge({ team }: { team: string }) {
         className="h-1.5 w-1.5 rounded-full"
         style={{ backgroundColor: teamColorFor(team) }}
       />
-      {teamLabel(team)}
+      {label ?? teamLabel(team)}
     </span>
   );
 }

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { CampManagementMember } from "@camp404/db/roster";
+import { DEFAULT_CAMP_CONFIG, type TeamsConfig } from "@camp404/db/camp-config";
 import type {
   IncomingPromotionRequest,
   QuestionnaireFieldChange,
@@ -110,6 +111,10 @@ interface TestStoreState {
   deliveries: TestDelivery[];
   promotionRequests: TestPromotionRequest[];
   nextSerial: number;
+  // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
+  // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
+  // deep clone of DEFAULT_CAMP_CONFIG so edits never mutate the shared const.
+  teamsConfig: TeamsConfig;
 }
 
 // Next.js gives RSC renders and route handlers SEPARATE module graphs in the
@@ -139,6 +144,7 @@ function globalState(): TestStoreState {
       deliveries: [] as TestDelivery[],
       promotionRequests: [] as TestPromotionRequest[],
       nextSerial: 1,
+      teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
   }
   return g[GLOBAL_KEY] as TestStoreState;
@@ -168,6 +174,14 @@ function nextId(): string {
 }
 
 export const testStore = {
+  /** The camp team config (Phase 2). Backs the E2E-mode camp-config facade. */
+  getTeamsConfig(): TeamsConfig {
+    return globalState().teamsConfig;
+  },
+  /** Persist a (whole) new team config — the facade passes the transformed value. */
+  setTeamsConfig(config: TeamsConfig): void {
+    globalState().teamsConfig = config;
+  },
   findUserByAuthId(authUserId: string): TestUser | null {
     return usersByAuthId.get(authUserId) ?? null;
   },
@@ -698,6 +712,7 @@ export const testStore = {
     deliveries.length = 0;
     promotionRequests.length = 0;
     S.nextSerial = 1;
+    S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },
 };
 

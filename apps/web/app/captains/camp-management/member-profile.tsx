@@ -65,10 +65,13 @@ export function MemberProfile({
   row,
   index,
   onClose,
+  teamLabels = {},
 }: {
   row: RosterRow;
   index: number;
   onClose: () => void;
+  /** key → configured label for the team chips (falls back to the humanizer). */
+  teamLabels?: Record<string, string>;
 }) {
   const router = useRouter();
   const panelRef = useRef<HTMLElement>(null);
@@ -246,7 +249,7 @@ export function MemberProfile({
           {row.teams.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               {row.teams.map((team) => (
-                <TeamBadge key={team} team={team} />
+                <TeamBadge key={team} team={team} label={teamLabels[team]} />
               ))}
             </div>
           )}
