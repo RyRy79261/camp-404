@@ -1,6 +1,5 @@
-import type { Question } from "@camp404/types";
+import type { Question, Questionnaire } from "@camp404/types";
 import type { CampMemberDetail } from "@camp404/db/roster";
-import { QUESTIONNAIRE } from "./questionnaire";
 import { COUNTRIES } from "./countries";
 
 // Intentionally not `import "server-only"` — `presentMemberDetail` is a pure
@@ -117,6 +116,7 @@ function describeApproval(detail: CampMemberDetail): string {
 
 export function presentMemberDetail(
   detail: CampMemberDetail,
+  questionnaire: Questionnaire,
 ): PresentedMember {
   const responses = detail.responses;
 
@@ -162,7 +162,7 @@ export function presentMemberDetail(
   // Group answers by questionnaire page, skipping intro pages and any page
   // that ended up with no answered questions.
   const profileSections: DetailSection[] = [];
-  for (const page of QUESTIONNAIRE.pages) {
+  for (const page of questionnaire.pages) {
     if (page.kind !== "questions") continue;
     const items: DetailItem[] = [];
     for (const question of page.questions) {

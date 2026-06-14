@@ -41,7 +41,7 @@ export default async function FormReplayPage({
     redirect("/pending-approval");
   }
 
-  const form = getReplayableForm(key);
+  const form = await getReplayableForm(key);
   if (!form) notFound();
 
   const state = await form.load(campUser.id);

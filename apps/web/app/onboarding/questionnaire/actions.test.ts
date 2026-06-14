@@ -18,7 +18,11 @@ vi.mock("@/lib/users", () => ({
   satisfyBurnerProfileAction: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("@/lib/questionnaire-config", () => ({
+  getQuestionnaireForResponses: vi.fn(),
+}));
 
+import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
 import { saveBurnerProfile } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
@@ -27,6 +31,8 @@ import {
   setIdDocuments,
   upsertBurnerProfile,
 } from "@/lib/users";
+import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
+import { buildQuestionnaire } from "@/lib/questionnaire";
 
 const responsesWithId = {
   "id.type": "passport",
@@ -34,8 +40,14 @@ const responsesWithId = {
   birthday: "1990-04-12",
 };
 
+// The config-built catalogue the action validates a final submit against.
+const catalogue = buildQuestionnaire(
+  DEFAULT_TEAMS.map((t) => ({ value: t.key, label: t.label })),
+);
+
 describe("saveBurnerProfile persistence error handling", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(getAuthenticatedUserOrRedirect).mockResolvedValue({
       id: "auth-1",
       primaryEmail: "member@example.com",
@@ -52,6 +64,7 @@ describe("saveBurnerProfile persistence error handling", () => {
     });
     vi.mocked(hasCampAccess).mockReturnValue(true);
     vi.mocked(upsertBurnerProfile).mockResolvedValue(undefined);
+    vi.mocked(getQuestionnaireForResponses).mockResolvedValue(catalogue);
     // Silence the intentional console.error in the catch.
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -79,5 +92,17 @@ describe("saveBurnerProfile persistence error handling", () => {
     const result = await saveBurnerProfile(responsesWithId, false);
 
     expect(result.ok).toBe(true);
+  });
+
+  it("validates a final submit against the config-built catalogue", async () => {
+    vi.mocked(setIdDocuments).mockResolvedValue(undefined);
+
+    // A final submit missing required answers must be rejected by
+    // validateResponses(getQuestionnaireForResponses()) before any persistence.
+    const result = await saveBurnerProfile(responsesWithId, true);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(Object.keys(result.errors).length).toBeGreaterThan(0);
+    expect(upsertBurnerProfile).not.toHaveBeenCalled();
   });
 });

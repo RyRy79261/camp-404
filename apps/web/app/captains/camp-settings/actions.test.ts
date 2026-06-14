@@ -46,6 +46,13 @@ function writerOver(config: TeamsConfig) {
   );
 }
 
+const threeActive: TeamsConfig = {
+  teams: [
+    { key: "kitchen", label: "Kitchen", order: 0, archived: false },
+    { key: "structures", label: "Structures", order: 1, archived: false },
+    { key: "art_and_activities", label: "Art", order: 2, archived: false },
+  ],
+};
 const twoActive: TeamsConfig = {
   teams: [
     { key: "kitchen", label: "Kitchen", order: 0, archived: false },
@@ -146,20 +153,20 @@ describe("moveTeamAction", () => {
   });
 });
 
-describe("setTeamArchivedAction — last-active guard", () => {
+describe("setTeamArchivedAction — minimum-active-teams guard", () => {
   beforeEach(asCaptain);
 
-  it("refuses to archive the last active team (guard runs in the locked transform)", async () => {
-    writerOver(oneActive); // kitchen is the only active team
+  it("refuses to archive below two active teams (guard runs in the locked transform)", async () => {
+    writerOver(twoActive); // archiving either would leave only one active
     const result = await setTeamArchivedAction("kitchen", true);
     expect(result).toEqual({
       ok: false,
-      error: "At least one team must stay active.",
+      error: "At least two teams must stay active.",
     });
   });
 
-  it("archives when another team stays active", async () => {
-    writerOver(twoActive);
+  it("archives when at least two teams stay active", async () => {
+    writerOver(threeActive);
     const result = await setTeamArchivedAction("kitchen", true);
     expect(result).toEqual({ ok: true });
     expect(mutateTeamsConfig).toHaveBeenCalledTimes(1);

@@ -7,6 +7,7 @@ import { ID_NUMBER_KEY } from "@camp404/db/id-documents";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 import { getReplayableForm, recordFormEdit } from "@/lib/forms";
+import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 
 export type SaveResult =
   | { ok: true }
@@ -31,13 +32,19 @@ export async function saveFormReplay(
     redirect("/signup/required");
   }
 
-  const form = getReplayableForm(key);
+  const form = await getReplayableForm(key);
   if (!form) return { ok: false, errors: { _root: "Unknown form." } };
 
   // Nothing to persist until the user commits the whole form.
   if (!final) return { ok: true };
 
-  const result = validateResponses(form.questionnaire, rawResponses);
+  // Validate + diff against ALL teams (incl. archived), not the active-only
+  // picker (form.questionnaire) the user saw: the multi_select validator
+  // silently DROPS values not in its options, so validating an old response
+  // that picked a since-archived team against the active set would erase it on
+  // re-save. The full catalogue is the superset that keeps it valid + labelled.
+  const catalogue = await getQuestionnaireForResponses();
+  const result = validateResponses(catalogue, rawResponses);
   if (!result.ok) return { ok: false, errors: result.errors };
 
   const state = await form.load(campUser.id);
@@ -52,7 +59,7 @@ export async function saveFormReplay(
   // never lands in questionnaire_edits (it lives encrypted on users, and the
   // owner's load() merges it back into both sides of the diff).
   const changes = diffResponses(
-    form.questionnaire,
+    catalogue,
     state.responses,
     result.responses,
   ).filter((c) => c.fieldId !== ID_NUMBER_KEY);
@@ -63,7 +70,7 @@ export async function saveFormReplay(
     await recordFormEdit({
       userId: campUser.id,
       questionnaireKey: form.key,
-      version: form.questionnaire.version,
+      version: catalogue.version,
       editedByUserId: campUser.id,
       changes,
     });

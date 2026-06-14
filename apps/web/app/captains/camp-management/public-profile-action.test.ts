@@ -21,6 +21,9 @@ vi.mock("@/lib/promotion", () => ({
 vi.mock("@camp404/db/roster", () => ({ getCampMemberDetail: vi.fn() }));
 vi.mock("@camp404/db/crypto", () => ({ decryptOrNull: vi.fn(() => null) }));
 vi.mock("@camp404/db/id-documents", () => ({ mergeIdNumber: vi.fn(() => ({})) }));
+vi.mock("@/lib/questionnaire-config", () => ({
+  getQuestionnaireForResponses: vi.fn(),
+}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { getPublicMemberProfileAction } from "./actions";

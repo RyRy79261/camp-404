@@ -12,7 +12,8 @@ import {
   upsertBurnerProfile,
 } from "@/lib/users";
 import { splitIdNumber } from "@camp404/db/id-documents";
-import { QUESTIONNAIRE } from "@/lib/questionnaire";
+import { QUESTIONNAIRE_VERSION } from "@/lib/questionnaire";
+import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 
 export type SaveResult =
   | { ok: true }
@@ -36,7 +37,10 @@ export async function saveBurnerProfile(
   // For non-final saves we tolerate missing required answers (the user is
   // still working through pages); for final submission we enforce everything.
   if (final) {
-    const result = validateResponses(QUESTIONNAIRE, rawResponses);
+    // Validate against ALL teams (incl. archived), so a team archived between
+    // render and submit doesn't make a just-picked team fail validation.
+    const questionnaire = await getQuestionnaireForResponses();
+    const result = validateResponses(questionnaire, rawResponses);
     if (!result.ok) return { ok: false, errors: result.errors };
   }
 
@@ -53,7 +57,7 @@ export async function saveBurnerProfile(
 
     await upsertBurnerProfile({
       userId: campUser.id,
-      version: QUESTIONNAIRE.version,
+      version: QUESTIONNAIRE_VERSION,
       responses: cleaned,
       markComplete: final,
     });

@@ -28,7 +28,7 @@ import {
   hasCampAccess as coreHasCampAccess,
   isApproved as coreIsApproved,
 } from "@camp404/core";
-import { QUESTIONNAIRE } from "./questionnaire";
+import { QUESTIONNAIRE_VERSION } from "./questionnaire";
 import type { AuthenticatedUser } from "./auth";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
@@ -200,7 +200,7 @@ export async function seedBurnerProfileAction(userId: string): Promise<void> {
     type: "questionnaire",
     actionKey: "burner_profile",
     title: "Complete your burner profile",
-    version: QUESTIONNAIRE.version,
+    version: QUESTIONNAIRE_VERSION,
   });
 }
 
@@ -209,7 +209,11 @@ export async function satisfyBurnerProfileAction(
   userId: string,
 ): Promise<void> {
   if (isE2ETestMode()) return;
-  await dbSatisfyRequiredAction(userId, "burner_profile", QUESTIONNAIRE.version);
+  await dbSatisfyRequiredAction(
+    userId,
+    "burner_profile",
+    QUESTIONNAIRE_VERSION,
+  );
 }
 
 /** The user's pending blocking required actions (empty under E2E test mode). */

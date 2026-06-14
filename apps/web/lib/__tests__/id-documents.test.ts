@@ -6,7 +6,13 @@ import {
   idColumnsFor,
   ID_NUMBER_KEY,
 } from "@camp404/db/id-documents";
+import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
 import { presentMemberDetail } from "../member-detail";
+import { buildQuestionnaire } from "../questionnaire";
+
+const DEFAULT_QUESTIONNAIRE = buildQuestionnaire(
+  DEFAULT_TEAMS.map((t) => ({ value: t.key, label: t.label })),
+);
 
 describe("splitIdNumber", () => {
   it("removes id.number, returns idType + idNumber, keeps id.type", () => {
@@ -88,9 +94,10 @@ describe("captain member-detail render", () => {
       invitedByName: null,
       createdAt: new Date(),
     };
-    const flat = presentMemberDetail(detail).profileSections.flatMap(
-      (s) => s.items,
-    );
+    const flat = presentMemberDetail(
+      detail,
+      DEFAULT_QUESTIONNAIRE,
+    ).profileSections.flatMap((s) => s.items);
     expect(flat.some((i) => i.value === "A12345678")).toBe(true);
   });
 });

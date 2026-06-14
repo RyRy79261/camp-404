@@ -29,6 +29,7 @@ import {
   presentMemberDetail,
   type PresentedMember,
 } from "@/lib/member-detail";
+import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 import {
   presentPublicMember,
   type PublicMemberProfile,
@@ -169,9 +170,13 @@ export async function getMemberDetailAction(
   const openRequest = await getOpenPromotionForTarget(userId);
   const promotionStep = promotionStepState(openRequest);
 
+  // Resolve team picks against ALL teams (incl. archived) so a member who chose
+  // a since-archived team still shows its label, not the raw key.
+  const questionnaire = await getQuestionnaireForResponses();
+
   return {
     ok: true,
-    member: presentMemberDetail({ ...detail, responses }),
+    member: presentMemberDetail({ ...detail, responses }, questionnaire),
     canAssignCaptain,
     promotionStep,
     promotionRequestId: openRequest?.id ?? null,

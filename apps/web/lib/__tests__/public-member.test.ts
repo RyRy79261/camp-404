@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
 import { presentPublicMember } from "@/lib/public-member";
-import { QUESTIONNAIRE } from "@/lib/questionnaire";
+import { buildQuestionnaire } from "@/lib/questionnaire";
+
+const QUESTIONNAIRE = buildQuestionnaire(
+  DEFAULT_TEAMS.map((t) => ({ value: t.key, label: t.label })),
+);
 
 // The member-facing allowlist projection. Privacy invariant: ONLY bio +
 // this-year ideas are surfaced — adding any other answer to `responses` must not
