@@ -1,4 +1,5 @@
-import { createHttpDb } from "./index";
+import { eq } from "drizzle-orm";
+import { createHttpDb, createPooledDb } from "./index";
 import { campSettings } from "./schema";
 
 // Editable camp-wide config that hangs off the `camp_settings` singleton.
@@ -96,4 +97,116 @@ export async function getTeamsConfig(): Promise<TeamsConfig> {
     .from(campSettings)
     .limit(1);
   return resolveTeamsConfig(row?.config);
+}
+
+// --- Phase 2: pure config transforms (relabel / reorder / archive) ----------
+// These are the ONLY edits Phase 2 allows: they never add or remove a team key
+// (a new key needs an enum migration — Phase 4). Each is pure so it's unit-
+// testable and can run identically against the DB row or the E2E test store.
+
+/** Rename one team's display label. Unknown key → config returned unchanged. */
+export function renameTeam(
+  config: TeamsConfig,
+  key: string,
+  label: string,
+): TeamsConfig {
+  return {
+    teams: config.teams.map((team) =>
+      team.key === key ? { ...team, label } : team,
+    ),
+  };
+}
+
+/** Archive / unarchive one team. Unknown key → config returned unchanged. */
+export function setTeamArchived(
+  config: TeamsConfig,
+  key: string,
+  archived: boolean,
+): TeamsConfig {
+  return {
+    teams: config.teams.map((team) =>
+      team.key === key ? { ...team, archived } : team,
+    ),
+  };
+}
+
+/**
+ * Move one team up/down in the configured order, renormalising every `order` to
+ * a contiguous 0..n-1 so the column never accumulates gaps. Unknown key or a
+ * no-op move (already at the relevant edge) → config returned unchanged.
+ */
+export function moveTeam(
+  config: TeamsConfig,
+  key: string,
+  direction: "up" | "down",
+): TeamsConfig {
+  const ordered = [...config.teams].sort((a, b) => a.order - b.order);
+  const from = ordered.findIndex((team) => team.key === key);
+  if (from === -1) return config;
+  const to = direction === "up" ? from - 1 : from + 1;
+  if (to < 0 || to >= ordered.length) return config;
+  const swapped = ordered[from]!;
+  ordered[from] = ordered[to]!;
+  ordered[to] = swapped;
+  return { teams: ordered.map((team, index) => ({ ...team, order: index })) };
+}
+
+/** The sorted set of team keys, as a comparable string. */
+function teamKeySignature(config: TeamsConfig): string {
+  return config.teams
+    .map((team) => team.key)
+    .sort()
+    .join(",");
+}
+
+/**
+ * Guard the writer against a transform that adds or removes a team key — Phase 2
+ * may only relabel / reorder / archive (key growth is Phase 4). Throws so a
+ * buggy transform rolls the transaction back rather than corrupting the row.
+ */
+export function assertStableTeamKeys(
+  before: TeamsConfig,
+  after: TeamsConfig,
+): void {
+  if (teamKeySignature(before) !== teamKeySignature(after)) {
+    throw new Error(
+      "Team config mutation must not add or remove team keys (Phase 4).",
+    );
+  }
+}
+
+/**
+ * Apply a transform to the stored config under the `camp_settings` singleton
+ * lock — a `SELECT … FOR UPDATE` read-modify-write so concurrent captain edits
+ * serialise (no lost updates), mirroring bootstrap.ts. Uses the pooled driver
+ * (the HTTP driver has no transactions). Returns the persisted config.
+ */
+export async function mutateTeamsConfig(
+  transform: (current: TeamsConfig) => TeamsConfig,
+): Promise<TeamsConfig> {
+  const { db, pool } = createPooledDb();
+  try {
+    return await db.transaction(async (tx) => {
+      // Ensure the singleton exists, then lock it for the read-modify-write.
+      await tx
+        .insert(campSettings)
+        .values({ id: true })
+        .onConflictDoNothing({ target: campSettings.id });
+      const [locked] = await tx
+        .select({ config: campSettings.config })
+        .from(campSettings)
+        .where(eq(campSettings.id, true))
+        .for("update");
+      const current = resolveTeamsConfig(locked?.config);
+      const next = transform(current);
+      assertStableTeamKeys(current, next);
+      await tx
+        .update(campSettings)
+        .set({ config: next, updatedAt: new Date() })
+        .where(eq(campSettings.id, true));
+      return next;
+    });
+  } finally {
+    await pool.end();
+  }
 }

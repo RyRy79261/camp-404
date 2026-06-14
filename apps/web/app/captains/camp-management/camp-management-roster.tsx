@@ -29,9 +29,12 @@ import { RosterToolbar } from "./roster-toolbar";
 export function CampManagementRoster({
   rows,
   teams,
+  teamLabels = {},
 }: {
   rows: RosterRow[];
   teams: readonly { key: string; label: string }[];
+  /** key → configured label for the profile team chips. */
+  teamLabels?: Record<string, string>;
 }) {
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<RosterChip>("all");
@@ -155,6 +158,7 @@ export function CampManagementRoster({
           key={selectedRow.id}
           row={selectedRow}
           index={selectedIndex}
+          teamLabels={teamLabels}
           onClose={() => {
             const id = selectedId;
             setSelectedId(null);

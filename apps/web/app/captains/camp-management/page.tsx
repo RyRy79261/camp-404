@@ -5,7 +5,7 @@ import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getCampManagementRoster } from "@/lib/roster";
 import { rosterForViewer } from "@/lib/camp-roster";
-import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
+import { activeTeams, getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { CampManagementRoster } from "./camp-management-roster";
 import { MemberRoster } from "./member-roster";
 
@@ -42,9 +42,13 @@ export default async function CampManagementPage() {
   const members = await getCampManagementRoster();
   const roster = rosterForViewer(members, isCaptain);
 
-  // The team-filter list comes from the editable camp config (Phase 1), not a
-  // hardcoded const — active teams only, in their configured order.
-  const teams = activeTeams(await getTeamsConfig());
+  // The team data comes from the editable camp config (not a hardcoded const).
+  // `teams` is the active-only, order-sorted list for the filter dropdown;
+  // `teamLabels` is the full key→label map (incl. archived) for the profile
+  // chips, so a captain's relabel shows on the chips too — not just the filter.
+  const config = await getTeamsConfig();
+  const teams = activeTeams(config);
+  const teamLabels = teamLabelMap(config);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
@@ -82,9 +86,13 @@ export default async function CampManagementPage() {
       </header>
 
       {roster.isCaptain ? (
-        <CampManagementRoster rows={roster.rows} teams={teams} />
+        <CampManagementRoster
+          rows={roster.rows}
+          teams={teams}
+          teamLabels={teamLabels}
+        />
       ) : (
-        <MemberRoster rows={roster.rows} teams={teams} />
+        <MemberRoster rows={roster.rows} teams={teams} teamLabels={teamLabels} />
       )}
     </main>
   );

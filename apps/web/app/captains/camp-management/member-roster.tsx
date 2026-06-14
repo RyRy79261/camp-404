@@ -27,9 +27,12 @@ type PublicChip = "all" | "captains";
 export function MemberRoster({
   rows,
   teams,
+  teamLabels = {},
 }: {
   rows: PublicRosterRow[];
   teams: readonly { key: string; label: string }[];
+  /** key → configured label for the profile team chips. */
+  teamLabels?: Record<string, string>;
 }) {
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<PublicChip>("all");
@@ -110,6 +113,7 @@ export function MemberRoster({
           key={selectedRow.id}
           row={selectedRow}
           index={selectedIndex}
+          teamLabels={teamLabels}
           onClose={() => {
             const id = selectedId;
             setSelectedId(null);
