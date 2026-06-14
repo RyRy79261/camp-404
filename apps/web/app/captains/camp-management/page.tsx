@@ -5,6 +5,7 @@ import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getCampManagementRoster } from "@/lib/roster";
 import { rosterForViewer } from "@/lib/camp-roster";
+import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { CampManagementRoster } from "./camp-management-roster";
 import { MemberRoster } from "./member-roster";
 
@@ -40,6 +41,10 @@ export default async function CampManagementPage() {
   // member branch literally has no private data to leak.
   const members = await getCampManagementRoster();
   const roster = rosterForViewer(members, isCaptain);
+
+  // The team-filter list comes from the editable camp config (Phase 1), not a
+  // hardcoded const — active teams only, in their configured order.
+  const teams = activeTeams(await getTeamsConfig());
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
@@ -77,9 +82,9 @@ export default async function CampManagementPage() {
       </header>
 
       {roster.isCaptain ? (
-        <CampManagementRoster rows={roster.rows} />
+        <CampManagementRoster rows={roster.rows} teams={teams} />
       ) : (
-        <MemberRoster rows={roster.rows} />
+        <MemberRoster rows={roster.rows} teams={teams} />
       )}
     </main>
   );

@@ -37,9 +37,14 @@ const rows = [
   }),
 ];
 
+const teams = [
+  { key: "kitchen", label: "Kitchen" },
+  { key: "structures", label: "Structures" },
+];
+
 describe("MemberRoster — member view", () => {
   it("withholds all captain chrome (stats strip + approval chips)", () => {
-    render(<MemberRoster rows={rows} />);
+    render(<MemberRoster rows={rows} teams={teams} />);
     // No approval stats strip.
     expect(screen.queryByText("Approved")).toBeNull();
     expect(screen.queryByText("Incomplete")).toBeNull();
@@ -52,7 +57,7 @@ describe("MemberRoster — member view", () => {
   });
 
   it("filters to captains via the Captains chip", () => {
-    render(<MemberRoster rows={rows} />);
+    render(<MemberRoster rows={rows} teams={teams} />);
     expect(screen.getAllByText("Nova Reyes").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /Captains 1/ }));
     expect(screen.queryByText("Nova Reyes")).toBeNull();
@@ -65,7 +70,7 @@ describe("MemberRoster — member view", () => {
       bio: "Bio text.",
       contribution: null,
     });
-    render(<MemberRoster rows={[row()]} />);
+    render(<MemberRoster rows={[row()]} teams={teams} />);
     // Two open controls render (table + list); click the first.
     fireEvent.click(
       screen.getAllByRole("button", { name: /Open Nova Reyes/ })[0]!,
@@ -84,7 +89,7 @@ describe("MemberRoster — member view", () => {
       bio: "Bio.",
       contribution: null,
     });
-    render(<MemberRoster rows={rows} />);
+    render(<MemberRoster rows={rows} teams={teams} />);
     fireEvent.click(
       screen.getAllByRole("button", { name: /Open Nova Reyes/ })[0]!,
     );

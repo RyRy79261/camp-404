@@ -24,7 +24,13 @@ import { RosterToolbar } from "./roster-toolbar";
 
 type PublicChip = "all" | "captains";
 
-export function MemberRoster({ rows }: { rows: PublicRosterRow[] }) {
+export function MemberRoster({
+  rows,
+  teams,
+}: {
+  rows: PublicRosterRow[];
+  teams: readonly { key: string; label: string }[];
+}) {
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<PublicChip>("all");
   const [team, setTeam] = useState<string | null>(null);
@@ -72,6 +78,7 @@ export function MemberRoster({ rows }: { rows: PublicRosterRow[] }) {
         }
         team={team}
         onTeamChange={setTeam}
+        teams={teams}
         stats={stats}
         publicOnly
       />
