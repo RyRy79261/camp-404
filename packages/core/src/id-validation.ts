@@ -53,11 +53,30 @@ function validateSaId(value: string): IdValidationResult {
 }
 
 function hasValidDatePrefix(idNumber: string): boolean {
+  const yy = Number.parseInt(idNumber.slice(0, 2), 10);
   const month = Number.parseInt(idNumber.slice(2, 4), 10);
   const day = Number.parseInt(idNumber.slice(4, 6), 10);
-  if (month < 1 || month > 12) return false;
-  if (day < 1 || day > 31) return false;
-  return true;
+  // The SA ID year is two digits with no century, so accept the date if EITHER
+  // plausible century (19YY or 20YY) is a real calendar date — a real leap-year
+  // birthday (e.g. 29 Feb 2000) is never wrongly rejected, while an impossible
+  // one (29 Feb '01, 31 Apr, 30 Feb) is. Leap-year + month-length rules are left
+  // to the platform Date engine rather than re-implemented here.
+  return isRealCalendarDate(1900 + yy, month, day) || isRealCalendarDate(2000 + yy, month, day);
+}
+
+/**
+ * Whether (year, month, day) is a real calendar date. Builds a UTC Date and
+ * checks it didn't roll over (e.g. 30 Feb → 1/2 Mar), which is the standard
+ * zero-dependency way to validate a date via the runtime's own calendar.
+ */
+function isRealCalendarDate(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }
 
 /**

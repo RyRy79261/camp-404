@@ -127,3 +127,32 @@ describe("validateIdNumber — SA ID branch", () => {
     });
   });
 });
+
+describe("validateIdNumber — SA ID branch, impossible dates", () => {
+  const DATE_ERROR = "First six digits aren't a valid YYMMDD date.";
+
+  it("rejects a day that doesn't exist in its month", () => {
+    // 30 Feb, 31 Apr, 31 Jun — the date check fires before Luhn, so any check
+    // digit reaches it. (Each is 13 digits with an in-range month.)
+    for (const id of ["9002305009086", "9004315009086", "8506310123006"]) {
+      expect(validateIdNumber("sa_id", id)).toEqual({
+        ok: false,
+        error: DATE_ERROR,
+      });
+    }
+  });
+
+  it("rejects 29 Feb when neither century interpretation is a leap year", () => {
+    // YY=01 → neither 1901 nor 2001 is a leap year, so 29 Feb is impossible.
+    expect(validateIdNumber("sa_id", "0102295009086")).toEqual({
+      ok: false,
+      error: DATE_ERROR,
+    });
+  });
+
+  it("accepts 29 Feb when a plausible century is a leap year", () => {
+    // YY=00 → 2000 is a leap year, so 29 Feb is a real date (and the check
+    // digit here is valid), so it must NOT be rejected.
+    expect(validateIdNumber("sa_id", "0002295009084")).toEqual({ ok: true });
+  });
+});
