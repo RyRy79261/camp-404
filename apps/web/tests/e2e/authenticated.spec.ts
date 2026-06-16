@@ -22,8 +22,9 @@ test.describe("authenticated flow (test-mode)", () => {
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+    // The required-questionnaire gate interstitial (S23) is what greets them.
     await expect(
-      page.getByRole("heading", { name: "Build your burner profile" }),
+      page.getByRole("heading", { name: "Before you go any further" }),
     ).toBeVisible();
   });
 
