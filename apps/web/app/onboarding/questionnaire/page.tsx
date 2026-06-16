@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { flattenQuestions } from "@camp404/types";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -9,13 +10,26 @@ import {
 import { mergeIdNumber } from "@camp404/db/id-documents";
 import { getQuestionnaireForPicker } from "@/lib/questionnaire-config";
 import { QuestionnaireWizard } from "@/components/questionnaire/wizard";
+import { QuestionnaireGate } from "./gate";
 import { saveBurnerProfile } from "./actions";
 import type { QuestionnaireResponses } from "@camp404/types";
 
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
 
-export default async function QuestionnairePage() {
+// The burner profile is a blocking required action, so this route is the S23/S24
+// blocking flow: a gate interstitial first, then — on "Start" (?start=1) — the
+// wizard in its runner variant (sticky Required top bar + persistent notice).
+// It's only ever reached as the required flow (the gating spine redirects here
+// when burner_profile is pending and away once it's complete), so the chrome is
+// unconditional — no per-request required-action lookup needed.
+const TITLE = "Burner profile";
+
+export default async function QuestionnairePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ start?: string }>;
+}) {
   const authUser = await getAuthenticatedUserOrRedirect();
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
@@ -43,21 +57,28 @@ export default async function QuestionnairePage() {
   // (active teams only) — a fresh sign-up never sees an archived team.
   const questionnaire = await getQuestionnaireForPicker();
 
+  const { start } = await searchParams;
+  const questionCount = flattenQuestions(questionnaire).length;
+  const estimatedMinutes = Math.max(2, Math.round(questionCount / 8));
+
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 py-8">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Build your burner profile</h1>
-        <p className="mt-1 text-sm text-[color:var(--color-muted-foreground)]">
-          A few questions so the camp knows who's arriving in the dust. Takes
-          about two minutes.
-        </p>
-      </header>
-      <QuestionnaireWizard
-        questionnaire={questionnaire}
-        initialResponses={initialResponses}
-        action={saveBurnerProfile}
-        firstStepSignOut
-      />
+      {start ? (
+        <QuestionnaireWizard
+          questionnaire={questionnaire}
+          initialResponses={initialResponses}
+          action={saveBurnerProfile}
+          variant="runner"
+          title={TITLE}
+        />
+      ) : (
+        <QuestionnaireGate
+          title={TITLE}
+          questionCount={questionCount}
+          estimatedMinutes={estimatedMinutes}
+          startHref="/onboarding/questionnaire?start=1"
+        />
+      )}
     </main>
   );
 }
