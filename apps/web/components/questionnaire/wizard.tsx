@@ -12,6 +12,7 @@ import { Button } from "@camp404/ui/components/button";
 import { ProgressBar } from "@camp404/ui/components/progress-bar";
 import { CloudOff, TriangleAlert } from "lucide-react";
 import { QuestionField } from "./question";
+import { BlockingNotice, BlockingTopBar } from "./blocking-chrome";
 import { validateIdNumber } from "@/lib/id-validation";
 import type { SaveResult } from "@/app/onboarding/questionnaire/actions";
 
@@ -47,6 +48,13 @@ interface QuestionnaireWizardProps {
   // account — before creating anything — isn't trapped. The replay flow leaves
   // this off (its users are established members editing a form).
   firstStepSignOut?: boolean;
+  // "runner" swaps the plain onboarding progress for the blocking chrome (sticky
+  // BlockingTopBar with a Required chip + sign-out, and a persistent notice) —
+  // surface 24, used when the questionnaire is a blocking required action. The
+  // top bar provides its own sign-out, so firstStepSignOut is ignored.
+  variant?: "onboarding" | "runner";
+  // Title shown in the runner top bar (ignored in the onboarding variant).
+  title?: string;
 }
 
 export function QuestionnaireWizard({
@@ -57,6 +65,8 @@ export function QuestionnaireWizard({
   onComplete,
   submitLabel = "Finish",
   firstStepSignOut = false,
+  variant = "onboarding",
+  title,
 }: QuestionnaireWizardProps) {
   const [pageIndex, setPageIndex] = React.useState(0);
   const [responses, setResponses] =
@@ -176,6 +186,7 @@ export function QuestionnaireWizard({
   // A page-level error from either the local catch (_form) or a server action
   // that returned a non-field failure (_root).
   const formError = errors[FORM_ERROR_KEY] ?? errors[ROOT_ERROR_KEY];
+  const isRunner = variant === "runner";
 
   return (
     <form
@@ -186,10 +197,21 @@ export function QuestionnaireWizard({
       }}
       className="flex flex-1 flex-col gap-6"
     >
-      <WizardProgress
-        current={pageIndex + 1}
-        total={questionnaire.pages.length}
-      />
+      {isRunner ? (
+        <>
+          <BlockingTopBar
+            title={title ?? ""}
+            current={pageIndex + 1}
+            total={questionnaire.pages.length}
+          />
+          <BlockingNotice />
+        </>
+      ) : (
+        <WizardProgress
+          current={pageIndex + 1}
+          total={questionnaire.pages.length}
+        />
+      )}
 
       {formError && (
         <Alert variant="error">
@@ -241,9 +263,10 @@ export function QuestionnaireWizard({
       )}
 
       <div className="mt-auto flex items-center justify-between pt-6">
-        {pageIndex === 0 && firstStepSignOut ? (
+        {pageIndex === 0 && firstStepSignOut && !isRunner ? (
           // First page has nothing to go "Back" to; offer an escape hatch for
-          // someone who signed in with the wrong account.
+          // someone who signed in with the wrong account. (The runner variant
+          // puts Sign out in its sticky top bar instead.)
           <Button type="button" variant="ghost" asChild>
             <a href="/auth/sign-out">Sign out</a>
           </Button>

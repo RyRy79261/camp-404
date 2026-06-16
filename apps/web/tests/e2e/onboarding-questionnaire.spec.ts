@@ -23,6 +23,17 @@ test.describe("onboarding questionnaire wizard", () => {
     await redeemInviteAtGate(page, "TEST-INVITE");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
+    // Surface 23 — the gate interstitial lands first; start into the wizard
+    // (surface 24, the blocking runner).
+    await expect(
+      page.getByRole("heading", { name: "Before you go any further" }),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "Start questionnaire" }).click();
+    // The runner's blocking chrome is up (the persistent notice is unique copy).
+    await expect(
+      page.getByText(/can't use the rest of the app/i),
+    ).toBeVisible();
+
     // Page 1 — profile photo: optional, so skip it.
     await expect(page.getByText("Add a profile photo")).toBeVisible();
     await page.getByRole("button", { name: "Skip" }).click();

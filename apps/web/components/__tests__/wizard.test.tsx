@@ -58,6 +58,42 @@ describe("QuestionnaireWizard", () => {
     expect(screen.getByText("Step 1 of 2")).toBeDefined();
   });
 
+  it("shows the blocking chrome (and no double progress) in the runner variant", () => {
+    render(
+      <QuestionnaireWizard
+        questionnaire={Q}
+        initialResponses={{}}
+        action={noopAction}
+        variant="runner"
+        title="Burner profile"
+      />,
+    );
+    // BlockingTopBar (title + Required chip + Sign out) and the persistent notice.
+    expect(screen.getByText("Burner profile")).toBeDefined();
+    expect(screen.getByText("Required")).toBeDefined();
+    expect(screen.getByRole("link", { name: "Sign out" })).toBeDefined();
+    expect(screen.getByText(/can't use the rest of the app/i)).toBeDefined();
+    // The plain WizardProgress is suppressed — only the top bar's step counter.
+    expect(screen.getAllByText("Step 1 of 2")).toHaveLength(1);
+    // The top-bar title is the page's h1.
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Burner profile" }),
+    ).toBeDefined();
+  });
+
+  it("keeps the default (onboarding/replay) variant free of blocking chrome", () => {
+    render(
+      <QuestionnaireWizard
+        questionnaire={Q}
+        initialResponses={{}}
+        action={noopAction}
+      />,
+    );
+    expect(screen.queryByText("Required")).toBeNull();
+    expect(screen.queryByText(/can't use the rest of the app/i)).toBeNull();
+    expect(screen.getByText("Step 1 of 2")).toBeDefined(); // plain progress
+  });
+
   it("blocks Next when a required field is empty", async () => {
     const action = vi.fn(noopAction);
     render(
