@@ -12,13 +12,6 @@ import { DateControl } from "@camp404/ui/components/date-control";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
 import { OptionCardGroup } from "@camp404/ui/components/option-card-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@camp404/ui/components/select";
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { Slider } from "@camp404/ui/components/slider";
 import { Textarea } from "@camp404/ui/components/textarea";
@@ -132,22 +125,20 @@ function FieldInput({
       );
     }
     case "single_select":
+      // Board S04/S11 (Divergence #4, "boards win → RadioCardGroup"): a single
+      // pick renders as stacked option cards, not a dropdown. OptionCardGroup is
+      // the leaf for exactly this — same affordance as `scale` above.
       return (
-        <Select
+        <OptionCardGroup
+          id={id}
+          aria-label={question.prompt}
+          options={question.options.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
           value={typeof value === "string" ? value : undefined}
           onValueChange={onChange}
-        >
-          <SelectTrigger id={id}>
-            <SelectValue placeholder="Choose one…" />
-          </SelectTrigger>
-          <SelectContent>
-            {question.options.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       );
     case "multi_select": {
       const selected = Array.isArray(value)
