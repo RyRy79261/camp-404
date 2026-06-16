@@ -2,6 +2,7 @@ import * as React from "react"
 import { ChevronRight } from "lucide-react"
 
 import { cn } from "../lib/utils"
+import { IconBadge } from "./icon-badge"
 
 // A tappable navigation card — leading icon, title, description, trailing
 // chevron. Renders a plain anchor so it stays framework-agnostic (no next/*);
@@ -24,12 +25,9 @@ const NavCard = React.forwardRef<HTMLAnchorElement, NavCardProps>(
       {...props}
     >
       {icon && (
-        <span
-          aria-hidden
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/40 [&>svg]:h-5 [&>svg]:w-5"
-        >
+        <IconBadge aria-hidden size="md" shape="rounded" tone="muted">
           {icon}
-        </span>
+        </IconBadge>
       )}
       <span className="min-w-0 flex-1">
         <span className="block text-base font-medium">{title}</span>
