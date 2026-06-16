@@ -29,7 +29,7 @@ const TOOLS: ToolEntry[] = [
   {
     href: "/tools/invite",
     title: "Invite a member",
-    description: "Mint a single-use code to bring someone onto Camp 404.",
+    description: "Mint a named invite link to bring someone onto Camp 404.",
     icon: <Mail className="text-primary" />,
   },
   {
