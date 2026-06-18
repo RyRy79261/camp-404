@@ -16,6 +16,7 @@
     "./captain-promotion": "./src/captain-promotion.ts",
     "./bootstrap": "./src/bootstrap.ts",
     "./camp-config": "./src/camp-config.ts",
+    "./questionnaire-definitions": "./src/questionnaire-definitions.ts",
     "./broadcasts": "./src/broadcasts.ts",
     "./audience": "./src/audience.ts",
     "./push": "./src/push.ts",
