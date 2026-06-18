@@ -17,9 +17,7 @@ import { Button } from "@camp404/ui/components/button";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { CodeDisplay } from "@camp404/ui/components/code-display";
 import { Input } from "@camp404/ui/components/input";
-import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
-import { Textarea } from "@camp404/ui/components/textarea";
 import {
   CODE_RULES_HINT,
   generateInviteCode,
@@ -39,7 +37,6 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
   // vetting); maxUses lets a captain hand one code to several people.
   const [preApprove, setPreApprove] = useState(false);
   const [maxUses, setMaxUses] = useState("1");
-  const multiUse = isCaptain && Number(maxUses) > 1;
 
   const [result, formAction, isPending] = useActionState<
     CreateInviteResult | null,
@@ -93,7 +90,7 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
     return (
       <SuccessPanel
         code={result.code}
-        email={result.invitedEmail}
+        recipientName={result.recipientName}
         maxUses={result.maxUses}
         requiresApproval={result.requiresApproval}
       />
@@ -103,47 +100,6 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
   return (
     <form action={formAction} className="flex flex-col gap-[18px]">
       <h1 className="text-2xl font-bold text-foreground">Invite a member</h1>
-
-      <InputField
-        id="email"
-        name="email"
-        type="email"
-        required={!multiUse}
-        autoComplete="off"
-        placeholder="sara@example.com"
-        label={
-          multiUse ? "Lead recipient's email (optional)" : "Their email address"
-        }
-      />
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="note">Why you&apos;re inviting them (optional)</Label>
-        <Textarea
-          id="note"
-          name="note"
-          rows={3}
-          placeholder="Kitchen lead from last burn; great with sourdough."
-        />
-      </div>
-
-      {isCaptain ? (
-        <CaptainOptions
-          preApprove={preApprove}
-          onPreApproveChange={setPreApprove}
-          maxUses={maxUses}
-          onMaxUsesChange={setMaxUses}
-        />
-      ) : (
-        // Board S14 draws this as a quiet muted note (fill:$muted), not an
-        // accent Alert — keeps it tonally distinct from Captain options.
-        <div className="flex items-start gap-2.5 rounded-xl bg-muted p-3.5 text-label text-muted-foreground">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <span>
-            Anyone who signs up with this code will need a captain&apos;s
-            approval before they can use the app.
-          </span>
-        </div>
-      )}
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="code">Invite code</Label>
@@ -170,6 +126,30 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
         </div>
         <AvailabilityHint availability={availability} code={code} />
       </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="note">Name (optional)</Label>
+        <Input id="note" name="note" autoComplete="off" placeholder="Sara" />
+      </div>
+
+      {isCaptain ? (
+        <CaptainOptions
+          preApprove={preApprove}
+          onPreApproveChange={setPreApprove}
+          maxUses={maxUses}
+          onMaxUsesChange={setMaxUses}
+        />
+      ) : (
+        // Board S14 draws this as a quiet muted note (fill:$muted), not an
+        // accent Alert — keeps it tonally distinct from Captain options.
+        <div className="flex items-start gap-2.5 rounded-xl bg-muted p-3.5 text-label text-muted-foreground">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <span>
+            Anyone who signs up with this code will need a captain&apos;s
+            approval before they can use the app.
+          </span>
+        </div>
+      )}
 
       {result && !result.ok && (
         <Alert variant="error">
@@ -263,12 +243,12 @@ function CaptainOptions({
 
 function SuccessPanel({
   code,
-  email,
+  recipientName,
   maxUses,
   requiresApproval,
 }: {
   code: string;
-  email: string;
+  recipientName: string | null;
   maxUses: number;
   requiresApproval: boolean;
 }) {
@@ -297,8 +277,8 @@ function SuccessPanel({
         <h2 className="text-lg font-bold text-foreground">Invite ready</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        {email
-          ? `Share this code with ${email}.`
+        {recipientName
+          ? `Share this code with ${recipientName}.`
           : "Share this code with whoever you’re inviting."}
       </p>
 

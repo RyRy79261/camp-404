@@ -12,7 +12,7 @@ export type CreateInviteResult =
   | {
       ok: true;
       code: string;
-      invitedEmail: string;
+      recipientName: string | null;
       maxUses: number;
       requiresApproval: boolean;
     }
@@ -20,8 +20,6 @@ export type CreateInviteResult =
       ok: false;
       error: string;
     };
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // A captain can mint a code for many redeemers; cap it so a typo can't
 // create an effectively unlimited code by accident.
@@ -37,12 +35,14 @@ const MAX_USES_LIMIT = 100;
  *
  * Captain vetting:
  *   - A non-captain's codes ALWAYS require captain approval (the redeemer
- *     lands in the vetting queue) and stay single-use, tied to one email.
+ *     lands in the vetting queue) and stay single-use.
  *   - A captain may pre-approve the redeemer (skip vetting) and raise the
  *     use cap to hand the code to several people.
  *
- * Validates everything server-side: email format, code syntax, code
- * uniqueness, captain-only options. The /api/tools/invite/check endpoint is a
+ * The only thing needed to mint a code is the code itself; an optional name
+ * (who it's for) is recorded as the invite note. No email — if you had it you'd
+ * just invite them by email. Validates code syntax, code uniqueness, and the
+ * captain-only options server-side. The /api/tools/invite/check endpoint is a
  * UX convenience; this is the security boundary.
  */
 export async function createInviteAction(
@@ -58,10 +58,6 @@ export async function createInviteAction(
   }
   const isCaptain = campUser.rank === "captain";
 
-  const emailRaw =
-    typeof formData.get("email") === "string"
-      ? (formData.get("email") as string)
-      : "";
   const noteRaw =
     typeof formData.get("note") === "string"
       ? (formData.get("note") as string)
@@ -92,17 +88,9 @@ export async function createInviteAction(
     }
   }
 
-  // The email targets a single person, so it's only meaningful (and required)
-  // for a single-use code. A captain minting a multi-use code may leave it
-  // blank; if they fill it in we still record it as the lead recipient.
-  const email = emailRaw.trim().toLowerCase();
-  const emailRequired = maxUses === 1;
-  if (email && !EMAIL_PATTERN.test(email)) {
-    return { ok: false, error: "Enter a valid email address." };
-  }
-  if (emailRequired && !email) {
-    return { ok: false, error: "Enter a valid email address." };
-  }
+  // The only optional metadata is a name/label for who the code is for, stored
+  // as the invite note (and surfaced to captains on the member's detail). No
+  // email is collected — the code is what gets shared.
   const note = noteRaw.trim() || null;
 
   // Code: either user-supplied or auto-generated. Either way we re-check
@@ -131,7 +119,6 @@ export async function createInviteAction(
       note,
       maxUses,
       assignedRank: null,
-      invitedEmail: email || null,
       requiresApproval,
     });
   } catch {
@@ -140,7 +127,7 @@ export async function createInviteAction(
     return { ok: false, error: "Couldn't save invite. Try a different code." };
   }
 
-  return { ok: true, code, invitedEmail: email, maxUses, requiresApproval };
+  return { ok: true, code, recipientName: note, maxUses, requiresApproval };
 }
 
 async function generateUnusedCode(): Promise<string> {
