@@ -103,11 +103,17 @@ Decisions baked into the schema — keep new code consistent with them:
   requirement is a `required_actions` row — never an ad-hoc `redirect()`.
   (The hardcoded gates currently in `page.tsx` are tech debt to migrate,
   not a pattern to copy.)
-- **Questionnaires.** Each questionnaire is a bespoke coded page writing
-  into its own distinct domain table (`burner_profiles`,
-  `dietary_requirements`, `driver_profiles`, …). There is no generic
-  questionnaire-response store. `questionnaire_activations` is how a
-  captain dispatches a questionnaire to an audience.
+- **Questionnaires — two classes.** *Code questionnaires* (`burner_profiles`,
+  `dietary_requirements`, `driver_profiles`, …) are bespoke coded pages
+  writing into their own distinct domain tables — keep these as-is.
+  *Builder questionnaires* are authored in-app via the captain questionnaire
+  builder: their definitions live as data in `questionnaire_definitions` and
+  their answers in the one generic `questionnaire_responses` store (JSONB
+  keyed by field id). Both classes dispatch through
+  `questionnaire_activations` and gate through `required_actions` — the
+  shared, key-driven spine. The generic def+response pair is a deliberately
+  *scoped* exception to "bespoke over generic" (below), for camp-authored
+  forms only.
 - **Notifications.** `broadcasts` are composed messages fanned out by a
   worker into per-user `notification_deliveries` (a queue). `push_tokens`
   holds device tokens.
@@ -119,7 +125,11 @@ Decisions baked into the schema — keep new code consistent with them:
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.
 This is a deliberate product stance; prefer a new table and a new
-component over a configurable abstraction.
+component over a configurable abstraction. **One scoped exception:** the
+captain questionnaire builder is a deliberately bounded dynamic content
+engine (generic `questionnaire_definitions` + `questionnaire_responses` +
+a data-driven runner) for camp-authored questionnaires. It does not
+license genericizing any other feature.
 
 ## Environment variables
 
