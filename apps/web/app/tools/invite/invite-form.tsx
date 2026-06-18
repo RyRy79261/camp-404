@@ -18,7 +18,6 @@ import { Checkbox } from "@camp404/ui/components/checkbox";
 import { CodeDisplay } from "@camp404/ui/components/code-display";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
-import { Textarea } from "@camp404/ui/components/textarea";
 import {
   CODE_RULES_HINT,
   generateInviteCode,
@@ -103,35 +102,6 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
       <h1 className="text-2xl font-bold text-foreground">Invite a member</h1>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="note">Who&apos;s this for? (optional)</Label>
-        <Textarea
-          id="note"
-          name="note"
-          rows={3}
-          placeholder="Sara — kitchen lead from last burn, great with sourdough."
-        />
-      </div>
-
-      {isCaptain ? (
-        <CaptainOptions
-          preApprove={preApprove}
-          onPreApproveChange={setPreApprove}
-          maxUses={maxUses}
-          onMaxUsesChange={setMaxUses}
-        />
-      ) : (
-        // Board S14 draws this as a quiet muted note (fill:$muted), not an
-        // accent Alert — keeps it tonally distinct from Captain options.
-        <div className="flex items-start gap-2.5 rounded-xl bg-muted p-3.5 text-label text-muted-foreground">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <span>
-            Anyone who signs up with this code will need a captain&apos;s
-            approval before they can use the app.
-          </span>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-1.5">
         <Label htmlFor="code">Invite code</Label>
         <div className="flex gap-2.5">
           <Input
@@ -156,6 +126,30 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
         </div>
         <AvailabilityHint availability={availability} code={code} />
       </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="note">Name (optional)</Label>
+        <Input id="note" name="note" autoComplete="off" placeholder="Sara" />
+      </div>
+
+      {isCaptain ? (
+        <CaptainOptions
+          preApprove={preApprove}
+          onPreApproveChange={setPreApprove}
+          maxUses={maxUses}
+          onMaxUsesChange={setMaxUses}
+        />
+      ) : (
+        // Board S14 draws this as a quiet muted note (fill:$muted), not an
+        // accent Alert — keeps it tonally distinct from Captain options.
+        <div className="flex items-start gap-2.5 rounded-xl bg-muted p-3.5 text-label text-muted-foreground">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <span>
+            Anyone who signs up with this code will need a captain&apos;s
+            approval before they can use the app.
+          </span>
+        </div>
+      )}
 
       {result && !result.ok && (
         <Alert variant="error">
