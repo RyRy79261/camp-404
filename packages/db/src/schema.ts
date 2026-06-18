@@ -15,7 +15,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type { QuestionnaireFieldChange } from "@camp404/types";
+import type { Questionnaire, QuestionnaireFieldChange } from "@camp404/types";
 // Type-only (erased at runtime — no import cycle with camp-config.ts, which
 // imports this schema): types the camp_settings.config JSONB column.
 import type { TeamsConfig } from "./camp-config";
@@ -1422,3 +1422,20 @@ export const campSettings = pgTable(
     singleton: check("camp_settings_singleton", sql`${t.id}`),
   }),
 );
+
+// --- Questionnaire definitions -------------------------------------------
+// A questionnaire's STORED definition — the pages/questions catalogue as the
+// @camp404/types `Questionnaire` JSON (version lives inside it). Keyed by the
+// same stable questionnaire_key used by required_actions / questionnaire_
+// activations. Today only `burner_profile`, served from a code template
+// (BURNER_PROFILE_TEMPLATE) until a row is written; the in-app questionnaire
+// builder (later phase) persists captain edits here. Team-bound questions are
+// resolved against the live camp config at read time (resolveTeamBindings), so
+// a relabel/archive flows in without rewriting the stored definition.
+export const questionnaireDefinitions = pgTable("questionnaire_definitions", {
+  key: text("key").primaryKey(),
+  title: text("title").notNull(),
+  definition: jsonb("definition").$type<Questionnaire>().notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});

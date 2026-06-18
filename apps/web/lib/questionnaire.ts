@@ -1,4 +1,4 @@
-import type { Questionnaire } from "@camp404/types";
+import { Questionnaire, type Question } from "@camp404/types";
 import { COUNTRIES, countryFlag } from "./countries";
 
 // Render each country option with its flag emoji prefixed, e.g.
@@ -59,6 +59,36 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 // stable enum), so it must NOT bump this. (Adding a brand-new team key is a
 // shape change — that's Phase 4, with an enum migration + a version bump.)
 export const QUESTIONNAIRE_VERSION = "2026.06.04-v9";
+
+// The two team-bound anchors in the burner questionnaire — the only parts that
+// depend on the live camp config. `resolveTeamBindings` injects the configured
+// teams into these by id, so a STORED definition (DB-backed builder, later
+// phase) can carry placeholder team content and still pick up relabels/archives
+// at read time. Kept here next to the builder so the ids stay in lockstep.
+export const TEAM_INTERESTS_PAGE_ID = "team_interests";
+export const TEAM_LEAD_QUESTION_ID = "team_lead.interests";
+
+/** One team-interest slider — the single source for both the builder and the resolver. */
+function teamInterestSlider(team: TeamOption): Question {
+  return {
+    id: `team_interest.${team.value}`,
+    kind: "slider",
+    prompt: team.label,
+    min: 0,
+    max: 6,
+    step: 1,
+    minLabel: "Not for me",
+    maxLabel: "Sign me up",
+    required: false,
+  };
+}
+
+/** The team-lead multi-select options — shared by the builder and the resolver. */
+function teamLeadOptions(
+  teams: ReadonlyArray<TeamOption>,
+): { value: string; label: string }[] {
+  return teams.map((team) => ({ value: team.value, label: team.label }));
+}
 
 /**
  * Build the burner-profile questionnaire. `teams` populates the team-interest
@@ -191,17 +221,7 @@ export function buildQuestionnaire(
         title: "Team interests",
         subtitle:
           "Slide each team based on how keen you are to help. If you nudge a team above zero we'll send you their team-specific questionnaire later.",
-        questions: teams.map((t) => ({
-          id: `team_interest.${t.value}`,
-          kind: "slider" as const,
-          prompt: t.label,
-          min: 0,
-          max: 6,
-          step: 1,
-          minLabel: "Not for me",
-          maxLabel: "Sign me up",
-          required: false,
-        })),
+        questions: teams.map(teamInterestSlider),
       },
       {
         id: "cooking_competency",
@@ -235,7 +255,7 @@ export function buildQuestionnaire(
             kind: "multi_select",
             prompt: "I would like to be a team lead of…",
             helper: "Pick none if you'd rather just be in the trenches.",
-            options: [...teams],
+            options: teamLeadOptions(teams),
             required: false,
           },
           {
@@ -378,5 +398,75 @@ export function buildQuestionnaire(
         ],
       },
     ],
+  };
+}
+
+// The 8 founding teams as picker options, mirroring DEFAULT_TEAMS in
+// @camp404/db/camp-config (a test guards the two against drift). Used only to
+// freeze BURNER_PROFILE_TEMPLATE; the stored definition's team anchors are
+// overwritten from the live config on read, so these labels never surface.
+export const DEFAULT_TEAM_OPTIONS: ReadonlyArray<TeamOption> = [
+  { value: "kitchen", label: "Kitchen" },
+  { value: "structures", label: "Structures" },
+  { value: "power_and_lighting", label: "Power and Lighting" },
+  { value: "sanitation_and_water", label: "Sanitation and Water" },
+  { value: "health_and_safety", label: "Health and Safety" },
+  { value: "art_and_activities", label: "Art and Activities" },
+  { value: "ministry_of_memes", label: "Ministry of Memes" },
+  { value: "ministry_of_vibes", label: "Ministry of Vibes" },
+];
+
+// The stored-shaped burner-profile definition — what the DB-backed accessor
+// serves when no edited row exists yet (and the seed the in-app builder will
+// start from). Its team anchors hold the default teams as placeholders;
+// resolveTeamBindings replaces them with the live config on every read.
+export const BURNER_PROFILE_TEMPLATE: Questionnaire =
+  buildQuestionnaire(DEFAULT_TEAM_OPTIONS);
+
+/**
+ * Inject the live camp teams into a stored questionnaire definition's two
+ * team-bound anchors (the team-interest sliders page + the team-lead
+ * multi-select), leaving every other page/question untouched. The caller picks
+ * the team set — active for a fresh picker, all (incl. archived) for validating
+ * or displaying a stored response. Pure, so it runs identically client/server
+ * and in tests. For the default template this reproduces buildQuestionnaire(teams)
+ * exactly (asserted in questionnaire-definitions.test.ts), so persisting the
+ * definition is behaviour-preserving.
+ */
+/**
+ * Validate a raw stored definition (untyped JSONB) against the schema, falling
+ * back to a known-good definition when it's absent or malformed — so a
+ * half-written / older-shape row never renders a broken questionnaire. Pure (no
+ * DB / server-only), so the data facade stays a thin DB+E2E wrapper around it.
+ */
+export function parseStoredDefinition(
+  raw: unknown,
+  fallback: Questionnaire | null,
+): Questionnaire | null {
+  const parsed = Questionnaire.safeParse(raw);
+  return parsed.success ? parsed.data : fallback;
+}
+
+export function resolveTeamBindings(
+  definition: Questionnaire,
+  teams: ReadonlyArray<TeamOption>,
+): Questionnaire {
+  return {
+    ...definition,
+    pages: definition.pages.map((page) => {
+      if (page.kind !== "questions") return page;
+      if (page.id === TEAM_INTERESTS_PAGE_ID) {
+        return { ...page, questions: teams.map(teamInterestSlider) };
+      }
+      return {
+        ...page,
+        questions: page.questions.map((question) =>
+          question.id === TEAM_LEAD_QUESTION_ID &&
+          question.kind === "multi_select"
+            ? { ...question, options: teamLeadOptions(teams) }
+            : question,
+        ),
+      };
+    }),
   };
 }

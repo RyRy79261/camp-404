@@ -2,12 +2,19 @@ import "server-only";
 
 import type { Questionnaire } from "@camp404/types";
 import { activeTeams, getTeamsConfig, type TeamsConfig } from "./camp-config";
-import { buildQuestionnaire, type TeamOption } from "./questionnaire";
+import {
+  BURNER_PROFILE_TEMPLATE,
+  resolveTeamBindings,
+  type TeamOption,
+} from "./questionnaire";
+import { getQuestionnaireDefinition } from "./questionnaire-definitions";
 
 // Resolve the burner-profile questionnaire against the live camp config (Phase 3),
-// so a captain's relabel / reorder / archive flows into onboarding. The team-
-// interest sliders + the team-lead multi-select are built from config; everything
-// else is static. Two variants, by intent:
+// so a captain's relabel / reorder / archive flows into onboarding. The stored
+// catalogue now comes from the DB-backed definition (getQuestionnaireDefinition,
+// falling back to the code template); the team-interest sliders + the team-lead
+// multi-select are injected from config by resolveTeamBindings; everything else
+// is served verbatim. Two variants, by intent:
 //   - PICKER  (active teams only)  — what a fresh sign-up / a replay renders.
 //   - RESPONSES (all teams, incl. archived) — used to VALIDATE and DISPLAY a
 //     stored response, so an archived pick still validates (the multi_select
@@ -15,8 +22,8 @@ import { buildQuestionnaire, type TeamOption } from "./questionnaire";
 //     on re-save) and still resolves to its label instead of the raw key.
 // Team keys are immutable (assertStableTeamKeys), so "all config teams" is always
 // a superset of any key a stored response can contain — no per-response union
-// needed. This module is server-only (getTeamsConfig pulls the DB driver); the
-// pure builder it calls stays DB-free for the client wizard + unit tests.
+// needed. This module is server-only (the definition read + getTeamsConfig pull
+// the DB driver); the pure resolver it calls stays DB-free for unit tests.
 
 function activeTeamOptions(config: TeamsConfig): TeamOption[] {
   return activeTeams(config).map((t) => ({ value: t.key, label: t.label }));
@@ -28,9 +35,20 @@ function allTeamOptions(config: TeamsConfig): TeamOption[] {
     .map((t) => ({ value: t.key, label: t.label }));
 }
 
+async function burnerDefinition(): Promise<Questionnaire> {
+  return (
+    (await getQuestionnaireDefinition("burner_profile")) ??
+    BURNER_PROFILE_TEMPLATE
+  );
+}
+
 /** The questionnaire for a fresh picker — active teams only, config labels. */
 export async function getQuestionnaireForPicker(): Promise<Questionnaire> {
-  return buildQuestionnaire(activeTeamOptions(await getTeamsConfig()));
+  const [definition, config] = await Promise.all([
+    burnerDefinition(),
+    getTeamsConfig(),
+  ]);
+  return resolveTeamBindings(definition, activeTeamOptions(config));
 }
 
 /**
@@ -38,5 +56,9 @@ export async function getQuestionnaireForPicker(): Promise<Questionnaire> {
  * (incl. archived), so an archived pick still validates and resolves to a label.
  */
 export async function getQuestionnaireForResponses(): Promise<Questionnaire> {
-  return buildQuestionnaire(allTeamOptions(await getTeamsConfig()));
+  const [definition, config] = await Promise.all([
+    burnerDefinition(),
+    getTeamsConfig(),
+  ]);
+  return resolveTeamBindings(definition, allTeamOptions(config));
 }
