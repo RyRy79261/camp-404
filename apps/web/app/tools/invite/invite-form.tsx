@@ -17,7 +17,6 @@ import { Button } from "@camp404/ui/components/button";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { CodeDisplay } from "@camp404/ui/components/code-display";
 import { Input } from "@camp404/ui/components/input";
-import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
 import { Textarea } from "@camp404/ui/components/textarea";
 import {
@@ -39,7 +38,6 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
   // vetting); maxUses lets a captain hand one code to several people.
   const [preApprove, setPreApprove] = useState(false);
   const [maxUses, setMaxUses] = useState("1");
-  const multiUse = isCaptain && Number(maxUses) > 1;
 
   const [result, formAction, isPending] = useActionState<
     CreateInviteResult | null,
@@ -93,7 +91,7 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
     return (
       <SuccessPanel
         code={result.code}
-        email={result.invitedEmail}
+        recipientName={result.recipientName}
         maxUses={result.maxUses}
         requiresApproval={result.requiresApproval}
       />
@@ -104,25 +102,13 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
     <form action={formAction} className="flex flex-col gap-[18px]">
       <h1 className="text-2xl font-bold text-foreground">Invite a member</h1>
 
-      <InputField
-        id="email"
-        name="email"
-        type="email"
-        required={!multiUse}
-        autoComplete="off"
-        placeholder="sara@example.com"
-        label={
-          multiUse ? "Lead recipient's email (optional)" : "Their email address"
-        }
-      />
-
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="note">Why you&apos;re inviting them (optional)</Label>
+        <Label htmlFor="note">Who&apos;s this for? (optional)</Label>
         <Textarea
           id="note"
           name="note"
           rows={3}
-          placeholder="Kitchen lead from last burn; great with sourdough."
+          placeholder="Sara — kitchen lead from last burn, great with sourdough."
         />
       </div>
 
@@ -263,12 +249,12 @@ function CaptainOptions({
 
 function SuccessPanel({
   code,
-  email,
+  recipientName,
   maxUses,
   requiresApproval,
 }: {
   code: string;
-  email: string;
+  recipientName: string | null;
   maxUses: number;
   requiresApproval: boolean;
 }) {
@@ -297,8 +283,8 @@ function SuccessPanel({
         <h2 className="text-lg font-bold text-foreground">Invite ready</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        {email
-          ? `Share this code with ${email}.`
+        {recipientName
+          ? `Share this code with ${recipientName}.`
           : "Share this code with whoever you’re inviting."}
       </p>
 
