@@ -12,8 +12,8 @@ import { getQuestionnaireDefinition } from "./questionnaire-definitions";
 // Resolve the burner-profile questionnaire against the live camp config (Phase 3),
 // so a captain's relabel / reorder / archive flows into onboarding. The stored
 // catalogue now comes from the DB-backed definition (getQuestionnaireDefinition,
-// falling back to the code template); the team-interest sliders + the team-lead
-// multi-select are injected from config by resolveTeamBindings; everything else
+// falling back to the code template); the team-interest 0–6 pickers + the team-
+// lead multi-select are injected from config by resolveTeamBindings; everything else
 // is served verbatim. Two variants, by intent:
 //   - PICKER  (active teams only)  — what a fresh sign-up / a replay renders.
 //   - RESPONSES (all teams, incl. archived) — used to VALIDATE and DISPLAY a

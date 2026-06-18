@@ -22,7 +22,7 @@ const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({
 // encrypted-PII class (passport / SA-ID / bank details). See
 // docs/superpowers/specs/2026-05-30-pii-at-rest-encryption-design.md.
 //
-// NOTE on the team-specific questionnaires: the team-interest sliders on
+// NOTE on the team-specific questionnaires: the team-interest 0–6 pickers on
 // the "Team interests" page drive which follow-up questionnaires the user
 // gets activated for (kitchen, structures, …). Those follow-ups are
 // separate bespoke pages and not modelled here.
@@ -68,15 +68,19 @@ export const QUESTIONNAIRE_VERSION = "2026.06.04-v9";
 export const TEAM_INTERESTS_PAGE_ID = "team_interests";
 export const TEAM_LEAD_QUESTION_ID = "team_lead.interests";
 
-/** One team-interest slider — the single source for both the builder and the resolver. */
-function teamInterestSlider(team: TeamOption): Question {
+/**
+ * One team-interest input — a 0–6 whole-number picker per the board (OB-step-06),
+ * NOT a slider. The single source for both the builder and the resolver. The
+ * value stays a number in [0,6], so switching from the old slider kind is
+ * presentation-only — stored answers stay valid and the gate doesn't re-open.
+ */
+function teamInterestNumber(team: TeamOption): Question {
   return {
     id: `team_interest.${team.value}`,
-    kind: "slider",
+    kind: "number",
     prompt: team.label,
     min: 0,
     max: 6,
-    step: 1,
     minLabel: "Not for me",
     maxLabel: "Sign me up",
     required: false,
@@ -221,7 +225,7 @@ export function buildQuestionnaire(
         title: "Team interests",
         subtitle:
           "Slide each team based on how keen you are to help. If you nudge a team above zero we'll send you their team-specific questionnaire later.",
-        questions: teams.map(teamInterestSlider),
+        questions: teams.map(teamInterestNumber),
       },
       {
         id: "cooking_competency",
@@ -456,7 +460,7 @@ export function resolveTeamBindings(
     pages: definition.pages.map((page) => {
       if (page.kind !== "questions") return page;
       if (page.id === TEAM_INTERESTS_PAGE_ID) {
-        return { ...page, questions: teams.map(teamInterestSlider) };
+        return { ...page, questions: teams.map(teamInterestNumber) };
       }
       return {
         ...page,

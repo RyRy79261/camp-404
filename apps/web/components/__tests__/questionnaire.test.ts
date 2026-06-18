@@ -44,7 +44,7 @@ describe("burner-profile questionnaire", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("rejects slider values outside [min, max]", () => {
+  it("rejects team-interest number values outside [0, 6]", () => {
     const result = validateResponses(QUESTIONNAIRE, {
       ...validResponses,
       "team_interest.kitchen": 99,

@@ -46,3 +46,40 @@ describe("QuestionField — single_select", () => {
     expect(onChange).toHaveBeenCalledWith("yes");
   });
 });
+
+// Board OB-step-06 team interests: a 0–6 number picker rendered as a row of
+// whole-number cells, NOT a slider. The stored value is the chosen integer.
+const numberField: Question = {
+  id: "team_interest.kitchen",
+  kind: "number",
+  prompt: "Kitchen",
+  min: 0,
+  max: 6,
+  minLabel: "Not for me",
+  maxLabel: "Sign me up",
+  required: false,
+};
+
+describe("QuestionField — number", () => {
+  it("renders a cell per whole number from min..max (0–6 ⇒ 7 cells)", () => {
+    render(
+      <QuestionField question={numberField} value={undefined} onChange={() => {}} />,
+    );
+    const cells = screen.getAllByRole("radio");
+    expect(cells).toHaveLength(7);
+    expect(cells.map((c) => c.textContent)).toEqual([
+      "0", "1", "2", "3", "4", "5", "6",
+    ]);
+    // It is not a dragged slider.
+    expect(screen.queryByRole("slider")).toBeNull();
+  });
+
+  it("emits the chosen cell as a number", () => {
+    const onChange = vi.fn();
+    render(
+      <QuestionField question={numberField} value={undefined} onChange={onChange} />,
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "4" }));
+    expect(onChange).toHaveBeenCalledWith(4);
+  });
+});
