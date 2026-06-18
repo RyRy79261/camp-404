@@ -124,6 +124,31 @@ function FieldInput({
         </div>
       );
     }
+    case "number": {
+      // Board OB-step-06 (team interests): a row of equal-width whole-number
+      // cells from min..max, the picked one filled $primary, end labels beneath
+      // ("Not for me" / "Sign me up"). The value is the chosen integer.
+      const cells = Array.from(
+        { length: question.max - question.min + 1 },
+        (_, i) => question.min + i,
+      );
+      const current = typeof value === "number" ? value : undefined;
+      return (
+        <div className="flex flex-col gap-2">
+          <SegmentedControl
+            id={id}
+            aria-label={question.prompt}
+            options={cells.map((n) => ({ value: String(n), label: String(n) }))}
+            value={current !== undefined ? String(current) : undefined}
+            onValueChange={(v) => onChange(Number(v))}
+          />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>{question.minLabel ?? question.min}</span>
+            <span>{question.maxLabel ?? question.max}</span>
+          </div>
+        </div>
+      );
+    }
     case "single_select":
       // Board S04/S11 (Divergence #4, "boards win → RadioCardGroup"): a single
       // pick renders as stacked option cards, not a dropdown. OptionCardGroup is

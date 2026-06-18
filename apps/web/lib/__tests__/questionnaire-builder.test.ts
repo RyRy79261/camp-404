@@ -40,7 +40,7 @@ const requiredAnswers: Record<string, unknown> = {
 };
 
 describe("buildQuestionnaire", () => {
-  it("builds one team-interest slider per team, keyed + labelled from the input", () => {
+  it("builds one team-interest 0–6 number picker per team, keyed + labelled from the input", () => {
     const q = buildQuestionnaire([
       { value: "kitchen", label: "Cuisine" }, // relabelled
       { value: "structures", label: "Structures" },
@@ -52,8 +52,14 @@ describe("buildQuestionnaire", () => {
       "team_interest.kitchen",
       "team_interest.structures",
     ]);
-    // The relabel flows into the slider prompt.
-    expect(page.questions[0]?.prompt).toBe("Cuisine");
+    // Board OB-step-06: a 0–6 number picker, not a slider.
+    const first = page.questions[0]!;
+    expect(first.kind).toBe("number");
+    expect(first.prompt).toBe("Cuisine"); // the relabel flows into the prompt
+    if (first.kind === "number") {
+      expect(first.min).toBe(0);
+      expect(first.max).toBe(6);
+    }
   });
 
   it("builds the team-lead multi-select options from the input teams", () => {

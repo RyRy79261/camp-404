@@ -25,6 +25,14 @@ const sample: Questionnaire = {
           required: true,
         },
         {
+          id: "keenness",
+          kind: "number",
+          prompt: "How keen on the kitchen?",
+          min: 0,
+          max: 6,
+          required: false,
+        },
+        {
           id: "tier",
           kind: "single_select",
           prompt: "Membership tier?",
@@ -84,6 +92,36 @@ describe("validateResponses", () => {
     expect(result.ok).toBe(false);
     if (!result.ok)
       expect(result.errors.experience).toMatch(/between 0 and 20/);
+  });
+
+  it("accepts a number value at the range boundary", () => {
+    const result = validateResponses(sample, {
+      experience: 1,
+      tier: "full",
+      keenness: 6,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.responses.keenness).toBe(6);
+  });
+
+  it("rejects a number value outside the configured range", () => {
+    const result = validateResponses(sample, {
+      experience: 1,
+      tier: "full",
+      keenness: 7,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.keenness).toMatch(/between 0 and 6/);
+  });
+
+  it("rejects a non-integer number value", () => {
+    const result = validateResponses(sample, {
+      experience: 1,
+      tier: "full",
+      keenness: 3.5,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.keenness).toMatch(/whole number/);
   });
 
   it("rejects a single_select value not in the options list", () => {
@@ -171,7 +209,13 @@ describe("validateResponses", () => {
 });
 
 describe("displayResponseValue", () => {
-  const [experience, tier, diet, bio] = flattenQuestions(sample);
+  // Select by id (not array position) so inserting questions can't shift these.
+  const questions = flattenQuestions(sample);
+  const byId = (id: string) => questions.find((q) => q.id === id)!;
+  const experience = byId("experience");
+  const tier = byId("tier");
+  const diet = byId("diet");
+  const bio = byId("bio");
 
   it("resolves single_select values to their option label", () => {
     expect(displayResponseValue(tier!, "build_week_only")).toBe(

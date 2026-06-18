@@ -18,6 +18,24 @@ export const SliderQuestion = z.object({
 });
 export type SliderQuestion = z.infer<typeof SliderQuestion>;
 
+// Discrete numeric picker — a row of whole-number cells from `min` to `max`
+// (board OB-step-06 team interests: 0–6, range configurable). The stored value
+// is the chosen integer. Distinct from `slider` (a dragged range) and `scale`
+// (string-keyed labelled steps): the value here is a plain number, so it sorts
+// and aggregates. Optional min/max end labels ("Not for me" / "Sign me up").
+export const NumberQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("number"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  min: z.number().int().default(0),
+  max: z.number().int().default(6),
+  minLabel: z.string().optional(),
+  maxLabel: z.string().optional(),
+  required: z.boolean().default(true),
+});
+export type NumberQuestion = z.infer<typeof NumberQuestion>;
+
 export const SingleSelectQuestion = z.object({
   id: z.string().min(1),
   kind: z.literal("single_select"),
@@ -136,6 +154,7 @@ export type ImageQuestion = z.infer<typeof ImageQuestion>;
 
 export const Question = z.discriminatedUnion("kind", [
   SliderQuestion,
+  NumberQuestion,
   SingleSelectQuestion,
   MultiSelectQuestion,
   ShortTextQuestion,
@@ -369,6 +388,15 @@ function validateOne(
     case "slider": {
       if (typeof raw !== "number" || Number.isNaN(raw))
         return { ok: false, error: "Expected a number" };
+      if (raw < q.min || raw > q.max)
+        return { ok: false, error: `Must be between ${q.min} and ${q.max}` };
+      return { ok: true, value: raw };
+    }
+    case "number": {
+      if (typeof raw !== "number" || Number.isNaN(raw))
+        return { ok: false, error: "Expected a number" };
+      if (!Number.isInteger(raw))
+        return { ok: false, error: "Expected a whole number" };
       if (raw < q.min || raw > q.max)
         return { ok: false, error: `Must be between ${q.min} and ${q.max}` };
       return { ok: true, value: raw };
