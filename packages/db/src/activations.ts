@@ -228,3 +228,63 @@ export async function getPendingRequiredActions(
     )
     .orderBy(asc(schema.requiredActions.createdAt));
 }
+
+export interface ActivationRow {
+  id: string;
+  questionnaireKey: string;
+  version: string;
+  title: string;
+  status: (typeof schema.activationStatusEnum.enumValues)[number];
+  blocking: boolean;
+}
+
+/** Read a single activation by id, or null. The generic runner loads by id. */
+export async function getActivationById(
+  id: string,
+): Promise<ActivationRow | null> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      id: schema.questionnaireActivations.id,
+      questionnaireKey: schema.questionnaireActivations.questionnaireKey,
+      version: schema.questionnaireActivations.version,
+      title: schema.questionnaireActivations.title,
+      status: schema.questionnaireActivations.status,
+      blocking: schema.questionnaireActivations.blocking,
+    })
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.id, id))
+    .limit(1);
+  return row ?? null;
+}
+
+export interface RequiredActionState {
+  status: (typeof schema.requiredActionStatusEnum.enumValues)[number];
+  version: string | null;
+}
+
+/**
+ * The viewer's required_actions row for one questionnaire key, or null when
+ * they were never targeted — the runner's access predicate (no row ⇒ the
+ * questionnaire was not sent to this user).
+ */
+export async function getRequiredAction(
+  userId: string,
+  actionKey: string,
+): Promise<RequiredActionState | null> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      status: schema.requiredActions.status,
+      version: schema.requiredActions.version,
+    })
+    .from(schema.requiredActions)
+    .where(
+      and(
+        eq(schema.requiredActions.userId, userId),
+        eq(schema.requiredActions.actionKey, actionKey),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
