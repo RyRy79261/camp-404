@@ -4,6 +4,7 @@ import {
   BURNER_PROFILE_TEMPLATE,
   DEFAULT_TEAM_OPTIONS,
   buildQuestionnaire,
+  parseStoredBuilderDefinition,
   parseStoredDefinition,
   resolveTeamBindings,
   type TeamOption,
@@ -116,5 +117,37 @@ describe("parseStoredDefinition (validate-or-fall-back)", () => {
 
   it("passes the null fallback through for an unknown key with bad data", () => {
     expect(parseStoredDefinition({ nope: true }, null)).toBeNull();
+  });
+});
+
+describe("parseStoredBuilderDefinition (data-only, no fallback)", () => {
+  it("returns a valid builder definition", () => {
+    const def = {
+      version: "1",
+      title: "Survey",
+      pages: [
+        {
+          id: "p1",
+          type: "question",
+          title: "P",
+          blocks: [
+            {
+              kind: "question",
+              question: { id: "a", kind: "short_text", prompt: "A" },
+            },
+          ],
+        },
+      ],
+    };
+    const parsed = parseStoredBuilderDefinition(def);
+    expect(parsed?.title).toBe("Survey");
+  });
+
+  it("returns null for malformed, legacy, or absent definitions", () => {
+    expect(parseStoredBuilderDefinition({ version: "1", pages: "x" })).toBeNull();
+    // A legacy Questionnaire (pages carry `questions`, not `blocks`) is not a
+    // builder definition.
+    expect(parseStoredBuilderDefinition(BURNER_PROFILE_TEMPLATE)).toBeNull();
+    expect(parseStoredBuilderDefinition(null)).toBeNull();
   });
 });

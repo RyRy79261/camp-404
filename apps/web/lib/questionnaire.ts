@@ -1,4 +1,4 @@
-import { Questionnaire, type Question } from "@camp404/types";
+import { BuilderQuestionnaire, Questionnaire, type Question } from "@camp404/types";
 import { COUNTRIES, countryFlag } from "./countries";
 
 // Render each country option with its flag emoji prefixed, e.g.
@@ -449,6 +449,20 @@ export function parseStoredDefinition(
 ): Questionnaire | null {
   const parsed = Questionnaire.safeParse(raw);
   return parsed.success ? parsed.data : fallback;
+}
+
+/**
+ * Validate a raw stored BUILDER definition (the in-app, data-only kind). There
+ * is no code fallback — builder questionnaires exist only as data, so a
+ * malformed/absent row (or a legacy code definition, which has pages with
+ * `questions` not `blocks`) yields null. Pure, so the data facade stays a thin
+ * DB wrapper around it.
+ */
+export function parseStoredBuilderDefinition(
+  raw: unknown,
+): BuilderQuestionnaire | null {
+  const parsed = BuilderQuestionnaire.safeParse(raw);
+  return parsed.success ? parsed.data : null;
 }
 
 export function resolveTeamBindings(
