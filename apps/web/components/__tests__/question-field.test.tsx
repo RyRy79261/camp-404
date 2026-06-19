@@ -83,3 +83,83 @@ describe("QuestionField — number", () => {
     expect(onChange).toHaveBeenCalledWith(4);
   });
 });
+
+// boolean — an on/off Switch. Stores a real boolean, and only once toggled (an
+// untouched required boolean stays "missing").
+const booleanField: Question = {
+  id: "lead",
+  kind: "boolean",
+  prompt: "Want to lead a team?",
+  required: false,
+};
+
+describe("QuestionField — boolean", () => {
+  it("renders a switch defaulting to off", () => {
+    render(
+      <QuestionField question={booleanField} value={undefined} onChange={() => {}} />,
+    );
+    expect(screen.getByRole("switch")).toBeTruthy();
+    expect(screen.getByText("No")).toBeTruthy();
+  });
+
+  it("emits a real boolean when toggled on", () => {
+    const onChange = vi.fn();
+    render(
+      <QuestionField question={booleanField} value={undefined} onChange={onChange} />,
+    );
+    fireEvent.click(screen.getByRole("switch"));
+    expect(onChange).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("QuestionField — email & phone", () => {
+  it("email uses the email input type and emits the typed string", () => {
+    const onChange = vi.fn();
+    const q: Question = { id: "e", kind: "email", prompt: "Email", required: true };
+    render(<QuestionField question={q} value={undefined} onChange={onChange} />);
+    const input = screen.getByRole("textbox") as HTMLInputElement;
+    expect(input.type).toBe("email");
+    fireEvent.change(input, { target: { value: "a@b.co" } });
+    expect(onChange).toHaveBeenCalledWith("a@b.co");
+  });
+
+  it("phone uses the tel input type", () => {
+    const q: Question = { id: "p", kind: "phone", prompt: "Phone", required: true };
+    render(<QuestionField question={q} value={undefined} onChange={() => {}} />);
+    expect((screen.getByRole("textbox") as HTMLInputElement).type).toBe("tel");
+  });
+});
+
+// slider with display:'segmented' — the builder "Scale": a row of number cells
+// (like `number`), NOT a dragged slider; the value is the chosen number.
+const segmentedScale: Question = {
+  id: "rating",
+  kind: "slider",
+  prompt: "Rate it",
+  min: 1,
+  max: 5,
+  step: 1,
+  display: "segmented",
+  required: true,
+};
+
+describe("QuestionField — slider (segmented)", () => {
+  it("renders number cells, not a dragged slider", () => {
+    render(
+      <QuestionField question={segmentedScale} value={undefined} onChange={() => {}} />,
+    );
+    expect(screen.getAllByRole("radio").map((c) => c.textContent)).toEqual([
+      "1", "2", "3", "4", "5",
+    ]);
+    expect(screen.queryByRole("slider")).toBeNull();
+  });
+
+  it("emits the chosen cell as a number", () => {
+    const onChange = vi.fn();
+    render(
+      <QuestionField question={segmentedScale} value={undefined} onChange={onChange} />,
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "4" }));
+    expect(onChange).toHaveBeenCalledWith(4);
+  });
+});

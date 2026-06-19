@@ -187,6 +187,7 @@ export function buildQuestionnaire(
           {
             id: "bio.statement",
             kind: "long_text",
+            enableDictation: true,
             prompt: "Tell us about yourself",
             helper:
               "Who you are when you're in the dust — this is the bio your team lead reads first.",
@@ -205,6 +206,7 @@ export function buildQuestionnaire(
           {
             id: "ideas.this_year",
             kind: "long_text",
+            enableDictation: true,
             prompt: "What do you want to make happen?",
             helper:
               "Rough is fine — the dust shapes the plan. Tap the mic to dictate.",
@@ -334,6 +336,7 @@ export function buildQuestionnaire(
           {
             id: "history.other_burns",
             kind: "long_text",
+            enableDictation: true,
             prompt: "Other burns you've been to?",
             helper:
               "Burning Man, regional burns, theme camps, fire-arts collectives — anything dusty.",
@@ -393,6 +396,7 @@ export function buildQuestionnaire(
           {
             id: "dietary.notes",
             kind: "long_text",
+            enableDictation: true,
             prompt: "Anything else the kitchen should know?",
             helper:
               "Anaphylaxis, religious requirements, eating-disorder triggers, fasting windows — anything that doesn't fit a checkbox.",
