@@ -18,6 +18,9 @@ export interface PendingRequiredAction {
   type: (typeof schema.requiredActionTypeEnum.enumValues)[number];
   title: string;
   version: string | null;
+  // The activation that created this row (set for questionnaire gates). Lets the
+  // gate router send builder questionnaires to the generic runner.
+  activationId: string | null;
   blocking: boolean;
   dueAt: Date | null;
   createdAt: Date;
@@ -210,6 +213,7 @@ export async function getPendingRequiredActions(
       type: schema.requiredActions.type,
       title: schema.requiredActions.title,
       version: schema.requiredActions.version,
+      activationId: schema.requiredActions.activationId,
       blocking: schema.requiredActions.blocking,
       dueAt: schema.requiredActions.dueAt,
       createdAt: schema.requiredActions.createdAt,

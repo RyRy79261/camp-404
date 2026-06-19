@@ -32,4 +32,37 @@ describe("nextGate", () => {
       ]),
     ).toBe("/onboarding/questionnaire");
   });
+
+  it("routes a builder questionnaire (type + activationId) to the generic runner", () => {
+    expect(
+      nextGate([
+        {
+          actionKey: "def_abc",
+          blocking: true,
+          type: "questionnaire",
+          activationId: "act-1",
+        },
+      ]),
+    ).toBe("/questionnaires/act-1");
+  });
+
+  it("skips a questionnaire action with no activationId (never strands)", () => {
+    expect(
+      nextGate([{ actionKey: "def_abc", blocking: true, type: "questionnaire" }]),
+    ).toBeNull();
+  });
+
+  it("honours oldest-first across static and dynamic routes", () => {
+    expect(
+      nextGate([
+        {
+          actionKey: "def_abc",
+          blocking: true,
+          type: "questionnaire",
+          activationId: "act-1",
+        },
+        { actionKey: "burner_profile", blocking: true },
+      ]),
+    ).toBe("/questionnaires/act-1");
+  });
 });
