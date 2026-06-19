@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { initialsFrom } from "../text-utils";
+import { initialsFrom, slugify } from "../text-utils";
 
 describe("initialsFrom", () => {
   it("returns '?' for null input", () => {
@@ -33,5 +33,28 @@ describe("initialsFrom", () => {
 
   it("splits an email-like source on '@' and '.'", () => {
     expect(initialsFrom("jane.doe@example.com")).toBe("JD");
+  });
+});
+
+describe("slugify", () => {
+  it("lowercases and hyphenates words", () => {
+    expect(slugify("Burner Profile")).toBe("burner-profile");
+  });
+
+  it("collapses runs of punctuation/space into single hyphens, trimmed", () => {
+    expect(slugify("  2026 — Dietary  Survey!! ")).toBe("2026-dietary-survey");
+  });
+
+  it("strips diacritics", () => {
+    expect(slugify("Crème Brûlée")).toBe("creme-brulee");
+  });
+
+  it("returns '' when there is nothing usable (caller supplies a fallback)", () => {
+    expect(slugify("—  !! ")).toBe("");
+    expect(slugify("")).toBe("");
+  });
+
+  it("caps length", () => {
+    expect(slugify("a".repeat(80)).length).toBeLessThanOrEqual(48);
   });
 });
