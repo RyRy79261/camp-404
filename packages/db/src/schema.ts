@@ -15,7 +15,12 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type { Questionnaire, QuestionnaireFieldChange } from "@camp404/types";
+import type {
+  BuilderQuestionnaire,
+  Questionnaire,
+  QuestionnaireFieldChange,
+  QuestionnaireResponses,
+} from "@camp404/types";
 // Type-only (erased at runtime — no import cycle with camp-config.ts, which
 // imports this schema): types the camp_settings.config JSONB column.
 import type { TeamsConfig } from "./camp-config";
@@ -137,6 +142,15 @@ export const activationStatusEnum = pgEnum("activation_status", [
   "draft",
   "open",
   "closed",
+]);
+
+// Lifecycle of a builder-authored questionnaire DEFINITION (distinct from an
+// activation's status). `unpublished` is the terminal, responses-preserving
+// offline state — there is no separate "archived".
+export const questionnaireStatusEnum = pgEnum("questionnaire_status", [
+  "draft",
+  "published",
+  "unpublished",
 ]);
 
 export const broadcastKindEnum = pgEnum("broadcast_kind", [
@@ -1435,7 +1449,79 @@ export const campSettings = pgTable(
 export const questionnaireDefinitions = pgTable("questionnaire_definitions", {
   key: text("key").primaryKey(),
   title: text("title").notNull(),
-  definition: jsonb("definition").$type<Questionnaire>().notNull(),
+  // The working/head definition — a legacy `Questionnaire` (code questionnaires)
+  // or a `BuilderQuestionnaire` (in-app builder). The loader discriminates the
+  // two shapes (isBuilderDefinition) before parsing.
+  definition: jsonb("definition")
+    .$type<Questionnaire | BuilderQuestionnaire>()
+    .notNull(),
+  // Builder lifecycle. `version` is null until the first publish, then the
+  // latest published version (immutable snapshots live in questionnaire_versions).
+  status: questionnaireStatusEnum("status").notNull().default("draft"),
+  version: text("version"),
+  createdBy: uuid("created_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
+
+// Immutable published snapshots. Publishing copies the definition head into a
+// (key, version) row so historical responses render/validate against the
+// version they were answered under. Cosmetic re-publishes overwrite the current
+// version's snapshot in place; breaking ones mint a new version.
+export const questionnaireVersions = pgTable(
+  "questionnaire_versions",
+  {
+    definitionKey: text("definition_key")
+      .notNull()
+      .references(() => questionnaireDefinitions.key, { onDelete: "cascade" }),
+    version: text("version").notNull(),
+    definition: jsonb("definition")
+      .$type<Questionnaire | BuilderQuestionnaire>()
+      .notNull(),
+    publishedAt: timestamp("published_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    publishedByUserId: uuid("published_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (v) => ({
+    pk: primaryKey({ columns: [v.definitionKey, v.version] }),
+  }),
+);
+
+// Generic response store for BUILDER questionnaires only (code questionnaires
+// keep their bespoke domain tables). One latest-answer row per (user,
+// definition); the per-field change history lives in questionnaire_edits.
+// `definition_key` is plain text (NOT a FK) so responses survive a definition
+// delete; `definition_version` records which version was answered.
+export const questionnaireResponses = pgTable(
+  "questionnaire_responses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    definitionKey: text("definition_key").notNull(),
+    definitionVersion: text("definition_version").notNull(),
+    responses: jsonb("responses")
+      .$type<QuestionnaireResponses>()
+      .notNull()
+      .default({}),
+    activationId: uuid("activation_id").references(
+      () => questionnaireActivations.id,
+      { onDelete: "set null" },
+    ),
+    completedAt: timestamp("completed_at", { mode: "date" }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    userDefIdx: uniqueIndex("questionnaire_responses_user_def_idx").on(
+      r.userId,
+      r.definitionKey,
+    ),
+    defIdx: index("questionnaire_responses_def_idx").on(r.definitionKey),
+  }),
+);
