@@ -2,6 +2,7 @@ export * from "./roles";
 export * from "./announcement";
 export * from "./member";
 export * from "./questionnaire";
+export * from "./questionnaire-builder";
 export * from "./questionnaire-queue";
 export * from "./promotion";
 export * from "./referral";

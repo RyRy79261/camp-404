@@ -4,6 +4,12 @@ import { z } from "zod";
 // each new kind must extend Question (discriminated union) AND the response
 // validator below.
 
+// Lenient formats — no new deps (see the date/phone handling rule). Email is
+// RFC-lite; phone accepts +, spaces, dashes, parens and is digit-bounded
+// (7–15, the E.164 range) without pulling in a phone library.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_RE = /^\+?[\d\s().-]{7,20}$/;
+
 export const SliderQuestion = z.object({
   id: z.string().min(1),
   kind: z.literal("slider"),
@@ -14,6 +20,10 @@ export const SliderQuestion = z.object({
   step: z.number().positive().default(1),
   minLabel: z.string().optional(),
   maxLabel: z.string().optional(),
+  // Render variant: "continuous" = a dragged slider; "segmented" = a row of
+  // discrete whole-number cells to tap (the builder "Scale" palette card).
+  // Same numeric value + validation either way. Absent ⇒ "continuous".
+  display: z.enum(["continuous", "segmented"]).optional(),
   required: z.boolean().default(true),
 });
 export type SliderQuestion = z.infer<typeof SliderQuestion>;
@@ -65,6 +75,7 @@ export const ShortTextQuestion = z.object({
   kind: z.literal("short_text"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  placeholder: z.string().optional(),
   maxLength: z.number().int().positive().default(120),
   required: z.boolean().default(true),
 });
@@ -75,7 +86,11 @@ export const LongTextQuestion = z.object({
   kind: z.literal("long_text"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  placeholder: z.string().optional(),
   maxLength: z.number().int().positive().default(1000),
+  // Opt-in voice dictation (the Groq transcription path). Absent/false ⇒ the
+  // dictate affordance is hidden; shown only where the author enabled it.
+  enableDictation: z.boolean().optional(),
   required: z.boolean().default(false),
 });
 export type LongTextQuestion = z.infer<typeof LongTextQuestion>;
@@ -152,6 +167,43 @@ export const ImageQuestion = z.object({
 });
 export type ImageQuestion = z.infer<typeof ImageQuestion>;
 
+// On/off boolean — rendered as a switch. The stored value is a real boolean
+// (the response union already allows it). Distinct from `toggle`, which is a
+// string-keyed segmented control over 2–4 options. Optional by default; an
+// untouched required boolean is treated as missing (the runner stores a value
+// only after an explicit toggle).
+export const BooleanQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("boolean"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  required: z.boolean().default(false),
+});
+export type BooleanQuestion = z.infer<typeof BooleanQuestion>;
+
+// Email address — a single-line text answer validated against EMAIL_RE.
+export const EmailQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("email"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  placeholder: z.string().optional(),
+  required: z.boolean().default(true),
+});
+export type EmailQuestion = z.infer<typeof EmailQuestion>;
+
+// Phone number — a single-line text answer validated leniently against
+// PHONE_RE (7–15 digits, optional +/spacing). No phone library.
+export const PhoneQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("phone"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  placeholder: z.string().optional(),
+  required: z.boolean().default(true),
+});
+export type PhoneQuestion = z.infer<typeof PhoneQuestion>;
+
 export const Question = z.discriminatedUnion("kind", [
   SliderQuestion,
   NumberQuestion,
@@ -164,6 +216,9 @@ export const Question = z.discriminatedUnion("kind", [
   ToggleQuestion,
   ComboboxQuestion,
   ImageQuestion,
+  BooleanQuestion,
+  EmailQuestion,
+  PhoneQuestion,
 ]);
 export type Question = z.infer<typeof Question>;
 
@@ -279,6 +334,8 @@ export function displayResponseValue(
         .map((v) => question.options.find((o) => o.value === v)?.label ?? v)
         .join(", ");
     }
+    case "boolean":
+      return value ? "Yes" : "No";
     default:
       return Array.isArray(value) ? value.join(", ") : String(value);
   }
@@ -370,7 +427,7 @@ export function validateResponses(
   return { ok: true, responses };
 }
 
-function validateOne(
+export function validateOne(
   q: Question,
   raw: unknown,
 ):
@@ -399,6 +456,24 @@ function validateOne(
         return { ok: false, error: "Expected a whole number" };
       if (raw < q.min || raw > q.max)
         return { ok: false, error: `Must be between ${q.min} and ${q.max}` };
+      return { ok: true, value: raw };
+    }
+    case "boolean": {
+      if (typeof raw !== "boolean")
+        return { ok: false, error: "Expected yes or no" };
+      return { ok: true, value: raw };
+    }
+    case "email": {
+      if (typeof raw !== "string") return { ok: false, error: "Expected text" };
+      if (!EMAIL_RE.test(raw))
+        return { ok: false, error: "Enter a valid email address" };
+      return { ok: true, value: raw };
+    }
+    case "phone": {
+      if (typeof raw !== "string") return { ok: false, error: "Expected text" };
+      const digits = raw.replace(/\D/g, "");
+      if (!PHONE_RE.test(raw) || digits.length < 7 || digits.length > 15)
+        return { ok: false, error: "Enter a valid phone number" };
       return { ok: true, value: raw };
     }
     case "single_select": {
