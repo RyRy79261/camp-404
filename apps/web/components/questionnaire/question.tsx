@@ -98,10 +98,15 @@ function FieldInput({
       if (question.display === "segmented") {
         // Builder "Scale" variant: a row of whole-number cells to tap (step
         // apart), end labels beneath. The chosen number is the value.
-        const cells: number[] = [];
-        for (let n = question.min; n <= question.max; n += question.step) {
-          cells.push(n);
-        }
+        // Build cells by index, not by accumulating `step`, so a non-integer
+        // step never drifts into float artifacts (0.30000000000000004).
+        const count = Math.max(
+          0,
+          Math.floor((question.max - question.min) / question.step) + 1,
+        );
+        const cells = Array.from({ length: count }, (_, i) =>
+          Number((question.min + i * question.step).toPrecision(12)),
+        );
         const picked = typeof value === "number" ? value : undefined;
         return (
           <div className="flex flex-col gap-2">

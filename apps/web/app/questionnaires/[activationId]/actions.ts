@@ -1,8 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { validateBuilderResponses } from "@camp404/types";
-import type { QuestionnaireResponses } from "@camp404/types";
+import { QuestionnaireResponses, validateBuilderResponses } from "@camp404/types";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -48,16 +47,26 @@ export async function saveBuilderResponses(
   if (!activation || activation.status !== "open") {
     return { ok: false, errors: { _form: "This form is closed." } };
   }
-  // Access predicate — the viewer must have been targeted by this activation.
+  // Access predicate — the viewer must have a PENDING obligation for this
+  // questionnaire. A completed/waived/expired row must NOT write: a stale
+  // partial save (completedAt=null) would otherwise wipe a completed row's
+  // completedAt and diverge from required_actions.status.
   const targeted = await getRequiredAction(campUser.id, activation.questionnaireKey);
-  if (!targeted) {
-    return { ok: false, errors: { _form: "You're not on this questionnaire." } };
+  if (!targeted || targeted.status !== "pending") {
+    return { ok: false, errors: { _form: "This form is closed." } };
   }
 
-  const responses: QuestionnaireResponses =
-    rawResponses && typeof rawResponses === "object"
-      ? (rawResponses as QuestionnaireResponses)
-      : {};
+  // Structurally validate on EVERY save (not just final) so a malformed client
+  // payload can never land in the responses JSONB. Per-field / required checks
+  // still run only on final, so partial progress with empty requireds resumes.
+  const parsed = QuestionnaireResponses.safeParse(rawResponses);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: { _form: "We couldn't read your answers. Please reload and try again." },
+    };
+  }
+  const responses = parsed.data;
 
   let toStore = responses;
   if (final) {

@@ -36,9 +36,11 @@ export default async function QuestionnaireRunnerPage({
   const activation = await getActivationById(activationId);
   if (!activation) return <RunnerEdgeCard kind="closed" />;
 
-  // Access predicate: the questionnaire must have been sent to this viewer.
+  // Access predicate: the questionnaire must have been sent to this viewer and
+  // still be pending — a completed/waived/expired obligation can't answer here.
   const targeted = await getRequiredAction(campUser.id, activation.questionnaireKey);
   if (!targeted) return <RunnerEdgeCard kind="not-invited" />;
+  if (targeted.status !== "pending") return <RunnerEdgeCard kind="closed" />;
 
   // A direct link must not bypass an EARLIER pending blocking gate.
   const gate = nextGate(await getPendingRequiredActions(campUser.id));
