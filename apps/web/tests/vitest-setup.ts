@@ -26,3 +26,14 @@ if (typeof window !== "undefined" && !window.matchMedia) {
 if (typeof Element !== "undefined" && !Element.prototype.scrollTo) {
   Element.prototype.scrollTo = (() => {}) as never;
 }
+
+// JSDOM doesn't implement ResizeObserver. Radix primitives (Switch, Slider)
+// measure their control via @radix-ui/react-use-size in a layout effect on
+// mount; stub it so mounting them under test doesn't throw.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as never;
+}
