@@ -3,6 +3,7 @@ import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 import { meetsRequiredVersion } from "./versions";
+import type { QuestionnaireResponses } from "@camp404/types";
 
 // The required_actions gating producer + satisfaction. A questionnaire
 // activation fans out one required_actions row per matched member (the generic
@@ -18,6 +19,9 @@ export interface PendingRequiredAction {
   type: (typeof schema.requiredActionTypeEnum.enumValues)[number];
   title: string;
   version: string | null;
+  // The activation that created this row (set for questionnaire gates). Lets the
+  // gate router send builder questionnaires to the generic runner.
+  activationId: string | null;
   blocking: boolean;
   dueAt: Date | null;
   createdAt: Date;
@@ -210,6 +214,7 @@ export async function getPendingRequiredActions(
       type: schema.requiredActions.type,
       title: schema.requiredActions.title,
       version: schema.requiredActions.version,
+      activationId: schema.requiredActions.activationId,
       blocking: schema.requiredActions.blocking,
       dueAt: schema.requiredActions.dueAt,
       createdAt: schema.requiredActions.createdAt,
@@ -223,4 +228,138 @@ export async function getPendingRequiredActions(
       ),
     )
     .orderBy(asc(schema.requiredActions.createdAt));
+}
+
+export interface ActivationRow {
+  id: string;
+  questionnaireKey: string;
+  version: string;
+  title: string;
+  status: (typeof schema.activationStatusEnum.enumValues)[number];
+  blocking: boolean;
+}
+
+/** Read a single activation by id, or null. The generic runner loads by id. */
+export async function getActivationById(
+  id: string,
+): Promise<ActivationRow | null> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      id: schema.questionnaireActivations.id,
+      questionnaireKey: schema.questionnaireActivations.questionnaireKey,
+      version: schema.questionnaireActivations.version,
+      title: schema.questionnaireActivations.title,
+      status: schema.questionnaireActivations.status,
+      blocking: schema.questionnaireActivations.blocking,
+    })
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.id, id))
+    .limit(1);
+  return row ?? null;
+}
+
+export interface RequiredActionState {
+  status: (typeof schema.requiredActionStatusEnum.enumValues)[number];
+  version: string | null;
+  activationId: string | null;
+}
+
+/**
+ * The viewer's required_actions row for one questionnaire key, or null when
+ * they were never targeted — the runner's access predicate (no row ⇒ the
+ * questionnaire was not sent to this user).
+ */
+export async function getRequiredAction(
+  userId: string,
+  actionKey: string,
+): Promise<RequiredActionState | null> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      status: schema.requiredActions.status,
+      version: schema.requiredActions.version,
+      activationId: schema.requiredActions.activationId,
+    })
+    .from(schema.requiredActions)
+    .where(
+      and(
+        eq(schema.requiredActions.userId, userId),
+        eq(schema.requiredActions.actionKey, actionKey),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Atomically record a builder questionnaire's FINAL submission: upsert the
+ * latest-answer row (completedAt set) AND satisfy the required-action gate in a
+ * single transaction, so a completed response can never coexist with a
+ * still-pending gate. Honours satisfyRequiredAction's version rule (a completion
+ * against an older version leaves the gate open).
+ */
+export async function completeBuilderResponse(input: {
+  userId: string;
+  definitionKey: string;
+  definitionVersion: string;
+  responses: QuestionnaireResponses;
+  activationId: string;
+}): Promise<void> {
+  const { db, pool } = createPooledDb();
+  const now = new Date();
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(schema.questionnaireResponses)
+        .values({
+          userId: input.userId,
+          definitionKey: input.definitionKey,
+          definitionVersion: input.definitionVersion,
+          responses: input.responses,
+          activationId: input.activationId,
+          completedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.questionnaireResponses.userId,
+            schema.questionnaireResponses.definitionKey,
+          ],
+          set: {
+            definitionVersion: input.definitionVersion,
+            responses: input.responses,
+            activationId: input.activationId,
+            completedAt: now,
+            updatedAt: now,
+          },
+        });
+      const [ra] = await tx
+        .select({
+          id: schema.requiredActions.id,
+          version: schema.requiredActions.version,
+          status: schema.requiredActions.status,
+        })
+        .from(schema.requiredActions)
+        .where(
+          and(
+            eq(schema.requiredActions.userId, input.userId),
+            eq(schema.requiredActions.actionKey, input.definitionKey),
+          ),
+        )
+        .limit(1);
+      if (
+        ra &&
+        ra.status === "pending" &&
+        (!ra.version ||
+          meetsRequiredVersion(ra.version, input.definitionVersion))
+      ) {
+        await tx
+          .update(schema.requiredActions)
+          .set({ status: "completed", completedAt: now })
+          .where(eq(schema.requiredActions.id, ra.id));
+      }
+    });
+  } finally {
+    await pool.end();
+  }
 }

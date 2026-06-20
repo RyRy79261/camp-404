@@ -17,6 +17,7 @@
     "./bootstrap": "./src/bootstrap.ts",
     "./camp-config": "./src/camp-config.ts",
     "./questionnaire-definitions": "./src/questionnaire-definitions.ts",
+    "./questionnaire-responses": "./src/questionnaire-responses.ts",
     "./broadcasts": "./src/broadcasts.ts",
     "./audience": "./src/audience.ts",
     "./push": "./src/push.ts",

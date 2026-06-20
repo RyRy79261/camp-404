@@ -222,6 +222,14 @@ export const Question = z.discriminatedUnion("kind", [
 ]);
 export type Question = z.infer<typeof Question>;
 
+// The result every questionnaire SAVE action returns — shared by the onboarding,
+// replay, and builder wizards (so a reusable wizard never couples to one route's
+// action module). `errors` is keyed by question id, plus the reserved
+// `_form`/`_root` keys for page-level failures.
+export type SaveResult =
+  | { ok: true }
+  | { ok: false; errors: Record<string, string> };
+
 // Standard page: one or more questions, the wizard validates them and
 // advances on Next.
 export const QuestionsPage = z.object({

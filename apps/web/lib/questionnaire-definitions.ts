@@ -1,8 +1,15 @@
 import "server-only";
 
-import type { Questionnaire } from "@camp404/types";
-import { getQuestionnaireDefinitionRow } from "@camp404/db/questionnaire-definitions";
-import { BURNER_PROFILE_TEMPLATE, parseStoredDefinition } from "./questionnaire";
+import type { BuilderQuestionnaire, Questionnaire } from "@camp404/types";
+import {
+  getQuestionnaireDefinitionRow,
+  getQuestionnaireVersionRow,
+} from "@camp404/db/questionnaire-definitions";
+import {
+  BURNER_PROFILE_TEMPLATE,
+  parseStoredBuilderDefinition,
+  parseStoredDefinition,
+} from "./questionnaire";
 import { isE2ETestMode } from "./test-mode";
 
 // Questionnaire-definition data facade. Reads the stored catalogue from the
@@ -33,4 +40,25 @@ export async function getQuestionnaireDefinition(
   if (!row) return template;
 
   return parseStoredDefinition(row.definition, template);
+}
+
+/**
+ * Load a BUILDER questionnaire definition (the in-app, data-only kind). With a
+ * `version`, reads the immutable published snapshot from questionnaire_versions
+ * (what an activation pins); without one, reads the editable head from
+ * questionnaire_definitions (what the builder edits). Returns null for an
+ * absent/malformed row or a legacy code definition — those load via
+ * getQuestionnaireDefinition instead. No code template: builder questionnaires
+ * exist only as data.
+ */
+export async function getBuilderDefinition(
+  key: string,
+  version?: string,
+): Promise<BuilderQuestionnaire | null> {
+  if (isE2ETestMode()) return null;
+  const raw = version
+    ? (await getQuestionnaireVersionRow(key, version))?.definition
+    : (await getQuestionnaireDefinitionRow(key))?.definition;
+  if (raw == null) return null;
+  return parseStoredBuilderDefinition(raw);
 }

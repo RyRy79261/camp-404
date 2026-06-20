@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createHttpDb } from "./index";
-import { questionnaireDefinitions } from "./schema";
+import { questionnaireDefinitions, questionnaireVersions } from "./schema";
 
 // Stored questionnaire-definition reads. A questionnaire's catalogue is the
 // @camp404/types `Questionnaire` JSON kept on `questionnaire_definitions`,
@@ -36,6 +36,41 @@ export async function getQuestionnaireDefinitionRow(
     })
     .from(questionnaireDefinitions)
     .where(eq(questionnaireDefinitions.key, key))
+    .limit(1);
+  return row ?? null;
+}
+
+export interface QuestionnaireVersionRow {
+  definitionKey: string;
+  version: string;
+  /** The immutable published snapshot — validated by the app facade before use. */
+  definition: unknown;
+}
+
+/**
+ * Read one immutable published-version snapshot, or null when that
+ * (key, version) was never published. The runner loads by the (key, version)
+ * an activation pinned so historical responses render against the exact version
+ * they were answered under.
+ */
+export async function getQuestionnaireVersionRow(
+  key: string,
+  version: string,
+): Promise<QuestionnaireVersionRow | null> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      definitionKey: questionnaireVersions.definitionKey,
+      version: questionnaireVersions.version,
+      definition: questionnaireVersions.definition,
+    })
+    .from(questionnaireVersions)
+    .where(
+      and(
+        eq(questionnaireVersions.definitionKey, key),
+        eq(questionnaireVersions.version, version),
+      ),
+    )
     .limit(1);
   return row ?? null;
 }

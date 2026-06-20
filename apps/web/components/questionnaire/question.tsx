@@ -14,6 +14,7 @@ import { Label } from "@camp404/ui/components/label";
 import { OptionCardGroup } from "@camp404/ui/components/option-card-group";
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { Slider } from "@camp404/ui/components/slider";
+import { Switch } from "@camp404/ui/components/switch";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { CircleAlert } from "lucide-react";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
@@ -94,6 +95,38 @@ function FieldInput({
 }) {
   switch (question.kind) {
     case "slider": {
+      if (question.display === "segmented") {
+        // Builder "Scale" variant: a row of whole-number cells to tap (step
+        // apart), end labels beneath. The chosen number is the value.
+        // Build cells by index, not by accumulating `step`, so a non-integer
+        // step never drifts into float artifacts (0.30000000000000004).
+        const count = Math.max(
+          0,
+          Math.floor((question.max - question.min) / question.step) + 1,
+        );
+        const cells = Array.from({ length: count }, (_, i) =>
+          Number((question.min + i * question.step).toPrecision(12)),
+        );
+        const picked = typeof value === "number" ? value : undefined;
+        return (
+          <div className="flex flex-col gap-2">
+            <SegmentedControl
+              id={id}
+              aria-label={question.prompt}
+              options={cells.map((n) => ({
+                value: String(n),
+                label: String(n),
+              }))}
+              value={picked !== undefined ? String(picked) : undefined}
+              onValueChange={(v) => onChange(Number(v))}
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{question.minLabel ?? question.min}</span>
+              <span>{question.maxLabel ?? question.max}</span>
+            </div>
+          </div>
+        );
+      }
       // Default to the min when the user hasn't touched it yet — the most
       // honest "no preference" position for an interest slider.
       const current = typeof value === "number" ? value : question.min;
@@ -262,6 +295,45 @@ function FieldInput({
           searchPlaceholder={question.searchPlaceholder ?? "Search…"}
         />
       );
+    case "boolean":
+      // On/off switch. Stores a value only once toggled, so an untouched
+      // required boolean stays "missing" for the validators.
+      return (
+        <div className="flex items-center gap-3">
+          <Switch
+            id={id}
+            checked={typeof value === "boolean" ? value : false}
+            onCheckedChange={(checked) => onChange(checked)}
+          />
+          <span className="text-sm text-muted-foreground">
+            {value === true ? "Yes" : "No"}
+          </span>
+        </div>
+      );
+    case "email":
+      return (
+        <Input
+          id={id}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          placeholder={question.placeholder}
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => onChange(e.currentTarget.value)}
+        />
+      );
+    case "phone":
+      return (
+        <Input
+          id={id}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder={question.placeholder}
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => onChange(e.currentTarget.value)}
+        />
+      );
     case "image":
       return (
         <div className="flex flex-1 flex-col items-center justify-center py-4">
@@ -316,18 +388,19 @@ function LongTextField({
         rows={fullScreen ? undefined : 6}
         className={fullScreen ? "min-h-[40dvh] flex-1 resize-none" : undefined}
       />
-      {dictating ? (
-        <RecorderPanel
-          onTranscript={appendTranscript}
-          onDismiss={() => setDictating(false)}
-          promptKey="questionnaire"
-        />
-      ) : (
-        <DictatePill
-          onActivate={() => setDictating(true)}
-          className="self-end"
-        />
-      )}
+      {question.enableDictation &&
+        (dictating ? (
+          <RecorderPanel
+            onTranscript={appendTranscript}
+            onDismiss={() => setDictating(false)}
+            promptKey="questionnaire"
+          />
+        ) : (
+          <DictatePill
+            onActivate={() => setDictating(true)}
+            className="self-end"
+          />
+        ))}
     </div>
   );
 }

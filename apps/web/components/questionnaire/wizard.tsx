@@ -14,7 +14,7 @@ import { CloudOff, TriangleAlert } from "lucide-react";
 import { QuestionField } from "./question";
 import { BlockingNotice, BlockingTopBar } from "./blocking-chrome";
 import { validateIdNumber } from "@/lib/id-validation";
-import type { SaveResult } from "@/app/onboarding/questionnaire/actions";
+import type { SaveResult } from "@camp404/types";
 
 // Reserved error-map keys for a page-level (non-field) failure. `_form` is set
 // by this component when a save action throws; `_root` is what server actions
