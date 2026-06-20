@@ -161,11 +161,32 @@ function FieldInput({
       // Board OB-step-06 (team interests): a row of equal-width whole-number
       // cells from min..max, the picked one filled $primary, end labels beneath
       // ("Not for me" / "Sign me up"). The value is the chosen integer.
+      const current = typeof value === "number" ? value : undefined;
+      const span = question.max - question.min;
+      // A segmented row only suits a small range; a wide or inverted range would
+      // materialise an unbounded cell array (UI freeze) — fall back to a plain
+      // numeric input.
+      if (!Number.isFinite(span) || span < 0 || span > 30) {
+        return (
+          <Input
+            id={id}
+            type="number"
+            inputMode="numeric"
+            aria-label={question.prompt}
+            min={question.min}
+            max={question.max}
+            value={current ?? ""}
+            onChange={(e) => {
+              const raw = e.currentTarget.value;
+              if (raw !== "") onChange(Number(raw));
+            }}
+          />
+        );
+      }
       const cells = Array.from(
-        { length: question.max - question.min + 1 },
+        { length: span + 1 },
         (_, i) => question.min + i,
       );
-      const current = typeof value === "number" ? value : undefined;
       return (
         <div className="flex flex-col gap-2">
           <SegmentedControl

@@ -4,6 +4,7 @@ import {
   classifyChange,
   evalVisibleIf,
   isBuilderDefinition,
+  regenerateBuilderIds,
   validateBuilderQuestionnaire,
   validateBuilderResponses,
 } from "../questionnaire-builder";
@@ -38,6 +39,75 @@ const QUESTION_PAGE = {
     },
   ],
 };
+
+describe("regenerateBuilderIds", () => {
+  // 'team' (block-level) and page 2 (page-level) both show-when 'lead' answers.
+  const branching = build({
+    version: "1",
+    title: "Branchy",
+    pages: [
+      {
+        id: "p1",
+        type: "question",
+        title: "Page 1",
+        blocks: [
+          {
+            kind: "question",
+            question: { id: "lead", kind: "boolean", prompt: "Lead?", required: true },
+          },
+          {
+            kind: "question",
+            question: { id: "team", kind: "short_text", prompt: "Team", required: false },
+            visibleIf: { fieldId: "lead", op: "eq", value: true },
+          },
+        ],
+      },
+      {
+        id: "p2",
+        type: "question",
+        title: "Page 2",
+        visibleIf: { fieldId: "lead", op: "eq", value: true },
+        blocks: [
+          {
+            kind: "question",
+            question: { id: "why", kind: "long_text", prompt: "Why", required: false },
+          },
+        ],
+      },
+    ],
+  });
+
+  it("mints fresh ids and remaps page- and block-level visibleIf to the new field id", () => {
+    let n = 0;
+    const copy = regenerateBuilderIds(branching, () => `new-${n++}`);
+
+    const questionIds: string[] = [];
+    const visibleRefs: string[] = [];
+    for (const page of copy.pages) {
+      if (page.visibleIf) visibleRefs.push(page.visibleIf.fieldId);
+      for (const block of page.blocks) {
+        if (block.visibleIf) visibleRefs.push(block.visibleIf.fieldId);
+        if (block.kind === "question") questionIds.push(block.question.id);
+      }
+    }
+
+    // No original id survives the clone.
+    expect(copy.pages.map((p) => p.id)).not.toContain("p1");
+    expect(questionIds).not.toContain("lead");
+
+    // Both visibleIf refs now point at the cloned 'lead' (first question), not
+    // the orphaned old id.
+    const clonedLead = questionIds[0];
+    expect(visibleRefs).toEqual([clonedLead, clonedLead]);
+  });
+
+  it("keeps the copy as publishable as the original (no dangling shows-when)", () => {
+    let n = 0;
+    const copy = regenerateBuilderIds(branching, () => `id-${n++}`);
+    expect(validateBuilderQuestionnaire(branching)).toEqual([]);
+    expect(validateBuilderQuestionnaire(copy)).toEqual([]);
+  });
+});
 
 describe("isBuilderDefinition", () => {
   it("distinguishes builder pages (blocks) from legacy pages (questions)", () => {

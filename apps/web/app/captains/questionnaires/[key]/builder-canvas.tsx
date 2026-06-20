@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Calendar,
@@ -211,7 +210,6 @@ export function BuilderCanvas({
   definition: BuilderQuestionnaire;
   canPublish: boolean;
 }) {
-  const router = useRouter();
   const [working, setWorking] = useState<BuilderQuestionnaire>(definition);
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState<{
@@ -227,12 +225,13 @@ export function BuilderCanvas({
   );
 
   function persist(next: BuilderQuestionnaire) {
-    setWorking(next);
+    const previous = working; // last-good snapshot for rollback
+    setWorking(next); // optimistic
     startTransition(async () => {
       const result = await updateDefinitionAction(questionnaireKey, next);
       if (!result.ok) {
         toast.error(result.error);
-        router.refresh(); // re-read the server's last-good state
+        setWorking(previous); // a rejected save must not leave the bad state on screen
       }
     });
   }

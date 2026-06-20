@@ -70,6 +70,14 @@ async function assertCanEdit(
 ): Promise<QResult> {
   const meta = await getDefinitionMetaRow(key);
   if (!meta) return { ok: false, error: "Questionnaire not found." };
+  // Draft-only here: the published-edit (re-version) flow is Phase D. Until then
+  // a published/unpublished head must never be silently mutated by autosave.
+  if (meta.status !== "draft") {
+    return {
+      ok: false,
+      error: "Published questionnaires can't be edited here yet.",
+    };
+  }
   if (gate.rank === "captain") return { ok: true };
   if (meta.createdBy !== gate.campUser.id) {
     return { ok: false, error: "You can only edit your own drafts." };
@@ -124,6 +132,19 @@ export async function duplicateDraftAction(
   const gate = await gateAuthor();
   if (!gate.ok) return gate;
   if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
+  // Visibility gate: cloning reads the whole definition, so a non-captain may
+  // only duplicate what the hub would show them (their own draft, or any
+  // published/unpublished) — never another author's private draft. "Not found"
+  // so foreign keys can't be probed.
+  const meta = await getDefinitionMetaRow(key);
+  if (!meta) return { ok: false, error: "Questionnaire not found." };
+  if (
+    gate.rank !== "captain" &&
+    meta.status === "draft" &&
+    meta.createdBy !== gate.campUser.id
+  ) {
+    return { ok: false, error: "Questionnaire not found." };
+  }
   const newKey = await duplicateDefinition({ key, createdBy: gate.campUser.id });
   if (!newKey) {
     return { ok: false, error: "Couldn't duplicate this questionnaire." };

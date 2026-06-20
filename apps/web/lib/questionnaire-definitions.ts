@@ -1,7 +1,11 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { BuilderQuestionnaire, flattenBuilderQuestions } from "@camp404/types";
+import {
+  BuilderQuestionnaire,
+  flattenBuilderQuestions,
+  regenerateBuilderIds,
+} from "@camp404/types";
 import type { Questionnaire } from "@camp404/types";
 import { slugify } from "@camp404/core";
 import {
@@ -127,20 +131,10 @@ export async function updateDefinition(
   });
 }
 
-/** Deep-clone a definition with fresh ids (pages, content blocks, fields). */
+/** Deep-clone a definition with fresh ids + remapped visibleIf references —
+ *  see regenerateBuilderIds in @camp404/types for the why. */
 function regenerateIds(def: BuilderQuestionnaire): BuilderQuestionnaire {
-  return {
-    ...def,
-    pages: def.pages.map((page) => ({
-      ...page,
-      id: randomUUID(),
-      blocks: page.blocks.map((block) =>
-        block.kind === "question"
-          ? { ...block, question: { ...block.question, id: randomUUID() } }
-          : { ...block, id: randomUUID() },
-      ),
-    })),
-  };
+  return regenerateBuilderIds(def, randomUUID);
 }
 
 /** Duplicate a definition into a fresh draft; returns the new key, or null. */

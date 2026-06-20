@@ -151,6 +151,7 @@ function QuestionEditor({
   setQuestion: (question: Question) => void;
 }) {
   const num = (raw: string, fallback: number) => {
+    if (raw.trim() === "") return fallback; // clearing the box keeps the prior value (not 0)
     const n = Number(raw);
     return Number.isFinite(n) ? n : fallback;
   };
@@ -232,13 +233,21 @@ function QuestionEditor({
             label="Min"
             type="number"
             value={String(question.min)}
-            onChange={(e) => patch({ min: num(e.currentTarget.value, question.min) })}
+            onChange={(e) =>
+              patch({
+                min: Math.min(question.max, num(e.currentTarget.value, question.min)),
+              })
+            }
           />
           <InputField
             label="Max"
             type="number"
             value={String(question.max)}
-            onChange={(e) => patch({ max: num(e.currentTarget.value, question.max) })}
+            onChange={(e) =>
+              patch({
+                max: Math.max(question.min, num(e.currentTarget.value, question.max)),
+              })
+            }
           />
         </div>
       )}
