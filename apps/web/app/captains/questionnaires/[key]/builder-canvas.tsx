@@ -70,24 +70,12 @@ import {
 } from "./builder-ops";
 import { BlockEditorDialog } from "./block-editor";
 import { PageSettingsDialog } from "./page-settings-dialog";
+import { BlockCatalogDialog } from "./block-catalog-dialog";
 
 const newId = (): string =>
   typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
     : `id-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-
-function newQuestionBlock(): Block {
-  return {
-    kind: "question",
-    question: {
-      id: newId(),
-      kind: "short_text",
-      prompt: "Untitled question",
-      required: false,
-      maxLength: 120,
-    },
-  };
-}
 
 const QUESTION_META: Record<Question["kind"], { label: string; icon: LucideIcon }> = {
   short_text: { label: "Short text", icon: Type },
@@ -231,6 +219,7 @@ export function BuilderCanvas({
     blockId: string;
   } | null>(null);
   const [settingsPageId, setSettingsPageId] = useState<string | null>(null);
+  const [addingToPageId, setAddingToPageId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -266,6 +255,9 @@ export function BuilderCanvas({
     : null;
   const settingsPage = settingsPageId
     ? (working.pages.find((p) => p.id === settingsPageId) ?? null)
+    : null;
+  const addingPage = addingToPageId
+    ? (working.pages.find((p) => p.id === addingToPageId) ?? null)
     : null;
 
   return (
@@ -369,11 +361,9 @@ export function BuilderCanvas({
               type="button"
               variant="outline"
               className="border-dashed"
-              onClick={() =>
-                persist(addBlock(working, page.id, newQuestionBlock()))
-              }
+              onClick={() => setAddingToPageId(page.id)}
             >
-              <Plus /> Add field
+              <Plus /> Add block
             </Button>
           </Card>
         ))}
@@ -458,6 +448,18 @@ export function BuilderCanvas({
             setSettingsPageId(null);
           }}
           onClose={() => setSettingsPageId(null)}
+        />
+      )}
+
+      {addingToPageId && addingPage && (
+        <BlockCatalogDialog
+          pageType={addingPage.type}
+          onSelect={(block) => {
+            persist(addBlock(working, addingToPageId, block));
+            setAddingToPageId(null);
+            setEditing({ pageId: addingToPageId, blockId: blockId(block) });
+          }}
+          onClose={() => setAddingToPageId(null)}
         />
       )}
     </div>
