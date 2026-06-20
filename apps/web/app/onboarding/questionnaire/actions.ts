@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { validateResponses } from "@camp404/types";
+import { validateResponses, type SaveResult } from "@camp404/types";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -14,10 +14,6 @@ import {
 import { splitIdNumber } from "@camp404/db/id-documents";
 import { QUESTIONNAIRE_VERSION } from "@/lib/questionnaire";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
-
-export type SaveResult =
-  | { ok: true }
-  | { ok: false; errors: Record<string, string> };
 
 /**
  * Persist questionnaire responses. If `final` is true the burner profile is

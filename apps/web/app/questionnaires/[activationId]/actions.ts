@@ -1,7 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { QuestionnaireResponses, validateBuilderResponses } from "@camp404/types";
+import {
+  QuestionnaireResponses,
+  validateBuilderResponses,
+  type SaveResult,
+} from "@camp404/types";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -9,17 +13,13 @@ import {
   hasCampAccess,
 } from "@/lib/users";
 import {
+  completeBuilderResponse,
   getActivationById,
   getRequiredAction,
-  satisfyRequiredAction,
 } from "@camp404/db/activations";
 import { upsertQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { nextGate } from "@/lib/required-actions";
-
-export type SaveResult =
-  | { ok: true }
-  | { ok: false; errors: Record<string, string> };
 
 const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again — if it keeps happening, let a camp captain know.";
@@ -52,7 +52,11 @@ export async function saveBuilderResponses(
   // partial save (completedAt=null) would otherwise wipe a completed row's
   // completedAt and diverge from required_actions.status.
   const targeted = await getRequiredAction(campUser.id, activation.questionnaireKey);
-  if (!targeted || targeted.status !== "pending") {
+  if (
+    !targeted ||
+    targeted.status !== "pending" ||
+    targeted.activationId !== activation.id
+  ) {
     return { ok: false, errors: { _form: "This form is closed." } };
   }
 
@@ -83,20 +87,26 @@ export async function saveBuilderResponses(
   }
 
   try {
-    await upsertQuestionnaireResponse({
-      userId: campUser.id,
-      definitionKey: activation.questionnaireKey,
-      definitionVersion: activation.version,
-      responses: toStore,
-      activationId: activation.id,
-      completedAt: final ? new Date() : null,
-    });
     if (final) {
-      await satisfyRequiredAction(
-        campUser.id,
-        activation.questionnaireKey,
-        activation.version,
-      );
+      // Atomic: upsert the completed response + satisfy the gate in one
+      // transaction, so a response can't be marked complete while the gate
+      // stays pending.
+      await completeBuilderResponse({
+        userId: campUser.id,
+        definitionKey: activation.questionnaireKey,
+        definitionVersion: activation.version,
+        responses: toStore,
+        activationId: activation.id,
+      });
+    } else {
+      await upsertQuestionnaireResponse({
+        userId: campUser.id,
+        definitionKey: activation.questionnaireKey,
+        definitionVersion: activation.version,
+        responses: toStore,
+        activationId: activation.id,
+        completedAt: null,
+      });
     }
   } catch (err) {
     console.error("saveBuilderResponses persistence failed", err);

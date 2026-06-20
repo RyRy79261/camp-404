@@ -3,6 +3,7 @@ import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 import { meetsRequiredVersion } from "./versions";
+import type { QuestionnaireResponses } from "@camp404/types";
 
 // The required_actions gating producer + satisfaction. A questionnaire
 // activation fans out one required_actions row per matched member (the generic
@@ -261,6 +262,7 @@ export async function getActivationById(
 export interface RequiredActionState {
   status: (typeof schema.requiredActionStatusEnum.enumValues)[number];
   version: string | null;
+  activationId: string | null;
 }
 
 /**
@@ -277,6 +279,7 @@ export async function getRequiredAction(
     .select({
       status: schema.requiredActions.status,
       version: schema.requiredActions.version,
+      activationId: schema.requiredActions.activationId,
     })
     .from(schema.requiredActions)
     .where(
@@ -287,4 +290,76 @@ export async function getRequiredAction(
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Atomically record a builder questionnaire's FINAL submission: upsert the
+ * latest-answer row (completedAt set) AND satisfy the required-action gate in a
+ * single transaction, so a completed response can never coexist with a
+ * still-pending gate. Honours satisfyRequiredAction's version rule (a completion
+ * against an older version leaves the gate open).
+ */
+export async function completeBuilderResponse(input: {
+  userId: string;
+  definitionKey: string;
+  definitionVersion: string;
+  responses: QuestionnaireResponses;
+  activationId: string;
+}): Promise<void> {
+  const { db, pool } = createPooledDb();
+  const now = new Date();
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(schema.questionnaireResponses)
+        .values({
+          userId: input.userId,
+          definitionKey: input.definitionKey,
+          definitionVersion: input.definitionVersion,
+          responses: input.responses,
+          activationId: input.activationId,
+          completedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.questionnaireResponses.userId,
+            schema.questionnaireResponses.definitionKey,
+          ],
+          set: {
+            definitionVersion: input.definitionVersion,
+            responses: input.responses,
+            activationId: input.activationId,
+            completedAt: now,
+            updatedAt: now,
+          },
+        });
+      const [ra] = await tx
+        .select({
+          id: schema.requiredActions.id,
+          version: schema.requiredActions.version,
+          status: schema.requiredActions.status,
+        })
+        .from(schema.requiredActions)
+        .where(
+          and(
+            eq(schema.requiredActions.userId, input.userId),
+            eq(schema.requiredActions.actionKey, input.definitionKey),
+          ),
+        )
+        .limit(1);
+      if (
+        ra &&
+        ra.status === "pending" &&
+        (!ra.version ||
+          meetsRequiredVersion(ra.version, input.definitionVersion))
+      ) {
+        await tx
+          .update(schema.requiredActions)
+          .set({ status: "completed", completedAt: now })
+          .where(eq(schema.requiredActions.id, ra.id));
+      }
+    });
+  } finally {
+    await pool.end();
+  }
 }

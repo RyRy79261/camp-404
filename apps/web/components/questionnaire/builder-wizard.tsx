@@ -17,7 +17,7 @@ import { CloudOff, TriangleAlert } from "lucide-react";
 import { QuestionField } from "./question";
 import { ContentBlockRenderer } from "./content-block";
 import { BlockingNotice, BlockingTopBar } from "./blocking-chrome";
-import type { SaveResult } from "@/app/onboarding/questionnaire/actions";
+import type { SaveResult } from "@camp404/types";
 
 // The block-based runner for BUILDER questionnaires. It reuses the legacy
 // wizard's chrome verbatim (blocking top bar + notice, the _form/_root error
@@ -144,6 +144,10 @@ export function BuilderWizard({
   const current = clampedIndex + 1;
   const total = pages.length;
   maxStepRef.current = Math.max(maxStepRef.current, current);
+  // Non-decreasing high-water mark, but clamped to the current visible-page count
+  // so branching that hides pages can't render "Page 3 of 2" / >100%. One source
+  // for both variants.
+  const progressCurrent = Math.min(maxStepRef.current, total);
 
   return (
     <form
@@ -158,13 +162,13 @@ export function BuilderWizard({
         <>
           <BlockingTopBar
             title={title ?? questionnaire.title}
-            current={current}
+            current={progressCurrent}
             total={total}
           />
           <BlockingNotice />
         </>
       ) : (
-        <BuilderProgress current={maxStepRef.current} total={total} />
+        <BuilderProgress current={progressCurrent} total={total} />
       )}
 
       {formError && (

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BuilderQuestionnaire } from "@camp404/types";
 
 import { BuilderWizard } from "../questionnaire/builder-wizard";
@@ -81,5 +81,44 @@ describe("BuilderWizard", () => {
     expect(screen.queryByText("Which team?")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
     expect(action).toHaveBeenCalledWith({ name: "Ada" }, true);
+  });
+});
+
+describe("BuilderWizard — persisted saves (persistProgress)", () => {
+  function renderPersisting(action: () => Promise<unknown>) {
+    render(
+      <BuilderWizard
+        questionnaire={def}
+        initialResponses={{ name: "Ada" }}
+        action={action as never}
+        persistProgress
+        variant="onboarding"
+        submitLabel="Finish"
+      />,
+    );
+  }
+
+  it("surfaces a server validation error and stays on the page", async () => {
+    const action = vi.fn(async () => ({
+      ok: false as const,
+      errors: { name: "Server says no" },
+    }));
+    renderPersisting(action);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(screen.getByText("Server says no")).toBeTruthy());
+    expect(action).toHaveBeenCalledWith({ name: "Ada" }, false);
+    expect(screen.getByText("Page 1 of 2")).toBeTruthy(); // did not advance
+  });
+
+  it("shows a form-level error when the save action throws", async () => {
+    const action = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    renderPersisting(action);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(screen.getByText(/couldn't save your answers/i)).toBeTruthy(),
+    );
+    expect(screen.getByText("Page 1 of 2")).toBeTruthy();
   });
 });
