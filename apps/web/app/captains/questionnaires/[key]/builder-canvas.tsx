@@ -19,7 +19,9 @@ import {
   Mail,
   Minus,
   Phone,
+  Pencil,
   Plus,
+  Settings2,
   SlidersHorizontal,
   StickyNote,
   ToggleRight,
@@ -61,9 +63,13 @@ import {
   blockId,
   moveBlock,
   movePage,
+  patchPage,
   removeBlock,
   removePage,
+  replaceBlock,
 } from "./builder-ops";
+import { BlockEditorDialog } from "./block-editor";
+import { PageSettingsDialog } from "./page-settings-dialog";
 
 const newId = (): string =>
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -142,7 +148,15 @@ function describeBlock(block: Block): {
   }
 }
 
-function BlockRow({ block, onDelete }: { block: Block; onDelete: () => void }) {
+function BlockRow({
+  block,
+  onEdit,
+  onDelete,
+}: {
+  block: Block;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const id = blockId(block);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id });
@@ -182,6 +196,15 @@ function BlockRow({ block, onDelete }: { block: Block; onDelete: () => void }) {
         type="button"
         variant="ghost"
         size="icon"
+        aria-label={`Edit ${label}`}
+        onClick={onEdit}
+      >
+        <Pencil />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
         aria-label={`Delete ${label}`}
         onClick={onDelete}
       >
@@ -203,6 +226,11 @@ export function BuilderCanvas({
   const router = useRouter();
   const [working, setWorking] = useState<BuilderQuestionnaire>(definition);
   const [pending, startTransition] = useTransition();
+  const [editing, setEditing] = useState<{
+    pageId: string;
+    blockId: string;
+  } | null>(null);
+  const [settingsPageId, setSettingsPageId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -231,6 +259,15 @@ export function BuilderCanvas({
     persist(moveBlock(working, pageId, from, to));
   }
 
+  const editingBlock = editing
+    ? (working.pages
+        .find((p) => p.id === editing.pageId)
+        ?.blocks.find((b) => blockId(b) === editing.blockId) ?? null)
+    : null;
+  const settingsPage = settingsPageId
+    ? (working.pages.find((p) => p.id === settingsPageId) ?? null)
+    : null;
+
   return (
     <div className="flex flex-col gap-5 pb-24">
       <InputField
@@ -251,6 +288,15 @@ export function BuilderCanvas({
                 Page {pageIndex + 1} · {page.type === "content" ? "Content" : "Questions"}
               </span>
               <div className="flex items-center gap-0.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Page settings"
+                  onClick={() => setSettingsPageId(page.id)}
+                >
+                  <Settings2 />
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -299,6 +345,12 @@ export function BuilderCanvas({
                       <BlockRow
                         key={blockId(block)}
                         block={block}
+                        onEdit={() =>
+                          setEditing({
+                            pageId: page.id,
+                            blockId: blockId(block),
+                          })
+                        }
                         onDelete={() =>
                           persist(removeBlock(working, page.id, blockId(block)))
                         }
@@ -375,6 +427,39 @@ export function BuilderCanvas({
           </div>
         </div>
       </div>
+
+      {editing && editingBlock && (
+        <BlockEditorDialog
+          key={editing.blockId}
+          block={editingBlock}
+          onSave={(next) => {
+            persist(replaceBlock(working, editing.pageId, editing.blockId, next));
+            setEditing(null);
+          }}
+          onDelete={() => {
+            persist(removeBlock(working, editing.pageId, editing.blockId));
+            setEditing(null);
+          }}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      {settingsPageId && settingsPage && (
+        <PageSettingsDialog
+          key={settingsPageId}
+          page={settingsPage}
+          canDelete={working.pages.length > 1}
+          onSave={(patch) => {
+            persist(patchPage(working, settingsPageId, patch));
+            setSettingsPageId(null);
+          }}
+          onDelete={() => {
+            persist(removePage(working, settingsPageId));
+            setSettingsPageId(null);
+          }}
+          onClose={() => setSettingsPageId(null)}
+        />
+      )}
     </div>
   );
 }
