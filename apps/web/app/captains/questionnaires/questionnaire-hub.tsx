@@ -41,6 +41,7 @@ const STATUS: Record<
 export function QuestionnaireHub({ items }: { items: HubItem[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
 
@@ -58,27 +59,37 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
   }
 
   function duplicate(key: string) {
+    setBusyKey(key);
     startTransition(async () => {
-      const result = await duplicateDraftAction(key);
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
+      try {
+        const result = await duplicateDraftAction(key);
+        if (!result.ok) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success("Duplicated");
+        router.refresh();
+      } finally {
+        setBusyKey(null);
       }
-      toast.success("Duplicated");
-      router.refresh();
     });
   }
 
   function remove(key: string, title: string) {
     if (!window.confirm(`Delete "${title}"? This can't be undone.`)) return;
+    setBusyKey(key);
     startTransition(async () => {
-      const result = await deleteDraftAction(key);
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
+      try {
+        const result = await deleteDraftAction(key);
+        if (!result.ok) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success("Deleted");
+        router.refresh();
+      } finally {
+        setBusyKey(null);
       }
-      toast.success("Deleted");
-      router.refresh();
     });
   }
 
@@ -157,9 +168,13 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
                       size="icon"
                       aria-label={`Duplicate ${item.title}`}
                       onClick={() => duplicate(item.key)}
-                      disabled={pending}
+                      disabled={busyKey !== null}
                     >
-                      <Copy />
+                      {busyKey === item.key ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <Copy />
+                      )}
                     </Button>
                     {item.canDelete && (
                       <Button
@@ -167,9 +182,13 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
                         size="icon"
                         aria-label={`Delete ${item.title}`}
                         onClick={() => remove(item.key, item.title)}
-                        disabled={pending}
+                        disabled={busyKey !== null}
                       >
-                        <Trash2 className="text-destructive" />
+                        {busyKey === item.key ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          <Trash2 className="text-destructive" />
+                        )}
                       </Button>
                     )}
                   </div>

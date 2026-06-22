@@ -32,6 +32,27 @@ const ROOT_ERROR_KEY = "_root";
 const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again — if it keeps happening, let a camp captain know.";
 
+// The first visible page that still has an unsatisfied required (and visible)
+// field — where the runner resumes on re-entry (spec §5). 0 when complete/empty.
+function firstIncompletePage(
+  q: BuilderQuestionnaire,
+  responses: QuestionnaireResponses,
+): number {
+  const pages = visiblePages(q, responses);
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
+    if (!page) continue;
+    for (const block of page.blocks) {
+      if (block.kind !== "question") continue;
+      if (block.visibleIf && !evalVisibleIf(block.visibleIf, responses)) continue;
+      if (!validateOne(block.question, responses[block.question.id]).ok) {
+        return i;
+      }
+    }
+  }
+  return 0;
+}
+
 interface BuilderWizardProps {
   questionnaire: BuilderQuestionnaire;
   initialResponses: QuestionnaireResponses;
@@ -59,7 +80,13 @@ export function BuilderWizard({
 }: BuilderWizardProps) {
   const [responses, setResponses] =
     React.useState<QuestionnaireResponses>(initialResponses);
-  const [pageIndex, setPageIndex] = React.useState(0);
+  // Runner re-entry resumes at the first incomplete page (spec §5); preview /
+  // onboarding (no persisted answers) start at the top.
+  const [pageIndex, setPageIndex] = React.useState(() =>
+    persistProgress && Object.keys(initialResponses).length > 0
+      ? firstIncompletePage(questionnaire, initialResponses)
+      : 0,
+  );
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [isPending, startTransition] = React.useTransition();
 
@@ -73,7 +100,7 @@ export function BuilderWizard({
 
   // Progress never goes backward (Back, or a branch hiding a later page, must
   // not drop the bar below the furthest page reached).
-  const maxStepRef = React.useRef(1);
+  const maxStepRef = React.useRef(pageIndex + 1);
 
   if (!page) return null;
 
@@ -164,11 +191,12 @@ export function BuilderWizard({
             title={title ?? questionnaire.title}
             current={progressCurrent}
             total={total}
+            showProgress={total > 1}
           />
           <BlockingNotice />
         </>
       ) : (
-        <BuilderProgress current={progressCurrent} total={total} />
+        total > 1 && <BuilderProgress current={progressCurrent} total={total} />
       )}
 
       {formError && (

@@ -313,12 +313,9 @@ export function validateBuilderResponses(
 
 // --- Publish-time validity ----------------------------------------------
 
-const OPTION_KINDS = new Set([
-  "single_select",
-  "multi_select",
-  "combobox",
-  "toggle",
-]);
+// Defence-in-depth: duplicates the schema's options.min(2) guarantee on parsed
+// input. `toggle` is omitted — it isn't authorable in the builder palette.
+const OPTION_KINDS = new Set(["single_select", "multi_select", "combobox"]);
 
 /**
  * Hard publish blockers (member-visible messages). An empty array means the

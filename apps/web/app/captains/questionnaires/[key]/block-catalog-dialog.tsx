@@ -2,22 +2,11 @@
 
 import { useState } from "react";
 import {
-  Calendar,
-  ChevronDown,
-  CircleDot,
-  FileText,
-  Hash,
   Heading,
   Image as ImageIcon,
-  ListChecks,
-  Mail,
   Minus,
-  Phone,
   Search,
-  SlidersHorizontal,
   StickyNote,
-  ToggleRight,
-  Type,
   type LucideIcon,
 } from "lucide-react";
 import type { Block } from "@camp404/types";
@@ -29,7 +18,11 @@ import {
   DialogTitle,
 } from "@camp404/ui/components/dialog";
 import { Input } from "@camp404/ui/components/input";
-import { morphQuestion, type BuilderFieldKind } from "./field-kinds";
+import {
+  BUILDER_FIELD_KINDS,
+  morphQuestion,
+  type BuilderFieldKind,
+} from "./field-kinds";
 import { newId } from "./builder-ops";
 
 function makeQuestion(kind: BuilderFieldKind): Block {
@@ -63,7 +56,9 @@ function makeContent(
         id: newId(),
         kind,
         imageUrl: "https://placehold.co/800x450",
-        altText: "Describe this image",
+        // Empty so the editor's Save stays disabled until the author writes real
+        // alt text (blockValid rejects empty altText) — a fake default would ship.
+        altText: "",
         sizeFit: "fit",
       };
     case "divider":
@@ -86,28 +81,15 @@ const CONTENT_TILES: Tile[] = [
   { key: "divider", label: "Divider", desc: "A thin dividing rule", icon: Minus, make: () => makeContent("divider") },
 ];
 
-const INPUT_DEFS: [BuilderFieldKind, string, string, LucideIcon][] = [
-  ["short_text", "Short text", "Single line answer", Type],
-  ["long_text", "Long text", "Multi-line paragraph", FileText],
-  ["email", "Email", "An email address", Mail],
-  ["phone", "Phone", "A phone number", Phone],
-  ["number", "Number", "A number in a range", Hash],
-  ["slider", "Scale / slider", "Rate on a numeric range", SlidersHorizontal],
-  ["single_select", "Single select", "Choose one option", CircleDot],
-  ["multi_select", "Multi select", "Choose several options", ListChecks],
-  ["combobox", "Dropdown", "Searchable single choice", ChevronDown],
-  ["date", "Date", "Pick a calendar date", Calendar],
-  ["boolean", "Yes / no", "An on/off switch", ToggleRight],
-  ["image", "Image upload", "Upload a photo", ImageIcon],
-];
-
-const INPUT_TILES: Tile[] = INPUT_DEFS.map(([kind, label, desc, icon]) => ({
-  key: kind,
-  label,
-  desc,
-  icon,
-  make: () => makeQuestion(kind),
-}));
+const INPUT_TILES: Tile[] = BUILDER_FIELD_KINDS.map(
+  ({ kind, label, desc, icon }) => ({
+    key: kind,
+    label,
+    desc,
+    icon,
+    make: () => makeQuestion(kind),
+  }),
+);
 
 function TileButton({ tile, onPick }: { tile: Tile; onPick: () => void }) {
   const Icon = tile.icon;

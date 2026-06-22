@@ -1,6 +1,7 @@
 "use client";
 
 import type { BuilderQuestionnaire, QuestionnaireResponses } from "@camp404/types";
+import { toast } from "@camp404/ui/components/toast";
 import { BuilderWizard } from "./builder-wizard";
 
 // Author-side preview of a builder questionnaire: the REAL runner driven from
@@ -26,7 +27,13 @@ export function BuilderPreview({
       variant="onboarding"
       title={questionnaire.title}
       submitLabel="Finish preview"
-      onComplete={onComplete}
+      onComplete={
+        onComplete ??
+        (() =>
+          toast.success(
+            "Preview complete — this is the end of the questionnaire.",
+          ))
+      }
     />
   );
 }
