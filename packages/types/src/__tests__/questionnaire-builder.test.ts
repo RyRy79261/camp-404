@@ -4,6 +4,7 @@ import {
   classifyChange,
   evalVisibleIf,
   isBuilderDefinition,
+  regenerateBuilderIds,
   validateBuilderQuestionnaire,
   validateBuilderResponses,
 } from "../questionnaire-builder";
@@ -38,6 +39,75 @@ const QUESTION_PAGE = {
     },
   ],
 };
+
+describe("regenerateBuilderIds", () => {
+  // 'team' (block-level) and page 2 (page-level) both show-when 'lead' answers.
+  const branching = build({
+    version: "1",
+    title: "Branchy",
+    pages: [
+      {
+        id: "p1",
+        type: "question",
+        title: "Page 1",
+        blocks: [
+          {
+            kind: "question",
+            question: { id: "lead", kind: "boolean", prompt: "Lead?", required: true },
+          },
+          {
+            kind: "question",
+            question: { id: "team", kind: "short_text", prompt: "Team", required: false },
+            visibleIf: { fieldId: "lead", op: "eq", value: true },
+          },
+        ],
+      },
+      {
+        id: "p2",
+        type: "question",
+        title: "Page 2",
+        visibleIf: { fieldId: "lead", op: "eq", value: true },
+        blocks: [
+          {
+            kind: "question",
+            question: { id: "why", kind: "long_text", prompt: "Why", required: false },
+          },
+        ],
+      },
+    ],
+  });
+
+  it("mints fresh ids and remaps page- and block-level visibleIf to the new field id", () => {
+    let n = 0;
+    const copy = regenerateBuilderIds(branching, () => `new-${n++}`);
+
+    const questionIds: string[] = [];
+    const visibleRefs: string[] = [];
+    for (const page of copy.pages) {
+      if (page.visibleIf) visibleRefs.push(page.visibleIf.fieldId);
+      for (const block of page.blocks) {
+        if (block.visibleIf) visibleRefs.push(block.visibleIf.fieldId);
+        if (block.kind === "question") questionIds.push(block.question.id);
+      }
+    }
+
+    // No original id survives the clone.
+    expect(copy.pages.map((p) => p.id)).not.toContain("p1");
+    expect(questionIds).not.toContain("lead");
+
+    // Both visibleIf refs now point at the cloned 'lead' (first question), not
+    // the orphaned old id.
+    const clonedLead = questionIds[0];
+    expect(visibleRefs).toEqual([clonedLead, clonedLead]);
+  });
+
+  it("keeps the copy as publishable as the original (no dangling shows-when)", () => {
+    let n = 0;
+    const copy = regenerateBuilderIds(branching, () => `id-${n++}`);
+    expect(validateBuilderQuestionnaire(branching)).toEqual([]);
+    expect(validateBuilderQuestionnaire(copy)).toEqual([]);
+  });
+});
 
 describe("isBuilderDefinition", () => {
   it("distinguishes builder pages (blocks) from legacy pages (questions)", () => {
@@ -165,6 +235,43 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
     expect(errors.some((e) => /alt text/i.test(e))).toBe(true);
     expect(errors.some((e) => /shows-when/i.test(e))).toBe(true);
   });
+
+  it("rejects a questionnaire with no input fields", () => {
+    const q = build({
+      version: "1",
+      title: "T",
+      pages: [
+        {
+          id: "p1",
+          type: "content",
+          title: "Welcome",
+          blocks: [{ id: "hdr", kind: "header_break", headingText: "Hi" }],
+        },
+      ],
+    });
+    const errors = validateBuilderQuestionnaire(q);
+    expect(errors.some((e) => /at least one input/i.test(e))).toBe(true);
+  });
+
+  it("rejects a form where no page is visible under empty answers", () => {
+    const q = build({
+      version: "1",
+      title: "T",
+      pages: [
+        {
+          id: "p1",
+          type: "question",
+          title: "P",
+          visibleIf: { fieldId: "x", op: "is_answered" },
+          blocks: [
+            { kind: "question", question: { id: "a", kind: "short_text", prompt: "A" } },
+          ],
+        },
+      ],
+    });
+    const errors = validateBuilderQuestionnaire(q);
+    expect(errors.some((e) => /shows no pages/i.test(e))).toBe(true);
+  });
 });
 
 describe("classifyChange", () => {
@@ -250,5 +357,45 @@ describe("classifyChange", () => {
       ],
     });
     expect(classifyChange(base, narrow)).toBe("breaking");
+  });
+
+  it("treats adding, removing, or editing a visibleIf as breaking", () => {
+    const withCond = build({
+      version: "1",
+      title: "T",
+      pages: [
+        {
+          ...QUESTION_PAGE,
+          blocks: [
+            QUESTION_PAGE.blocks[0],
+            QUESTION_PAGE.blocks[1],
+            {
+              ...QUESTION_PAGE.blocks[2],
+              visibleIf: { fieldId: "name", op: "is_answered" },
+            },
+          ],
+        },
+      ],
+    });
+    expect(classifyChange(base, withCond)).toBe("breaking"); // add
+    expect(classifyChange(withCond, base)).toBe("breaking"); // remove
+    const edited = build({
+      version: "1",
+      title: "T",
+      pages: [
+        {
+          ...QUESTION_PAGE,
+          blocks: [
+            QUESTION_PAGE.blocks[0],
+            QUESTION_PAGE.blocks[1],
+            {
+              ...QUESTION_PAGE.blocks[2],
+              visibleIf: { fieldId: "name", op: "is_empty" },
+            },
+          ],
+        },
+      ],
+    });
+    expect(classifyChange(withCond, edited)).toBe("breaking"); // edit
   });
 });

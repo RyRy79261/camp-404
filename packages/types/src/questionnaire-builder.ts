@@ -223,6 +223,51 @@ export function visiblePages(
 }
 
 /**
+ * Deep-clone a questionnaire with fresh ids for every page, content block and
+ * field, remapping each page- and block-level `visibleIf.fieldId` through the
+ * old→new field-id map so the copy's conditional branching keeps referring to
+ * ITS OWN fields. Without the remap the copied references dangle: branching
+ * mis-renders at runtime and the copy fails the publish "shows-when references
+ * an earlier field" check. `nextId` supplies fresh unique ids.
+ */
+export function regenerateBuilderIds(
+  q: BuilderQuestionnaire,
+  nextId: () => string,
+): BuilderQuestionnaire {
+  // Pass 1: assign a new id to every question and record old → new, so a
+  // visibleIf referencing any field (even one on a later page) can be remapped.
+  const idMap = new Map<string, string>();
+  for (const page of q.pages) {
+    for (const block of page.blocks) {
+      if (block.kind === "question") idMap.set(block.question.id, nextId());
+    }
+  }
+  const remap = (v: VisibleIf | undefined): VisibleIf | undefined =>
+    v ? { ...v, fieldId: idMap.get(v.fieldId) ?? v.fieldId } : undefined;
+  // Pass 2: rebuild with fresh page/block ids + remapped visibleIf.
+  return {
+    ...q,
+    pages: q.pages.map((page) => ({
+      ...page,
+      id: nextId(),
+      visibleIf: remap(page.visibleIf),
+      blocks: page.blocks.map((block) =>
+        block.kind === "question"
+          ? {
+              ...block,
+              question: {
+                ...block.question,
+                id: idMap.get(block.question.id) ?? block.question.id,
+              },
+              visibleIf: remap(block.visibleIf),
+            }
+          : { ...block, id: nextId(), visibleIf: remap(block.visibleIf) },
+      ),
+    })),
+  };
+}
+
+/**
  * Validate a response map against a builder questionnaire. Visibility-aware:
  * required checks are skipped for fields hidden by an unmet `visibleIf`, and a
  * hidden field's stored value is retained untouched (never pruned). Mirrors the
@@ -388,6 +433,29 @@ function breakingParamChange(prev: Question, next: Question): boolean {
   return false;
 }
 
+function sameVisibleIf(a?: VisibleIf, b?: VisibleIf): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.fieldId === b.fieldId && a.op === b.op && a.value === b.value;
+}
+
+/** Map of stable element id → its `visibleIf` (page- and block-level). A
+ *  question's visibleIf lives on its block but is keyed by the stable
+ *  question.id; content blocks key by their own id; pages by page id. */
+function visibleIfMap(
+  q: BuilderQuestionnaire,
+): Map<string, VisibleIf | undefined> {
+  const m = new Map<string, VisibleIf | undefined>();
+  for (const page of q.pages) {
+    m.set(`p:${page.id}`, page.visibleIf);
+    for (const block of page.blocks) {
+      const key = block.kind === "question" ? block.question.id : block.id;
+      m.set(`b:${key}`, block.visibleIf);
+    }
+  }
+  return m;
+}
+
 /**
  * Classify the change between two builder questionnaires as `cosmetic` (no
  * version bump, no re-submit) or `breaking` (version bump, re-opens the gate on
@@ -406,6 +474,16 @@ export function classifyChange(
     if (prevField.kind !== nextField.kind) return "breaking";
     if (prevField.required !== nextField.required) return "breaking";
     if (breakingParamChange(prevField, nextField)) return "breaking";
+  }
+  // Adding, removing, or editing any visibleIf is breaking (spec §6.1): it
+  // changes branching, so the gate must re-open rather than patch in place.
+  const va = visibleIfMap(prev);
+  const vb = visibleIfMap(next);
+  for (const [key, cond] of va) {
+    if (!sameVisibleIf(cond, vb.get(key))) return "breaking";
+  }
+  for (const key of vb.keys()) {
+    if (!va.has(key)) return "breaking";
   }
   return "cosmetic";
 }

@@ -1,6 +1,19 @@
 import { and, eq } from "drizzle-orm";
+import type { BuilderQuestionnaire } from "@camp404/types";
 import { createHttpDb } from "./index";
 import { questionnaireDefinitions, questionnaireVersions } from "./schema";
+
+type DefinitionStatus = "draft" | "published" | "unpublished";
+
+// Code-questionnaire keys a captain-authored questionnaire may never claim —
+// they map to bespoke pages/tables. The builder hub excludes them and the
+// writer refuses to mint them.
+export const RESERVED_DEFINITION_KEYS: ReadonlySet<string> = new Set([
+  "burner_profile",
+  "dietary_requirements",
+  "driver_profile",
+  "driver_profiles",
+]);
 
 // Stored questionnaire-definition reads. A questionnaire's catalogue is the
 // @camp404/types `Questionnaire` JSON kept on `questionnaire_definitions`,
@@ -73,4 +86,130 @@ export async function getQuestionnaireVersionRow(
     )
     .limit(1);
   return row ?? null;
+}
+
+// --- Builder writers (Phase C) -------------------------------------------
+
+export interface DefinitionListRow {
+  key: string;
+  title: string;
+  status: DefinitionStatus;
+  version: string | null;
+  createdBy: string | null;
+  definition: unknown;
+  updatedAt: Date;
+}
+
+/** All builder-authored definition rows (reserved code keys excluded). */
+export async function listDefinitionRows(): Promise<DefinitionListRow[]> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      key: questionnaireDefinitions.key,
+      title: questionnaireDefinitions.title,
+      status: questionnaireDefinitions.status,
+      version: questionnaireDefinitions.version,
+      createdBy: questionnaireDefinitions.createdBy,
+      definition: questionnaireDefinitions.definition,
+      updatedAt: questionnaireDefinitions.updatedAt,
+    })
+    .from(questionnaireDefinitions);
+  return rows.filter((r) => !RESERVED_DEFINITION_KEYS.has(r.key));
+}
+
+/** True when a key is already taken — a stored row OR a reserved code key. */
+export async function definitionKeyExists(key: string): Promise<boolean> {
+  if (RESERVED_DEFINITION_KEYS.has(key)) return true;
+  const db = createHttpDb();
+  const [row] = await db
+    .select({ key: questionnaireDefinitions.key })
+    .from(questionnaireDefinitions)
+    .where(eq(questionnaireDefinitions.key, key))
+    .limit(1);
+  return Boolean(row);
+}
+
+export interface DefinitionMetaRow {
+  key: string;
+  status: DefinitionStatus;
+  createdBy: string | null;
+}
+
+/** A definition's ownership + lifecycle, for the edit/delete permission check. */
+export async function getDefinitionMetaRow(
+  key: string,
+): Promise<DefinitionMetaRow | null> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      key: questionnaireDefinitions.key,
+      status: questionnaireDefinitions.status,
+      createdBy: questionnaireDefinitions.createdBy,
+    })
+    .from(questionnaireDefinitions)
+    .where(eq(questionnaireDefinitions.key, key))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Insert a brand-new draft (status draft, version null). */
+export async function insertDefinitionDraft(input: {
+  key: string;
+  title: string;
+  createdBy: string | null;
+  definition: BuilderQuestionnaire;
+}): Promise<void> {
+  const db = createHttpDb();
+  await db.insert(questionnaireDefinitions).values({
+    key: input.key,
+    title: input.title,
+    definition: input.definition,
+    status: "draft",
+    version: null,
+    createdBy: input.createdBy,
+  });
+}
+
+/**
+ * Autosave the working head: rewrites the definition jsonb and keeps the display
+ * `title` column in sync with definition.title. Never touches key/version/status.
+ */
+export async function updateDefinitionRow(input: {
+  key: string;
+  title: string;
+  definition: BuilderQuestionnaire;
+}): Promise<void> {
+  const db = createHttpDb();
+  await db
+    .update(questionnaireDefinitions)
+    .set({
+      title: input.title,
+      definition: input.definition,
+      updatedAt: new Date(),
+    })
+    .where(eq(questionnaireDefinitions.key, input.key));
+}
+
+/** A row's title + definition for cloning, or null. */
+export async function getDefinitionRowForClone(
+  key: string,
+): Promise<{ title: string; definition: unknown } | null> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      title: questionnaireDefinitions.title,
+      definition: questionnaireDefinitions.definition,
+    })
+    .from(questionnaireDefinitions)
+    .where(eq(questionnaireDefinitions.key, key))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Hard-delete a definition row (caller enforces draft-only + ownership). */
+export async function deleteDefinitionRow(key: string): Promise<void> {
+  const db = createHttpDb();
+  await db
+    .delete(questionnaireDefinitions)
+    .where(eq(questionnaireDefinitions.key, key));
 }

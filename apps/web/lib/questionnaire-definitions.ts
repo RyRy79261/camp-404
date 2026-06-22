@@ -1,9 +1,22 @@
 import "server-only";
 
-import type { BuilderQuestionnaire, Questionnaire } from "@camp404/types";
+import { randomUUID } from "node:crypto";
 import {
+  BuilderQuestionnaire,
+  flattenBuilderQuestions,
+  regenerateBuilderIds,
+} from "@camp404/types";
+import type { Questionnaire } from "@camp404/types";
+import { slugify } from "@camp404/core";
+import {
+  definitionKeyExists,
+  deleteDefinitionRow,
+  getDefinitionRowForClone,
   getQuestionnaireDefinitionRow,
   getQuestionnaireVersionRow,
+  insertDefinitionDraft,
+  listDefinitionRows,
+  updateDefinitionRow,
 } from "@camp404/db/questionnaire-definitions";
 import {
   BURNER_PROFILE_TEMPLATE,
@@ -61,4 +74,126 @@ export async function getBuilderDefinition(
     : (await getQuestionnaireDefinitionRow(key))?.definition;
   if (raw == null) return null;
   return parseStoredBuilderDefinition(raw);
+}
+
+// --- Builder authoring (Phase C) -----------------------------------------
+
+const DRAFT_VERSION = "1";
+
+/** A blank one-page builder questionnaire to start a draft from. */
+function blankDefinition(title: string): BuilderQuestionnaire {
+  return {
+    version: DRAFT_VERSION,
+    title,
+    pages: [{ id: randomUUID(), type: "question", title: "", blocks: [] }],
+  };
+}
+
+/**
+ * Mint a unique, immutable definition key from a title — a slug plus a numeric
+ * suffix until free. Reserved code keys count as taken.
+ */
+export async function generateDefinitionKey(title: string): Promise<string> {
+  const base = slugify(title) || "questionnaire";
+  if (!(await definitionKeyExists(base))) return base;
+  for (let n = 2; n < 1000; n++) {
+    const candidate = `${base}-${n}`;
+    if (!(await definitionKeyExists(candidate))) return candidate;
+  }
+  return `${base}-${randomUUID().slice(0, 8)}`;
+}
+
+/** Create a blank draft owned by `createdBy`; returns its new key. */
+export async function createDraft(input: {
+  title: string;
+  createdBy: string;
+}): Promise<string> {
+  const title = input.title.trim() || "Untitled questionnaire";
+  const key = await generateDefinitionKey(title);
+  await insertDefinitionDraft({
+    key,
+    title,
+    createdBy: input.createdBy,
+    definition: blankDefinition(title),
+  });
+  return key;
+}
+
+/** Autosave the working head (validated upstream). */
+export async function updateDefinition(
+  key: string,
+  definition: BuilderQuestionnaire,
+): Promise<void> {
+  await updateDefinitionRow({
+    key,
+    title: definition.title.trim() || "Untitled questionnaire",
+    definition,
+  });
+}
+
+/** Duplicate a definition into a fresh draft; returns the new key, or null. */
+export async function duplicateDefinition(input: {
+  key: string;
+  createdBy: string;
+}): Promise<string | null> {
+  const row = await getDefinitionRowForClone(input.key);
+  if (!row) return null;
+  const parsed = BuilderQuestionnaire.safeParse(row.definition);
+  if (!parsed.success) return null;
+  const title = `${parsed.data.title || "Untitled questionnaire"} (copy)`;
+  const key = await generateDefinitionKey(title);
+  await insertDefinitionDraft({
+    key,
+    title,
+    createdBy: input.createdBy,
+    definition: regenerateBuilderIds(
+      { ...parsed.data, version: DRAFT_VERSION, title },
+      randomUUID,
+    ),
+  });
+  return key;
+}
+
+/** Hard-delete a draft (caller enforces draft-only + ownership). */
+export async function deleteDraft(key: string): Promise<void> {
+  await deleteDefinitionRow(key);
+}
+
+export interface DefinitionSummary {
+  key: string;
+  title: string;
+  status: "draft" | "published" | "unpublished";
+  questionCount: number;
+  createdBy: string | null;
+  updatedAt: Date;
+}
+
+/**
+ * The hub list for a viewer. Captains see every builder questionnaire;
+ * team-leads see published ones plus their own drafts. Newest first.
+ */
+export async function listDefinitionsForViewer(input: {
+  userId: string;
+  canSeeAll: boolean;
+}): Promise<DefinitionSummary[]> {
+  const rows = await listDefinitionRows();
+  return rows
+    .filter(
+      (r) =>
+        input.canSeeAll || r.status !== "draft" || r.createdBy === input.userId,
+    )
+    .map((r) => {
+      const parsed = BuilderQuestionnaire.safeParse(r.definition);
+      return {
+        key: r.key,
+        title: r.title,
+        status: r.status,
+        questionCount: parsed.success
+          ? flattenBuilderQuestions(parsed.data).length
+          : 0,
+        createdBy: r.createdBy,
+        updatedAt: r.updatedAt,
+      };
+    })
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 }
