@@ -29,7 +29,8 @@ describe("BuilderPreview", () => {
     render(<BuilderPreview questionnaire={def} onComplete={onComplete} />);
 
     expect(screen.getByRole("heading", { name: "Welcome" })).toBeTruthy();
-    expect(screen.getByText("Page 1 of 1")).toBeTruthy();
+    // Single-page forms suppress the progress row (spec §5).
+    expect(screen.queryByText("Page 1 of 1")).toBeNull();
 
     // No-op action: finishing a single-page preview just calls onComplete (the
     // submit runs in a transition, so wait for it).

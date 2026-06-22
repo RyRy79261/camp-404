@@ -29,11 +29,13 @@ export function BlockingTopBar({
   current,
   total,
   signOutHref = "/auth/sign-out",
+  showProgress = true,
 }: {
   title: string;
   current: number;
   total: number;
   signOutHref?: string;
+  showProgress?: boolean;
 }) {
   return (
     <div className="sticky top-0 z-20 -mx-4 flex flex-col gap-2 border-b bg-card px-4 py-3">
@@ -47,17 +49,19 @@ export function BlockingTopBar({
           <a href={signOutHref}>Sign out</a>
         </Button>
       </div>
-      <div className="flex items-center gap-2.5">
-        <span className="shrink-0 font-mono text-caption text-muted-foreground">
-          Step {current} of {total}
-        </span>
-        <ProgressBar
-          value={current}
-          max={total}
-          label="Questionnaire progress"
-          className="flex-1"
-        />
-      </div>
+      {showProgress && (
+        <div className="flex items-center gap-2.5">
+          <span className="shrink-0 font-mono text-caption text-muted-foreground">
+            Step {current} of {total}
+          </span>
+          <ProgressBar
+            value={current}
+            max={total}
+            label="Questionnaire progress"
+            className="flex-1"
+          />
+        </div>
+      )}
     </div>
   );
 }

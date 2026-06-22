@@ -3,21 +3,14 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
-  Calendar,
   ChevronDown,
   ChevronUp,
-  CircleDot,
   Eye,
-  FileText,
   GripVertical,
-  Hash,
   Heading,
   Image as ImageIcon,
-  ListChecks,
   Loader2,
-  Mail,
   Minus,
-  Phone,
   Pencil,
   Plus,
   Settings2,
@@ -25,7 +18,6 @@ import {
   StickyNote,
   ToggleRight,
   Trash2,
-  Type,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -71,23 +63,17 @@ import {
 import { BlockEditorDialog } from "./block-editor";
 import { PageSettingsDialog } from "./page-settings-dialog";
 import { BlockCatalogDialog } from "./block-catalog-dialog";
+import { BUILDER_FIELD_KINDS } from "./field-kinds";
 
+// The 12 builder kinds come from the shared palette table; `scale`/`toggle` are
+// legacy code-questionnaire kinds the Question union still includes.
 const QUESTION_META: Record<Question["kind"], { label: string; icon: LucideIcon }> = {
-  short_text: { label: "Short text", icon: Type },
-  long_text: { label: "Long text", icon: FileText },
-  email: { label: "Email", icon: Mail },
-  phone: { label: "Phone", icon: Phone },
-  number: { label: "Number", icon: Hash },
-  slider: { label: "Scale / slider", icon: SlidersHorizontal },
+  ...Object.fromEntries(
+    BUILDER_FIELD_KINDS.map(({ kind, label, icon }) => [kind, { label, icon }]),
+  ),
   scale: { label: "Scale", icon: SlidersHorizontal },
-  single_select: { label: "Single select", icon: CircleDot },
-  multi_select: { label: "Multi select", icon: ListChecks },
-  combobox: { label: "Dropdown", icon: ChevronDown },
   toggle: { label: "Toggle", icon: ToggleRight },
-  boolean: { label: "Yes / no", icon: ToggleRight },
-  date: { label: "Date", icon: Calendar },
-  image: { label: "Image upload", icon: ImageIcon },
-};
+} as Record<Question["kind"], { label: string; icon: LucideIcon }>;
 
 function describeBlock(block: Block): {
   label: string;
@@ -406,17 +392,16 @@ export function BuilderCanvas({
                 <Eye /> Preview
               </Link>
             </Button>
-            <Button
-              type="button"
-              disabled
-              title={
-                canPublish
+            <div className="flex flex-col items-end gap-1">
+              <Button type="button" disabled aria-describedby="publish-reason">
+                Publish
+              </Button>
+              <span id="publish-reason" className="text-xs text-muted-foreground">
+                {canPublish
                   ? "Publishing arrives in the next update"
-                  : "Only captains can publish"
-              }
-            >
-              Publish
-            </Button>
+                  : "Only captains can publish"}
+              </span>
+            </div>
           </div>
         </div>
       </div>

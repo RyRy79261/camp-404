@@ -1,4 +1,19 @@
 import type { Question } from "@camp404/types";
+import {
+  Calendar,
+  ChevronDown,
+  CircleDot,
+  FileText,
+  Hash,
+  Image as ImageIcon,
+  ListChecks,
+  Mail,
+  Phone,
+  SlidersHorizontal,
+  ToggleRight,
+  Type,
+  type LucideIcon,
+} from "lucide-react";
 
 // The input kinds the builder palette exposes (the legacy categorical `scale` /
 // segmented-string `toggle` kinds are not authored here — see
@@ -17,19 +32,29 @@ export type BuilderFieldKind =
   | "boolean"
   | "image";
 
-export const BUILDER_FIELD_KINDS: { kind: BuilderFieldKind; label: string }[] = [
-  { kind: "short_text", label: "Short text" },
-  { kind: "long_text", label: "Long text" },
-  { kind: "email", label: "Email" },
-  { kind: "phone", label: "Phone" },
-  { kind: "number", label: "Number" },
-  { kind: "slider", label: "Scale / slider" },
-  { kind: "single_select", label: "Single select" },
-  { kind: "multi_select", label: "Multi select" },
-  { kind: "combobox", label: "Dropdown" },
-  { kind: "date", label: "Date" },
-  { kind: "boolean", label: "Yes / no" },
-  { kind: "image", label: "Image upload" },
+export interface BuilderFieldMeta {
+  kind: BuilderFieldKind;
+  label: string;
+  icon: LucideIcon;
+  desc: string;
+}
+
+// Single source of truth for the builder palette (order + label + icon + desc).
+// The editor's field-type <select>, the add-block catalog tiles, and the canvas
+// block-row metadata all derive from this one table.
+export const BUILDER_FIELD_KINDS: BuilderFieldMeta[] = [
+  { kind: "short_text", label: "Short text", icon: Type, desc: "Single line answer" },
+  { kind: "long_text", label: "Long text", icon: FileText, desc: "Multi-line paragraph" },
+  { kind: "email", label: "Email", icon: Mail, desc: "An email address" },
+  { kind: "phone", label: "Phone", icon: Phone, desc: "A phone number" },
+  { kind: "number", label: "Number", icon: Hash, desc: "A number in a range" },
+  { kind: "slider", label: "Scale / slider", icon: SlidersHorizontal, desc: "Rate on a numeric range" },
+  { kind: "single_select", label: "Single select", icon: CircleDot, desc: "Choose one option" },
+  { kind: "multi_select", label: "Multi select", icon: ListChecks, desc: "Choose several options" },
+  { kind: "combobox", label: "Dropdown", icon: ChevronDown, desc: "Searchable single choice" },
+  { kind: "date", label: "Date", icon: Calendar, desc: "Pick a calendar date" },
+  { kind: "boolean", label: "Yes / no", icon: ToggleRight, desc: "An on/off switch" },
+  { kind: "image", label: "Image upload", icon: ImageIcon, desc: "Upload a photo" },
 ];
 
 export const CHOICE_KINDS = [

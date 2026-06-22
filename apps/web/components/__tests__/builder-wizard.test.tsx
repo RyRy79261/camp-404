@@ -122,3 +122,73 @@ describe("BuilderWizard — persisted saves (persistProgress)", () => {
     expect(screen.getByText("Page 1 of 2")).toBeTruthy();
   });
 });
+
+describe("BuilderWizard — resume & single-page (spec §5)", () => {
+  const noop = vi.fn(async () => ({ ok: true as const }));
+
+  it("resumes at the first incomplete page on persisted re-entry", () => {
+    // name done; lead=true makes the required `team` field visible + unanswered.
+    render(
+      <BuilderWizard
+        questionnaire={def}
+        initialResponses={{ name: "Ada", lead: true }}
+        action={noop}
+        persistProgress
+        variant="onboarding"
+        submitLabel="Finish"
+      />,
+    );
+    expect(screen.getByText("Page 2 of 2")).toBeTruthy();
+    expect(screen.getByText("Which team?")).toBeTruthy();
+  });
+
+  it("starts at the top when there are no saved answers", () => {
+    render(
+      <BuilderWizard
+        questionnaire={def}
+        initialResponses={{}}
+        action={noop}
+        persistProgress
+        variant="onboarding"
+        submitLabel="Finish"
+      />,
+    );
+    expect(screen.getByText("Page 1 of 2")).toBeTruthy();
+  });
+
+  it("hides the progress row for a single-page form", () => {
+    const single = BuilderQuestionnaire.parse({
+      version: "1",
+      title: "One",
+      pages: [
+        {
+          id: "p1",
+          type: "question",
+          title: "Only",
+          blocks: [
+            {
+              kind: "question",
+              question: {
+                id: "n",
+                kind: "short_text",
+                prompt: "Name",
+                required: false,
+              },
+            },
+          ],
+        },
+      ],
+    });
+    render(
+      <BuilderWizard
+        questionnaire={single}
+        initialResponses={{}}
+        action={noop}
+        persistProgress={false}
+        variant="onboarding"
+        submitLabel="Finish"
+      />,
+    );
+    expect(screen.queryByText(/Page 1 of 1/)).toBeNull();
+  });
+});

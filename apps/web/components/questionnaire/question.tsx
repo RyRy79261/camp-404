@@ -93,6 +93,12 @@ function FieldInput({
   onChange: (value: QuestionnaireResponseValue) => void;
   fullScreen?: boolean;
 }) {
+  // The choice/group controls (radiogroup, group) aren't bound by the prompt's
+  // `<Label htmlFor>`, so their aria-label carries the required state too.
+  const ariaLabel =
+    "required" in question && question.required
+      ? `${question.prompt} (required)`
+      : question.prompt;
   switch (question.kind) {
     case "slider": {
       if (question.display === "segmented") {
@@ -112,7 +118,7 @@ function FieldInput({
           <div className="flex flex-col gap-2">
             <SegmentedControl
               id={id}
-              aria-label={question.prompt}
+              aria-label={ariaLabel}
               options={cells.map((n) => ({
                 value: String(n),
                 label: String(n),
@@ -143,7 +149,7 @@ function FieldInput({
           </div>
           <Slider
             id={id}
-            aria-label={question.prompt}
+            aria-label={ariaLabel}
             value={[current]}
             onValueChange={(v) => onChange(v[0] ?? current)}
             min={question.min}
@@ -172,7 +178,7 @@ function FieldInput({
             id={id}
             type="number"
             inputMode="numeric"
-            aria-label={question.prompt}
+            aria-label={ariaLabel}
             min={question.min}
             max={question.max}
             value={current ?? ""}
@@ -191,7 +197,7 @@ function FieldInput({
         <div className="flex flex-col gap-2">
           <SegmentedControl
             id={id}
-            aria-label={question.prompt}
+            aria-label={ariaLabel}
             options={cells.map((n) => ({ value: String(n), label: String(n) }))}
             value={current !== undefined ? String(current) : undefined}
             onValueChange={(v) => onChange(Number(v))}
@@ -210,7 +216,7 @@ function FieldInput({
       return (
         <OptionCardGroup
           id={id}
-          aria-label={question.prompt}
+          aria-label={ariaLabel}
           options={question.options.map((o) => ({
             value: o.value,
             label: o.label,
@@ -227,7 +233,7 @@ function FieldInput({
         <div
           id={id}
           role="group"
-          aria-label={question.prompt}
+          aria-label={ariaLabel}
           className="flex flex-col gap-3"
         >
           {question.options.map((o) => {
@@ -287,7 +293,7 @@ function FieldInput({
       return (
         <OptionCardGroup
           id={id}
-          aria-label={question.prompt}
+          aria-label={ariaLabel}
           options={question.steps.map((s) => ({ value: s.value, label: s.label }))}
           value={typeof value === "string" ? value : undefined}
           onValueChange={onChange}
@@ -299,7 +305,7 @@ function FieldInput({
       return (
         <SegmentedControl
           id={id}
-          aria-label={question.prompt}
+          aria-label={ariaLabel}
           options={question.options}
           value={typeof value === "string" ? value : undefined}
           onValueChange={onChange}
