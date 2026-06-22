@@ -16,6 +16,10 @@ import {
   openActivation,
   satisfyRequiredAction,
 } from "../activations";
+import {
+  closeActivation,
+  isOpenActivationConflict,
+} from "../questionnaire-lifecycle";
 import * as schema from "../schema";
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
@@ -102,6 +106,10 @@ describe("openActivation — fan-out", () => {
     await satisfyRequiredAction(u.id, "feedback", "1-v1");
     expect((await requiredActionsFor(db, u.id))[0]!.status).toBe("completed");
 
+    // The one-open-per-key invariant (partial unique index) forbids a second
+    // overlapping open, so re-sending closes the current activation first; the
+    // user's completed gate is left intact by the close (only pending → expired).
+    await closeActivation(act1.id);
     const act2 = await makeActivation(db, {
       questionnaireKey: "feedback",
       version: "1-v2",
@@ -132,6 +140,32 @@ describe("openActivation — fan-out", () => {
     });
     const optin = await makeActivation(db, { scope: "opt_in" });
     expect((await openActivation(optin.id)).ok).toBe(false);
+  });
+
+  it("the partial unique index forbids a second concurrent open for one key", async () => {
+    const db = h.db();
+    // The Send pre-check normally catches this; here we drive openActivation
+    // directly to prove the DB-level backstop ("...one_open_per_key_idx") fires
+    // when two opens race past the application guard.
+    const act1 = await makeActivation(db, {
+      questionnaireKey: "feedback",
+      scope: "individual",
+    });
+    const act2 = await makeActivation(db, {
+      questionnaireKey: "feedback",
+      scope: "individual",
+    });
+    expect((await openActivation(act1.id)).ok).toBe(true);
+    const err = await openActivation(act2.id).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeTruthy();
+    // The thrown error must be recognised by sendActivation's discriminator —
+    // otherwise a real concurrent race would surface as a generic failure
+    // instead of the "already open" message. Asserting via the shared helper
+    // ties the actual driver error shape to the catch logic.
+    expect(isOpenActivationConflict(err)).toBe(true);
   });
 });
 

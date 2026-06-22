@@ -110,6 +110,7 @@ export async function openActivation(
             activationId: act.id,
             title: act.title,
             blocking: act.blocking,
+            dueAt: act.dueAt,
           })),
         )
         .onConflictDoUpdate({
@@ -122,6 +123,7 @@ export async function openActivation(
             activationId: act.id,
             title: act.title,
             blocking: act.blocking,
+            dueAt: act.dueAt,
             status: "pending",
             completedAt: null,
           },
