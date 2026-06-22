@@ -43,6 +43,21 @@ describe("morphQuestion", () => {
     ]);
   });
 
+  it("injects sensible numeric defaults for number and slider", () => {
+    const n = morphQuestion(short, "number");
+    expect(n).toMatchObject({ kind: "number", min: 0, max: 6 });
+    const s = morphQuestion(short, "slider");
+    expect(s).toMatchObject({ kind: "slider", min: 1, max: 5, step: 1 });
+  });
+
+  it("falls back to two default options when the source has no usable options", () => {
+    const m = morphQuestion(short, "single_select");
+    expect("options" in m && m.options).toEqual([
+      { value: "option-1", label: "Option 1" },
+      { value: "option-2", label: "Option 2" },
+    ]);
+  });
+
   it("produces a parseable question for every builder kind", () => {
     for (const kind of [
       "short_text",

@@ -24,16 +24,13 @@ import type { Block } from "@camp404/types";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@camp404/ui/components/dialog";
 import { Input } from "@camp404/ui/components/input";
 import { morphQuestion, type BuilderFieldKind } from "./field-kinds";
-
-const newId = (): string =>
-  typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `id-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+import { newId } from "./builder-ops";
 
 function makeQuestion(kind: BuilderFieldKind): Block {
   return {
@@ -161,6 +158,9 @@ export function BlockCatalogDialog({
       <DialogContent className="flex max-h-[90dvh] flex-col gap-4 overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add block</DialogTitle>
+          <DialogDescription>
+            Pick a field or content block to add to this page.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3">

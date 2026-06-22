@@ -62,6 +62,7 @@ import {
   blockId,
   moveBlock,
   movePage,
+  newId,
   patchPage,
   removeBlock,
   removePage,
@@ -70,11 +71,6 @@ import {
 import { BlockEditorDialog } from "./block-editor";
 import { PageSettingsDialog } from "./page-settings-dialog";
 import { BlockCatalogDialog } from "./block-catalog-dialog";
-
-const newId = (): string =>
-  typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `id-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
 
 const QUESTION_META: Record<Question["kind"], { label: string; icon: LucideIcon }> = {
   short_text: { label: "Short text", icon: Type },
@@ -314,7 +310,15 @@ export function BuilderCanvas({
                   size="icon"
                   aria-label="Delete page"
                   disabled={working.pages.length <= 1}
-                  onClick={() => persist(removePage(working, page.id))}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Delete page ${pageIndex + 1} and its ${page.blocks.length} block(s)? This can't be undone.`,
+                      )
+                    )
+                      return;
+                    persist(removePage(working, page.id));
+                  }}
                 >
                   <Trash2 className="text-destructive" />
                 </Button>
@@ -352,7 +356,7 @@ export function BuilderCanvas({
               </DndContext>
             ) : (
               <p className="rounded-lg border border-dashed border-border py-4 text-center text-xs text-muted-foreground">
-                No questions yet.
+                No blocks yet.
               </p>
             )}
 

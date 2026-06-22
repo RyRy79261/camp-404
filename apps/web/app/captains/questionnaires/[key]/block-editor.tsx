@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Trash2 } from "lucide-react";
 import type { Block, ContentBlock, Question } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -21,6 +22,7 @@ import { ContentBlockRenderer } from "@/components/questionnaire/content-block";
 import { OptionsEditor } from "./options-editor";
 import {
   BUILDER_FIELD_KINDS,
+  isChoiceKind,
   morphQuestion,
   type BuilderFieldKind,
 } from "./field-kinds";
@@ -29,12 +31,7 @@ function blockValid(block: Block): boolean {
   if (block.kind === "question") {
     const q = block.question;
     if (!q.prompt.trim()) return false;
-    if (
-      (q.kind === "single_select" ||
-        q.kind === "multi_select" ||
-        q.kind === "combobox") &&
-      q.options.length < 2
-    ) {
+    if (isChoiceKind(q) && q.options.length < 2) {
       return false;
     }
     return true;
@@ -89,6 +86,11 @@ export function BlockEditorDialog({
           <DialogTitle>
             {draft.kind === "question" ? "Edit field" : "Edit block"}
           </DialogTitle>
+          <DialogDescription>
+            {draft.kind === "question"
+              ? "Edit this field and preview how respondents will see it."
+              : "Edit this block and preview how respondents will see it."}
+          </DialogDescription>
         </DialogHeader>
 
         {draft.kind === "question" ? (
@@ -150,6 +152,9 @@ function QuestionEditor({
   patch: (patch: Record<string, unknown>) => void;
   setQuestion: (question: Question) => void;
 }) {
+  const kindId = useId();
+  const requiredId = useId();
+  const dictationId = useId();
   const num = (raw: string, fallback: number) => {
     if (raw.trim() === "") return fallback; // clearing the box keeps the prior value (not 0)
     const n = Number(raw);
@@ -158,9 +163,9 @@ function QuestionEditor({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="field-kind">Field type</Label>
+        <Label htmlFor={kindId}>Field type</Label>
         <select
-          id="field-kind"
+          id={kindId}
           className={SELECT_CLASS}
           value={question.kind}
           onChange={(e) =>
@@ -188,9 +193,9 @@ function QuestionEditor({
         onChange={(e) => patch({ helper: e.currentTarget.value || undefined })}
       />
       <div className="flex items-center justify-between">
-        <Label htmlFor="field-required">Required</Label>
+        <Label htmlFor={requiredId}>Required</Label>
         <Switch
-          id="field-required"
+          id={requiredId}
           checked={question.required}
           onCheckedChange={(c) => patch({ required: c })}
         />
@@ -219,9 +224,9 @@ function QuestionEditor({
       )}
       {question.kind === "long_text" && (
         <div className="flex items-center justify-between">
-          <Label htmlFor="field-dictation">Enable voice dictation</Label>
+          <Label htmlFor={dictationId}>Enable voice dictation</Label>
           <Switch
-            id="field-dictation"
+            id={dictationId}
             checked={question.enableDictation ?? false}
             onCheckedChange={(c) => patch({ enableDictation: c })}
           />
@@ -255,6 +260,7 @@ function QuestionEditor({
         <div className="flex flex-col gap-1.5">
           <Label>Display</Label>
           <SegmentedControl
+            aria-label="Display"
             options={[
               { value: "continuous", label: "Slider" },
               { value: "segmented", label: "Number row" },
@@ -264,9 +270,7 @@ function QuestionEditor({
           />
         </div>
       )}
-      {(question.kind === "single_select" ||
-        question.kind === "multi_select" ||
-        question.kind === "combobox") && (
+      {isChoiceKind(question) && (
         <div className="flex flex-col gap-1.5">
           <Label>Options</Label>
           <OptionsEditor
@@ -310,6 +314,7 @@ function ContentEditor({
           <div className="flex flex-col gap-1.5">
             <Label>Alignment</Label>
             <SegmentedControl
+              aria-label="Text alignment"
               options={[
                 { value: "left", label: "Left" },
                 { value: "center", label: "Center" },
@@ -333,6 +338,7 @@ function ContentEditor({
           <div className="flex flex-col gap-1.5">
             <Label>Style</Label>
             <SegmentedControl
+              aria-label="Explainer style"
               options={[
                 { value: "plain", label: "Plain" },
                 { value: "note", label: "Note" },
@@ -368,6 +374,7 @@ function ContentEditor({
           <div className="flex flex-col gap-1.5">
             <Label>Size &amp; fit</Label>
             <SegmentedControl
+              aria-label="Image size and fit"
               options={[
                 { value: "fit", label: "Fit" },
                 { value: "fill", label: "Fill" },

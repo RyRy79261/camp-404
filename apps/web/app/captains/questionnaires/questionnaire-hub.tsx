@@ -90,7 +90,7 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
             label="Questionnaire name"
             value={name}
             onChange={(e) => setName(e.currentTarget.value)}
-            placeholder="e.g. Burner profile"
+            placeholder="e.g. Camp feedback"
             autoFocus
             onKeyDown={(e) => {
               if (e.key === "Enter") create();

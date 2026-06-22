@@ -9,6 +9,12 @@ export function blockId(block: Block): string {
   return block.kind === "question" ? block.question.id : block.id;
 }
 
+/** A fresh client-generated id for a new page / block / question. */
+export const newId = (): string =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `id-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+
 function move<T>(arr: readonly T[], from: number, to: number): T[] {
   const next = [...arr];
   if (from < 0 || from >= next.length) return next;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BuilderQuestionnaire, type Block } from "@camp404/types";
+import { BuilderQuestionnaire, type Block, type BuilderPage } from "@camp404/types";
 
 import {
   addBlock,
@@ -7,8 +7,10 @@ import {
   blockId,
   moveBlock,
   movePage,
+  patchPage,
   removeBlock,
   removePage,
+  replaceBlock,
 } from "../builder-ops";
 
 const def = BuilderQuestionnaire.parse({
@@ -77,5 +79,56 @@ describe("builder-ops", () => {
     expect(removePage(def, "p2").pages.map((p) => p.id)).toEqual(["p1"]);
     const single = removePage(def, "p2");
     expect(removePage(single, "p1").pages.map((p) => p.id)).toEqual(["p1"]);
+  });
+
+  it("moveBlock ignores an out-of-range source index", () => {
+    expect(ids(moveBlock(def, "p1", 5, 0), "p1")).toEqual(["a", "h", "b"]);
+    expect(ids(moveBlock(def, "p1", -1, 0), "p1")).toEqual(["a", "h", "b"]);
+  });
+
+  it("moveBlock clamps a destination past the end / below 0", () => {
+    expect(ids(moveBlock(def, "p1", 0, 99), "p1")).toEqual(["h", "b", "a"]);
+    expect(ids(moveBlock(def, "p1", 2, -5), "p1")).toEqual(["b", "a", "h"]);
+  });
+
+  it("movePage ignores an out-of-range index", () => {
+    expect(movePage(def, 9, 0).pages.map((p) => p.id)).toEqual(["p1", "p2"]);
+  });
+
+  it("addPage appends at the end when afterPageId is null or unknown", () => {
+    const next: BuilderPage = {
+      id: "pZ",
+      type: "question",
+      title: "",
+      blocks: [],
+    };
+    expect(addPage(def, null, next).pages.map((p) => p.id)).toEqual([
+      "p1",
+      "p2",
+      "pZ",
+    ]);
+    expect(addPage(def, "nope", next).pages.map((p) => p.id)).toEqual([
+      "p1",
+      "p2",
+      "pZ",
+    ]);
+  });
+
+  it("replaceBlock swaps a block by id, preserving order", () => {
+    const next: Block = { id: "h", kind: "header_break", headingText: "H2" };
+    const page = replaceBlock(def, "p1", "h", next).pages.find(
+      (p) => p.id === "p1",
+    )!;
+    expect(page.blocks.map(blockId)).toEqual(["a", "h", "b"]);
+    expect(page.blocks[1]).toEqual(next);
+  });
+
+  it("patchPage updates title without touching id/blocks", () => {
+    const page = patchPage(def, "p1", { title: "New" }).pages.find(
+      (p) => p.id === "p1",
+    )!;
+    expect(page.title).toBe("New");
+    expect(page.id).toBe("p1");
+    expect(page.blocks.map(blockId)).toEqual(["a", "h", "b"]);
   });
 });

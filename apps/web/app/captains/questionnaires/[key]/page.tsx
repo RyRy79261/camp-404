@@ -40,6 +40,7 @@ export default async function BuilderCanvasPage({
       <GhostBack href="/captains/questionnaires" className="-ml-2 mb-4">
         Questionnaires
       </GhostBack>
+      <h1 className="sr-only">Edit questionnaire</h1>
       {children}
     </main>
   );

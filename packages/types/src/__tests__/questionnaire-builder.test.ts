@@ -235,6 +235,43 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
     expect(errors.some((e) => /alt text/i.test(e))).toBe(true);
     expect(errors.some((e) => /shows-when/i.test(e))).toBe(true);
   });
+
+  it("rejects a questionnaire with no input fields", () => {
+    const q = build({
+      version: "1",
+      title: "T",
+      pages: [
+        {
+          id: "p1",
+          type: "content",
+          title: "Welcome",
+          blocks: [{ id: "hdr", kind: "header_break", headingText: "Hi" }],
+        },
+      ],
+    });
+    const errors = validateBuilderQuestionnaire(q);
+    expect(errors.some((e) => /at least one input/i.test(e))).toBe(true);
+  });
+
+  it("rejects a form where no page is visible under empty answers", () => {
+    const q = build({
+      version: "1",
+      title: "T",
+      pages: [
+        {
+          id: "p1",
+          type: "question",
+          title: "P",
+          visibleIf: { fieldId: "x", op: "is_answered" },
+          blocks: [
+            { kind: "question", question: { id: "a", kind: "short_text", prompt: "A" } },
+          ],
+        },
+      ],
+    });
+    const errors = validateBuilderQuestionnaire(q);
+    expect(errors.some((e) => /shows no pages/i.test(e))).toBe(true);
+  });
 });
 
 describe("classifyChange", () => {
@@ -320,5 +357,45 @@ describe("classifyChange", () => {
       ],
     });
     expect(classifyChange(base, narrow)).toBe("breaking");
+  });
+
+  it("treats adding, removing, or editing a visibleIf as breaking", () => {
+    const withCond = build({
+      version: "1",
+      title: "T",
+      pages: [
+        {
+          ...QUESTION_PAGE,
+          blocks: [
+            QUESTION_PAGE.blocks[0],
+            QUESTION_PAGE.blocks[1],
+            {
+              ...QUESTION_PAGE.blocks[2],
+              visibleIf: { fieldId: "name", op: "is_answered" },
+            },
+          ],
+        },
+      ],
+    });
+    expect(classifyChange(base, withCond)).toBe("breaking"); // add
+    expect(classifyChange(withCond, base)).toBe("breaking"); // remove
+    const edited = build({
+      version: "1",
+      title: "T",
+      pages: [
+        {
+          ...QUESTION_PAGE,
+          blocks: [
+            QUESTION_PAGE.blocks[0],
+            QUESTION_PAGE.blocks[1],
+            {
+              ...QUESTION_PAGE.blocks[2],
+              visibleIf: { fieldId: "name", op: "is_empty" },
+            },
+          ],
+        },
+      ],
+    });
+    expect(classifyChange(withCond, edited)).toBe("breaking"); // edit
   });
 });

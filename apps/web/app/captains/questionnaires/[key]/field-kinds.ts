@@ -32,6 +32,19 @@ export const BUILDER_FIELD_KINDS: { kind: BuilderFieldKind; label: string }[] = 
   { kind: "image", label: "Image upload" },
 ];
 
+export const CHOICE_KINDS = [
+  "single_select",
+  "multi_select",
+  "combobox",
+] as const;
+
+/** Narrows to the question kinds that carry an `options` array. */
+export function isChoiceKind(
+  q: Question,
+): q is Extract<Question, { kind: (typeof CHOICE_KINDS)[number] }> {
+  return (CHOICE_KINDS as readonly string[]).includes(q.kind);
+}
+
 const DEFAULT_OPTIONS = [
   { value: "option-1", label: "Option 1" },
   { value: "option-2", label: "Option 2" },

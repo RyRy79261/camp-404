@@ -131,12 +131,6 @@ export async function updateDefinition(
   });
 }
 
-/** Deep-clone a definition with fresh ids + remapped visibleIf references —
- *  see regenerateBuilderIds in @camp404/types for the why. */
-function regenerateIds(def: BuilderQuestionnaire): BuilderQuestionnaire {
-  return regenerateBuilderIds(def, randomUUID);
-}
-
 /** Duplicate a definition into a fresh draft; returns the new key, or null. */
 export async function duplicateDefinition(input: {
   key: string;
@@ -152,7 +146,10 @@ export async function duplicateDefinition(input: {
     key,
     title,
     createdBy: input.createdBy,
-    definition: regenerateIds({ ...parsed.data, version: DRAFT_VERSION, title }),
+    definition: regenerateBuilderIds(
+      { ...parsed.data, version: DRAFT_VERSION, title },
+      randomUUID,
+    ),
   });
   return key;
 }

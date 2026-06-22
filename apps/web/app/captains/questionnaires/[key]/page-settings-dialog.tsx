@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Trash2 } from "lucide-react";
 import type { BuilderPage } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -41,6 +42,7 @@ export function PageSettingsDialog({
   const [requiredToContinue, setRequired] = useState(
     page.requiredToContinue ?? false,
   );
+  const requiredId = useId();
 
   return (
     <Dialog
@@ -52,6 +54,10 @@ export function PageSettingsDialog({
       <DialogContent className="flex flex-col gap-4">
         <DialogHeader>
           <DialogTitle>Page settings</DialogTitle>
+          <DialogDescription>
+            Rename the page, set its type, and control whether members must finish
+            it before continuing.
+          </DialogDescription>
         </DialogHeader>
 
         <InputField
@@ -66,6 +72,7 @@ export function PageSettingsDialog({
         <div className="flex flex-col gap-1.5">
           <Label>Page type</Label>
           <SegmentedControl
+            aria-label="Page type"
             options={[
               { value: "question", label: "Question page" },
               { value: "content", label: "Content page" },
@@ -80,13 +87,13 @@ export function PageSettingsDialog({
         </div>
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-col">
-            <Label htmlFor="page-required">Required to continue</Label>
+            <Label htmlFor={requiredId}>Required to continue</Label>
             <p className="text-xs text-muted-foreground">
               Members must finish this page before moving on.
             </p>
           </div>
           <Switch
-            id="page-required"
+            id={requiredId}
             checked={requiredToContinue}
             onCheckedChange={setRequired}
           />
