@@ -132,6 +132,7 @@ export async function definitionKeyExists(key: string): Promise<boolean> {
 export interface DefinitionMetaRow {
   key: string;
   status: DefinitionStatus;
+  version: string | null;
   createdBy: string | null;
 }
 
@@ -144,6 +145,7 @@ export async function getDefinitionMetaRow(
     .select({
       key: questionnaireDefinitions.key,
       status: questionnaireDefinitions.status,
+      version: questionnaireDefinitions.version,
       createdBy: questionnaireDefinitions.createdBy,
     })
     .from(questionnaireDefinitions)
