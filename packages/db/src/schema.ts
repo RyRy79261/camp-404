@@ -563,6 +563,14 @@ export const questionnaireActivations = pgTable(
   (a) => ({
     keyIdx: index("questionnaire_activations_key_idx").on(a.questionnaireKey),
     statusIdx: index("questionnaire_activations_status_idx").on(a.status),
+    // At most one OPEN activation per questionnaire key (spec §6.3). To change
+    // scope / blocking / dueAt the captain closes the current activation and
+    // opens a fresh one; this partial unique index forbids a second overlapping
+    // open at the database level (the Send action also pre-checks for a clean
+    // error). Mirrors captain_promotion_open_per_target_idx.
+    oneOpenPerKey: uniqueIndex("questionnaire_activations_one_open_per_key_idx")
+      .on(a.questionnaireKey)
+      .where(sql`${a.status} = 'open'`),
   }),
 );
 

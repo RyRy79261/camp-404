@@ -22,3 +22,23 @@ export function meetsRequiredVersion(
   }
   return completed >= required;
 }
+
+/**
+ * Mint the next published version for a BUILDER questionnaire. Builder versions
+ * are `<key>-v<N>`: a fixed base (the immutable definition key) plus a strictly
+ * incrementing counter, so meetsRequiredVersion always compares them on the
+ * numeric path — provably monotonic regardless of wall-clock. (The bespoke code
+ * questionnaires use a date base `<YYYY.MM.DD>-vN`, which is human-readable but
+ * relies on time only moving forward; publish versioning is automated, so it
+ * uses the clock-independent scheme instead.)
+ *
+ * The first publish is `<key>-v1`; each BREAKING re-publish bumps N. Cosmetic
+ * re-publishes keep the current version (the caller decides via classifyChange).
+ * A non-conforming `latest` (legacy / corrupt) falls back to `<key>-v1`.
+ */
+export function nextBuilderVersion(key: string, latest: string | null): string {
+  if (!latest) return `${key}-v1`;
+  const match = /-v(\d+)$/.exec(latest);
+  const n = match ? Number(match[1]) : 0;
+  return `${key}-v${n + 1}`;
+}

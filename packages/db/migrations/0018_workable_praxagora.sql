@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "questionnaire_activations_one_open_per_key_idx" ON "questionnaire_activations" USING btree ("questionnaire_key") WHERE "questionnaire_activations"."status" = 'open';

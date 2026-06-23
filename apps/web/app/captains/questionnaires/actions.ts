@@ -2,11 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { BuilderQuestionnaire } from "@camp404/types";
+import { BuilderQuestionnaire, Team } from "@camp404/types";
 import type { ViewerRank } from "@camp404/types";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { isTeamLead } from "@camp404/db/roster";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
+import {
+  closeActivation,
+  publishDefinition,
+  sendActivation,
+  unpublishDefinition,
+  type PublishResult,
+} from "@camp404/db/questionnaire-lifecycle";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import {
@@ -27,6 +34,10 @@ export type QResult = { ok: true } | { ok: false; error: string };
 export type QResultWithKey =
   | { ok: true; key: string }
   | { ok: false; error: string };
+export type QResultWithActivation =
+  | { ok: true; activationId: string }
+  | { ok: false; error: string };
+export type PublishActionResult = PublishResult;
 
 type CampUser = Awaited<ReturnType<typeof ensureCampUser>>;
 type AuthorGate =
@@ -51,6 +62,20 @@ async function gateAuthor(): Promise<AuthorGate> {
   return { ok: true, campUser, rank };
 }
 
+type CaptainGate =
+  | { ok: true; campUser: CampUser }
+  | { ok: false; error: string };
+
+/** Gate the lifecycle actions (publish / unpublish / send / close) to captains. */
+async function gateCaptain(): Promise<CaptainGate> {
+  const gate = await gateAuthor();
+  if (!gate.ok) return gate;
+  if (gate.rank !== "captain") {
+    return { ok: false, error: "Only captains can publish or send." };
+  }
+  return { ok: true, campUser: gate.campUser };
+}
+
 const Title = z
   .string()
   .trim()
@@ -70,17 +95,12 @@ async function assertCanEdit(
 ): Promise<QResult> {
   const meta = await getDefinitionMetaRow(key);
   if (!meta) return { ok: false, error: "Questionnaire not found." };
-  // Draft-only here: the published-edit (re-version) flow is Phase D. Until then
-  // a published/unpublished head must never be silently mutated by autosave.
-  if (meta.status !== "draft") {
-    return {
-      ok: false,
-      error: "Published questionnaires can't be edited here yet.",
-    };
-  }
+  // Editing a PUBLISHED head is allowed (the §4.2 re-version flow): autosave
+  // mutates the working head while the live snapshot keeps serving open
+  // activations until the captain re-publishes. Ownership still gates team-leads.
   if (gate.rank === "captain") return { ok: true };
   if (meta.createdBy !== gate.campUser.id) {
-    return { ok: false, error: "You can only edit your own drafts." };
+    return { ok: false, error: "You can only edit your own questionnaires." };
   }
   return { ok: true };
 }
@@ -171,4 +191,93 @@ export async function deleteDraftAction(key: string): Promise<QResult> {
   await deleteDraft(key);
   revalidateBuilder();
   return { ok: true };
+}
+
+// --- Lifecycle: publish / unpublish / send / close (captain-only, Phase D) ---
+
+export async function publishAction(key: string): Promise<PublishActionResult> {
+  const gate = await gateCaptain();
+  if (!gate.ok) return { ok: false, errors: [gate.error] };
+  if (!Key.safeParse(key).success) return { ok: false, errors: ["Invalid key."] };
+  const meta = await getDefinitionMetaRow(key);
+  if (!meta) return { ok: false, errors: ["Questionnaire not found."] };
+  const result = await publishDefinition(key, gate.campUser.id);
+  if (result.ok) revalidateBuilder(key);
+  return result;
+}
+
+export async function unpublishAction(key: string): Promise<QResult> {
+  const gate = await gateCaptain();
+  if (!gate.ok) return gate;
+  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
+  const meta = await getDefinitionMetaRow(key);
+  if (!meta) return { ok: false, error: "Questionnaire not found." };
+  if (meta.status !== "published") {
+    return {
+      ok: false,
+      error: "Only a published questionnaire can be unpublished.",
+    };
+  }
+  const result = await unpublishDefinition(key);
+  if (result.ok) revalidateBuilder(key);
+  return result.ok ? { ok: true } : result;
+}
+
+const SendForm = z
+  .object({
+    scope: z.enum(["everyone", "team", "team_leads", "individual"]),
+    team: Team.nullish(),
+    blocking: z.boolean(),
+    // ISO datetime string from the client, or null for no deadline.
+    dueAt: z.string().datetime().nullish(),
+    targetUserIds: z.array(z.string().uuid()).optional(),
+  })
+  .refine((d) => d.scope !== "team" || Boolean(d.team), {
+    message: "Choose a team to send to.",
+  })
+  .refine(
+    (d) => d.scope !== "individual" || (d.targetUserIds?.length ?? 0) > 0,
+    { message: "Choose at least one member." },
+  );
+
+export async function sendAction(
+  key: string,
+  rawInput: unknown,
+): Promise<QResultWithActivation> {
+  const gate = await gateCaptain();
+  if (!gate.ok) return gate;
+  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
+  const parsed = SendForm.safeParse(rawInput);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid send settings.",
+    };
+  }
+  const result = await sendActivation({
+    questionnaireKey: key,
+    scope: parsed.data.scope,
+    team: parsed.data.team ?? null,
+    blocking: parsed.data.blocking,
+    dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
+    activatedByUserId: gate.campUser.id,
+    targetUserIds: parsed.data.targetUserIds,
+  });
+  if (!result.ok) return result;
+  revalidateBuilder(key);
+  return { ok: true, activationId: result.activationId };
+}
+
+export async function closeActivationAction(
+  activationId: string,
+  key?: string,
+): Promise<QResult> {
+  const gate = await gateCaptain();
+  if (!gate.ok) return gate;
+  if (!z.string().uuid().safeParse(activationId).success) {
+    return { ok: false, error: "Invalid activation." };
+  }
+  const result = await closeActivation(activationId);
+  if (result.ok) revalidateBuilder(key);
+  return result;
 }

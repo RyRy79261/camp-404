@@ -345,9 +345,12 @@ visible under empty responses (completable). Warnings (allow-with-confirm):
 - **Send** (captain, separate from Publish) opens an activation pinned to the
   **currently-published version** (immutable on the activation) and fans out
   `required_actions` via `openActivation()`. Scope (§6.4), blocking, dueAt.
-- **Invariant:** at most **one OPEN activation per key per user**. Activations are
-  immutable once opened; to change scope/blocking/dueAt the captain **closes** the
-  current activation and opens a fresh one (forbid a second overlapping open).
+- **Invariant:** at most **one OPEN activation per key** (enforced by a partial
+  unique index on `questionnaire_activations(questionnaire_key) WHERE status =
+  'open'`), which transitively gives each targeted user at most one open
+  obligation per key. Activations are immutable once opened; to change
+  scope/blocking/dueAt the captain **closes** the current activation and opens a
+  fresh one (a second overlapping open is forbidden).
 - **`closeActivation(activationId)`** (captain, new): one transaction — set
   activation `status='closed'`, `closedAt=now`, and UPDATE its **still-linked**
   pending `required_actions` (where `activationId` still equals this activation)
