@@ -228,15 +228,24 @@ describe("required-action getters", () => {
   it("getPendingRequiredActions returns only pending blocking rows, oldest first", async () => {
     const db = h.db();
     const u = await makeUser(db);
-    // blocking pending
-    const blocking = await makeActivation(db, {
+    // older blocking pending
+    const blockingA = await makeActivation(db, {
       questionnaireKey: "a",
       version: "1",
       scope: "individual",
       blocking: true,
     });
-    await addTarget(db, blocking.id, u.id);
-    await openActivation(blocking.id);
+    await addTarget(db, blockingA.id, u.id);
+    await openActivation(blockingA.id);
+    // newer blocking pending — proves the createdAt ordering, not just filtering
+    const blockingC = await makeActivation(db, {
+      questionnaireKey: "c",
+      version: "1",
+      scope: "individual",
+      blocking: true,
+    });
+    await addTarget(db, blockingC.id, u.id);
+    await openActivation(blockingC.id);
     // non-blocking pending (excluded)
     const nonBlocking = await makeActivation(db, {
       questionnaireKey: "b",
@@ -248,7 +257,7 @@ describe("required-action getters", () => {
     await openActivation(nonBlocking.id);
 
     const pending = await getPendingRequiredActions(u.id);
-    expect(pending.map((p) => p.actionKey)).toEqual(["a"]);
+    expect(pending.map((p) => p.actionKey)).toEqual(["a", "c"]);
   });
 
   it("getRequiredAction returns null when the user was never targeted", async () => {

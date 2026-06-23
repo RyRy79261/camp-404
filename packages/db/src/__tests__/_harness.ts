@@ -47,6 +47,11 @@ async function reset(): Promise<void> {
     "select tablename from pg_tables where schemaname = 'public'",
   );
   if (res.rows.length === 0) return;
+  // Dynamic SQL is safe here (static-analysis "SQL injection" flag is a false
+  // positive): the names come from the pg_tables system catalogue (not user
+  // input), are quoted as identifiers, and TRUNCATE cannot be parameterised.
+  // The `drizzle` migrations table lives in its own schema and is excluded by
+  // the schemaname filter, so the migration journal survives the reset.
   const list = res.rows.map((r) => `"public"."${r.tablename}"`).join(", ");
   await client.query(`truncate ${list} restart identity cascade`);
 }
