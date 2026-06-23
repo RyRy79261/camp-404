@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { isTeamLead } from "@camp404/db/roster";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
+import { getOpenActivationForKey } from "@camp404/db/questionnaire-lifecycle";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
@@ -63,11 +64,19 @@ export default async function BuilderCanvasPage({
     );
   }
 
+  // Lifecycle is captain-only; the open activation (if any) drives the Send vs.
+  // close-and-resend affordance.
+  const isCaptain = rank === "captain";
+  const openActivation = isCaptain ? await getOpenActivationForKey(key) : null;
+
   return chrome(
     <BuilderCanvas
       questionnaireKey={key}
       definition={definition}
-      canPublish={rank === "captain"}
+      canPublish={isCaptain}
+      status={meta.status}
+      publishedVersion={meta.version}
+      openActivationId={openActivation?.id ?? null}
     />,
   );
 }

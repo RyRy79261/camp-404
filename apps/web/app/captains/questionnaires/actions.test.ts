@@ -76,6 +76,7 @@ describe("publishAction — captain gate", () => {
     vi.mocked(getDefinitionMetaRow).mockResolvedValue({
       key: "feedback",
       status: "draft",
+      version: null,
       createdBy: "u1",
     });
     vi.mocked(publishDefinition).mockResolvedValue({
@@ -160,6 +161,7 @@ describe("unpublishAction", () => {
     vi.mocked(getDefinitionMetaRow).mockResolvedValue({
       key: "feedback",
       status: "draft",
+      version: null,
       createdBy: "u1",
     });
     expect(await unpublishAction("feedback")).toEqual({
@@ -172,6 +174,7 @@ describe("unpublishAction", () => {
     vi.mocked(getDefinitionMetaRow).mockResolvedValue({
       key: "feedback",
       status: "published",
+      version: null,
       createdBy: "u1",
     });
     vi.mocked(unpublishDefinition).mockResolvedValue({

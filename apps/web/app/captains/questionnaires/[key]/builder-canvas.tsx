@@ -64,6 +64,13 @@ import { BlockEditorDialog } from "./block-editor";
 import { PageSettingsDialog } from "./page-settings-dialog";
 import { BlockCatalogDialog } from "./block-catalog-dialog";
 import { BUILDER_FIELD_KINDS } from "./field-kinds";
+import {
+  EditPublishedBanner,
+  LifecycleBar,
+  PublishButton,
+} from "./lifecycle-controls";
+
+type Status = "draft" | "published" | "unpublished";
 
 // The 12 builder kinds come from the shared palette table; `scale`/`toggle` are
 // legacy code-questionnaire kinds the Question union still includes.
@@ -187,10 +194,16 @@ export function BuilderCanvas({
   questionnaireKey,
   definition,
   canPublish,
+  status,
+  publishedVersion,
+  openActivationId,
 }: {
   questionnaireKey: string;
   definition: BuilderQuestionnaire;
   canPublish: boolean;
+  status: Status;
+  publishedVersion: string | null;
+  openActivationId: string | null;
 }) {
   const [working, setWorking] = useState<BuilderQuestionnaire>(definition);
   const [pending, startTransition] = useTransition();
@@ -252,6 +265,17 @@ export function BuilderCanvas({
         onBlur={() => persist(working)}
         placeholder="Untitled questionnaire"
       />
+
+      {status !== "draft" && <EditPublishedBanner status={status} />}
+
+      {canPublish && (
+        <LifecycleBar
+          questionnaireKey={questionnaireKey}
+          status={status}
+          version={publishedVersion}
+          openActivationId={openActivationId}
+        />
+      )}
 
       <div className="flex flex-col gap-4">
         {working.pages.map((page, pageIndex) => (
@@ -392,16 +416,21 @@ export function BuilderCanvas({
                 <Eye /> Preview
               </Link>
             </Button>
-            <div className="flex flex-col items-end gap-1">
-              <Button type="button" disabled aria-describedby="publish-reason">
-                Publish
-              </Button>
-              <span id="publish-reason" className="text-xs text-muted-foreground">
-                {canPublish
-                  ? "Publishing arrives in the next update"
-                  : "Only captains can publish"}
-              </span>
-            </div>
+            {canPublish ? (
+              <PublishButton questionnaireKey={questionnaireKey} status={status} />
+            ) : (
+              <div className="flex flex-col items-end gap-1">
+                <Button type="button" disabled aria-describedby="publish-reason">
+                  Publish
+                </Button>
+                <span
+                  id="publish-reason"
+                  className="text-xs text-muted-foreground"
+                >
+                  Only captains can publish
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
