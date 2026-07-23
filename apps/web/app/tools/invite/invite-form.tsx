@@ -29,7 +29,13 @@ import { Stepper } from "./stepper";
 import type { Availability } from "./types";
 
 export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
-  const [code, setCode] = useState<string>(() => generateInviteCode());
+  // Start empty and generate the code after mount: the generator is random, so
+  // running it in the initializer produces a different code on the server than
+  // on the client and trips a hydration mismatch on the input value.
+  const [code, setCode] = useState<string>("");
+  useEffect(() => {
+    setCode(generateInviteCode());
+  }, []);
   const [availability, setAvailability] = useState<Availability>({
     state: "idle",
   });
@@ -253,6 +259,7 @@ function SuccessPanel({
   requiresApproval: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   // Flip "Copied" back after a beat; clear the timer on unmount so a fast
   // navigate-away can't setState on an unmounted component.
@@ -303,12 +310,26 @@ function SuccessPanel({
           type="button"
           className="w-full"
           onClick={async () => {
-            await navigator.clipboard.writeText(code);
-            setCopied(true);
+            // Clipboard access can be denied (permissions policy, insecure
+            // context, iOS quirks) — fall back to pointing at the visible code
+            // instead of letting the rejection vanish into the void.
+            try {
+              await navigator.clipboard.writeText(code);
+              setCopied(true);
+              setCopyFailed(false);
+            } catch {
+              setCopyFailed(true);
+            }
           }}
         >
           <Copy /> {copied ? "Copied" : "Copy"}
         </Button>
+        {copyFailed && (
+          <p className="text-center text-xs text-muted-foreground" role="status">
+            Couldn&apos;t copy automatically — select the code above and copy it
+            by hand.
+          </p>
+        )}
         <Button asChild variant="outline" className="w-full">
           <a href="/tools/invite">Send another</a>
         </Button>

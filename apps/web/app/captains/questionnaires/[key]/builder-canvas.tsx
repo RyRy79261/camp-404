@@ -211,6 +211,9 @@ export function BuilderCanvas({
     pageId: string;
     blockId: string;
   } | null>(null);
+  // Drives the editor dialog's open state separately from `editing` so the
+  // dialog stays mounted through close and its exit animation can run.
+  const [editorOpen, setEditorOpen] = useState(false);
   const [settingsPageId, setSettingsPageId] = useState<string | null>(null);
   const [addingToPageId, setAddingToPageId] = useState<string | null>(null);
 
@@ -350,12 +353,13 @@ export function BuilderCanvas({
                       <BlockRow
                         key={blockId(block)}
                         block={block}
-                        onEdit={() =>
+                        onEdit={() => {
                           setEditing({
                             pageId: page.id,
                             blockId: blockId(block),
-                          })
-                        }
+                          });
+                          setEditorOpen(true);
+                        }}
                         onDelete={() =>
                           persist(removeBlock(working, page.id, blockId(block)))
                         }
@@ -439,15 +443,17 @@ export function BuilderCanvas({
         <BlockEditorDialog
           key={editing.blockId}
           block={editingBlock}
+          open={editorOpen}
           onSave={(next) => {
             persist(replaceBlock(working, editing.pageId, editing.blockId, next));
-            setEditing(null);
+            setEditorOpen(false);
           }}
           onDelete={() => {
             persist(removeBlock(working, editing.pageId, editing.blockId));
-            setEditing(null);
+            setEditorOpen(false);
+            setEditing(null); // block is gone — nothing left to animate over
           }}
-          onClose={() => setEditing(null)}
+          onClose={() => setEditorOpen(false)}
         />
       )}
 
@@ -475,6 +481,7 @@ export function BuilderCanvas({
             persist(addBlock(working, addingToPageId, block));
             setAddingToPageId(null);
             setEditing({ pageId: addingToPageId, blockId: blockId(block) });
+            setEditorOpen(true);
           }}
           onClose={() => setAddingToPageId(null)}
         />

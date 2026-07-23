@@ -124,7 +124,6 @@ function Branch({
   viewerUserId,
   isLastChild,
 }: BranchProps) {
-  const hasChildren = node.children.length > 0;
   const isOpen = expanded.has(node.user.id);
   const isViewer = node.user.id === viewerUserId;
   const isMatch = matchIds?.has(node.user.id) ?? false;
@@ -132,6 +131,10 @@ function Branch({
   const visibleChildren = matchIds
     ? node.children.filter((c) => subtreeHasMatch(c, matchIds))
     : node.children;
+  // During a search, children that don't match are filtered out of the render —
+  // so the chevron/expand affordance must key off what's actually renderable,
+  // or a matched leaf shows a chevron that expands to nothing.
+  const hasChildren = visibleChildren.length > 0;
 
   return (
     <li className="relative">
@@ -231,7 +234,7 @@ function Branch({
         </Card>
       </div>
 
-      {hasChildren && isOpen && visibleChildren.length > 0 && (
+      {hasChildren && isOpen && (
         <ul className="mt-2 space-y-2">
           {visibleChildren.map((child, idx) => (
             <Branch

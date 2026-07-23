@@ -166,7 +166,9 @@ export const TILE_CATALOGUE: RankGroupSpec[] = [
         id: "tools",
         icon: Wrench,
         title: "Tools",
-        hint: "Meals, expenses…",
+        // Mirror what the /tools hub actually contains today — promising
+        // meals/expenses here pointed at tools that don't exist yet.
+        hint: "Invites, forms…",
         href: "/tools",
         comingSoon: false,
       },
