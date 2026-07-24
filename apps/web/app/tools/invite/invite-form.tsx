@@ -318,6 +318,9 @@ function SuccessPanel({
               setCopied(true);
               setCopyFailed(false);
             } catch {
+              // A failed retry inside the success timeout must not show
+              // "Copied" and the failure hint at the same time.
+              setCopied(false);
               setCopyFailed(true);
             }
           }}

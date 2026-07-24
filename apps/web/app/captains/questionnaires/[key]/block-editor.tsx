@@ -117,8 +117,14 @@ export function BlockEditorDialog({
             Respondent preview — display only
           </span>
           {/* Inert: the preview renders the real member controls, which would
-              otherwise accept clicks and silently do nothing. */}
-          <div aria-hidden className="pointer-events-none select-none">
+              otherwise accept clicks/keyboard focus and silently do nothing.
+              Native `inert` removes descendants from the tab order too —
+              pointer-events alone only blocks the mouse. */}
+          <div
+            inert
+            aria-hidden="true"
+            className="pointer-events-none select-none"
+          >
             {draft.kind === "question" ? (
               <QuestionField
                 question={draft.question}
