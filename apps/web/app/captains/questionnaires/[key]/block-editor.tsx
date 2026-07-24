@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Trash2 } from "lucide-react";
 import type { Block, ContentBlock, Question } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
@@ -49,16 +49,25 @@ function blockValid(block: Block): boolean {
 // member renderers (QuestionField / ContentBlockRenderer).
 export function BlockEditorDialog({
   block,
+  open,
   onSave,
   onDelete,
   onClose,
 }: {
   block: Block;
+  open: boolean;
   onSave: (block: Block) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<Block>(block);
+
+  // The parent keeps this dialog mounted through close so the exit animation
+  // can run; re-opening must therefore discard any unsaved draft from the
+  // previous session on the same block.
+  useEffect(() => {
+    if (open) setDraft(block);
+  }, [open, block]);
 
   function setQuestion(question: Question) {
     setDraft((d) => (d.kind === "question" ? { ...d, question } : d));
@@ -76,9 +85,9 @@ export function BlockEditorDialog({
 
   return (
     <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
       }}
     >
       <DialogContent className="flex max-h-[90dvh] flex-col gap-4 overflow-y-auto">
@@ -105,17 +114,27 @@ export function BlockEditorDialog({
 
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3">
           <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            Respondent preview
+            Respondent preview — display only
           </span>
-          {draft.kind === "question" ? (
-            <QuestionField
-              question={draft.question}
-              value={undefined}
-              onChange={() => {}}
-            />
-          ) : (
-            <ContentBlockRenderer block={draft} />
-          )}
+          {/* Inert: the preview renders the real member controls, which would
+              otherwise accept clicks/keyboard focus and silently do nothing.
+              Native `inert` removes descendants from the tab order too —
+              pointer-events alone only blocks the mouse. */}
+          <div
+            inert
+            aria-hidden="true"
+            className="pointer-events-none select-none"
+          >
+            {draft.kind === "question" ? (
+              <QuestionField
+                question={draft.question}
+                value={undefined}
+                onChange={() => {}}
+              />
+            ) : (
+              <ContentBlockRenderer block={draft} />
+            )}
+          </div>
         </div>
 
         <DialogFooter className="flex-row items-center justify-between gap-2">

@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import type {
-  Questionnaire,
-  QuestionnairePage,
-  QuestionnaireResponses,
-  QuestionnaireResponseValue,
+import {
+  validateOne,
+  type Questionnaire,
+  type QuestionnairePage,
+  type QuestionnaireResponses,
+  type QuestionnaireResponseValue,
 } from "@camp404/types";
 import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
@@ -94,9 +95,11 @@ export function QuestionnaireWizard({
     const next: Record<string, string> = {};
     for (const q of p.questions) {
       const v = responses[q.id];
-      const missing = v === undefined || v === null || v === "";
-      if (missing && "required" in q && q.required) {
-        next[q.id] = "This question is required";
+      // Shared per-question validator — the same one the server runs in
+      // validateResponses, so local and server verdicts can't drift.
+      const result = validateOne(q, v);
+      if (!result.ok) {
+        next[q.id] = result.error;
         continue;
       }
       // Cross-field: validate id.number against the chosen id.type.

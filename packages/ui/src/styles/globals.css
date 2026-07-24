@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Animation utilities (animate-in/out, fade-*, zoom-*, slide-*) used by the
+   dialog/popover/select primitives. Without this import those classes silently
+   compile to nothing and every overlay pops with zero motion. */
+@import "tw-animate-css";
 
 /* Tailwind v4 only scans the *consuming* project by default, so the
    web app misses the `bg-primary` / `text-primary-foreground` etc.

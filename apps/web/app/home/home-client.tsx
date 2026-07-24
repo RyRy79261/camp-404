@@ -56,7 +56,9 @@ export function HomeClient({ lockedGroupIds }: { lockedGroupIds: string[] }) {
       return (
         <RankGroupCard
           key={sectionKey(section)}
-          name={section.title}
+          // Same blank-title fallback the customize editor applies, so clearing
+          // a custom group's name can't leave a nameless header on the panel.
+          name={section.title.trim() || "Custom group"}
           icon={CUSTOM_GROUP_ICON}
           chipTone={CUSTOM_GROUP_TONE}
           locked={false}

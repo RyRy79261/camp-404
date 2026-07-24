@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Megaphone, Users } from "lucide-react";
+import { ClipboardList, Megaphone, Shield, Users } from "lucide-react";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
@@ -31,6 +31,20 @@ const TOOLS: ToolEntry[] = [
     description:
       "Compose a camp-wide announcement, save it as a draft, then publish it to everyone. Choose how hard it lands — a full-screen note members must acknowledge, a pop-up, or a quiet inbox entry.",
     icon: <Megaphone className="text-primary" />,
+  },
+  {
+    href: "/captains/camp-management",
+    title: "Roster & approvals",
+    description:
+      "Review the member roster, approve or reject pending applications, and manage ranks.",
+    icon: <Shield className="text-primary" />,
+  },
+  {
+    href: "/captains/questionnaires",
+    title: "Questionnaires",
+    description:
+      "Build questionnaires block by block, preview them as a member sees them, then publish and send them to camp.",
+    icon: <ClipboardList className="text-primary" />,
   },
   {
     href: "/captains/camp-settings",
