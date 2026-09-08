@@ -7,7 +7,12 @@ import {
 import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
 import { nextBuilderVersion } from "./versions";
-import { openActivation, type ActivationRow } from "./activations";
+import {
+  openActivation,
+  type ActivationRow,
+  type PooledTx,
+} from "./activations";
+import { carryOverFor, currentCycleNumber } from "./cycles";
 
 // Builder-questionnaire lifecycle: publish (snapshot + cosmetic-vs-version-bump),
 // unpublish (status + cascade close), send (open an activation with the one-open
@@ -221,6 +226,39 @@ export async function unpublishDefinition(
 export type CloseResult = { ok: true } | { ok: false; error: string };
 
 /**
+ * The body of {@link closeActivation}, inside a caller-supplied transaction.
+ * Extracted so the cycle rollover can close an activation and open its
+ * replacement in ONE transaction rather than a pool per step (spec §8.3).
+ */
+export async function closeActivationTx(
+  tx: PooledTx,
+  activationId: string,
+): Promise<CloseResult> {
+  const now = new Date();
+  const [act] = await tx
+    .select({ status: schema.questionnaireActivations.status })
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.id, activationId))
+    .limit(1);
+  if (!act) return { ok: false, error: "Activation not found." };
+  if (act.status === "closed") return { ok: true };
+  await tx
+    .update(schema.questionnaireActivations)
+    .set({ status: "closed", closedAt: now, updatedAt: now })
+    .where(eq(schema.questionnaireActivations.id, activationId));
+  await tx
+    .update(schema.requiredActions)
+    .set({ status: "expired" })
+    .where(
+      and(
+        eq(schema.requiredActions.activationId, activationId),
+        eq(schema.requiredActions.status, "pending"),
+      ),
+    );
+  return { ok: true };
+}
+
+/**
  * Close one activation: status → closed and expire its still-linked pending
  * required_actions (non-gating terminal state, NOT deleted — preserves metrics).
  * Responses + completed rows are untouched. Idempotent on an already-closed row.
@@ -228,32 +266,9 @@ export type CloseResult = { ok: true } | { ok: false; error: string };
 export async function closeActivation(
   activationId: string,
 ): Promise<CloseResult> {
-  const now = new Date();
   const { db, pool } = createPooledDb();
   try {
-    return await db.transaction(async (tx) => {
-      const [act] = await tx
-        .select({ status: schema.questionnaireActivations.status })
-        .from(schema.questionnaireActivations)
-        .where(eq(schema.questionnaireActivations.id, activationId))
-        .limit(1);
-      if (!act) return { ok: false, error: "Activation not found." };
-      if (act.status === "closed") return { ok: true };
-      await tx
-        .update(schema.questionnaireActivations)
-        .set({ status: "closed", closedAt: now, updatedAt: now })
-        .where(eq(schema.questionnaireActivations.id, activationId));
-      await tx
-        .update(schema.requiredActions)
-        .set({ status: "expired" })
-        .where(
-          and(
-            eq(schema.requiredActions.activationId, activationId),
-            eq(schema.requiredActions.status, "pending"),
-          ),
-        );
-      return { ok: true };
-    });
+    return await db.transaction((tx) => closeActivationTx(tx, activationId));
   } finally {
     await pool.end();
   }
@@ -272,6 +287,8 @@ export async function getOpenActivationForKey(
       title: schema.questionnaireActivations.title,
       status: schema.questionnaireActivations.status,
       blocking: schema.questionnaireActivations.blocking,
+      cycle: schema.questionnaireActivations.cycle,
+      carryOver: schema.questionnaireActivations.carryOver,
     })
     .from(schema.questionnaireActivations)
     .where(
@@ -304,8 +321,8 @@ export type SendResult =
  * published version, and fan out the gates. Enforces the one-open invariant
  * (§6.3): rejects if an open activation already exists for the key — the captain
  * must close it first. The version + title are derived from the definition (the
- * single source of truth); the caller chooses scope / blocking / dueAt /
- * targets.
+ * single source of truth), as are the cycle + carry-over policy frozen onto the
+ * row; the caller chooses scope / blocking / dueAt / targets.
  */
 export async function sendActivation(input: SendInput): Promise<SendResult> {
   const db = createHttpDb();
@@ -328,6 +345,16 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
     return { ok: false, error: ONE_OPEN_ERROR };
   }
 
+  // Freeze the year namespace and the carry-over policy onto the row, exactly
+  // as `version` and `title` are copied off the definition just below and for
+  // exactly the same reason: every downstream read (fan-out, prefill, write)
+  // uses the ACTIVATION's copy, so a rollover or a toggle flip landing
+  // mid-collection changes the next send, never the one in flight (§7.2).
+  const [cycle, carryOver] = await Promise.all([
+    currentCycleNumber(),
+    carryOverFor(input.questionnaireKey),
+  ]);
+
   const { db: tdb, pool } = createPooledDb();
   let activationId: string;
   try {
@@ -344,6 +371,8 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
           dueAt: input.dueAt ?? null,
           activatedByUserId: input.activatedByUserId,
           status: "draft",
+          cycle,
+          carryOver: carryOver === "carry",
         })
         .returning({ id: schema.questionnaireActivations.id });
       if (

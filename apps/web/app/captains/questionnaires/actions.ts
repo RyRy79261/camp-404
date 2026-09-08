@@ -6,7 +6,11 @@ import { BuilderQuestionnaire, Team } from "@camp404/types";
 import type { ViewerRank } from "@camp404/types";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { isTeamLead } from "@camp404/db/roster";
-import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
+import { carryOverFor } from "@camp404/db/cycles";
+import {
+  getDefinitionMetaRow,
+  setDefinitionCarryOver,
+} from "@camp404/db/questionnaire-definitions";
 import {
   closeActivation,
   publishDefinition,
@@ -280,4 +284,50 @@ export async function closeActivationAction(
   const result = await closeActivation(activationId);
   if (result.ok) revalidateBuilder(key);
   return result;
+}
+
+// --- The year policy: does this questionnaire ask again next year? ----------
+// `questionnaire_definitions.carry_over` is a COLUMN rather than a field inside
+// the definition JSON precisely so flipping it needs no re-publish: it never
+// changes what a member is asked, only whether they are asked again after a
+// rollover. Nor does it reach a send already in flight — sendActivation freezes
+// a copy onto the activation, and every downstream read uses that copy.
+
+export type CarryOverResult =
+  | { ok: true; carryOver: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Read one questionnaire's year policy for the lifecycle bar. `carryOver: true`
+ * means a rollover leaves it alone; false means everyone in scope answers it
+ * again on a blank form the next time the camp starts a new year.
+ */
+export async function getCarryOverAction(
+  key: string,
+): Promise<CarryOverResult> {
+  const gate = await gateCaptain();
+  if (!gate.ok) return gate;
+  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
+  return { ok: true, carryOver: (await carryOverFor(key)) === "carry" };
+}
+
+/**
+ * Set one questionnaire's year policy. `updated_at` is deliberately not bumped
+ * — see setDefinitionCarryOver.
+ */
+export async function setCarryOverAction(
+  key: string,
+  carryOver: boolean,
+): Promise<QResult> {
+  const gate = await gateCaptain();
+  if (!gate.ok) return gate;
+  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
+  const parsedFlag = z.boolean().safeParse(carryOver);
+  if (!parsedFlag.success) return { ok: false, error: "Invalid request." };
+  const meta = await getDefinitionMetaRow(key);
+  if (!meta) return { ok: false, error: "Questionnaire not found." };
+
+  await setDefinitionCarryOver(key, parsedFlag.data);
+  revalidateBuilder(key);
+  return { ok: true };
 }

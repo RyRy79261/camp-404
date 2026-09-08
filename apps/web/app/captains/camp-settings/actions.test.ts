@@ -16,13 +16,16 @@ vi.mock("@/lib/users", () => ({
   isApproved: vi.fn(),
 }));
 vi.mock("@/lib/camp-config", () => ({ mutateTeamsConfig: vi.fn() }));
+vi.mock("@camp404/db/cycle-rollover", () => ({ advanceCycle: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import {
+  advanceCycleAction,
   moveTeamAction,
   renameTeamAction,
   setTeamArchivedAction,
 } from "./actions";
+import { advanceCycle } from "@camp404/db/cycle-rollover";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { mutateTeamsConfig } from "@/lib/camp-config";
@@ -33,7 +36,10 @@ function asCaptain() {
     primaryEmail: "cap@example.com",
     displayName: "Cap",
   } as never);
-  vi.mocked(ensureCampUser).mockResolvedValue({ rank: "captain" } as never);
+  vi.mocked(ensureCampUser).mockResolvedValue({
+    id: "cap-1",
+    rank: "captain",
+  } as never);
   vi.mocked(hasCampAccess).mockReturnValue(true);
   vi.mocked(isApproved).mockReturnValue(true);
 }
@@ -176,5 +182,107 @@ describe("setTeamArchivedAction — minimum-active-teams guard", () => {
     writerOver(oneActive);
     const result = await setTeamArchivedAction("structures", false);
     expect(result).toEqual({ ok: true });
+  });
+});
+
+// --- advanceCycleAction: the gate, the boundary, and the type-to-confirm ----
+// The transaction itself is covered by the PGlite suite in packages/db; what
+// matters here is that a mistyped confirmation, a signed-out caller, or a
+// non-captain never reaches it.
+
+const report = {
+  plan: {},
+  to: { number: 2, label: "2027", startedAt: "x", endedAt: null },
+  reGated: [],
+  duesCleared: [],
+  announcementBroadcastId: null,
+  auditLogId: "audit-1",
+};
+
+describe("advanceCycleAction", () => {
+  it("rejects a non-captain without advancing anything", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-m",
+      primaryEmail: "m@example.com",
+      displayName: "M",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ rank: "member" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(isApproved).mockReturnValue(true);
+
+    const result = await advanceCycleAction({ label: "2027", confirm: "2027" });
+    expect(result).toEqual({ ok: false, error: "Captain access only." });
+    expect(advanceCycle).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the confirmation doesn't match the name", async () => {
+    asCaptain();
+    const result = await advanceCycleAction({ label: "2027", confirm: "2026" });
+    expect(result.ok).toBe(false);
+    expect(advanceCycle).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unnamed year", async () => {
+    asCaptain();
+    const result = await advanceCycleAction({ label: "   ", confirm: "   " });
+    expect(result).toEqual({ ok: false, error: "Give the new year a name." });
+    expect(advanceCycle).not.toHaveBeenCalled();
+  });
+
+  it("passes the trimmed label, the actor, and the levers through", async () => {
+    asCaptain();
+    vi.mocked(advanceCycle).mockResolvedValue({ ok: true, report } as never);
+
+    const result = await advanceCycleAction({
+      label: "  2027  ",
+      confirm: "2027",
+      resetDues: true,
+      announcement: { title: "New year", body: "Off we go." },
+    });
+
+    expect(advanceCycle).toHaveBeenCalledWith({
+      label: "2027",
+      actorUserId: "cap-1",
+      resetDues: true,
+      announcement: { title: "New year", body: "Off we go." },
+    });
+    expect(result).toEqual({ ok: true, report });
+  });
+
+  it("defaults the optional levers off", async () => {
+    asCaptain();
+    vi.mocked(advanceCycle).mockResolvedValue({ ok: true, report } as never);
+    await advanceCycleAction({ label: "2027", confirm: "2027" });
+    expect(advanceCycle).toHaveBeenCalledWith(
+      expect.objectContaining({ resetDues: false, announcement: null }),
+    );
+  });
+
+  it("turns the loser of a race into a sentence a captain can act on", async () => {
+    asCaptain();
+    vi.mocked(advanceCycle).mockResolvedValue({
+      ok: false,
+      reason: "already-advanced",
+    } as never);
+    const result = await advanceCycleAction({ label: "2027", confirm: "2027" });
+    expect(result).toEqual({
+      ok: false,
+      error:
+        "The camp has already started that year. Reload the page to see where it is now.",
+    });
+  });
+
+  it("refuses an announcement with no words in it", async () => {
+    asCaptain();
+    const result = await advanceCycleAction({
+      label: "2027",
+      confirm: "2027",
+      announcement: { title: "New year", body: "  " },
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "Write something for the announcement.",
+    });
+    expect(advanceCycle).not.toHaveBeenCalled();
   });
 });

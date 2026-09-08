@@ -1,9 +1,15 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// The apps/web facade below is server-only (so is the test store it reads);
+// neutralize the import guard under vitest.
+vi.mock("server-only", () => ({}));
+
 import { teamEnum } from "@camp404/db/schema";
 import {
+  CYCLE_ONE,
   DEFAULT_TEAMS,
   DEFAULT_CAMP_CONFIG,
   activeTeams,
@@ -15,6 +21,7 @@ import {
   teamLabelMap,
   type TeamsConfig,
 } from "@camp404/db/camp-config";
+import { getCurrentCycle } from "../camp-config";
 
 // configurable-teams: the config layer. Covers the pure shaping + transform
 // helpers and the seeded defaults. The DB-backed read/write (getTeamsConfig's
@@ -245,5 +252,26 @@ describe("the config transforms preserve unrelated top-level keys", () => {
 
   it("moveTeam keeps them", () => {
     expect(extraOf(moveTeam(withExtra, "build", "up"))).toEqual({ keep: "me" });
+  });
+});
+
+describe("getCurrentCycle under E2E_TEST_MODE", () => {
+  // Playwright runs with no database. The test store seeds DEFAULT_CAMP_CONFIG,
+  // which has no `cycles` key, so the facade's E2E branch runs the same pure
+  // resolve the real path does and lands on the founding cycle — the E2E suite
+  // keeps passing with no test-store change. This asserts that rather than
+  // assuming it.
+  const previous = process.env.E2E_TEST_MODE;
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env.E2E_TEST_MODE;
+    else process.env.E2E_TEST_MODE = previous;
+  });
+
+  it("resolves to cycle 1 without touching the database", async () => {
+    process.env.E2E_TEST_MODE = "1";
+    // DEFAULT_CAMP_CONFIG is what the store clones, and it carries no cycles.
+    expect("cycles" in DEFAULT_CAMP_CONFIG).toBe(false);
+    await expect(getCurrentCycle()).resolves.toEqual(CYCLE_ONE);
   });
 });

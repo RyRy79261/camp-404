@@ -8,6 +8,7 @@ import {
   renameTeam,
   setTeamArchived,
 } from "@camp404/db/camp-config";
+import { advanceCycle, type RolloverReport } from "@camp404/db/cycle-rollover";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { mutateTeamsConfig } from "@/lib/camp-config";
@@ -145,4 +146,101 @@ export async function setTeamArchivedAction(
   }
   revalidateTeamSurfaces();
   return { ok: true };
+}
+
+// --- Starting a new year (the cycle rollover, spec §8) ----------------------
+// The camp-facing half lives in @camp404/db/cycle-rollover: planRollover() is a
+// pure read the page calls directly, advanceCycle() is one pooled transaction.
+// This action is the captain gate, the boundary parse, and the type-to-confirm
+// check — deliberately thin, because the interesting refusals (already
+// advanced, nothing to re-gate) belong to the transaction that holds the lock.
+
+export type AdvanceCycleActionResult =
+  | { ok: true; report: RolloverReport }
+  | { ok: false; error: string };
+
+const CycleLabel = z
+  .string()
+  .trim()
+  .min(1, "Give the new year a name.")
+  .max(60, "Keep the name under 60 characters.");
+
+const AdvanceCycleForm = z
+  .object({
+    label: CycleLabel,
+    /** The same string typed a second time — the GitHub type-the-name pattern. */
+    confirm: z.string(),
+    resetDues: z.boolean().optional(),
+    announcement: z
+      .object({
+        title: z
+          .string()
+          .trim()
+          .min(1, "Give the announcement a title.")
+          .max(120, "Keep the announcement title under 120 characters."),
+        body: z
+          .string()
+          .trim()
+          .min(1, "Write something for the announcement.")
+          .max(2000, "Keep the announcement under 2000 characters."),
+      })
+      .nullish(),
+  })
+  // Re-checked here and not only in the browser: a server action is reachable
+  // without the page that rendered the confirm box.
+  .refine((form) => form.confirm.trim() === form.label, {
+    message: "That doesn't match the name you gave the new year.",
+  });
+
+// A rollover closes sends and re-arms gates, so every surface that renders a
+// gate or a send is stale afterwards — including the member home page, which is
+// what redirects someone into a re-opened questionnaire.
+function revalidateRolloverSurfaces(): void {
+  revalidatePath("/captains/camp-settings/cycle");
+  revalidatePath("/captains/questionnaires");
+  revalidatePath("/");
+}
+
+/**
+ * Advance the camp to the next cycle. Returns the executed plan as a receipt
+ * (§8.4) — the page renders it rather than re-reading, because re-reading would
+ * show the new state, not what just happened.
+ */
+export async function advanceCycleAction(
+  rawInput: unknown,
+): Promise<AdvanceCycleActionResult> {
+  const gate = await requireCaptain();
+  if (!gate.ok) return gate;
+  const parsed = AdvanceCycleForm.safeParse(rawInput);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid request.",
+    };
+  }
+
+  // requireCaptain answers only "may they?", and the audit row wants "who?".
+  // Re-deriving costs one extra read on an action a camp runs once a year;
+  // widening the shared gate's return type to carry the user would touch every
+  // other caller.
+  const authUser = await getAuthenticatedUser();
+  const actorUserId = authUser ? (await ensureCampUser(authUser)).id : null;
+
+  const result = await advanceCycle({
+    label: parsed.data.label,
+    actorUserId: actorUserId || null,
+    resetDues: parsed.data.resetDues ?? false,
+    announcement: parsed.data.announcement ?? null,
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.reason === "already-advanced"
+          ? "The camp has already started that year. Reload the page to see where it is now."
+          : "Give the new year a name.",
+    };
+  }
+  revalidateRolloverSurfaces();
+  return { ok: true, report: result.report };
 }

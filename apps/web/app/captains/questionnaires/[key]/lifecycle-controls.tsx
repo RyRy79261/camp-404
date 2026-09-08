@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useId, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -21,10 +21,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@camp404/ui/components/dialog";
+import { Label } from "@camp404/ui/components/label";
+import { Switch } from "@camp404/ui/components/switch";
 import { toast } from "@camp404/ui/components/toast";
 import {
   closeActivationAction,
+  getCarryOverAction,
   publishAction,
+  setCarryOverAction,
   unpublishAction,
 } from "../actions";
 
@@ -119,6 +123,84 @@ export function EditPublishedBanner({ status }: { status: Status }) {
           : "This questionnaire is unpublished. Edits are saved as a draft; re-publish to put it back online."}
       </span>
     </Alert>
+  );
+}
+
+/**
+ * The year policy, in the captain's words rather than the schema's: "ask
+ * everyone again next year". On the column it is `carry_over` — inverted here
+ * because the thing a captain is deciding is whether the questionnaire goes
+ * back out, not whether an answer survives.
+ *
+ * Flipping it needs no re-publish (that is why it is a column, not a field in
+ * the definition JSON) and it never disturbs a send already in flight: the
+ * activation carries a frozen copy, and a member halfway through a form keeps
+ * the rules they started under.
+ *
+ * The bar loads the value itself rather than taking it as a prop, which keeps
+ * the read beside the write and keeps a once-a-year setting off the builder
+ * page's server render path.
+ */
+function CarryOverToggle({ questionnaireKey }: { questionnaireKey: string }) {
+  const switchId = useId();
+  const [askAgain, setAskAgain] = useState<boolean | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    let live = true;
+    void getCarryOverAction(questionnaireKey).then((result) => {
+      if (live && result.ok) setAskAgain(!result.carryOver);
+    });
+    return () => {
+      live = false;
+    };
+  }, [questionnaireKey]);
+
+  // No optimistic flip — the server stays the truth, as everywhere else in the
+  // captain surfaces. The switch is disabled until the read lands.
+  function change(next: boolean) {
+    startTransition(async () => {
+      const result = await setCarryOverAction(questionnaireKey, !next);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setAskAgain(next);
+      toast.success(
+        next
+          ? "Everyone will be asked this again next year"
+          : "Answers will stay as they are next year",
+      );
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+      <div className="flex items-center gap-3">
+        <Label htmlFor={switchId} className="flex-1">
+          Ask everyone again next year
+        </Label>
+        {askAgain === null && (
+          <Loader2
+            aria-hidden
+            className="size-4 animate-spin text-muted-foreground"
+          />
+        )}
+        <Switch
+          id={switchId}
+          checked={askAgain ?? false}
+          disabled={pending || askAgain === null}
+          onCheckedChange={change}
+        />
+      </div>
+      <p className="text-caption text-muted-foreground">
+        {askAgain === null
+          ? "Checking this questionnaire’s setting…"
+          : askAgain
+            ? "When a captain starts a new year, this goes out again on a blank form. Everyone’s answers from previous years stay readable."
+            : "When a captain starts a new year, nothing happens to this. Anyone who has answered stays answered."}
+      </p>
+    </div>
   );
 }
 
@@ -241,6 +323,8 @@ export function LifecycleBar({
           </Button>
         </div>
       )}
+
+      <CarryOverToggle questionnaireKey={questionnaireKey} />
     </Card>
   );
 }

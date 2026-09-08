@@ -67,6 +67,10 @@ interface BuilderWizardProps {
   // "onboarding" shows a plain page-progress bar (used by the author preview).
   variant?: "onboarding" | "runner";
   title?: string;
+  // One line of context above the form — today, the carry-over prefill line the
+  // runner shows when the answers came from an earlier cycle (year-namespace
+  // spec §9). Plain text, not a banner: it explains, it doesn't warn.
+  notice?: string;
 }
 
 export function BuilderWizard({
@@ -78,6 +82,7 @@ export function BuilderWizard({
   submitLabel = "Finish",
   variant = "runner",
   title,
+  notice,
 }: BuilderWizardProps) {
   const [responses, setResponses] =
     React.useState<QuestionnaireResponses>(initialResponses);
@@ -198,6 +203,12 @@ export function BuilderWizard({
         </>
       ) : (
         total > 1 && <BuilderProgress current={progressCurrent} total={total} />
+      )}
+
+      {notice && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {notice}
+        </p>
       )}
 
       {formError && (

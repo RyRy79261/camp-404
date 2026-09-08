@@ -34,8 +34,8 @@ const SAVE_REJECTED =
  * final) action shape. Re-verifies the access predicate on every call (never
  * trust the client), bounds every save against the pinned definition and runs
  * the full per-field validator on the final submit, upserts the
- * latest-answer row, and on submit satisfies the required action and routes to
- * the next gate.
+ * latest-answer row for the activation's cycle, and on submit satisfies the
+ * required action and routes to the next gate.
  */
 export async function saveBuilderResponses(
   activationId: string,
@@ -114,6 +114,9 @@ export async function saveBuilderResponses(
         userId: campUser.id,
         definitionKey: activation.questionnaireKey,
         definitionVersion: activation.version,
+        // The activation's FROZEN cycle, never the live config's: a rollover
+        // landing mid-form must not move this answer into the next year.
+        cycle: activation.cycle,
         responses: toStore,
         activationId: activation.id,
       });
@@ -122,6 +125,7 @@ export async function saveBuilderResponses(
         userId: campUser.id,
         definitionKey: activation.questionnaireKey,
         definitionVersion: activation.version,
+        cycle: activation.cycle,
         responses: toStore,
         activationId: activation.id,
         completedAt: null,
