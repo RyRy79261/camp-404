@@ -17,6 +17,12 @@ export type DeleteAccountResult = { ok: false; error: string };
 
 const MAX_NAME_LENGTH = 80;
 
+// One sentence, two gates: the cheap pre-check below and the authoritative
+// recount inside sanitiseAccount's transaction. The member is told the same
+// thing either way — which of the two refused is our business, not theirs.
+const SOLE_CAPTAIN_ERROR =
+  "You're the last captain — promote another member to captain before erasing your account.";
+
 /**
  * Persist edits from the profile editor: display name and profile photo
  * URL (the image itself is already uploaded to Blob via the avatar
@@ -68,18 +74,16 @@ export async function deleteOwnAccount(
   }
   // The camp must never lose its last captain — /setup latches shut after
   // bootstrap and there is no demotion or CLI rescue path, so this is
-  // unrecoverable. Checked at the moment of erasure, not at page render.
+  // unrecoverable. Checked at the moment of erasure, not at page render — and
+  // checked again inside the erasure transaction, which is where the count and
+  // the write are actually inseparable. This one is here to give a good error
+  // before any work happens.
   const guard = canLeaveCamp({
     isCaptain: campUser.rank === "captain",
     captainCount: await countActiveCaptains(),
   });
-  if (!guard.ok) {
-    return {
-      ok: false,
-      error:
-        "You're the last captain — promote another member to captain before erasing your account.",
-    };
-  }
-  await deleteAccount(campUser.id);
+  if (!guard.ok) return { ok: false, error: SOLE_CAPTAIN_ERROR };
+  const erased = await deleteAccount(campUser.id);
+  if (!erased.ok) return { ok: false, error: SOLE_CAPTAIN_ERROR };
   redirect("/auth/sign-out");
 }

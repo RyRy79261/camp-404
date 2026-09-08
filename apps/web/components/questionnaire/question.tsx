@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useParams } from "next/navigation";
 import type {
   LongTextQuestion,
   Question,
@@ -106,6 +107,21 @@ function FieldInput({
     "required" in question && question.required
       ? `${question.prompt} (required)`
       : question.prompt;
+  // The activation this field is being answered under, when the runner is
+  // mounted at /questionnaires/[activationId] — the upload route resolves the
+  // question against THAT activation's pinned definition rather than trusting
+  // the id (see api/uploads/questionnaire-image/route.ts). Absent everywhere
+  // else: onboarding's burner profile resolves against its own definition, and
+  // the author preview has no definition to be answered against at all. Typed
+  // non-null but null outside a route context (a unit test rendering the field
+  // bare), so it is read defensively.
+  const routeParams: Partial<Record<string, string | string[]>> | null =
+    useParams();
+  const activationId =
+    typeof routeParams?.activationId === "string"
+      ? routeParams.activationId
+      : undefined;
+
   switch (question.kind) {
     case "slider": {
       if (question.display === "segmented") {
@@ -378,12 +394,22 @@ function FieldInput({
             uploadUrl={
               question.id === PROFILE_IMAGE_QUESTION_ID
                 ? undefined
-                : `/api/uploads/questionnaire-image?question=${encodeURIComponent(question.id)}`
+                : questionnaireImageUploadUrl(question.id, activationId)
             }
           />
         </div>
       );
   }
+}
+
+/** Upload endpoint for one image answer, carrying the activation when there is one. */
+function questionnaireImageUploadUrl(
+  questionId: string,
+  activationId: string | undefined,
+): string {
+  const params = new URLSearchParams({ question: questionId });
+  if (activationId) params.set("activation", activationId);
+  return `/api/uploads/questionnaire-image?${params}`;
 }
 
 /**
