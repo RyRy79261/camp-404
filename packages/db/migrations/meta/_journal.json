@@ -134,6 +134,13 @@
       "when": 1782169795826,
       "tag": "0018_workable_praxagora",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788854845108,
+      "tag": "0019_small_chimera",
+      "breakpoints": true
     }
   ]
 }

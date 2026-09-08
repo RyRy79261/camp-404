@@ -22,8 +22,10 @@ import type {
   QuestionnaireResponses,
 } from "@camp404/types";
 // Type-only (erased at runtime — no import cycle with camp-config.ts, which
-// imports this schema): types the camp_settings.config JSONB column.
-import type { TeamsConfig } from "./camp-config";
+// imports this schema): types the camp_settings.config JSONB column. The
+// SQL default literal below stays teams-only — cycles and the carry-over map
+// are absent on every existing row and resolve to their defaults.
+import type { CampConfig } from "./camp-config";
 
 // Camp 404 schema. Authentication is handled by Neon Auth (Better Auth) —
 // the managed auth service holds credentials, sessions, and identity. Our
@@ -559,6 +561,18 @@ export const questionnaireActivations = pgTable(
     closedAt: timestamp("closed_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+
+    // The camp cycle current at Send time. Immutable afterwards, so a response
+    // inherits the cycle its form was OPENED in rather than the config's cycle
+    // at submit time (which kills the mid-submit rollover race). Default 1
+    // stamps every existing row into the founding cycle — no backfill script.
+    cycle: integer("cycle").notNull().default(1),
+
+    // The carry-over policy, COPIED off the definition at Send time exactly as
+    // `version` and `title` already are, and exactly as
+    // notification_deliveries.presentation is copied off broadcasts. Flipping
+    // the definition toggle affects the NEXT send, never the one in flight.
+    carryOver: boolean("carry_over").notNull().default(true),
   },
   (a) => ({
     keyIdx: index("questionnaire_activations_key_idx").on(a.questionnaireKey),
@@ -1434,7 +1448,7 @@ export const campSettings = pgTable(
     // teams; the seed mirrors DEFAULT_CAMP_CONFIG in camp-config.ts (a test
     // guards the two against drift). See camp-config.ts for the accessor.
     config: jsonb("config")
-      .$type<TeamsConfig>()
+      .$type<CampConfig>()
       .notNull()
       .default(
         sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and Water","order":3,"archived":false},{"key":"health_and_safety","label":"Health and Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false}]}'::jsonb`,
@@ -1472,6 +1486,17 @@ export const questionnaireDefinitions = pgTable("questionnaire_definitions", {
   }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+
+  // Per-questionnaire rollover policy. TRUE (the default) = answers carry over
+  // and the rollover leaves this questionnaire alone. FALSE = the rollover
+  // closes the open send and opens a fresh one, so members answer again on a
+  // blank form. A COLUMN, not a field inside `definition`: classifyChange reads
+  // only the field map and the visibleIf map, so a toggle would classify as
+  // `cosmetic` — and a cosmetic re-publish overwrites the immutable version
+  // snapshot in place, letting a policy switch retroactively rewrite what a
+  // past collection ran under. As a column it is also togglable with no
+  // re-publish, and readable in one SELECT by the rollover planner.
+  carryOver: boolean("carry_over").notNull().default(true),
 });
 
 // Immutable published snapshots. Publishing copies the definition head into a
@@ -1524,12 +1549,21 @@ export const questionnaireResponses = pgTable(
     ),
     completedAt: timestamp("completed_at", { mode: "date" }),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+
+    // Copied from questionnaire_activations.cycle at write time. Carry-over
+    // keeps ONE row a member amends forever; `fresh` grows a NEW row each
+    // cycle. "Fresh" means the member must answer again — never that the old
+    // answer is destroyed.
+    cycle: integer("cycle").notNull().default(1),
   },
   (r) => ({
-    userDefIdx: uniqueIndex("questionnaire_responses_user_def_idx").on(
-      r.userId,
-      r.definitionKey,
-    ),
+    // Renamed rather than redefined so drizzle-kit emits a clean DROP INDEX +
+    // CREATE UNIQUE INDEX. The three-column index is strictly WEAKER than the
+    // two-column one it replaces, and the ADD COLUMN immediately before stamps
+    // every existing row cycle = 1, so no duplicate can appear mid-swap.
+    userDefCycleIdx: uniqueIndex(
+      "questionnaire_responses_user_def_cycle_idx",
+    ).on(r.userId, r.definitionKey, r.cycle),
     defIdx: index("questionnaire_responses_def_idx").on(r.definitionKey),
   }),
 );

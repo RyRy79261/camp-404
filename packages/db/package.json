@@ -16,6 +16,8 @@
     "./captain-promotion": "./src/captain-promotion.ts",
     "./bootstrap": "./src/bootstrap.ts",
     "./camp-config": "./src/camp-config.ts",
+    "./cycles": "./src/cycles.ts",
+    "./cycle-rollover": "./src/cycle-rollover.ts",
     "./questionnaire-definitions": "./src/questionnaire-definitions.ts",
     "./questionnaire-lifecycle": "./src/questionnaire-lifecycle.ts",
     "./questionnaire-responses": "./src/questionnaire-responses.ts",
