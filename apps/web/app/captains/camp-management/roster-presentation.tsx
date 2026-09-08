@@ -1,4 +1,4 @@
-import { initialsFrom } from "@camp404/core";
+import { humanizeKey, initialsFrom } from "@camp404/core";
 import { cn } from "@camp404/ui/lib/utils";
 import type { RosterStatus } from "@/lib/camp-roster";
 import { COUNTRIES } from "@/lib/countries";
@@ -14,17 +14,15 @@ import { COUNTRIES } from "@/lib/countries";
 // filter. `teamLabel` below stays as the humanizer for rendering a stored enum
 // key as a chip (and it seeds the config's default labels).
 
-/** Humanise a team enum value: "art_and_activities" → "Art and Activities". */
-export function teamLabel(team: string): string {
-  return team
-    .split("_")
-    .map((w, i) =>
-      i > 0 && (w === "and" || w === "of")
-        ? w
-        : w.charAt(0).toUpperCase() + w.slice(1),
-    )
-    .join(" ");
-}
+/**
+ * Humanise a team enum value: "art_and_activities" → "Art and Activities".
+ * A thin alias over the shared humanizer in @camp404/core: the same fallback
+ * `audienceLabel` (@camp404/db/camp-config) applies when a key has no config
+ * entry, so a chip here and a send target there can never read differently.
+ * This file is bundled client-side, which is why the shared rule lives in core
+ * (pure, DB-free) rather than beside the config it backstops.
+ */
+export const teamLabel = humanizeKey;
 
 // A small, stable identity palette (the board's avatar/team hues). Picked by
 // hashing an id so a member keeps the same tint across renders.

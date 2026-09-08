@@ -103,6 +103,46 @@ Decisions baked into the schema — keep new code consistent with them:
   `team_memberships.is_lead`; a **driver** from
   `driver_profiles.intends_to_drive`. Do not add a stored role column for
   a derived capability.
+- **`team_lead` clearance is GLOBAL, not per-team.** Leading *any* team in
+  the camp's current year raises a member to the `team_lead` rung of the
+  `camp_member < team_lead < captain` ladder **everywhere in the app** —
+  `isTeamLead(userId)` is a single boolean and `deriveViewerRank` takes it
+  as one. Team identity governs *audience* (who a `team` / `team_leads`
+  broadcast or questionnaire send reaches, which chips a roster row wears),
+  never *clearance*. There is no "lead of team X may see team X's data and
+  no one else's" tier, and adding one would mean re-shaping
+  `deriveViewerRank`, `requireClearance` and every call site — not a local
+  change. Rationale: the ladder is a single ordered scale by construction,
+  the camp is 30–80 people who all camp together, and a per-team scope
+  would buy privacy the camp does not ask for at the cost of a second,
+  parallel authorization axis. A lead never reaches a captain-required
+  surface, because `team_lead < captain` still holds.
+  - **Corollary — pass the real flag.** Several captain pages currently
+    hardcode `deriveViewerRank(rank, false)`. That is behaviour-preserving
+    only while the surface requires `captain`; on any surface requiring
+    `team_lead` it wrongly locks out a genuine lead. New gates must call
+    `isTeamLead()` and pass the result.
+  - Team membership and the lead flag are **year-scoped**: `cycle` is part
+    of `team_memberships`' primary key and every production read filters on
+    the camp's current burn year, because the owner ruled that teams and
+    lead roles go fresh each year. Write them only through
+    `@camp404/db/team-memberships` (`assignTeam` / `removeTeam` /
+    `setLead`), which stamps `currentCycleNumber()` itself; never insert
+    into `team_memberships` directly, or the row lands on the `DEFAULT 1`
+    sentinel and is invisible to every production read. `setLead` refuses a
+    non-member rather than creating the membership, and removing a team's
+    last lead is allowed — a leaderless team is a legitimate state (every
+    team is leaderless the moment the camp rolls over).
+  - **The audience half has one owner too.** Clearance says which rung a
+    viewer stands on; it does not say which audiences they may *address*.
+    That is `canSendToAudience` in `packages/core/src/audience-authz.ts`: a
+    captain is unrestricted, a team lead may send only to a single `team`
+    scope they themselves lead, and everything wider — `everyone`,
+    `team_leads`, `drivers`, `individual`, `opt_in` — is refused
+    (fail-closed on an unknown rank or a missing team). It is pure and
+    tested but has no live caller yet, because every send path is still
+    captain-gated; it goes live the moment one of them stops being. Change
+    the rule in that function, never at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping

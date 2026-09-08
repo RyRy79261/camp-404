@@ -1,4 +1,10 @@
-import { BuilderQuestionnaire, Questionnaire, type Question } from "@camp404/types";
+import { humanizeKey } from "@camp404/core";
+import {
+  BuilderQuestionnaire,
+  Questionnaire,
+  Team,
+  type Question,
+} from "@camp404/types";
 import { COUNTRIES, countryFlag } from "./countries";
 
 // Render each country option with its flag emoji prefixed, e.g.
@@ -413,16 +419,15 @@ export function buildQuestionnaire(
 // @camp404/db/camp-config (a test guards the two against drift). Used only to
 // freeze BURNER_PROFILE_TEMPLATE; the stored definition's team anchors are
 // overwritten from the live config on read, so these labels never surface.
-export const DEFAULT_TEAM_OPTIONS: ReadonlyArray<TeamOption> = [
-  { value: "kitchen", label: "Kitchen" },
-  { value: "structures", label: "Structures" },
-  { value: "power_and_lighting", label: "Power and Lighting" },
-  { value: "sanitation_and_water", label: "Sanitation and Water" },
-  { value: "health_and_safety", label: "Health and Safety" },
-  { value: "art_and_activities", label: "Art and Activities" },
-  { value: "ministry_of_memes", label: "Ministry of Memes" },
-  { value: "ministry_of_vibes", label: "Ministry of Vibes" },
-];
+//
+// DERIVED rather than typed out again: the keys are the enum, and the labels
+// are the shared humanizer that `audienceLabel` falls back to — so this is the
+// same vocabulary the send picker and the roster chips read, not a ninth copy
+// of it. This module is bundled client-side, which is why it reaches for
+// @camp404/core and never @camp404/db.
+export const DEFAULT_TEAM_OPTIONS: ReadonlyArray<TeamOption> = Team.options.map(
+  (value) => ({ value, label: humanizeKey(value) }),
+);
 
 // The stored-shaped burner-profile definition — what the DB-backed accessor
 // serves when no edited row exists yet (and the seed the in-app builder will

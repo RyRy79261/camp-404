@@ -3,6 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCampMemberDetail } from "@camp404/db/roster";
+import {
+  assignTeam,
+  getTeamMemberships,
+  removeTeam,
+  setLead,
+  type TeamMembership,
+} from "@camp404/db/team-memberships";
 import { decryptField } from "@camp404/db/crypto";
 import { ID_UNREADABLE_LABEL, mergeIdNumber } from "@camp404/db/id-documents";
 import {
@@ -12,6 +19,7 @@ import {
   promotionStepState,
   requireClearance,
 } from "@camp404/core";
+import { Team } from "@camp404/types";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
   decideUserApproval,
@@ -27,10 +35,12 @@ import {
 } from "@/lib/promotion";
 import { presentMemberDetail, type PresentedMember } from "@/lib/member-detail";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
+import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import {
   presentPublicMember,
   type PublicMemberProfile,
 } from "@/lib/public-member";
+import { runAction, type ActionFailure } from "@/lib/action-result";
 
 export type MemberDetailResult =
   | {
@@ -45,7 +55,31 @@ export type MemberDetailResult =
       /** Whether the open request was sent by THIS captain — only the requester
        * may cancel it, so this gates the dialog's cancel affordance. */
       promotionRequestIsMine: boolean;
+      /** This member's team memberships FOR THE CAMP'S CURRENT YEAR. */
+      teams: TeamMembership[];
+      /** The teams a captain may assign — active only, order-sorted. Archived
+       * teams are filtered out SERVER-SIDE so they can never be picked. */
+      assignableTeams: AssignableTeam[];
     }
+  | { ok: false; error: string };
+
+// Re-exported so the client panel can type its membership props without
+// importing @camp404/db (which pulls the database driver) into a client module.
+export type { TeamMembership };
+
+/** One pickable team for the assignment control. */
+export interface AssignableTeam {
+  key: string;
+  label: string;
+}
+
+/**
+ * Every team write answers with the member's refreshed membership list, so the
+ * panel re-renders from the server's truth rather than guessing at the outcome
+ * of a write it did not perform.
+ */
+export type TeamAssignmentResult =
+  | { ok: true; teams: TeamMembership[] }
   | { ok: false; error: string };
 
 export type PublicMemberProfileResult =
@@ -144,76 +178,91 @@ async function requireApprovedMember(): Promise<
 export async function getMemberDetailAction(
   userId: string,
 ): Promise<MemberDetailResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("getMemberDetailAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  // The only action in this file that was missing the opaque-id boundary check
-  // every sibling has — and the only one that passes includeIdDocuments, i.e.
-  // the government-ID decrypt path. Validate before the privileged read.
-  if (!UserId.safeParse(userId).success) {
-    return { ok: false, error: "Member not found." };
-  }
+    // The only action in this file that was missing the opaque-id boundary check
+    // every sibling has — and the only one that passes includeIdDocuments, i.e.
+    // the government-ID decrypt path. Validate before the privileged read.
+    if (!UserId.safeParse(userId).success) {
+      return { ok: false, error: "Member not found." };
+    }
 
-  // Captain-gated above, and we decrypt below — the only caller that may pull
-  // the ID ciphertext out of the database.
-  const detail = await getCampMemberDetail(userId, {
-    includeIdDocuments: true,
+    // Captain-gated above, and we decrypt below — the only caller that may pull
+    // the ID ciphertext out of the database.
+    const detail = await getCampMemberDetail(userId, {
+      includeIdDocuments: true,
+    });
+    if (!detail) return { ok: false, error: "Member not found." };
+
+    // Captain-gated above — decrypt this member's government ID number and merge
+    // it back into the answers so the profile modal can show it. Captains and
+    // the owner are the only readers of this field.
+    //
+    // An UNREADABLE column (key rotation / corrupt ciphertext) must not render as
+    // an absent one: mergeIdNumber is a no-op on a null number, so the row would
+    // silently disappear and the captain would read it as "this member never gave
+    // us an ID". Merge an explicit marker instead. This is a read-only
+    // projection — presentMemberDetail never writes back.
+    const passport = decryptField(detail.passportEncrypted);
+    const saId = decryptField(detail.saIdEncrypted);
+    const readable =
+      passport.state === "ok" ? passport : saId.state === "ok" ? saId : null;
+    const unreadableType =
+      passport.state === "unreadable"
+        ? "passport"
+        : saId.state === "unreadable"
+          ? "sa_id"
+          : null;
+    const id = readable
+      ? {
+          idType: passport.state === "ok" ? "passport" : "sa_id",
+          idNumber: readable.value,
+        }
+      : unreadableType
+        ? { idType: unreadableType, idNumber: ID_UNREADABLE_LABEL }
+        : { idType: null, idNumber: null };
+    const responses = mergeIdNumber(detail.responses, id);
+
+    // Assign-captain affordance for the modal: reuse the pure send-guard for
+    // visibility (captain viewer, target not already a captain, not self) and the
+    // pure step-state over the member's open request (if any).
+    const canAssignCaptain = canSendPromotion({
+      viewerRank: "captain",
+      viewerId: gate.captainId,
+      targetRank: deriveViewerRank(detail.rank, false),
+      targetId: userId,
+    }).ok;
+    const openRequest = await getOpenPromotionForTarget(userId);
+    const promotionStep = promotionStepState(openRequest);
+
+    // Resolve team picks against ALL teams (incl. archived) so a member who chose
+    // a since-archived team still shows its label, not the raw key.
+    const questionnaire = await getQuestionnaireForResponses();
+
+    // The assignment control's two inputs: what this member is on THIS YEAR,
+    // and what a captain may put them on. `activeTeams` drops archived teams,
+    // so an archived team is unpickable before the client ever sees the list.
+    const [teams, config] = await Promise.all([
+      getTeamMemberships(userId),
+      getTeamsConfig(),
+    ]);
+
+    return {
+      ok: true,
+      member: presentMemberDetail({ ...detail, responses }, questionnaire),
+      canAssignCaptain,
+      promotionStep,
+      promotionRequestId: openRequest?.id ?? null,
+      promotionRequestIsMine: openRequest?.requestedByUserId === gate.captainId,
+      teams,
+      assignableTeams: activeTeams(config).map((t) => ({
+        key: t.key,
+        label: t.label,
+      })),
+    };
   });
-  if (!detail) return { ok: false, error: "Member not found." };
-
-  // Captain-gated above — decrypt this member's government ID number and merge
-  // it back into the answers so the profile modal can show it. Captains and
-  // the owner are the only readers of this field.
-  //
-  // An UNREADABLE column (key rotation / corrupt ciphertext) must not render as
-  // an absent one: mergeIdNumber is a no-op on a null number, so the row would
-  // silently disappear and the captain would read it as "this member never gave
-  // us an ID". Merge an explicit marker instead. This is a read-only
-  // projection — presentMemberDetail never writes back.
-  const passport = decryptField(detail.passportEncrypted);
-  const saId = decryptField(detail.saIdEncrypted);
-  const readable =
-    passport.state === "ok" ? passport : saId.state === "ok" ? saId : null;
-  const unreadableType =
-    passport.state === "unreadable"
-      ? "passport"
-      : saId.state === "unreadable"
-        ? "sa_id"
-        : null;
-  const id = readable
-    ? {
-        idType: passport.state === "ok" ? "passport" : "sa_id",
-        idNumber: readable.value,
-      }
-    : unreadableType
-      ? { idType: unreadableType, idNumber: ID_UNREADABLE_LABEL }
-      : { idType: null, idNumber: null };
-  const responses = mergeIdNumber(detail.responses, id);
-
-  // Assign-captain affordance for the modal: reuse the pure send-guard for
-  // visibility (captain viewer, target not already a captain, not self) and the
-  // pure step-state over the member's open request (if any).
-  const canAssignCaptain = canSendPromotion({
-    viewerRank: "captain",
-    viewerId: gate.captainId,
-    targetRank: deriveViewerRank(detail.rank, false),
-    targetId: userId,
-  }).ok;
-  const openRequest = await getOpenPromotionForTarget(userId);
-  const promotionStep = promotionStepState(openRequest);
-
-  // Resolve team picks against ALL teams (incl. archived) so a member who chose
-  // a since-archived team still shows its label, not the raw key.
-  const questionnaire = await getQuestionnaireForResponses();
-
-  return {
-    ok: true,
-    member: presentMemberDetail({ ...detail, responses }, questionnaire),
-    canAssignCaptain,
-    promotionStep,
-    promotionRequestId: openRequest?.id ?? null,
-    promotionRequestIsMine: openRequest?.requestedByUserId === gate.captainId,
-  };
 }
 
 /**
@@ -226,22 +275,24 @@ export async function getMemberDetailAction(
 export async function getPublicMemberProfileAction(
   userId: string,
 ): Promise<PublicMemberProfileResult> {
-  const gate = await requireApprovedMember();
-  if (!gate.ok) return gate;
+  return runAction("getPublicMemberProfileAction", async () => {
+    const gate = await requireApprovedMember();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(userId).success) {
-    return { ok: false, error: "Invalid member." };
-  }
+    if (!UserId.safeParse(userId).success) {
+      return { ok: false, error: "Invalid member." };
+    }
 
-  // Member-facing (NOT captain-gated): never SELECT the ID ciphertext, so it
-  // cannot reach this request's scope at all — not merely be projected away.
-  const detail = await getCampMemberDetail(userId, {
-    includeIdDocuments: false,
+    // Member-facing (NOT captain-gated): never SELECT the ID ciphertext, so it
+    // cannot reach this request's scope at all — not merely be projected away.
+    const detail = await getCampMemberDetail(userId, {
+      includeIdDocuments: false,
+    });
+    if (!detail) return { ok: false, error: "Member not found." };
+
+    // Allowlist projection (no decrypt, no status, no email, no provenance).
+    return { ok: true, ...presentPublicMember(detail) };
   });
-  if (!detail) return { ok: false, error: "Member not found." };
-
-  // Allowlist projection (no decrypt, no status, no email, no provenance).
-  return { ok: true, ...presentPublicMember(detail) };
 }
 
 /**
@@ -255,34 +306,36 @@ export async function decideApprovalAction(
   userId: string,
   decision: "approved" | "rejected",
 ): Promise<ApprovalDecisionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("decideApprovalAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(userId).success) {
-    return { ok: false, error: "Invalid member." };
-  }
-  if (decision !== "approved" && decision !== "rejected") {
-    return { ok: false, error: "Unknown decision." };
-  }
-  if (userId === gate.captainId) {
-    return { ok: false, error: "You can't decide on your own account." };
-  }
+    if (!UserId.safeParse(userId).success) {
+      return { ok: false, error: "Invalid member." };
+    }
+    if (decision !== "approved" && decision !== "rejected") {
+      return { ok: false, error: "Unknown decision." };
+    }
+    if (userId === gate.captainId) {
+      return { ok: false, error: "You can't decide on your own account." };
+    }
 
-  const decided = await decideUserApproval({
-    userId,
-    status: decision,
-    decidedByUserId: gate.captainId,
+    const decided = await decideUserApproval({
+      userId,
+      status: decision,
+      decidedByUserId: gate.captainId,
+    });
+    // Revalidate either way: on the lost-CAS path the roster this captain is
+    // looking at is stale, which is exactly why they got here.
+    revalidatePath("/captains/camp-management");
+    if (!decided) {
+      return {
+        ok: false,
+        error: "Another captain already decided on this member.",
+      };
+    }
+    return { ok: true };
   });
-  // Revalidate either way: on the lost-CAS path the roster this captain is
-  // looking at is stale, which is exactly why they got here.
-  revalidatePath("/captains/camp-management");
-  if (!decided) {
-    return {
-      ok: false,
-      error: "Another captain already decided on this member.",
-    };
-  }
-  return { ok: true };
 }
 
 /**
@@ -295,37 +348,39 @@ export async function decideApprovalAction(
 export async function sendCaptainPromotionAction(
   targetUserId: string,
 ): Promise<SendPromotionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("sendCaptainPromotionAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(targetUserId).success) {
-    return { ok: false, error: "Invalid member." };
-  }
+    if (!UserId.safeParse(targetUserId).success) {
+      return { ok: false, error: "Invalid member." };
+    }
 
-  const target = await getCampMemberDetail(targetUserId);
-  if (!target) return { ok: false, error: "Member not found." };
+    const target = await getCampMemberDetail(targetUserId);
+    if (!target) return { ok: false, error: "Member not found." };
 
-  // The viewer is a captain by construction (requireCaptain). team-lead is
-  // irrelevant to this guard (it only checks `=== "captain"`), so isLead=false.
-  const guard = canSendPromotion({
-    viewerRank: "captain",
-    viewerId: gate.captainId,
-    targetRank: deriveViewerRank(target.rank, false),
-    targetId: targetUserId,
+    // The viewer is a captain by construction (requireCaptain). team-lead is
+    // irrelevant to this guard (it only checks `=== "captain"`), so isLead=false.
+    const guard = canSendPromotion({
+      viewerRank: "captain",
+      viewerId: gate.captainId,
+      targetRank: deriveViewerRank(target.rank, false),
+      targetId: targetUserId,
+    });
+    if (!guard.ok) {
+      return {
+        ok: false,
+        error: SEND_PROMOTION_COPY[guard.reason] ?? "Couldn't send the request.",
+      };
+    }
+
+    const created = await sendCaptainPromotion({
+      targetUserId,
+      requestedByUserId: gate.captainId,
+    });
+    revalidatePath("/captains/camp-management");
+    return { ok: true, requestId: created.id };
   });
-  if (!guard.ok) {
-    return {
-      ok: false,
-      error: SEND_PROMOTION_COPY[guard.reason] ?? "Couldn't send the request.",
-    };
-  }
-
-  const created = await sendCaptainPromotion({
-    targetUserId,
-    requestedByUserId: gate.captainId,
-  });
-  revalidatePath("/captains/camp-management");
-  return { ok: true, requestId: created.id };
 }
 
 /**
@@ -336,46 +391,169 @@ export async function sendCaptainPromotionAction(
 export async function cancelCaptainPromotionAction(
   requestId: string,
 ): Promise<PromotionActionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("cancelCaptainPromotionAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(requestId).success) {
-    return { ok: false, error: "Invalid request." };
-  }
+    if (!UserId.safeParse(requestId).success) {
+      return { ok: false, error: "Invalid request." };
+    }
 
-  const request = await getPromotionRequestById(requestId);
-  if (
-    !request ||
-    request.targetUserId === null ||
-    request.requestedByUserId === null
-  ) {
-    return { ok: false, error: "Request not found." };
-  }
+    const request = await getPromotionRequestById(requestId);
+    if (
+      !request ||
+      request.targetUserId === null ||
+      request.requestedByUserId === null
+    ) {
+      return { ok: false, error: "Request not found." };
+    }
 
-  const guard = canDecidePromotion({
-    actorId: gate.captainId,
-    request: {
-      status: request.status,
-      targetUserId: request.targetUserId,
-      requestedByUserId: request.requestedByUserId,
-    },
-    action: "cancel",
+    const guard = canDecidePromotion({
+      actorId: gate.captainId,
+      request: {
+        status: request.status,
+        targetUserId: request.targetUserId,
+        requestedByUserId: request.requestedByUserId,
+      },
+      action: "cancel",
+    });
+    if (!guard.ok) {
+      return {
+        ok: false,
+        error:
+          CANCEL_PROMOTION_COPY[guard.reason] ?? "Couldn't cancel the request.",
+      };
+    }
+
+    // Bind the actor in the write predicate too (defense in depth): the cancel
+    // only flips a row this captain actually requested.
+    await decideCaptainPromotion({
+      requestId,
+      status: "cancelled",
+      actorUserId: gate.captainId,
+    });
+    revalidatePath("/captains/camp-management");
+    return { ok: true };
   });
-  if (!guard.ok) {
+}
+
+// --- Team assignment --------------------------------------------------------
+// The captain-facing write path for `team_memberships` (WP6). Every one of these
+// is captain-gated by the same `requireCaptain()` the decisions above use, and
+// every one resolves the burn year inside @camp404/db — the cycle is never a
+// parameter a caller can get wrong.
+
+/**
+ * Resolve a submitted team key against the camp config.
+ *
+ * `requireActive` is the archived-team rule: a captain may not ASSIGN to (or
+ * appoint a lead of) an archived team, but may still REMOVE a member from one —
+ * archiving a team must not strand its roster. Validated server-side against the
+ * config rather than trusting the list the client was handed.
+ *
+ * The `Team` enum check is the second half: the config's keys are `teamEnum`
+ * keys by contract, and this makes a config that has drifted from the database
+ * enum a refused action rather than a Postgres error.
+ */
+async function resolveTeamKey(
+  team: string,
+  requireActive: boolean,
+): Promise<{ ok: true; team: Team } | ActionFailure> {
+  const parsed = Team.safeParse(team);
+  if (!parsed.success) return { ok: false, error: "Unknown team." };
+  const config = await getTeamsConfig();
+  const pool = requireActive ? activeTeams(config) : config.teams;
+  if (!pool.some((t) => t.key === parsed.data)) {
     return {
       ok: false,
-      error:
-        CANCEL_PROMOTION_COPY[guard.reason] ?? "Couldn't cancel the request.",
+      error: requireActive ? "That team isn't active." : "Unknown team.",
     };
   }
+  return { ok: true, team: parsed.data };
+}
 
-  // Bind the actor in the write predicate too (defense in depth): the cancel
-  // only flips a row this captain actually requested.
-  await decideCaptainPromotion({
-    requestId,
-    status: "cancelled",
-    actorUserId: gate.captainId,
+/** Captain-gate + validate the (member, team) pair every team write shares. */
+async function gateTeamWrite(
+  userId: string,
+  team: string,
+  requireActive: boolean,
+): Promise<{ ok: true; captainId: string; team: Team } | ActionFailure> {
+  const gate = await requireCaptain();
+  if (!gate.ok) return gate;
+  if (!UserId.safeParse(userId).success) {
+    return { ok: false, error: "Invalid member." };
+  }
+  const resolved = await resolveTeamKey(team, requireActive);
+  if (!resolved.ok) return resolved;
+  return { ok: true, captainId: gate.captainId, team: resolved.team };
+}
+
+/**
+ * Put a member on a team for the camp's current year. Idempotent — assigning
+ * someone already on the team succeeds without a duplicate row.
+ */
+export async function assignTeamAction(
+  userId: string,
+  team: string,
+): Promise<TeamAssignmentResult> {
+  return runAction("assignTeamAction", async () => {
+    const gate = await gateTeamWrite(userId, team, true);
+    if (!gate.ok) return gate;
+
+    await assignTeam({ userId, team: gate.team, actorId: gate.captainId });
+    // The roster's team badges and lead column read the same rows.
+    revalidatePath("/captains/camp-management");
+    return { ok: true, teams: await getTeamMemberships(userId) };
   });
-  revalidatePath("/captains/camp-management");
-  return { ok: true };
+}
+
+/**
+ * Take a member off a team for the camp's current year. Accepts an archived
+ * team so a captain can still clear a roster after archiving it, and removing
+ * the team's last lead is allowed by design (see `removeTeam` in
+ * @camp404/db/team-memberships).
+ */
+export async function removeTeamAction(
+  userId: string,
+  team: string,
+): Promise<TeamAssignmentResult> {
+  return runAction("removeTeamAction", async () => {
+    const gate = await gateTeamWrite(userId, team, false);
+    if (!gate.ok) return gate;
+
+    await removeTeam({ userId, team: gate.team, actorId: gate.captainId });
+    revalidatePath("/captains/camp-management");
+    return { ok: true, teams: await getTeamMemberships(userId) };
+  });
+}
+
+/**
+ * Mark a member as leading (or no longer leading) a team they are already on.
+ * Refuses a member who is not on the team this year — the lead flag is a
+ * modifier on a membership, never a way to create one.
+ */
+export async function setTeamLeadAction(
+  userId: string,
+  team: string,
+  isLead: boolean,
+): Promise<TeamAssignmentResult> {
+  return runAction("setTeamLeadAction", async () => {
+    const gate = await gateTeamWrite(userId, team, true);
+    if (!gate.ok) return gate;
+    if (typeof isLead !== "boolean") {
+      return { ok: false, error: "Unknown decision." };
+    }
+
+    const result = await setLead({
+      userId,
+      team: gate.team,
+      isLead,
+      actorId: gate.captainId,
+    });
+    if (!result.ok) {
+      return { ok: false, error: "Add them to the team first." };
+    }
+    revalidatePath("/captains/camp-management");
+    return { ok: true, teams: await getTeamMemberships(userId) };
+  });
 }

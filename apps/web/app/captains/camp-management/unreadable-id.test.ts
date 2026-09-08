@@ -44,6 +44,16 @@ vi.mock("@/lib/questionnaire-config", () => ({
     pages: [],
   })),
 }));
+vi.mock("@camp404/db/team-memberships", () => ({
+  assignTeam: vi.fn(),
+  removeTeam: vi.fn(),
+  setLead: vi.fn(),
+  getTeamMemberships: vi.fn(async () => []),
+}));
+vi.mock("@/lib/camp-config", () => ({
+  getTeamsConfig: vi.fn(async () => ({ teams: [] })),
+  activeTeams: () => [],
+}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { getMemberDetailAction } from "./actions";

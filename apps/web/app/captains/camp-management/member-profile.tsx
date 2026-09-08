@@ -9,10 +9,16 @@ import { Divider } from "@camp404/ui/components/divider";
 import { Spinner } from "@camp404/ui/components/spinner";
 import type { RosterRow } from "@/lib/camp-roster";
 import type { DetailItem, PresentedMember } from "@/lib/member-detail";
-import { decideApprovalAction, getMemberDetailAction } from "./actions";
+import {
+  decideApprovalAction,
+  getMemberDetailAction,
+  type AssignableTeam,
+  type TeamMembership,
+} from "./actions";
 import { AssignCaptainDialog } from "./assign-captain-dialog";
 import { RejectConfirmDialog } from "./reject-confirm-dialog";
 import { RoleBadge, RosterAvatar, TeamBadge } from "./roster-presentation";
+import { TeamAssignment } from "./team-assignment";
 
 // Inline member profile (board S17 MemberProfile). A row selection expands this
 // panel below the roster (not a modal). The head paints instantly from the row;
@@ -29,6 +35,10 @@ type DetailState =
       promotionStep: { sent: boolean; accepted: boolean };
       promotionRequestId: string | null;
       promotionRequestIsMine: boolean;
+      /** This member's teams for the camp's current year. */
+      teams: TeamMembership[];
+      /** Active teams a captain may assign (archived excluded server-side). */
+      assignableTeams: AssignableTeam[];
     }
   | { state: "error"; message: string };
 
@@ -101,6 +111,8 @@ export function MemberProfile({
                 promotionStep: res.promotionStep,
                 promotionRequestId: res.promotionRequestId,
                 promotionRequestIsMine: res.promotionRequestIsMine,
+                teams: res.teams,
+                assignableTeams: res.assignableTeams,
               }
             : { state: "error", message: res.error },
         );
@@ -149,6 +161,14 @@ export function MemberProfile({
     });
   }
 
+  // A team write answers with the refreshed membership list; fold it into the
+  // panel state and pull the roster behind it down again, since the row's team
+  // chips and lead badge are the same rows.
+  function applyTeams(teams: TeamMembership[]) {
+    setDetail((prev) => (prev.state === "loaded" ? { ...prev, teams } : prev));
+    router.refresh();
+  }
+
   function markPromotionSent(requestId: string) {
     setDetail((prev) =>
       prev.state === "loaded"
@@ -189,6 +209,9 @@ export function MemberProfile({
     detail.state === "loaded" ? detail.promotionRequestId : null;
   const promotionRequestIsMine =
     detail.state === "loaded" ? detail.promotionRequestIsMine : false;
+  const teams = detail.state === "loaded" ? detail.teams : [];
+  const assignableTeams =
+    detail.state === "loaded" ? detail.assignableTeams : [];
   const isAwaiting = member?.approvalStatus === "pending";
   const status = member ? STATUS_BADGE[member.approvalStatus] : null;
 
@@ -309,6 +332,18 @@ export function MemberProfile({
               </div>
             ))
           )}
+
+          <Divider />
+
+          {/* Team assignment — the write path behind every team-scoped
+              broadcast, questionnaire send and roster badge. */}
+          <TeamAssignment
+            userId={row.id}
+            teams={teams}
+            assignableTeams={assignableTeams}
+            teamLabels={teamLabels}
+            onChange={applyTeams}
+          />
 
           <Divider />
 

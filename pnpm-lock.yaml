@@ -307,6 +307,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@camp404/core':
+        specifier: workspace:*
+        version: link:../core
       '@camp404/types':
         specifier: workspace:*
         version: link:../types
