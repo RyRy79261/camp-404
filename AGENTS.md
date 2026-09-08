@@ -27,6 +27,13 @@ packages/
   eslint-config/ typescript-config/
 ```
 
+> **[CORRECTION 2026-09-09]** The tree above omits two workspaces that exist
+> today: `packages/core/` (`@camp404/core` — framework-free domain logic:
+> access rules, invites, ID validation, promotion, family tree, text
+> redaction/utils, shake) and `packages/telegram/` (`@camp404/telegram` — bot
+> client, webhook, and handlers; outbound is built but deliberately not
+> activated, see `DEFERRED.md`). `pnpm-workspace.yaml` is the source of truth.
+
 ## Commands
 
 Run from the repo root; Turbo fans tasks out across the workspace.
@@ -165,7 +172,15 @@ version instead.
 
 All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
 Scheduled routes are registered in `apps/web/vercel.json` (recipes, manuals,
-reminders). `telegram/dispatch` is intentionally **not** scheduled yet —
+reminders).
+
+> **[CORRECTION 2026-09-09]** `vercel.json` now schedules **five** crons, not
+> three: `notifications/dispatch` (09:15 UTC) and `notifications/push`
+> (09:25 UTC) were added with the notifications work. The sentence below about
+> `telegram/dispatch` still holds — that is a different route
+> (`/api/cron/telegram/dispatch`) and it remains unscheduled.
+
+`telegram/dispatch` is intentionally **not** scheduled yet —
 nothing enqueues announcements until the notifications work lands, and Vercel's
 daily-cron cap means it will be scheduled (or folded into an inline send) only
 once there is a queue to drain (see the route's own comment).
@@ -180,6 +195,17 @@ once there is a queue to drain (see the route's own comment).
 - Add or update tests with behavioural changes. Vitest covers units;
   Playwright e2e exists in `apps/web/tests/e2e` but is disabled pending a
   preview deployment.
+
+  > **[UNRESOLVED 2026-09-09]** This claim and the CI config disagree, and the
+  > owner has not ruled — do not act on either half without checking.
+  > **Doc:** the line above says the Playwright suite is disabled.
+  > **Code:** `.github/workflows/ci.yml` defines an `e2e` job that runs
+  > `pnpm --filter @camp404/web test:e2e` on every `src` PR (it self-hosts
+  > `next dev` with `E2E_TEST_MODE=1`, so it needs no preview deployment) and
+  > lists `e2e` in the `ci-pass` aggregate's `needs`, so a failure blocks
+  > merge. Tracked as decision **D-A** on issue #143; five harvest units
+  > down-weighted their e2e recommendations on this line. Leave both facts
+  > here until the owner decides which document is wrong.
 
 ## Security / POPIA
 

@@ -1,0 +1,28 @@
+# Generated / machine-authored artefacts.
+#
+# `-merge` turns off git's line-based three-way merge for these paths: a
+# concurrent edit conflicts whole-file and has to be resolved by taking one
+# side (then regenerating), instead of being blended into output that still
+# parses but means something neither branch wrote.
+#
+# `linguist-generated=true` collapses them in GitHub diffs — nobody reviews
+# these by hand.
+
+# The Pencil design canvas: 45k lines of JSON in one file, rewritten wholesale
+# by the Pencil CLI. A blended merge yields a structurally valid canvas with
+# semantically wrong geometry/ownership, and nothing downstream would flag it.
+*.pen -merge linguist-generated=true
+
+# pnpm lockfile. A blended merge can pair a package entry from one side with a
+# peer resolution from the other: it installs, and CI's --frozen-lockfile is
+# happy, but the resolved graph is one neither branch tested. Resolve by taking
+# one side and re-running `pnpm install`.
+pnpm-lock.yaml -merge linguist-generated=true
+
+# drizzle-kit schema snapshots. Each is the exact state the *next* migration is
+# diffed against, so a snapshot merged out of two branches describes a database
+# that never existed and makes drizzle-kit generate a wrong migration. Resolve
+# by taking one side and re-running the generator.
+# (`meta/_journal.json` is deliberately NOT listed: it is a short ordered list
+# where merging both branches' entries is the correct resolution.)
+packages/db/migrations/meta/*_snapshot.json -merge linguist-generated=true

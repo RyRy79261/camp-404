@@ -30,6 +30,7 @@
     "./telegram": "./src/telegram.ts",
     "./crypto": "./src/crypto.ts",
     "./id-documents": "./src/id-documents.ts",
+    "./audit": "./src/audit.ts",
     "./maintenance": "./src/maintenance.ts"
   },
   "scripts": {
@@ -54,6 +55,6 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.4.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.11"
   }
 }

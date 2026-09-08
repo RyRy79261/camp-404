@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { createHttpDb, createPooledDb } from "./index";
+import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import {
   chunk,
@@ -169,41 +169,36 @@ export async function drainQueuedPush(send: PushSend): Promise<PushDrainResult> 
     send,
   );
 
-  const { db, pool } = createPooledDb();
   let sent = 0;
   let failed = 0;
   let skipped = 0;
   let pruned = 0;
-  try {
-    await db.transaction(async (tx) => {
-      for (const [id, status] of statusById) {
-        const updated = await tx
-          .update(schema.notificationDeliveries)
-          .set({
-            pushStatus: status,
-            ...(status === "sent" ? { deliveredAt: new Date() } : {}),
-          })
-          .where(
-            and(
-              eq(schema.notificationDeliveries.id, id),
-              eq(schema.notificationDeliveries.pushStatus, "queued"),
-            ),
-          )
-          .returning({ id: schema.notificationDeliveries.id });
-        if (updated.length === 0) continue; // already handled by another run
-        if (status === "sent") sent += 1;
-        else if (status === "failed") failed += 1;
-        else skipped += 1;
-      }
-      if (deadTokens.size > 0) {
-        await tx
-          .delete(schema.pushTokens)
-          .where(inArray(schema.pushTokens.token, [...deadTokens]));
-        pruned = deadTokens.size;
-      }
-    });
-    return { sent, failed, skipped, pruned };
-  } finally {
-    await pool.end();
-  }
+  await withTransaction(async (tx) => {
+    for (const [id, status] of statusById) {
+      const updated = await tx
+        .update(schema.notificationDeliveries)
+        .set({
+          pushStatus: status,
+          ...(status === "sent" ? { deliveredAt: new Date() } : {}),
+        })
+        .where(
+          and(
+            eq(schema.notificationDeliveries.id, id),
+            eq(schema.notificationDeliveries.pushStatus, "queued"),
+          ),
+        )
+        .returning({ id: schema.notificationDeliveries.id });
+      if (updated.length === 0) continue; // already handled by another run
+      if (status === "sent") sent += 1;
+      else if (status === "failed") failed += 1;
+      else skipped += 1;
+    }
+    if (deadTokens.size > 0) {
+      await tx
+        .delete(schema.pushTokens)
+        .where(inArray(schema.pushTokens.token, [...deadTokens]));
+      pruned = deadTokens.size;
+    }
+  });
+  return { sent, failed, skipped, pruned };
 }
