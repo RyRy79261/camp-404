@@ -83,6 +83,33 @@ describe("openActivation — fan-out", () => {
     expect(await requiredActionsFor(db, grunt.id)).toHaveLength(0);
   });
 
+  it("scope=team is asked of the YEAR frozen on the activation", async () => {
+    const db = h.db();
+    const lastYear = await makeUser(db);
+    const thisYear = await makeUser(db);
+    await makeMembership(db, {
+      userId: lastYear.id,
+      team: "kitchen",
+      cycle: 2026,
+    });
+    await makeMembership(db, {
+      userId: thisYear.id,
+      team: "kitchen",
+      cycle: 2027,
+    });
+    const act = await makeActivation(db, {
+      scope: "team",
+      team: "kitchen",
+      cycle: 2027,
+    });
+
+    // The activation's own cycle decides, never the live config — so a
+    // rollover landing between draft and open cannot move this audience.
+    expect(await openActivation(act.id)).toEqual({ ok: true, created: 1 });
+    expect(await requiredActionsFor(db, thisYear.id)).toHaveLength(1);
+    expect(await requiredActionsFor(db, lastYear.id)).toHaveLength(0);
+  });
+
   it("scope=individual uses the activation targets table", async () => {
     const db = h.db();
     const picked = await makeUser(db);
@@ -169,6 +196,119 @@ describe("openActivation — fan-out", () => {
   });
 });
 
+describe("openActivation — the carry-over fan-out filter", () => {
+  const h = useTestDb();
+
+  /**
+   * Re-send one key: the one-open-per-key index forbids two overlapping opens,
+   * so a replay always closes the current activation first. `answered` completes
+   * their gate under the first send before the replay.
+   */
+  async function replay(
+    db: ReturnType<typeof h.db>,
+    opts: { firstVersion: string; replayVersion: string; carryOver: boolean },
+  ) {
+    const answered = await makeUser(db);
+    const silent = await makeUser(db);
+    const act1 = await makeActivation(db, {
+      questionnaireKey: "feedback",
+      version: opts.firstVersion,
+    });
+    await openActivation(act1.id);
+    expect(
+      await satisfyRequiredAction(answered.id, "feedback", opts.firstVersion),
+    ).toBe(true);
+    await closeActivation(act1.id);
+
+    const act2 = await makeActivation(db, {
+      questionnaireKey: "feedback",
+      version: opts.replayVersion,
+      carryOver: opts.carryOver,
+    });
+    const res = await openActivation(act2.id);
+    return { answered, silent, act1, act2, res };
+  }
+
+  it("carry: skips a member who already completed at a satisfying version", async () => {
+    const db = h.db();
+    const { answered, act1, act2, res } = await replay(db, {
+      firstVersion: "feedback-v1",
+      replayVersion: "feedback-v1",
+      carryOver: true,
+    });
+    // only `silent` is re-gated; `answered` is not counted and not touched
+    expect(res).toEqual({ ok: true, created: 1 });
+    const row = (await requiredActionsFor(db, answered.id))[0]!;
+    expect(row.status).toBe("completed");
+    expect(row.activationId).toBe(act1.id); // still pointing at the old send
+    expect(act2.carryOver).toBe(true);
+  });
+
+  it("carry: still gates a member who never answered", async () => {
+    const db = h.db();
+    const { silent, act2 } = await replay(db, {
+      firstVersion: "feedback-v1",
+      replayVersion: "feedback-v1",
+      carryOver: true,
+    });
+    // The hole this closes: carry means "don't re-ask someone who already
+    // answered", never "let everyone through".
+    const row = (await requiredActionsFor(db, silent.id))[0]!;
+    expect(row.status).toBe("pending");
+    expect(row.activationId).toBe(act2.id);
+  });
+
+  it("fresh: gates everyone, including the member who already answered", async () => {
+    const db = h.db();
+    const { answered, silent, act2, res } = await replay(db, {
+      firstVersion: "feedback-v1",
+      replayVersion: "feedback-v1",
+      carryOver: false,
+    });
+    expect(res).toEqual({ ok: true, created: 2 });
+    const row = (await requiredActionsFor(db, answered.id))[0]!;
+    expect(row.status).toBe("pending");
+    expect(row.completedAt).toBeNull();
+    expect(row.activationId).toBe(act2.id);
+    expect((await requiredActionsFor(db, silent.id))[0]!.status).toBe(
+      "pending",
+    );
+  });
+
+  it("carry: a breaking version bump re-gates the member who answered", async () => {
+    const db = h.db();
+    const { answered, res } = await replay(db, {
+      firstVersion: "feedback-v1",
+      replayVersion: "feedback-v2", // BREAKING edit minted a new version
+      carryOver: true,
+    });
+    expect(res).toEqual({ ok: true, created: 2 });
+    expect((await requiredActionsFor(db, answered.id))[0]!.status).toBe(
+      "pending",
+    );
+  });
+
+  it("carry: a completion for a DIFFERENT key never satisfies this one", async () => {
+    const db = h.db();
+    const u = await makeUser(db);
+    const other = await makeActivation(db, {
+      questionnaireKey: "other",
+      version: "other-v1",
+      scope: "individual",
+    });
+    await addTarget(db, other.id, u.id);
+    await openActivation(other.id);
+    await satisfyRequiredAction(u.id, "other", "other-v1");
+
+    const act = await makeActivation(db, {
+      questionnaireKey: "feedback",
+      version: "feedback-v1",
+      carryOver: true,
+    });
+    expect(await openActivation(act.id)).toEqual({ ok: true, created: 1 });
+  });
+});
+
 describe("completeBuilderResponse — atomic submit", () => {
   const h = useTestDb();
 
@@ -185,6 +325,7 @@ describe("completeBuilderResponse — atomic submit", () => {
       userId: u.id,
       definitionKey: "feedback",
       definitionVersion: "1",
+      cycle: act.cycle,
       responses: { q1: "hello" },
       activationId: act.id,
     });
@@ -216,6 +357,7 @@ describe("completeBuilderResponse — atomic submit", () => {
       userId: u.id,
       definitionKey: "feedback",
       definitionVersion: "1-v1", // older than required 1-v2
+      cycle: act.cycle,
       responses: {},
       activationId: act.id,
     });
@@ -242,6 +384,7 @@ describe("completeBuilderResponse — atomic submit", () => {
         userId: u.id,
         definitionKey: "feedback",
         definitionVersion: "1",
+        cycle: act.cycle,
         responses: { q: answer },
         activationId: act.id,
       });

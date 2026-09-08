@@ -1,7 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
+import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
 import { decryptField } from "@camp404/db/crypto";
 import { canSeeIdDocuments } from "../consent";
@@ -35,7 +36,13 @@ export function registerPeopleTools(server: McpServer): void {
           if (!args.includeSystem) rows = rows.filter((r) => !r.isSystem);
           if (args.rank) rows = rows.filter((r) => r.rank === args.rank);
 
-          const memberships = await db.select().from(schema.teamMemberships);
+          // THIS YEAR's memberships. Team membership is year-scoped, so an
+          // unscoped read would list a member on every team they have ever
+          // been on, and `team` / `isLead` filters would match on last year.
+          const memberships = await db
+            .select()
+            .from(schema.teamMemberships)
+            .where(eq(schema.teamMemberships.cycle, await currentCycleNumber()));
           const byUser = new Map<
             string,
             { team: typeof schema.teamMemberships.$inferSelect.team; isLead: boolean }[]
@@ -89,7 +96,12 @@ export function registerPeopleTools(server: McpServer): void {
               isLead: schema.teamMemberships.isLead,
             })
             .from(schema.teamMemberships)
-            .where(eq(schema.teamMemberships.userId, args.userId));
+            .where(
+              and(
+                eq(schema.teamMemberships.userId, args.userId),
+                eq(schema.teamMemberships.cycle, await currentCycleNumber()),
+              ),
+            );
           return shapeUser(row, memberships, scope);
         },
       }),

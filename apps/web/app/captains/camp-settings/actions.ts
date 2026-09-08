@@ -7,7 +7,15 @@ import {
   moveTeam,
   renameTeam,
   setTeamArchived,
+  MAX_CYCLE_YEAR,
+  MIN_CYCLE_YEAR,
 } from "@camp404/db/camp-config";
+import {
+  advanceCycle,
+  setFoundingYear,
+  type FoundingReport,
+  type RolloverReport,
+} from "@camp404/db/cycle-rollover";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { mutateTeamsConfig } from "@/lib/camp-config";
@@ -145,4 +153,153 @@ export async function setTeamArchivedAction(
   }
   revalidateTeamSurfaces();
   return { ok: true };
+}
+
+// --- The year (the founding year + the rollover, spec §8) -------------------
+// The camp-facing half lives in @camp404/db/cycle-rollover: planRollover() is a
+// pure read the page calls directly; setFoundingYear() and advanceCycle() are
+// each one pooled transaction. These actions are the captain gate, the boundary
+// parse, and the type-to-confirm check — deliberately thin, because the
+// interesting refusals (already advanced, already founded) belong to the
+// transaction that holds the lock.
+//
+// A year is a number, not a name: one integer both identifies the year a
+// captain reads and namespaces every row stamped with it.
+
+export type AdvanceCycleActionResult =
+  | { ok: true; report: RolloverReport }
+  | { ok: false; error: string };
+
+export type SetFoundingYearActionResult =
+  | { ok: true; report: FoundingReport }
+  | { ok: false; error: string };
+
+// Coerced rather than z.number() so a form value arrives the same way whether
+// the caller sent the number or the string the input holds.
+const CycleYear = z.coerce
+  .number()
+  .int("A year is a whole number.")
+  .min(MIN_CYCLE_YEAR, `A year has to be ${MIN_CYCLE_YEAR} or later.`)
+  .max(MAX_CYCLE_YEAR, `A year has to be ${MAX_CYCLE_YEAR} or earlier.`);
+
+const SetFoundingYearForm = z.object({ year: CycleYear });
+
+const AdvanceCycleForm = z
+  .object({
+    year: CycleYear,
+    /** The same number typed a second time — the type-the-name pattern. */
+    confirm: CycleYear,
+    resetDues: z.boolean().optional(),
+    announcement: z
+      .object({
+        title: z
+          .string()
+          .trim()
+          .min(1, "Give the announcement a title.")
+          .max(120, "Keep the announcement title under 120 characters."),
+        body: z
+          .string()
+          .trim()
+          .min(1, "Write something for the announcement.")
+          .max(2000, "Keep the announcement under 2000 characters."),
+      })
+      .nullish(),
+  })
+  // Re-checked here and not only in the browser: a server action is reachable
+  // without the page that rendered the confirm box.
+  .refine((form) => form.confirm === form.year, {
+    message: "That doesn't match the year you typed above.",
+  });
+
+// A rollover closes sends and re-arms gates, so every surface that renders a
+// gate or a send is stale afterwards — including the member home page, which is
+// what redirects someone into a re-opened questionnaire.
+function revalidateRolloverSurfaces(): void {
+  revalidatePath("/captains/camp-settings/cycle");
+  revalidatePath("/captains/questionnaires");
+  revalidatePath("/");
+}
+
+/**
+ * Name the camp's founding year — the cycle page's first screen, and the only
+ * caller of the one-time write that adopts every row migration 0019 could only
+ * stamp with a sentinel.
+ */
+export async function setFoundingYearAction(
+  rawInput: unknown,
+): Promise<SetFoundingYearActionResult> {
+  const gate = await requireCaptain();
+  if (!gate.ok) return gate;
+  const parsed = SetFoundingYearForm.safeParse(rawInput);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "That isn't a year.",
+    };
+  }
+
+  const authUser = await getAuthenticatedUser();
+  const actorUserId = authUser ? (await ensureCampUser(authUser)).id : null;
+
+  const result = await setFoundingYear({
+    year: parsed.data.year,
+    actorUserId: actorUserId || null,
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.reason === "already-founded"
+          ? "The camp already has a year. Reload the page to see which one."
+          : "That isn't a year.",
+    };
+  }
+  revalidateRolloverSurfaces();
+  return { ok: true, report: result.report };
+}
+
+/**
+ * Advance the camp to the next year. Returns the executed plan as a receipt
+ * (§8.4) — the page renders it rather than re-reading, because re-reading would
+ * show the new state, not what just happened.
+ */
+export async function advanceCycleAction(
+  rawInput: unknown,
+): Promise<AdvanceCycleActionResult> {
+  const gate = await requireCaptain();
+  if (!gate.ok) return gate;
+  const parsed = AdvanceCycleForm.safeParse(rawInput);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid request.",
+    };
+  }
+
+  // requireCaptain answers only "may they?", and the audit row wants "who?".
+  // Re-deriving costs one extra read on an action a camp runs once a year;
+  // widening the shared gate's return type to carry the user would touch every
+  // other caller.
+  const authUser = await getAuthenticatedUser();
+  const actorUserId = authUser ? (await ensureCampUser(authUser)).id : null;
+
+  const result = await advanceCycle({
+    year: parsed.data.year,
+    actorUserId: actorUserId || null,
+    resetDues: parsed.data.resetDues ?? false,
+    announcement: parsed.data.announcement ?? null,
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.reason === "already-advanced"
+          ? "The camp has already started that year. Reload the page to see where it is now."
+          : result.reason === "no-founding-year"
+            ? "The camp hasn't said what year it is yet. Reload the page and start there."
+            : `A new year has to be later than the one you're in, and between ${MIN_CYCLE_YEAR} and ${MAX_CYCLE_YEAR}.`,
+    };
+  }
+  revalidateRolloverSurfaces();
+  return { ok: true, report: result.report };
 }

@@ -12,6 +12,7 @@ import {
 import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
+import { currentCycleNumber } from "./cycles";
 
 // Announcements & notifications data layer.
 //
@@ -48,12 +49,18 @@ function isOwnedAnnouncementDraft(id: string, senderId: string) {
  * primitive the inline publish and the scheduled dispatch worker share. Reads
  * via the stateless HTTP driver; the pure scope→ids mapping lives in
  * ./audience so it can be unit-tested without a database.
+ *
+ * Team membership and driver intent are year-scoped, so a `team`, `team_leads`
+ * or `drivers` broadcast resolves against THIS YEAR's roster. Unscoped it would
+ * reach the union of every year the camp has run — last year's kitchen team
+ * would still get this year's kitchen announcement.
  */
 export async function resolveAudience(
   broadcast: { id: string; scope: BroadcastScope; team: string | null },
   senderId: string | null,
 ): Promise<string[]> {
   const db = createHttpDb();
+  const cycle = await currentCycleNumber();
   const [members, memberships, drivers, targets] = await Promise.all([
     db
       .select({
@@ -68,11 +75,17 @@ export async function resolveAudience(
         team: schema.teamMemberships.team,
         isLead: schema.teamMemberships.isLead,
       })
-      .from(schema.teamMemberships),
+      .from(schema.teamMemberships)
+      .where(eq(schema.teamMemberships.cycle, cycle)),
     db
       .select({ userId: schema.driverProfiles.userId })
       .from(schema.driverProfiles)
-      .where(eq(schema.driverProfiles.intendsToDrive, true)),
+      .where(
+        and(
+          eq(schema.driverProfiles.intendsToDrive, true),
+          eq(schema.driverProfiles.cycle, cycle),
+        ),
+      ),
     broadcast.scope === "individual"
       ? db
           .select({ userId: schema.broadcastTargets.userId })

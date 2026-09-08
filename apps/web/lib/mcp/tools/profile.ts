@@ -1,7 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
+import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
 import { decryptField, encrypt } from "@camp404/db/crypto";
 import { splitIdNumber, idColumnsFor } from "@camp404/db/id-documents";
@@ -229,10 +230,18 @@ export function registerProfileTools(server: McpServer): void {
         argsForAudit: null,
         handler: async ({ scope }) => {
           const db = createHttpDb();
+          // driver_profiles is one row per driver PER YEAR, so this asks for
+          // this year's. Without the predicate the ORDER BY-less `.limit(1)`
+          // would return an arbitrary year's vehicle.
           const [row] = await db
             .select()
             .from(schema.driverProfiles)
-            .where(eq(schema.driverProfiles.userId, scope.campUserId))
+            .where(
+              and(
+                eq(schema.driverProfiles.userId, scope.campUserId),
+                eq(schema.driverProfiles.cycle, await currentCycleNumber()),
+              ),
+            )
             .limit(1);
           return row ?? null;
         },
@@ -276,6 +285,10 @@ export function registerProfileTools(server: McpServer): void {
         handler: async ({ scope }) => {
           const db = createHttpDb();
           const now = new Date();
+          // The year this profile belongs to. Driving is a year-scoped fact —
+          // "who's driving in whose car ... [has] to be fresh" — so the upsert
+          // targets this year's row and leaves last year's on file.
+          const cycle = await currentCycleNumber();
           const arrivalAt = args.arrivalAt ? new Date(args.arrivalAt) : null;
           const departureAt = args.departureAt
             ? new Date(args.departureAt)
@@ -285,7 +298,12 @@ export function registerProfileTools(server: McpServer): void {
               intentRegisteredAt: schema.driverProfiles.intentRegisteredAt,
             })
             .from(schema.driverProfiles)
-            .where(eq(schema.driverProfiles.userId, scope.campUserId))
+            .where(
+              and(
+                eq(schema.driverProfiles.userId, scope.campUserId),
+                eq(schema.driverProfiles.cycle, cycle),
+              ),
+            )
             .limit(1);
           const intentRegisteredAt =
             args.intendsToDrive && !existing?.intentRegisteredAt
@@ -296,6 +314,7 @@ export function registerProfileTools(server: McpServer): void {
             .insert(schema.driverProfiles)
             .values({
               userId: scope.campUserId,
+              cycle,
               version: args.version,
               intendsToDrive: args.intendsToDrive,
               intentRegisteredAt,
@@ -315,7 +334,13 @@ export function registerProfileTools(server: McpServer): void {
               completedAt: args.markComplete ? now : null,
             })
             .onConflictDoUpdate({
-              target: schema.driverProfiles.userId,
+              // Must name the WHOLE primary key: it is (user_id, cycle) now,
+              // and `user_id` alone no longer has a unique constraint for
+              // Postgres to match this ON CONFLICT against.
+              target: [
+                schema.driverProfiles.userId,
+                schema.driverProfiles.cycle,
+              ],
               set: {
                 version: args.version,
                 intendsToDrive: args.intendsToDrive,

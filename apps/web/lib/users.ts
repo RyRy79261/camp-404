@@ -244,10 +244,16 @@ export function isApproved(
 }
 
 /**
- * Whether a user leads at least one team — the derived `team_lead` rank that
- * unlocks the control panel's team-lead layer. Routed through the test store
- * under E2E_TEST_MODE (which has no team-membership concept, so always
- * false), keeping the home page renderable without a real DB.
+ * Whether a user leads at least one team THIS YEAR — the derived `team_lead`
+ * rank that unlocks the control panel's team-lead layer. Team leadership is
+ * year-scoped in the database, so this flips back to false for everyone at a
+ * rollover and returns as captains reappoint leads ("same with team lead
+ * roles"). Nothing is deleted: last year's lead row stays on file, it just is
+ * not an answer to this year's question.
+ *
+ * Routed through the test store under E2E_TEST_MODE, which has no
+ * team-membership concept and so answers false for every user in every year —
+ * still the right answer, and it keeps the home page renderable without a DB.
  */
 export async function isTeamLead(userId: string): Promise<boolean> {
   const store = isE2ETestMode() ? testBackend : realBackend;
@@ -468,7 +474,8 @@ const testBackend: UserBackend = {
       version: row.version,
     };
   },
-  // The in-memory store models no team memberships, so nobody is a lead.
+  // The in-memory store models no team memberships in any year, so nobody is
+  // a lead — see the note on isTeamLead().
   async isTeamLead() {
     return false;
   },

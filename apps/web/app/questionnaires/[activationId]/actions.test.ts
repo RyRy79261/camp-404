@@ -32,9 +32,14 @@ import { BuilderQuestionnaire } from "@camp404/types";
 import { saveBuilderResponses } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
-import { getActivationById, getRequiredAction } from "@camp404/db/activations";
+import {
+  completeBuilderResponse,
+  getActivationById,
+  getRequiredAction,
+} from "@camp404/db/activations";
 import { upsertQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
+import { nextGate } from "@/lib/required-actions";
 
 // Parsed so Zod fills the defaulted field params (maxLength, …).
 const definition = BuilderQuestionnaire.parse({
@@ -83,6 +88,10 @@ describe("saveBuilderResponses draft bounds", () => {
       status: "open",
       questionnaireKey: "kitchen_shift",
       version: "v2",
+      // The frozen year namespace. Deliberately not 1: a write that silently
+      // fell back to the founding cycle would still pass against `cycle: 1`.
+      cycle: 3,
+      carryOver: true,
     } as never);
     vi.mocked(getRequiredAction).mockResolvedValue({
       status: "pending",
@@ -143,6 +152,66 @@ describe("saveBuilderResponses draft bounds", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors._form).toBe("This form is unavailable.");
+    expect(upsertQuestionnaireResponse).not.toHaveBeenCalled();
+  });
+});
+
+describe("saveBuilderResponses cycle stamping", () => {
+  // Rule 2 of the year namespace: every write uses the ACTIVATION's frozen
+  // cycle, never the live config's. Nothing here reads camp_settings — the
+  // proof is that the action never imports a cycle reader at all, and that the
+  // number it writes is the one hanging off the activation row.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getAuthenticatedUserOrRedirect).mockResolvedValue({
+      id: "auth-1",
+      primaryEmail: "member@example.com",
+      displayName: "Member",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ id: "camp-1" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(getActivationById).mockResolvedValue({
+      id: "act-1",
+      status: "open",
+      questionnaireKey: "kitchen_shift",
+      version: "v2",
+      cycle: 3,
+      carryOver: true,
+    } as never);
+    vi.mocked(getRequiredAction).mockResolvedValue({
+      status: "pending",
+      activationId: "act-1",
+    } as never);
+    vi.mocked(getBuilderDefinition).mockResolvedValue(definition);
+    vi.mocked(upsertQuestionnaireResponse).mockResolvedValue(undefined as never);
+    vi.mocked(completeBuilderResponse).mockResolvedValue(undefined as never);
+    vi.mocked(nextGate).mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("stamps the activation's cycle on a draft save", async () => {
+    const result = await saveBuilderResponses("act-1", { name: "Ada" }, false);
+
+    expect(result.ok).toBe(true);
+    expect(vi.mocked(upsertQuestionnaireResponse).mock.calls[0]![0]).toMatchObject({
+      cycle: 3,
+      completedAt: null,
+    });
+  });
+
+  it("stamps the activation's cycle on the final submit", async () => {
+    await saveBuilderResponses("act-1", { name: "Ada" }, true);
+
+    expect(vi.mocked(completeBuilderResponse).mock.calls[0]![0]).toMatchObject({
+      cycle: 3,
+      definitionKey: "kitchen_shift",
+      definitionVersion: "v2",
+    });
+    // A carry member reaffirming last year's answer writes a THIS-cycle row —
+    // reads may fall back to an earlier cycle, writes never do.
     expect(upsertQuestionnaireResponse).not.toHaveBeenCalled();
   });
 });

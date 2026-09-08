@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { createHttpDb, createPooledDb } from "./index";
+import { createHttpDb, createPooledDb, type PooledDatabase } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 import { meetsRequiredVersion } from "./versions";
@@ -12,7 +12,14 @@ import type { QuestionnaireResponses } from "@camp404/types";
 
 // questionnaire scope subset the producer supports today. `opt_in` is a pull
 // model (members self-select) — deferred. `drivers` is broadcast-only.
-const PUSH_SCOPES = new Set(["everyone", "team", "team_leads", "individual"]);
+// Exported because the cycle rollover previews the same fan-out and must agree
+// with the producer on which scopes have an audience at all.
+export const PUSH_SCOPES = new Set([
+  "everyone",
+  "team",
+  "team_leads",
+  "individual",
+]);
 
 export interface PendingRequiredAction {
   actionKey: string;
@@ -32,10 +39,132 @@ export type OpenActivationResult =
   | { ok: false; error: string };
 
 /**
+ * The transaction handle a pooled `db.transaction()` callback receives. Named
+ * so the `…Tx` helpers can be composed into ONE transaction by a caller that
+ * opens the pool itself (the cycle rollover closes an activation and opens its
+ * replacement atomically — spec §8.3).
+ */
+export type PooledTx = Parameters<
+  Parameters<PooledDatabase["db"]["transaction"]>[0]
+>[0];
+
+/** The activation fields the fan-out needs — a subset of the row. */
+export interface ActivationFanOut {
+  id: string;
+  questionnaireKey: string;
+  version: string;
+  title: string;
+  blocking: boolean;
+  dueAt: Date | null;
+  /** The copy FROZEN at Send. Never re-read the definition/config here. */
+  carryOver: boolean;
+}
+
+/**
+ * The carry-over fan-out filter (spec §7.3a): under `carry`, subtract every
+ * recipient who already holds a `completed` gate for this key at a version that
+ * satisfies the one being sent.
+ *
+ * `required_actions` is the satisfaction oracle for BOTH questionnaire classes
+ * — builder questionnaires write `questionnaire_responses`, code questionnaires
+ * write bespoke domain tables, but every one of them flips a `required_actions`
+ * row to `completed` — so this filter is storage-agnostic.
+ *
+ * Two rules keep it honest:
+ *   - A member with NO completed prior row is still gated. Carry-over means
+ *     "don't re-ask someone who already answered", never "let everyone
+ *     through".
+ *   - The completion must satisfy `act.version`, so a BREAKING edit (which
+ *     mints a new version) re-gates everyone even under `carry`, while a
+ *     cosmetic re-send does not. A completion with NO recorded version cannot
+ *     be shown to satisfy anything, so it gates too — the filter only ever
+ *     narrows the audience, never widens the gate.
+ */
+async function subtractCarriedOver(
+  tx: PooledTx,
+  act: ActivationFanOut,
+  recipientIds: string[],
+): Promise<string[]> {
+  const prior = await tx
+    .select({
+      userId: schema.requiredActions.userId,
+      version: schema.requiredActions.version,
+    })
+    .from(schema.requiredActions)
+    .where(
+      and(
+        eq(schema.requiredActions.actionKey, act.questionnaireKey),
+        eq(schema.requiredActions.status, "completed"),
+      ),
+    );
+  const satisfied = new Set(
+    prior
+      .filter((r) => r.version && meetsRequiredVersion(act.version, r.version))
+      .map((r) => r.userId),
+  );
+  return recipientIds.filter((id) => !satisfied.has(id));
+}
+
+/**
+ * The body of {@link openActivation}, inside a caller-supplied transaction:
+ * flip the activation open, apply the carry-over filter, and upsert the gates.
+ * Returns the number of gates written. Extracted so the cycle rollover can run
+ * close + re-open in ONE transaction instead of a pool per step (spec §8.3).
+ */
+export async function openActivationTx(
+  tx: PooledTx,
+  act: ActivationFanOut,
+  recipientIds: string[],
+): Promise<number> {
+  await tx
+    .update(schema.questionnaireActivations)
+    .set({ status: "open", openedAt: new Date(), updatedAt: new Date() })
+    .where(eq(schema.questionnaireActivations.id, act.id));
+
+  if (recipientIds.length === 0) return 0;
+
+  // Between the audience and the insert — see subtractCarriedOver.
+  const targets = act.carryOver
+    ? await subtractCarriedOver(tx, act, recipientIds)
+    : recipientIds;
+  if (targets.length === 0) return 0;
+
+  await tx
+    .insert(schema.requiredActions)
+    .values(
+      targets.map((userId) => ({
+        userId,
+        type: "questionnaire" as const,
+        actionKey: act.questionnaireKey,
+        version: act.version,
+        activationId: act.id,
+        title: act.title,
+        blocking: act.blocking,
+        dueAt: act.dueAt,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: [schema.requiredActions.userId, schema.requiredActions.actionKey],
+      set: {
+        version: act.version,
+        activationId: act.id,
+        title: act.title,
+        blocking: act.blocking,
+        dueAt: act.dueAt,
+        status: "pending",
+        completedAt: null,
+      },
+    });
+
+  return targets.length;
+}
+
+/**
  * Open a questionnaire activation: mark it open and fan out one
  * `required_actions` row per matched member. Idempotent / re-activation-safe
  * via the `(user_id, action_key)` unique index — a re-open re-points the row
- * to this activation/version and re-sets it to pending.
+ * to this activation/version and re-sets it to pending. A `carry` activation
+ * skips members who already answered at a satisfying version (§7.3a).
  */
 export async function openActivation(
   activationId: string,
@@ -63,13 +192,18 @@ export async function openActivation(
         sanitised: schema.users.sanitised,
       })
       .from(schema.users),
+    // Team membership is year-scoped, so "who is on the kitchen team" has to be
+    // asked of a particular year — and the year that governs a send is the one
+    // FROZEN on the activation, never the live config. A rollover landing
+    // between draft and open therefore cannot move this send's audience.
     httpDb
       .select({
         userId: schema.teamMemberships.userId,
         team: schema.teamMemberships.team,
         isLead: schema.teamMemberships.isLead,
       })
-      .from(schema.teamMemberships),
+      .from(schema.teamMemberships)
+      .where(eq(schema.teamMemberships.cycle, act.cycle)),
     httpDb
       .select({ userId: schema.questionnaireActivationTargets.userId })
       .from(schema.questionnaireActivationTargets)
@@ -91,46 +225,10 @@ export async function openActivation(
 
   const { db, pool } = createPooledDb();
   try {
-    return await db.transaction(async (tx) => {
-      await tx
-        .update(schema.questionnaireActivations)
-        .set({ status: "open", openedAt: new Date(), updatedAt: new Date() })
-        .where(eq(schema.questionnaireActivations.id, act.id));
-
-      if (recipientIds.length === 0) return { ok: true as const, created: 0 };
-
-      await tx
-        .insert(schema.requiredActions)
-        .values(
-          recipientIds.map((userId) => ({
-            userId,
-            type: "questionnaire" as const,
-            actionKey: act.questionnaireKey,
-            version: act.version,
-            activationId: act.id,
-            title: act.title,
-            blocking: act.blocking,
-            dueAt: act.dueAt,
-          })),
-        )
-        .onConflictDoUpdate({
-          target: [
-            schema.requiredActions.userId,
-            schema.requiredActions.actionKey,
-          ],
-          set: {
-            version: act.version,
-            activationId: act.id,
-            title: act.title,
-            blocking: act.blocking,
-            dueAt: act.dueAt,
-            status: "pending",
-            completedAt: null,
-          },
-        });
-
-      return { ok: true as const, created: recipientIds.length };
-    });
+    return await db.transaction(async (tx) => ({
+      ok: true as const,
+      created: await openActivationTx(tx, act, recipientIds),
+    }));
   } finally {
     await pool.end();
   }
@@ -239,6 +337,14 @@ export interface ActivationRow {
   title: string;
   status: (typeof schema.activationStatusEnum.enumValues)[number];
   blocking: boolean;
+  /**
+   * The year namespace and carry-over policy FROZEN at Send. Every downstream
+   * read (prefill, write, gate) uses these, never the live config or the
+   * definition column — a captain rolling the year over or flipping the toggle
+   * mid-collection must not change the rules under a member mid-form.
+   */
+  cycle: number;
+  carryOver: boolean;
 }
 
 /** Read a single activation by id, or null. The generic runner loads by id. */
@@ -254,6 +360,8 @@ export async function getActivationById(
       title: schema.questionnaireActivations.title,
       status: schema.questionnaireActivations.status,
       blocking: schema.questionnaireActivations.blocking,
+      cycle: schema.questionnaireActivations.cycle,
+      carryOver: schema.questionnaireActivations.carryOver,
     })
     .from(schema.questionnaireActivations)
     .where(eq(schema.questionnaireActivations.id, id))
@@ -296,15 +404,17 @@ export async function getRequiredAction(
 
 /**
  * Atomically record a builder questionnaire's FINAL submission: upsert the
- * latest-answer row (completedAt set) AND satisfy the required-action gate in a
- * single transaction, so a completed response can never coexist with a
- * still-pending gate. Honours satisfyRequiredAction's version rule (a completion
- * against an older version leaves the gate open).
+ * latest-answer row for THIS CYCLE (completedAt set) AND satisfy the
+ * required-action gate in a single transaction, so a completed response can
+ * never coexist with a still-pending gate. Honours satisfyRequiredAction's
+ * version rule (a completion against an older version leaves the gate open).
  */
 export async function completeBuilderResponse(input: {
   userId: string;
   definitionKey: string;
   definitionVersion: string;
+  /** `activation.cycle` — the frozen year namespace, never the live config. */
+  cycle: number;
   responses: QuestionnaireResponses;
   activationId: string;
 }): Promise<void> {
@@ -318,14 +428,19 @@ export async function completeBuilderResponse(input: {
           userId: input.userId,
           definitionKey: input.definitionKey,
           definitionVersion: input.definitionVersion,
+          cycle: input.cycle,
           responses: input.responses,
           activationId: input.activationId,
           completedAt: now,
         })
         .onConflictDoUpdate({
+          // Reads may fall back to an earlier cycle; writes never do — a carry
+          // member who reaffirms an answer in year N gets a year-N row, and
+          // year N-1's row is left intact.
           target: [
             schema.questionnaireResponses.userId,
             schema.questionnaireResponses.definitionKey,
+            schema.questionnaireResponses.cycle,
           ],
           set: {
             definitionVersion: input.definitionVersion,

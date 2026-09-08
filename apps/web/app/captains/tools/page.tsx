@@ -1,5 +1,11 @@
 import { redirect } from "next/navigation";
-import { ClipboardList, Megaphone, Shield, Users } from "lucide-react";
+import {
+  CalendarClock,
+  ClipboardList,
+  Megaphone,
+  Shield,
+  Users,
+} from "lucide-react";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
@@ -52,6 +58,16 @@ const TOOLS: ToolEntry[] = [
     description:
       "Manage your camp's teams — rename them, reorder them, or archive ones you're not using. Changes flow through to the roster's team filter.",
     icon: <Users className="text-primary" />,
+  },
+  {
+    href: "/captains/camp-settings/cycle",
+    // Covers BOTH screens behind this route: a camp that has never said what
+    // year it is gets asked, and one that has gets the rollover. "Start a new
+    // year" would misdescribe the first of those.
+    title: "The camp's year",
+    description:
+      "Say what year the camp is in, and when it moves on to the next burn, say so here. See exactly which questionnaires go out again before anything changes — and everything that stays untouched.",
+    icon: <CalendarClock className="text-primary" />,
   },
 ];
 

@@ -11,7 +11,8 @@ import {
   sendActivation,
   unpublishDefinition,
 } from "../questionnaire-lifecycle";
-import { completeBuilderResponse } from "../activations";
+import { completeBuilderResponse, getActivationById } from "../activations";
+import { DEFAULT_CAMP_CONFIG } from "../camp-config";
 import * as schema from "../schema";
 
 function validDef(
@@ -218,6 +219,7 @@ describe("closeActivation", () => {
       userId: u.id,
       definitionKey: "feedback",
       definitionVersion: "feedback-v1",
+      cycle: 1,
       responses: { q1: "done" },
       activationId,
     });
@@ -414,6 +416,84 @@ describe("sendActivation — one-open invariant", () => {
   });
 });
 
+describe("sendActivation — the cycle + carry-over stamp", () => {
+  const h = useTestDb();
+
+  it("stamps the year current at Send and carry_over off the definition", async () => {
+    const db = h.db();
+    const u = await makeUser(db);
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await publishDefinition("feedback", null);
+    // the camp has rolled over twice; 2028 is the open year
+    await db.insert(schema.campSettings).values({
+      config: {
+        ...DEFAULT_CAMP_CONFIG,
+        cycles: [
+          {
+            year: 2026,
+            startedAt: "2026-01-01T00:00:00.000Z",
+            endedAt: "2027-01-01T00:00:00.000Z",
+          },
+          {
+            year: 2027,
+            startedAt: "2027-01-01T00:00:00.000Z",
+            endedAt: "2028-01-01T00:00:00.000Z",
+          },
+          {
+            year: 2028,
+            startedAt: "2028-01-01T00:00:00.000Z",
+            endedAt: null,
+          },
+        ],
+      },
+    });
+
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: true,
+      activatedByUserId: u.id,
+    });
+    if (!sent.ok) throw new Error(sent.error);
+
+    const act = await getActivationById(sent.activationId);
+    expect(act?.cycle).toBe(2028);
+    expect(act?.carryOver).toBe(true); // the definition column's default
+    expect(await getOpenActivationForKey("feedback")).toMatchObject({
+      cycle: 2028,
+      carryOver: true,
+    });
+  });
+
+  it("copies carry_over = false off the definition, and the copy is FROZEN", async () => {
+    const db = h.db();
+    const u = await makeUser(db);
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await publishDefinition("feedback", null);
+    await db
+      .update(schema.questionnaireDefinitions)
+      .set({ carryOver: false })
+      .where(eq(schema.questionnaireDefinitions.key, "feedback"));
+
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: true,
+      activatedByUserId: u.id,
+    });
+    if (!sent.ok) throw new Error(sent.error);
+    expect((await getActivationById(sent.activationId))?.carryOver).toBe(false);
+
+    // A captain flipping the toggle mid-collection affects the NEXT send, never
+    // the one in flight.
+    await db
+      .update(schema.questionnaireDefinitions)
+      .set({ carryOver: true })
+      .where(eq(schema.questionnaireDefinitions.key, "feedback"));
+    expect((await getActivationById(sent.activationId))?.carryOver).toBe(false);
+  });
+});
+
 describe("data survival across the full lifecycle", () => {
   const h = useTestDb();
 
@@ -434,6 +514,7 @@ describe("data survival across the full lifecycle", () => {
       userId: u.id,
       definitionKey: "feedback",
       definitionVersion: "feedback-v1",
+      cycle: 1,
       responses: { q1: "kept" },
       activationId: sent.activationId,
     });

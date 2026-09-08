@@ -2,6 +2,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
+import { currentCycleNumber } from "./cycles";
 
 // Camp-management roster — the captain-only "who is on camp and where are
 // they up to" view. One row per real (non-system) camp member, aggregating
@@ -51,6 +52,12 @@ export async function getCampManagementRoster(): Promise<
   CampManagementMember[]
 > {
   const db = createHttpDb();
+  // Teams, team leads and driver profiles are year-scoped, so this asks for
+  // THIS year's. At a rollover those three columns go blank across the roster
+  // and fill back in as captains re-establish them — which is the camp owner's
+  // ruling ("who's part of what team ... same with team lead roles"). Last
+  // year's rows are untouched and still readable; only the question changed.
+  const cycle = await currentCycleNumber();
   const rows = await db
     .select({
       id: schema.users.id,
@@ -69,10 +76,11 @@ export async function getCampManagementRoster(): Promise<
       isLead: sql<boolean>`exists (
         select 1 from team_memberships tm
         where tm.user_id = ${schema.users.id} and tm.is_lead = true
+          and tm.cycle = ${cycle}
       )`,
       teams: sql<
         string[]
-      >`coalesce((select array_agg(tm.team order by tm.team) from team_memberships tm where tm.user_id = ${schema.users.id}), '{}')`,
+      >`coalesce((select array_agg(tm.team order by tm.team) from team_memberships tm where tm.user_id = ${schema.users.id} and tm.cycle = ${cycle}), '{}')`,
       pendingRequiredActions: sql<number>`(
         select count(*)::int from required_actions ra
         where ra.user_id = ${schema.users.id}
@@ -86,8 +94,14 @@ export async function getCampManagementRoster(): Promise<
       eq(schema.burnerProfiles.userId, schema.users.id),
     )
     .leftJoin(
+      // The cycle predicate belongs in the JOIN, not the WHERE: driver_profiles
+      // now holds one row per driver PER YEAR, so joining on user_id alone
+      // would multiply a member into one roster row per year they drove.
       schema.driverProfiles,
-      eq(schema.driverProfiles.userId, schema.users.id),
+      and(
+        eq(schema.driverProfiles.userId, schema.users.id),
+        eq(schema.driverProfiles.cycle, cycle),
+      ),
     )
     .where(
       and(eq(schema.users.isSystem, false), eq(schema.users.sanitised, false)),
@@ -226,11 +240,18 @@ export async function getCampMemberDetail(
 }
 
 /**
- * Whether a user leads at least one team — the derived `team_lead` rank used
- * to unlock the control panel's team-lead layer. Cheap existence check.
+ * Whether a user leads at least one team THIS YEAR — the derived `team_lead`
+ * rank used to unlock the control panel's team-lead layer. Cheap existence
+ * check.
+ *
+ * Year-scoped, so a lead stops being one the moment the camp rolls over and
+ * becomes one again when a captain reappoints them: "team lead roles ... have
+ * to be fresh". Last year's `is_lead` row is still on file; it just does not
+ * answer this year's question.
  */
 export async function isTeamLead(userId: string): Promise<boolean> {
   const db = createHttpDb();
+  const cycle = await currentCycleNumber();
   const rows = await db
     .select({ team: schema.teamMemberships.team })
     .from(schema.teamMemberships)
@@ -238,6 +259,7 @@ export async function isTeamLead(userId: string): Promise<boolean> {
       and(
         eq(schema.teamMemberships.userId, userId),
         eq(schema.teamMemberships.isLead, true),
+        eq(schema.teamMemberships.cycle, cycle),
       ),
     )
     .limit(1);

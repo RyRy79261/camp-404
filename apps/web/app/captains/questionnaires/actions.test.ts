@@ -15,6 +15,7 @@ vi.mock("@/lib/users", () => ({
 vi.mock("@camp404/db/roster", () => ({ isTeamLead: vi.fn() }));
 vi.mock("@camp404/db/questionnaire-definitions", () => ({
   getDefinitionMetaRow: vi.fn(),
+  setDefinitionCarryOver: vi.fn(),
 }));
 vi.mock("@camp404/db/questionnaire-lifecycle", () => ({
   publishDefinition: vi.fn(),
