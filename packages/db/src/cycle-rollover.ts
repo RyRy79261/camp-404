@@ -12,8 +12,12 @@ import { closeActivationTx } from "./questionnaire-lifecycle";
 import {
   advanceCycles,
   currentCycle,
+  foundingCycles,
+  isCycleYear,
+  MAX_CYCLE_YEAR,
   resolveCodeCarryOver,
   resolveCycles,
+  UNSET_CYCLE,
   type CampConfig,
   type CycleEntry,
 } from "./camp-config";
@@ -21,15 +25,23 @@ import {
 // The year rollover — the captain-facing half of the cycle feature. See
 // docs/superpowers/specs/2026-09-08-year-namespace-design.md §8.
 //
-// Two functions, deliberately split:
+// A cycle IS a year: one number, which increments and namespaces the rows
+// stamped with it. Nothing here has a name.
 //
-//   planRollover()  — a PURE READ. Zero writes, safe on every page load. It is
-//                     what the confirm screen renders, and it is re-read INSIDE
-//                     advanceCycle's lock so the preview and the execution can
-//                     never disagree.
-//   advanceCycle()  — one pooled transaction that closes the `fresh` sends,
-//                     opens their cycle-N+1 replacements, advances the config,
-//                     and writes the audit receipt.
+// Three functions, deliberately split:
+//
+//   planRollover()    — a PURE READ. Zero writes, safe on every page load. It
+//                       is what the confirm screen renders, and it is re-read
+//                       INSIDE advanceCycle's lock so the preview and the
+//                       execution can never disagree.
+//   setFoundingYear() — the one-time answer to "what year is it?". Migration
+//                       0019 could only default `cycle` to a sentinel, because
+//                       a migration cannot know the year; this is the captain
+//                       telling it, and it rewrites those sentinel rows in the
+//                       same transaction that records the year.
+//   advanceCycle()    — one pooled transaction that closes the `fresh` sends,
+//                       opens their next-year replacements, advances the config,
+//                       and writes the audit receipt.
 //
 // Three rules govern every line here:
 //
@@ -42,6 +54,15 @@ import {
 //   3. CARRY-OVER NEVER WIDENS A GATE. Hence the `notSent` bucket: a `fresh`
 //      questionnaire with no open send is left alone rather than sent. A gate
 //      the captain deliberately closed stays closed.
+//
+// Team memberships, team leads and car seats are deliberately NOT touched by
+// advanceCycle — not copied forward, not deleted. They carry their own `cycle`
+// (schema.ts), and every read filters to the camp's current year, so the new
+// year simply starts with no rows while last year's stay on file and readable.
+// Freshness is a READ rule here; copying forward would defy the owner's ruling
+// and deleting would defy rule 1. The one write is setFoundingYear() moving
+// pre-namespace rows off the sentinel, which is the same adoption it already
+// does for sends and answers.
 
 /**
  * The RESERVED code questionnaires (schema.ts:666). They can never hold a
@@ -65,7 +86,7 @@ const CODE_QUESTIONNAIRES: ReadonlyArray<{ key: string; title: string }> = [
 export const ROLLOVER_UNTOUCHED: readonly string[] = [
   "Approvals — nobody returns to the approval queue, and a rejected member stays rejected.",
   "Ranks — captains stay captains, members stay members.",
-  "Teams — every team membership and team lead is kept.",
+  "Teams and cars — last year's team lists, team leads and car seats are kept on file and stay readable forever. They start EMPTY for the new year: nobody is on a team, leads a team, or holds a seat until a captain sets it up again.",
   "Invites — invite codes and the family tree are untouched.",
   "Terms consent — consent is to a document, not to a year. Re-consent is a terms version bump.",
   "Answers — every previous year's answers stay readable. Nothing is deleted.",
@@ -96,10 +117,18 @@ export interface RolloverEntry {
 }
 
 export interface RolloverPlan {
-  /** The cycle the camp is in now. */
-  from: CycleEntry;
-  /** The number the next cycle will carry. */
-  toNumber: number;
+  /**
+   * The year the camp is in now, or NULL when it has never said. Null is the
+   * page's first screen: it asks the year rather than inventing one.
+   */
+  from: CycleEntry | null;
+  /**
+   * The obvious next year — the current one plus one — offered as the input's
+   * starting value, NOT as the answer. A camp that skips a burn goes from 2026
+   * straight to 2028, so the captain types the year; this only saves keystrokes.
+   * Null when there is no current year, or when it is already MAX_CYCLE_YEAR.
+   */
+  suggestedYear: number | null;
   /** `fresh` with an open send: closed, then re-opened blank for the new year. */
   reGate: RolloverEntry[];
   /** `carry`: nothing happens. Answered members stay done, pending stay gated. */
@@ -111,6 +140,32 @@ export interface RolloverPlan {
   /** {@link ROLLOVER_UNTOUCHED}, carried on the plan so the page renders one object. */
   untouched: readonly string[];
 }
+
+/** The one-time founding write, as a receipt. */
+export interface FoundingReport {
+  /** The year the camp is now filing everything under. */
+  year: number;
+  /**
+   * How many rows carried the pre-namespace sentinel and now carry the real
+   * year. Reported rather than assumed: on a camp that has been running, these
+   * are every send and every answer ever made.
+   */
+  activationsStamped: number;
+  responsesStamped: number;
+  /**
+   * The year-scoped roster facts adopted in the same breath. Not tidiness:
+   * reads of these three tables filter to the camp's year, so a row left on the
+   * sentinel would DISAPPEAR from the roster the moment the year is named.
+   */
+  teamMembershipsStamped: number;
+  driverProfilesStamped: number;
+  carSeatsStamped: number;
+  auditLogId: string;
+}
+
+export type SetFoundingYearResult =
+  | { ok: true; report: FoundingReport }
+  | { ok: false; reason: "already-founded" | "invalid-year" };
 
 /** What actually happened to one re-gated questionnaire — the receipt row. */
 export interface ReGateResult {
@@ -138,8 +193,8 @@ export interface RolloverReport {
 }
 
 export interface AdvanceCycleInput {
-  /** The new cycle's label — free text, also the type-to-confirm string. */
-  label: string;
+  /** The year being started. Also the number the captain types to confirm. */
+  year: number;
   actorUserId: string | null;
   /** Clear `users.dues_paid` (the §8.2 checkbox). Ids are recorded in the audit row. */
   resetDues?: boolean;
@@ -149,13 +204,24 @@ export interface AdvanceCycleInput {
 
 export type AdvanceCycleResult =
   | { ok: true; report: RolloverReport }
-  | { ok: false; reason: "already-advanced" | "needs-a-label" };
+  | {
+      ok: false;
+      reason: "already-advanced" | "invalid-year" | "no-founding-year";
+    };
 
 // The planner's reads are plain SELECTs, so they run identically on the
 // stateless HTTP handle (the page-load path) and on a transaction handle
 // (advanceCycle re-reading inside its lock). Drizzle types the two separately
 // because their result HKTs differ, so the reader is a union.
 type PlanReader = Database | PooledTx;
+
+/** One `team_memberships` row, as the audience builder needs it. */
+interface MembershipRow {
+  userId: string;
+  team: (typeof schema.teamEnum.enumValues)[number];
+  isLead: boolean;
+  cycle: number;
+}
 
 /** The open activation's fields the re-gate has to clone, plus its audience. */
 interface OpenActivation {
@@ -200,6 +266,7 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
       carryOver: schema.questionnaireDefinitions.carryOver,
       activationId: schema.questionnaireActivations.id,
       activationKey: schema.questionnaireActivations.questionnaireKey,
+      activationCycle: schema.questionnaireActivations.cycle,
       version: schema.questionnaireActivations.version,
       activationTitle: schema.questionnaireActivations.title,
       description: schema.questionnaireActivations.description,
@@ -223,6 +290,19 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
   const openIds = rows
     .map((r) => r.activationId)
     .filter((id): id is string => id !== null);
+  // The years those open sends were stamped with — normally just the current
+  // one. Team membership is year-scoped, so each send's audience is read from
+  // ITS OWN year (the frozen copy, rule 2), not from the year being opened.
+  // That is also what keeps the rollover from widening or silently emptying a
+  // gate: the members who owe this form today are exactly the ones re-armed on
+  // the blank replacement, and the preview says so.
+  const openCycles = [
+    ...new Set(
+      rows
+        .filter((r) => r.activationId !== null)
+        .map((r) => r.activationCycle!),
+    ),
+  ];
 
   // The audience inputs, fetched once and shared across every open activation
   // — the same three reads openActivation makes, so the preview number is the
@@ -235,13 +315,17 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
         sanitised: schema.users.sanitised,
       })
       .from(schema.users),
-    db
-      .select({
-        userId: schema.teamMemberships.userId,
-        team: schema.teamMemberships.team,
-        isLead: schema.teamMemberships.isLead,
-      })
-      .from(schema.teamMemberships),
+    openCycles.length > 0
+      ? db
+          .select({
+            userId: schema.teamMemberships.userId,
+            team: schema.teamMemberships.team,
+            isLead: schema.teamMemberships.isLead,
+            cycle: schema.teamMemberships.cycle,
+          })
+          .from(schema.teamMemberships)
+          .where(inArray(schema.teamMemberships.cycle, openCycles))
+      : Promise.resolve([] as MembershipRow[]),
     openIds.length > 0
       ? db
           .select({
@@ -266,6 +350,13 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
         ),
       ),
   ]);
+
+  const membershipsByCycle = new Map<number, MembershipRow[]>();
+  for (const m of memberships) {
+    const list = membershipsByCycle.get(m.cycle);
+    if (list) list.push(m);
+    else membershipsByCycle.set(m.cycle, [m]);
+  }
 
   const targetsByActivation = new Map<string, string[]>();
   for (const t of targets) {
@@ -313,7 +404,7 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
           { scope: row.scope as BroadcastScope, team: row.team },
           {
             members,
-            memberships,
+            memberships: membershipsByCycle.get(row.activationCycle!) ?? [],
             driverUserIds: [],
             targetUserIds: targetsByActivation.get(row.activationId) ?? [],
           },
@@ -361,7 +452,9 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
   return {
     plan: {
       from,
-      toNumber: from.number + 1,
+      // Offered, not decided — see RolloverPlan.suggestedYear.
+      suggestedYear:
+        from && from.year < MAX_CYCLE_YEAR ? from.year + 1 : null,
       reGate: reGate.sort(byTitle),
       carriesOver: carriesOver.sort(byTitle),
       notSent: notSent.sort(byTitle),
@@ -384,6 +477,9 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
  * | carry  | no        | `carriesOver` | nothing                            |
  * | fresh  | yes       | `reGate`      | closed, re-opened blank for the new cycle |
  * | fresh  | no        | `notSent`     | nothing — send it yourself if you want it |
+ *
+ * `plan.from` is null on a camp that has never named a year. That is not an
+ * error: it is the cycle page's first screen, which asks.
  */
 export async function planRollover(): Promise<RolloverPlan> {
   const { plan } = await buildPlan(createHttpDb());
@@ -391,24 +487,154 @@ export async function planRollover(): Promise<RolloverPlan> {
 }
 
 /**
+ * Name the camp's founding year — the one-time write that turns the year
+ * namespace on.
+ *
+ * Migrations 0019 and 0020 defaulted `cycle` to UNSET_CYCLE on every
+ * pre-existing row because a migration cannot know what year it is. This is the
+ * captain saying so, and it does BOTH halves in one transaction: it records the
+ * founding CycleEntry and it rewrites every sentinel-stamped row — activations,
+ * responses, team memberships, driver profiles and the car seats that hang off
+ * them — to the real year. Deliberately a captain-triggered data write and not
+ * a DDL migration: the year is an answer, not a schema fact.
+ *
+ * It cannot run twice: the `already-founded` guard reads the cycle list under
+ * the same `SELECT … FOR UPDATE` lock every other config write takes, so a
+ * second press (or a second captain) changes nothing. Nothing is destroyed
+ * either way — the rewrite is a bijection on one cycle value, so the
+ * `(user, definition, cycle)` uniqueness it moves under still holds.
+ */
+export async function setFoundingYear(input: {
+  year: number;
+  actorUserId: string | null;
+}): Promise<SetFoundingYearResult> {
+  if (!isCycleYear(input.year)) {
+    return { ok: false, reason: "invalid-year" };
+  }
+
+  const now = new Date();
+  const { db, pool } = createPooledDb();
+  try {
+    return await db.transaction(async (tx) => {
+      await tx
+        .insert(schema.campSettings)
+        .values({ id: true })
+        .onConflictDoNothing({ target: schema.campSettings.id });
+      const [locked] = await tx
+        .select({ config: schema.campSettings.config })
+        .from(schema.campSettings)
+        .where(eq(schema.campSettings.id, true))
+        .for("update");
+
+      const stored =
+        locked?.config && typeof locked.config === "object"
+          ? (locked.config as CampConfig)
+          : ({} as CampConfig);
+      if (resolveCycles(stored).length > 0) {
+        return { ok: false as const, reason: "already-founded" as const };
+      }
+
+      // SPREAD the stored object: `cycles` is one key in a shared JSONB column
+      // and rebuilding it would silently discard the team config beside it.
+      await tx
+        .update(schema.campSettings)
+        .set({
+          config: { ...stored, cycles: foundingCycles(input.year, now) },
+          updatedAt: now,
+        })
+        .where(eq(schema.campSettings.id, true));
+
+      // Adopt everything sent or answered before the camp had a year. RETURNING
+      // counts in the same statement that writes, so the receipt can never
+      // drift from what actually moved.
+      const activations = await tx
+        .update(schema.questionnaireActivations)
+        .set({ cycle: input.year })
+        .where(eq(schema.questionnaireActivations.cycle, UNSET_CYCLE))
+        .returning({ id: schema.questionnaireActivations.id });
+      const responses = await tx
+        .update(schema.questionnaireResponses)
+        .set({ cycle: input.year })
+        .where(eq(schema.questionnaireResponses.cycle, UNSET_CYCLE))
+        .returning({ id: schema.questionnaireResponses.id });
+
+      // The same adoption for the three year-scoped roster tables. `driver_
+      // profiles` FIRST and the seats ride its ON UPDATE CASCADE: car_members'
+      // composite FK points at (user_id, cycle), so a car and its seats cannot
+      // move apart. Which is also why the seats are COUNTED before the update
+      // rather than returned by one.
+      const [seats] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.carMembers)
+        .where(eq(schema.carMembers.cycle, UNSET_CYCLE));
+      const drivers = await tx
+        .update(schema.driverProfiles)
+        .set({ cycle: input.year })
+        .where(eq(schema.driverProfiles.cycle, UNSET_CYCLE))
+        .returning({ userId: schema.driverProfiles.userId });
+      const teams = await tx
+        .update(schema.teamMemberships)
+        .set({ cycle: input.year })
+        .where(eq(schema.teamMemberships.cycle, UNSET_CYCLE))
+        .returning({ userId: schema.teamMemberships.userId });
+
+      const [audit] = await tx
+        .insert(schema.auditLog)
+        .values({
+          actorId: input.actorUserId,
+          action: "camp.cycle.founded",
+          target: String(input.year),
+          metadata: {
+            year: input.year,
+            activationsStamped: activations.length,
+            responsesStamped: responses.length,
+            teamMembershipsStamped: teams.length,
+            driverProfilesStamped: drivers.length,
+            carSeatsStamped: seats?.count ?? 0,
+          },
+        })
+        .returning({ id: schema.auditLog.id });
+
+      return {
+        ok: true as const,
+        report: {
+          year: input.year,
+          activationsStamped: activations.length,
+          responsesStamped: responses.length,
+          teamMembershipsStamped: teams.length,
+          driverProfilesStamped: drivers.length,
+          carSeatsStamped: seats?.count ?? 0,
+          auditLogId: audit!.id,
+        },
+      };
+    });
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
  * Advance the camp to the next cycle, in ONE pooled transaction (§8.3).
  *
  * Concurrency: every attempt serialises behind a `SELECT … FOR UPDATE` on the
  * `camp_settings` singleton — the identical lock `mutateTeamsConfig` and
- * `bootstrapFirstCaptain` take. The loser sees the label already present in the
- * cycle list and returns `already-advanced`. The label doubles as the
- * idempotency key precisely because the confirm screen makes the captain type
- * it, so two captains pressing at once type the same string.
+ * `bootstrapFirstCaptain` take. The loser sees the year already present in the
+ * cycle list and returns `already-advanced`. The YEAR is the idempotency key
+ * precisely because the confirm screen makes the captain type it, so two
+ * captains pressing at once type the same number.
  *
- * Nothing is deleted. Closed sends stay closed, prior cycles' answers stay
+ * A year only ever goes forwards, so a year that is not later than the current
+ * one is refused as `invalid-year` rather than silently reordering the list.
+ * A camp with no founding year is sent back to the page's first screen.
+ *
+ * Nothing is deleted. Closed sends stay closed, prior years' answers stay
  * readable, and the cleared dues ids are enumerated in the audit row so even
  * the one destructive-looking option is recoverable by hand.
  */
 export async function advanceCycle(
   input: AdvanceCycleInput,
 ): Promise<AdvanceCycleResult> {
-  const label = input.label.trim();
-  if (!label) return { ok: false, reason: "needs-a-label" };
+  if (!isCycleYear(input.year)) return { ok: false, reason: "invalid-year" };
 
   const now = new Date();
   const { db, pool } = createPooledDb();
@@ -430,8 +656,17 @@ export async function advanceCycle(
           ? (locked.config as CampConfig)
           : ({} as CampConfig);
       const cycles = resolveCycles(stored);
-      if (cycles.some((c) => c.label === label)) {
+      const from = currentCycle(cycles);
+      if (!from) {
+        // The camp never said what year it is, so there is no "next" one. The
+        // page's first screen (setFoundingYear) is where this goes.
+        return { ok: false as const, reason: "no-founding-year" as const };
+      }
+      if (cycles.some((c) => c.year === input.year)) {
         return { ok: false as const, reason: "already-advanced" as const };
+      }
+      if (input.year <= from.year) {
+        return { ok: false as const, reason: "invalid-year" as const };
       }
 
       // 2. Re-read the plan INSIDE the lock, so a send that raced in just
@@ -442,14 +677,19 @@ export async function advanceCycle(
       // 3. Advance the cycle list. SPREAD the stored object: `cycles` is one
       //    key in a shared JSONB column and rebuilding it from scratch would
       //    silently discard the team config beside it.
-      const nextCycles = advanceCycles(cycles, label, now);
-      const to = currentCycle(nextCycles);
+      const nextCycles = advanceCycles(cycles, input.year, now);
+      // Non-null by construction: advanceCycles appends exactly one open entry.
+      const to = currentCycle(nextCycles)!;
       await tx
         .update(schema.campSettings)
         .set({ config: { ...stored, cycles: nextCycles }, updatedAt: now })
         .where(eq(schema.campSettings.id, true));
 
-      // 4. Re-gate every `fresh` questionnaire with an open send.
+      // 4. Re-gate every `fresh` questionnaire with an open send. Note what is
+      //    absent: nothing here reads or writes team_memberships, car_members
+      //    or driver_profiles. The new year starts with no rows in them by
+      //    construction, which is what makes teams, team leads and car seats
+      //    fresh without a single delete.
       const reGated: ReGateResult[] = [];
       for (const entry of plan.reGate) {
         const old = open.get(entry.key);
@@ -482,7 +722,7 @@ export async function advanceCycle(
             dueAt: null,
             activatedByUserId: input.actorUserId,
             status: "draft",
-            cycle: to.number,
+            cycle: to.year,
             // `fresh` is the only reason this row exists, so its frozen copy
             // must say so — a `carryOver: true` replacement would subtract the
             // members who answered last year, which is exactly what fresh
@@ -614,7 +854,7 @@ export async function advanceCycle(
         .values({
           actorId: input.actorUserId,
           action: "camp.cycle.advanced",
-          target: to.label,
+          target: String(to.year),
           metadata,
         })
         .returning({ id: schema.auditLog.id });

@@ -98,6 +98,9 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       await tx
         .delete(schema.requiredActions)
         .where(eq(schema.requiredActions.userId, userId));
+      // Deliberately NOT year-scoped, unlike every read of these tables:
+      // erasure is erasure, so every year's memberships, seats and driver
+      // profiles go. (driver_profiles above cascades to this user's car seats.)
       await tx
         .delete(schema.teamMemberships)
         .where(eq(schema.teamMemberships.userId, userId));

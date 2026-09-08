@@ -28,18 +28,60 @@ export async function makeUser(
   return row!;
 }
 
+/**
+ * A team membership in one year. `cycle` defaults to 1 — the sentinel every
+ * pre-namespace row carries and the value currentCycleNumber() returns on a
+ * camp that has not named its founding year — so callers that don't care about
+ * the year namespace read exactly as they did before it existed.
+ */
 export async function makeMembership(
   db: DB,
   input: {
     userId: string;
     team: (typeof schema.teamEnum.enumValues)[number];
     isLead?: boolean;
+    cycle?: number;
   },
 ): Promise<void> {
   await db.insert(schema.teamMemberships).values({
     userId: input.userId,
     team: input.team,
     isLead: input.isLead ?? false,
+    cycle: input.cycle ?? 1,
+  });
+}
+
+/** A driver profile for one member in one year. */
+export async function makeDriverProfile(
+  db: DB,
+  input: {
+    userId: string;
+    cycle?: number;
+    intendsToDrive?: boolean;
+    completedAt?: Date | null;
+  },
+): Promise<void> {
+  await db.insert(schema.driverProfiles).values({
+    userId: input.userId,
+    cycle: input.cycle ?? 1,
+    intendsToDrive: input.intendsToDrive ?? true,
+    completedAt: input.completedAt ?? null,
+    version: "1",
+  });
+}
+
+/**
+ * A seat in a driver's car. The composite FK means the driver must already
+ * have a driver_profiles row for the SAME year.
+ */
+export async function makeCarMember(
+  db: DB,
+  input: { driverUserId: string; memberUserId: string; cycle?: number },
+): Promise<void> {
+  await db.insert(schema.carMembers).values({
+    driverUserId: input.driverUserId,
+    memberUserId: input.memberUserId,
+    cycle: input.cycle ?? 1,
   });
 }
 

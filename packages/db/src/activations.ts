@@ -192,13 +192,18 @@ export async function openActivation(
         sanitised: schema.users.sanitised,
       })
       .from(schema.users),
+    // Team membership is year-scoped, so "who is on the kitchen team" has to be
+    // asked of a particular year — and the year that governs a send is the one
+    // FROZEN on the activation, never the live config. A rollover landing
+    // between draft and open therefore cannot move this send's audience.
     httpDb
       .select({
         userId: schema.teamMemberships.userId,
         team: schema.teamMemberships.team,
         isLead: schema.teamMemberships.isLead,
       })
-      .from(schema.teamMemberships),
+      .from(schema.teamMemberships)
+      .where(eq(schema.teamMemberships.cycle, act.cycle)),
     httpDb
       .select({ userId: schema.questionnaireActivationTargets.userId })
       .from(schema.questionnaireActivationTargets)

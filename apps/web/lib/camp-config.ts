@@ -52,17 +52,18 @@ export function mutateTeamsConfig(
 }
 
 /**
- * The camp's current cycle — the year namespace an activation is stamped with
- * at Send. Callers that already hold an activation must read `activation.cycle`
- * instead: that copy is frozen, and a rollover landing mid-collection must not
- * move an in-flight form into the next year.
+ * The year the camp is in — the namespace an activation is stamped with at Send.
+ * NULL until a captain names the founding year on the cycle page. Callers that
+ * already hold an activation must read `activation.cycle` instead: that copy is
+ * frozen, and a rollover landing mid-collection must not move an in-flight form
+ * into the next year.
  *
  * The E2E branch runs the same pure resolve over the test store, which seeds
- * DEFAULT_CAMP_CONFIG — no `cycles` key — so `resolveCycles` yields [CYCLE_ONE]
- * and Playwright keeps running with no database and no test-store change. It
- * stays honest if the store ever grows a cycles key.
+ * DEFAULT_CAMP_CONFIG — no `cycles` key — so `resolveCycles` yields an empty
+ * list and this returns null. Playwright keeps running with no database and no
+ * test-store change, and it stays honest if the store ever grows a cycles key.
  */
-export function getCurrentCycle(): Promise<CycleEntry> {
+export function getCurrentCycle(): Promise<CycleEntry | null> {
   return isE2ETestMode()
     ? Promise.resolve(currentCycle(resolveCycles(testStore.getTeamsConfig())))
     : dbGetCurrentCycle();

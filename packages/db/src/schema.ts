@@ -9,6 +9,7 @@ import {
   jsonb,
   numeric,
   primaryKey,
+  foreignKey,
   index,
   uniqueIndex,
   check,
@@ -415,58 +416,104 @@ export const dietaryRequirements = pgTable("dietary_requirements", {
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// --- Year-scoped facts ----------------------------------------------------
+// driver_profiles, car_members and team_memberships each carry a `cycle`. They
+// are the camp owner's "must be established again" set: "who's driving in
+// whose car and who's part of what team have to be fresh so that wouldn't
+// carry over to the next year. Same with team lead roles."
+//
+// A carry-over flag on a questionnaire cannot deliver that, because these
+// facts live in their own tables rather than in questionnaire_responses — with
+// no year on the row, a rollover would leave every team, lead and car seat
+// exactly as it was.
+//
+// Freshness is a READ rule, never a delete: the rollover touches none of these
+// tables, and a query scoped to the new year simply finds no rows. Last year's
+// roster and car lists stay on file and readable forever.
+
 // --- Driver profiles -----------------------------------------------------
 // Opt-in: a member registers intent to drive (`intends_to_drive`), which
 // triggers a blocking questionnaire to capture vehicle + proficiency
-// detail. Its own bespoke page and table.
+// detail. Its own bespoke page and table. One row per driver PER YEAR — a
+// driver re-registers intent (and re-confirms the vehicle) each burn.
 
-export const driverProfiles = pgTable("driver_profiles", {
-  userId: uuid("user_id")
-    .primaryKey()
-    .references(() => users.id, { onDelete: "cascade" }),
-  intendsToDrive: boolean("intends_to_drive").notNull().default(false),
-  intentRegisteredAt: timestamp("intent_registered_at", { mode: "date" }),
+export const driverProfiles = pgTable(
+  "driver_profiles",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The burn year this profile belongs to. Defaults to 1 for the same reason
+    // questionnaire_activations.cycle does: a migration cannot know what year
+    // it is, so setFoundingYear() adopts every sentinel-stamped row into the
+    // real founding year in the transaction that records it.
+    cycle: integer("cycle").notNull().default(1),
+    intendsToDrive: boolean("intends_to_drive").notNull().default(false),
+    intentRegisteredAt: timestamp("intent_registered_at", { mode: "date" }),
 
-  vehicleMake: text("vehicle_make"),
-  vehicleModel: text("vehicle_model"),
-  vehicleRegistration: text("vehicle_registration"),
-  seatsTotal: integer("seats_total"),
-  seatsOffered: integer("seats_offered"),
-  canOfferLifts: boolean("can_offer_lifts").notNull().default(false),
+    vehicleMake: text("vehicle_make"),
+    vehicleModel: text("vehicle_model"),
+    vehicleRegistration: text("vehicle_registration"),
+    seatsTotal: integer("seats_total"),
+    seatsOffered: integer("seats_offered"),
+    canOfferLifts: boolean("can_offer_lifts").notNull().default(false),
 
-  offroadExperienced: boolean("offroad_experienced").notNull().default(false),
-  canTow: boolean("can_tow").notNull().default(false),
-  proficiencyNotes: text("proficiency_notes"),
+    offroadExperienced: boolean("offroad_experienced").notNull().default(false),
+    canTow: boolean("can_tow").notNull().default(false),
+    proficiencyNotes: text("proficiency_notes"),
 
-  departureCity: text("departure_city"),
-  arrivalAt: timestamp("arrival_at", { mode: "date" }),
-  departureAt: timestamp("departure_at", { mode: "date" }),
-  notes: text("notes"),
+    departureCity: text("departure_city"),
+    arrivalAt: timestamp("arrival_at", { mode: "date" }),
+    departureAt: timestamp("departure_at", { mode: "date" }),
+    notes: text("notes"),
 
-  version: text("version").notNull(),
-  completedAt: timestamp("completed_at", { mode: "date" }),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
-});
+    version: text("version").notNull(),
+    completedAt: timestamp("completed_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    // Widened from bare `user_id`. Safe on live data: every existing row is
+    // already distinct on user_id, so (user_id, 1) stays unique.
+    pk: primaryKey({ columns: [d.userId, d.cycle] }),
+  }),
+);
 
 // --- Car members ---------------------------------------------------------
 // A driver assigns riders to their car. "Driver" and "car group" are
 // derived facets of a user profile, not ranks. This group can be a
 // notification audience (broadcast scope 'drivers', or individual targets).
+// Seats are per-year: who rides with whom is re-agreed every burn.
 
 export const carMembers = pgTable(
   "car_members",
   {
-    driverUserId: uuid("driver_user_id")
-      .notNull()
-      .references(() => driverProfiles.userId, { onDelete: "cascade" }),
+    // No column-level .references(): driver_profiles.user_id is no longer
+    // unique on its own, so the reference has to carry the year with it — see
+    // driverFk below.
+    driverUserId: uuid("driver_user_id").notNull(),
     memberUserId: uuid("member_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull().default(1),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (c) => ({
-    pk: primaryKey({ columns: [c.driverUserId, c.memberUserId] }),
+    // The same rider may sit in the same driver's car in two different years,
+    // but never twice in one.
+    pk: primaryKey({ columns: [c.driverUserId, c.memberUserId, c.cycle] }),
+    // Widened rather than dropped: the seat points at THAT year's driver
+    // profile, so a 2027 seat can never hang off a 2026 car. ON UPDATE CASCADE
+    // because the referenced key is now mutable in exactly one place —
+    // setFoundingYear() moving pre-namespace rows off the sentinel — and the
+    // seats have to ride along with the car rather than block the adoption.
+    driverFk: foreignKey({
+      columns: [c.driverUserId, c.cycle],
+      foreignColumns: [driverProfiles.userId, driverProfiles.cycle],
+      name: "car_members_driver_cycle_fk",
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
     memberIdx: index("car_members_member_idx").on(c.memberUserId),
   }),
 );
@@ -482,11 +529,16 @@ export const teamMemberships = pgTable(
     team: teamEnum("team").notNull(),
     // Authoritative answer to "does this user lead this team". A user who
     // is a lead on any team should also carry `users.rank = 'team_lead'`.
+    // Year-scoped like the membership itself: a lead stops leading at the
+    // rollover until a captain says otherwise, which is the owner's ruling.
     isLead: boolean("is_lead").notNull().default(false),
+    cycle: integer("cycle").notNull().default(1),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (tm) => ({
-    pk: primaryKey({ columns: [tm.userId, tm.team] }),
+    // The same member may be on the same team in 2026 and 2027, but is listed
+    // at most once in either.
+    pk: primaryKey({ columns: [tm.userId, tm.team, tm.cycle] }),
     teamIdx: index("team_memberships_team_idx").on(tm.team),
   }),
 );

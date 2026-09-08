@@ -61,9 +61,12 @@ const TOOLS: ToolEntry[] = [
   },
   {
     href: "/captains/camp-settings/cycle",
-    title: "Start a new year",
+    // Covers BOTH screens behind this route: a camp that has never said what
+    // year it is gets asked, and one that has gets the rollover. "Start a new
+    // year" would misdescribe the first of those.
+    title: "The camp's year",
     description:
-      "When the camp moves on to the next burn, say so here. See exactly which questionnaires go out again before anything changes — and everything that stays untouched.",
+      "Say what year the camp is in, and when it moves on to the next burn, say so here. See exactly which questionnaires go out again before anything changes — and everything that stays untouched.",
     icon: <CalendarClock className="text-primary" />,
   },
 ];

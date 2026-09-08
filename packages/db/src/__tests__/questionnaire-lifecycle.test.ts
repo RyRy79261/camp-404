@@ -419,31 +419,28 @@ describe("sendActivation — one-open invariant", () => {
 describe("sendActivation — the cycle + carry-over stamp", () => {
   const h = useTestDb();
 
-  it("stamps the cycle current at Send and carry_over off the definition", async () => {
+  it("stamps the year current at Send and carry_over off the definition", async () => {
     const db = h.db();
     const u = await makeUser(db);
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
-    // the camp has rolled over twice; cycle 3 is the open one
+    // the camp has rolled over twice; 2028 is the open year
     await db.insert(schema.campSettings).values({
       config: {
         ...DEFAULT_CAMP_CONFIG,
         cycles: [
           {
-            number: 1,
-            label: "2026",
+            year: 2026,
             startedAt: "2026-01-01T00:00:00.000Z",
             endedAt: "2027-01-01T00:00:00.000Z",
           },
           {
-            number: 2,
-            label: "2027",
+            year: 2027,
             startedAt: "2027-01-01T00:00:00.000Z",
             endedAt: "2028-01-01T00:00:00.000Z",
           },
           {
-            number: 3,
-            label: "2028",
+            year: 2028,
             startedAt: "2028-01-01T00:00:00.000Z",
             endedAt: null,
           },
@@ -460,10 +457,10 @@ describe("sendActivation — the cycle + carry-over stamp", () => {
     if (!sent.ok) throw new Error(sent.error);
 
     const act = await getActivationById(sent.activationId);
-    expect(act?.cycle).toBe(3);
+    expect(act?.cycle).toBe(2028);
     expect(act?.carryOver).toBe(true); // the definition column's default
     expect(await getOpenActivationForKey("feedback")).toMatchObject({
-      cycle: 3,
+      cycle: 2028,
       carryOver: true,
     });
   });

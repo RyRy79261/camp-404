@@ -9,16 +9,26 @@ vi.mock("server-only", () => ({}));
 
 import { teamEnum } from "@camp404/db/schema";
 import {
-  CYCLE_ONE,
   DEFAULT_TEAMS,
   DEFAULT_CAMP_CONFIG,
+  MAX_CYCLE_YEAR,
+  MIN_CYCLE_YEAR,
+  UNSET_CYCLE,
   activeTeams,
+  advanceCycles,
   assertStableTeamKeys,
+  currentCycle,
+  foundingCycles,
   moveTeam,
   renameTeam,
+  resolveCodeCarryOver,
+  resolveCycles,
   resolveTeamsConfig,
+  setCodeCarryOver,
   setTeamArchived,
   teamLabelMap,
+  type CampConfig,
+  type CycleEntry,
   type TeamsConfig,
 } from "@camp404/db/camp-config";
 import { getCurrentCycle } from "../camp-config";
@@ -255,12 +265,189 @@ describe("the config transforms preserve unrelated top-level keys", () => {
   });
 });
 
+// --- The year namespace ----------------------------------------------------
+// A cycle IS a year: one number that both names the year a captain reads and
+// namespaces the rows stamped with it. These are the pure halves — the DB
+// writers that use them (setFoundingYear, advanceCycle) are covered by the
+// PGlite suite in packages/db.
+
+function cycle(year: number, endedAt: string | null = null): CycleEntry {
+  return { year, startedAt: `${year}-01-01T00:00:00.000Z`, endedAt };
+}
+
+describe("UNSET_CYCLE", () => {
+  it("can never be mistaken for a year", () => {
+    // Migration 0019 stamped it on every pre-existing row and
+    // currentCycleNumber() returns it until a captain says what year it is.
+    // setFoundingYear rewrites exactly the rows carrying it — which is only
+    // safe while no real year can equal it.
+    expect(UNSET_CYCLE).toBeLessThan(MIN_CYCLE_YEAR);
+  });
+});
+
+describe("resolveCycles", () => {
+  it("reads an absent or malformed list as 'no year yet'", () => {
+    expect(resolveCycles(null)).toEqual([]);
+    expect(resolveCycles(undefined)).toEqual([]);
+    expect(resolveCycles({})).toEqual([]);
+    expect(resolveCycles({ cycles: [] })).toEqual([]);
+    expect(resolveCycles({ cycles: "nope" })).toEqual([]);
+    // One bad entry discards the list wholesale: a dropped year would silently
+    // renumber the camp, and "unset" routes the captain to a screen that asks.
+    expect(resolveCycles({ cycles: [cycle(2026), { year: 2027 }] })).toEqual([]);
+    // The sentinel is not a year, so a hand-edited config can't smuggle it in.
+    expect(resolveCycles({ cycles: [cycle(UNSET_CYCLE)] })).toEqual([]);
+  });
+
+  it("returns a valid list, year-ascending", () => {
+    expect(
+      resolveCycles({
+        cycles: [cycle(2028), cycle(2026, "2027-01-01T00:00:00.000Z")],
+      }).map((c) => c.year),
+    ).toEqual([2026, 2028]);
+  });
+});
+
+describe("currentCycle", () => {
+  it("is null when the camp has never said what year it is", () => {
+    expect(currentCycle([])).toBeNull();
+  });
+
+  it("is the one entry still open", () => {
+    const cycles = [cycle(2026, "2027-01-01T00:00:00.000Z"), cycle(2027)];
+    expect(currentCycle(cycles)?.year).toBe(2027);
+  });
+
+  it("falls back to the latest year when a write left none open", () => {
+    // A read must never throw, and it must never silently revert the camp to
+    // its first year.
+    const cycles = [
+      cycle(2026, "2027-01-01T00:00:00.000Z"),
+      cycle(2027, "2028-01-01T00:00:00.000Z"),
+    ];
+    expect(currentCycle(cycles)?.year).toBe(2027);
+  });
+});
+
+describe("foundingCycles", () => {
+  it("opens the camp's first year", () => {
+    const now = new Date("2026-03-01T00:00:00.000Z");
+    expect(foundingCycles(2026, now)).toEqual([
+      { year: 2026, startedAt: now.toISOString(), endedAt: null },
+    ]);
+  });
+
+  it("refuses an implausible year", () => {
+    const now = new Date();
+    for (const year of [202, 20267, 2026.5, MIN_CYCLE_YEAR - 1, MAX_CYCLE_YEAR + 1]) {
+      expect(() => foundingCycles(year, now)).toThrow(/whole number between/);
+    }
+  });
+});
+
+describe("advanceCycles", () => {
+  const now = new Date("2027-01-01T00:00:00.000Z");
+  const founded = [cycle(2026)];
+
+  it("closes the open year and appends the new one, immutably", () => {
+    const next = advanceCycles(founded, 2027, now);
+    expect(next).toEqual([
+      { ...cycle(2026), endedAt: now.toISOString() },
+      { year: 2027, startedAt: now.toISOString(), endedAt: null },
+    ]);
+    expect(founded[0]!.endedAt).toBeNull(); // input not mutated
+  });
+
+  it("lets a camp skip a burn", () => {
+    // Years are dates, not an incrementing counter — 2026 to 2028 is legal.
+    expect(advanceCycles(founded, 2028, now).map((c) => c.year)).toEqual([
+      2026, 2028,
+    ]);
+  });
+
+  it("refuses a year that isn't later than the current one", () => {
+    expect(() => advanceCycles(founded, 2026, now)).toThrow(/already had/);
+    expect(() => advanceCycles(founded, 2025, now)).toThrow(/later than 2026/);
+  });
+
+  it("refuses a duplicate even when it isn't the current year", () => {
+    // A hand-edited config can leave the OPEN entry behind the latest one.
+    const odd = [cycle(2026), cycle(2028, "2029-01-01T00:00:00.000Z")];
+    expect(() => advanceCycles(odd, 2028, now)).toThrow(/already had/);
+  });
+
+  it("refuses an implausible year, and a camp with no year at all", () => {
+    expect(() => advanceCycles(founded, 20267, now)).toThrow(
+      /whole number between/,
+    );
+    expect(() => advanceCycles([], 2027, now)).toThrow(/what year it is/);
+  });
+});
+
+describe("resolveCodeCarryOver", () => {
+  // The owner's ruling, seeded as the per-key default so an untouched camp
+  // already behaves the way they asked.
+  it("defaults the bio and the diet to carry, the driver profile to fresh", () => {
+    for (const raw of [null, undefined, {}, { questionnaireCarryOver: {} }]) {
+      expect(resolveCodeCarryOver(raw, "burner_profile")).toBe("carry");
+      expect(resolveCodeCarryOver(raw, "dietary_requirements")).toBe("carry");
+      expect(resolveCodeCarryOver(raw, "driver_profile")).toBe("fresh");
+    }
+  });
+
+  it("lets a captain's explicit choice win, in both directions", () => {
+    const raw = {
+      questionnaireCarryOver: {
+        burner_profile: "fresh",
+        driver_profile: "carry",
+      },
+    };
+    expect(resolveCodeCarryOver(raw, "burner_profile")).toBe("fresh");
+    expect(resolveCodeCarryOver(raw, "driver_profile")).toBe("carry");
+  });
+
+  it("falls back PER KEY, so one bad entry keeps the rest", () => {
+    const raw = {
+      questionnaireCarryOver: {
+        burner_profile: "fresh",
+        dietary_requirements: 42, // nonsense
+      },
+    };
+    expect(resolveCodeCarryOver(raw, "burner_profile")).toBe("fresh");
+    // The nonsense entry falls back to the owner's default for that key, and
+    // does NOT discard the captain's choice above it.
+    expect(resolveCodeCarryOver(raw, "dietary_requirements")).toBe("carry");
+    expect(resolveCodeCarryOver(raw, "driver_profile")).toBe("fresh");
+  });
+
+  it("reads an unknown key as carry — nothing changes until it's opted in", () => {
+    expect(resolveCodeCarryOver({}, "something_else")).toBe("carry");
+  });
+});
+
+describe("setCodeCarryOver", () => {
+  it("sets one key and keeps every other key in the config", () => {
+    const before: CampConfig = {
+      ...DEFAULT_CAMP_CONFIG,
+      cycles: [cycle(2026)],
+      questionnaireCarryOver: { burner_profile: "carry" },
+    };
+    const after = setCodeCarryOver(before, "driver_profile", "fresh");
+    expect(after.questionnaireCarryOver).toEqual({
+      burner_profile: "carry",
+      driver_profile: "fresh",
+    });
+    expect(after.cycles).toBe(before.cycles);
+    expect(after.teams).toBe(before.teams);
+    expect(before.questionnaireCarryOver).toEqual({ burner_profile: "carry" });
+  });
+});
+
 describe("getCurrentCycle under E2E_TEST_MODE", () => {
   // Playwright runs with no database. The test store seeds DEFAULT_CAMP_CONFIG,
   // which has no `cycles` key, so the facade's E2E branch runs the same pure
-  // resolve the real path does and lands on the founding cycle — the E2E suite
-  // keeps passing with no test-store change. This asserts that rather than
-  // assuming it.
+  // resolve the real path does and lands on "no year yet" — the E2E suite keeps
+  // passing with no test-store change. This asserts that rather than assuming it.
   const previous = process.env.E2E_TEST_MODE;
 
   afterEach(() => {
@@ -268,10 +455,10 @@ describe("getCurrentCycle under E2E_TEST_MODE", () => {
     else process.env.E2E_TEST_MODE = previous;
   });
 
-  it("resolves to cycle 1 without touching the database", async () => {
+  it("resolves to no year without touching the database", async () => {
     process.env.E2E_TEST_MODE = "1";
     // DEFAULT_CAMP_CONFIG is what the store clones, and it carries no cycles.
     expect("cycles" in DEFAULT_CAMP_CONFIG).toBe(false);
-    await expect(getCurrentCycle()).resolves.toEqual(CYCLE_ONE);
+    await expect(getCurrentCycle()).resolves.toBeNull();
   });
 });

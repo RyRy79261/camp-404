@@ -83,6 +83,33 @@ describe("openActivation — fan-out", () => {
     expect(await requiredActionsFor(db, grunt.id)).toHaveLength(0);
   });
 
+  it("scope=team is asked of the YEAR frozen on the activation", async () => {
+    const db = h.db();
+    const lastYear = await makeUser(db);
+    const thisYear = await makeUser(db);
+    await makeMembership(db, {
+      userId: lastYear.id,
+      team: "kitchen",
+      cycle: 2026,
+    });
+    await makeMembership(db, {
+      userId: thisYear.id,
+      team: "kitchen",
+      cycle: 2027,
+    });
+    const act = await makeActivation(db, {
+      scope: "team",
+      team: "kitchen",
+      cycle: 2027,
+    });
+
+    // The activation's own cycle decides, never the live config — so a
+    // rollover landing between draft and open cannot move this audience.
+    expect(await openActivation(act.id)).toEqual({ ok: true, created: 1 });
+    expect(await requiredActionsFor(db, thisYear.id)).toHaveLength(1);
+    expect(await requiredActionsFor(db, lastYear.id)).toHaveLength(0);
+  });
+
   it("scope=individual uses the activation targets table", async () => {
     const db = h.db();
     const picked = await makeUser(db);

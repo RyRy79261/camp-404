@@ -20,28 +20,34 @@ import { Label } from "@camp404/ui/components/label";
 import { SectionHeader } from "@camp404/ui/components/section-header";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
-import { advanceCycleAction } from "../actions";
+import { advanceCycleAction, setFoundingYearAction } from "../actions";
 
-// The rollover surface: plan → confirm → receipt (spec §8.2/§8.4). The server
-// page hands in planRollover()'s output; this island owns the confirm form and
-// keeps the executed report on screen afterwards.
+// The year surface: name the year → plan → confirm → receipt (spec §8.2/§8.4).
+// The server page hands in planRollover()'s output; this island owns the two
+// forms and keeps the executed report on screen afterwards.
 //
-// Two things about this screen are load-bearing rather than decorative:
+// A year is a number, not a name. One integer is both the thing a captain reads
+// ("you're in 2026") and the namespace stamped on every send and answer, which
+// is why the confirm box takes the number rather than a label beside it.
 //
+// Three things about this screen are load-bearing rather than decorative:
+//
+//   • The first screen asks what year it is. Migration 0019 could only stamp a
+//     sentinel on the rows that predate the year namespace, because a migration
+//     cannot know the year; naming it is what adopts them.
 //   • "Nothing else changes" is rendered as prominently as the change lists.
 //     That is where a captain's fear lives, and burying it is what makes a
 //     button frightening.
-//   • Confirmation is typing the new year's name back — the type-the-repo-name
-//     pattern. It is hard to do by accident, and because the string IS the
-//     label being saved it is not ceremony for its own sake.
+//   • Confirmation is typing the new year's number back — the type-the-name
+//     pattern. It is hard to do by accident, and because the number IS the year
+//     being saved it is not ceremony for its own sake.
 
 // The plan/report shapes, kept as local structural types (like the team
 // editor's TeamRow) so this client island never imports the DB package. The
 // server page and the action conform to them by assignment.
 
 export type CycleView = {
-  number: number;
-  label: string;
+  year: number;
   startedAt: string;
   endedAt: string | null;
 };
@@ -55,13 +61,25 @@ export type RolloverEntryView = {
 };
 
 export type RolloverPlanView = {
-  from: CycleView;
-  toNumber: number;
+  /** Null on a camp that has never said what year it is. */
+  from: CycleView | null;
+  /** The obvious next year, prefilled into the input. Not the answer. */
+  suggestedYear: number | null;
   reGate: RolloverEntryView[];
   carriesOver: RolloverEntryView[];
   notSent: RolloverEntryView[];
   duesPaidCount: number;
   untouched: readonly string[];
+};
+
+export type FoundingReportView = {
+  year: number;
+  activationsStamped: number;
+  responsesStamped: number;
+  teamMembershipsStamped: number;
+  driverProfilesStamped: number;
+  carSeatsStamped: number;
+  auditLogId: string;
 };
 
 export type ReGateResultView = {
@@ -81,8 +99,64 @@ export type RolloverReportView = {
   auditLogId: string;
 };
 
+// The plausible range, restated here so the input can refuse a typo before a
+// round-trip. The server is the authority — setFoundingYearAction and
+// advanceCycleAction re-check every value against the same bounds.
+const MIN_YEAR = 2000;
+const MAX_YEAR = 2100;
+
+/** Keep a year input to four digits, so it can only ever hold a year. */
+function digits(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 4);
+}
+
+function isYear(value: string): boolean {
+  const year = Number(value);
+  return value.length === 4 && year >= MIN_YEAR && year <= MAX_YEAR;
+}
+
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
+}
+
+/** "a", "a and b", "a, b and c" — the receipt reads as a sentence, not a table. */
+function sentenceList(parts: string[]): string {
+  if (parts.length < 2) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * The receipt for naming the founding year — shown until the page catches up.
+ *
+ * It enumerates EVERY count the founding transaction moved, not just the two
+ * questionnaire ones: naming the year also adopts the year-scoped roster facts,
+ * and on a camp that has been running those are the bulk of it. A receipt whose
+ * whole job is "here is exactly what changed" must not undercount. Zero rows are
+ * dropped so a brand-new camp gets a short sentence instead of a row of noughts.
+ */
+function FoundedNotice({ report }: { report: FoundingReportView }) {
+  const counted: ReadonlyArray<readonly [number, string, string]> = [
+    [report.activationsStamped, "send", "sends"],
+    [report.responsesStamped, "answer", "answers"],
+    [report.teamMembershipsStamped, "team place", "team places"],
+    [report.driverProfilesStamped, "driver profile", "driver profiles"],
+    [report.carSeatsStamped, "car seat", "car seats"],
+  ];
+  const moved = counted.filter(([count]) => count > 0);
+  const total = moved.reduce((sum, [count]) => sum + count, 0);
+  return (
+    <Alert variant="success">
+      <CircleCheck aria-hidden />
+      <span>
+        The camp is in <strong>{report.year}</strong>.{" "}
+        {moved.length > 0
+          ? `${sentenceList(
+              moved.map(([count, one, many]) => plural(count, one, many)),
+            )} already on file ${total === 1 ? "is" : "are"} now filed under it.`
+          : "Everything from here is filed under it."}
+      </span>
+    </Alert>
+  );
 }
 
 /** One bucket of the plan: a heading, a plain sentence, then the list. */
@@ -135,10 +209,96 @@ function PlanSection({
   );
 }
 
-export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
+/**
+ * The first screen: a camp that has never said what year it is. Confirming
+ * writes the founding year AND stamps it onto everything already on file, in
+ * one transaction — so it asks for the year the camp is in NOW, not the one it
+ * is moving to.
+ */
+function FoundingYearForm({
+  onFounded,
+}: {
+  onFounded: (report: FoundingReportView) => void;
+}) {
+  const router = useRouter();
+  const [year, setYear] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await setFoundingYearAction({ year: Number(year) });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      onFounded(result.report);
+      toast.success(`The camp is in ${result.report.year}`);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {error && (
+        <Alert variant="error">
+          <TriangleAlert aria-hidden />
+          <span>{error}</span>
+        </Alert>
+      )}
+
+      <Card className="flex flex-col gap-4 p-4">
+        <SectionHeader
+          as="h2"
+          title="What year is it?"
+          description="Camp 404 files everything under a year — every questionnaire sent, every answer given. It doesn't know which year this is yet, so nothing else has one either. Tell it, and everything already on file is filed under that year."
+        />
+
+        <InputField
+          label="This year"
+          helper="Four digits, the year the camp is in right now. For example 2026."
+          value={year}
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={4}
+          autoFocus
+          onChange={(event) => setYear(digits(event.target.value))}
+        />
+
+        <p className="text-caption text-muted-foreground">
+          Nothing is deleted and nobody is asked anything again. This only says
+          which year the camp is in. Next year you come back here and say so.
+        </p>
+
+        <Button
+          type="button"
+          onClick={save}
+          disabled={pending || !isYear(year)}
+        >
+          {pending && <Loader2 aria-hidden className="size-4 animate-spin" />}
+          {isYear(year) ? `The camp is in ${year}` : "Type the year"}
+        </Button>
+      </Card>
+    </div>
+  );
+}
+
+/** The plan, the confirm form, and the receipt — for a camp that has a year. */
+function AdvanceYearPanel({
+  plan,
+  from,
+  founded,
+}: {
+  plan: RolloverPlanView;
+  from: CycleView;
+  founded: FoundingReportView | null;
+}) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
-  const [label, setLabel] = useState("");
+  const [year, setYear] = useState(
+    plan.suggestedYear === null ? "" : String(plan.suggestedYear),
+  );
   const [confirm, setConfirm] = useState("");
   const [resetDues, setResetDues] = useState(true);
   const [announce, setAnnounce] = useState(false);
@@ -148,18 +308,20 @@ export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
   const [report, setReport] = useState<RolloverReportView | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const trimmedLabel = label.trim();
+  // A year only goes forwards. Refused here as well as on the server, because
+  // catching it in the box is kinder than catching it in a round-trip.
+  const tooEarly = isYear(year) && Number(year) <= from.year;
   const announcementReady =
     !announce || (announceTitle.trim() !== "" && announceBody.trim() !== "");
   const canAdvance =
-    trimmedLabel !== "" && confirm.trim() === trimmedLabel && announcementReady;
+    isYear(year) && !tooEarly && confirm === year && announcementReady;
 
   function advance() {
     setError(null);
     startTransition(async () => {
       const result = await advanceCycleAction({
-        label,
-        confirm,
+        year: Number(year),
+        confirm: Number(confirm),
         // The dues lever only exists when there is something to clear, so it
         // can never be sent as a stray true on a camp with no dues ledger.
         resetDues: plan.duesPaidCount > 0 ? resetDues : false,
@@ -173,7 +335,7 @@ export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
       }
       setReport(result.report);
       setConfirming(false);
-      toast.success(`The camp is now in ${result.report.to.label}`);
+      toast.success(`The camp is now in ${result.report.to.year}`);
       // Re-read the plan behind the receipt, so dismissing it shows the new
       // state rather than the one that was just executed.
       router.refresh();
@@ -182,7 +344,7 @@ export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
 
   function startOver() {
     setReport(null);
-    setLabel("");
+    setYear("");
     setConfirm("");
     setAnnounce(false);
     setAnnounceTitle("");
@@ -197,7 +359,7 @@ export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
         <Alert variant="success">
           <CircleCheck aria-hidden />
           <span>
-            The camp is now in <strong>{report.to.label}</strong>. Nothing was
+            The camp is now in <strong>{report.to.year}</strong>. Nothing was
             deleted — every previous year&apos;s answers are still readable.
           </span>
         </Alert>
@@ -206,7 +368,11 @@ export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
           <SectionHeader
             as="h2"
             title="What just happened"
-            description={`${report.plan.from.label} is closed. ${report.to.label} is now the year everything new is filed under.`}
+            description={
+              report.plan.from
+                ? `${report.plan.from.year} is closed. ${report.to.year} is now the year everything new is filed under.`
+                : `${report.to.year} is now the year everything new is filed under.`
+            }
           />
           <ul className="flex flex-col gap-2 text-sm">
             {report.reGated.map((entry) => (
@@ -264,6 +430,8 @@ export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
   // --- The plan, and the confirm form beneath it (§8.1/§8.2) ---------------
   return (
     <div className="flex flex-col gap-4">
+      {founded && <FoundedNotice report={founded} />}
+
       {error && (
         <Alert variant="error">
           <TriangleAlert aria-hidden />
@@ -274,20 +442,18 @@ export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
       <Card className="flex flex-col gap-1 p-4">
         <div className="flex items-center gap-2">
           <CalendarClock aria-hidden className="size-4 text-primary" />
-          <h2 className="text-lg font-semibold">
-            You&apos;re in {plan.from.label}
-          </h2>
+          <h2 className="text-lg font-semibold">You&apos;re in {from.year}</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          That&apos;s year {plan.from.number}. Starting a new year makes it year{" "}
-          {plan.toNumber}. Everything below is what would happen — nothing has
-          changed yet.
+          Everything sent and answered right now is filed under {from.year}.
+          Starting a new year files it under the next one instead. Everything
+          below is what would happen — nothing has changed yet.
         </p>
       </Card>
 
       <PlanSection
         title="Will be asked again"
-        summary={`Each one starts on a blank form. Everyone's ${plan.from.label} answers stay readable.`}
+        summary={`Each one starts on a blank form. Everyone's ${from.year} answers stay readable.`}
         entries={plan.reGate}
         showCounts
         icon={<RefreshCw className="size-4" />}
@@ -336,28 +502,37 @@ export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
           <SectionHeader
             as="h3"
             title="Start a new year"
-            description="Name the new year, then type the name again to confirm. That name is what everyone will see."
+            description="Type the year the camp is moving to, then type it again to confirm."
           />
 
           <InputField
-            label="Name the new year"
-            helper="For example 2027, or AfrikaBurn 2027."
-            value={label}
-            maxLength={60}
+            label="The new year"
+            helper={`Usually ${from.year + 1}. Type a later one if the camp skipped a burn.`}
+            error={
+              tooEarly
+                ? `The camp is already in ${from.year}. A new year has to be later.`
+                : undefined
+            }
+            value={year}
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={4}
             autoFocus
-            onChange={(event) => setLabel(event.target.value)}
+            onChange={(event) => setYear(digits(event.target.value))}
           />
 
           <InputField
             label={
-              trimmedLabel
-                ? `Type ${trimmedLabel} again to confirm`
-                : "Type the name again to confirm"
+              isYear(year) && !tooEarly
+                ? `Type ${year} again to confirm`
+                : "Type the year again to confirm"
             }
             value={confirm}
-            maxLength={60}
-            disabled={trimmedLabel === ""}
-            onChange={(event) => setConfirm(event.target.value)}
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={4}
+            disabled={!isYear(year) || tooEarly}
+            onChange={(event) => setConfirm(digits(event.target.value))}
           />
 
           {plan.duesPaidCount > 0 && (
@@ -427,7 +602,7 @@ export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
               {pending && (
                 <Loader2 aria-hidden className="size-4 animate-spin" />
               )}
-              Start {trimmedLabel || "the new year"}
+              Start {isYear(year) && !tooEarly ? year : "the new year"}
             </Button>
             <Button
               type="button"
@@ -445,4 +620,20 @@ export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
       )}
     </div>
   );
+}
+
+export function RolloverPanel({ plan }: { plan: RolloverPlanView }) {
+  // Held here rather than in the founding form so it survives the branch flip:
+  // router.refresh() lands a plan WITH a year, and the notice stays on screen
+  // above the rollover plan instead of vanishing at the moment it's earned.
+  const [founded, setFounded] = useState<FoundingReportView | null>(null);
+
+  if (plan.from === null) {
+    return founded ? (
+      <FoundedNotice report={founded} />
+    ) : (
+      <FoundingYearForm onFounded={setFounded} />
+    );
+  }
+  return <AdvanceYearPanel plan={plan} from={plan.from} founded={founded} />;
 }
