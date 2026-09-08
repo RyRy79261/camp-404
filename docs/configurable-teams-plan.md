@@ -3,6 +3,18 @@
 Status: **parked before implementation.** This captures the design/mapping
 output so the work can resume cleanly. No feature code is written yet.
 
+> **[CORRECTION 2026-09-09]** The status above is stale — the work resumed and
+> **Phases 1–3 shipped**. Phase 1: the config layer lives in
+> `packages/db/src/camp-config.ts` (`TeamsConfig`, `activeTeams`,
+> `getTeamsConfig`, `mutateTeamsConfig`) over the seeded `campSettings.config`
+> jsonb column in `packages/db/src/schema.ts`. Phase 2: the captain editor is
+> `apps/web/app/captains/camp-settings/` (`team-settings-manager.tsx` +
+> `actions.ts`). Phase 3: the questionnaire is config-driven —
+> `apps/web/lib/questionnaire.ts` resolves the team-bound anchors
+> (`TEAM_INTERESTS_PAGE_ID`, `TEAM_LEAD_QUESTION_ID`) from the live config at
+> read time. **Phase 4 (enum growth) remains unstarted**, on demand. Read the
+> phase notes below as the record of the plan, not of the current state.
+
 ## Goal
 
 Move the camp's team list out of hardcoded constants into editable config,

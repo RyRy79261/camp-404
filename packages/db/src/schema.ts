@@ -1186,7 +1186,7 @@ export const auditLog = pgTable(
     }),
     action: text("action").notNull(),
     target: text("target"),
-    metadata: jsonb("metadata"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (a) => ({

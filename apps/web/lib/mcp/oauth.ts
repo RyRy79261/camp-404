@@ -1,4 +1,4 @@
-import { createHttpDb, createPooledDb } from "@camp404/db";
+import { createHttpDb, withTransaction } from "@camp404/db";
 import * as schema from "@camp404/db/schema";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { generateOpaqueToken, sha256, verifyPkce } from "./tokens";
@@ -160,42 +160,37 @@ export async function consumeAuthCode(input: {
   redirectUri: string;
   codeVerifier: string;
 }): Promise<ConsumedAuthCode | null> {
-  const { db, pool } = createPooledDb();
-  try {
-    return await db.transaction(async (tx) => {
-      const [row] = await tx
-        .select()
-        .from(schema.mcpAuthCodes)
-        .where(
-          and(
-            eq(schema.mcpAuthCodes.code, input.code),
-            eq(schema.mcpAuthCodes.clientId, input.clientId),
-            isNull(schema.mcpAuthCodes.consumedAt),
-            gt(schema.mcpAuthCodes.expiresAt, new Date()),
-          ),
-        )
-        .limit(1);
-      if (!row) return null;
-      if (row.redirectUri !== input.redirectUri) return null;
-      if (!verifyPkce(row.codeChallenge, row.codeChallengeMethod, input.codeVerifier)) {
-        return null;
-      }
-      const updated = await tx
-        .update(schema.mcpAuthCodes)
-        .set({ consumedAt: new Date() })
-        .where(
-          and(
-            eq(schema.mcpAuthCodes.code, input.code),
-            isNull(schema.mcpAuthCodes.consumedAt),
-          ),
-        )
-        .returning({ code: schema.mcpAuthCodes.code });
-      if (updated.length === 0) return null; // raced
-      return { userId: row.userId, scope: row.scope };
-    });
-  } finally {
-    await pool.end();
-  }
+  return await withTransaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(schema.mcpAuthCodes)
+      .where(
+        and(
+          eq(schema.mcpAuthCodes.code, input.code),
+          eq(schema.mcpAuthCodes.clientId, input.clientId),
+          isNull(schema.mcpAuthCodes.consumedAt),
+          gt(schema.mcpAuthCodes.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    if (row.redirectUri !== input.redirectUri) return null;
+    if (!verifyPkce(row.codeChallenge, row.codeChallengeMethod, input.codeVerifier)) {
+      return null;
+    }
+    const updated = await tx
+      .update(schema.mcpAuthCodes)
+      .set({ consumedAt: new Date() })
+      .where(
+        and(
+          eq(schema.mcpAuthCodes.code, input.code),
+          isNull(schema.mcpAuthCodes.consumedAt),
+        ),
+      )
+      .returning({ code: schema.mcpAuthCodes.code });
+    if (updated.length === 0) return null; // raced
+    return { userId: row.userId, scope: row.scope };
+  });
 }
 
 // --- Access + refresh tokens --------------------------------------------
@@ -244,51 +239,46 @@ export async function rotateRefreshToken(input: {
   refreshToken: string;
   clientId: string;
 }): Promise<IssuedTokens | null> {
-  const { db, pool } = createPooledDb();
   const refreshHash = sha256(input.refreshToken);
   const now = new Date();
 
-  try {
-    return await db.transaction(async (tx) => {
-      const revoked = await tx
-        .update(schema.mcpAccessTokens)
-        .set({ revokedAt: now })
-        .where(
-          and(
-            eq(schema.mcpAccessTokens.refreshTokenHash, refreshHash),
-            eq(schema.mcpAccessTokens.clientId, input.clientId),
-            isNull(schema.mcpAccessTokens.revokedAt),
-            gt(schema.mcpAccessTokens.refreshExpiresAt, now),
-          ),
-        )
-        .returning({
-          userId: schema.mcpAccessTokens.userId,
-          scope: schema.mcpAccessTokens.scope,
-        });
-      const old = revoked[0];
-      if (!old) return null; // unknown / expired / already rotated
-
-      const access = generateOpaqueToken(32);
-      const refresh = generateOpaqueToken(32);
-      await tx.insert(schema.mcpAccessTokens).values({
-        tokenHash: sha256(access),
-        refreshTokenHash: sha256(refresh),
-        clientId: input.clientId,
-        userId: old.userId,
-        scope: old.scope,
-        expiresAt: new Date(now.getTime() + ACCESS_TOKEN_TTL_SEC * 1000),
-        refreshExpiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_SEC * 1000),
+  return await withTransaction(async (tx) => {
+    const revoked = await tx
+      .update(schema.mcpAccessTokens)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(schema.mcpAccessTokens.refreshTokenHash, refreshHash),
+          eq(schema.mcpAccessTokens.clientId, input.clientId),
+          isNull(schema.mcpAccessTokens.revokedAt),
+          gt(schema.mcpAccessTokens.refreshExpiresAt, now),
+        ),
+      )
+      .returning({
+        userId: schema.mcpAccessTokens.userId,
+        scope: schema.mcpAccessTokens.scope,
       });
+    const old = revoked[0];
+    if (!old) return null; // unknown / expired / already rotated
 
-      return {
-        accessToken: access,
-        refreshToken: refresh,
-        expiresIn: ACCESS_TOKEN_TTL_SEC,
-        refreshExpiresIn: REFRESH_TOKEN_TTL_SEC,
-        scope: old.scope,
-      };
+    const access = generateOpaqueToken(32);
+    const refresh = generateOpaqueToken(32);
+    await tx.insert(schema.mcpAccessTokens).values({
+      tokenHash: sha256(access),
+      refreshTokenHash: sha256(refresh),
+      clientId: input.clientId,
+      userId: old.userId,
+      scope: old.scope,
+      expiresAt: new Date(now.getTime() + ACCESS_TOKEN_TTL_SEC * 1000),
+      refreshExpiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_SEC * 1000),
     });
-  } finally {
-    await pool.end();
-  }
+
+    return {
+      accessToken: access,
+      refreshToken: refresh,
+      expiresIn: ACCESS_TOKEN_TTL_SEC,
+      refreshExpiresIn: REFRESH_TOKEN_TTL_SEC,
+      scope: old.scope,
+    };
+  });
 }
