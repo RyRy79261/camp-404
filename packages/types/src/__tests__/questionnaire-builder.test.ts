@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BuilderQuestionnaire,
+  boundDraftResponses,
   classifyChange,
   evalVisibleIf,
   isBuilderDefinition,
@@ -141,32 +142,115 @@ describe("validateBuilderResponses", () => {
     }
   });
 
+  // `team` (short_text, maxLength 120) and `crew` (single_select) are both
+  // hidden while `lead` !== true — the branch that skips required checks and
+  // retains whatever the client sent under those ids.
+  const gated = build({
+    version: "1",
+    title: "T",
+    pages: [
+      {
+        id: "p1",
+        type: "question",
+        title: "Gated",
+        blocks: [
+          {
+            kind: "question",
+            question: { id: "lead", kind: "boolean", prompt: "Lead?", required: true },
+          },
+          {
+            kind: "question",
+            question: {
+              id: "team",
+              kind: "short_text",
+              prompt: "Team",
+              required: true,
+              maxLength: 120,
+            },
+            visibleIf: { fieldId: "lead", op: "eq", value: true },
+          },
+          {
+            kind: "question",
+            question: {
+              id: "crew",
+              kind: "single_select",
+              prompt: "Crew",
+              required: false,
+              options: [
+                { value: "kitchen", label: "Kitchen" },
+                { value: "build", label: "Build" },
+              ],
+            },
+            visibleIf: { fieldId: "lead", op: "eq", value: true },
+          },
+        ],
+      },
+    ],
+  });
+
   it("skips required checks for fields hidden by visibleIf, retaining their value", () => {
-    const gated = build({
-      version: "1",
-      title: "T",
-      pages: [
-        {
-          id: "p1",
-          type: "question",
-          title: "Gated",
-          blocks: [
-            {
-              kind: "question",
-              question: { id: "lead", kind: "boolean", prompt: "Lead?", required: true },
-            },
-            {
-              kind: "question",
-              question: { id: "team", kind: "short_text", prompt: "Team", required: true },
-              visibleIf: { fieldId: "lead", op: "eq", value: true },
-            },
-          ],
-        },
-      ],
-    });
-    // `team` is hidden because `lead` !== true → its required check is skipped.
+    // `team` is hidden because `lead` !== true → its required check is skipped,
+    // and with nothing sent for it there is nothing to retain.
     const res = validateBuilderResponses(gated, { lead: false });
     expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.responses).toEqual({ lead: false });
+    }
+  });
+
+  it("retains a hidden field value that is still valid", () => {
+    const res = validateBuilderResponses(gated, { lead: false, team: "Kitchen" });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.responses.team).toBe("Kitchen");
+  });
+
+  it("drops a hidden field value that is not a legal answer for that field", () => {
+    // REFUSED CASE: `team` is hidden, so nothing validates it on the old code
+    // path — a hand-made request could smuggle 5 KB past a maxLength of 120.
+    const res = validateBuilderResponses(gated, {
+      lead: false,
+      team: "x".repeat(5000),
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect("team" in res.responses).toBe(false);
+  });
+
+  it("drops a hidden select value that is not one of its options", () => {
+    // REFUSED CASE: option allow-lists are the only constraint on select
+    // values, and the hidden branch used to bypass them entirely.
+    const res = validateBuilderResponses(gated, { lead: false, crew: "sound" });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect("crew" in res.responses).toBe(false);
+  });
+});
+
+describe("boundDraftResponses", () => {
+  it("drops keys not in the definition", () => {
+    // REFUSED CASE: a draft save accepts whatever the client posts, so the
+    // allow-list is the only thing keeping foreign keys out of the JSONB.
+    const res = boundDraftResponses({ a: 1, unknown: "y", polluted: "x" }, ["a"]);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.responses).toEqual({ a: 1 });
+  });
+
+  it("rejects an oversized draft", () => {
+    // REFUSED CASE: one allowed key holding ~200 KB, past the 128 KB cap.
+    const res = boundDraftResponses({ a: "x".repeat(200 * 1024) }, ["a"]);
+    expect(res.ok).toBe(false);
+  });
+
+  it("rejects a structurally malformed payload", () => {
+    // REFUSED CASE: nested objects are not a legal response value, and the
+    // onboarding draft path had no equivalent check at all.
+    const res = boundDraftResponses({ a: { nested: true } }, ["a"]);
+    expect(res.ok).toBe(false);
+  });
+
+  it("accepts an incomplete draft", () => {
+    // The resume guarantee: a draft may leave required answers absent.
+    const res = boundDraftResponses({ a: "partial" }, ["a", "b"]);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.responses).toEqual({ a: "partial" });
   });
 });
 

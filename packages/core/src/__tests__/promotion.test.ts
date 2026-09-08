@@ -3,6 +3,7 @@ import type { PromotionRequestStatus } from "@camp404/types";
 
 import {
   canDecidePromotion,
+  canLeaveCamp,
   canSendPromotion,
   nextPromotionStatus,
   promotionStepState,
@@ -251,5 +252,41 @@ describe("promotionStepState", () => {
       sent: true,
       accepted: false,
     });
+  });
+});
+
+// The camp must never lose its last captain: /setup latches shut after
+// bootstrap, there is no demotion path, and the admin CLI refuses to mint a
+// captain-assigning invite without a captain to attribute it to. An erased sole
+// captain is therefore unrecoverable without hand SQL.
+describe("canLeaveCamp", () => {
+  it("refuses the sole captain", () => {
+    expect(canLeaveCamp({ isCaptain: true, captainCount: 1 })).toEqual({
+      ok: false,
+      reason: "sole_captain",
+    });
+  });
+
+  it("refuses a captain on an already-stranded camp (count 0)", () => {
+    // A count below 1 means the caller is not even in the count — a state that
+    // should never happen, and the one where letting them leave is worst.
+    expect(canLeaveCamp({ isCaptain: true, captainCount: 0 })).toEqual({
+      ok: false,
+      reason: "sole_captain",
+    });
+  });
+
+  it("allows a captain when another captain remains", () => {
+    expect(canLeaveCamp({ isCaptain: true, captainCount: 2 })).toEqual({
+      ok: true,
+    });
+  });
+
+  it("always allows a member, whatever the captain count", () => {
+    for (const captainCount of [0, 1, 2]) {
+      expect(canLeaveCamp({ isCaptain: false, captainCount })).toEqual({
+        ok: true,
+      });
+    }
   });
 });

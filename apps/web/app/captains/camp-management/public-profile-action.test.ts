@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+// Type-only, so it is erased before the vi.mock factories hoist above it.
+import type * as IdDocumentsModule from "@camp404/db/id-documents";
 
 // getPublicMemberProfileAction — the member-facing public card. Gated to approved
 // camp members (NOT captains); returns an allowlisted projection. The pure
@@ -19,8 +21,17 @@ vi.mock("@/lib/promotion", () => ({
   decideCaptainPromotion: vi.fn(),
 }));
 vi.mock("@camp404/db/roster", () => ({ getCampMemberDetail: vi.fn() }));
-vi.mock("@camp404/db/crypto", () => ({ decryptOrNull: vi.fn(() => null) }));
-vi.mock("@camp404/db/id-documents", () => ({ mergeIdNumber: vi.fn(() => ({})) }));
+vi.mock("@camp404/db/crypto", () => ({
+  decryptOrNull: vi.fn(() => null),
+  decryptField: vi.fn(() => ({ state: "absent", value: null })),
+}));
+vi.mock("@camp404/db/id-documents", async (importOriginal) => ({
+  // Spread the real module: actions.ts also reads ID_UNREADABLE_LABEL from
+  // here, and a factory that omits it throws the moment a test drives
+  // decryptField to "unreadable".
+  ...(await importOriginal<typeof IdDocumentsModule>()),
+  mergeIdNumber: vi.fn(() => ({})),
+}));
 vi.mock("@/lib/questionnaire-config", () => ({
   getQuestionnaireForResponses: vi.fn(),
 }));
@@ -70,6 +81,12 @@ describe("getPublicMemberProfileAction", () => {
       ok: true,
       bio: "Darkroom in Cape Town.",
       contribution: "Analog photo lab.",
+    });
+    // The privacy boundary is the SELECT, not the projection: this path opts
+    // out at the call, so the ID ciphertext never leaves Postgres for a
+    // member-facing request.
+    expect(getCampMemberDetail).toHaveBeenCalledExactlyOnceWith("target-1", {
+      includeIdDocuments: false,
     });
   });
 
@@ -140,5 +157,10 @@ describe("getPublicMemberProfileAction", () => {
     const res = await getPublicMemberProfileAction("target-1");
 
     expect(res).toEqual({ ok: true, bio: "Bio.", contribution: "Ideas." });
+    // A captain arriving via the PUBLIC action doesn't widen the fetch either —
+    // the opt-in lives on getMemberDetailAction, not on the viewer's rank.
+    expect(getCampMemberDetail).toHaveBeenCalledExactlyOnceWith("target-1", {
+      includeIdDocuments: false,
+    });
   });
 });

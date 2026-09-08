@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+// Type-only, so it is erased before the vi.mock factories hoist above it.
+import type * as IdDocumentsModule from "@camp404/db/id-documents";
 
 // Unit tests for sendCaptainPromotionAction (captain/roster side). The pure
 // canSendPromotion guard is left REAL (exhaustively tested in @camp404/core);
@@ -18,8 +20,17 @@ vi.mock("@/lib/promotion", () => ({
   decideCaptainPromotion: vi.fn(),
 }));
 vi.mock("@camp404/db/roster", () => ({ getCampMemberDetail: vi.fn() }));
-vi.mock("@camp404/db/crypto", () => ({ decryptOrNull: vi.fn() }));
-vi.mock("@camp404/db/id-documents", () => ({ mergeIdNumber: vi.fn() }));
+vi.mock("@camp404/db/crypto", () => ({
+  decryptOrNull: vi.fn(),
+  decryptField: vi.fn(() => ({ state: "absent", value: null })),
+}));
+vi.mock("@camp404/db/id-documents", async (importOriginal) => ({
+  // Spread the real module: actions.ts also reads ID_UNREADABLE_LABEL from
+  // here, and a factory that omits it throws the moment a test drives
+  // decryptField to "unreadable".
+  ...(await importOriginal<typeof IdDocumentsModule>()),
+  mergeIdNumber: vi.fn(),
+}));
 vi.mock("@/lib/member-detail", () => ({ presentMemberDetail: vi.fn() }));
 vi.mock("@/lib/questionnaire-config", () => ({
   getQuestionnaireForResponses: vi.fn(),
@@ -78,6 +89,12 @@ describe("sendCaptainPromotionAction", () => {
       requestedByUserId: CAPTAIN,
     });
     expect(revalidatePath).toHaveBeenCalledWith("/captains/camp-management");
+    // Only `target.rank` is read here, so this path must not opt into the ID
+    // ciphertext — the data layer's default (exclude) has to stay in force.
+    expect(getCampMemberDetail).toHaveBeenCalledExactlyOnceWith("member-1");
+    expect(
+      vi.mocked(getCampMemberDetail).mock.calls[0]![1]?.includeIdDocuments,
+    ).not.toBe(true);
   });
 
   it("refuses a viewer who isn't camp-active yet", async () => {
@@ -107,6 +124,22 @@ describe("sendCaptainPromotionAction", () => {
     const res = await sendCaptainPromotionAction("member-1");
 
     expect(res).toEqual({ ok: false, error: "Captain access only." });
+    expect(sendCaptainPromotion).not.toHaveBeenCalled();
+  });
+
+  it("refuses a captain still awaiting approval", async () => {
+    signInAsCaptain();
+    targetRank("member");
+    vi.mocked(isApproved).mockReturnValue(false);
+
+    const res = await sendCaptainPromotionAction("member-1");
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Your account is still awaiting approval.",
+    });
+    // A pending captain must not be able to manufacture more of its own kind.
+    expect(getCampMemberDetail).not.toHaveBeenCalled();
     expect(sendCaptainPromotion).not.toHaveBeenCalled();
   });
 
@@ -202,6 +235,26 @@ describe("cancelCaptainPromotionAction", () => {
     const res = await cancelCaptainPromotionAction("req-1");
 
     expect(res).toEqual({ ok: false, error: "Captain access only." });
+    expect(getPromotionRequestById).not.toHaveBeenCalled();
+    expect(decideCaptainPromotion).not.toHaveBeenCalled();
+  });
+
+  it("refuses a captain still awaiting approval", async () => {
+    signInAsCaptain();
+    vi.mocked(isApproved).mockReturnValue(false);
+    vi.mocked(getPromotionRequestById).mockResolvedValue({
+      id: "req-1",
+      status: "sent",
+      targetUserId: "member-1",
+      requestedByUserId: CAPTAIN,
+    } as never);
+
+    const res = await cancelCaptainPromotionAction("req-1");
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Your account is still awaiting approval.",
+    });
     expect(getPromotionRequestById).not.toHaveBeenCalled();
     expect(decideCaptainPromotion).not.toHaveBeenCalled();
   });

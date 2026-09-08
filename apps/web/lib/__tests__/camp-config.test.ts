@@ -212,3 +212,38 @@ describe("teamLabelMap", () => {
     expect(teamLabelMap(cfg)).toEqual({ kitchen: "Cuisine", old: "Old" });
   });
 });
+
+describe("the config transforms preserve unrelated top-level keys", () => {
+  // `camp_settings.config` is one JSONB column and `teams` is only the first
+  // thing to live in it. A transform that rebuilds the object from a bare
+  // `{ teams }` literal silently discards everything else — so relabelling a
+  // team would wipe unrelated camp config. Latent today; load-bearing the
+  // moment a second key exists.
+  const withExtra = {
+    teams: [
+      { key: "kitchen", label: "Kitchen", order: 0, archived: false },
+      { key: "build", label: "Build", order: 1, archived: false },
+    ],
+    // Stand-in for any future sibling key.
+    unrelated: { keep: "me" },
+  } as unknown as TeamsConfig;
+
+  const extraOf = (cfg: TeamsConfig) =>
+    (cfg as unknown as { unrelated?: unknown }).unrelated;
+
+  it("renameTeam keeps them", () => {
+    expect(extraOf(renameTeam(withExtra, "kitchen", "Cuisine"))).toEqual({
+      keep: "me",
+    });
+  });
+
+  it("setTeamArchived keeps them", () => {
+    expect(extraOf(setTeamArchived(withExtra, "kitchen", true))).toEqual({
+      keep: "me",
+    });
+  });
+
+  it("moveTeam keeps them", () => {
+    expect(extraOf(moveTeam(withExtra, "build", "up"))).toEqual({ keep: "me" });
+  });
+});

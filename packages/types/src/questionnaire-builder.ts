@@ -270,8 +270,10 @@ export function regenerateBuilderIds(
 /**
  * Validate a response map against a builder questionnaire. Visibility-aware:
  * required checks are skipped for fields hidden by an unmet `visibleIf`, and a
- * hidden field's stored value is retained untouched (never pruned). Mirrors the
- * legacy `validateResponses` contract; reuses the per-question `validateOne`.
+ * hidden field's value is retained if it is a legal answer for that field
+ * (never pruned merely for being hidden, never trusted merely for being
+ * hidden). Mirrors the legacy `validateResponses` contract; reuses the
+ * per-question `validateOne`.
  */
 export function validateBuilderResponses(
   q: BuilderQuestionnaire,
@@ -294,8 +296,18 @@ export function validateBuilderResponses(
       const id = block.question.id;
       const hidden = !pageVisible || !isVisible(block.visibleIf, data);
       if (hidden) {
-        // Retain any previously-entered value untouched; do not validate.
-        if (data[id] !== undefined) responses[id] = data[id];
+        // Spec §5.1: a hidden field's value is RETAINED (re-showing the field
+        // restores what was typed) and never *required*. Retention is not a
+        // free pass though — `data` is the CLIENT payload, so without a type
+        // check a hand-made request could write arbitrary data under any
+        // hidden question's id straight into the responses JSONB. Reuse
+        // `validateOne` and keep the value only if it is a legal answer for
+        // this field; a failure here is silent (missing ⇒ nothing to retain,
+        // invalid ⇒ dropped), never a submit-blocking error.
+        const retained = validateOne(block.question, data[id]);
+        if (retained.ok && retained.value !== undefined) {
+          responses[id] = retained.value;
+        }
         continue;
       }
       const result = validateOne(block.question, data[id]);
@@ -308,6 +320,49 @@ export function validateBuilderResponses(
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, responses };
+}
+
+// --- Draft (non-final) response bounds ----------------------------------
+// A partial save can't be validated per-field — the respondent hasn't finished
+// — but it must still be bounded: a server action accepts whatever the client
+// posts and the result lands verbatim in a JSONB column. Serves BOTH the
+// builder and the legacy routes (it takes ids, not a questionnaire). Sized for
+// text answers; mirrors the hard-cap idiom in app/api/uploads/avatar/route.ts.
+// `.length` on the serialized JSON is UTF-16 units, not bytes — deliberately
+// dependency- and Buffer-free so this module stays browser-safe.
+const MAX_DRAFT_KEYS = 500;
+const MAX_DRAFT_JSON_LENGTH = 128 * 1024;
+
+/**
+ * Bound an unvalidated draft response map: structurally parse it, drop every
+ * key that is not a field id in `allowedIds`, and reject it outright past the
+ * key-count / serialized-length caps. Per-field and required checks
+ * deliberately do NOT run — a draft is allowed to be incomplete and wrong —
+ * but nothing outside the definition, and nothing unbounded, reaches storage.
+ */
+export function boundDraftResponses(
+  raw: unknown,
+  allowedIds: Iterable<string>,
+):
+  | { ok: true; responses: QuestionnaireResponses }
+  | { ok: false; error: string } {
+  const parsed = QuestionnaireResponses.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Malformed response payload" };
+  }
+  const entries = Object.entries(parsed.data);
+  if (entries.length > MAX_DRAFT_KEYS) {
+    return { ok: false, error: "Too many answers" };
+  }
+  const allowed = new Set(allowedIds);
+  const responses: QuestionnaireResponses = {};
+  for (const [key, value] of entries) {
+    if (allowed.has(key)) responses[key] = value;
+  }
+  if (JSON.stringify(responses).length > MAX_DRAFT_JSON_LENGTH) {
+    return { ok: false, error: "Answers are too large" };
+  }
   return { ok: true, responses };
 }
 

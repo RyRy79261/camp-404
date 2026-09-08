@@ -3,6 +3,7 @@ import type { CampMemberDetail } from "@camp404/db/roster";
 import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
 import { presentMemberDetail as presentWithCatalogue } from "@/lib/member-detail";
 import { buildQuestionnaire } from "@/lib/questionnaire";
+import { ID_UNREADABLE_LABEL, mergeIdNumber } from "@camp404/db/id-documents";
 
 // Phase 3: presentMemberDetail now takes the (config-built) catalogue so team
 // picks resolve to config labels. These tests build it from the seeded defaults
@@ -237,5 +238,38 @@ describe("presentMemberDetail — approval summary", () => {
       detail({ approvalStatus: "rejected", approvalDecidedByName: null }),
     );
     expect(m.approvalSummary).toBe("Rejected");
+  });
+});
+
+// A key rotation (or a corrupt column) leaves an ID ciphertext this deployment
+// cannot decrypt. The captain-facing projection must show that as a row saying
+// "unreadable" — never as no row at all, which reads as "never provided" and
+// sends a captain chasing a member for data already on file. See decryptField
+// in packages/db/src/crypto.ts.
+describe("presentMemberDetail — unreadable ID document", () => {
+  it("keeps the document-number row, carrying the unreadable marker", () => {
+    const m = presentMemberDetail(
+      detail({
+        responses: mergeIdNumber(
+          { "id.type": "passport" },
+          { idType: "passport", idNumber: ID_UNREADABLE_LABEL },
+        ),
+      }),
+    );
+    const items = m.profileSections.flatMap((s) => s.items);
+    expect(valueOf(items, "Document number")).toBe(ID_UNREADABLE_LABEL);
+  });
+
+  it("drops the row entirely when the merge saw a null number — the state this fix distinguishes", () => {
+    const m = presentMemberDetail(
+      detail({
+        responses: mergeIdNumber(
+          { "id.type": "passport" },
+          { idType: "passport", idNumber: null },
+        ),
+      }),
+    );
+    const items = m.profileSections.flatMap((s) => s.items);
+    expect(valueOf(items, "Document number")).toBeUndefined();
   });
 });

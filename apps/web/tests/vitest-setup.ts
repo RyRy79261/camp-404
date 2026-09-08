@@ -2,7 +2,13 @@
 // `canvas.getContext("2d")` inside an effect — without this stub, every
 // test that mounts the wizard logs an "Not implemented" warning. Returning
 // null is fine; the component already short-circuits when ctx is falsy.
-HTMLCanvasElement.prototype.getContext = (() => null) as never;
+// Guarded like every stub below it: this setup file runs for the node
+// environment too (a route test with a `@vitest-environment node` docblock),
+// where HTMLCanvasElement does not exist and an unguarded reference is a
+// ReferenceError before the first test runs.
+if (typeof HTMLCanvasElement !== "undefined") {
+  HTMLCanvasElement.prototype.getContext = (() => null) as never;
+}
 
 // JSDOM doesn't implement matchMedia. The Waveform reads it to honour
 // prefers-reduced-motion before starting its RAF loop; default to "motion
