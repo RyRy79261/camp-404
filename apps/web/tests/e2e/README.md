@@ -69,6 +69,15 @@ complete and jump straight to the gates that follow it (home vs.
 `/pending-approval`). The user row must exist first, so hit a gated page
 (e.g. `/`) once after login before calling it.
 
+> **[CORRECTION 2026-09-09]** "13-page" is stale (here and in the "Not
+> covered" list below): the catalogue in `apps/web/lib/questionnaire.ts`
+> builds **11** pages — `profile_photo`, `about_you`, `bio`, `burn_ideas`,
+> `team_interests_intro`, `team_interests`, `cooking_competency`,
+> `leadership_logistics`, `burn_history`, `burn_intent`, `dietary` (matching
+> the design's OB Step 01–11). Nothing else in this section changes: the
+> count is descriptive, and the specs still jump the wizard via the
+> `complete-onboarding` seam.
+
 > Note: the captains' camp-management roster (`getCampManagementRoster` /
 > `getCampMemberDetail`) reads the **real** Neon DB, not the in-memory
 > store, so the approve/reject UI isn't drivable under `E2E_TEST_MODE`.

@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// avatar-blob.ts is server-only; neutralize the import guard under vitest.
-vi.mock("server-only", () => ({}));
 vi.mock("@vercel/blob", () => ({ list: vi.fn(), del: vi.fn() }));
 
 import { deleteAvatarBlobs } from "@/lib/avatar-blob";

@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// feedback-ai.ts is server-only; neutralize the import guard under vitest.
-vi.mock("server-only", () => ({}));
 vi.mock("@/lib/anthropic", () => ({
   anthropic: vi.fn(),
   MODELS: { opus: "claude-opus-4-8", haiku: "claude-haiku-4-5-20251001" },

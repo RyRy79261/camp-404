@@ -57,3 +57,98 @@ export function sanitizeReportText(text: string, maxLength: number): string {
     .trim()
     .slice(0, maxLength);
 }
+
+// --- Secret scrubbing -----------------------------------------------------
+// `redactPii` catches secrets that LOOK like secrets (JWTs, `sk-…`, long
+// opaque runs). It cannot catch a value that looks ordinary — a short-ish
+// pgcrypto key, a comma-separated GOD_EMAILS list, a bare bot token. Those we
+// know by name, so we scrub them by name.
+
+/**
+ * The environment variables whose VALUES are secret. Camp 404's `process.env`
+ * surface is wider than this; everything left out is either public by design
+ * (`NEXT_PUBLIC_*`, `VERCEL_URL`), a mode flag (`NODE_ENV`, `CI`,
+ * `E2E_TEST_MODE`, `MOBILE_BUILD`, `NEXT_PHASE`, `NEXT_RUNTIME`,
+ * `CAPTURE_THEME`), or test plumbing (`PLAYWRIGHT_*`, `NEON_LOCAL_PROXY`) —
+ * redacting those would blank ordinary words like "production" or "1".
+ *
+ * core never reads `process.env` itself (see index.ts's dependency rule), so
+ * `redactSecrets` takes the env in as an argument.
+ */
+export const SECRET_ENV_KEYS = [
+  "ANTHROPIC_API_KEY",
+  "BLOB_READ_WRITE_TOKEN",
+  "CRON_SECRET",
+  "DATABASE_URL",
+  "FIREBASE_CLIENT_EMAIL",
+  "FIREBASE_PRIVATE_KEY",
+  "GITHUB_FEEDBACK_TOKEN",
+  "GOD_EMAILS",
+  "GROQ_API_KEY",
+  "INVITE_CODES",
+  "NEON_AUTH_COOKIE_SECRET",
+  "PGCRYPTO_KEY",
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_WEBHOOK_SECRET",
+] as const;
+
+export type SecretEnvKey = (typeof SECRET_ENV_KEYS)[number];
+
+/**
+ * Shortest env value we will scrub by literal match. A 2-character value ("hi",
+ * "1", a dev-stub key) occurs inside ordinary prose constantly, so redacting it
+ * would shred the surrounding text and tell the reader nothing. Below this
+ * length only the name-pass (`KEY=…`) applies.
+ */
+const MIN_SECRET_LENGTH = 8;
+
+const NAME_PASS = SECRET_ENV_KEYS.map(
+  (name) =>
+    [
+      name,
+      // `KEY=value`, `KEY: value`, `KEY="value"` — the shapes a secret takes
+      // when a stack trace, connection string or shell line is logged verbatim.
+      new RegExp(`(\\b${name}\\s*[=:]\\s*)(?:"[^"]*"|'[^']*'|\\S+)`, "g"),
+    ] as const,
+);
+
+/**
+ * Two-pass scrubber for text about to be logged or handed back to a caller
+ * (an error message, a stack trace, a cron response body).
+ *
+ * Pass 1 — value: replace every literal occurrence of a known secret's value.
+ * Longest value first, so a secret that contains a shorter one still wins.
+ * Pass 2 — name: replace whatever follows `KEY=` / `KEY:`, which catches a
+ * secret this process doesn't hold (a rotated key, another environment's).
+ *
+ * Idempotent: the replacement token carries no secret and the name-pass
+ * rewrites its own output to itself.
+ */
+export function redactSecrets(
+  text: string,
+  env: Record<string, string | undefined>,
+): string {
+  if (!text) return "";
+
+  let out = text;
+
+  const values = SECRET_ENV_KEYS.map((name) => ({ name, value: env[name] }))
+    .filter(
+      (entry): entry is { name: SecretEnvKey; value: string } =>
+        typeof entry.value === "string" &&
+        entry.value.length >= MIN_SECRET_LENGTH,
+    )
+    .sort((a, b) => b.value.length - a.value.length);
+
+  for (const { name, value } of values) {
+    // split/join, not RegExp — an env value can contain regex metacharacters
+    // (a DATABASE_URL is full of them) and must match literally.
+    out = out.split(value).join(`[redacted:${name}]`);
+  }
+
+  for (const [name, pattern] of NAME_PASS) {
+    out = out.replace(pattern, `$1[redacted:${name}]`);
+  }
+
+  return out;
+}

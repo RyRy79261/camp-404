@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { createHttpDb, createPooledDb } from "./index";
+import { createHttpDb, withTransaction } from "./index";
 import { campSettings } from "./schema";
 
 // Editable camp-wide config that hangs off the `camp_settings` singleton.
@@ -460,29 +460,24 @@ export function assertStableTeamKeys(
 export async function mutateTeamsConfig(
   transform: (current: TeamsConfig) => TeamsConfig,
 ): Promise<TeamsConfig> {
-  const { db, pool } = createPooledDb();
-  try {
-    return await db.transaction(async (tx) => {
-      // Ensure the singleton exists, then lock it for the read-modify-write.
-      await tx
-        .insert(campSettings)
-        .values({ id: true })
-        .onConflictDoNothing({ target: campSettings.id });
-      const [locked] = await tx
-        .select({ config: campSettings.config })
-        .from(campSettings)
-        .where(eq(campSettings.id, true))
-        .for("update");
-      const current = resolveTeamsConfig(locked?.config);
-      const next = transform(current);
-      assertStableTeamKeys(current, next);
-      await tx
-        .update(campSettings)
-        .set({ config: next, updatedAt: new Date() })
-        .where(eq(campSettings.id, true));
-      return next;
-    });
-  } finally {
-    await pool.end();
-  }
+  return await withTransaction(async (tx) => {
+    // Ensure the singleton exists, then lock it for the read-modify-write.
+    await tx
+      .insert(campSettings)
+      .values({ id: true })
+      .onConflictDoNothing({ target: campSettings.id });
+    const [locked] = await tx
+      .select({ config: campSettings.config })
+      .from(campSettings)
+      .where(eq(campSettings.id, true))
+      .for("update");
+    const current = resolveTeamsConfig(locked?.config);
+    const next = transform(current);
+    assertStableTeamKeys(current, next);
+    await tx
+      .update(campSettings)
+      .set({ config: next, updatedAt: new Date() })
+      .where(eq(campSettings.id, true));
+    return next;
+  });
 }

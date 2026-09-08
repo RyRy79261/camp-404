@@ -16,7 +16,8 @@
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
 //     (./invites)
 //   - text utils: initialsFrom (./text-utils)
-//   - text redaction: redactPii, sanitizeReportText (./text-redaction)
+//   - text redaction: redactPii, sanitizeReportText, redactSecrets +
+//     SECRET_ENV_KEYS (./text-redaction)
 //   - shake detector: createShakeDetector + ShakeSample/ShakeDetectorConfig
 //     (./shake); the React hook + DOM permission helpers stay in apps/web
 //   - id validation: validateIdNumber, IdValidationResult (./id-validation)
@@ -24,6 +25,8 @@
 //     promotionStepState, canLeaveCamp — the captain-handshake guards +
 //     state machine, and the sole-captain erasure guard
 //     (./promotion)
+//   - field privacy: ALWAYS_PRIVATE, SAFETY_VISIBLE, isFieldLocked,
+//     isSafetyVisible (./privacy)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -38,3 +41,4 @@ export * from "./text-redaction";
 export * from "./shake";
 export * from "./id-validation";
 export * from "./promotion";
+export * from "./privacy";
