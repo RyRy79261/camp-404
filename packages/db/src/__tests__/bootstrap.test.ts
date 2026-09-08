@@ -22,10 +22,15 @@ describe("getBootstrapState — captainCount", () => {
     expect((await getBootstrapState()).captainCount).toBe(1);
   });
 
-  it("does not count an erased sole captain", async () => {
+  it("does not count an erased captain", async () => {
+    // Two captains because sanitiseAccount now refuses the camp's last one
+    // (account.ts) — erasing the sole captain is the state this count exists
+    // to keep the camp out of, so it can no longer be reached through the
+    // erasure path.
     const db = h.db();
     const founder = await makeUser(db, { rank: "captain" });
-    expect((await getBootstrapState()).captainCount).toBe(1);
+    await makeUser(db, { rank: "captain" });
+    expect((await getBootstrapState()).captainCount).toBe(2);
 
     await sanitiseAccount(founder.id);
 
@@ -35,7 +40,7 @@ describe("getBootstrapState — captainCount", () => {
       .from(schema.users)
       .where(eq(schema.users.id, founder.id));
     expect(row?.sanitised).toBe(true);
-    expect((await getBootstrapState()).captainCount).toBe(0);
+    expect((await getBootstrapState()).captainCount).toBe(1);
   });
 
   it("does not count a tombstone that kept `captain` from before the fix", async () => {
@@ -103,7 +108,14 @@ describe("bootstrapFirstCaptain — the ghost-captain latch", () => {
     expect(first.ok).toBe(true);
     if (!first.ok) return;
 
-    await sanitiseAccount(first.userId);
+    // Strand the camp by hand. sanitiseAccount now refuses to erase the last
+    // captain, so the app can no longer produce this state — but a legacy
+    // tombstone from before that guard, or an operator with psql, still can,
+    // and the latch has to hold against it.
+    await db
+      .update(schema.users)
+      .set({ sanitised: true, rank: "member" })
+      .where(eq(schema.users.id, first.userId));
     expect((await getBootstrapState()).captainCount).toBe(0);
 
     const second = await bootstrapFirstCaptain({
