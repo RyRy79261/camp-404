@@ -1,6 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Question } from "@camp404/types";
+
+// `image` only. The field reads the activation off the route so the upload
+// route can resolve the question against THAT activation's pinned definition;
+// outside a route context `useParams()` is null, which is the burner-profile
+// shape. AvatarUpload is stubbed to the one thing under test here — the URL it
+// is handed; its own POST behaviour is covered in profile/__tests__.
+const route = vi.hoisted(() => ({
+  params: null as Record<string, string | string[]> | null,
+}));
+vi.mock("next/navigation", () => ({ useParams: () => route.params }));
+vi.mock("@camp404/ui/components/avatar-upload", () => ({
+  AvatarUpload: ({ uploadUrl }: { uploadUrl?: string }) => (
+    <div data-testid="upload" data-url={uploadUrl ?? "(component default)"} />
+  ),
+}));
 
 import { QuestionField } from "../questionnaire/question";
 
@@ -161,5 +176,65 @@ describe("QuestionField — slider (segmented)", () => {
     );
     fireEvent.click(screen.getByRole("radio", { name: "4" }));
     expect(onChange).toHaveBeenCalledWith(4);
+  });
+});
+
+const imageQuestion = (id: string): Question => ({
+  id,
+  kind: "image",
+  prompt: "Add a photo",
+  required: false,
+});
+
+const uploadUrl = () => screen.getByTestId("upload").getAttribute("data-url");
+
+describe("QuestionField — image upload endpoint", () => {
+  afterEach(() => {
+    cleanup();
+    route.params = null;
+  });
+
+  it("posts an ordinary image answer to the questionnaire route, by question id", () => {
+    render(
+      <QuestionField
+        question={imageQuestion("kitchen.setup_photo")}
+        value={undefined}
+        onChange={() => {}}
+      />,
+    );
+    expect(uploadUrl()).toBe(
+      "/api/uploads/questionnaire-image?question=kitchen.setup_photo",
+    );
+  });
+
+  it("names the activation when the runner is mounted on one", () => {
+    // Without this the upload route cannot tell WHICH questionnaire is being
+    // answered, so it can only authorize the burner profile's questions.
+    route.params = { activationId: "act-1" };
+    render(
+      <QuestionField
+        question={imageQuestion("gear.photo")}
+        value={undefined}
+        onChange={() => {}}
+      />,
+    );
+    expect(uploadUrl()).toBe(
+      "/api/uploads/questionnaire-image?question=gear.photo&activation=act-1",
+    );
+  });
+
+  it("keeps the burner profile photo on the avatar route, activation or not", () => {
+    // `profile.image` IS the member's profile photo (onboarding mirrors it onto
+    // users.profile_image_url), so it must never take the answers path — that
+    // was the defect 1cb5d30 fixed.
+    route.params = { activationId: "act-1" };
+    render(
+      <QuestionField
+        question={imageQuestion("profile.image")}
+        value={undefined}
+        onChange={() => {}}
+      />,
+    );
+    expect(uploadUrl()).toBe("(component default)");
   });
 });

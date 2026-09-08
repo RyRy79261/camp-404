@@ -1,7 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { validateResponses, type SaveResult } from "@camp404/types";
+import {
+  boundDraftResponses,
+  flattenQuestions,
+  validateResponses,
+  type SaveResult,
+} from "@camp404/types";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -30,20 +35,35 @@ export async function saveBurnerProfile(
     redirect("/signup/required");
   }
 
+  // Validate against ALL teams (incl. archived), so a team archived between
+  // render and submit doesn't make a just-picked team fail validation.
+  const questionnaire = await getQuestionnaireForResponses();
+
   // For non-final saves we tolerate missing required answers (the user is
   // still working through pages); for final submission we enforce everything.
+  // Either way what we PERSIST is the checked map, never the raw client
+  // object — matching the replay path in app/tools/forms/[key]/actions.ts.
+  let responses: Record<string, unknown>;
   if (final) {
-    // Validate against ALL teams (incl. archived), so a team archived between
-    // render and submit doesn't make a just-picked team fail validation.
-    const questionnaire = await getQuestionnaireForResponses();
     const result = validateResponses(questionnaire, rawResponses);
     if (!result.ok) return { ok: false, errors: result.errors };
+    responses = result.responses;
+  } else {
+    const draft = boundDraftResponses(
+      rawResponses,
+      flattenQuestions(questionnaire).map((q) => q.id),
+    );
+    if (!draft.ok) {
+      return {
+        ok: false,
+        errors: {
+          _form:
+            "We couldn't save that — your answers are unreadable or too large. Please reload and try again.",
+        },
+      };
+    }
+    responses = draft.responses;
   }
-
-  const responses =
-    rawResponses && typeof rawResponses === "object"
-      ? (rawResponses as Record<string, unknown>)
-      : {};
 
   try {
     // Split the sensitive government ID number out of the generic responses

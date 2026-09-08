@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import {
   QuestionnaireResponses,
+  boundDraftResponses,
+  flattenBuilderQuestions,
   validateBuilderResponses,
   type SaveResult,
 } from "@camp404/types";
@@ -23,12 +25,15 @@ import { nextGate } from "@/lib/required-actions";
 
 const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again — if it keeps happening, let a camp captain know.";
+const SAVE_REJECTED =
+  "We couldn't save that — your answers are unreadable or too large. Please reload and try again.";
 
 /**
  * Persist a builder questionnaire's responses for the signed-in member.
  * `activationId` is bound at the runner so the wizard keeps its (responses,
  * final) action shape. Re-verifies the access predicate on every call (never
- * trust the client), validates only on the final submit, upserts the
+ * trust the client), bounds every save against the pinned definition and runs
+ * the full per-field validator on the final submit, upserts the
  * latest-answer row, and on submit satisfies the required action and routes to
  * the next gate.
  */
@@ -72,18 +77,32 @@ export async function saveBuilderResponses(
   }
   const responses = parsed.data;
 
-  let toStore = responses;
+  // The version-pinned definition is now needed on EVERY save, not just the
+  // final one: a draft is bounded against ITS field ids below.
+  const definition = await getBuilderDefinition(
+    activation.questionnaireKey,
+    activation.version,
+  );
+  if (!definition) {
+    return { ok: false, errors: { _form: "This form is unavailable." } };
+  }
+
+  let toStore: QuestionnaireResponses;
   if (final) {
-    const definition = await getBuilderDefinition(
-      activation.questionnaireKey,
-      activation.version,
-    );
-    if (!definition) {
-      return { ok: false, errors: { _form: "This form is unavailable." } };
-    }
     const result = validateBuilderResponses(definition, responses);
     if (!result.ok) return { ok: false, errors: result.errors };
     toStore = result.responses;
+  } else {
+    // Non-final: no per-field / required checks — partial progress with empty
+    // requireds must resume — but the draft is restricted to the definition's
+    // own field ids and size-capped before it reaches the JSONB. (DEFERRED.md
+    // "Server-side validation": size cap + key allow-list on non-final saves.)
+    const draft = boundDraftResponses(
+      responses,
+      flattenBuilderQuestions(definition).map((q) => q.id),
+    );
+    if (!draft.ok) return { ok: false, errors: { _form: SAVE_REJECTED } };
+    toStore = draft.responses;
   }
 
   try {

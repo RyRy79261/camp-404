@@ -57,3 +57,15 @@ export async function runFirstTimeSetup(
   });
   return { ok: true };
 }
+
+/**
+ * How many real captains the camp has (erased tombstones and system actors
+ * excluded) — the data source for the sole-captain deletion guard. E2E test
+ * mode models no captains or latch, so report a count that cannot block (the
+ * guard only fires at <= 1).
+ */
+export async function countActiveCaptains(): Promise<number> {
+  if (isE2ETestMode()) return 2;
+  const state = await getBootstrapState();
+  return state.captainCount;
+}

@@ -69,7 +69,7 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
 - **MCP completion hooks** — `update_my_burner_profile` / `update_my_dietary_requirements` / `update_my_driver_profile` on `markComplete` should call `satisfyRequiredAction`. Prerequisite for removing the gate fallback. **[E]**
 - **Existing-member required_action backfill** — seed a `burner_profile` required_action for members created before E (new members are seeded at signup). **[E rollout]**
 - **Redirect-ladder consolidation** — migrate the ~8 other gated pages (`tools/*`, `family-tree`, `captains/*`) onto the shared `nextGate` gate; the captain-approval gate stays hardcoded by design. **[audit #7, E]**
-- **Server-side validation** — run `validateResponses`/`validateIdNumber` (size cap + key allow-list) on non-final questionnaire saves; move ID Luhn/format + DOB age checks server-side. **[audit #5]**
+- **Server-side validation** — the size cap + key allow-list on non-final questionnaire saves is **done** (`boundDraftResponses`, bounding both the builder and onboarding draft paths against the definition's own field ids). Still outstanding: move ID Luhn/format + DOB age checks server-side. **[audit #5]**
 - **`opt_in` activation scope** — pull-model audience (members self-select); currently error-gated in `openActivation`. **[E]**
 - **Captain activation compose UI** and **captain-initiated account erasure**. **[E, F]**
 - **Native push** — `@capacitor-firebase/messaging` client POSTing to the existing `/api/push/tokens` (no server change). Needs the mobile build (broken/deferred, Phase 7), the deployed API base URL, and an APNs key. **[D]**

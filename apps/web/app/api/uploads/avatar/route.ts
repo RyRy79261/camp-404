@@ -10,6 +10,15 @@ import { isE2ETestMode } from "@/lib/test-mode";
 // cap just guards against someone POSTing a raw file directly.
 const MAX_BYTES = 5 * 1024 * 1024;
 
+// Content types we will actually store. The client normalises to WebP
+// (lib/image.ts `cropResizeToSquare`), and a browser that can't encode WebP
+// falls back to PNG per the canvas spec — those two are the only types a
+// legitimate upload produces. An explicit allow-list rather than `image/*`
+// keeps script-bearing `image/svg+xml` out of the store: /api/avatar streams
+// blobs back same-origin with their stored content type, so a stored SVG
+// would execute in this app's origin when a member opens the link directly.
+const ALLOWED_TYPES = new Set(["image/webp", "image/png"]);
+
 export const runtime = "nodejs";
 
 /**
@@ -18,9 +27,9 @@ export const runtime = "nodejs";
  * rather than the raw blob URL. Profile photos are members-only: the blob
  * itself is unreadable without the store token, and the proxy route gates
  * access on an authenticated session. Auth + rate limiting mirror the voice
- * transcription route. In E2E test mode (or when the Blob token is absent)
- * we skip the network call and echo a deterministic proxy URL so tests and
- * local dev work without a configured Blob store.
+ * transcription route. In E2E test mode we skip the network call and echo a
+ * deterministic proxy URL so the suite runs without a Blob store; a missing
+ * store token in any other environment is a 501, not a fabricated success.
  */
 export async function POST(req: Request) {
   const user = await getAuthenticatedUser();
@@ -62,21 +71,35 @@ export async function POST(req: Request) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Missing `image` file" }, { status: 400 });
   }
-  if (!file.type.startsWith("image/")) {
-    return NextResponse.json({ error: "File must be image/*" }, { status: 415 });
+  if (!ALLOWED_TYPES.has(file.type)) {
+    return NextResponse.json(
+      { error: "Photo must be a WebP or PNG image" },
+      { status: 415 },
+    );
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ error: "Image too large" }, { status: 413 });
   }
 
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-
-  // Test mode / unconfigured store — don't hit the network. Return a stable
-  // proxy URL so the rest of the flow (persisting + rendering) still works.
-  if (isE2ETestMode() || !token) {
+  // E2E harness only — a deterministic stub with no network call.
+  // E2E_TEST_MODE is never set on a deployed environment (lib/test-mode.ts).
+  if (isE2ETestMode()) {
     return NextResponse.json({
       url: avatarProxyUrl(`avatars/${user.id}/test-avatar.webp`),
     });
+  }
+
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  // No Blob store configured — say so rather than echoing a proxy URL for a
+  // blob we never wrote. The client treats any 2xx as success and persists the
+  // URL to `users.profile_image_url`, where it 404s forever and the member's
+  // photo silently never appears. Same contract as the voice route, which
+  // reports "Voice not configured" instead of faking a transcript.
+  if (!token) {
+    return NextResponse.json(
+      { error: "Photo uploads aren't configured on this deployment." },
+      { status: 501 },
+    );
   }
 
   try {

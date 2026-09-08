@@ -103,6 +103,13 @@ export async function getTeamsConfig(): Promise<TeamsConfig> {
 // These are the ONLY edits Phase 2 allows: they never add or remove a team key
 // (a new key needs an enum migration — Phase 4). Each is pure so it's unit-
 // testable and can run identically against the DB row or the E2E test store.
+//
+// Each SPREADS the incoming config rather than returning a bare `{ teams }`
+// literal. `camp_settings.config` is a single JSONB column and `teams` is only
+// the first thing to live in it; a transform that rebuilds the object from
+// scratch silently discards every other top-level key, so relabelling a team
+// would wipe unrelated camp config. Latent while `teams` is the only key —
+// load-bearing the moment it is not.
 
 /** Rename one team's display label. Unknown key → config returned unchanged. */
 export function renameTeam(
@@ -111,6 +118,7 @@ export function renameTeam(
   label: string,
 ): TeamsConfig {
   return {
+    ...config,
     teams: config.teams.map((team) =>
       team.key === key ? { ...team, label } : team,
     ),
@@ -124,6 +132,7 @@ export function setTeamArchived(
   archived: boolean,
 ): TeamsConfig {
   return {
+    ...config,
     teams: config.teams.map((team) =>
       team.key === key ? { ...team, archived } : team,
     ),
@@ -148,7 +157,10 @@ export function moveTeam(
   const swapped = ordered[from]!;
   ordered[from] = ordered[to]!;
   ordered[to] = swapped;
-  return { teams: ordered.map((team, index) => ({ ...team, order: index })) };
+  return {
+    ...config,
+    teams: ordered.map((team, index) => ({ ...team, order: index })),
+  };
 }
 
 /** The sorted set of team keys, as a comparable string. */

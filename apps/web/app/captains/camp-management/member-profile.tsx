@@ -76,16 +76,24 @@ export function MemberProfile({
   const router = useRouter();
   const panelRef = useRef<HTMLElement>(null);
   const [detail, setDetail] = useState<DetailState>({ state: "loading" });
+  const [reloadToken, setReloadToken] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Fetch detail whenever a (new) row is selected; abandon a stale response if
-  // the captain has since clicked a different member.
+  // A new selection starts on a clean error slate. Deliberately NOT folded into
+  // the fetch effect below: a reload driven by a refused decision has to keep
+  // the error that caused it on screen.
+  useEffect(() => {
+    setActionError(null);
+  }, [row.id]);
+
+  // Fetch detail whenever a (new) row is selected, or `reloadToken` says the
+  // loaded copy is known-stale; abandon a stale response if the captain has
+  // since clicked a different member.
   useEffect(() => {
     let cancelled = false;
-    setActionError(null);
     setRejectOpen(false);
     setAssignOpen(false);
     setDetail({ state: "loading" });
@@ -114,7 +122,7 @@ export function MemberProfile({
     return () => {
       cancelled = true;
     };
-  }, [row.id]);
+  }, [row.id, reloadToken]);
 
   // Move focus into the panel on open (a11y); the island returns focus to the
   // triggering row on close.
@@ -128,6 +136,14 @@ export function MemberProfile({
       const res = await decideApprovalAction(row.id, decision);
       if (!res.ok) {
         setActionError(res.error);
+        // The decision may have lost the compare-and-set to another captain.
+        // `router.refresh()` re-renders the server components behind the panel
+        // but leaves this client component's `detail` untouched, so re-run the
+        // fetch too — otherwise `approvalStatus` stays "pending" and the panel
+        // keeps offering the decision that was just refused. Harmless for the
+        // other error branches, which reload an unchanged member.
+        setReloadToken((n) => n + 1);
+        router.refresh();
         return;
       }
       // Reflect the decision locally so the action buttons clear, then refresh

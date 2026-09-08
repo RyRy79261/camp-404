@@ -3,12 +3,29 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
 import * as schema from "@camp404/db/schema";
-import { decryptOrNull, encrypt } from "@camp404/db/crypto";
+import { decryptField, encrypt } from "@camp404/db/crypto";
 import { splitIdNumber, idColumnsFor } from "@camp404/db/id-documents";
 import { runTool, ToolError } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
 const MembershipTierEnum = z.enum(schema.membershipTierEnum.enumValues);
+
+/**
+ * How one optional encrypted-ID argument should be applied.
+ *
+ * The three states are what the tool's contract promises: omit a field to leave
+ * it alone, pass `null` to clear it, pass a value to set it. An empty string is
+ * a CLEAR, not a set — zod's `z.string().nullable().optional()` admits `""`, so
+ * a model can produce it, and the write path has always treated it as falsy.
+ * Both the audit label and the write derive from this one function so they
+ * cannot drift apart.
+ */
+function classifyIdArg(
+  value: string | null | undefined,
+): "unchanged" | "cleared" | "set" {
+  if (value === undefined) return "unchanged";
+  return value ? "set" : "cleared";
+}
 
 export function registerProfileTools(server: McpServer): void {
   // -------------------------------------------------------------------------
@@ -63,7 +80,10 @@ export function registerProfileTools(server: McpServer): void {
       runTool({
         toolName: "update_my_burner_profile",
         extra,
-        argsForAudit: { version: args.version, markComplete: args.markComplete },
+        argsForAudit: {
+          version: args.version,
+          markComplete: args.markComplete,
+        },
         handler: async ({ scope }) => {
           const db = createHttpDb();
           const now = new Date();
@@ -99,7 +119,6 @@ export function registerProfileTools(server: McpServer): void {
           }
           return row;
         },
-
       }),
   );
 
@@ -258,16 +277,20 @@ export function registerProfileTools(server: McpServer): void {
           const db = createHttpDb();
           const now = new Date();
           const arrivalAt = args.arrivalAt ? new Date(args.arrivalAt) : null;
-          const departureAt = args.departureAt ? new Date(args.departureAt) : null;
+          const departureAt = args.departureAt
+            ? new Date(args.departureAt)
+            : null;
           const [existing] = await db
-            .select({ intentRegisteredAt: schema.driverProfiles.intentRegisteredAt })
+            .select({
+              intentRegisteredAt: schema.driverProfiles.intentRegisteredAt,
+            })
             .from(schema.driverProfiles)
             .where(eq(schema.driverProfiles.userId, scope.campUserId))
             .limit(1);
           const intentRegisteredAt =
             args.intendsToDrive && !existing?.intentRegisteredAt
               ? now
-              : existing?.intentRegisteredAt ?? null;
+              : (existing?.intentRegisteredAt ?? null);
 
           const [row] = await db
             .insert(schema.driverProfiles)
@@ -413,10 +436,21 @@ export function registerProfileTools(server: McpServer): void {
             .where(eq(schema.users.id, scope.campUserId))
             .limit(1);
           if (!row) throw new ToolError("User row not found.");
+          const passport = decryptField(row.passport);
+          const saId = decryptField(row.saId);
+          const eft = decryptField(row.eft);
           return {
-            passport: decryptOrNull(row.passport),
-            saId: decryptOrNull(row.saId),
-            eft: decryptOrNull(row.eft),
+            passport: passport.value,
+            saId: saId.value,
+            eft: eft.value,
+            // A field listed here IS on file — this server just cannot decrypt
+            // it. Do not tell the user they have no value stored, and do not
+            // offer to "clear" it.
+            unreadableFields: [
+              ...(passport.state === "unreadable" ? ["passport"] : []),
+              ...(saId.state === "unreadable" ? ["saId"] : []),
+              ...(eft.state === "unreadable" ? ["eft"] : []),
+            ],
           };
         },
       }),
@@ -427,7 +461,7 @@ export function registerProfileTools(server: McpServer): void {
     {
       title: "Update my ID documents",
       description:
-        "Encrypts and stores the supplied fields. Pass `null` for a field to clear it; omit a field to leave it unchanged.",
+        "Encrypts and stores the supplied fields. Pass `null` for a field to clear it; omit a field to leave it unchanged. A member holds one government ID document, so setting `passport` clears `saId` and vice versa.",
       inputSchema: {
         passport: z.string().nullable().optional(),
         saId: z.string().nullable().optional(),
@@ -438,24 +472,45 @@ export function registerProfileTools(server: McpServer): void {
       runTool({
         toolName: "update_my_id_documents",
         extra,
-        // Never audit-log the plaintext values themselves; only flags.
+        // Never audit-log the plaintext values themselves; only flags. The
+        // label comes from the SAME classifier the write below branches on, so
+        // the audit row can never disagree with what actually happened —
+        // `{ passport: "" }` is a clear in both, not a "set" in the log and a
+        // clear in the column.
         argsForAudit: {
-          passport: args.passport === undefined ? "unchanged" : args.passport === null ? "cleared" : "set",
-          saId: args.saId === undefined ? "unchanged" : args.saId === null ? "cleared" : "set",
-          eft: args.eft === undefined ? "unchanged" : args.eft === null ? "cleared" : "set",
+          passport: classifyIdArg(args.passport),
+          saId: classifyIdArg(args.saId),
+          eft: classifyIdArg(args.eft),
         },
         handler: async ({ scope }) => {
           const db = createHttpDb();
           const patch: Partial<typeof schema.users.$inferInsert> = {
             updatedAt: new Date(),
           };
-          if (args.passport !== undefined) {
-            patch.passportEncrypted = args.passport ? encrypt(args.passport) : null;
+          const passportOp = classifyIdArg(args.passport);
+          const saIdOp = classifyIdArg(args.saId);
+          // passport_encrypted and sa_id_encrypted are two columns for ONE
+          // document: idColumnsFor (packages/db/src/id-documents.ts) writes the
+          // column that id.type names and NULLs the other. Setting one here
+          // without clearing its sibling leaves both populated, and the
+          // member's next burner-profile save then silently deletes whichever
+          // column idColumnsFor did not pick. Hold the invariant on write.
+          if (passportOp === "set" && saIdOp === "set") {
+            throw new ToolError(
+              "A member holds one ID document — pass either passport or saId, not both.",
+            );
           }
-          if (args.saId !== undefined) {
-            patch.saIdEncrypted = args.saId ? encrypt(args.saId) : null;
+          if (passportOp !== "unchanged") {
+            patch.passportEncrypted =
+              passportOp === "set" ? encrypt(args.passport as string) : null;
+            if (passportOp === "set") patch.saIdEncrypted = null;
           }
-          if (args.eft !== undefined) {
+          if (saIdOp !== "unchanged") {
+            patch.saIdEncrypted =
+              saIdOp === "set" ? encrypt(args.saId as string) : null;
+            if (saIdOp === "set") patch.passportEncrypted = null;
+          }
+          if (classifyIdArg(args.eft) !== "unchanged") {
             patch.eftDetailsEncrypted = args.eft ? encrypt(args.eft) : null;
           }
           await db

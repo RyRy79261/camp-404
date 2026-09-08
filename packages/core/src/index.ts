@@ -21,7 +21,8 @@
 //     (./shake); the React hook + DOM permission helpers stay in apps/web
 //   - id validation: validateIdNumber, IdValidationResult (./id-validation)
 //   - promotion: canSendPromotion, canDecidePromotion, nextPromotionStatus,
-//     promotionStepState — the captain-handshake guards + state machine
+//     promotionStepState, canLeaveCamp — the captain-handshake guards +
+//     state machine, and the sole-captain erasure guard
 //     (./promotion)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and

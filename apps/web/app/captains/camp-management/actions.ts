@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCampMemberDetail } from "@camp404/db/roster";
-import { decryptOrNull } from "@camp404/db/crypto";
-import { mergeIdNumber } from "@camp404/db/id-documents";
+import { decryptField } from "@camp404/db/crypto";
+import { ID_UNREADABLE_LABEL, mergeIdNumber } from "@camp404/db/id-documents";
 import {
   canDecidePromotion,
   canSendPromotion,
@@ -25,10 +25,7 @@ import {
   getPromotionRequestById,
   sendCaptainPromotion,
 } from "@/lib/promotion";
-import {
-  presentMemberDetail,
-  type PresentedMember,
-} from "@/lib/member-detail";
+import { presentMemberDetail, type PresentedMember } from "@/lib/member-detail";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 import {
   presentPublicMember,
@@ -59,9 +56,7 @@ export type ApprovalDecisionResult =
   | { ok: true }
   | { ok: false; error: string };
 
-export type PromotionActionResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type PromotionActionResult = { ok: true } | { ok: false; error: string };
 
 export type SendPromotionResult =
   | { ok: true; requestId: string }
@@ -97,6 +92,15 @@ async function requireCaptain(): Promise<
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     return { ok: false, error: "Your account isn't camp-active yet." };
+  }
+  // Mirror the page's gates: a captain still held behind vetting can't act.
+  // Server actions are reachable independently of the page render, so the
+  // approval check has to live here too — not just on the page (D3). A
+  // captain+pending row is reachable today: the roster offers assign-captain
+  // on a member still in the vetting queue, and accepting flips rank without
+  // touching approval status.
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    return { ok: false, error: "Your account is still awaiting approval." };
   }
   // Same preview-but-locked comparator the captain pages gate on (D3).
   const { cleared } = requireClearance(
@@ -143,18 +147,46 @@ export async function getMemberDetailAction(
   const gate = await requireCaptain();
   if (!gate.ok) return gate;
 
-  const detail = await getCampMemberDetail(userId);
+  // The only action in this file that was missing the opaque-id boundary check
+  // every sibling has — and the only one that passes includeIdDocuments, i.e.
+  // the government-ID decrypt path. Validate before the privileged read.
+  if (!UserId.safeParse(userId).success) {
+    return { ok: false, error: "Member not found." };
+  }
+
+  // Captain-gated above, and we decrypt below — the only caller that may pull
+  // the ID ciphertext out of the database.
+  const detail = await getCampMemberDetail(userId, {
+    includeIdDocuments: true,
+  });
   if (!detail) return { ok: false, error: "Member not found." };
 
   // Captain-gated above — decrypt this member's government ID number and merge
   // it back into the answers so the profile modal can show it. Captains and
   // the owner are the only readers of this field.
-  const passport = decryptOrNull(detail.passportEncrypted);
-  const saId = decryptOrNull(detail.saIdEncrypted);
-  const id = passport
-    ? { idType: "passport", idNumber: passport }
-    : saId
-      ? { idType: "sa_id", idNumber: saId }
+  //
+  // An UNREADABLE column (key rotation / corrupt ciphertext) must not render as
+  // an absent one: mergeIdNumber is a no-op on a null number, so the row would
+  // silently disappear and the captain would read it as "this member never gave
+  // us an ID". Merge an explicit marker instead. This is a read-only
+  // projection — presentMemberDetail never writes back.
+  const passport = decryptField(detail.passportEncrypted);
+  const saId = decryptField(detail.saIdEncrypted);
+  const readable =
+    passport.state === "ok" ? passport : saId.state === "ok" ? saId : null;
+  const unreadableType =
+    passport.state === "unreadable"
+      ? "passport"
+      : saId.state === "unreadable"
+        ? "sa_id"
+        : null;
+  const id = readable
+    ? {
+        idType: passport.state === "ok" ? "passport" : "sa_id",
+        idNumber: readable.value,
+      }
+    : unreadableType
+      ? { idType: unreadableType, idNumber: ID_UNREADABLE_LABEL }
       : { idType: null, idNumber: null };
   const responses = mergeIdNumber(detail.responses, id);
 
@@ -201,7 +233,11 @@ export async function getPublicMemberProfileAction(
     return { ok: false, error: "Invalid member." };
   }
 
-  const detail = await getCampMemberDetail(userId);
+  // Member-facing (NOT captain-gated): never SELECT the ID ciphertext, so it
+  // cannot reach this request's scope at all — not merely be projected away.
+  const detail = await getCampMemberDetail(userId, {
+    includeIdDocuments: false,
+  });
   if (!detail) return { ok: false, error: "Member not found." };
 
   // Allowlist projection (no decrypt, no status, no email, no provenance).
@@ -211,7 +247,9 @@ export async function getPublicMemberProfileAction(
 /**
  * Apply a captain's vetting decision to a pending applicant. Approving
  * unblocks the app on their next load; rejecting holds them at the blocking
- * screen with a terminal message.
+ * screen with a terminal message. The write is a compare-and-set on `pending`,
+ * so a captain acting on a stale roster cannot overwrite another captain's
+ * standing decision — they are told about it instead.
  */
 export async function decideApprovalAction(
   userId: string,
@@ -220,6 +258,9 @@ export async function decideApprovalAction(
   const gate = await requireCaptain();
   if (!gate.ok) return gate;
 
+  if (!UserId.safeParse(userId).success) {
+    return { ok: false, error: "Invalid member." };
+  }
   if (decision !== "approved" && decision !== "rejected") {
     return { ok: false, error: "Unknown decision." };
   }
@@ -227,12 +268,20 @@ export async function decideApprovalAction(
     return { ok: false, error: "You can't decide on your own account." };
   }
 
-  await decideUserApproval({
+  const decided = await decideUserApproval({
     userId,
     status: decision,
     decidedByUserId: gate.captainId,
   });
+  // Revalidate either way: on the lost-CAS path the roster this captain is
+  // looking at is stale, which is exactly why they got here.
   revalidatePath("/captains/camp-management");
+  if (!decided) {
+    return {
+      ok: false,
+      error: "Another captain already decided on this member.",
+    };
+  }
   return { ok: true };
 }
 
@@ -315,7 +364,8 @@ export async function cancelCaptainPromotionAction(
   if (!guard.ok) {
     return {
       ok: false,
-      error: CANCEL_PROMOTION_COPY[guard.reason] ?? "Couldn't cancel the request.",
+      error:
+        CANCEL_PROMOTION_COPY[guard.reason] ?? "Couldn't cancel the request.",
     };
   }
 

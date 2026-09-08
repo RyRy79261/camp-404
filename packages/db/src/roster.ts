@@ -130,9 +130,14 @@ export interface CampMemberDetail {
   onboardingVersion: string | null;
   /** Raw burner-profile answers, keyed by question id, for the profile tabs. */
   responses: Record<string, unknown>;
-  /** Encrypted government ID columns. Decrypt only behind the captain gate. */
-  passportEncrypted: string | null;
-  saIdEncrypted: string | null;
+  /**
+   * Encrypted government ID columns. Present ONLY when the caller passed
+   * `includeIdDocuments: true` — absent from every member-facing read, so the
+   * ciphertext never enters a non-captain render scope. Decrypt only behind
+   * the captain gate.
+   */
+  passportEncrypted?: string | null;
+  saIdEncrypted?: string | null;
   /** The code this member redeemed to join (NULL for god/founder accounts). */
   inviteCode: string | null;
   /** Free-text note the inviter left when minting the code. */
@@ -142,9 +147,20 @@ export interface CampMemberDetail {
   createdAt: Date;
 }
 
+export interface CampMemberDetailOptions {
+  /**
+   * SELECT the encrypted government-ID columns. Defaults to FALSE. Only a
+   * caller that is already captain-gated AND about to decrypt should opt in;
+   * a member-facing read must never pull the ciphertext out of Postgres.
+   */
+  includeIdDocuments?: boolean;
+}
+
 export async function getCampMemberDetail(
   userId: string,
+  options: CampMemberDetailOptions = {},
 ): Promise<CampMemberDetail | null> {
+  const includeIdDocuments = options.includeIdDocuments === true;
   const db = createHttpDb();
   const decider = alias(schema.users, "decider");
   const inviter = alias(schema.users, "inviter");
@@ -159,8 +175,12 @@ export async function getCampMemberDetail(
       onboardingCompletedAt: schema.burnerProfiles.completedAt,
       onboardingVersion: schema.burnerProfiles.version,
       responses: schema.burnerProfiles.responses,
-      passportEncrypted: schema.users.passportEncrypted,
-      saIdEncrypted: schema.users.saIdEncrypted,
+      ...(includeIdDocuments
+        ? {
+            passportEncrypted: schema.users.passportEncrypted,
+            saIdEncrypted: schema.users.saIdEncrypted,
+          }
+        : {}),
       inviteCode: schema.users.inviteCode,
       inviteNote: schema.inviteCodes.note,
       invitedByName: inviter.displayName,
@@ -192,8 +212,12 @@ export async function getCampMemberDetail(
     onboardingComplete: r.onboardingCompletedAt != null,
     onboardingVersion: r.onboardingVersion,
     responses: (r.responses as Record<string, unknown>) ?? {},
-    passportEncrypted: r.passportEncrypted,
-    saIdEncrypted: r.saIdEncrypted,
+    ...(includeIdDocuments
+      ? {
+          passportEncrypted: r.passportEncrypted,
+          saIdEncrypted: r.saIdEncrypted,
+        }
+      : {}),
     inviteCode: r.inviteCode,
     inviteNote: r.inviteNote,
     invitedByName: r.invitedByName,

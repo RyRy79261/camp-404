@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
 import * as schema from "@camp404/db/schema";
-import { decryptOrNull } from "@camp404/db/crypto";
+import { decryptField } from "@camp404/db/crypto";
 import { canSeeIdDocuments } from "../consent";
 import { notFound, runTool, truncateList } from "../tool-utils";
 
@@ -135,11 +135,20 @@ function shapeUser(
       { id: row.id, aiDataConsent: row.aiDataConsent },
     )
   ) {
+    const passport = decryptField(row.passportEncrypted);
+    const saId = decryptField(row.saIdEncrypted);
+    const eft = decryptField(row.eftDetailsEncrypted);
     return {
       ...extended,
-      passport: decryptOrNull(row.passportEncrypted),
-      saId: decryptOrNull(row.saIdEncrypted),
-      eft: decryptOrNull(row.eftDetailsEncrypted),
+      passport: passport.value,
+      saId: saId.value,
+      eft: eft.value,
+      // On file but undecryptable here — never report these as "not provided".
+      unreadableFields: [
+        ...(passport.state === "unreadable" ? ["passport"] : []),
+        ...(saId.state === "unreadable" ? ["saId"] : []),
+        ...(eft.state === "unreadable" ? ["eft"] : []),
+      ],
     };
   }
   return extended;
