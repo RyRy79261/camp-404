@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
-import { getAuthenticatedUser } from "@/lib/auth";
+import {
+  flattenBuilderQuestions,
+  flattenQuestions,
+  type Question,
+} from "@camp404/types";
+import { getActivationById, getRequiredAction } from "@camp404/db/activations";
+import { getAuthenticatedUser, type AuthenticatedUser } from "@/lib/auth";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
+import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
+import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
+import { ensureCampUser } from "@/lib/users";
 import {
   deleteQuestionnaireImageBlobs,
   questionKeySegment,
@@ -43,12 +52,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const questionId = new URL(req.url).searchParams.get("question");
+  const params = new URL(req.url).searchParams;
+  const questionId = params.get("question");
   if (!questionId) {
     return NextResponse.json({ error: "Missing `question`" }, { status: 400 });
   }
-  // Client-supplied — slug it before it can become part of a blob path.
-  const questionKey = questionKeySegment(questionId);
 
   const limit = await rateLimiter.limit(
     `questionnaire-image-upload:${user.id}`,
@@ -82,6 +90,27 @@ export async function POST(req: Request) {
       },
     );
   }
+
+  // Authorize the KEY, before any storage is touched. Slugging only made the
+  // client string path-safe; every distinct id still minted its own
+  // `answers/<key>/` folder, and per-question cleanup never leaves the folder
+  // it wrote to — so N ids meant N folders nothing ever prunes, which no
+  // per-request rate or size limit bounds. Resolving the id against the
+  // server's own definition bounds the folder count to the questions the
+  // member is actually being asked.
+  const resolved = await resolveImageQuestion(
+    user,
+    questionId,
+    params.get("activation"),
+  );
+  if (!resolved.ok) {
+    return NextResponse.json(
+      { error: resolved.error },
+      { status: resolved.status },
+    );
+  }
+  // Key off the canonical record, not the client string.
+  const questionKey = questionKeySegment(resolved.question.id);
 
   let form: FormData;
   try {
@@ -144,6 +173,84 @@ export async function POST(req: Request) {
     console.error("questionnaire-image-upload error", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 502 });
   }
+}
+
+type QuestionLookup =
+  | { ok: true; question: Question }
+  | { ok: false; status: number; error: string };
+
+const UNKNOWN: QuestionLookup = {
+  ok: false,
+  status: 400,
+  error: "Unknown `question`",
+};
+const FORBIDDEN: QuestionLookup = {
+  ok: false,
+  status: 403,
+  error: "Forbidden",
+};
+
+/**
+ * The `image` question this upload claims to answer, resolved against the
+ * SERVER's copy of the questionnaire — never the client's word for it.
+ *
+ * `activation` names the dispatched builder questionnaire the runner is
+ * mounted on (`/questionnaires/[activationId]`); its absence means the burner
+ * profile, the only questionnaire answered without one. An author previewing a
+ * draft (`/captains/questionnaires/[key]/preview`) sends neither, so a preview
+ * upload resolves to nothing and is refused — which is what that preview
+ * already promises: it renders the real runner with no persistence and no
+ * side effects.
+ */
+async function resolveImageQuestion(
+  authUser: AuthenticatedUser,
+  questionId: string,
+  activationId: string | null,
+): Promise<QuestionLookup> {
+  if (!activationId) {
+    // RESPONSES variant (all teams, incl. archived) — the same definition the
+    // burner-profile save action validates a stored answer against.
+    const questionnaire = await getQuestionnaireForResponses();
+    return imageQuestion(
+      flattenQuestions(questionnaire).find((q) => q.id === questionId),
+    );
+  }
+
+  // Mirror the runner's access predicate (the page and saveBuilderResponses):
+  // an open activation the viewer holds a PENDING obligation for. A member who
+  // was never sent this questionnaire — or already finished it — has no answer
+  // to store.
+  const campUser = await ensureCampUser(authUser);
+  const activation = await getActivationById(activationId);
+  if (!activation || activation.status !== "open") return FORBIDDEN;
+  const targeted = await getRequiredAction(
+    campUser.id,
+    activation.questionnaireKey,
+  );
+  if (
+    !targeted ||
+    targeted.status !== "pending" ||
+    targeted.activationId !== activation.id
+  ) {
+    return FORBIDDEN;
+  }
+
+  // The version this activation PINNED, so a question the head has since
+  // dropped still accepts the answer the member is being asked for.
+  const definition = await getBuilderDefinition(
+    activation.questionnaireKey,
+    activation.version,
+  );
+  if (!definition) return FORBIDDEN;
+  return imageQuestion(
+    flattenBuilderQuestions(definition).find((q) => q.id === questionId),
+  );
+}
+
+/** A found question, but only if it is the `image` kind this route stores. */
+function imageQuestion(question: Question | undefined): QuestionLookup {
+  if (!question || question.kind !== "image") return UNKNOWN;
+  return { ok: true, question };
 }
 
 /** Same-origin URL that streams a private blob to signed-in members. */

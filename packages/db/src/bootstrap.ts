@@ -16,9 +16,10 @@ const { users, inviteCodes, campSettings } = schema;
  * see account.ts), so a bare `rank = 'captain'` count lets a tombstone hold the
  * camp's only captaincy — closing /setup on a camp that has no captain left,
  * and telling the sole-captain deletion guard there are two. Same filter as
- * roster.ts and audience.ts.
+ * roster.ts and audience.ts. Exported so the in-transaction recount in
+ * account.ts asks exactly this question — a second copy would drift.
  */
-const isRealCaptain = and(
+export const isRealCaptain = and(
   eq(users.rank, "captain"),
   eq(users.sanitised, false),
   eq(users.isSystem, false),

@@ -16,7 +16,10 @@ describe("deleteAccount", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(isE2ETestMode).mockReturnValue(false);
-    vi.mocked(sanitiseAccount).mockResolvedValue({ lostCatNumber: 7 });
+    vi.mocked(sanitiseAccount).mockResolvedValue({
+      ok: true,
+      lostCatNumber: 7,
+    });
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
   afterEach(() => vi.restoreAllMocks());
@@ -24,24 +27,37 @@ describe("deleteAccount", () => {
   it("short-circuits under E2E mode without touching the DB or blobs", async () => {
     vi.mocked(isE2ETestMode).mockReturnValue(true);
     const res = await deleteAccount("u1");
-    expect(res).toEqual({ lostCatNumber: 0 });
+    expect(res).toEqual({ ok: true, lostCatNumber: 0 });
     expect(sanitiseAccount).not.toHaveBeenCalled();
     expect(deleteAvatarBlobs).not.toHaveBeenCalled();
   });
 
   it("scrubs the DB, then deletes all the member's avatar blobs", async () => {
     const res = await deleteAccount("u1");
-    expect(res).toEqual({ lostCatNumber: 7 });
+    expect(res).toEqual({ ok: true, lostCatNumber: 7 });
     expect(sanitiseAccount).toHaveBeenCalledWith("u1");
     // No keepPathname — anonymisation removes every avatar object.
     expect(deleteAvatarBlobs).toHaveBeenCalledExactlyOnceWith("u1");
+  });
+
+  it("takes no avatar blobs with it when the DB refused the erasure", async () => {
+    // The sole-captain refusal happens inside the sanitise transaction and
+    // writes nothing — so the blobs, which the kept row still points at, must
+    // survive too.
+    vi.mocked(sanitiseAccount).mockResolvedValue({
+      ok: false,
+      reason: "sole_captain",
+    });
+    const res = await deleteAccount("u1");
+    expect(res).toEqual({ ok: false, reason: "sole_captain" });
+    expect(deleteAvatarBlobs).not.toHaveBeenCalled();
   });
 
   it("swallows a blob-cleanup failure (the DB scrub stands) and logs it", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(deleteAvatarBlobs).mockRejectedValue(new Error("blob down"));
     const res = await deleteAccount("u1");
-    expect(res).toEqual({ lostCatNumber: 7 }); // still returns the scrub result
+    expect(res).toEqual({ ok: true, lostCatNumber: 7 }); // still returns the scrub result
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("avatar-cleanup"),
       expect.any(Error),

@@ -40,12 +40,64 @@ function backoff(attempt: number): number {
   return 1000 * 2 ** attempt + Math.floor(Math.random() * 250);
 }
 
+/** A caller's absolute deadline elapsed. Never retried — waiting is the failure. */
+class DeadlineError extends Error {}
+
+/** Milliseconds left before `deadline`, or Infinity when the caller set none. */
+function remainingUntil(deadline: number | undefined): number {
+  return deadline === undefined ? Infinity : deadline - Date.now();
+}
+
+// Cap the sleep at the time left so the last backoff cannot overshoot the
+// deadline; the next attempt then exits on it immediately.
+async function backoffSleep(attempt: number, deadline?: number): Promise<void> {
+  const wait = Math.min(backoff(attempt), remainingUntil(deadline));
+  if (wait > 0) await sleep(wait);
+}
+
+// One fetch plus its body read, aborted once `remaining` elapses. Node's fetch has
+// no timeout of its own, so the deadline has to arrive as a signal: a server that
+// accepts the connection and never answers would otherwise hang here forever, and
+// a deadline consulted only between attempts never gets to fire. The signal stays
+// armed across the body read — a response whose stream never completes hangs
+// exactly like a request that is never answered.
+async function fetchOnce(
+  path: string,
+  init: RequestInit,
+  remaining: number,
+): Promise<{ res: Response; body: string }> {
+  const controller = new AbortController();
+  const expiry: ReturnType<typeof setTimeout> | undefined = Number.isFinite(
+    remaining,
+  )
+    ? setTimeout(() => controller.abort(), remaining)
+    : undefined;
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+    });
+    return { res, body: await res.text() };
+  } catch (err) {
+    // Our own abort, not the network's: the caller is out of time.
+    if (controller.signal.aborted) {
+      throw new DeadlineError(`mail.tm ${path}: deadline exceeded`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(expiry);
+  }
+}
+
 // Retries only the transient classes (network error, 429, 5xx); a real 4xx (e.g.
 // 422 "address already used") throws immediately rather than burning retries.
+// `deadline` is an absolute Date.now() timestamp and bounds the whole call — the
+// in-flight request included, not just the gaps between attempts.
 async function req<T>(
   path: string,
   init: RequestInit = {},
   token?: string,
+  deadline?: number,
 ): Promise<T> {
   const headers = new Headers(init.headers);
   // mail.tm is API Platform: collection endpoints only return the `hydra:member`
@@ -56,23 +108,28 @@ async function req<T>(
 
   let lastErr: unknown;
   for (let attempt = 0; attempt < 4; attempt++) {
-    let res: Response;
+    const remaining = remainingUntil(deadline);
+    if (remaining <= 0) {
+      throw new DeadlineError(`mail.tm ${path}: deadline exceeded`);
+    }
+    let received: { res: Response; body: string };
     try {
-      res = await fetch(`${BASE}${path}`, { ...init, headers });
+      received = await fetchOnce(path, { ...init, headers }, remaining);
     } catch (err) {
+      if (err instanceof DeadlineError) throw err;
       lastErr = err;
-      await sleep(backoff(attempt));
+      await backoffSleep(attempt, deadline);
       continue;
     }
+    const { res, body } = received;
     if (res.status === 429 || res.status >= 500) {
       lastErr = new Error(`mail.tm ${res.status} on ${path}`);
-      await sleep(backoff(attempt));
+      await backoffSleep(attempt, deadline);
       continue;
     }
     if (!res.ok) {
-      throw new Error(`mail.tm ${res.status} on ${path}: ${await res.text()}`);
+      throw new Error(`mail.tm ${res.status} on ${path}: ${body}`);
     }
-    const body = await res.text();
     return (body ? JSON.parse(body) : undefined) as T;
   }
   throw new Error(`mail.tm ${path} failed after retries: ${String(lastErr)}`);
@@ -104,21 +161,30 @@ export async function waitForEmail(
   timeoutMs = 90_000,
 ): Promise<MailMessage> {
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const list = await req<HydraList<MailMessage>>(
-      "/messages",
-      {},
-      inbox.token,
-    );
-    for (const summary of list["hydra:member"]) {
-      const full = await req<MailMessage>(
-        `/messages/${summary.id}`,
+  try {
+    while (Date.now() < deadline) {
+      const list = await req<HydraList<MailMessage>>(
+        "/messages",
         {},
         inbox.token,
+        deadline,
       );
-      if (match(full)) return full;
+      for (const summary of list["hydra:member"]) {
+        const full = await req<MailMessage>(
+          `/messages/${summary.id}`,
+          {},
+          inbox.token,
+          deadline,
+        );
+        if (match(full)) return full;
+      }
+      const pause = Math.min(2500, deadline - Date.now());
+      if (pause > 0) await sleep(pause);
     }
-    await sleep(2500);
+  } catch (err) {
+    // The deadline is this loop's own: report it as the timeout it is, not as a
+    // transport failure. Anything else is a real error and propagates.
+    if (!(err instanceof DeadlineError)) throw err;
   }
   throw new Error("mail.tm: timed out waiting for a matching email");
 }

@@ -1,5 +1,6 @@
 import { eq, or, sql } from "drizzle-orm";
-import { withTransaction } from "./index";
+import { isRealCaptain } from "./bootstrap";
+import { createPooledDb } from "./index";
 import * as schema from "./schema";
 
 // Account erasure ("right to be forgotten"). We do NOT hard-delete the users
@@ -48,87 +49,141 @@ export function sanitisedUserPatch(
   } satisfies Partial<typeof schema.users.$inferInsert>;
 }
 
-export interface SanitiseResult {
-  lostCatNumber: number;
-}
+export type SanitiseResult =
+  | { ok: true; lostCatNumber: number }
+  | { ok: false; reason: "sole_captain" };
 
 /**
  * Erase an account in one pooled transaction: anonymise the users row, delete
  * the personal owned rows (CASCADE-owned children aren't auto-removed since the
  * row is kept), and scrub reimbursement bank PII. Audit / authorship refs and
  * the user's referral subtree are left intact, now resolving to "Lost Cat #N".
+ *
+ * Refuses the camp's last real captain — see the guard below. `canLeaveCamp`
+ * (core) stays the cheap pre-check that gives the caller a good error before
+ * any work happens; this is the one that decides.
  */
 export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
-  return await withTransaction(async (tx) => {
-    const [row] = await tx
-      .select({
-        max: sql<number | null>`max(${schema.users.lostCatNumber})`,
-      })
-      .from(schema.users);
-    const lostCatNumber = (row?.max ?? 0) + 1;
-    const now = new Date();
+  const { db, pool } = createPooledDb();
+  try {
+    return await db.transaction(async (tx) => {
+      // The sole-captain guard, recounted HERE so the check and the write
+      // cannot be separated: a caller that counted two captains and then took
+      // a request's worth of time to get here would otherwise erase the
+      // second-to-last one against a stale count, and a camp with no captain
+      // is unrecoverable (/setup is latched shut and the admin CLI cannot mint
+      // a captain invite with no captain to attribute it to).
+      //
+      // `for("update")` is what makes it atomic rather than merely fresh: it
+      // locks every real-captain row for the rest of the transaction, so a
+      // concurrent erasure of a peer blocks here and then re-reads the set
+      // this transaction has already shrunk. Same predicate as /setup reads
+      // (`isRealCaptain`) and the same `<= 1` as `canLeaveCamp`.
+      const captains = await tx
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(isRealCaptain)
+        .for("update");
+      if (captains.length <= 1 && captains.some((c) => c.id === userId)) {
+        return { ok: false as const, reason: "sole_captain" as const };
+      }
 
-    await tx
-      .update(schema.users)
-      .set(sanitisedUserPatch(userId, lostCatNumber, now))
-      .where(eq(schema.users.id, userId));
+      const [row] = await tx
+        .select({
+          max: sql<number | null>`max(${schema.users.lostCatNumber})`,
+        })
+        .from(schema.users);
+      const lostCatNumber = (row?.max ?? 0) + 1;
+      const now = new Date();
 
-    // Personal owned rows — explicit deletes (the kept users row means the
-    // CASCADE never fires).
-    await tx
-      .delete(schema.burnerProfiles)
-      .where(eq(schema.burnerProfiles.userId, userId));
-    await tx
-      .delete(schema.dietaryRequirements)
-      .where(eq(schema.dietaryRequirements.userId, userId));
-    await tx
-      .delete(schema.driverProfiles)
-      .where(eq(schema.driverProfiles.userId, userId));
-    await tx
-      .delete(schema.pushTokens)
-      .where(eq(schema.pushTokens.userId, userId));
-    await tx
-      .delete(schema.notificationDeliveries)
-      .where(eq(schema.notificationDeliveries.userId, userId));
-    await tx
-      .delete(schema.questionnaireEdits)
-      .where(eq(schema.questionnaireEdits.userId, userId));
-    await tx
-      .delete(schema.requiredActions)
-      .where(eq(schema.requiredActions.userId, userId));
-    // Deliberately NOT year-scoped, unlike every read of these tables:
-    // erasure is erasure, so every year's memberships, seats and driver
-    // profiles go. (driver_profiles above cascades to this user's car seats.)
-    await tx
-      .delete(schema.teamMemberships)
-      .where(eq(schema.teamMemberships.userId, userId));
-    // car_members is a join table — remove the user whether they were the
-    // driver or a passenger.
-    await tx
-      .delete(schema.carMembers)
-      .where(
-        or(
-          eq(schema.carMembers.driverUserId, userId),
-          eq(schema.carMembers.memberUserId, userId),
-        ),
-      );
-    await tx
-      .delete(schema.workshopRsvps)
-      .where(eq(schema.workshopRsvps.userId, userId));
-    await tx
-      .delete(schema.broadcastTargets)
-      .where(eq(schema.broadcastTargets.userId, userId));
-    await tx
-      .delete(schema.questionnaireActivationTargets)
-      .where(eq(schema.questionnaireActivationTargets.userId, userId));
+      await tx
+        .update(schema.users)
+        .set(sanitisedUserPatch(userId, lostCatNumber, now))
+        .where(eq(schema.users.id, userId));
 
-    // Scrub encrypted bank details (NOT NULL → empty string, not null) while
-    // keeping the reimbursement record for accounting.
-    await tx
-      .update(schema.reimbursements)
-      .set({ accountDetailsEncrypted: "" })
-      .where(eq(schema.reimbursements.submitterId, userId));
+      // Personal owned rows — explicit deletes (the kept users row means the
+      // CASCADE never fires).
+      await tx
+        .delete(schema.burnerProfiles)
+        .where(eq(schema.burnerProfiles.userId, userId));
+      await tx
+        .delete(schema.dietaryRequirements)
+        .where(eq(schema.dietaryRequirements.userId, userId));
+      await tx
+        .delete(schema.driverProfiles)
+        .where(eq(schema.driverProfiles.userId, userId));
+      await tx
+        .delete(schema.pushTokens)
+        .where(eq(schema.pushTokens.userId, userId));
+      await tx
+        .delete(schema.notificationDeliveries)
+        .where(eq(schema.notificationDeliveries.userId, userId));
+      await tx
+        .delete(schema.questionnaireEdits)
+        .where(eq(schema.questionnaireEdits.userId, userId));
+      // The generic builder-questionnaire answer store. The bespoke
+      // questionnaires keep their own domain tables (burner_profiles,
+      // dietary_requirements, driver_profiles) and are deleted above; this is
+      // where every other answer the member ever gave lives.
+      await tx
+        .delete(schema.questionnaireResponses)
+        .where(eq(schema.questionnaireResponses.userId, userId));
+      await tx
+        .delete(schema.requiredActions)
+        .where(eq(schema.requiredActions.userId, userId));
+      // Deliberately NOT year-scoped, unlike every read of these tables:
+      // erasure is erasure, so every year's memberships, seats and driver
+      // profiles go. (driver_profiles above cascades to this user's car seats.)
+      await tx
+        .delete(schema.teamMemberships)
+        .where(eq(schema.teamMemberships.userId, userId));
+      // car_members is a join table — remove the user whether they were the
+      // driver or a passenger.
+      await tx
+        .delete(schema.carMembers)
+        .where(
+          or(
+            eq(schema.carMembers.driverUserId, userId),
+            eq(schema.carMembers.memberUserId, userId),
+          ),
+        );
+      await tx
+        .delete(schema.workshopRsvps)
+        .where(eq(schema.workshopRsvps.userId, userId));
+      await tx
+        .delete(schema.broadcastTargets)
+        .where(eq(schema.broadcastTargets.userId, userId));
+      await tx
+        .delete(schema.questionnaireActivationTargets)
+        .where(eq(schema.questionnaireActivationTargets.userId, userId));
 
-    return { lostCatNumber };
-  });
+      // Live access grants. All three declare `onDelete: "cascade"` on
+      // users.id, but erasure KEEPS the users row — it anonymises it — so the
+      // cascade never fires and the grant outlives the account. Without these
+      // an issued MCP access token (and its refresh token) keeps answering for
+      // the member until it expires, and a pending Telegram invite stays
+      // redeemable. Revoking access is the part of "erase my account" a member
+      // would assume happened first.
+      await tx
+        .delete(schema.mcpAccessTokens)
+        .where(eq(schema.mcpAccessTokens.userId, userId));
+      await tx
+        .delete(schema.mcpAuthCodes)
+        .where(eq(schema.mcpAuthCodes.userId, userId));
+      await tx
+        .delete(schema.telegramInvites)
+        .where(eq(schema.telegramInvites.userId, userId));
+
+      // Scrub encrypted bank details (NOT NULL → empty string, not null) while
+      // keeping the reimbursement record for accounting.
+      await tx
+        .update(schema.reimbursements)
+        .set({ accountDetailsEncrypted: "" })
+        .where(eq(schema.reimbursements.submitterId, userId));
+
+      return { ok: true as const, lostCatNumber };
+    });
+  } finally {
+    await pool.end();
+  }
 }
