@@ -39,6 +39,33 @@ const def = BuilderQuestionnaire.parse({
   ],
 });
 
+// A conditional CONTENT block, kept separate from `def` so the persisted-save
+// suite below keeps its page count.
+const conditionalContentDef = BuilderQuestionnaire.parse({
+  version: "1",
+  title: "Survey",
+  pages: [
+    {
+      id: "p1",
+      type: "question",
+      title: "Leadership",
+      blocks: [
+        {
+          kind: "question",
+          question: { id: "lead", kind: "boolean", prompt: "Lead a team?", required: false },
+        },
+        {
+          id: "lead-note",
+          kind: "explainer",
+          bodyText: "Team leads get an extra briefing.",
+          style: "note",
+          visibleIf: { fieldId: "lead", op: "eq", value: true },
+        },
+      ],
+    },
+  ],
+});
+
 function renderWizard(action = vi.fn(async () => ({ ok: true as const }))) {
   render(
     <BuilderWizard
@@ -59,6 +86,24 @@ describe("BuilderWizard", () => {
     expect(screen.getByRole("heading", { name: "Tell us about you" })).toBeTruthy();
     expect(screen.getByText("Name")).toBeTruthy();
     expect(screen.getByText("Page 1 of 2")).toBeTruthy();
+  });
+
+  it("hides a content block whose visibleIf is unmet, and shows it once the answer matches", () => {
+    render(
+      <BuilderWizard
+        questionnaire={conditionalContentDef}
+        initialResponses={{}}
+        action={vi.fn(async () => ({ ok: true as const }))}
+        persistProgress={false}
+        variant="onboarding"
+        submitLabel="Finish"
+      />,
+    );
+    // The refused case: the gating answer is unset, so the explainer must not render.
+    expect(screen.queryByText("Team leads get an extra briefing.")).toBeNull();
+
+    fireEvent.click(screen.getByRole("switch"));
+    expect(screen.getByText("Team leads get an extra briefing.")).toBeTruthy();
   });
 
   it("blocks Continue on a missing required field, then advances when filled", () => {

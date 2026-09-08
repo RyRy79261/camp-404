@@ -24,8 +24,9 @@ import type { SaveResult } from "@camp404/types";
 // banner, Back/Continue, startTransition, the persistProgress branch and the
 // (responses, final) action contract) and forks only the page/block loop: pages
 // come from visiblePages() so branching hides/shows pages, each page renders its
-// blocks (content blocks display-only, question blocks honoring their own
-// visibleIf), and validation runs per-page over the visible question blocks.
+// blocks (every block honours its own visibleIf; content blocks are display-only
+// so they never validate), and validation runs per-page over the visible
+// question blocks.
 
 const FORM_ERROR_KEY = "_form";
 const ROOT_ERROR_KEY = "_root";
@@ -219,10 +220,15 @@ export function BuilderWizard({
 
       <div className="flex flex-col gap-5">
         {page.blocks.map((block) => {
+          // EVERY block kind honours its own `visibleIf` (spec §5.1) — a
+          // conditional explainer, header break, image or divider branches
+          // exactly like a conditional field does. The publish validator and
+          // classifyChange already treat content-block conditions as real, so
+          // the runner has to as well.
+          if (block.visibleIf && !evalVisibleIf(block.visibleIf, responses)) {
+            return null;
+          }
           if (block.kind === "question") {
-            if (block.visibleIf && !evalVisibleIf(block.visibleIf, responses)) {
-              return null;
-            }
             const q = block.question;
             return (
               <QuestionField

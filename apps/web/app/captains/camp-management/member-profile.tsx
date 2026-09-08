@@ -128,6 +128,10 @@ export function MemberProfile({
       const res = await decideApprovalAction(row.id, decision);
       if (!res.ok) {
         setActionError(res.error);
+        // The decision may have lost the compare-and-set to another captain —
+        // pull the current status down so the panel stops offering a decision
+        // that is no longer available. Harmless for the other error branches.
+        router.refresh();
         return;
       }
       // Reflect the decision locally so the action buttons clear, then refresh

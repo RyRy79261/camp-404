@@ -16,7 +16,8 @@ export function lostCatName(n: number): string {
  * The `users`-row patch that anonymises an account. Pure (no DB) so it is
  * unit-tested. `authUserId` is severed to `deleted:<id>` so the Neon Auth login
  * no longer maps to this row — a re-login becomes a fresh, access-less user.
- * Keeps `id` and `inviteCode` (who invited them — lineage).
+ * Keeps `id` and `inviteCode` (who invited them — lineage); drops rank to
+ * `member`.
  */
 export function sanitisedUserPatch(
   userId: string,
@@ -26,6 +27,11 @@ export function sanitisedUserPatch(
   return {
     displayName: lostCatName(lostCatNumber),
     authUserId: `deleted:${userId}`,
+    // A tombstone must not hold rank. Belt to the braces of the
+    // `sanitised = false` filter on the captain count in bootstrap.ts: rows
+    // erased BEFORE this change keep `captain` and are caught only by that
+    // filter, so both are required.
+    rank: "member",
     profileImageUrl: null,
     passportEncrypted: null,
     saIdEncrypted: null,

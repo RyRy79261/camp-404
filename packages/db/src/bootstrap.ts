@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
 
@@ -10,10 +10,24 @@ import * as schema from "./schema";
 
 const { users, inviteCodes, campSettings } = schema;
 
+/**
+ * "A real captain": a stored captain who is neither an erased account nor a
+ * system actor. Account erasure KEEPS the users row (lineage / FK integrity,
+ * see account.ts), so a bare `rank = 'captain'` count lets a tombstone hold the
+ * camp's only captaincy — closing /setup on a camp that has no captain left,
+ * and telling the sole-captain deletion guard there are two. Same filter as
+ * roster.ts and audience.ts.
+ */
+const isRealCaptain = and(
+  eq(users.rank, "captain"),
+  eq(users.sanitised, false),
+  eq(users.isSystem, false),
+);
+
 export interface BootstrapState {
   /** Stamped when the wizard completed; null on a fresh system. */
   bootstrappedAt: Date | null;
-  /** How many stored captains exist — the real "is the camp set up" signal. */
+  /** How many REAL (non-erased, non-system) captains exist. */
   captainCount: number;
 }
 
@@ -23,7 +37,7 @@ export async function getBootstrapState(): Promise<BootstrapState> {
   const [captains] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(users)
-    .where(eq(users.rank, "captain"));
+    .where(isRealCaptain);
   const [settings] = await db
     .select({ bootstrappedAt: campSettings.bootstrappedAt })
     .from(campSettings)
@@ -75,7 +89,7 @@ export async function bootstrapFirstCaptain(input: {
       const [captains] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(users)
-        .where(eq(users.rank, "captain"));
+        .where(isRealCaptain);
       if (locked?.bootstrappedAt || (captains?.count ?? 0) > 0) {
         return { ok: false as const, reason: "already-bootstrapped" as const };
       }

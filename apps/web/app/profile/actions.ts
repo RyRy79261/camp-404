@@ -1,7 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { canLeaveCamp } from "@camp404/core";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
+import { countActiveCaptains } from "@/lib/bootstrap";
 import {
   ensureCampUser,
   hasCampAccess,
@@ -63,6 +65,20 @@ export async function deleteOwnAccount(
   }
   if (formData.get("confirm") !== "DELETE") {
     return { ok: false, error: "Type DELETE to confirm." };
+  }
+  // The camp must never lose its last captain — /setup latches shut after
+  // bootstrap and there is no demotion or CLI rescue path, so this is
+  // unrecoverable. Checked at the moment of erasure, not at page render.
+  const guard = canLeaveCamp({
+    isCaptain: campUser.rank === "captain",
+    captainCount: await countActiveCaptains(),
+  });
+  if (!guard.ok) {
+    return {
+      ok: false,
+      error:
+        "You're the last captain — promote another member to captain before erasing your account.",
+    };
   }
   await deleteAccount(campUser.id);
   redirect("/auth/sign-out");

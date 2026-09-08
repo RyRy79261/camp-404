@@ -75,6 +75,11 @@ export function useVoiceRecorder({
   const mountedRef = React.useRef(true);
 
   React.useEffect(() => {
+    // Re-arm on every effect setup, not just the first. React StrictMode
+    // double-invokes mount effects in dev, so without this the cleanup's
+    // `false` sticks for the component's whole life and every safeSet — plus
+    // the post-await unmount guard in start() — permanently reads as unmounted.
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       // Critical cleanup per the voice brief: clear handlers BEFORE stop()
@@ -121,6 +126,18 @@ export function useVoiceRecorder({
           autoGainControl: true,
         },
       });
+
+      // The panel can unmount while the OS permission prompt is open (a step
+      // change in the questionnaire runner, an Escape out of the bug-report
+      // dialog). Cleanup has already run against a null streamRef, so this
+      // resolved stream is ownerless: stop it here or the mic stays live and
+      // the AudioContext / MediaRecorder built below record — and upload — on
+      // a dead component.
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
       streamRef.current = stream;
 
       // Analyser for the live waveform UI. fftSize 1024 per the voice

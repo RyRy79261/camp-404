@@ -240,16 +240,21 @@ export const testStore = {
     userId: string;
     status: "approved" | "rejected";
     decidedByUserId: string;
-  }): void {
+  }): boolean {
+    // Mirrors the db's compare-and-set: only a `pending` row flips, so a second
+    // captain deciding the same applicant is a no-op (false) rather than a
+    // silent overwrite — same shape as decideCaptainPromotion below.
     for (const user of usersByAuthId.values()) {
       if (user.id === input.userId) {
+        if (user.approvalStatus !== "pending") return false;
         user.approvalStatus = input.status;
         user.approvalDecidedByUserId = input.decidedByUserId;
         user.approvalDecidedAt = new Date();
         user.updatedAt = new Date();
-        return;
+        return true;
       }
     }
+    return false;
   },
   setProfileImage(userId: string, url: string | null): void {
     for (const user of usersByAuthId.values()) {

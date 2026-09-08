@@ -24,5 +24,9 @@ export async function GET(req: Request) {
   }
 
   const result = await dispatchPendingAnnouncements({ client });
-  return NextResponse.json({ ok: true, ...result });
+  // Same terminal-failure rule as the push drain: markAnnouncementFailed puts
+  // the row in 'failed' and listDueAnnouncements only reads 'queued', so a
+  // failure is never retried and a 200 would bury it.
+  const ok = result.failed === 0;
+  return NextResponse.json({ ok, ...result }, { status: ok ? 200 : 500 });
 }

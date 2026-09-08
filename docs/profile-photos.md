@@ -64,10 +64,13 @@ to `/onboarding/questionnaire` if the burner profile isn't finished yet.
 
 - `BLOB_READ_WRITE_TOKEN` — read/write token for a **private** Vercel Blob
   store (see `.env.example`). The store must be created with **private**
-  access; a public store will reject the `access: "private"` upload. When the
-  token is unset, or when `E2E_TEST_MODE=1`, the upload route skips the
-  network call and returns a deterministic proxy URL, and the proxy route
-  serves nothing, so local dev and E2E tests work without a configured store.
+  access; a public store will reject the `access: "private"` upload. Under
+  `E2E_TEST_MODE=1` the upload route skips the network call and echoes a
+  deterministic proxy URL so the suite runs without a store. Without the token
+  and without test mode, the upload route answers **501 "Photo uploads aren't
+  configured on this deployment."** — it will not hand back a URL for a blob it
+  never wrote. Local dev therefore needs a real token to exercise photos; every
+  other surface degrades to the initials fallback.
 
 ## Notes
 

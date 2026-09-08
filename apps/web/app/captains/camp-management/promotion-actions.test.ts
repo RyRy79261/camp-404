@@ -9,6 +9,7 @@ vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(() => true),
+  isApproved: vi.fn(() => true),
   decideUserApproval: vi.fn(),
 }));
 vi.mock("@/lib/promotion", () => ({
@@ -31,7 +32,7 @@ import {
 } from "./actions";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import {
   decideCaptainPromotion,
   getPromotionRequestById,
@@ -60,6 +61,7 @@ function targetRank(rank: "captain" | "member") {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(hasCampAccess).mockReturnValue(true);
+  vi.mocked(isApproved).mockReturnValue(true);
   vi.mocked(sendCaptainPromotion).mockResolvedValue({ id: "req-1" } as never);
 });
 

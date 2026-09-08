@@ -257,14 +257,16 @@ export async function isTeamLead(userId: string): Promise<boolean> {
 /**
  * Apply a captain's vetting decision. Captain-gated by the caller; this just
  * persists the decision and stamps the deciding captain for the audit trail.
+ * Returns false when the compare-and-set found no `pending` row — another
+ * captain already decided, so this call changed nothing.
  */
 export async function decideUserApproval(input: {
   userId: string;
   status: "approved" | "rejected";
   decidedByUserId: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const store = isE2ETestMode() ? testBackend : realBackend;
-  await store.setUserApproval(input);
+  return store.setUserApproval(input);
 }
 
 /**
@@ -299,7 +301,7 @@ interface UserBackend {
     userId: string;
     status: "approved" | "rejected";
     decidedByUserId: string;
-  }): Promise<void>;
+  }): Promise<boolean>;
   setUserProfileImage(userId: string, url: string | null): Promise<void>;
   setUserDisplayName(userId: string, name: string | null): Promise<void>;
   getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null>;
@@ -388,7 +390,7 @@ const realBackend: UserBackend = {
     await setUserApprovalStatus(userId, status);
   },
   async setUserApproval(input) {
-    await setUserApproval(input);
+    return setUserApproval(input);
   },
   async setUserProfileImage(userId, url) {
     await setUserProfileImage(userId, url);
@@ -448,7 +450,7 @@ const testBackend: UserBackend = {
     testStore.setUserApprovalStatus(userId, status);
   },
   async setUserApproval(input) {
-    testStore.setUserApproval(input);
+    return testStore.setUserApproval(input);
   },
   async setUserProfileImage(userId, url) {
     testStore.setProfileImage(userId, url);

@@ -27,6 +27,13 @@ import { cropResizeToSquare } from "@/lib/image";
 // unchanged: every kind emits the same QuestionnaireResponseValue it always did
 // (scale/toggle emit the chosen option's string value; slider a number; …).
 
+// The burner-profile photo question. Its answer IS the member's profile photo —
+// onboarding/questionnaire/actions.ts mirrors `profile.image` onto
+// users.profile_image_url — so it alone uploads through the avatar route. Every
+// other image question is a separate picture and gets its own blob folder;
+// sharing the avatar path made each upload delete the other's object.
+const PROFILE_IMAGE_QUESTION_ID = "profile.image";
+
 interface QuestionFieldProps {
   question: Question;
   value: QuestionnaireResponseValue | undefined;
@@ -368,6 +375,11 @@ function FieldInput({
             value={typeof value === "string" ? value : null}
             onChange={(url) => onChange(url)}
             preprocessImage={cropResizeToSquare}
+            uploadUrl={
+              question.id === PROFILE_IMAGE_QUESTION_ID
+                ? undefined
+                : `/api/uploads/questionnaire-image?question=${encodeURIComponent(question.id)}`
+            }
           />
         </div>
       );

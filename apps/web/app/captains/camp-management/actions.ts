@@ -98,6 +98,15 @@ async function requireCaptain(): Promise<
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     return { ok: false, error: "Your account isn't camp-active yet." };
   }
+  // Mirror the page's gates: a captain still held behind vetting can't act.
+  // Server actions are reachable independently of the page render, so the
+  // approval check has to live here too — not just on the page (D3). A
+  // captain+pending row is reachable today: the roster offers assign-captain
+  // on a member still in the vetting queue, and accepting flips rank without
+  // touching approval status.
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    return { ok: false, error: "Your account is still awaiting approval." };
+  }
   // Same preview-but-locked comparator the captain pages gate on (D3).
   const { cleared } = requireClearance(
     deriveViewerRank(campUser.rank, false),
@@ -143,7 +152,9 @@ export async function getMemberDetailAction(
   const gate = await requireCaptain();
   if (!gate.ok) return gate;
 
-  const detail = await getCampMemberDetail(userId);
+  // Captain-gated above, and we decrypt below — the only caller that may pull
+  // the ID ciphertext out of the database.
+  const detail = await getCampMemberDetail(userId, { includeIdDocuments: true });
   if (!detail) return { ok: false, error: "Member not found." };
 
   // Captain-gated above — decrypt this member's government ID number and merge
@@ -201,7 +212,9 @@ export async function getPublicMemberProfileAction(
     return { ok: false, error: "Invalid member." };
   }
 
-  const detail = await getCampMemberDetail(userId);
+  // Member-facing (NOT captain-gated): never SELECT the ID ciphertext, so it
+  // cannot reach this request's scope at all — not merely be projected away.
+  const detail = await getCampMemberDetail(userId, { includeIdDocuments: false });
   if (!detail) return { ok: false, error: "Member not found." };
 
   // Allowlist projection (no decrypt, no status, no email, no provenance).
@@ -211,7 +224,9 @@ export async function getPublicMemberProfileAction(
 /**
  * Apply a captain's vetting decision to a pending applicant. Approving
  * unblocks the app on their next load; rejecting holds them at the blocking
- * screen with a terminal message.
+ * screen with a terminal message. The write is a compare-and-set on `pending`,
+ * so a captain acting on a stale roster cannot overwrite another captain's
+ * standing decision — they are told about it instead.
  */
 export async function decideApprovalAction(
   userId: string,
@@ -220,6 +235,9 @@ export async function decideApprovalAction(
   const gate = await requireCaptain();
   if (!gate.ok) return gate;
 
+  if (!UserId.safeParse(userId).success) {
+    return { ok: false, error: "Invalid member." };
+  }
   if (decision !== "approved" && decision !== "rejected") {
     return { ok: false, error: "Unknown decision." };
   }
@@ -227,12 +245,20 @@ export async function decideApprovalAction(
     return { ok: false, error: "You can't decide on your own account." };
   }
 
-  await decideUserApproval({
+  const decided = await decideUserApproval({
     userId,
     status: decision,
     decidedByUserId: gate.captainId,
   });
+  // Revalidate either way: on the lost-CAS path the roster this captain is
+  // looking at is stale, which is exactly why they got here.
   revalidatePath("/captains/camp-management");
+  if (!decided) {
+    return {
+      ok: false,
+      error: "Another captain already decided on this member.",
+    };
+  }
   return { ok: true };
 }
 

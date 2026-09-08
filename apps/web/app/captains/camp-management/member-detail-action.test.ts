@@ -8,6 +8,7 @@ vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(() => true),
+  isApproved: vi.fn(() => true),
   decideUserApproval: vi.fn(),
 }));
 vi.mock("@/lib/promotion", () => ({
@@ -30,7 +31,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { getMemberDetailAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getOpenPromotionForTarget } from "@/lib/promotion";
 import { getCampMemberDetail } from "@camp404/db/roster";
 
@@ -62,6 +63,7 @@ function detail(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(hasCampAccess).mockReturnValue(true);
+  vi.mocked(isApproved).mockReturnValue(true);
   vi.mocked(getOpenPromotionForTarget).mockResolvedValue(null);
 });
 
