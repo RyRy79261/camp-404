@@ -29,6 +29,17 @@
 //     isSafetyVisible (./privacy)
 //   - audience authz: canSendToAudience + AudienceScope/AudienceActor/
 //     AudienceSpec — who may send to which audience (./audience-authz)
+//   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,
+//     neutraliseFormula, csvFilenamePart (./csv) — the ONE spreadsheet
+//     serialiser; the questionnaire export and WP9's roster export share it
+//   - questionnaire CSV: EMPTY_ANSWER, buildQuestionnaireCsv(Rows|Export),
+//     questionnaireCsvFilename, displayOrphanedAnswer, collectOrphanFieldIds,
+//     ORPHAN_LABEL/ORPHAN_COLUMN_SUFFIX
+//     (./questionnaire-csv)
+//   - questionnaire results: aggregateResponses + tallyActivationCompletion,
+//     with KIND_SHAPE and the Choice/Numeric/Count aggregate shapes — the
+//     per-question read-back engine and the activation completion figure
+//     (./questionnaire-results)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -45,3 +56,6 @@ export * from "./id-validation";
 export * from "./promotion";
 export * from "./privacy";
 export * from "./audience-authz";
+export * from "./csv";
+export * from "./questionnaire-csv";
+export * from "./questionnaire-results";
