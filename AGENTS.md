@@ -103,8 +103,10 @@ Decisions baked into the schema — keep new code consistent with them:
   `team_memberships.is_lead`; a **driver** from
   `driver_profiles.intends_to_drive`. Do not add a stored role column for
   a derived capability.
-- **`team_lead` clearance is GLOBAL, not per-team.** Leading *any* team in
-  the camp's current year raises a member to the `team_lead` rung of the
+- **`team_lead` clearance is GLOBAL, not per-team.** *(Owner-ratified
+  2026-09-09: "it's a sitewide global role." Settled — do not re-open it in
+  passing; a change here is a deliberate reshape, not a refactor.)* Leading
+  *any* team in the camp's current year raises a member to the `team_lead` rung of the
   `camp_member < team_lead < captain` ladder **everywhere in the app** —
   `isTeamLead(userId)` is a single boolean and `deriveViewerRank` takes it
   as one. Team identity governs *audience* (who a `team` / `team_leads`
