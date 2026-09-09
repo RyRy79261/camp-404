@@ -9,12 +9,18 @@ vi.mock("server-only", () => ({}));
 
 import { teamEnum } from "@camp404/db/schema";
 import {
+  AUDIENCE_SCOPE_LABELS,
   DEFAULT_TEAMS,
   DEFAULT_CAMP_CONFIG,
   MAX_CYCLE_YEAR,
   MIN_CYCLE_YEAR,
+  TeamNameConflictError,
   UNSET_CYCLE,
   activeTeams,
+  audienceLabel,
+  memberTeamsLabel,
+  roleNameConflicts,
+  teamPickerOptions,
   advanceCycles,
   assertStableTeamKeys,
   currentCycle,
@@ -460,5 +466,248 @@ describe("getCurrentCycle under E2E_TEST_MODE", () => {
     // DEFAULT_CAMP_CONFIG is what the store clones, and it carries no cycles.
     expect("cycles" in DEFAULT_CAMP_CONFIG).toBe(false);
     await expect(getCurrentCycle()).resolves.toBeNull();
+  });
+});
+
+// --- The audience vocabulary (WP6 items 2.3 / 2.4 / 2.8) -------------------
+// "Who is this going to" was written out longhand at five sites; audienceLabel
+// and the two picker helpers beside it are the one owner. These tests pin the
+// three things the duplication actually cost: an ARCHIVED team offered as a
+// send target, a captain's rename never reaching the send screen, and a raw
+// `power_and_lighting` printed where the pretty string already existed.
+
+// A camp that has exercised every Phase-2 edit: one renamed, one archived.
+function editedConfig(): TeamsConfig {
+  return {
+    teams: [
+      { key: "kitchen", label: "Cuisine", order: 0, archived: false },
+      {
+        key: "power_and_lighting",
+        label: "Sparks",
+        order: 1,
+        archived: false,
+      },
+      { key: "structures", label: "Structures", order: 2, archived: true },
+    ],
+  };
+}
+
+describe("audienceLabel", () => {
+  it("names every scope, and covers the union in both directions", () => {
+    // Both directions: no scope without a label, no label without a scope.
+    // A new AudienceScope member fails to compile in AUDIENCE_SCOPE_LABELS.
+    const scopes = Object.keys(AUDIENCE_SCOPE_LABELS) as Array<
+      keyof typeof AUDIENCE_SCOPE_LABELS
+    >;
+    expect(scopes.sort()).toEqual(
+      [
+        "drivers",
+        "everyone",
+        "individual",
+        "opt_in",
+        "team",
+        "team_leads",
+      ].sort(),
+    );
+    for (const scope of scopes) {
+      expect(audienceLabel(scope)).toBe(AUDIENCE_SCOPE_LABELS[scope]);
+      expect(audienceLabel(scope).trim()).not.toBe("");
+    }
+  });
+
+  it("preserves the send screen's own wording for the four send scopes", () => {
+    // The send picker's SCOPE_LABEL is gone; these are the strings it held, so
+    // the migration is behaviour-preserving for the scope half. (The TEAM half
+    // deliberately CHANGES: "Power & lighting" was a ninth spelling nobody
+    // configured.)
+    expect(
+      (["everyone", "team", "team_leads", "individual"] as const).map((s) =>
+        audienceLabel(s),
+      ),
+    ).toEqual(["Everyone", "A team", "Team leads", "Specific members"]);
+  });
+
+  it("reads a bare team scope as the CHOICE, not a resolved audience", () => {
+    // On a picker, "team" with nothing chosen yet is the option "A team".
+    expect(audienceLabel("team")).toBe("A team");
+    expect(audienceLabel("team", null)).toBe("A team");
+    expect(audienceLabel("team", "")).toBe("A team");
+  });
+
+  it("resolves a team key through the camp's CURRENT labels", () => {
+    const labels = teamLabelMap(editedConfig());
+    expect(audienceLabel("team", "kitchen", labels)).toBe("Cuisine");
+    // The rename the send screen used to miss entirely.
+    expect(audienceLabel("team", "power_and_lighting", labels)).toBe("Sparks");
+  });
+
+  it("humanises an unconfigured key instead of printing it raw", () => {
+    // The fallback is the difference between reading "Power and Lighting" and
+    // reading `power_and_lighting` — never the bare enum key.
+    expect(audienceLabel("team", "power_and_lighting")).toBe(
+      "Power and Lighting",
+    );
+    expect(audienceLabel("team", "power_and_lighting", {})).toBe(
+      "Power and Lighting",
+    );
+  });
+
+  it("returns the SAME string at every migrated site", () => {
+    // The point of one owner: the send picker's team option, a member's
+    // subtitle on that same screen, and the roster chip all resolve one key to
+    // one string. If these three ever disagree, the vocabulary has forked.
+    const config = editedConfig();
+    const labels = teamLabelMap(config);
+
+    const fromPicker = teamPickerOptions(config).find(
+      (option) => option.value === "power_and_lighting",
+    )?.label;
+    const fromSubtitle = memberTeamsLabel(["power_and_lighting"], labels);
+    const fromLabel = audienceLabel("team", "power_and_lighting", labels);
+
+    expect(fromPicker).toBe("Sparks");
+    expect(fromSubtitle).toBe("Sparks");
+    expect(fromLabel).toBe("Sparks");
+  });
+});
+
+describe("teamPickerOptions", () => {
+  it("omits an ARCHIVED team, so it can never be a send target", () => {
+    const options = teamPickerOptions(editedConfig());
+    expect(options.map((o) => o.value)).toEqual([
+      "kitchen",
+      "power_and_lighting",
+    ]);
+    expect(options.map((o) => o.value)).not.toContain("structures");
+  });
+
+  it("carries the configured labels, in the configured order", () => {
+    expect(teamPickerOptions(editedConfig())).toEqual([
+      { value: "kitchen", label: "Cuisine" },
+      { value: "power_and_lighting", label: "Sparks" },
+    ]);
+  });
+});
+
+describe("memberTeamsLabel", () => {
+  it("renders a member's teams as labels, not raw enum keys", () => {
+    const labels = teamLabelMap(editedConfig());
+    expect(memberTeamsLabel(["kitchen", "power_and_lighting"], labels)).toBe(
+      "Cuisine, Sparks",
+    );
+  });
+
+  it("still names a team the camp has ARCHIVED", () => {
+    // A member can hold a retired team; dropping it from their subtitle would
+    // hide a fact the roster elsewhere shows.
+    const labels = teamLabelMap(editedConfig());
+    expect(memberTeamsLabel(["structures"], labels)).toBe("Structures");
+  });
+
+  it("is empty for a member on no team", () => {
+    expect(memberTeamsLabel([], {})).toBe("");
+  });
+});
+
+describe("roleNameConflicts", () => {
+  const existing = ["Kitchen", "Structures", "Crème Brûlée"];
+
+  it("catches an exact and a case variant of another name", () => {
+    expect(roleNameConflicts(existing, "Kitchen")).toBe(true);
+    expect(roleNameConflicts(existing, "kitchen")).toBe(true);
+    expect(roleNameConflicts(existing, "  KITCHEN  ")).toBe(true);
+  });
+
+  it("catches an accent variant — the same name to everyone reading it", () => {
+    expect(roleNameConflicts(existing, "Kïtchen")).toBe(true);
+    expect(roleNameConflicts(existing, "Creme Brulee")).toBe(true);
+  });
+
+  it("catches a punctuation/spacing variant", () => {
+    // slugify collapses runs of non-alphanumerics, so these are one name.
+    expect(roleNameConflicts(["Health and Safety"], "health-and-safety")).toBe(
+      true,
+    );
+    expect(roleNameConflicts(["Health and Safety"], "Health  and  Safety")).toBe(
+      true,
+    );
+  });
+
+  it("lets a genuinely different name through", () => {
+    expect(roleNameConflicts(existing, "Logistics")).toBe(false);
+    expect(roleNameConflicts([], "Kitchen")).toBe(false);
+  });
+
+  // The non-obvious half: renaming a role to a variant of ITS OWN name is not a
+  // collision with itself.
+  it("exempts the row being renamed, so it may keep its own name in another case", () => {
+    expect(roleNameConflicts(existing, "KITCHEN", "kitchen")).toBe(false);
+    expect(roleNameConflicts(existing, "Kïtchen", "kitchen")).toBe(false);
+    // …but the exemption is exactly one name wide: another team still blocks.
+    expect(roleNameConflicts(existing, "structures", "kitchen")).toBe(true);
+  });
+
+  it("treats a nameless candidate as no conflict (the length parse owns that)", () => {
+    expect(roleNameConflicts(existing, "———")).toBe(false);
+    expect(roleNameConflicts(existing, "")).toBe(false);
+    // A nameless EXISTING entry never blocks anything either.
+    expect(roleNameConflicts(["!!!"], "!!!")).toBe(false);
+  });
+});
+
+describe("renameTeam refuses a duplicate name", () => {
+  const two: TeamsConfig = {
+    teams: [
+      { key: "kitchen", label: "Kitchen", order: 0, archived: false },
+      { key: "structures", label: "Structures", order: 1, archived: false },
+    ],
+  };
+
+  it("throws rather than writing two teams under one name", () => {
+    // Two "Structures" would make the roster filter ambiguous: a captain would
+    // pick between two identical rows and never learn which one they sent to.
+    expect(() => renameTeam(two, "kitchen", "Structures")).toThrow(
+      TeamNameConflictError,
+    );
+    expect(() => renameTeam(two, "kitchen", "strüctures")).toThrow(
+      TeamNameConflictError,
+    );
+  });
+
+  it("carries the offending label so the caller can name it", () => {
+    try {
+      renameTeam(two, "kitchen", "Structures");
+      expect.unreachable("expected a conflict");
+    } catch (error) {
+      expect(error).toBeInstanceOf(TeamNameConflictError);
+      expect((error as TeamNameConflictError).label).toBe("Structures");
+    }
+  });
+
+  it("still allows a team to restyle its own name", () => {
+    expect(renameTeam(two, "kitchen", "KITCHEN").teams[0]?.label).toBe(
+      "KITCHEN",
+    );
+    expect(renameTeam(two, "kitchen", "Kïtchen").teams[0]?.label).toBe(
+      "Kïtchen",
+    );
+  });
+
+  it("an ARCHIVED team still holds its name", () => {
+    // Archived is hidden, not gone: reusing its label would resurrect the same
+    // ambiguity the moment it is unarchived.
+    const withArchived: TeamsConfig = {
+      teams: [
+        { key: "kitchen", label: "Kitchen", order: 0, archived: false },
+        { key: "structures", label: "Structures", order: 1, archived: true },
+      ],
+    };
+    expect(() => renameTeam(withArchived, "kitchen", "Structures")).toThrow(
+      TeamNameConflictError,
+    );
+  });
+
+  it("leaves an unknown key alone rather than throwing", () => {
+    expect(renameTeam(two, "nope", "Structures")).toBe(two);
   });
 });

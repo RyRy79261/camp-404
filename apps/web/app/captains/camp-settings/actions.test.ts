@@ -140,6 +140,34 @@ describe("renameTeamAction", () => {
     const next = transform(twoActive);
     expect(next.teams.find((t) => t.key === "kitchen")?.label).toBe("Cuisine");
   });
+
+  // The refusal a captain actually sees. renameTeam throws from inside the
+  // locked transform, so the guard runs against the freshly-locked config —
+  // writerOver() reproduces that by running the transform for real.
+  it("refuses a name another team already answers to, in a sentence", async () => {
+    writerOver(twoActive);
+    const result = await renameTeamAction("kitchen", "structures");
+    expect(result).toEqual({
+      ok: false,
+      error: 'Another team is already called “structures”. Pick a different name.',
+    });
+  });
+
+  it("refuses an accent variant of another team's name", async () => {
+    writerOver(twoActive);
+    const result = await renameTeamAction("kitchen", "Strüctures");
+    expect(result.ok).toBe(false);
+  });
+
+  it("lets a team keep its own name in a different case", async () => {
+    writerOver(twoActive);
+    const result = await renameTeamAction("kitchen", "KITCHEN");
+    expect(result).toEqual({ ok: true });
+    const transform = vi.mocked(mutateTeamsConfig).mock.calls[0]![0];
+    expect(
+      transform(twoActive).teams.find((t) => t.key === "kitchen")?.label,
+    ).toBe("KITCHEN");
+  });
 });
 
 describe("moveTeamAction", () => {

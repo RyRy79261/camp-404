@@ -7,6 +7,7 @@ import {
   moveTeam,
   renameTeam,
   setTeamArchived,
+  TeamNameConflictError,
   MAX_CYCLE_YEAR,
   MIN_CYCLE_YEAR,
 } from "@camp404/db/camp-config";
@@ -95,9 +96,24 @@ export async function renameTeamAction(
       error: parsedLabel.error.issues[0]?.message ?? "Invalid team name.",
     };
   }
-  await mutateTeamsConfig((config) =>
-    renameTeam(config, parsedKey.data, parsedLabel.data),
-  );
+  // renameTeam refuses a name another team already answers to (case- and
+  // accent-insensitively) by throwing from INSIDE the locked transform, so the
+  // comparison runs against the freshly-locked config — two captains renaming
+  // two teams to the same thing at once cannot both win, and the loser's
+  // transaction rolls back rather than leaving the roster filter ambiguous.
+  try {
+    await mutateTeamsConfig((config) =>
+      renameTeam(config, parsedKey.data, parsedLabel.data),
+    );
+  } catch (error) {
+    if (error instanceof TeamNameConflictError) {
+      return {
+        ok: false,
+        error: `Another team is already called “${parsedLabel.data}”. Pick a different name.`,
+      };
+    }
+    throw error;
+  }
   revalidateTeamSurfaces();
   return { ok: true };
 }

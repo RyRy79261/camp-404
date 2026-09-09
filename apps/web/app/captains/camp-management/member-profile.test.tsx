@@ -76,6 +76,11 @@ function detail(
     promotionStep: { sent: false, accepted: false },
     promotionRequestId: null,
     promotionRequestIsMine: false,
+    // Wave 2 added the team panel to this action's payload; the decision-race
+    // cases below do not exercise it, but the panel renders from these and an
+    // absent array is a crash, not an empty list.
+    teams: [],
+    assignableTeams: [],
   };
 }
 

@@ -56,11 +56,35 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   transient DB throw bypasses it (now backstopped by `app/error.tsx`, but the typed
   contract should be made consistent). The questionnaire/forms save actions were fixed
   this pass. **[sweep 2026-05-31]**
+
+  > **[CORRECTION 2026-09-09]** Closed by Wave 0 / F8 (issue #141).
+  > `apps/web/lib/action-result.ts` adds `runAction(label, body)`, which converts
+  > a throw into the typed `{ok:false}` arm carrying a constant generic string
+  > and `console.error`s the original under `[action:<label>]`. It never reads
+  > `error.message` — `packages/db` nests the driver's text under `.cause`, so no
+  > Postgres detail can reach the screen — and it calls Next's `unstable_rethrow`
+  > first, so `redirect()` / `notFound()` bailouts still propagate (which is what
+  > makes the redirect-on-success profile actions safe to wrap). Applied to all
+  > four announcements actions, all five camp-management actions, and both
+  > profile actions; the duplicate `ActionResult<T>` that lived in
+  > `announcements/actions.ts` was deleted in favour of the shared module.
 - **Shake-to-report bug/feature modal** — spec written at
   `docs/superpowers/specs/2026-05-31-shake-to-report-design.md`; **not built**, pending
   maintainer review of the open decisions (storage target, Intake-Tracker relationship,
   accessibility affordance). The "manual" section of the modal is explicitly out of
   scope for now. **[spec 2026-05-31]**
+
+  > **[CORRECTION 2026-09-09]** "Not built" is stale — it **is** built and
+  > mounted. Shake detection is `packages/core/src/shake.ts` +
+  > `apps/web/components/feedback/use-shake-gesture.ts`; the modal is
+  > `components/feedback/report-bug-dialog.tsx`; `app/feedback-gate.tsx` is
+  > mounted in the root layout (`app/layout.tsx`) and gated on a live client
+  > session; `app/feedback/actions.ts` files the report through
+  > `lib/github-feedback.ts` (with `lib/feedback-ai.ts` behind
+  > `ANTHROPIC_API_KEY`). The open decisions above were answered by shipping:
+  > storage target is a GitHub issue. Two clauses still hold — shake is the
+  > **only** trigger (no manual affordance), and issue #143 D-D reopens whether
+  > the `severity` hint should be rendered into a public issue body.
 
 - **Telegram outbound triggers — intentionally NOT activated (maintainer decision).** `issueGroupInviteForUser` (on captain approval) and `queueAnnouncement` (on announcement publish) are built + unit-tested in `@camp404/telegram`, and the inbound webhook + dispatch cron exist, but the triggers are deliberately **left uncalled** — Telegram outbound must not run yet. Keep all the code; wire the triggers (guarded for no bot config, with an announcement→Telegram toggle, surfacing the invite link via `notification_deliveries`) only when Telegram is explicitly turned on. **[audit #10]**
 - **Invite-code case handling** — generated/DB codes are canonically lowercase (validity pattern `/^[a-z0-9]+.../`), but the redeem path matches **verbatim** while `/api/tools/invite/check` lowercases — so a DB code typed in the wrong case can pass the availability check yet fail on redeem. Fixing this needs a *coordinated* change (normalise at redeem + env + seed + storage **and** update the e2e fixtures + the CI `INVITE_CODES`, which currently use uppercase verbatim). An earlier attempt that only lowercased the redeem path broke the e2e and was reverted; do it as a deliberate, test-data-aware change. **[audit #11]**

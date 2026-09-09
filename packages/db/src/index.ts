@@ -64,3 +64,32 @@ export function createPooledDb(): PooledDatabase {
   const db = drizzleServerless(pool, { schema });
   return { db, pool };
 }
+
+/**
+ * The transaction handle drizzle hands a `db.transaction()` callback. Derived
+ * from the pooled driver rather than hand-written, so it can never drift from
+ * the driver's actual type.
+ */
+export type Tx = Parameters<
+  Parameters<PooledDatabase["db"]["transaction"]>[0]
+>[0];
+
+/**
+ * Run `fn` inside one pooled transaction and always close the pool. Replaces
+ * the hand-rolled `createPooledDb()` … `try { db.transaction(…) } finally {
+ * pool.end() }` shape — forgetting the `finally` leaks a connection per call.
+ *
+ * A throw from `fn` rolls the transaction back and propagates unchanged (no
+ * error mapping — `packages/db` errors nest under `.cause`, and swallowing that
+ * here would hide it from every caller).
+ */
+export async function withTransaction<T>(
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  const { db, pool } = createPooledDb();
+  try {
+    return await db.transaction(fn);
+  } finally {
+    await pool.end();
+  }
+}

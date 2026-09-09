@@ -7,6 +7,8 @@ import type { ViewerRank } from "@camp404/types";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { isTeamLead } from "@camp404/db/roster";
 import { carryOverFor } from "@camp404/db/cycles";
+import { PUSH_SCOPES } from "@camp404/db/activations";
+import { computeAudience } from "@camp404/db/audience";
 import {
   getDefinitionMetaRow,
   setDefinitionCarryOver,
@@ -20,6 +22,8 @@ import {
 } from "@camp404/db/questionnaire-lifecycle";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { runAction } from "@/lib/action-result";
+import { getCampManagementRoster } from "@/lib/roster";
 import {
   createDraft,
   deleteDraft,
@@ -270,6 +274,105 @@ export async function sendAction(
   if (!result.ok) return result;
   revalidateBuilder(key);
   return { ok: true, activationId: result.activationId };
+}
+
+// --- The audience preview -------------------------------------------------
+// A captain picking a scope currently sends into the dark: a `team` or
+// `team_leads` send with no matching membership rows resolves to ZERO
+// recipients and still toasts success. The preview is what turns that silent
+// failure into a visible one — so it has to be computed by the SAME two things
+// the real send is: this module's captain gate, and `computeAudience`. A
+// preview computed a different way is a preview that lies.
+
+const PreviewSpec = z.object({
+  // Deliberately accepts `opt_in` so the preview can REFUSE it the way
+  // openActivation does, rather than reporting a count for a scope that cannot
+  // send at all. Every other questionnaire scope is a push scope.
+  scope: z.enum(["everyone", "team", "team_leads", "individual", "opt_in"]),
+  team: Team.nullish(),
+  targetUserIds: z.array(z.string().uuid()).optional(),
+});
+
+export type PreviewCountResult =
+  | { ok: true; count: number }
+  | { ok: false; error: string };
+
+/**
+ * How many members a send with these settings would reach, right now.
+ *
+ * The count is the SCOPE audience — the same list `openActivation` fans out
+ * over. A `carry` questionnaire may reach fewer people than this once the
+ * carry-over filter subtracts members who already answered at a satisfying
+ * version (§7.3a); this is the ceiling, and the number the author is choosing.
+ *
+ * Every refusal above the gate costs ZERO database round-trips — the parse and
+ * the scope check are pure, so the 300 ms debounced client can call this on
+ * every keystroke of an audience edit without fanning out queries.
+ */
+export async function previewAudienceCount(
+  rawSpec: unknown,
+): Promise<PreviewCountResult> {
+  const parsed = PreviewSpec.safeParse(rawSpec);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid audience.",
+    };
+  }
+  // `const` destructuring, so the narrowing below survives into the closure.
+  const { scope, targetUserIds = [] } = parsed.data;
+  const team = parsed.data.team ?? null;
+  if (scope === "opt_in") {
+    // Mirrors openActivation exactly — opt_in is a pull model with no upfront
+    // fan-out, so there is no audience to count.
+    return { ok: false, error: "opt_in activations are not yet supported." };
+  }
+  if (!PUSH_SCOPES.has(scope)) {
+    return { ok: false, error: `Unsupported activation scope: ${scope}.` };
+  }
+  // An incomplete audience has no honest count yet. `ok:false` (not `count:0`)
+  // — the caller hides the line rather than telling the author "0 members",
+  // which they would rightly read as "this team is empty".
+  if (scope === "team" && !team) {
+    return { ok: false, error: "Choose a team to send to." };
+  }
+  if (scope === "individual" && targetUserIds.length === 0) {
+    return { ok: false, error: "Choose at least one member." };
+  }
+
+  return runAction("previewAudienceCount", async () => {
+    // The SAME gate the real send runs. When team leads are allowed to send
+    // (the write path lands them a real audience), swap this for
+    // `gateAuthor()` + `canSendToAudience(actor, {scope, team})` from
+    // @camp404/core — the audience rule is already written and tested there.
+    const gate = await gateCaptain();
+    if (!gate.ok) return gate;
+
+    // The roster read is already cycle-scoped (this year's teams and leads) and
+    // already excludes system actors and sanitised accounts — the same three
+    // facts openActivation reads out of users + team_memberships. Feeding it
+    // through `computeAudience` means the preview and the send apply ONE rule.
+    const roster = await getCampManagementRoster();
+    const count = computeAudience(
+      { scope, team },
+      {
+        members: roster.map((m) => ({
+          id: m.id,
+          isSystem: false,
+          sanitised: false,
+        })),
+        memberships: roster.flatMap((m) =>
+          m.teams.map((t) => ({ userId: m.id, team: t, isLead: m.isLead })),
+        ),
+        // A questionnaire never targets the driver axis, and an activation has
+        // no sender to exclude — both match openActivation's call.
+        driverUserIds: [],
+        targetUserIds,
+      },
+      null,
+    ).length;
+    return { ok: true, count };
+  });
 }
 
 export async function closeActivationAction(

@@ -13,6 +13,7 @@
     "./invite-codes": "./src/invite-codes.ts",
     "./relations": "./src/relations.ts",
     "./roster": "./src/roster.ts",
+    "./team-memberships": "./src/team-memberships.ts",
     "./captain-promotion": "./src/captain-promotion.ts",
     "./bootstrap": "./src/bootstrap.ts",
     "./camp-config": "./src/camp-config.ts",
@@ -32,6 +33,7 @@
     "./telegram": "./src/telegram.ts",
     "./crypto": "./src/crypto.ts",
     "./id-documents": "./src/id-documents.ts",
+    "./audit": "./src/audit.ts",
     "./maintenance": "./src/maintenance.ts"
   },
   "scripts": {
@@ -44,6 +46,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@camp404/core": "workspace:*",
     "@camp404/types": "workspace:*",
     "@neondatabase/serverless": "^1.1.0",
     "drizzle-orm": "^0.45.2"
@@ -56,6 +59,6 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.4.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.11"
   }
 }

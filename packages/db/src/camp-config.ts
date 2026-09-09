@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
-import { createHttpDb, createPooledDb } from "./index";
+import { humanizeKey, slugify, type AudienceScope } from "@camp404/core";
+import { createHttpDb, withTransaction } from "./index";
 import { campSettings } from "./schema";
 
 // Editable camp-wide config that hangs off the `camp_settings` singleton.
@@ -287,6 +288,101 @@ export function teamLabelMap(config: TeamsConfig): Record<string, string> {
   return Object.fromEntries(config.teams.map((team) => [team.key, team.label]));
 }
 
+// --- The audience vocabulary -----------------------------------------------
+// "Who is this going to" was written out longhand at five sites: the send
+// screen's SCOPE_LABEL and its separate hardcoded TEAM_LABEL, the raw
+// `m.teams.join(", ")` member subtitle beside it, the roster's teamLabel()
+// humanizer, and the frozen DEFAULT_TEAM_OPTIONS in lib/questionnaire.ts. Four
+// of them could disagree with the camp config the moment a captain renamed or
+// archived a team — and three of them did.
+//
+// It lives HERE, beside teamLabelMap, because the team half of the vocabulary
+// is camp config: only this module knows that `power_and_lighting` currently
+// reads "Power and Lighting". The scope half is static, so the two are joined
+// once and every surface asks the same question. AudienceScope is imported
+// rather than restated so a new scope is a compile error in the map below, the
+// same way it already is in computeAudience's switch.
+//
+// Client islands never import this module (it pulls the DB driver) — server
+// pages call it and pass the resolved strings down as props, exactly as they
+// already do with teamLabelMap.
+
+/**
+ * The static half: one display string per scope. A Record over the full union,
+ * so adding a scope to AudienceScope fails to compile until it is named here.
+ * `team` reads "A team" because unaccompanied by a key it is the *choice* of
+ * scope on a picker, not a resolved audience — audienceLabel swaps in the
+ * team's own label the moment one is chosen.
+ */
+export const AUDIENCE_SCOPE_LABELS: Readonly<Record<AudienceScope, string>> = {
+  everyone: "Everyone",
+  team: "A team",
+  team_leads: "Team leads",
+  drivers: "Drivers",
+  individual: "Specific members",
+  opt_in: "Anyone who opts in",
+};
+
+/**
+ * The display string for an audience: a scope, and the team it names when the
+ * scope is `team`.
+ *
+ * Pass `labels` (from teamLabelMap) to resolve a team key against the camp's
+ * CURRENT config, so a rename propagates. Without it — or for a key the config
+ * has never heard of — the key is humanised rather than printed raw, which is
+ * the difference between reading "Power and Lighting" and reading
+ * `power_and_lighting`.
+ */
+export function audienceLabel(
+  scope: AudienceScope,
+  team?: string | null,
+  labels?: Record<string, string>,
+): string {
+  if (scope === "team") {
+    if (!team) return AUDIENCE_SCOPE_LABELS.team;
+    return labels?.[team] ?? humanizeKey(team);
+  }
+  return AUDIENCE_SCOPE_LABELS[scope];
+}
+
+/** One entry in an audience picker: the stored value, and what a captain reads. */
+export interface AudienceOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * The team choices a send picker may offer: ACTIVE teams only, in the camp's
+ * configured order, under their configured labels.
+ *
+ * The `activeTeams` filter is the load-bearing half. Enumerating the raw
+ * `teamEnum` (as the send screen did) offers a team the camp has ARCHIVED —
+ * hidden from the roster filter and from onboarding, but still a legal send
+ * target, so a captain could aim a questionnaire at a team that no longer
+ * exists and be told it sent fine.
+ */
+export function teamPickerOptions(config: TeamsConfig): AudienceOption[] {
+  return activeTeams(config).map((team) => ({
+    value: team.key,
+    label: team.label,
+  }));
+}
+
+/**
+ * The teams one member holds, as one readable line — "Kitchen, Structures".
+ *
+ * Resolved against the FULL label map (archived included, which is why this
+ * takes a map rather than filtering to the active set): a member can still hold
+ * a team the camp has retired, and dropping it from their subtitle would hide a
+ * fact the roster elsewhere shows.
+ */
+export function memberTeamsLabel(
+  teams: readonly string[],
+  labels: Record<string, string>,
+): string {
+  return teams.map((team) => audienceLabel("team", team, labels)).join(", ");
+}
+
 function isTeamConfigEntry(value: unknown): value is TeamConfigEntry {
   if (!value || typeof value !== "object") return false;
   const entry = value as Record<string, unknown>;
@@ -375,12 +471,86 @@ export async function getTeamsConfig(): Promise<TeamsConfig> {
 // would wipe unrelated camp config. Latent while `teams` is the only key —
 // load-bearing the moment it is not.
 
-/** Rename one team's display label. Unknown key → config returned unchanged. */
+/**
+ * Two teams may not answer to the same name. The team KEY is what the database
+ * stores, so a duplicate label is not a data corruption — it is worse in a
+ * quieter way: the roster filter, the send picker and every team chip render
+ * the label, so two "Kitchen"s make a captain pick between two identical rows
+ * and never learn which one they sent to.
+ *
+ * Sameness is judged on the SLUG, not the raw string: "Kitchen", "kitchen",
+ * " Kitchen " and "Kïtchen" are one name to everyone reading the screen, so
+ * they are one name here. That rule already exists — `slugify` (@camp404/core)
+ * does NFKD → strip marks → lowercase → collapse to hyphens — and it is reused
+ * rather than restated, so the two can never drift apart.
+ *
+ * `exceptNormalized` is the half that is easy to get wrong. Renaming a team to
+ * a case or accent variant of ITS OWN name ("kitchen" → "Kitchen") must be
+ * allowed: the row being renamed is not a rival. Pass the slug of the name that
+ * row holds today and it is skipped; omit it and every existing name competes,
+ * which is what an ADD (Phase 4) wants.
+ *
+ * An empty candidate slug (a label of nothing but punctuation or emoji) never
+ * conflicts — it is not a name at all, and the caller's own min-length parse is
+ * what refuses it. Returning "conflict" here would blame the wrong thing.
+ */
+export function roleNameConflicts(
+  existing: Iterable<string>,
+  candidate: string,
+  exceptNormalized?: string,
+): boolean {
+  const wanted = slugify(candidate);
+  if (!wanted) return false;
+  for (const name of existing) {
+    const taken = slugify(name);
+    if (!taken) continue;
+    if (exceptNormalized !== undefined && taken === exceptNormalized) continue;
+    if (taken === wanted) return true;
+  }
+  return false;
+}
+
+/**
+ * Thrown by renameTeam when the new label collides with another team's. It is a
+ * named class so the caller can turn it into ONE captain-facing sentence
+ * without string-matching a message — the same shape the last-active-team guard
+ * uses. Thrown from the transform (rather than checked before the write) so the
+ * comparison runs against the freshly-locked config inside mutateTeamsConfig's
+ * transaction: two captains renaming two teams to "Logistics" at the same time
+ * cannot both win, and the loser's transaction rolls back.
+ */
+export class TeamNameConflictError extends Error {
+  constructor(public readonly label: string) {
+    super(`Another team is already called "${label}".`);
+    this.name = "TeamNameConflictError";
+  }
+}
+
+/**
+ * Rename one team's display label. Unknown key → config returned unchanged.
+ * Throws TeamNameConflictError when another team already answers to that name
+ * (case- and accent-insensitively); renaming a team to a variant of its own
+ * name is always allowed.
+ */
 export function renameTeam(
   config: TeamsConfig,
   key: string,
   label: string,
 ): TeamsConfig {
+  const target = config.teams.find((team) => team.key === key);
+  if (!target) return config;
+  // The whole list competes, minus the row being renamed — identified by the
+  // slug of the name it holds today, which is what lets "kitchen" → "Kitchen"
+  // through instead of colliding with itself.
+  if (
+    roleNameConflicts(
+      config.teams.map((team) => team.label),
+      label,
+      slugify(target.label),
+    )
+  ) {
+    throw new TeamNameConflictError(label);
+  }
   return {
     ...config,
     teams: config.teams.map((team) =>
@@ -460,29 +630,24 @@ export function assertStableTeamKeys(
 export async function mutateTeamsConfig(
   transform: (current: TeamsConfig) => TeamsConfig,
 ): Promise<TeamsConfig> {
-  const { db, pool } = createPooledDb();
-  try {
-    return await db.transaction(async (tx) => {
-      // Ensure the singleton exists, then lock it for the read-modify-write.
-      await tx
-        .insert(campSettings)
-        .values({ id: true })
-        .onConflictDoNothing({ target: campSettings.id });
-      const [locked] = await tx
-        .select({ config: campSettings.config })
-        .from(campSettings)
-        .where(eq(campSettings.id, true))
-        .for("update");
-      const current = resolveTeamsConfig(locked?.config);
-      const next = transform(current);
-      assertStableTeamKeys(current, next);
-      await tx
-        .update(campSettings)
-        .set({ config: next, updatedAt: new Date() })
-        .where(eq(campSettings.id, true));
-      return next;
-    });
-  } finally {
-    await pool.end();
-  }
+  return await withTransaction(async (tx) => {
+    // Ensure the singleton exists, then lock it for the read-modify-write.
+    await tx
+      .insert(campSettings)
+      .values({ id: true })
+      .onConflictDoNothing({ target: campSettings.id });
+    const [locked] = await tx
+      .select({ config: campSettings.config })
+      .from(campSettings)
+      .where(eq(campSettings.id, true))
+      .for("update");
+    const current = resolveTeamsConfig(locked?.config);
+    const next = transform(current);
+    assertStableTeamKeys(current, next);
+    await tx
+      .update(campSettings)
+      .set({ config: next, updatedAt: new Date() })
+      .where(eq(campSettings.id, true));
+    return next;
+  });
 }

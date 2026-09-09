@@ -5,9 +5,13 @@ import {
   getCurrentCycle as dbGetCurrentCycle,
   mutateTeamsConfig as dbMutateTeamsConfig,
   activeTeams,
+  audienceLabel,
   currentCycle,
+  memberTeamsLabel,
   resolveCycles,
   teamLabelMap,
+  teamPickerOptions,
+  AUDIENCE_SCOPE_LABELS,
   type CycleEntry,
   type TeamsConfig,
   type TeamConfigEntry,
@@ -21,12 +25,20 @@ import { testStore } from "./test-store";
 // split lib/roster.ts / lib/notifications.ts use. The store seeds with the same
 // DEFAULT_CAMP_CONFIG the column default seeds, so reads match Phase-1 behaviour
 // while now also reflecting edits made via mutateTeamsConfig in the same run.
-// The pure shaping helpers (activeTeams/teamLabelMap) are re-exported so server
-// pages compute serialisable lists/maps to pass into client islands; the
-// @camp404/db module is never imported client-side (it pulls the DB driver).
+// The pure shaping helpers (activeTeams/teamLabelMap/audienceLabel) are
+// re-exported so server pages compute serialisable lists/maps to pass into
+// client islands; the @camp404/db module is never imported client-side (it
+// pulls the DB driver).
 
 export type { CycleEntry, TeamsConfig, TeamConfigEntry };
-export { activeTeams, teamLabelMap };
+export {
+  activeTeams,
+  audienceLabel,
+  memberTeamsLabel,
+  teamLabelMap,
+  teamPickerOptions,
+  AUDIENCE_SCOPE_LABELS,
+};
 
 export function getTeamsConfig(): Promise<TeamsConfig> {
   return isE2ETestMode()

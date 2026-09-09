@@ -27,6 +27,13 @@ packages/
   eslint-config/ typescript-config/
 ```
 
+> **[CORRECTION 2026-09-09]** The tree above omits two workspaces that exist
+> today: `packages/core/` (`@camp404/core` — framework-free domain logic:
+> access rules, invites, ID validation, promotion, family tree, text
+> redaction/utils, shake) and `packages/telegram/` (`@camp404/telegram` — bot
+> client, webhook, and handlers; outbound is built but deliberately not
+> activated, see `DEFERRED.md`). `pnpm-workspace.yaml` is the source of truth.
+
 ## Commands
 
 Run from the repo root; Turbo fans tasks out across the workspace.
@@ -96,6 +103,48 @@ Decisions baked into the schema — keep new code consistent with them:
   `team_memberships.is_lead`; a **driver** from
   `driver_profiles.intends_to_drive`. Do not add a stored role column for
   a derived capability.
+- **`team_lead` clearance is GLOBAL, not per-team.** *(Owner-ratified
+  2026-09-09: "it's a sitewide global role." Settled — do not re-open it in
+  passing; a change here is a deliberate reshape, not a refactor.)* Leading
+  *any* team in the camp's current year raises a member to the `team_lead` rung of the
+  `camp_member < team_lead < captain` ladder **everywhere in the app** —
+  `isTeamLead(userId)` is a single boolean and `deriveViewerRank` takes it
+  as one. Team identity governs *audience* (who a `team` / `team_leads`
+  broadcast or questionnaire send reaches, which chips a roster row wears),
+  never *clearance*. There is no "lead of team X may see team X's data and
+  no one else's" tier, and adding one would mean re-shaping
+  `deriveViewerRank`, `requireClearance` and every call site — not a local
+  change. Rationale: the ladder is a single ordered scale by construction,
+  the camp is 30–80 people who all camp together, and a per-team scope
+  would buy privacy the camp does not ask for at the cost of a second,
+  parallel authorization axis. A lead never reaches a captain-required
+  surface, because `team_lead < captain` still holds.
+  - **Corollary — pass the real flag.** Several captain pages currently
+    hardcode `deriveViewerRank(rank, false)`. That is behaviour-preserving
+    only while the surface requires `captain`; on any surface requiring
+    `team_lead` it wrongly locks out a genuine lead. New gates must call
+    `isTeamLead()` and pass the result.
+  - Team membership and the lead flag are **year-scoped**: `cycle` is part
+    of `team_memberships`' primary key and every production read filters on
+    the camp's current burn year, because the owner ruled that teams and
+    lead roles go fresh each year. Write them only through
+    `@camp404/db/team-memberships` (`assignTeam` / `removeTeam` /
+    `setLead`), which stamps `currentCycleNumber()` itself; never insert
+    into `team_memberships` directly, or the row lands on the `DEFAULT 1`
+    sentinel and is invisible to every production read. `setLead` refuses a
+    non-member rather than creating the membership, and removing a team's
+    last lead is allowed — a leaderless team is a legitimate state (every
+    team is leaderless the moment the camp rolls over).
+  - **The audience half has one owner too.** Clearance says which rung a
+    viewer stands on; it does not say which audiences they may *address*.
+    That is `canSendToAudience` in `packages/core/src/audience-authz.ts`: a
+    captain is unrestricted, a team lead may send only to a single `team`
+    scope they themselves lead, and everything wider — `everyone`,
+    `team_leads`, `drivers`, `individual`, `opt_in` — is refused
+    (fail-closed on an unknown rank or a missing team). It is pure and
+    tested but has no live caller yet, because every send path is still
+    captain-gated; it goes live the moment one of them stops being. Change
+    the rule in that function, never at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping
@@ -165,7 +214,15 @@ version instead.
 
 All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
 Scheduled routes are registered in `apps/web/vercel.json` (recipes, manuals,
-reminders). `telegram/dispatch` is intentionally **not** scheduled yet —
+reminders).
+
+> **[CORRECTION 2026-09-09]** `vercel.json` now schedules **five** crons, not
+> three: `notifications/dispatch` (09:15 UTC) and `notifications/push`
+> (09:25 UTC) were added with the notifications work. The sentence below about
+> `telegram/dispatch` still holds — that is a different route
+> (`/api/cron/telegram/dispatch`) and it remains unscheduled.
+
+`telegram/dispatch` is intentionally **not** scheduled yet —
 nothing enqueues announcements until the notifications work lands, and Vercel's
 daily-cron cap means it will be scheduled (or folded into an inline send) only
 once there is a queue to drain (see the route's own comment).
@@ -180,6 +237,17 @@ once there is a queue to drain (see the route's own comment).
 - Add or update tests with behavioural changes. Vitest covers units;
   Playwright e2e exists in `apps/web/tests/e2e` but is disabled pending a
   preview deployment.
+
+  > **[UNRESOLVED 2026-09-09]** This claim and the CI config disagree, and the
+  > owner has not ruled — do not act on either half without checking.
+  > **Doc:** the line above says the Playwright suite is disabled.
+  > **Code:** `.github/workflows/ci.yml` defines an `e2e` job that runs
+  > `pnpm --filter @camp404/web test:e2e` on every `src` PR (it self-hosts
+  > `next dev` with `E2E_TEST_MODE=1`, so it needs no preview deployment) and
+  > lists `e2e` in the `ci-pass` aggregate's `needs`, so a failure blocks
+  > merge. Tracked as decision **D-A** on issue #143; five harvest units
+  > down-weighted their e2e recommendations on this line. Leave both facts
+  > here until the owner decides which document is wrong.
 
 ## Security / POPIA
 

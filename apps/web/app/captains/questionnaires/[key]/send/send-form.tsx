@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, Send, TriangleAlert, Undo2 } from "lucide-react";
-import { Team } from "@camp404/types";
 import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
 import { Card } from "@camp404/ui/components/card";
@@ -28,7 +27,11 @@ import {
 } from "@camp404/ui/components/select";
 import { Switch } from "@camp404/ui/components/switch";
 import { toast } from "@camp404/ui/components/toast";
-import { closeActivationAction, sendAction } from "../../actions";
+import {
+  closeActivationAction,
+  previewAudienceCount,
+  sendAction,
+} from "../../actions";
 
 export interface MemberOption {
   id: string;
@@ -36,25 +39,66 @@ export interface MemberOption {
   sub: string;
 }
 
+/**
+ * One entry in a picker: the value the send stores, and what a captain reads.
+ * Structurally the `AudienceOption` that @camp404/db/camp-config builds — named
+ * again here rather than imported because this island is bundled client-side
+ * and that module pulls the DB driver.
+ */
+export interface AudienceOption {
+  value: string;
+  label: string;
+}
+
 type Scope = "everyone" | "team" | "team_leads" | "individual";
 
-const SCOPE_LABEL: Record<Scope, string> = {
-  everyone: "Everyone",
-  team: "A team",
-  team_leads: "Team leads",
-  individual: "Specific members",
-};
+// This island used to own two label maps of its own: a SCOPE_LABEL, and a
+// TEAM_LABEL hardcoding all eight founding names. Both are gone. The team half
+// was a live bug the moment configurable-teams Phase 2 shipped — a captain's
+// rename never reached this screen, and the picker enumerated the raw
+// `Team.options` enum, so an ARCHIVED team was still offered as a send target.
+// Both lists now arrive as props, built on the server from the camp config by
+// `audienceLabel` (@camp404/db/camp-config), which is the one owner of the
+// vocabulary. The island stays a client component and never imports the DB.
 
-const TEAM_LABEL: Record<string, string> = {
-  kitchen: "Kitchen",
-  structures: "Structures",
-  power_and_lighting: "Power & lighting",
-  sanitation_and_water: "Sanitation & water",
-  health_and_safety: "Health & safety",
-  art_and_activities: "Art & activities",
-  ministry_of_memes: "Ministry of memes",
-  ministry_of_vibes: "Ministry of vibes",
-};
+/**
+ * The audience count line — the whole point of item 2.6, in one predicate.
+ *
+ *     showCount = count !== null && count !== undefined
+ *
+ * `null` HIDES the line (we don't know yet: still debouncing, an incomplete
+ * audience, a refused scope). `0` SHOWS it — zero is precisely the moment the
+ * author needs telling, because a team send with nobody on the team reaches
+ * nobody and still toasts success. Treating 0 as falsy and hiding the line
+ * would reproduce the silent failure this exists to fix.
+ */
+export function AudienceCount({
+  count,
+  noun = "member",
+}: {
+  count: number | null | undefined;
+  noun?: string;
+}) {
+  const showCount = count !== null && count !== undefined;
+  if (!showCount) return null;
+  return (
+    <p
+      role="status"
+      aria-live="polite"
+      className={
+        count === 0
+          ? "text-sm font-medium text-warning"
+          : "text-sm text-muted-foreground"
+      }
+    >
+      {count === 0
+        ? `Nobody matches this audience — this send would reach no ${noun}s.`
+        : count === 1
+          ? `This will reach 1 ${noun}.`
+          : `This will reach ${count} ${noun}s.`}
+    </p>
+  );
+}
 
 // The Send/Activate screen (§6.4, functional/undrawn). Captain-only — the page
 // gates clearance before rendering this. Opens an activation pinned to the
@@ -64,23 +108,62 @@ export function SendForm({
   questionnaireKey,
   title,
   members,
+  scopeOptions,
+  teamOptions,
   openActivationId,
 }: {
   questionnaireKey: string;
   title: string;
   members: MemberOption[];
+  /** Every scope this screen offers, labelled by `audienceLabel`. */
+  scopeOptions: AudienceOption[];
+  /** ACTIVE teams only, in the camp's configured order, with config labels. */
+  teamOptions: AudienceOption[];
   openActivationId: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   const [scope, setScope] = useState<Scope>("everyone");
-  const [team, setTeam] = useState<Team | "">("");
+  const [team, setTeam] = useState<string>("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [blocking, setBlocking] = useState(false);
   const [dueAtLocal, setDueAtLocal] = useState("");
   const [query, setQuery] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [audienceCount, setAudienceCount] = useState<number | null>(null);
+
+  // The spec the preview is keyed on. Stringified so the effect below depends
+  // on the VALUE, not on a fresh object identity every render.
+  const specKey = JSON.stringify({
+    scope,
+    team: scope === "team" ? team || null : null,
+    targetUserIds: scope === "individual" ? [...selected].sort() : [],
+  });
+
+  // 300 ms debounce: a captain ticking through a member list must not fan out
+  // one query per checkbox. The `cancelled` flag drops the answer to a spec
+  // that is no longer on screen, so a slow reply can never overwrite a newer
+  // one. Clearing to `null` first hides the line while it is being recomputed,
+  // rather than showing a stale count against the new audience.
+  useEffect(() => {
+    setAudienceCount(null);
+    if (openActivationId) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const result = await previewAudienceCount(JSON.parse(specKey));
+        if (cancelled) return;
+        // A refusal (opt_in, an incomplete audience, a non-captain) leaves the
+        // line hidden — `null`, never 0.
+        setAudienceCount(result.ok ? result.count : null);
+      })();
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [specKey, openActivationId]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -188,9 +271,9 @@ export function SendForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(Object.keys(SCOPE_LABEL) as Scope[]).map((s) => (
-              <SelectItem key={s} value={s}>
-                {SCOPE_LABEL[s]}
+            {scopeOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -200,14 +283,14 @@ export function SendForm({
       {scope === "team" && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="send-team">Which team?</Label>
-          <Select value={team} onValueChange={(v) => setTeam(v as Team)}>
+          <Select value={team} onValueChange={setTeam}>
             <SelectTrigger id="send-team">
               <SelectValue placeholder="Pick a team" />
             </SelectTrigger>
             <SelectContent>
-              {Team.options.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {TEAM_LABEL[t] ?? t}
+              {teamOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -259,6 +342,8 @@ export function SendForm({
           </ul>
         </div>
       )}
+
+      <AudienceCount count={audienceCount} />
 
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-col">
