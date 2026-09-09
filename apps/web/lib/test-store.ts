@@ -1,10 +1,24 @@
 import "server-only";
 
 import type { CampManagementMember } from "@camp404/db/roster";
-import { DEFAULT_CAMP_CONFIG, type TeamsConfig } from "@camp404/db/camp-config";
+import {
+  currentCycle,
+  DEFAULT_CAMP_CONFIG,
+  resolveCycles,
+  UNSET_CYCLE,
+  type TeamsConfig,
+} from "@camp404/db/camp-config";
+// Type-only: the store's three team operations return the SAME shapes the
+// production writers do, so a divergence is a typecheck failure rather than a
+// green e2e run over a broken app.
+import type {
+  SetLeadResult,
+  TeamMembership,
+} from "@camp404/db/team-memberships";
 import type {
   IncomingPromotionRequest,
   QuestionnaireFieldChange,
+  Team,
 } from "@camp404/types";
 
 // Process-scoped in-memory replacement for the Neon-backed user and
@@ -101,6 +115,17 @@ interface TestPromotionRequest {
   decidedAt: Date | null;
 }
 
+// In-memory stand-in for `team_memberships`. Year-scoped exactly like the real
+// table: (userId, team, cycle) is the identity, and every read filters on the
+// camp's current cycle. See the team-membership section below for the semantics
+// this mirrors.
+interface TestTeamMembership {
+  userId: string;
+  team: Team;
+  isLead: boolean;
+  cycle: number;
+}
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -110,6 +135,7 @@ interface TestStoreState {
   broadcasts: TestBroadcast[];
   deliveries: TestDelivery[];
   promotionRequests: TestPromotionRequest[];
+  teamMemberships: TestTeamMembership[];
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -143,6 +169,7 @@ function globalState(): TestStoreState {
       broadcasts: [] as TestBroadcast[],
       deliveries: [] as TestDelivery[],
       promotionRequests: [] as TestPromotionRequest[],
+      teamMemberships: [] as TestTeamMembership[],
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -161,6 +188,30 @@ const questionnaireEdits = S.questionnaireEdits;
 const broadcasts = S.broadcasts;
 const deliveries = S.deliveries;
 const promotionRequests = S.promotionRequests;
+const teamMemberships = S.teamMemberships;
+
+/**
+ * The camp's current year, resolved the way `currentCycleNumber()` resolves it
+ * in production: from the camp config, falling back to the `UNSET_CYCLE`
+ * sentinel on a camp that has not named its founding year yet.
+ *
+ * DEFAULT_CAMP_CONFIG carries no `cycles`, so a fresh store sits on the
+ * sentinel — the same value migration 0019 stamped on every pre-namespace row —
+ * and every membership written there is consistently readable. A test that
+ * names a founding year through `setTeamsConfig` gets real year-scoping,
+ * including last year's rows going quiet.
+ *
+ * KNOWN BOUNDARY: production's `setFoundingYear` also sweeps rows carrying the
+ * sentinel onto the founding year. Nothing mirrors that here because the
+ * founding-year write path (@camp404/db/cycle-rollover) is not routed through
+ * this store — so seed the year BEFORE the memberships, the way the PGlite
+ * suite's `foundedAt` helper does.
+ */
+function currentCycleNumber(): number {
+  return (
+    currentCycle(resolveCycles(globalState().teamsConfig))?.year ?? UNSET_CYCLE
+  );
+}
 
 function findUserById(userId: string): TestUser | null {
   for (const user of usersByAuthId.values()) {
@@ -594,13 +645,173 @@ export const testStore = {
     }
   },
 
+  // --- Team memberships (mirrors @camp404/db/team-memberships) -------------
+  // The three production operations, with production's semantics — not an
+  // approximation. Until this existed the store hardcoded `isLead: false,
+  // teams: []` and answered `isTeamLead` false for everyone, so the Playwright
+  // `team_lead` persona had nothing to stand on: the harness documented a tier
+  // it could not produce, which is how a stranded tier went unnoticed for so
+  // long. A store that DISAGREES with the real backend would be worse still —
+  // it makes e2e green while production is broken — so each operation below is
+  // mirrored case for case from packages/db/src/team-memberships.ts (and
+  // asserted against the real rules in lib/__tests__/test-store-teams.test.ts):
+  //
+  //   • year-scoped — every read and write resolves the store's OWN current
+  //     cycle, and nothing takes a cycle from its caller;
+  //   • `assignTeam` is idempotent and NEVER touches an existing row's lead
+  //     flag, so a re-assignment cannot silently demote a lead;
+  //   • `removeTeam` is idempotent and deletes only THIS year's row — last
+  //     year's membership and lead flag stay on file forever;
+  //   • `setLead` REFUSES a non-member (`not_a_member`) instead of creating the
+  //     membership, and reports `changed: false` for a no-op.
+
+  /** The year every team write is stamped with — exposed so specs can assert it. */
+  currentCycleNumber(): number {
+    return currentCycleNumber();
+  },
+
+  /** This year's memberships for one member, team-ordered (mirrors getTeamMemberships). */
+  getTeamMemberships(userId: string): TeamMembership[] {
+    const cycle = currentCycleNumber();
+    return teamMemberships
+      .filter((m) => m.userId === userId && m.cycle === cycle)
+      .map((m) => ({ team: m.team, isLead: m.isLead, cycle: m.cycle }))
+      .sort((a, b) => a.team.localeCompare(b.team));
+  },
+
+  /** Put a member on a team for THIS year. Idempotent; never sets the lead flag. */
+  assignTeam(input: {
+    userId: string;
+    team: Team;
+  }): { created: boolean; cycle: number } {
+    const cycle = currentCycleNumber();
+    // Mirrors the row's foreign key to `users`: a membership for a member who
+    // does not exist is a failed write in production, not a silent success.
+    if (!findUserById(input.userId)) {
+      throw new Error(`No test user with id ${input.userId}`);
+    }
+    const existing = teamMemberships.find(
+      (m) =>
+        m.userId === input.userId &&
+        m.team === input.team &&
+        m.cycle === cycle,
+    );
+    if (existing) return { created: false, cycle };
+    teamMemberships.push({
+      userId: input.userId,
+      team: input.team,
+      isLead: false,
+      cycle,
+    });
+    return { created: true, cycle };
+  },
+
+  /** Take a member off a team for THIS year. Idempotent; prior years survive. */
+  removeTeam(input: {
+    userId: string;
+    team: Team;
+  }): { removed: boolean; cycle: number } {
+    const cycle = currentCycleNumber();
+    const idx = teamMemberships.findIndex(
+      (m) =>
+        m.userId === input.userId &&
+        m.team === input.team &&
+        m.cycle === cycle,
+    );
+    if (idx === -1) return { removed: false, cycle };
+    teamMemberships.splice(idx, 1);
+    return { removed: true, cycle };
+  },
+
+  /** Set/clear the lead flag on a membership that already exists THIS year. */
+  setLead(input: {
+    userId: string;
+    team: Team;
+    isLead: boolean;
+  }): SetLeadResult {
+    const cycle = currentCycleNumber();
+    const existing = teamMemberships.find(
+      (m) =>
+        m.userId === input.userId &&
+        m.team === input.team &&
+        m.cycle === cycle,
+    );
+    // Leading a team is a modifier on a membership, not a membership of its
+    // own: a wrong id must not mint `team_lead` clearance through this control.
+    if (!existing) return { ok: false, reason: "not_a_member" };
+    if (existing.isLead === input.isLead) return { ok: true, changed: false };
+    existing.isLead = input.isLead;
+    return { ok: true, changed: true };
+  },
+
+  /**
+   * Seed a membership in an ARBITRARY year — the mirror of the PGlite suite's
+   * `makeMembership` factory, not a production path. Specs use it to put a
+   * member on last year's team and prove this year's reads ignore it.
+   */
+  seedTeamMembership(input: {
+    userId: string;
+    team: Team;
+    isLead?: boolean;
+    cycle?: number;
+  }): TestTeamMembership {
+    if (!findUserById(input.userId)) {
+      throw new Error(`No test user with id ${input.userId}`);
+    }
+    const row: TestTeamMembership = {
+      userId: input.userId,
+      team: input.team,
+      isLead: input.isLead ?? false,
+      cycle: input.cycle ?? currentCycleNumber(),
+    };
+    const idx = teamMemberships.findIndex(
+      (m) =>
+        m.userId === row.userId &&
+        m.team === row.team &&
+        m.cycle === row.cycle,
+    );
+    // (user_id, team, cycle) is the primary key: seeding the same triple twice
+    // replaces the row rather than duplicating it.
+    if (idx === -1) teamMemberships.push(row);
+    else teamMemberships[idx] = row;
+    return row;
+  },
+
+  /**
+   * Whether this member leads ANY team this year — the derived, GLOBAL
+   * `team_lead` clearance (owner-ratified: "it's a sitewide global role").
+   * Mirrors @camp404/db/roster.isTeamLead.
+   */
+  isTeamLead(userId: string): boolean {
+    const cycle = currentCycleNumber();
+    return teamMemberships.some(
+      (m) => m.userId === userId && m.isLead && m.cycle === cycle,
+    );
+  },
+
+  /**
+   * The teams this member leads this year, team-ordered. Clearance is global;
+   * THIS is the per-team fact, and it governs audience only — it is what
+   * `canSendToAudience` reads to decide which team a lead may send to.
+   */
+  getLeadTeams(userId: string): Team[] {
+    return this.getTeamMemberships(userId)
+      .filter((m) => m.isLead)
+      .map((m) => m.team);
+  },
+
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
-  // The test store models users + burner profiles, not teams / driver profiles /
-  // required-actions, so those facets default (empty / false / 0) — enough for
-  // the captain roster to render in E2E without touching Neon.
+  // The test store models users, burner profiles and team memberships, but not
+  // driver profiles / required-actions, so those facets still default (false /
+  // 0) — enough for the captain roster to render in E2E without touching Neon.
+  // `isLead` and `teams` come from the membership rows and are year-scoped, the
+  // same two facts the real query aggregates out of `team_memberships`.
   getCampManagementRoster(): CampManagementMember[] {
+    const cycle = currentCycleNumber();
+    const thisYear = teamMemberships.filter((m) => m.cycle === cycle);
     return Array.from(usersByAuthId.values())
       .map((u): CampManagementMember => {
+        const mine = thisYear.filter((m) => m.userId === u.id);
         const profile = profilesByUserId.get(u.id) ?? null;
         const country =
           profile && typeof profile.responses["country"] === "string"
@@ -612,8 +823,8 @@ export const testStore = {
           handle: null,
           rank: u.rank,
           approvalStatus: u.approvalStatus,
-          isLead: false,
-          teams: [],
+          isLead: mine.some((m) => m.isLead),
+          teams: mine.map((m) => m.team).sort((a, b) => a.localeCompare(b)),
           duesPaid: false,
           membershipTier: null,
           onboardingComplete: profile?.completedAt != null,
@@ -716,6 +927,7 @@ export const testStore = {
     broadcasts.length = 0;
     deliveries.length = 0;
     promotionRequests.length = 0;
+    teamMemberships.length = 0;
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },
@@ -727,4 +939,5 @@ export type {
   TestInviteCode,
   TestQuestionnaireEdit,
   TestPromotionRequest,
+  TestTeamMembership,
 };

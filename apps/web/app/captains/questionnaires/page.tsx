@@ -1,10 +1,19 @@
 import { redirect } from "next/navigation";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
-import { isTeamLead } from "@camp404/db/roster";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+// `isTeamLead` comes from the lib facade, not @camp404/db/roster: in production
+// the facade delegates to that same function, but under E2E_TEST_MODE it reads
+// the test store's team_memberships mirror. Importing the db function directly
+// would make this page ask Neon while the send/author gate in ./actions.ts asks
+// the store — two backends answering one question.
+import {
+  ensureCampUser,
+  hasCampAccess,
+  isApproved,
+  isTeamLead,
+} from "@/lib/users";
 import { listDefinitionsForViewer } from "@/lib/questionnaire-definitions";
 import { QuestionnaireHub, type HubItem } from "./questionnaire-hub";
 

@@ -52,6 +52,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { getMemberDetailAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { deriveViewerRank, hasClearance } from "@camp404/core";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getOpenPromotionForTarget } from "@/lib/promotion";
 import { getCampMemberDetail } from "@camp404/db/roster";
@@ -162,6 +163,35 @@ describe("getMemberDetailAction — promotion surfacing", () => {
 
     expect(res).toEqual({ ok: false, error: "Captain access only." });
     expect(getOpenPromotionForTarget).not.toHaveBeenCalled();
+  });
+
+  it("keeps a genuine team lead out of the ID decrypt path", () => {
+    // A team lead is stored as `member` (lead-ness is derived from
+    // team_memberships.is_lead), so the refusal above is already a real lead's
+    // session. This pins the OTHER half — that requireCaptain's bar is
+    // `captain` — so swapping the hardcoded `false` for the real isTeamLead
+    // flag could not open the government-ID decrypt path to a lead.
+    expect(deriveViewerRank("member", true)).toBe("team_lead");
+    expect(hasClearance("team_lead", "captain")).toBe(false);
+  });
+
+  it("does not care whether the TARGET leads a team", async () => {
+    // `targetRank: deriveViewerRank(detail.rank, false)` is bucket (c): the rank
+    // of the person being acted on, not the actor. canSendPromotion asks it one
+    // question — "already a captain?" — so a member who leads a team is exactly
+    // as promotable as one who doesn't, and passing the real flag here would
+    // change nothing but the query count.
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+
+    const res = await getMemberDetailAction("member-1");
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.canAssignCaptain).toBe(true);
+    // Both derivations of a `member` row clear the guard identically.
+    expect(deriveViewerRank("member", false)).not.toBe("captain");
+    expect(deriveViewerRank("member", true)).not.toBe("captain");
   });
 
   it("rejects when the member isn't found", async () => {

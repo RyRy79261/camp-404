@@ -137,6 +137,11 @@ async function requireCaptain(): Promise<
     return { ok: false, error: "Your account is still awaiting approval." };
   }
   // Same preview-but-locked comparator the captain pages gate on (D3).
+  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
+  // and `team_lead < captain`, so the real flag cannot change the outcome —
+  // passing it would only buy a DB round-trip on every action call. If this
+  // bar ever drops to `team_lead`, it MUST become
+  // `await isTeamLead(campUser.id)`.
   const { cleared } = requireClearance(
     deriveViewerRank(campUser.rank, false),
     "captain",
@@ -167,6 +172,9 @@ async function requireApprovedMember(): Promise<
   if (!isApproved(campUser, authUser.primaryEmail)) {
     return { ok: false, error: "Your account isn't approved yet." };
   }
+  // `false` again, and for the same reason: this comparison asks only "is this
+  // viewer a captain" (it feeds `isCaptain`, which picks the full vs. redacted
+  // roster projection). `team_lead < captain`, so the real flag cannot move it.
   const { cleared } = requireClearance(
     deriveViewerRank(campUser.rank, false),
     "captain",
@@ -231,6 +239,12 @@ export async function getMemberDetailAction(
     const canAssignCaptain = canSendPromotion({
       viewerRank: "captain",
       viewerId: gate.captainId,
+      // NOT a viewer gate: this is the rank of the person being ACTED ON, and
+      // `canSendPromotion` asks one thing of it — "are they already a captain?".
+      // Whether they lead a team has no bearing on being promotable, so `false`
+      // is the correct value here, not a missing lookup. Do not "fix" this to
+      // `await isTeamLead(userId)`: it would cost a round-trip per modal open
+      // and imply, wrongly, that leading a team changes who may be promoted.
       targetRank: deriveViewerRank(detail.rank, false),
       targetId: userId,
     }).ok;
@@ -359,8 +373,14 @@ export async function sendCaptainPromotionAction(
     const target = await getCampMemberDetail(targetUserId);
     if (!target) return { ok: false, error: "Member not found." };
 
-    // The viewer is a captain by construction (requireCaptain). team-lead is
-    // irrelevant to this guard (it only checks `=== "captain"`), so isLead=false.
+    // The viewer is a captain by construction (requireCaptain), so `viewerRank`
+    // is the literal "captain" rather than a re-derivation.
+    //
+    // `targetRank` is NOT a viewer rank: it is the rank of the person being
+    // acted on, and `canSendPromotion` asks one thing of it — "are they already
+    // a captain?". Leading a team has no bearing on being promotable, so `false`
+    // is the correct value, not a missing lookup. Do not "fix" it to
+    // `await isTeamLead(targetUserId)`.
     const guard = canSendPromotion({
       viewerRank: "captain",
       viewerId: gate.captainId,

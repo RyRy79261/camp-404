@@ -31,6 +31,10 @@ export default async function CampManagementPage() {
     redirect("/pending-approval");
   }
 
+  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
+  // and `team_lead < captain`, so the real flag cannot change the outcome —
+  // passing it would only buy a DB round-trip. If this bar ever drops to
+  // `team_lead`, it MUST become `await isTeamLead(campUser.id)`.
   const { cleared: isCaptain } = requireClearance(
     deriveViewerRank(campUser.rank, false),
     "captain",

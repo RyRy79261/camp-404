@@ -22,6 +22,7 @@
     "./questionnaire-definitions": "./src/questionnaire-definitions.ts",
     "./questionnaire-lifecycle": "./src/questionnaire-lifecycle.ts",
     "./questionnaire-responses": "./src/questionnaire-responses.ts",
+    "./questionnaire-results": "./src/questionnaire-results.ts",
     "./broadcasts": "./src/broadcasts.ts",
     "./audience": "./src/audience.ts",
     "./push": "./src/push.ts",

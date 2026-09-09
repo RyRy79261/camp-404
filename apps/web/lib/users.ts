@@ -17,6 +17,7 @@ import {
 import { encrypt, decryptOrNull } from "@camp404/db/crypto";
 import { idColumnsFor } from "@camp404/db/id-documents";
 import { isTeamLead as dbIsTeamLead } from "@camp404/db/roster";
+import { getTeamMemberships as dbGetTeamMemberships } from "@camp404/db/team-memberships";
 import {
   ensureRequiredAction,
   satisfyRequiredAction as dbSatisfyRequiredAction,
@@ -251,13 +252,28 @@ export function isApproved(
  * roles"). Nothing is deleted: last year's lead row stays on file, it just is
  * not an answer to this year's question.
  *
- * Routed through the test store under E2E_TEST_MODE, which has no
- * team-membership concept and so answers false for every user in every year —
- * still the right answer, and it keeps the home page renderable without a DB.
+ * Routed through the test store under E2E_TEST_MODE, which now models team
+ * memberships with the real backend's year-scoping — so a Playwright persona
+ * that has been made a lead reads as one here, and one that has not still
+ * reads false.
  */
 export async function isTeamLead(userId: string): Promise<boolean> {
   const store = isE2ETestMode() ? testBackend : realBackend;
   return store.isTeamLead(userId);
+}
+
+/**
+ * The teams this member LEADS this year. Clearance is global — leading any team
+ * makes you a `team_lead` everywhere (owner-ratified) — so this is never a
+ * clearance question; it is the AUDIENCE question, and the only consumer is
+ * `canSendToAudience`, which decides whether a lead may address a given team.
+ *
+ * Year-scoped like `isTeamLead`: at a rollover it empties for everyone until
+ * captains reappoint leads.
+ */
+export async function getLeadTeams(userId: string): Promise<string[]> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  return store.getLeadTeams(userId);
 }
 
 /**
@@ -312,6 +328,7 @@ interface UserBackend {
   setUserDisplayName(userId: string, name: string | null): Promise<void>;
   getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null>;
   isTeamLead(userId: string): Promise<boolean>;
+  getLeadTeams(userId: string): Promise<string[]>;
   upsertBurnerProfile(input: {
     userId: string;
     version: string;
@@ -417,6 +434,12 @@ const realBackend: UserBackend = {
   async isTeamLead(userId) {
     return dbIsTeamLead(userId);
   },
+  async getLeadTeams(userId) {
+    // The same year-scoped read the roster's lead column aggregates, narrowed
+    // to the rows whose lead flag is set.
+    const memberships = await dbGetTeamMemberships(userId);
+    return memberships.filter((m) => m.isLead).map((m) => m.team);
+  },
   async upsertBurnerProfile(input) {
     await upsertBurnerProfileDb(input);
   },
@@ -474,10 +497,13 @@ const testBackend: UserBackend = {
       version: row.version,
     };
   },
-  // The in-memory store models no team memberships in any year, so nobody is
-  // a lead — see the note on isTeamLead().
-  async isTeamLead() {
-    return false;
+  // Both read the store's `team_memberships` mirror, which is year-scoped and
+  // written by the same three operations production has.
+  async isTeamLead(userId) {
+    return testStore.isTeamLead(userId);
+  },
+  async getLeadTeams(userId) {
+    return testStore.getLeadTeams(userId);
   },
   async upsertBurnerProfile(input) {
     testStore.upsertProfile(input);

@@ -142,9 +142,19 @@ Decisions baked into the schema — keep new code consistent with them:
     scope they themselves lead, and everything wider — `everyone`,
     `team_leads`, `drivers`, `individual`, `opt_in` — is refused
     (fail-closed on an unknown rank or a missing team). It is pure and
-    tested but has no live caller yet, because every send path is still
-    captain-gated; it goes live the moment one of them stops being. Change
-    the rule in that function, never at a call site.
+    tested, and it is now LIVE: `sendAction` and `previewAudienceCount` in
+    `apps/web/app/captains/questionnaires/actions.ts` gate in two moves —
+    `gateAuthor()` for the rank (>= `team_lead`), then this function for the
+    specific audience. Both moves are the safety property: the rank gate on
+    its own would put every member one questionnaire away from the whole
+    camp. Every other send path (announcements, publish / unpublish / close,
+    questionnaire reminders) is still captain-only. Change the rule in that
+    function, never at a call site.
+    - The questionnaire **Send page** (`[key]/send/page.tsx`) is still gated
+      to `captain`, so the widened action has no UI a lead can reach yet;
+      the action is the enforcement boundary either way, but until that page
+      passes `await isTeamLead()` and narrows its scope picker, "a lead may
+      send to their team" is true of the server and not of the app.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping

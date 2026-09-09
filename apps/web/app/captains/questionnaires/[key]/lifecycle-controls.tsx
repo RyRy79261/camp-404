@@ -4,6 +4,7 @@ import { useEffect, useId, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  BarChart3,
   CircleAlert,
   Loader2,
   Send,
@@ -312,6 +313,17 @@ export function LifecycleBar({
               </Link>
             </Button>
           )}
+          {/* The read-back half. Published is the right gate: a draft has no
+              answers, so the page would render an empty state that reads as
+              broken. Sits beside Send deliberately — sending and seeing what
+              came back are the same job, ten minutes apart. */}
+          <Button asChild variant="outline">
+            <Link
+              href={`/captains/questionnaires/${questionnaireKey}/metrics`}
+            >
+              <BarChart3 className="size-4" /> See results
+            </Link>
+          </Button>
           <Button
             type="button"
             variant="outline"
