@@ -41,6 +41,7 @@ import {
   cycleLabel,
   emptyStateFor,
   loadResults,
+  outstandingFor,
   respondentsOf,
   summarise,
   type ResultsView,
@@ -253,6 +254,43 @@ const activation = {
   closedAt: null,
   createdAt: new Date("2027-02-01T00:00:00Z"),
 };
+
+describe("outstandingFor", () => {
+  it("lists the people the active send is still waiting on", () => {
+    const view = viewWith({
+      activations: [activation],
+      activeActivation: activation,
+      rows: [
+        { ...ROW, userId: "a", gateStatus: "pending", gateActivationId: "act1" },
+        {
+          ...ROW,
+          userId: "b",
+          gateStatus: "completed",
+          gateActivationId: "act1",
+        },
+      ],
+    });
+
+    expect(outstandingFor(view).map((r) => r.userId)).toEqual(["a"]);
+  });
+
+  it("waits on nobody when no send is active", () => {
+    // THE REGRESSION. required_actions.activation_id is `on delete set null`
+    // while status stays "pending", so an orphaned gate has BOTH a null
+    // activation and a pending status. Without the guard the bare equality
+    // `gateActivationId === activeId` matches null === null, and a closed
+    // questionnaire lists these people under "Still to answer" for a send
+    // that does not exist any more.
+    const view = viewWith({
+      activeActivation: null,
+      rows: [
+        { ...ROW, userId: "a", gateStatus: "pending", gateActivationId: null },
+      ],
+    });
+
+    expect(outstandingFor(view)).toEqual([]);
+  });
+});
 
 describe("summarise", () => {
   it("counts finished answers, not part-filled drafts", () => {

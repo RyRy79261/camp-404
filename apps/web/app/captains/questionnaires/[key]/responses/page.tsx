@@ -14,6 +14,7 @@ import {
   emptyStateFor,
   loadResults,
   memberName,
+  outstandingFor,
   respondentsOf,
   summarise,
 } from "../metrics/results-data";
@@ -83,12 +84,7 @@ export default async function ResponsesPage({
     })),
   });
 
-  // The people the ACTIVE send is still waiting on (§7.1: the pending rows
-  // themselves, not an anti-join against the roster).
-  const activeId = view.activeActivation?.id ?? null;
-  const outstanding = view.rows.filter(
-    (r) => r.gateActivationId === activeId && r.gateStatus === "pending",
-  );
+  const outstanding = outstandingFor(view);
 
   return (
     <ResultsShell view={view} viewName="responses" wide>

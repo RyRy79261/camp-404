@@ -33,7 +33,10 @@ export function ExportCsvButton({
     a.href = url;
     a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
+    // Revoke on the next tick, not inline. Some browsers read the blob
+    // asynchronously after click(), so revoking immediately can cancel the
+    // download it was meant to start.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   return (

@@ -192,6 +192,25 @@ export interface ResultsSummary {
   reachIsPartial: boolean;
 }
 
+/**
+ * The people the ACTIVE send is still waiting on (§7.1: the pending rows
+ * themselves, not an anti-join against the roster).
+ *
+ * The `activeId` guard is load-bearing, not defensive. `required_actions`
+ * .activation_id is `on delete set null` while `status` stays "pending", so
+ * with no active send the bare equality `gateActivationId === null` matches
+ * every orphaned gate — and a closed questionnaire would list those people
+ * under "Still to answer" for a send that no longer exists. One owner for the
+ * rule, because it is needed on both results routes and the two copies drifted.
+ */
+export function outstandingFor(view: ResultsView): ActivationResponseRow[] {
+  const activeId = view.activeActivation?.id ?? null;
+  if (!activeId) return [];
+  return view.rows.filter(
+    (r) => r.gateActivationId === activeId && r.gateStatus === "pending",
+  );
+}
+
 /** The counts both results routes put at the top of the page. */
 export function summarise(view: ResultsView): ResultsSummary {
   const respondents = view.rows.filter((r) => r.completedAt !== null).length;

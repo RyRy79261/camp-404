@@ -107,6 +107,19 @@ function ChoiceBars({ result }: { result: ChoiceAggregate }) {
 
 function NumericSummary({ result }: { result: NumericAggregate }) {
   if (result.samples === 0) {
+    // "No answers yet" is only true when nobody answered. If people DID answer
+    // but nothing parsed as a number, saying that contradicts the Skips line
+    // directly above it, which is already printing "N of M answered" — and it
+    // hides the thing the captain needs to know, which is that the answers
+    // exist and are unusable.
+    if (result.unparsed > 0) {
+      return (
+        <p className="mt-3 text-sm text-muted-foreground">
+          {result.unparsed} {result.unparsed === 1 ? "answer" : "answers"}, none
+          of them a number. Nothing to average.
+        </p>
+      );
+    }
     return (
       <p className="mt-3 text-sm text-muted-foreground">No answers yet.</p>
     );
