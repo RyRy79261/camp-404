@@ -3,6 +3,7 @@ import { aggregateQuestions } from "@camp404/core";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { StatTile } from "@camp404/ui/components/stat-tile";
 import { MetricCard, OrphanCard } from "./metric-card";
+import { ReminderButton } from "./reminder-button";
 import {
   emptyStateFor,
   loadResults,
@@ -88,6 +89,19 @@ export default async function MetricsPage({
         {summary.reachIsPartial &&
           " Some answers here came from an earlier send this year, which the numbers above can't account for."}
       </p>
+
+      {/*
+        §7.4: the nudge, and only while a send is actually OPEN. A closed send
+        expired its pending gates, so there is nobody left holding an obligation
+        to be reminded of — offering the button there would promise an action
+        that can only refuse.
+      */}
+      {view.activeActivation?.status === "open" && (
+        <ReminderButton
+          activationId={view.activeActivation.id}
+          outstanding={summary.outstanding}
+        />
+      )}
 
       {empty ? (
         <EmptyState

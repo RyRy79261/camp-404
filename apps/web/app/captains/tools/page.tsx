@@ -82,6 +82,16 @@ export default async function CaptainToolsPage() {
   }
   // Captain-clearance gate (D3): render the shell for everyone, withhold the
   // tool list from non-captains rather than redirecting.
+  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
+  // and `team_lead < captain`, so the real flag cannot change the outcome —
+  // passing it would only buy a DB round-trip. If this bar ever drops to
+  // `team_lead`, it MUST become `await isTeamLead(campUser.id)`.
+  //
+  // NOTE for whoever revisits this: the Questionnaires card below points at a
+  // TEAM-LEAD+ surface, so this captain-only hub is currently the only link to a
+  // page a lead is cleared for. Opening the hub to leads is a surface-rank
+  // decision (which cards a lead may see, and the home tile group that routes
+  // here) — not a flag fix, and deliberately not made here.
   const { cleared } = requireClearance(
     deriveViewerRank(campUser.rank, false),
     "captain",

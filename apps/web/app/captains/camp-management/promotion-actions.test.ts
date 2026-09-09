@@ -41,6 +41,7 @@ import {
   cancelCaptainPromotionAction,
   sendCaptainPromotionAction,
 } from "./actions";
+import { deriveViewerRank, hasClearance } from "@camp404/core";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
@@ -108,6 +109,49 @@ describe("sendCaptainPromotionAction", () => {
       error: "Your account isn't camp-active yet.",
     });
     expect(sendCaptainPromotion).not.toHaveBeenCalled();
+  });
+
+  it("sends to a target who leads a team — targetRank is not a viewer rank", async () => {
+    // Bucket (c): `targetRank: deriveViewerRank(target.rank, false)` describes
+    // the person being ACTED ON. canSendPromotion asks it one question —
+    // "already a captain?" — so leading a team neither blocks nor enables a
+    // promotion. A sweep that "fixed" this to `await isTeamLead(targetUserId)`
+    // would buy a round-trip per send and imply a rule that does not exist.
+    signInAsCaptain();
+    targetRank("member"); // a lead IS a member row; lead-ness is derived
+
+    const res = await sendCaptainPromotionAction("lead-1");
+
+    expect(res).toEqual({ ok: true, requestId: "req-1" });
+    // Both derivations of the same stored rank answer the guard identically.
+    expect(deriveViewerRank("member", true)).not.toBe("captain");
+    expect(deriveViewerRank("member", false)).not.toBe("captain");
+  });
+
+  it("refuses a genuine team lead as the VIEWER", async () => {
+    // The mirror of the test above, and the half that matters: the acting
+    // viewer's bar in requireCaptain is `captain`, and `team_lead < captain`
+    // even though team-lead clearance is sitewide (owner-ratified 2026-09-09).
+    // So a real lead — a `member` row that leads a team — cannot manufacture
+    // captains, with or without the real isTeamLead flag at the call site.
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-lead",
+      primaryEmail: "lead@example.com",
+      displayName: "Lead",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({
+      id: "lead-1",
+      rank: "member",
+    } as never);
+
+    const res = await sendCaptainPromotionAction("member-1");
+
+    expect(res).toEqual({ ok: false, error: "Captain access only." });
+    expect(getCampMemberDetail).not.toHaveBeenCalled();
+    expect(sendCaptainPromotion).not.toHaveBeenCalled();
+    expect(hasClearance(deriveViewerRank("member", true), "captain")).toBe(
+      false,
+    );
   });
 
   it("refuses a non-captain viewer", async () => {

@@ -35,6 +35,8 @@ import {
 } from "@camp404/db/questionnaire-results";
 import { getCurrentCycle } from "@/lib/camp-config";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
+import { deriveViewerRank, hasClearance } from "@camp404/core";
+import type { StoredRank } from "@camp404/types";
 import {
   cycleLabel,
   emptyStateFor,
@@ -46,7 +48,13 @@ import {
 
 const KEY = "feedback";
 
-function asRank(rank: "member" | "team_lead" | "captain") {
+// `users.rank` is only ever `captain` or `member` — "team lead" is DERIVED from
+// team_memberships.is_lead and is never stored (AGENTS.md, schema domain model).
+// The union here is deliberately the STORED one: an earlier version of this file
+// accepted "team_lead" and the team-lead test passed for the wrong reason
+// (deriveViewerRank("team_lead", false) falls through to "camp_member"), so it
+// asserted nothing about leads at all.
+function asRank(rank: StoredRank) {
   vi.mocked(ensureCampUser).mockResolvedValue({
     id: "viewer",
     rank,
@@ -101,8 +109,11 @@ beforeEach(() => {
 });
 
 describe("loadResults — the captain gate", () => {
-  it("refuses a team lead and never reads a single answer", async () => {
-    asRank("team_lead");
+  it("refuses a genuine team lead and never reads a single answer", async () => {
+    // A genuine team lead IS a `member` row — lead-ness lives in
+    // team_memberships.is_lead. So this is what a real lead's session looks
+    // like at the gate, whatever `deriveViewerRank`'s second argument is.
+    asRank("member");
 
     const access = await loadResults(KEY);
 
@@ -111,6 +122,18 @@ describe("loadResults — the captain gate", () => {
     // answers are never fetched, let alone rendered and hidden with CSS.
     expect(listActivationResponses).not.toHaveBeenCalled();
     expect(getDefinitionMetaRow).not.toHaveBeenCalled();
+  });
+
+  it("stays shut on a lead even if the real isTeamLead flag were passed", () => {
+    // The other half of the refusal, and the half a future `deriveViewerRank(
+    // rank, await isTeamLead(...))` sweep would land on: the BAR here is
+    // `captain`, so a viewer who really does lead a team still does not clear
+    // it. This is why `false` at the call site is redundant rather than wrong.
+    expect(deriveViewerRank("member", true)).toBe("team_lead");
+    expect(hasClearance("team_lead", "captain")).toBe(false);
+    expect(hasClearance(deriveViewerRank("captain", false), "captain")).toBe(
+      true,
+    );
   });
 
   it("refuses a plain member", async () => {

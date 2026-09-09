@@ -3,14 +3,20 @@ import { hasClearance } from "./access";
 
 // Who may send to WHICH audience — the pure half of the send gate.
 //
-// The rank gate ("may this viewer send at all?") already exists: the
-// questionnaire and announcement actions require `captain` clearance. This
-// module answers the narrower question that only becomes live once
-// `team_memberships` has a write path (WP6 item 2.1): a **team lead** can
-// already author a questionnaire but cannot send one, and the moment leads are
-// real people rather than an empty table, "a lead may send to their own team"
-// becomes a decision someone has to make. It is made here, once, as a pure
-// function over plain inputs — no DB, no session, no next/*.
+// The rank gate ("may this viewer send at all?") comes first and separately:
+// the announcement actions still require `captain` clearance, and the
+// questionnaire send action requires `team_lead`. This module answers the
+// narrower question that went live once `team_memberships` got a write path
+// (WP6 item 2.1) and leads became real people rather than an empty table: a
+// team lead can author a questionnaire, and may now send one — but only to
+// their own team. That decision is made here, once, as a pure function over
+// plain inputs — no DB, no session, no next/*.
+//
+// LIVE CALLER: `sendAction` / `previewAudienceCount` in
+// apps/web/app/captains/questionnaires/actions.ts, which gate on
+// `gateAuthor()` (>= team_lead) and THEN on this function for the specific
+// audience. The two moves are the safety property: the rank gate alone would
+// have put every member one questionnaire away from the whole camp.
 //
 // PRODUCT RULE (flagged for the camp owner — change it here, not at call
 // sites): a team lead may send ONLY to a single team they themselves lead.

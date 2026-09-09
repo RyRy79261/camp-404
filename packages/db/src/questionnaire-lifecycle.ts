@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import {
   BuilderQuestionnaire,
   classifyChange,
@@ -16,8 +16,9 @@ import { carryOverFor, currentCycleNumber } from "./cycles";
 
 // Builder-questionnaire lifecycle: publish (snapshot + cosmetic-vs-version-bump),
 // unpublish (status + cascade close), send (open an activation with the one-open
-// invariant), and close. The pure decisions live in @camp404/types
-// (classifyChange / validateBuilderQuestionnaire) and ./versions
+// invariant), close, and REMIND (nudge the members still outstanding on an open
+// send — §7.4, at the foot of this file). The pure decisions live in
+// @camp404/types (classifyChange / validateBuilderQuestionnaire) and ./versions
 // (nextBuilderVersion); this module is the thin DB orchestration around them.
 // See docs/questionnaire-builder.md §6.
 
@@ -392,4 +393,247 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
       error: "Couldn't send this questionnaire right now — please try again.",
     };
   }
+}
+
+// --- Reminders (§7.4) ------------------------------------------------------
+// A captain nudges the members who still hold a PENDING gate for an open send.
+//
+// WHERE THE 24-HOUR DEDUP STATE LIVES, and why. The rule is "≤1 reminder per
+// (member, activation) per 24h" — a per-MEMBER fact — so it cannot live on the
+// activation: one timestamp there would be a per-send fact, and a member who
+// was added to the audience an hour ago would be silenced by a nudge that never
+// reached them. It lives instead in the rows the reminder already writes:
+// `notification_deliveries` is, by construction, one timestamped row per
+// (recipient, notification), carrying `refType`/`refId`. Filtered to
+// `refType = 'questionnaire_activation'`, `refId = <activation>` and a
+// `broadcasts.kind = 'reminder'` parent, those rows ARE the reminder log. No
+// new column, no migration — the record of the thing being deduped is the
+// dedup key.
+//
+// The residual race: two captains tapping within the same few milliseconds can
+// both read "no recent delivery" under READ COMMITTED and both insert. The
+// read and the write share one transaction, which closes the window to the
+// width of the insert; at ~30-80 members with one captain on the screen, the
+// remaining exposure is a double nudge, not a spam loop. A unique index would
+// close it properly and needs a migration, so it is deliberately not here.
+
+/** The §7.4 window: at most one reminder per (member, activation) per 24 hours. */
+export const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The deep-link discriminator every questionnaire reminder carries on both the
+ * broadcast and each delivery — and, per the note above, half of the dedup key.
+ */
+export const REMINDER_REF_TYPE = "questionnaire_activation";
+
+const DUE_ON = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+});
+
+/**
+ * The auto-filled reminder body (§7.4 — there is no custom-message UI in v1).
+ * Pure, so the one line every member reads is unit-testable without a database.
+ * A send with no deadline gets the deadline-free phrasing rather than the word
+ * "undefined" where a date should be.
+ */
+export function reminderBody(title: string, dueAt: Date | null): string {
+  return dueAt
+    ? `Reminder: ${title} is due ${DUE_ON.format(dueAt)}. Tap to complete.`
+    : `Reminder: ${title} is still waiting for your answer. Tap to complete.`;
+}
+
+export type ReminderResult =
+  /** Delivered. `suppressed` counts pending members inside their 24h window. */
+  | {
+      ok: true;
+      outcome: "sent";
+      sent: number;
+      suppressed: number;
+      broadcastId: string;
+    }
+  /** Nobody holds a pending gate — everyone answered. NOT an error. */
+  | { ok: true; outcome: "nobody_pending"; sent: 0; suppressed: 0 }
+  /** Every outstanding member is inside their window; `nextAllowedAt` says when. */
+  | {
+      ok: true;
+      outcome: "recently_reminded";
+      sent: 0;
+      suppressed: number;
+      nextAllowedAt: Date;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Remind the members with a PENDING required action for one open activation.
+ *
+ * Audience = the `pending` bucket exactly as Wave 3's tally derives it (§7.1).
+ * `waived` and `expired` gates are a separate CLOSED bucket and are never
+ * nudged: a waiver is a captain's decision that this member does not have to
+ * answer, and an expired gate belongs to a send that is over. Reminding either
+ * would re-open, by push, an obligation the app has already told them is done
+ * with. `completed` is likewise out by definition.
+ *
+ * Delivery reuses the existing spine — one `broadcasts` row (`kind='reminder'`,
+ * `scope='individual'`) fanned out into `notification_deliveries`, drained to
+ * `push_tokens` by the existing worker. `publishedAt`/`dispatchedAt` are both
+ * stamped inline, exactly as {@link publishAnnouncement} does, so the deferred
+ * dispatch cron cannot fan the same broadcast out a second time. §7.4 says to
+ * skip members with no push token: `planPushDrain` already resolves those to
+ * `pushStatus='skipped'`, and writing the delivery anyway is what puts the
+ * reminder in their in-app inbox — dropping them here would leave a member with
+ * no device silently un-nudged on every channel.
+ */
+export async function sendReminder(input: {
+  activationId: string;
+  senderId: string;
+  /** Injectable clock — the dedup window is the whole feature, so tests own it. */
+  now?: Date;
+}): Promise<ReminderResult> {
+  const now = input.now ?? new Date();
+  const cutoff = new Date(now.getTime() - REMINDER_WINDOW_MS);
+
+  const db = createHttpDb();
+  const [act] = await db
+    .select({
+      id: schema.questionnaireActivations.id,
+      questionnaireKey: schema.questionnaireActivations.questionnaireKey,
+      title: schema.questionnaireActivations.title,
+      status: schema.questionnaireActivations.status,
+      dueAt: schema.questionnaireActivations.dueAt,
+    })
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.id, input.activationId))
+    .limit(1);
+  if (!act) return { ok: false, error: "Activation not found." };
+  if (act.status !== "open") {
+    // A closed send expired its pending gates, so there is nobody to remind —
+    // but "nobody is outstanding" would read as "everyone answered", which is a
+    // different and much rosier fact. Say which one it is.
+    return {
+      ok: false,
+      error: "This send is closed, so nobody is waiting on it any more.",
+    };
+  }
+
+  const body = reminderBody(act.title, act.dueAt);
+
+  return await withTransaction(async (tx): Promise<ReminderResult> => {
+    const pending = await tx
+      .select({ userId: schema.requiredActions.userId })
+      .from(schema.requiredActions)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.requiredActions.userId),
+      )
+      .where(
+        and(
+          eq(schema.requiredActions.activationId, act.id),
+          eq(schema.requiredActions.actionKey, act.questionnaireKey),
+          // The pending bucket, and only it — see the doc comment.
+          eq(schema.requiredActions.status, "pending"),
+          // A departed or system account holds no obligation worth pushing.
+          eq(schema.users.isSystem, false),
+          eq(schema.users.sanitised, false),
+        ),
+      );
+
+    const pendingIds = [...new Set(pending.map((p) => p.userId))];
+    if (pendingIds.length === 0) {
+      return { ok: true, outcome: "nobody_pending", sent: 0, suppressed: 0 };
+    }
+
+    const recent = await tx
+      .select({
+        userId: schema.notificationDeliveries.userId,
+        createdAt: schema.notificationDeliveries.createdAt,
+      })
+      .from(schema.notificationDeliveries)
+      .innerJoin(
+        schema.broadcasts,
+        eq(schema.broadcasts.id, schema.notificationDeliveries.broadcastId),
+      )
+      .where(
+        and(
+          eq(schema.broadcasts.kind, "reminder"),
+          eq(schema.notificationDeliveries.refType, REMINDER_REF_TYPE),
+          eq(schema.notificationDeliveries.refId, act.id),
+          gte(schema.notificationDeliveries.createdAt, cutoff),
+          inArray(schema.notificationDeliveries.userId, pendingIds),
+        ),
+      );
+
+    const lastReminded = new Map<string, number>();
+    for (const row of recent) {
+      const at = row.createdAt.getTime();
+      const seen = lastReminded.get(row.userId);
+      if (seen === undefined || at > seen) lastReminded.set(row.userId, at);
+    }
+
+    const targets = pendingIds.filter((id) => !lastReminded.has(id));
+    if (targets.length === 0) {
+      // The captain pressed a button and nothing happened. Hand back WHEN the
+      // next nudge is allowed — the earliest window to expire — so the caller
+      // can say why instead of shrugging.
+      const earliest = Math.min(...lastReminded.values());
+      return {
+        ok: true,
+        outcome: "recently_reminded",
+        sent: 0,
+        suppressed: lastReminded.size,
+        nextAllowedAt: new Date(earliest + REMINDER_WINDOW_MS),
+      };
+    }
+
+    const [broadcast] = await tx
+      .insert(schema.broadcasts)
+      .values({
+        senderId: input.senderId,
+        kind: "reminder",
+        scope: "individual",
+        title: act.title,
+        body,
+        channel: "both",
+        // A nudge, not a takeover: `acknowledge` is the full-screen gate reserved
+        // for things every member must positively dismiss.
+        presentation: "popup",
+        refType: REMINDER_REF_TYPE,
+        refId: act.id,
+        publishedAt: now,
+        dispatchedAt: now,
+      })
+      .returning({ id: schema.broadcasts.id });
+    const broadcastId = broadcast!.id;
+
+    await tx
+      .insert(schema.broadcastTargets)
+      .values(targets.map((userId) => ({ broadcastId, userId })));
+
+    await tx
+      .insert(schema.notificationDeliveries)
+      .values(
+        targets.map((userId) => ({
+          broadcastId,
+          userId,
+          title: act.title,
+          body,
+          channel: "both" as const,
+          presentation: "popup" as const,
+          refType: REMINDER_REF_TYPE,
+          refId: act.id,
+          // Explicit rather than defaulted: this column IS the dedup clock, so
+          // it has to be the same `now` the window above was measured from.
+          createdAt: now,
+        })),
+      )
+      .onConflictDoNothing();
+
+    return {
+      ok: true,
+      outcome: "sent",
+      sent: targets.length,
+      suppressed: lastReminded.size,
+      broadcastId,
+    };
+  });
 }

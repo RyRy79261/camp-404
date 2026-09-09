@@ -59,7 +59,10 @@ export type ResultsAccess =
  * make the server fetch answers it will then decline to render (§4.1 — "data
  * withheld server-side"). `deriveViewerRank(rank, false)` skips the isTeamLead
  * lookup deliberately; this surface is captain-only, so lead-ness cannot change
- * the outcome.
+ * the outcome — re-checked against the owner's 2026-09-09 global-`team_lead`
+ * ruling and it still holds: results carry names on them, the bar stays
+ * `captain`, and `team_lead < captain`. If the bar ever drops, this MUST become
+ * `await isTeamLead(campUser.id)`.
  */
 export async function loadResults(
   key: string,

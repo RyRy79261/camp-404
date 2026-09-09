@@ -22,6 +22,7 @@ vi.mock("@camp404/db/cycle-rollover", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
+import { deriveViewerRank, hasClearance } from "@camp404/core";
 import {
   advanceCycleAction,
   moveTeamAction,
@@ -100,6 +101,39 @@ describe("camp-settings actions — captain gate", () => {
     const result = await setTeamArchivedAction("kitchen", true);
     expect(result).toEqual({ ok: false, error: "Captain access only." });
     expect(mutateTeamsConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects a genuine team lead without writing", async () => {
+    // A team lead is a `member` row — lead-ness is derived from
+    // team_memberships.is_lead, never stored — so this IS a real lead's
+    // session hitting the action. `team_lead` clearance is sitewide (owner-
+    // ratified 2026-09-09) but still sits BELOW `captain`, and team settings
+    // are captain-only, so the lead is refused and nothing is written.
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-lead",
+      primaryEmail: "lead@example.com",
+      displayName: "Lead",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ rank: "member" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(isApproved).mockReturnValue(true);
+
+    const result = await renameTeamAction("kitchen", "Cuisine");
+
+    expect(result).toEqual({ ok: false, error: "Captain access only." });
+    expect(mutateTeamsConfig).not.toHaveBeenCalled();
+  });
+
+  it("stays captain-only even if the real isTeamLead flag were passed", () => {
+    // requireCaptain() hardcodes `deriveViewerRank(rank, false)`. That is safe
+    // ONLY because the bar below is `captain`; this pins that half, so a future
+    // sweep that swaps in `await isTeamLead(...)` provably cannot open the team
+    // editor to leads, and dropping the bar to `team_lead` fails here loudly.
+    expect(deriveViewerRank("member", true)).toBe("team_lead");
+    expect(hasClearance("team_lead", "captain")).toBe(false);
+    expect(hasClearance(deriveViewerRank("captain", false), "captain")).toBe(
+      true,
+    );
   });
 
   it("rejects a captain still awaiting approval without writing", async () => {

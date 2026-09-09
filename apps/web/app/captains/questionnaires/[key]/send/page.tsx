@@ -64,6 +64,21 @@ export default async function SendPage({
     </main>
   );
 
+  // The lead flag is hardcoded `false`, and this PAGE is still captain-only.
+  //
+  // KNOWN GAP, not a claim that sending is captain-only: `sendAction` and
+  // `previewAudienceCount` now admit a team lead (rank gate, then
+  // `canSendToAudience` for the specific audience — see the send-gate note in
+  // ../../actions.ts). This page has not been reshaped to match, so a lead who
+  // may send through the action cannot reach the form that calls it. That is
+  // fail-SAFE — the action is the enforcement boundary and it still refuses
+  // every audience wider than a team they lead — but it is not finished.
+  //
+  // Opening it is a reshape, not a flag flip: pass
+  // `await isTeamLead(campUser.id)`, gate on `team_lead` instead of `captain`,
+  // and narrow SEND_SCOPES for a lead to `team` over the teams they actually
+  // lead — otherwise the form offers `everyone` and the action refuses it,
+  // which is a worse experience than the lock.
   const rank = deriveViewerRank(campUser.rank, false);
   if (rank !== "captain") {
     return chrome(
