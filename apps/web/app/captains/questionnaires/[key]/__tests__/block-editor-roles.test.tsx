@@ -13,6 +13,7 @@ function renderEditor(question: Question) {
   render(
     <BlockEditorDialog
       block={{ kind: "question", question } as Block}
+      questionnaireKey="feedback"
       fields={[]}
       open
       onSave={onSave}

@@ -31,6 +31,7 @@ import { QuestionField } from "@/components/questionnaire/question";
 import { ContentBlockRenderer } from "@/components/questionnaire/content-block";
 import { OptionsEditor } from "./options-editor";
 import { VisibilityEditor } from "./visibility-editor";
+import { ImageUploadButton } from "./image-upload-button";
 import {
   BUILDER_FIELD_KINDS,
   TEXT_FORMATS,
@@ -75,6 +76,7 @@ function blockValid(block: Block, fields: readonly Question[]): boolean {
 // member renderers (QuestionField / ContentBlockRenderer).
 export function BlockEditorDialog({
   block,
+  questionnaireKey,
   fields,
   open,
   onSave,
@@ -82,6 +84,8 @@ export function BlockEditorDialog({
   onClose,
 }: {
   block: Block;
+  /** The questionnaire being edited, for picture uploads. */
+  questionnaireKey: string;
   /** The questions above this block, which a condition may reference. */
   fields: readonly Question[];
   open: boolean;
@@ -144,7 +148,11 @@ export function BlockEditorDialog({
             setQuestion={setQuestion}
           />
         ) : (
-          <ContentEditor block={draft} patch={patchContent} />
+          <ContentEditor
+            block={draft}
+            patch={patchContent}
+            questionnaireKey={questionnaireKey}
+          />
         )}
 
         <VisibilityEditor
@@ -413,9 +421,11 @@ function QuestionEditor({
 function ContentEditor({
   block,
   patch,
+  questionnaireKey,
 }: {
   block: ContentBlock;
   patch: (patch: Record<string, unknown>) => void;
+  questionnaireKey: string;
 }) {
   switch (block.kind) {
     case "header_break":
@@ -481,6 +491,10 @@ function ContentEditor({
     case "image_block":
       return (
         <div className="flex flex-col gap-4">
+          <ImageUploadButton
+            questionnaireKey={questionnaireKey}
+            onUploaded={(url) => patch({ imageUrl: url })}
+          />
           <InputField
             label="Image URL"
             value={block.imageUrl}

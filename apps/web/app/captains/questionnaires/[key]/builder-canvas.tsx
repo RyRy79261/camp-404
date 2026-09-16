@@ -589,6 +589,7 @@ export function BuilderCanvas({
         <BlockEditorDialog
           key={editing.blockId}
           block={editingBlock}
+          questionnaireKey={questionnaireKey}
           fields={fieldsBefore(working, editing.pageId, editing.blockId)}
           open={editorOpen}
           onSave={(next) => {

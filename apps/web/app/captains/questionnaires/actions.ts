@@ -30,6 +30,7 @@ import {
   type PublishResult,
 } from "@camp404/db/questionnaire-lifecycle";
 import { captainActionGate } from "@/lib/captain-gate";
+import { canEditQuestionnaire } from "@/lib/questionnaire-authoring";
 import type { CampUser } from "@/lib/users";
 import { getLeadTeams } from "@/lib/users";
 import { runAction } from "@/lib/action-result";
@@ -137,16 +138,7 @@ async function assertCanEdit(
   gate: { campUser: CampUser; rank: ViewerRank },
   key: string,
 ): Promise<QResult> {
-  const meta = await getDefinitionMetaRow(key);
-  if (!meta) return { ok: false, error: "Questionnaire not found." };
-  // Editing a PUBLISHED head is allowed (the §4.2 re-version flow): autosave
-  // mutates the working head while the live snapshot keeps serving open
-  // activations until the captain re-publishes. Ownership still gates team-leads.
-  if (gate.rank === "captain") return { ok: true };
-  if (meta.createdBy !== gate.campUser.id) {
-    return { ok: false, error: "You can only edit your own questionnaires." };
-  }
-  return { ok: true };
+  return canEditQuestionnaire(gate, key);
 }
 
 export async function createDraftAction(
