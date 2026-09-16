@@ -17,6 +17,7 @@ import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { Divider } from "@camp404/ui/components/divider";
 import { Spinner } from "@camp404/ui/components/spinner";
 import type { RosterRow } from "@/lib/camp-roster";
+import { approvalSummary } from "@/lib/approval-summary";
 import type { DetailItem, PresentedMember } from "@/lib/member-detail";
 import {
   decideApprovalAction,
@@ -208,7 +209,13 @@ export function MemberProfile({
         prev.state === "loaded"
           ? {
               ...prev,
-              member: { ...prev.member, approvalStatus: to },
+              // The summary line too, or it says "Awaiting a captain's
+              // decision" beside an Approved badge until the panel reopens.
+              member: {
+                ...prev.member,
+                approvalStatus: to,
+                approvalSummary: approvalSummary(to),
+              },
               reviewOptions: availableReviewActions({
                 status: to,
                 isSelf: false,

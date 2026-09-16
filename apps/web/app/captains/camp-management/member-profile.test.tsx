@@ -205,8 +205,12 @@ describe("MemberProfile — a decision that lost the race", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Approve/ }));
 
     // The accepted path already knows the new status, so it applies it locally
-    // and leaves the fetch alone.
-    await waitFor(() => expect(screen.getByText("Approved")).toBeTruthy());
+    // and leaves the fetch alone: the badge AND the summary line under the name
+    // say Approved, so the two never contradict each other.
+    await waitFor(() =>
+      expect(screen.getAllByText("Approved")).toHaveLength(2),
+    );
+    expect(screen.queryByText("Decision: pending")).toBeNull();
     expect(getMemberDetailAction).toHaveBeenCalledTimes(1);
   });
 });
