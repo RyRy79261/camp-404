@@ -109,7 +109,9 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-        run: pnpm turbo run test
+        # Coverage floors live in each package's vitest.config.ts; a package
+        # that drops below its floor fails this job.
+        run: pnpm turbo run test:coverage
 
   build:
     runs-on: ubuntu-latest

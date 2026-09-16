@@ -12,5 +12,20 @@ export default defineConfig({
     globals: true,
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     setupFiles: ["./vitest.setup.ts"],
+    // `pnpm test:coverage` (CI). The floors are the coverage measured on
+    // 2026-09-16 minus 3 points, so coverage can drift down only a little
+    // before CI says so.
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/__tests__/**", "src/**/*.stories.tsx"],
+      reporter: ["text-summary", "json-summary"],
+      thresholds: {
+        statements: 34,
+        branches: 30,
+        functions: 46,
+        lines: 34,
+      },
+    },
   },
 });

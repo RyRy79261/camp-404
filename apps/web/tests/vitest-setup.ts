@@ -1,3 +1,12 @@
+import { configure } from "@testing-library/react";
+
+// findBy* and waitFor give up after 1 s by default. A rendered test that waits
+// on a mocked action chain (click, action, refetch, repaint) finishes in well
+// under that alone, but under a full turbo run with coverage on it can take
+// longer, and the test then fails for load, not for a bug. A real miss still
+// fails, after 5 s.
+configure({ asyncUtilTimeout: 5_000 });
+
 // JSDOM doesn't ship a canvas implementation. The Waveform component calls
 // `canvas.getContext("2d")` inside an effect — without this stub, every
 // test that mounts the wizard logs an "Not implemented" warning. Returning
