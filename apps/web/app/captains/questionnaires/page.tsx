@@ -1,23 +1,7 @@
-import { redirect } from "next/navigation";
-import {
-  CAMP_TIME_ZONE,
-  deriveViewerRank,
-  requireClearance,
-} from "@camp404/core";
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-// `isTeamLead` comes from the lib facade, not @camp404/db/roster: in production
-// the facade delegates to that same function, but under E2E_TEST_MODE it reads
-// the test store's team_memberships mirror. Importing the db function directly
-// would make this page ask Neon while the send/author gate in ./actions.ts asks
-// the store — two backends answering one question.
-import {
-  ensureCampUser,
-  hasCampAccess,
-  isApproved,
-  isTeamLead,
-} from "@/lib/users";
+import { captainPageGate } from "@/lib/captain-gate";
 import { listOpenSendBlocking } from "@camp404/db/questionnaire-lifecycle";
 import { listDefinitionsForViewer } from "@/lib/questionnaire-definitions";
 import { QuestionnaireHub, type HubItem } from "./questionnaire-hub";
@@ -39,17 +23,11 @@ const EDITED = new Intl.DateTimeFormat("en-GB", {
 });
 
 export default async function QuestionnairesPage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
-
-  const rank = deriveViewerRank(campUser.rank, await isTeamLead(campUser.id));
-  const canAuthor = requireClearance(rank, "team_lead").cleared;
+  const {
+    campUser,
+    rank,
+    cleared: canAuthor,
+  } = await captainPageGate("team_lead");
 
   const [definitions, openSends] = canAuthor
     ? await Promise.all([
@@ -71,9 +49,15 @@ export default async function QuestionnairesPage() {
 
   return (
     <main className="mx-auto max-w-lg px-4 py-6">
-      <GhostBack href="/captains/tools" className="-ml-2 mb-4">
-        Camp tools
-      </GhostBack>
+      {rank !== "camp_member" ? (
+        <GhostBack href="/captains/tools" className="-ml-2 mb-4">
+          Camp tools
+        </GhostBack>
+      ) : (
+        <GhostBack href="/" className="-ml-2 mb-4">
+          Home
+        </GhostBack>
+      )}
       <header className="mb-6">
         <h1 className="text-2xl font-bold">Questionnaires</h1>
         <p className="mt-1 text-sm text-muted-foreground">

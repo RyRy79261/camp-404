@@ -1,11 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { completeOnboarding, login, resetTestState, setRank } from "./_helpers";
 
-// The questionnaire Send/Activate screen is captain-only. A non-captain is
-// stopped at the clearance gate BEFORE any database read (the page derives rank
-// without the isTeamLead DB call and returns the CaptainLock), so this is
-// observable under E2E_TEST_MODE even though the builder's data layer is not
-// test-store-backed. A god email clears the access + approval gates so setRank
+// The questionnaire Send/Activate screen is for captains and team leads. A plain
+// member is stopped at the clearance gate BEFORE any questionnaire read (the
+// team-lead flag comes from the test store), so this is observable under
+// E2E_TEST_MODE even though the builder's data layer is not test-store-backed. A god email clears the access + approval gates so setRank
 // toggles only the clearance gate under test.
 test.describe("questionnaire Send screen — captain gate (test-mode)", () => {
   test.beforeEach(async ({ request }) => {
@@ -29,7 +28,7 @@ test.describe("questionnaire Send screen — captain gate (test-mode)", () => {
       page.getByRole("heading", { name: "Send to members" }),
     ).toBeVisible();
     await expect(
-      page.getByText(/only captains can send questionnaires/i),
+      page.getByText(/only captains and team leads can send questionnaires/i),
     ).toBeVisible();
     // The Send form is withheld: no audience picker, no Send button.
     await expect(page.getByText(/who should answer/i)).toHaveCount(0);

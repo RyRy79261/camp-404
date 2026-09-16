@@ -10,6 +10,7 @@ import {
   FileText,
   Loader2,
   Plus,
+  Send,
   Trash2,
 } from "lucide-react";
 import { Badge } from "@camp404/ui/components/badge";
@@ -190,6 +191,20 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
                     {/* Results only exist once something has been published and
                         sent — a draft has no answers to show, and an empty
                         metrics page reads as broken rather than as "not yet". */}
+                    {/* The way a team lead reaches Send: a lead can't open a
+                        captain's questionnaire in the editor. */}
+                    {item.status === "published" && (
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Send ${item.title}`}
+                      >
+                        <Link href={`/captains/questionnaires/${item.key}/send`}>
+                          <Send />
+                        </Link>
+                      </Button>
+                    )}
                     {item.status !== "draft" && (
                       <Button
                         asChild

@@ -12,6 +12,7 @@ vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(() => true),
   isApproved: vi.fn(() => true),
+  isTeamLead: vi.fn(async () => false),
   decideUserApproval: vi.fn(),
 }));
 vi.mock("@/lib/promotion", () => ({
@@ -114,7 +115,7 @@ describe("getPublicMemberProfileAction", () => {
     const res = await getPublicMemberProfileAction("target-1");
     expect(res).toEqual({
       ok: false,
-      error: "Your account isn't approved yet.",
+      error: "Your account is still awaiting approval.",
     });
     expect(getCampMemberDetail).not.toHaveBeenCalled();
   });

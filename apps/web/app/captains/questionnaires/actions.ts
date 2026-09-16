@@ -12,8 +12,6 @@ import {
   CAMP_TIME_ZONE,
   canSendToAudience,
   canViewBuilderDefinition,
-  deriveViewerRank,
-  requireClearance,
   type AudienceSpec,
 } from "@camp404/core";
 import { carryOverFor } from "@camp404/db/cycles";
@@ -31,14 +29,9 @@ import {
   unpublishDefinition,
   type PublishResult,
 } from "@camp404/db/questionnaire-lifecycle";
-import { getAuthenticatedUser } from "@/lib/auth";
-import {
-  ensureCampUser,
-  getLeadTeams,
-  hasCampAccess,
-  isApproved,
-  isTeamLead,
-} from "@/lib/users";
+import { captainActionGate } from "@/lib/captain-gate";
+import type { CampUser } from "@/lib/users";
+import { getLeadTeams } from "@/lib/users";
 import { runAction } from "@/lib/action-result";
 import { getCampManagementRoster } from "@/lib/roster";
 import {
@@ -65,41 +58,22 @@ export type QResultWithActivation =
   | { ok: false; error: string };
 export type PublishActionResult = PublishResult;
 
-type CampUser = Awaited<ReturnType<typeof ensureCampUser>>;
 type AuthorGate =
   | { ok: true; campUser: CampUser; rank: ViewerRank }
   | { ok: false; error: string };
 
 /** Gate to >= team_lead clearance — the level that may author drafts. */
 async function gateAuthor(): Promise<AuthorGate> {
-  const authUser = await getAuthenticatedUser();
-  if (!authUser) return { ok: false, error: "Not signed in." };
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't camp-active yet." };
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account is still awaiting approval." };
-  }
-  const rank = deriveViewerRank(campUser.rank, await isTeamLead(campUser.id));
-  if (!requireClearance(rank, "team_lead").cleared) {
-    return { ok: false, error: "Team-lead access only." };
-  }
-  return { ok: true, campUser, rank };
+  return captainActionGate("team_lead");
 }
 
 type CaptainGate =
   | { ok: true; campUser: CampUser }
   | { ok: false; error: string };
 
-/** Gate the lifecycle actions (publish / unpublish / send / close) to captains. */
+/** Gate the lifecycle actions (publish / unpublish / close) to captains. */
 async function gateCaptain(): Promise<CaptainGate> {
-  const gate = await gateAuthor();
-  if (!gate.ok) return gate;
-  if (gate.rank !== "captain") {
-    return { ok: false, error: "Only captains can publish or send." };
-  }
-  return { ok: true, campUser: gate.campUser };
+  return captainActionGate("captain", "Only captains can publish or send.");
 }
 
 // --- The send gate ----------------------------------------------------------
@@ -119,14 +93,9 @@ async function gateCaptain(): Promise<CaptainGate> {
 // makes the widening safe, and it lives in @camp404/core (pure, tested) so it
 // is stated once rather than re-derived here. Change the rule there.
 //
-// NOTE — the UI half is deliberately NOT built. `[key]/send/page.tsx` still
-// requires `captain`, so no team lead can currently reach this action through
-// the app; it is fail-safe, not live. The owner ratified that `team_lead` is a
-// sitewide role (AGENTS.md), which is a statement about CLEARANCE — it is not
-// a decision that leads may message the camp, and that decision has not been
-// made. Opening the send screen to leads needs a lead-narrowed scope picker
-// and an explicit yes. Do not read the rank gate here as permission to widen
-// the page.
+// The owner said yes on 2026-09-16: a lead may send to the teams they lead.
+// `[key]/send/page.tsx` offers a lead the `team` scope over those teams only;
+// this action is still the boundary that enforces it.
 
 /** The refusal a lead sees when the audience is wider than the team they lead. */
 const AUDIENCE_REFUSED = "You can only send to a team you lead.";

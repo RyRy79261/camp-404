@@ -1,18 +1,10 @@
-import { redirect } from "next/navigation";
-import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { Team } from "@camp404/types";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { listAnnouncements } from "@/lib/notifications";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
-import {
-  ensureCampUser,
-  getLeadTeams,
-  hasCampAccess,
-  isApproved,
-  isTeamLead,
-} from "@/lib/users";
+import { captainPageGate } from "@/lib/captain-gate";
+import { getLeadTeams } from "@/lib/users";
 import {
   AnnouncementsManager,
   type AudienceOption,
@@ -29,28 +21,16 @@ export const metadata = { title: "Announcements — Camp 404" };
 // server never fetches announcement data for them.
 
 export default async function AnnouncementsPage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
-  // The bar is `team_lead`, so the real lead flag is required here.
-  const isCaptain = campUser.rank === "captain";
-  const viewerRank = deriveViewerRank(
-    campUser.rank,
-    isCaptain ? false : await isTeamLead(campUser.id),
-  );
-  const leadTeams = isCaptain
-    ? []
-    : (await getLeadTeams(campUser.id)).filter(
-        (t) => Team.safeParse(t).success,
-      );
-  const cleared =
-    requireClearance(viewerRank, "team_lead").cleared &&
-    (isCaptain || leadTeams.length > 0);
+  const gate = await captainPageGate("team_lead");
+  const { campUser } = gate;
+  const isCaptain = gate.rank === "captain";
+  const leadTeams =
+    gate.cleared && !isCaptain
+      ? (await getLeadTeams(campUser.id)).filter(
+          (t) => Team.safeParse(t).success,
+        )
+      : [];
+  const cleared = gate.cleared && (isCaptain || leadTeams.length > 0);
 
   // Withhold the data server-side when locked — never fetch what we won't send.
   const config = cleared ? await getTeamsConfig() : null;

@@ -1,5 +1,4 @@
-import { notFound, redirect } from "next/navigation";
-import { deriveViewerRank } from "@camp404/core";
+import { notFound } from "next/navigation";
 import {
   flattenBuilderQuestions,
   type Question,
@@ -17,8 +16,7 @@ import {
   type ActivationResponseRow,
   type ResultsActivationRow,
 } from "@camp404/db/questionnaire-results";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { captainPageGate } from "@/lib/captain-gate";
 import { getCycles } from "@/lib/camp-config";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 
@@ -62,28 +60,15 @@ export type ResultsAccess =
  *
  * The rank check runs BEFORE any results read: a team lead must not be able to
  * make the server fetch answers it will then decline to render (§4.1 — "data
- * withheld server-side"). `deriveViewerRank(rank, false)` skips the isTeamLead
- * lookup deliberately; this surface is captain-only, so lead-ness cannot change
- * the outcome — re-checked against the owner's 2026-09-09 global-`team_lead`
- * ruling and it still holds: results carry names on them, the bar stays
- * `captain`, and `team_lead < captain`. If the bar ever drops, this MUST become
- * `await isTeamLead(campUser.id)`.
+ * withheld server-side"). Results carry names on them, so the bar stays
+ * `captain` under the owner's 2026-09-09 global-`team_lead` ruling.
  */
 export async function loadResults(
   key: string,
   cycleParam?: string,
 ): Promise<ResultsAccess> {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
-  if (deriveViewerRank(campUser.rank, false) !== "captain") {
-    return { ok: false, reason: "locked" };
-  }
+  const { cleared } = await captainPageGate("captain");
+  if (!cleared) return { ok: false, reason: "locked" };
 
   const meta = await getDefinitionMetaRow(key);
   if (!meta) notFound();

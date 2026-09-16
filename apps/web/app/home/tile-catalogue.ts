@@ -21,7 +21,7 @@ import type { IconBadgeTone } from "@camp404/ui/components/icon-badge";
  * `requireClearance` and withholds the tiles of locked groups, so this is the
  * single source of truth for what a *cleared* viewer sees.
  *
- * Only four destinations exist today; the rest are `comingSoon` — rendered
+ * Only five destinations exist today; the rest are `comingSoon` — rendered
  * inert with no href so they never 404 (the old quadrant model wired dead
  * `/members` / `/meals` links). Per-tile badge counts are deferred: their
  * destinations (tasks / team_memberships reads) aren't built, so no fabricated
@@ -117,9 +117,11 @@ export const TILE_CATALOGUE: RankGroupSpec[] = [
         id: "crew-forms",
         icon: FileText,
         title: "Crew Forms",
-        hint: "Questionnaire responses",
-        href: null,
-        comingSoon: true,
+        // Board S08 says "Questionnaire responses", but results are
+        // captain-only. What a lead can do there is build and send.
+        hint: "Build & send to your crew",
+        href: "/captains/questionnaires",
+        comingSoon: false,
       },
       {
         id: "crew-announcements",

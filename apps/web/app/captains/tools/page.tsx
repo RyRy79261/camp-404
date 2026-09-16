@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import {
   CalendarClock,
   ClipboardList,
@@ -6,28 +5,31 @@ import {
   Shield,
   Users,
 } from "lucide-react";
-import { deriveViewerRank, requireClearance } from "@camp404/core";
+import { hasClearance } from "@camp404/core";
+import type { ViewerRank } from "@camp404/types";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { NavCard } from "@camp404/ui/components/nav-card";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { captainPageGate } from "@/lib/captain-gate";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Camp tools — Camp 404" };
 
 // Captains' tool hub — the "Camp Tools" tile on the captain control panel.
-// Like the members' /tools page, it's an index of captain-only tooling; new
-// captain tools slot in here as cards. Preview-but-locked (D3): non-captains
-// see the chrome + a CaptainLock instead of a redirect — the tool list is
-// withheld server-side, never sent.
+// Like the members' /tools page, it's an index of console tooling; new tools
+// slot in here as cards. Each card carries its own clearance bar: a team lead
+// sees the Questionnaires card (owner's call, 2026-09-16) and a CaptainLock for
+// the rest. Preview-but-locked (D3): a card the viewer can't open is withheld
+// server-side, never sent.
 
 interface ToolEntry {
   href: string;
   title: string;
   description: string;
   icon: React.ReactNode;
+  /** The lowest rank that may open this tool. */
+  rank: ViewerRank;
 }
 
 const TOOLS: ToolEntry[] = [
@@ -37,6 +39,7 @@ const TOOLS: ToolEntry[] = [
     description:
       "Compose a camp-wide announcement, save it as a draft, then publish it to everyone. Choose how hard it lands — a full-screen note members must acknowledge, a pop-up, or a quiet inbox entry.",
     icon: <Megaphone className="text-primary" />,
+    rank: "captain",
   },
   {
     href: "/captains/camp-management",
@@ -44,6 +47,7 @@ const TOOLS: ToolEntry[] = [
     description:
       "Review the member roster, approve or reject pending applications, and manage ranks.",
     icon: <Shield className="text-primary" />,
+    rank: "captain",
   },
   {
     href: "/captains/questionnaires",
@@ -51,6 +55,7 @@ const TOOLS: ToolEntry[] = [
     description:
       "Build questionnaires block by block, preview them as a member sees them, then publish and send them to camp.",
     icon: <ClipboardList className="text-primary" />,
+    rank: "team_lead",
   },
   {
     href: "/captains/camp-settings",
@@ -58,6 +63,7 @@ const TOOLS: ToolEntry[] = [
     description:
       "Manage your camp's teams — rename them, reorder them, or archive ones you're not using. Changes flow through to the roster's team filter.",
     icon: <Users className="text-primary" />,
+    rank: "captain",
   },
   {
     href: "/captains/camp-settings/cycle",
@@ -68,39 +74,20 @@ const TOOLS: ToolEntry[] = [
     description:
       "Say what year the camp is in, and when it moves on to the next burn, say so here. See exactly which questionnaires go out again before anything changes — and everything that stays untouched.",
     icon: <CalendarClock className="text-primary" />,
+    rank: "captain",
   },
 ];
 
 export default async function CaptainToolsPage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
-  // Captain-clearance gate (D3): render the shell for everyone, withhold the
-  // tool list from non-captains rather than redirecting.
-  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
-  // and `team_lead < captain`, so the real flag cannot change the outcome —
-  // passing it would only buy a DB round-trip. If this bar ever drops to
-  // `team_lead`, it MUST become `await isTeamLead(campUser.id)`.
-  //
-  // NOTE for whoever revisits this: the Questionnaires card below points at a
-  // TEAM-LEAD+ surface, so this captain-only hub is currently the only link to a
-  // page a lead is cleared for. Opening the hub to leads is a surface-rank
-  // decision (which cards a lead may see, and the home tile group that routes
-  // here) — not a flag fix, and deliberately not made here.
-  const { cleared } = requireClearance(
-    deriveViewerRank(campUser.rank, false),
-    "captain",
-  );
+  // The lowest card bar is `team_lead`, so the viewer's rank is exact here.
+  const { rank } = await captainPageGate("team_lead");
+  const tools = TOOLS.filter((tool) => hasClearance(rank, tool.rank));
+  const locked = tools.length < TOOLS.length;
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-4">
       <GhostBack href="/" className="-ml-2">
-        Captains
+        {rank === "captain" ? "Captains" : "Home"}
       </GhostBack>
 
       <div className="flex flex-col gap-4 pt-2">
@@ -111,9 +98,9 @@ export default async function CaptainToolsPage() {
           </p>
         </div>
 
-        {cleared ? (
+        {tools.length > 0 && (
           <div className="flex flex-col gap-3">
-            {TOOLS.map((tool) => (
+            {tools.map((tool) => (
               <NavCard
                 key={tool.href}
                 href={tool.href}
@@ -123,8 +110,15 @@ export default async function CaptainToolsPage() {
               />
             ))}
           </div>
-        ) : (
-          <CaptainLock message="This tooling is captain-only. Your rank doesn't have clearance for these tools." />
+        )}
+        {locked && (
+          <CaptainLock
+            message={
+              tools.length === 0
+                ? "This tooling is captain-only. Your rank doesn't have clearance for these tools."
+                : "The other camp tools are captain-only."
+            }
+          />
         )}
       </div>
     </main>

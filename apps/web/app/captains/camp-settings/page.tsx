@@ -1,9 +1,6 @@
-import { redirect } from "next/navigation";
-import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { captainPageGate } from "@/lib/captain-gate";
 import { getTeamsConfig } from "@/lib/camp-config";
 import { TeamSettingsManager, type TeamRow } from "./team-settings-manager";
 
@@ -19,22 +16,7 @@ export const metadata = { title: "Camp settings — Camp 404" };
 // projection the roster filter uses.
 
 export default async function CampSettingsPage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
-  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
-  // and `team_lead < captain`, so the real flag cannot change the outcome —
-  // passing it would only buy a DB round-trip. If this bar ever drops to
-  // `team_lead`, it MUST become `await isTeamLead(campUser.id)`.
-  const { cleared } = requireClearance(
-    deriveViewerRank(campUser.rank, false),
-    "captain",
-  );
+  const { cleared } = await captainPageGate("captain");
 
   const teams: TeamRow[] = cleared
     ? [...(await getTeamsConfig()).teams].sort((a, b) => a.order - b.order)

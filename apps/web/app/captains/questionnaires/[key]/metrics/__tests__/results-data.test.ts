@@ -10,6 +10,17 @@ vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(),
   isApproved: vi.fn(),
+  isTeamLead: vi.fn(async () => false),
+}));
+// The member ladder is lib/member-gate's own test; here it signs in the viewer
+// the mocks above describe.
+vi.mock("@/lib/member-gate", () => ({
+  requireMemberPage: vi.fn(async () => {
+    const { getAuthenticatedUserOrRedirect } = await import("@/lib/auth");
+    const { ensureCampUser } = await import("@/lib/users");
+    const authUser = await getAuthenticatedUserOrRedirect();
+    return { authUser, campUser: await ensureCampUser(authUser) };
+  }),
 }));
 vi.mock("next/navigation", () => ({ notFound: vi.fn(), redirect: vi.fn() }));
 vi.mock("@camp404/db/questionnaire-definitions", () => ({

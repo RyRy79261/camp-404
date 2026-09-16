@@ -53,6 +53,9 @@ test.describe("captain announcements (test-mode)", () => {
       displayName: "Captain Jo",
     });
     await page.goto("/");
+    // Captain pages walk the member ladder too, so the captain finishes
+    // onboarding first.
+    await completeOnboarding(request, "captain-auth");
     await setRank(request, "captain-auth", "captain");
 
     await page.goto("/captains/announcements");
@@ -134,6 +137,7 @@ test.describe("captain announcements (test-mode)", () => {
       displayName: "Captain Jo",
     });
     await page.goto("/");
+    await completeOnboarding(request, "captain-auth");
     await setRank(request, "captain-auth", "captain");
     await page.goto("/captains/announcements");
     await page.getByLabel("Title").fill("Water run");

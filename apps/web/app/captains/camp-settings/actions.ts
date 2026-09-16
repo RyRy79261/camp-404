@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { deriveViewerRank, requireClearance } from "@camp404/core";
 import {
   moveTeam,
   renameTeam,
@@ -19,8 +18,7 @@ import {
   type FoundingReport,
   type RolloverReport,
 } from "@camp404/db/cycle-rollover";
-import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { captainActionGate } from "@/lib/captain-gate";
 import { mutateTeamsConfig } from "@/lib/camp-config";
 
 // Captain-only team-settings mutations (Phase 2). Each does a captain-gate, a
@@ -54,32 +52,11 @@ type CaptainGate =
 /**
  * Captain-gate a team-settings action. Returns the captain's id (every change
  * here writes an audit row naming them), or a captain-facing error string for
- * the caller to surface — same preview-but-locked comparator (D3) the captain
- * pages gate on.
+ * the caller to surface.
  */
 async function requireCaptain(): Promise<CaptainGate> {
-  const authUser = await getAuthenticatedUser();
-  if (!authUser) return { ok: false, error: "Not signed in." };
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't camp-active yet." };
-  }
-  // Mirror the page's gates: a captain still held behind vetting can't act.
-  // Server actions are reachable independently of the page render, so the
-  // approval check has to live here too — not just on the page (D3).
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account is still awaiting approval." };
-  }
-  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
-  // and `team_lead < captain`, so the real flag cannot change the outcome —
-  // passing it would only buy a DB round-trip. If this bar ever drops to
-  // `team_lead`, it MUST become `await isTeamLead(campUser.id)`.
-  const { cleared } = requireClearance(
-    deriveViewerRank(campUser.rank, false),
-    "captain",
-  );
-  if (!cleared) return { ok: false, error: "Captain access only." };
-  return { ok: true, captainId: campUser.id };
+  const gate = await captainActionGate("captain");
+  return gate.ok ? { ok: true, captainId: gate.campUser.id } : gate;
 }
 
 // Relabelling, reordering, or archiving a team changes every surface that reads

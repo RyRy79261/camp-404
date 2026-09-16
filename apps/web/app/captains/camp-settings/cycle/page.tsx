@@ -1,10 +1,7 @@
-import { redirect } from "next/navigation";
-import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { planRollover } from "@camp404/db/cycle-rollover";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { captainPageGate } from "@/lib/captain-gate";
 import { RolloverPanel, type RolloverPlanView } from "./rollover-panel";
 
 export const dynamic = "force-dynamic";
@@ -25,22 +22,7 @@ export const metadata = { title: "The camp's year — Camp 404" };
 // captain the real numbers before anything happens.
 
 export default async function CycleRolloverPage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
-  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
-  // and `team_lead < captain`, so the real flag cannot change the outcome —
-  // passing it would only buy a DB round-trip. If this bar ever drops to
-  // `team_lead`, it MUST become `await isTeamLead(campUser.id)`.
-  const { cleared } = requireClearance(
-    deriveViewerRank(campUser.rank, false),
-    "captain",
-  );
+  const { cleared } = await captainPageGate("captain");
 
   // Typed to the island's structural view so the page conforms to the client
   // contract by assignment, rather than the island importing the DB package.

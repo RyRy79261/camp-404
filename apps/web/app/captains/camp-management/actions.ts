@@ -17,16 +17,10 @@ import {
   canSendPromotion,
   deriveViewerRank,
   promotionStepState,
-  requireClearance,
 } from "@camp404/core";
 import { Team } from "@camp404/types";
-import { getAuthenticatedUser } from "@/lib/auth";
-import {
-  decideUserApproval,
-  ensureCampUser,
-  hasCampAccess,
-  isApproved,
-} from "@/lib/users";
+import { captainActionGate } from "@/lib/captain-gate";
+import { decideUserApproval } from "@/lib/users";
 import {
   decideCaptainPromotion,
   getOpenPromotionForTarget,
@@ -128,70 +122,36 @@ const CANCEL_PROMOTION_COPY: Record<string, string> = {
 
 /**
  * Captain-gate every camp-management action at the data layer. Returns the
- * acting captain's camp user, or an error string for the caller to surface.
+ * acting captain's id, or an error string for the caller to surface. A
+ * captain+pending row is refused: the roster offers assign-captain on a member
+ * still in the vetting queue, and accepting flips rank without touching
+ * approval status.
  */
 async function requireCaptain(): Promise<
   { ok: true; captainId: string } | { ok: false; error: string }
 > {
-  const authUser = await getAuthenticatedUser();
-  if (!authUser) return { ok: false, error: "Not signed in." };
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't camp-active yet." };
-  }
-  // Mirror the page's gates: a captain still held behind vetting can't act.
-  // Server actions are reachable independently of the page render, so the
-  // approval check has to live here too — not just on the page (D3). A
-  // captain+pending row is reachable today: the roster offers assign-captain
-  // on a member still in the vetting queue, and accepting flips rank without
-  // touching approval status.
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account is still awaiting approval." };
-  }
-  // Same preview-but-locked comparator the captain pages gate on (D3).
-  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
-  // and `team_lead < captain`, so the real flag cannot change the outcome —
-  // passing it would only buy a DB round-trip on every action call. If this
-  // bar ever drops to `team_lead`, it MUST become
-  // `await isTeamLead(campUser.id)`.
-  const { cleared } = requireClearance(
-    deriveViewerRank(campUser.rank, false),
-    "captain",
-  );
-  if (!cleared) {
-    return { ok: false, error: "Captain access only." };
-  }
-  return { ok: true, captainId: campUser.id };
+  const gate = await captainActionGate("captain");
+  return gate.ok ? { ok: true, captainId: gate.campUser.id } : gate;
 }
 
 /**
- * Gate a member-facing camp-management read: authenticated, camp-active, and
- * approved — but NOT captain-gated. Backs the public member profile (decision:
- * any approved member may browse the roster + public cards). Returns the viewer's
- * id and whether they are a captain (so a captain hitting the public path is
- * still recognised).
+ * Gate a member-facing camp-management read: signed in, camp-active and
+ * approved, but NOT captain-gated. Backs the public member profile (decision:
+ * any approved member may browse the roster + public cards). Returns the
+ * viewer's id and whether they are a captain, so a captain hitting the public
+ * path is still recognised.
  */
 async function requireApprovedMember(): Promise<
   | { ok: true; userId: string; isCaptain: boolean }
   | { ok: false; error: string }
 > {
-  const authUser = await getAuthenticatedUser();
-  if (!authUser) return { ok: false, error: "Not signed in." };
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't camp-active yet." };
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't approved yet." };
-  }
-  // `false` again, and for the same reason: this comparison asks only "is this
-  // viewer a captain" (it feeds `isCaptain`, which picks the full vs. redacted
-  // roster projection). `team_lead < captain`, so the real flag cannot move it.
-  const { cleared } = requireClearance(
-    deriveViewerRank(campUser.rank, false),
-    "captain",
-  );
-  return { ok: true, userId: campUser.id, isCaptain: cleared };
+  const gate = await captainActionGate("camp_member");
+  if (!gate.ok) return gate;
+  return {
+    ok: true,
+    userId: gate.campUser.id,
+    isCaptain: gate.rank === "captain",
+  };
 }
 
 /** Load the full burner detail behind a roster row, for the modal. */

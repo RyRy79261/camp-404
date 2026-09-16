@@ -1,19 +1,10 @@
 import type { ReactNode } from "react";
-import { notFound, redirect } from "next/navigation";
-import { deriveViewerRank, requireClearance } from "@camp404/core";
+import { notFound } from "next/navigation";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import { getOpenActivationForKey } from "@camp404/db/questionnaire-lifecycle";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-// Via the lib facade so E2E reads the test store, not Neon — see the note on
-// the same import in ../page.tsx.
-import {
-  ensureCampUser,
-  hasCampAccess,
-  isApproved,
-  isTeamLead,
-} from "@/lib/users";
+import { captainPageGate } from "@/lib/captain-gate";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { BuilderCanvas } from "./builder-canvas";
 
@@ -30,17 +21,11 @@ export default async function BuilderCanvasPage({
   params: Promise<{ key: string }>;
 }) {
   const { key } = await params;
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
-
-  const rank = deriveViewerRank(campUser.rank, await isTeamLead(campUser.id));
-  const canAuthor = requireClearance(rank, "team_lead").cleared;
+  const {
+    campUser,
+    rank,
+    cleared: canAuthor,
+  } = await captainPageGate("team_lead");
 
   const chrome = (children: ReactNode) => (
     <main className="mx-auto max-w-lg px-4 py-6">
