@@ -9,6 +9,7 @@ import {
   setProfileImage,
 } from "@/lib/users";
 import { deleteAccount } from "@/lib/account";
+import { runAction } from "@/lib/action-result";
 
 export type UpdateProfileResult = { ok: false; error: string };
 export type DeleteAccountResult = { ok: false; error: string };
@@ -25,26 +26,31 @@ export async function updateProfile(
   _prev: UpdateProfileResult | null,
   formData: FormData,
 ): Promise<UpdateProfileResult> {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
+  return runAction("updateProfile", async () => {
+    const authUser = await getAuthenticatedUserOrRedirect();
+    const campUser = await ensureCampUser(authUser);
+    if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+      redirect("/signup/required");
+    }
 
-  const rawName = formData.get("displayName");
-  const name = typeof rawName === "string" ? rawName.trim() : "";
-  if (!name) return { ok: false, error: "Display name can't be empty." };
-  if (name.length > MAX_NAME_LENGTH) {
-    return { ok: false, error: `Display name must be ${MAX_NAME_LENGTH} characters or fewer.` };
-  }
+    const rawName = formData.get("displayName");
+    const name = typeof rawName === "string" ? rawName.trim() : "";
+    if (!name) return { ok: false, error: "Display name can't be empty." };
+    if (name.length > MAX_NAME_LENGTH) {
+      return {
+        ok: false,
+        error: `Display name must be ${MAX_NAME_LENGTH} characters or fewer.`,
+      };
+    }
 
-  const rawImage = formData.get("profileImageUrl");
-  const image = typeof rawImage === "string" ? rawImage.trim() : "";
+    const rawImage = formData.get("profileImageUrl");
+    const image = typeof rawImage === "string" ? rawImage.trim() : "";
 
-  await setDisplayName(campUser.id, name);
-  await setProfileImage(campUser.id, image.length > 0 ? image : null);
+    await setDisplayName(campUser.id, name);
+    await setProfileImage(campUser.id, image.length > 0 ? image : null);
 
-  redirect("/profile");
+    redirect("/profile");
+  });
 }
 
 /**
@@ -56,14 +62,16 @@ export async function deleteOwnAccount(
   _prev: DeleteAccountResult | null,
   formData: FormData,
 ): Promise<DeleteAccountResult> {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (formData.get("confirm") !== "DELETE") {
-    return { ok: false, error: "Type DELETE to confirm." };
-  }
-  await deleteAccount(campUser.id);
-  redirect("/auth/sign-out");
+  return runAction("deleteOwnAccount", async () => {
+    const authUser = await getAuthenticatedUserOrRedirect();
+    const campUser = await ensureCampUser(authUser);
+    if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+      redirect("/signup/required");
+    }
+    if (formData.get("confirm") !== "DELETE") {
+      return { ok: false, error: "Type DELETE to confirm." };
+    }
+    await deleteAccount(campUser.id);
+    redirect("/auth/sign-out");
+  });
 }

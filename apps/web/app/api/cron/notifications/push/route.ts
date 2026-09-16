@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { drainQueuedPush } from "@camp404/db/push";
+import { redactSecrets } from "@camp404/core";
 import { sendPush } from "@/lib/firebase-admin";
 import { assertCron } from "@/lib/cron-auth";
 
@@ -19,7 +20,13 @@ export async function GET(req: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: err instanceof Error ? err.message : "push drain failed",
+        // The failure is usually a Firebase/DB throw whose message can carry a
+        // connection string or credential; scrub known secret values before it
+        // goes into a response body (and from there, a log).
+        error: redactSecrets(
+          err instanceof Error ? err.message : "push drain failed",
+          process.env,
+        ),
       },
       { status: 503 },
     );

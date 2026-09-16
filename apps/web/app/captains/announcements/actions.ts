@@ -10,10 +10,7 @@ import {
 } from "@/lib/notifications";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-
-export type ActionResult<T = undefined> =
-  | ({ ok: true } & (T extends undefined ? object : { data: T }))
-  | { ok: false; error: string };
+import { runAction, type ActionResult } from "@/lib/action-result";
 
 /**
  * Captain-gate every announcement action at the data layer. Returns the
@@ -43,20 +40,25 @@ async function requireCaptain(): Promise<
 export async function saveDraftAction(
   input: unknown,
 ): Promise<ActionResult<{ id: string }>> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("saveDraftAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  const parsed = ComposeAnnouncementInput.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
-  }
+    const parsed = ComposeAnnouncementInput.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid.",
+      };
+    }
 
-  const { id } = await createAnnouncementDraft({
-    senderId: gate.captainId,
-    ...parsed.data,
+    const { id } = await createAnnouncementDraft({
+      senderId: gate.captainId,
+      ...parsed.data,
+    });
+    revalidatePath("/captains/announcements");
+    return { ok: true, data: { id } };
   });
-  revalidatePath("/captains/announcements");
-  return { ok: true, data: { id } };
 }
 
 /** Edit an existing draft (author-only, drafts only). */
@@ -64,37 +66,44 @@ export async function updateDraftAction(
   id: string,
   input: unknown,
 ): Promise<ActionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("updateDraftAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  const parsed = ComposeAnnouncementInput.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
-  }
+    const parsed = ComposeAnnouncementInput.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid.",
+      };
+    }
 
-  const ok = await updateAnnouncementDraft({
-    id,
-    senderId: gate.captainId,
-    ...parsed.data,
+    const ok = await updateAnnouncementDraft({
+      id,
+      senderId: gate.captainId,
+      ...parsed.data,
+    });
+    if (!ok) {
+      return { ok: false, error: "Draft not found or already published." };
+    }
+    revalidatePath("/captains/announcements");
+    return { ok: true };
   });
-  if (!ok) {
-    return { ok: false, error: "Draft not found or already published." };
-  }
-  revalidatePath("/captains/announcements");
-  return { ok: true };
 }
 
 /** Delete a draft (author-only, drafts only). */
 export async function deleteDraftAction(id: string): Promise<ActionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("deleteDraftAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  const ok = await deleteAnnouncementDraft({ id, senderId: gate.captainId });
-  if (!ok) {
-    return { ok: false, error: "Draft not found or already published." };
-  }
-  revalidatePath("/captains/announcements");
-  return { ok: true };
+    const ok = await deleteAnnouncementDraft({ id, senderId: gate.captainId });
+    if (!ok) {
+      return { ok: false, error: "Draft not found or already published." };
+    }
+    revalidatePath("/captains/announcements");
+    return { ok: true };
+  });
 }
 
 /**
@@ -104,11 +113,13 @@ export async function deleteDraftAction(id: string): Promise<ActionResult> {
 export async function publishAction(
   id: string,
 ): Promise<ActionResult<{ recipientCount: number }>> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("publishAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  const result = await publishAnnouncement({ id, senderId: gate.captainId });
-  if (!result.ok) return result;
-  revalidatePath("/captains/announcements");
-  return { ok: true, data: { recipientCount: result.recipientCount } };
+    const result = await publishAnnouncement({ id, senderId: gate.captainId });
+    if (!result.ok) return result;
+    revalidatePath("/captains/announcements");
+    return { ok: true, data: { recipientCount: result.recipientCount } };
+  });
 }

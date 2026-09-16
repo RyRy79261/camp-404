@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// bootstrap.ts is server-only; neutralize the import guard under vitest.
-vi.mock("server-only", () => ({}));
-
 const { getBootstrapState, bootstrapFirstCaptain, seedBurnerProfileAction, isE2E } =
   vi.hoisted(() => ({
     getBootstrapState: vi.fn(),

@@ -9,7 +9,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { createHttpDb, createPooledDb } from "./index";
+import { createHttpDb, createPooledDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 
@@ -229,64 +229,59 @@ export async function publishAnnouncement(input: {
   id: string;
   senderId: string;
 }): Promise<PublishResult> {
-  const { db, pool } = createPooledDb();
-  try {
-    return await db.transaction(async (tx) => {
-      // Claim the draft: only an unpublished row owned by this sender flips.
-      const claimed = await tx
-        .update(schema.broadcasts)
-        .set({ publishedAt: new Date(), dispatchedAt: new Date() })
-        .where(isOwnedAnnouncementDraft(input.id, input.senderId))
-        .returning({
-          id: schema.broadcasts.id,
-          title: schema.broadcasts.title,
-          body: schema.broadcasts.body,
-          channel: schema.broadcasts.channel,
-          presentation: schema.broadcasts.presentation,
-        });
+  return await withTransaction(async (tx) => {
+    // Claim the draft: only an unpublished row owned by this sender flips.
+    const claimed = await tx
+      .update(schema.broadcasts)
+      .set({ publishedAt: new Date(), dispatchedAt: new Date() })
+      .where(isOwnedAnnouncementDraft(input.id, input.senderId))
+      .returning({
+        id: schema.broadcasts.id,
+        title: schema.broadcasts.title,
+        body: schema.broadcasts.body,
+        channel: schema.broadcasts.channel,
+        presentation: schema.broadcasts.presentation,
+      });
 
-      const broadcast = claimed[0];
-      if (!broadcast) {
-        return {
-          ok: false as const,
-          error: "Draft not found, already published, or not yours.",
-        };
-      }
+    const broadcast = claimed[0];
+    if (!broadcast) {
+      return {
+        ok: false as const,
+        error: "Draft not found, already published, or not yours.",
+      };
+    }
 
-      // Resolve the audience via the shared resolver (scope = 'everyone' for a
-      // camp-wide announcement — same recipient set as before). ON CONFLICT DO
-      // NOTHING pairs with the new (broadcast_id, user_id) dedupe index so a
-      // retry can never double-deliver.
-      const recipientIds = await resolveAudience(
-        { id: broadcast.id, scope: "everyone", team: null },
-        input.senderId,
-      );
+    // Resolve the audience via the shared resolver (scope = 'everyone' for a
+    // camp-wide announcement — same recipient set as before). ON CONFLICT DO
+    // NOTHING pairs with the new (broadcast_id, user_id) dedupe index so a
+    // retry can never double-deliver.
+    const recipientIds = await resolveAudience(
+      { id: broadcast.id, scope: "everyone", team: null },
+      input.senderId,
+    );
 
-      if (recipientIds.length === 0) {
-        return { ok: true as const, recipientCount: 0 };
-      }
+    if (recipientIds.length === 0) {
+      return { ok: true as const, recipientCount: 0 };
+    }
 
-      await tx
-        .insert(schema.notificationDeliveries)
-        .values(
-          recipientIds.map((userId) => ({
-            broadcastId: broadcast.id,
-            userId,
-            title: broadcast.title,
-            body: broadcast.body,
-            channel: broadcast.channel,
-            presentation: broadcast.presentation,
-            refType: "announcement",
-            refId: broadcast.id,
-          })),
-        )
-        .onConflictDoNothing();
+    await tx
+      .insert(schema.notificationDeliveries)
+      .values(
+        recipientIds.map((userId) => ({
+          broadcastId: broadcast.id,
+          userId,
+          title: broadcast.title,
+          body: broadcast.body,
+          channel: broadcast.channel,
+          presentation: broadcast.presentation,
+          refType: "announcement",
+          refId: broadcast.id,
+        })),
+      )
+      .onConflictDoNothing();
 
-      return { ok: true as const, recipientCount: recipientIds.length };
-    });
-  } finally {
-    await pool.end();
-  }
+    return { ok: true as const, recipientCount: recipientIds.length };
+  });
 }
 
 export interface DispatchResult {
