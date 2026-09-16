@@ -56,6 +56,9 @@ vi.mock("@/lib/camp-config", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ auditReadAfterResponse: vi.fn() }));
+vi.mock("@camp404/db/activations", () => ({
+  listMemberQuestionnaireGates: vi.fn(async () => []),
+}));
 vi.mock("@camp404/db/member-notes", () => ({
   MAX_MEMBER_NOTE_LENGTH: 2000,
   addMemberNote: vi.fn(),

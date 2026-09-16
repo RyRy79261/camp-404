@@ -58,6 +58,8 @@
 //     tapping an inbox row or a push opens (./notification-links)
 //   - time zone: CAMP_TIME_ZONE, the zone every human-read date is formatted
 //     in (./time-zone)
+//   - questionnaire status: memberQuestionnaireStatuses — where each
+//     questionnaire stands for one member (./questionnaire-status)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -86,3 +88,4 @@ export * from "./notifications";
 export * from "./notification-days";
 export * from "./notification-email";
 export * from "./time-zone";
+export * from "./questionnaire-status";

@@ -1,9 +1,10 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction, type PooledDatabase } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 import { currentCycle, resolveCycles, UNSET_CYCLE } from "./camp-config";
 import { meetsRequiredVersion } from "./versions";
+import { currentCycleNumber } from "./cycles";
 import type { DbOrTx } from "./audit";
 import type { QuestionnaireResponses } from "@camp404/types";
 
@@ -498,6 +499,54 @@ export async function getPendingRequiredActions(
       ),
     )
     .orderBy(asc(schema.requiredActions.createdAt));
+}
+
+/**
+ * Every questionnaire gate a member has, for the captain's member panel: all
+ * pending ones, the code questionnaires (no send behind them), and this year's
+ * sends. Earlier years' finished or closed sends are left out, so the list does
+ * not grow every year. Oldest first, the order the member meets them.
+ */
+export async function listMemberQuestionnaireGates(userId: string): Promise<
+  Array<{
+    actionKey: string;
+    title: string;
+    status: (typeof schema.requiredActionStatusEnum.enumValues)[number];
+    blocking: boolean;
+    dueAt: Date | null;
+    completedAt: Date | null;
+    createdAt: Date;
+  }>
+> {
+  const db = createHttpDb();
+  const cycle = await currentCycleNumber(db);
+  return db
+    .select({
+      actionKey: schema.requiredActions.actionKey,
+      title: schema.requiredActions.title,
+      status: schema.requiredActions.status,
+      blocking: schema.requiredActions.blocking,
+      dueAt: schema.requiredActions.dueAt,
+      completedAt: schema.requiredActions.completedAt,
+      createdAt: schema.requiredActions.createdAt,
+    })
+    .from(schema.requiredActions)
+    .leftJoin(
+      schema.questionnaireActivations,
+      eq(schema.questionnaireActivations.id, schema.requiredActions.activationId),
+    )
+    .where(
+      and(
+        eq(schema.requiredActions.userId, userId),
+        eq(schema.requiredActions.type, "questionnaire"),
+        or(
+          eq(schema.requiredActions.status, "pending"),
+          isNull(schema.requiredActions.activationId),
+          eq(schema.questionnaireActivations.cycle, cycle),
+        ),
+      ),
+    )
+    .orderBy(asc(schema.requiredActions.createdAt), asc(schema.requiredActions.id));
 }
 
 /** One questionnaire a member still has to answer, from a send that is open. */
