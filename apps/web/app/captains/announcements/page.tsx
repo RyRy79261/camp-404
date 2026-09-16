@@ -83,7 +83,10 @@ export default async function AnnouncementsPage() {
           teamLabels={teamLabels}
         />
       ) : (
-        <CaptainLock />
+        <CaptainLock
+          title="Team leads and captains only"
+          message="Announcements are for team leads and captains. Your rank doesn’t have clearance for this."
+        />
       )}
     </main>
   );

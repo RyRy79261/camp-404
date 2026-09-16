@@ -38,7 +38,10 @@ export default async function BuilderPreviewPage({
 
   if (!cleared) {
     return chrome(
-      <CaptainLock message="Questionnaire previews are for team leads and captains." />,
+      <CaptainLock
+        title="Team leads and captains only"
+        message="Questionnaire previews are for team leads and captains."
+      />,
     );
   }
 

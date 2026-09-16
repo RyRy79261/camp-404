@@ -58,11 +58,15 @@ export function RankGroupCard({
       </div>
 
       {locked ? (
-        <CaptainLock />
+        <CaptainLock
+          title={`${name} only`}
+          message={`Your rank doesn’t have clearance for the ${name} tools.`}
+        />
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {tiles.map((tile) => (
-            <GridTile linkAs={Link}
+            <GridTile
+              linkAs={Link}
               key={tile.id}
               icon={tile.icon}
               iconTone={chipTone}

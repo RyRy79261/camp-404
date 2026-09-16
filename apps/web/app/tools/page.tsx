@@ -73,7 +73,8 @@ export default async function ToolsPage() {
 
         <div className="flex flex-col gap-3">
           {TOOLS.map((tool) => (
-            <NavCard linkAs={Link}
+            <NavCard
+              linkAs={Link}
               key={tool.href}
               href={tool.href}
               icon={tool.icon}

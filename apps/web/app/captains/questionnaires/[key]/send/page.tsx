@@ -49,7 +49,8 @@ export default async function SendPage({
     <main className="mx-auto max-w-lg px-4 py-6">
       {/* A lead edits only their own questionnaires, so the hub is the way back. */}
       {isCaptain ? (
-        <GhostBack linkAs={Link}
+        <GhostBack
+          linkAs={Link}
           href={`/captains/questionnaires/${key}`}
           className="-ml-2 mb-4"
         >
@@ -70,7 +71,7 @@ export default async function SendPage({
   const leadTeams = cleared && !isCaptain ? await getLeadTeams(campUser.id) : [];
   if (!cleared || (!isCaptain && leadTeams.length === 0)) {
     return chrome(
-      <CaptainLock message="Only captains and team leads can send questionnaires to members." />,
+      <CaptainLock title="Team leads and captains only" message="Only captains and team leads can send questionnaires to members." />,
     );
   }
 

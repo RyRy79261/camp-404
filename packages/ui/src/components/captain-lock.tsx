@@ -2,35 +2,35 @@ import { Lock } from "lucide-react"
 
 import { cn } from "../lib/utils"
 
-// Preview-but-locked panel (decision D3): a clearance-gated surface renders the
-// page chrome for everyone, then this in place of the data for viewers without
-// clearance — the server withholds the data, this explains why. Presentational
-// leaf; the gating decision (`requireClearance`) lives in @camp404/core.
+// Preview-but-locked (board 09): the page shows its chrome, and this card
+// stands where the data would be. The page sends no data for a rank below its
+// bar, so this is the whole of what that viewer gets. `title` names who may see
+// it; `message` says what the viewer is missing.
 export interface CaptainLockProps {
+  /** @default "Captain access only" */
   title?: string
+  /** @default "This data is visible to captains. Your rank doesn’t have clearance for this view." */
   message?: string
   className?: string
 }
 
 export function CaptainLock({
-  title = "VIEW ONLY",
-  message = "No data for your rank.",
+  title = "Captain access only",
+  message = "This data is visible to captains. Your rank doesn’t have clearance for this view.",
   className,
 }: CaptainLockProps) {
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-2 rounded-lg border border-dashed bg-muted/20 px-6 py-12 text-center",
+        "flex flex-col items-center gap-2.5 rounded-[var(--radius)] border bg-card p-6 text-center",
         className,
       )}
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-full border bg-muted/40">
-        <Lock aria-hidden className="h-5 w-5 text-muted-foreground" />
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
+        <Lock aria-hidden className="h-5 w-5 text-primary" />
       </span>
-      <p className="text-sm font-semibold uppercase tracking-wide text-foreground">
-        {title}
-      </p>
-      <p className="text-sm text-muted-foreground">{message}</p>
+      <p className="text-[15px] font-bold text-foreground">{title}</p>
+      <p className="text-xs text-muted-foreground">{message}</p>
     </div>
   )
 }

@@ -42,7 +42,7 @@ export default async function BuilderCanvasPage({
 
   if (!canAuthor) {
     return chrome(
-      <CaptainLock message="The questionnaire builder is for team leads and captains." />,
+      <CaptainLock title="Team leads and captains only" message="The questionnaire builder is for team leads and captains." />,
     );
   }
 
@@ -54,7 +54,7 @@ export default async function BuilderCanvasPage({
   const canEdit = rank === "captain" || meta.createdBy === campUser.id;
   if (!canEdit) {
     return chrome(
-      <CaptainLock message="You can only edit your own drafts." />,
+      <CaptainLock title="Author and captains only" message="You can only edit your own drafts." />,
     );
   }
 

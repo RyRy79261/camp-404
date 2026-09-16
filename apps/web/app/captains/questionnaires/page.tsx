@@ -72,7 +72,10 @@ export default async function QuestionnairesPage() {
       {canAuthor ? (
         <QuestionnaireHub items={items} />
       ) : (
-        <CaptainLock message="The questionnaire builder is for team leads and captains. Your rank doesn't have clearance for this." />
+        <CaptainLock
+          title="Team leads and captains only"
+          message="The questionnaire builder is for team leads and captains. Your rank doesn't have clearance for this."
+        />
       )}
     </main>
   );

@@ -37,7 +37,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await expect(
       page.getByRole("heading", { name: "Camp tools" }),
     ).toBeVisible();
-    await expect(page.getByText("VIEW ONLY")).toBeVisible();
+    await expect(page.getByText("Captain access only")).toBeVisible();
     await expect(
       page.getByText(/this tooling is captain-only/i),
     ).toBeVisible();
@@ -58,7 +58,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await expect(
       page.getByRole("link", { name: /Announcements & notifications/ }),
     ).toBeVisible();
-    await expect(page.getByText("VIEW ONLY")).toHaveCount(0);
+    await expect(page.getByText("Captain access only")).toHaveCount(0);
   });
 
   test("/captains/announcements: a non-captain sees the locked shell, no composer", async ({
@@ -73,7 +73,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await expect(
       page.getByRole("heading", { name: "Announcements & notifications" }),
     ).toBeVisible();
-    await expect(page.getByText("VIEW ONLY")).toBeVisible();
+    await expect(page.getByText("Team leads and captains only")).toBeVisible();
     // The composer is withheld — its Title field never renders.
     await expect(page.getByLabel("Title")).toHaveCount(0);
   });
@@ -87,7 +87,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await page.goto("/captains/announcements");
 
     await expect(page.getByLabel("Title")).toBeVisible();
-    await expect(page.getByText("VIEW ONLY")).toHaveCount(0);
+    await expect(page.getByText("Team leads and captains only")).toHaveCount(0);
   });
 
   // camp-management is NOT preview-but-locked any more: any approved member may
