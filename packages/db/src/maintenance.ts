@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { createPooledDb } from "./index";
+import { and, eq } from "drizzle-orm";
+import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
 import { encrypt } from "./crypto";
 import { splitIdNumber, idColumnsFor } from "./id-documents";
@@ -46,4 +46,59 @@ export async function backfillIdEncryption(): Promise<{
   } finally {
     await pool.end();
   }
+}
+
+/**
+ * Idempotent backfill: give every real member who predates signup seeding a
+ * `burner_profile` required action, so the required_actions gate covers them
+ * and the `completedAt` fallback can go. A member whose profile is already
+ * complete gets a COMPLETED row stamped with that time, never a pending one,
+ * or finished members would be sent back to onboarding. Everyone else gets a
+ * pending row with no version, so any completion satisfies it. The system
+ * account and erased accounts are skipped. A member who already has the row
+ * keeps it untouched (ON CONFLICT on required_actions_user_action_idx).
+ */
+export async function backfillBurnerProfileActions(): Promise<{
+  scanned: number;
+  seededPending: number;
+  seededCompleted: number;
+}> {
+  const db = createHttpDb();
+  const members = await db
+    .select({
+      userId: schema.users.id,
+      completedAt: schema.burnerProfiles.completedAt,
+    })
+    .from(schema.users)
+    .leftJoin(
+      schema.burnerProfiles,
+      eq(schema.burnerProfiles.userId, schema.users.id),
+    )
+    .where(
+      and(eq(schema.users.isSystem, false), eq(schema.users.sanitised, false)),
+    );
+  if (members.length === 0) {
+    return { scanned: 0, seededPending: 0, seededCompleted: 0 };
+  }
+  const seeded = await db
+    .insert(schema.requiredActions)
+    .values(
+      members.map((m) => ({
+        userId: m.userId,
+        type: "questionnaire" as const,
+        actionKey: "burner_profile",
+        title: "Complete your burner profile",
+        status: m.completedAt ? ("completed" as const) : ("pending" as const),
+        completedAt: m.completedAt,
+      })),
+    )
+    .onConflictDoNothing({
+      target: [schema.requiredActions.userId, schema.requiredActions.actionKey],
+    })
+    .returning({ status: schema.requiredActions.status });
+  return {
+    scanned: members.length,
+    seededPending: seeded.filter((r) => r.status === "pending").length,
+    seededCompleted: seeded.filter((r) => r.status === "completed").length,
+  };
 }
