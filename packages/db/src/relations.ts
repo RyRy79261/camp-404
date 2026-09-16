@@ -12,7 +12,7 @@ import * as schema from "./schema";
 /**
  * One row per user with the id of the user who invited them (NULL for the
  * founder / god accounts that pre-date any code). Ordered by displayName so the
- * page is stable.
+ * page is stable. The system account is not a person, so it is left out.
  */
 export async function getReferralRoster(): Promise<ReferralUser[]> {
   const db = createHttpDb();
@@ -29,6 +29,7 @@ export async function getReferralRoster(): Promise<ReferralUser[]> {
       schema.inviteCodes,
       eq(schema.inviteCodes.code, schema.users.inviteCode),
     )
+    .where(eq(schema.users.isSystem, false))
     .orderBy(asc(schema.users.displayName));
   return rows;
 }
