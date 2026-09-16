@@ -5,15 +5,10 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { isCampBootstrapped } from "@/lib/bootstrap";
 import {
   ensureCampUser,
-  getBurnerProfile,
   getPendingQuestionnaires,
-  getPendingRequiredActions,
-  hasCampAccess,
-  isApproved,
   isTeamLead,
-  syncOpenGates,
 } from "@/lib/users";
-import { nextGate } from "@/lib/required-actions";
+import { memberBlock } from "@/lib/member-gate";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { countUnread } from "@/lib/notifications";
 import { initialsFrom } from "@/lib/initials";
@@ -43,37 +38,13 @@ export default async function HomePage() {
     redirect("/setup");
   }
 
-  // Invite gate — god accounts (GOD_EMAILS) bypass; everyone else must have
-  // redeemed an invite code before getting past this point. Without one they
-  // land on /signup/required to enter a code.
+  // The member ladder every member page shares (lib/member-gate): an invite
+  // (god accounts bypass), any blocking questionnaire, a finished burner
+  // profile, then captain approval. Each rung redirects to the page that
+  // clears it.
   const campUser = await ensureCampUser(user);
-  if (!hasCampAccess(campUser, user.primaryEmail)) {
-    redirect("/signup/required");
-  }
-
-  // Generic required_actions gate — the canonical "what blocks this user"
-  // mechanism. Routes to the first pending blocking action's bespoke page
-  // (today: the burner profile; future questionnaires slot in via the registry).
-  // A send only gates the people in its audience when it opens, so first hand
-  // this member the gates of any open send they have joined since.
-  await syncOpenGates(campUser.id);
-  const gate = nextGate(await getPendingRequiredActions(campUser.id));
-  if (gate) redirect(gate);
-
-  // Belt-and-braces fallback (one release): until every member is guaranteed a
-  // seeded burner_profile required action, also honour the legacy completedAt
-  // check. Drop once required_actions seeding is confirmed in prod.
-  const profile = await getBurnerProfile(campUser.id);
-  if (!profile?.completedAt) {
-    redirect("/onboarding/questionnaire");
-  }
-
-  // Captain-approval gate — a member who redeemed a vetting-required invite
-  // code lands here after onboarding but is held behind the blocking
-  // application screen until a captain approves (or rejects) them.
-  if (!isApproved(campUser, user.primaryEmail)) {
-    redirect("/pending-approval");
-  }
+  const block = await memberBlock(campUser, user.primaryEmail);
+  if (block) redirect(block.href);
 
   const initials = initialsFrom(campUser.displayName ?? user.primaryEmail);
   // Kick off the unread count alongside the team-lead probe below rather than

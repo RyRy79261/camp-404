@@ -2,7 +2,7 @@
 
 - **Route(s):** none — mounted app-wide in the root layout (`apps/web/app/layout.tsx`). The error/not-found boundaries are file-convention routes (`error.tsx`, `global-error.tsx`, `not-found.tsx`) that Next mounts implicitly, not navigable paths.
 - **Canonical board(s):** `design/.spec-extract/boards/31-s22-global-overlays.txt` (S22 — the board renders every overlay as a labelled static state on one mobile column; in production each is a floating surface over whatever screen is active).
-- **Superseded-or-dropped:** none dropped here. **Ownership split (locked):** the `QuestionnaireBlock` overlay specced here is the **app-blocking overlay variant** (a captain-activated *blocking* `required_action` of type `questionnaire` that interrupts a member already inside the app). The **routed S25 gate** (`design/spec/surfaces/…s25…`, code `apps/web/app/onboarding/questionnaire/page.tsx`) owns the onboarding burner-profile gate that redirects an incomplete user to a full page. S25 = routed gate; this = blocking overlay. They share the same visual card and copy.
+- **Superseded-or-dropped:** **`QuestionnaireBlock` (the overlay) is dropped.** Owner's call, 2026-09-16: a server check on every member page owns the blocking questionnaire. `requireMemberPage()` in `apps/web/lib/member-gate.ts` redirects to the questionnaire runner, so nothing mounts an overlay. Section 2 below is kept as a record of the board only. *Earlier ownership split, now historical:* the `QuestionnaireBlock` overlay specced here is the **app-blocking overlay variant** (a captain-activated *blocking* `required_action` of type `questionnaire` that interrupts a member already inside the app). The **routed S25 gate** (`design/spec/surfaces/…s25…`, code `apps/web/app/onboarding/questionnaire/page.tsx`) owns the onboarding burner-profile gate that redirects an incomplete user to a full page. S25 = routed gate; this = blocking overlay. They share the same visual card and copy.
 - **Breakpoints:** mobile-first 430px shell. Overlays inherit it, with two deliberate exceptions: the **AckTakeover uses `max-w-2xl`** (wider than the app's `max-w-lg` shell — long-read announcement column) and the **error/not-found pages use `max-w-lg`**. All other overlays sit inside the active screen's column.
 
 ## Purpose
@@ -29,7 +29,7 @@ Full-screen fixed overlay (`fixed inset-0 z-[100]`, `role="dialog" aria-modal="t
 - **Scan overlay:** decorative `#00dcff08` scanline rect (board styling motif).
 - **Body scroll lock** while a current item exists; scroll position reset to top whenever a new item surfaces.
 
-### 2. QuestionnaireBlock (app-blocking overlay variant)
+### 2. QuestionnaireBlock (app-blocking overlay variant) — DROPPED, see header
 Full-screen centred card (`jc:center ai:center`, opaque `$background`, scan overlay):
 - **Icon disc:** `clipboard-list` ($primary) on `#ff008c2e` disc.
 - **Eyebrow:** "REQUIRED QUESTIONNAIRE" [JetBrains Mono/11px/700/$accent].

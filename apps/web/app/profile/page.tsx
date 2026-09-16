@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Pencil } from "lucide-react";
 import {
   Avatar,
@@ -8,13 +7,7 @@ import {
 } from "@camp404/ui/components/avatar";
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import {
-  ensureCampUser,
-  getBurnerProfile,
-  hasCampAccess,
-  isApproved,
-} from "@/lib/users";
+import { requireMemberPage } from "@/lib/member-gate";
 import { initialsFrom } from "@/lib/initials";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 
@@ -22,19 +15,7 @@ import { SignOutLink } from "@/components/auth/sign-out-link";
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  const profile = await getBurnerProfile(campUser.id);
-  // Until the burner profile is finished, the questionnaire owns the flow.
-  if (!profile?.completedAt) {
-    redirect("/onboarding/questionnaire");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
+  const { authUser, campUser } = await requireMemberPage();
 
   const name = campUser.displayName ?? authUser.primaryEmail ?? "Burner";
   const initials = initialsFrom(campUser.displayName ?? authUser.primaryEmail);

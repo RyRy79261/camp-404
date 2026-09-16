@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // gate and the captain-only knobs are what these assert.
 
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
+vi.mock("@/lib/member-gate", () => ({ memberBlock: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(() => true),
@@ -30,6 +31,7 @@ vi.mock("@/lib/rate-limit", () => ({
 import { createInviteAction, revokeInviteAction } from "./actions";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { memberBlock } from "@/lib/member-gate";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import {
   createInviteCode,
@@ -57,6 +59,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(hasCampAccess).mockReturnValue(true);
   vi.mocked(isApproved).mockReturnValue(true);
+  vi.mocked(memberBlock).mockResolvedValue(null);
   vi.mocked(findInviteCodeByCode).mockResolvedValue(null);
   vi.mocked(rateLimiter.limit).mockReturnValue({
     ok: true,
@@ -67,7 +70,10 @@ beforeEach(() => {
 describe("createInviteAction — approval gate", () => {
   it("refuses a member awaiting approval and mints nothing", async () => {
     signIn("member");
-    vi.mocked(isApproved).mockReturnValue(false);
+    vi.mocked(memberBlock).mockResolvedValue({
+      reason: "approval",
+      href: "/pending-approval",
+    });
 
     const res = await createInviteAction(null, form({ code: "amber-fox-7" }));
 
@@ -82,7 +88,10 @@ describe("createInviteAction — approval gate", () => {
 
   it("refuses a pending CAPTAIN minting a pre-approved multi-use code", async () => {
     signIn("captain");
-    vi.mocked(isApproved).mockReturnValue(false);
+    vi.mocked(memberBlock).mockResolvedValue({
+      reason: "approval",
+      href: "/pending-approval",
+    });
 
     const res = await createInviteAction(
       null,
@@ -101,7 +110,10 @@ describe("createInviteAction — approval gate", () => {
 
   it("refuses a caller who isn't camp-active yet", async () => {
     signIn("member");
-    vi.mocked(hasCampAccess).mockReturnValue(false);
+    vi.mocked(memberBlock).mockResolvedValue({
+      reason: "invite",
+      href: "/signup/required",
+    });
 
     const res = await createInviteAction(null, form({ code: "amber-fox-7" }));
 
@@ -110,6 +122,23 @@ describe("createInviteAction — approval gate", () => {
       error: "Your account isn't camp-active yet.",
     });
     expect(createInviteCode).not.toHaveBeenCalled();
+  });
+
+  it("refuses a member with a blocking questionnaire still to answer", async () => {
+    signIn("member");
+    vi.mocked(memberBlock).mockResolvedValue({
+      reason: "questionnaire",
+      href: "/questionnaires/act-1",
+    });
+
+    const res = await createInviteAction(null, form({ code: "amber-fox-7" }));
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Finish the questionnaire you've been asked to answer first.",
+    });
+    expect(createInviteCode).not.toHaveBeenCalled();
+    expect(findInviteCodeByCode).not.toHaveBeenCalled();
   });
 
   it("refuses an unauthenticated caller", async () => {

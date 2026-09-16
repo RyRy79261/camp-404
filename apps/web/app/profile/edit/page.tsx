@@ -1,12 +1,5 @@
-import { redirect } from "next/navigation";
 import { Card, CardContent } from "@camp404/ui/components/card";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import {
-  ensureCampUser,
-  getBurnerProfile,
-  hasCampAccess,
-  isApproved,
-} from "@/lib/users";
+import { requireMemberPage } from "@/lib/member-gate";
 import { ProfileEditForm } from "./edit-form";
 import { DeleteAccountForm } from "./delete-account";
 
@@ -14,18 +7,7 @@ import { DeleteAccountForm } from "./delete-account";
 export const dynamic = "force-dynamic";
 
 export default async function ProfileEditPage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  const profile = await getBurnerProfile(campUser.id);
-  if (!profile?.completedAt) {
-    redirect("/onboarding/questionnaire");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
+  const { authUser, campUser } = await requireMemberPage();
 
   const initialDisplayName =
     campUser.displayName ?? authUser.primaryEmail ?? "";

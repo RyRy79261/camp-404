@@ -1,14 +1,7 @@
-import { redirect } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import {
-  ensureCampUser,
-  getBurnerProfile,
-  hasCampAccess,
-  isApproved,
-} from "@/lib/users";
+import { requireMemberPage } from "@/lib/member-gate";
 import { getCycles } from "@/lib/camp-config";
 import { listAnsweredQuestionnaires, listCompletedForms } from "@/lib/forms";
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
@@ -24,18 +17,7 @@ const dateFmt = new Intl.DateTimeFormat("en-ZA", {
 });
 
 export default async function FormsListPage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  const profile = await getBurnerProfile(campUser.id);
-  if (!profile?.completedAt) {
-    redirect("/onboarding/questionnaire");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
+  const { campUser } = await requireMemberPage();
 
   const [forms, answered, cycles] = await Promise.all([
     listCompletedForms(campUser.id),
