@@ -47,6 +47,12 @@ export default async function QuestionnaireRunnerPage({
   // Must be a PENDING obligation that belongs to THIS activation — a stale row
   // pointing at a different (e.g. older) activation for the same key can't answer
   // here (nextGate routes them to the right one).
+  if (
+    targeted.status === "completed" &&
+    targeted.activationId === activation.id
+  ) {
+    return <RunnerEdgeCard kind="completed" />;
+  }
   if (targeted.status !== "pending" || targeted.activationId !== activation.id) {
     return <RunnerEdgeCard kind="closed" />;
   }

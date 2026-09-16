@@ -9,11 +9,7 @@ import {
   type SaveResult,
 } from "@camp404/types";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import {
-  ensureCampUser,
-  getPendingRequiredActions,
-  hasCampAccess,
-} from "@/lib/users";
+import { ensureCampUser, hasCampAccess } from "@/lib/users";
 import {
   completeBuilderResponse,
   getActivationById,
@@ -21,7 +17,6 @@ import {
 } from "@camp404/db/activations";
 import { upsertQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
-import { nextGate } from "@/lib/required-actions";
 
 const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again — if it keeps happening, let a camp captain know.";
@@ -35,7 +30,7 @@ const SAVE_REJECTED =
  * trust the client), bounds every save against the pinned definition and runs
  * the full per-field validator on the final submit, upserts the
  * latest-answer row for the activation's cycle, and on submit satisfies the
- * required action and routes to the next gate.
+ * required action and goes to the S27 completion screen, which routes onward.
  */
 export async function saveBuilderResponses(
   activationId: string,
@@ -137,9 +132,10 @@ export async function saveBuilderResponses(
   }
 
   // redirect() throws a control-flow signal, so it lives outside the try/catch.
+  // Every final submit lands on the S27 completion screen, which says what is
+  // next: the next required questionnaire, or back to camp.
   if (final) {
-    const gate = nextGate(await getPendingRequiredActions(campUser.id));
-    redirect(gate ?? "/");
+    redirect(`/questionnaires/${activation.id}/complete`);
   }
   return { ok: true };
 }

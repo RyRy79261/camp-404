@@ -12,7 +12,6 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(),
-  getPendingRequiredActions: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@camp404/db/activations", () => ({
@@ -26,9 +25,9 @@ vi.mock("@camp404/db/questionnaire-responses", () => ({
 vi.mock("@/lib/questionnaire-definitions", () => ({
   getBuilderDefinition: vi.fn(),
 }));
-vi.mock("@/lib/required-actions", () => ({ nextGate: vi.fn() }));
 
 import { BuilderQuestionnaire } from "@camp404/types";
+import { redirect } from "next/navigation";
 import { saveBuilderResponses } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
@@ -39,7 +38,6 @@ import {
 } from "@camp404/db/activations";
 import { upsertQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
-import { nextGate } from "@/lib/required-actions";
 
 // Parsed so Zod fills the defaulted field params (maxLength, …).
 const definition = BuilderQuestionnaire.parse({
@@ -185,7 +183,6 @@ describe("saveBuilderResponses cycle stamping", () => {
     vi.mocked(getBuilderDefinition).mockResolvedValue(definition);
     vi.mocked(upsertQuestionnaireResponse).mockResolvedValue(undefined as never);
     vi.mocked(completeBuilderResponse).mockResolvedValue(undefined as never);
-    vi.mocked(nextGate).mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -200,6 +197,11 @@ describe("saveBuilderResponses cycle stamping", () => {
       cycle: 3,
       completedAt: null,
     });
+  });
+
+  it("sends a finished submit to the completion screen", async () => {
+    await saveBuilderResponses("act-1", { name: "Ada" }, true);
+    expect(redirect).toHaveBeenCalledWith("/questionnaires/act-1/complete");
   });
 
   it("stamps the activation's cycle on the final submit", async () => {

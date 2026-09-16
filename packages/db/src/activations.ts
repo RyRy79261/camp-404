@@ -598,6 +598,8 @@ export interface RequiredActionState {
   status: (typeof schema.requiredActionStatusEnum.enumValues)[number];
   version: string | null;
   activationId: string | null;
+  /** When the member finished it, or null. */
+  completedAt: Date | null;
 }
 
 /**
@@ -615,6 +617,7 @@ export async function getRequiredAction(
       status: schema.requiredActions.status,
       version: schema.requiredActions.version,
       activationId: schema.requiredActions.activationId,
+      completedAt: schema.requiredActions.completedAt,
     })
     .from(schema.requiredActions)
     .where(
