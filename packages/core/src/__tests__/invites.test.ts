@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   CODE_RULES_HINT,
   generateInviteCode,
+  inviteCodeState,
   isSyntacticallyValidCode,
   normalizeInviteCode,
 } from "../invites";
@@ -49,5 +50,44 @@ describe("normalizeInviteCode", () => {
 describe("CODE_RULES_HINT", () => {
   it("documents the 3-48 char rule", () => {
     expect(CODE_RULES_HINT).toContain("3–48");
+  });
+});
+
+describe("inviteCodeState", () => {
+  const NOW = new Date("2026-09-16T10:00:00Z");
+  const code = (over: Partial<Parameters<typeof inviteCodeState>[0]> = {}) => ({
+    revokedAt: null,
+    expiresAt: null,
+    maxUses: 1,
+    useCount: 0,
+    ...over,
+  });
+
+  it("is active while it can still let someone in", () => {
+    expect(inviteCodeState(code(), NOW)).toBe("active");
+    expect(inviteCodeState(code({ maxUses: null, useCount: 40 }), NOW)).toBe(
+      "active",
+    );
+    expect(
+      inviteCodeState(
+        code({ expiresAt: new Date("2026-09-16T10:00:01Z") }),
+        NOW,
+      ),
+    ).toBe("active");
+  });
+
+  it("names why it cannot, in the redeem check's order", () => {
+    expect(inviteCodeState(code({ useCount: 1 }), NOW)).toBe("used_up");
+    expect(inviteCodeState(code({ expiresAt: NOW }), NOW)).toBe("expired");
+    // Revoked wins over everything else.
+    expect(
+      inviteCodeState(
+        code({ revokedAt: NOW, expiresAt: NOW, useCount: 1 }),
+        NOW,
+      ),
+    ).toBe("revoked");
+    expect(inviteCodeState(code({ expiresAt: NOW, useCount: 1 }), NOW)).toBe(
+      "expired",
+    );
   });
 });

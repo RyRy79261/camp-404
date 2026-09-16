@@ -69,3 +69,27 @@ export function normalizeInviteCode(raw: string): string {
 
 export const CODE_RULES_HINT =
   "3–48 chars, lowercase letters / digits / hyphens (no spaces).";
+
+export type InviteCodeState = "active" | "used_up" | "expired" | "revoked";
+
+/**
+ * Whether an invite code can still let someone in, and if not, why. The same
+ * order the redeem check uses (findUsableInviteCode): revoked, then expired,
+ * then out of uses.
+ */
+export function inviteCodeState(
+  code: {
+    revokedAt: Date | null;
+    expiresAt: Date | null;
+    maxUses: number | null;
+    useCount: number;
+  },
+  now: Date,
+): InviteCodeState {
+  if (code.revokedAt) return "revoked";
+  if (code.expiresAt && code.expiresAt.getTime() <= now.getTime()) {
+    return "expired";
+  }
+  if (code.maxUses !== null && code.useCount >= code.maxUses) return "used_up";
+  return "active";
+}

@@ -15,7 +15,9 @@ vi.mock("@/lib/users", () => ({
 vi.mock("@camp404/db/invite-codes", () => ({
   createInviteCode: vi.fn(),
   findInviteCodeByCode: vi.fn(),
+  revokeInviteCode: vi.fn(),
 }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/invite-words", () => ({
   generateInviteCode: vi.fn(() => "amber-fox-7"),
   isSyntacticallyValidCode: vi.fn(() => true),
@@ -25,10 +27,15 @@ vi.mock("@/lib/rate-limit", () => ({
   rateLimiter: { limit: vi.fn(() => ({ ok: true, retryAfterSeconds: 0 })) },
 }));
 
-import { createInviteAction } from "./actions";
+import { createInviteAction, revokeInviteAction } from "./actions";
+import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { createInviteCode, findInviteCodeByCode } from "@camp404/db/invite-codes";
+import {
+  createInviteCode,
+  findInviteCodeByCode,
+  revokeInviteCode,
+} from "@camp404/db/invite-codes";
 import { rateLimiter } from "@/lib/rate-limit";
 
 function signIn(rank: "captain" | "member", id = "user-1") {
@@ -189,11 +196,82 @@ describe("createInviteAction — throttling", () => {
 
   it("stores a typed code in lowercase", async () => {
     signIn("captain");
-    vi.mocked(createInviteCode).mockResolvedValue({ code: "berlin-crew" } as never);
+    vi.mocked(createInviteCode).mockResolvedValue({
+      code: "berlin-crew",
+    } as never);
     await createInviteAction(null, form({ code: "  Berlin-Crew " }));
     expect(findInviteCodeByCode).toHaveBeenCalledWith("berlin-crew");
     expect(createInviteCode).toHaveBeenCalledWith(
       expect.objectContaining({ code: "berlin-crew" }),
     );
+  });
+});
+
+describe("revokeInviteAction", () => {
+  it("lets a member revoke only codes they made, scoped in the write", async () => {
+    signIn("member", "member-1");
+    vi.mocked(revokeInviteCode).mockResolvedValue(true);
+
+    expect(await revokeInviteAction(" Amber-Fox-7 ")).toEqual({ ok: true });
+    expect(revokeInviteCode).toHaveBeenCalledWith({
+      code: "amber-fox-7",
+      actorUserId: "member-1",
+      createdByUserId: "member-1",
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/tools/invite");
+  });
+
+  it("lets a captain revoke any code", async () => {
+    signIn("captain", "captain-1");
+    vi.mocked(revokeInviteCode).mockResolvedValue(true);
+
+    expect(await revokeInviteAction("meowzit")).toEqual({ ok: true });
+    expect(revokeInviteCode).toHaveBeenCalledWith({
+      code: "meowzit",
+      actorUserId: "captain-1",
+      createdByUserId: undefined,
+    });
+  });
+
+  it("says why a revoke wrote nothing", async () => {
+    signIn("member", "member-1");
+    vi.mocked(revokeInviteCode).mockResolvedValue(false);
+
+    vi.mocked(findInviteCodeByCode).mockResolvedValue(null);
+    expect(await revokeInviteAction("amber-fox-7")).toEqual({
+      ok: false,
+      error: "That code doesn't exist.",
+    });
+
+    vi.mocked(findInviteCodeByCode).mockResolvedValue({
+      revokedAt: new Date(),
+    } as never);
+    expect(await revokeInviteAction("amber-fox-7")).toEqual({
+      ok: false,
+      error: "That code is already revoked.",
+    });
+
+    vi.mocked(findInviteCodeByCode).mockResolvedValue({
+      revokedAt: null,
+      createdByUserId: "someone-else",
+    } as never);
+    expect(await revokeInviteAction("amber-fox-7")).toEqual({
+      ok: false,
+      error: "Only the person who made this code, or a captain, can revoke it.",
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("holds the same gate as the page: signed in, camp-active, approved", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
+    expect((await revokeInviteAction("amber-fox-7")).ok).toBe(false);
+
+    signIn("captain");
+    vi.mocked(isApproved).mockReturnValue(false);
+    expect(await revokeInviteAction("amber-fox-7")).toEqual({
+      ok: false,
+      error: "Your account is still awaiting approval.",
+    });
+    expect(revokeInviteCode).not.toHaveBeenCalled();
   });
 });

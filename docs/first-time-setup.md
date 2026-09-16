@@ -39,7 +39,9 @@ This is the owner's call (2026-09-16): keep the word, add approval and a cap.
 Migration `0022_founder_code_policy` applies the same policy to a root code
 minted before the change.
 
-To close the code early, for example if it leaks beyond the camp, revoke it:
+To close the code early, for example if it leaks beyond the camp, revoke it. A
+captain can do it in the app: **Tools → Invite**, under "All invite codes". Or
+from the admin CLI:
 
 ```bash
 DATABASE_URL=... pnpm --filter @camp404/admin-cli dev revoke-invite --code meowzit

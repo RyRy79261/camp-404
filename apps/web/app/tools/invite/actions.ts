@@ -1,6 +1,11 @@
 "use server";
 
-import { createInviteCode, findInviteCodeByCode } from "@camp404/db/invite-codes";
+import { revalidatePath } from "next/cache";
+import {
+  createInviteCode,
+  findInviteCodeByCode,
+  revokeInviteCode,
+} from "@camp404/db/invite-codes";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { rateLimiter } from "@/lib/rate-limit";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
@@ -148,7 +153,56 @@ export async function createInviteAction(
     return { ok: false, error: "Couldn't save invite. Try a different code." };
   }
 
+  // The page lists the member's codes under the form; show the new one there.
+  revalidatePath("/tools/invite");
   return { ok: true, code, recipientName: note, maxUses, requiresApproval };
+}
+
+export type RevokeInviteResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Revoke an invite code so nobody else can join with it. People who already
+ * joined keep their place. A member may revoke the codes they made; a captain
+ * may revoke any code, the root code included. The write itself is scoped the
+ * same way, so a refused revoke writes nothing.
+ */
+export async function revokeInviteAction(
+  rawCode: string,
+): Promise<RevokeInviteResult> {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) return { ok: false, error: "Not signed in." };
+  const campUser = await ensureCampUser(authUser);
+  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+    return { ok: false, error: "Your account isn't camp-active yet." };
+  }
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    return { ok: false, error: "Your account is still awaiting approval." };
+  }
+  const code = typeof rawCode === "string" ? normalizeInviteCode(rawCode) : "";
+  if (!isSyntacticallyValidCode(code)) {
+    return { ok: false, error: "That isn't an invite code." };
+  }
+  const isCaptain = campUser.rank === "captain";
+
+  const revoked = await revokeInviteCode({
+    code,
+    actorUserId: campUser.id,
+    createdByUserId: isCaptain ? undefined : campUser.id,
+  });
+  if (!revoked) {
+    // Say which of the three it was: the write refuses all of them alike.
+    const existing = await findInviteCodeByCode(code);
+    if (!existing) return { ok: false, error: "That code doesn't exist." };
+    if (existing.revokedAt) {
+      return { ok: false, error: "That code is already revoked." };
+    }
+    return {
+      ok: false,
+      error: "Only the person who made this code, or a captain, can revoke it.",
+    };
+  }
+  revalidatePath("/tools/invite");
+  return { ok: true };
 }
 
 async function generateUnusedCode(): Promise<string> {
