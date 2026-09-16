@@ -2,10 +2,12 @@
 
 import { createInviteCode, findInviteCodeByCode } from "@camp404/db/invite-codes";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { rateLimiter } from "@/lib/rate-limit";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import {
   generateInviteCode,
   isSyntacticallyValidCode,
+  normalizeInviteCode,
 } from "@/lib/invite-words";
 
 export type CreateInviteResult =
@@ -62,6 +64,19 @@ export async function createInviteAction(
   if (!isApproved(campUser, authUser.primaryEmail)) {
     return { ok: false, error: "Your account is still awaiting approval." };
   }
+  // Each code is a way into the camp, so minting is throttled per member like
+  // the availability check beside it. Ten in ten minutes is far more than a
+  // person inviting friends needs.
+  const limited = await rateLimiter.limit(`invite-create:${campUser.id}`, {
+    limit: 10,
+    windowMs: 10 * 60_000,
+  });
+  if (!limited.ok) {
+    return {
+      ok: false,
+      error: `You've made a lot of invites just now. Try again in ${Math.ceil(limited.retryAfterSeconds / 60)} min.`,
+    };
+  }
   const isCaptain = campUser.rank === "captain";
 
   const noteRaw =
@@ -102,7 +117,7 @@ export async function createInviteAction(
   // Code: either user-supplied or auto-generated. Either way we re-check
   // availability before insert; the unique-PK on `code` is the final
   // backstop if two redeemers race for the same name.
-  let code = codeRaw.trim().toLowerCase();
+  let code = normalizeInviteCode(codeRaw);
   if (code) {
     if (!isSyntacticallyValidCode(code)) {
       return {

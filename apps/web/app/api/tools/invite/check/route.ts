@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { findInviteCodeByCode } from "@camp404/db/invite-codes";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { rateLimiter } from "@/lib/rate-limit";
 import {
   CODE_RULES_HINT,
   isSyntacticallyValidCode,
+  normalizeInviteCode,
 } from "@/lib/invite-words";
 import { isE2ETestMode } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
@@ -12,13 +14,22 @@ import { testStore } from "@/lib/test-store";
 export const runtime = "nodejs";
 
 // GitHub-style availability check for invite codes. Called from
-// /tools/invite as the user types. Auth-gated (anonymous callers can't
-// enumerate codes) but otherwise cheap — just a PK lookup.
+// /tools/invite as the user types, so it has the same gate as that page:
+// signed in, camp access, approved. Sign-up is open, so a signed-in account
+// alone is not a member. Without the camp gates, anyone could sign up and use
+// this to test whether a guessed code exists, and then redeem it.
 
 export async function GET(req: Request) {
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const campUser = await ensureCampUser(user);
+  if (
+    !hasCampAccess(campUser, user.primaryEmail) ||
+    !isApproved(campUser, user.primaryEmail)
+  ) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   // Throttle the existence oracle so a signed-in account can't enumerate codes.
@@ -37,7 +48,7 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const raw = (url.searchParams.get("code") ?? "").trim().toLowerCase();
+  const raw = normalizeInviteCode(url.searchParams.get("code") ?? "");
 
   if (!raw) {
     return NextResponse.json({

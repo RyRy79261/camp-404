@@ -28,7 +28,7 @@ the following fixture env (see `playwright.config.ts`):
 | Var | Value | Purpose |
 |---|---|---|
 | `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,inspect,complete-onboarding,set-approval}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
-| `INVITE_CODES` | `TEST-INVITE` | One known bootstrap (env-list) code for redemption specs. |
+| `INVITE_CODES` | `test-invite` | One known bootstrap (env-list) code for redemption specs. The specs type it as `TEST-INVITE` to prove redemption ignores case. |
 | `GOD_EMAILS` | `god@example.com` | One whitelisted god account that bypasses the invite gate. |
 
 Run with:

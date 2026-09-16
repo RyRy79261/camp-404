@@ -19,12 +19,17 @@ vi.mock("@camp404/db/invite-codes", () => ({
 vi.mock("@/lib/invite-words", () => ({
   generateInviteCode: vi.fn(() => "amber-fox-7"),
   isSyntacticallyValidCode: vi.fn(() => true),
+  normalizeInviteCode: (raw: string) => raw.trim().toLowerCase(),
+}));
+vi.mock("@/lib/rate-limit", () => ({
+  rateLimiter: { limit: vi.fn(() => ({ ok: true, retryAfterSeconds: 0 })) },
 }));
 
 import { createInviteAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { createInviteCode, findInviteCodeByCode } from "@camp404/db/invite-codes";
+import { rateLimiter } from "@/lib/rate-limit";
 
 function signIn(rank: "captain" | "member", id = "user-1") {
   vi.mocked(getAuthenticatedUser).mockResolvedValue({
@@ -46,6 +51,10 @@ beforeEach(() => {
   vi.mocked(hasCampAccess).mockReturnValue(true);
   vi.mocked(isApproved).mockReturnValue(true);
   vi.mocked(findInviteCodeByCode).mockResolvedValue(null);
+  vi.mocked(rateLimiter.limit).mockReturnValue({
+    ok: true,
+    retryAfterSeconds: 0,
+  });
 });
 
 describe("createInviteAction — approval gate", () => {
@@ -154,5 +163,37 @@ describe("createInviteAction — approval gate", () => {
       assignedRank: null,
       requiresApproval: false,
     });
+  });
+});
+
+describe("createInviteAction — throttling", () => {
+  it("throttles minting per member and says when to try again", async () => {
+    signIn("member", "user-9");
+    vi.mocked(rateLimiter.limit).mockReturnValue({
+      ok: false,
+      retryAfterSeconds: 130,
+    });
+
+    const res = await createInviteAction(null, form());
+
+    expect(rateLimiter.limit).toHaveBeenCalledWith("invite-create:user-9", {
+      limit: 10,
+      windowMs: 600_000,
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "You've made a lot of invites just now. Try again in 3 min.",
+    });
+    expect(createInviteCode).not.toHaveBeenCalled();
+  });
+
+  it("stores a typed code in lowercase", async () => {
+    signIn("captain");
+    vi.mocked(createInviteCode).mockResolvedValue({ code: "berlin-crew" } as never);
+    await createInviteAction(null, form({ code: "  Berlin-Crew " }));
+    expect(findInviteCodeByCode).toHaveBeenCalledWith("berlin-crew");
+    expect(createInviteCode).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "berlin-crew" }),
+    );
   });
 });

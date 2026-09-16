@@ -162,6 +162,13 @@
       "when": 1789557445131,
       "tag": "0022_founder_code_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789557669873,
+      "tag": "0023_lowercase_invite_codes",
+      "breakpoints": true
     }
   ]
 }

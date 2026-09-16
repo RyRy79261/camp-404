@@ -57,5 +57,15 @@ export function isSyntacticallyValidCode(raw: string): boolean {
   return CODE_PATTERN.test(raw);
 }
 
+/**
+ * The one spelling of an invite code: trimmed and lowercase. Codes are only
+ * ever lowercase (see isSyntacticallyValidCode), but a phone keyboard
+ * capitalises the first letter of a field. So every lookup and every write
+ * passes the code through this first, and "Meowzit" redeems like "meowzit".
+ */
+export function normalizeInviteCode(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
 export const CODE_RULES_HINT =
   "3–48 chars, lowercase letters / digits / hyphens (no spaces).";

@@ -23,7 +23,8 @@ test.describe("invite-code redemption", () => {
 
     const lookup = await request.get("/api/test/inspect?authUserId=fresh-auth");
     const body = (await lookup.json()) as { user: { inviteCode: string } };
-    expect(body.user.inviteCode).toBe("TEST-INVITE");
+    // Typed in capitals, stored in the one spelling codes have: lowercase.
+    expect(body.user.inviteCode).toBe("test-invite");
   });
 
   test("DB code: alice's invite is tracked back to alice after bob redeems it", async ({
@@ -66,7 +67,7 @@ test.describe("invite-code redemption", () => {
       user: { id: string; inviteCode: string };
       inviteCode: { createdByUserId: string; useCount: number; note: string };
     };
-    expect(bob.user.inviteCode).toBe("BERLIN-CREW");
+    expect(bob.user.inviteCode).toBe("berlin-crew");
     expect(bob.inviteCode.createdByUserId).toBe(alice.user.id);
     expect(bob.inviteCode.useCount).toBe(1);
     expect(bob.inviteCode.note).toBe("Berlin crew");
@@ -91,7 +92,7 @@ test.describe("invite-code redemption", () => {
     const body = (await lookup.json()) as {
       user: { inviteCode: string; approvalStatus: string };
     };
-    expect(body.user.inviteCode).toBe("VET-ME");
+    expect(body.user.inviteCode).toBe("vet-me");
     expect(body.user.approvalStatus).toBe("pending");
   });
 

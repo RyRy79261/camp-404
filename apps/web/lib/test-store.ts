@@ -1,5 +1,6 @@
 import "server-only";
 
+import { normalizeInviteCode } from "@camp404/core";
 import type { CampManagementMember } from "@camp404/db/roster";
 import {
   currentCycle,
@@ -410,8 +411,9 @@ export const testStore = {
     invitedEmail?: string | null;
     requiresApproval?: boolean;
   }): TestInviteCode {
+    // One spelling, like the database: lowercase (normalizeInviteCode).
     const row: TestInviteCode = {
-      code: input.code,
+      code: normalizeInviteCode(input.code),
       createdByUserId: input.createdByUserId ?? null,
       note: input.note ?? null,
       maxUses: input.maxUses ?? null,
@@ -423,11 +425,11 @@ export const testStore = {
       requiresApproval: input.requiresApproval ?? false,
       createdAt: new Date(),
     };
-    inviteCodes.set(input.code, row);
+    inviteCodes.set(row.code, row);
     return row;
   },
   findUsableInviteCode(code: string): TestInviteCode | null {
-    const row = inviteCodes.get(code);
+    const row = inviteCodes.get(normalizeInviteCode(code));
     if (!row) return null;
     if (row.revokedAt) return null;
     if (row.expiresAt && row.expiresAt <= new Date()) return null;

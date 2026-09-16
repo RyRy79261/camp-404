@@ -4,6 +4,7 @@ import {
   CODE_RULES_HINT,
   generateInviteCode,
   isSyntacticallyValidCode,
+  normalizeInviteCode,
 } from "../invites";
 
 describe("generateInviteCode", () => {
@@ -31,6 +32,17 @@ describe("isSyntacticallyValidCode", () => {
     expect(isSyntacticallyValidCode("-neon")).toBe(false); // leading hyphen
     expect(isSyntacticallyValidCode("neon-")).toBe(false); // trailing hyphen
     expect(isSyntacticallyValidCode("neon--toaster")).toBe(false); // double hyphen
+  });
+});
+
+describe("normalizeInviteCode", () => {
+  it("trims and lowercases, so a phone's capital first letter still redeems", () => {
+    expect(normalizeInviteCode("  Meowzit ")).toBe("meowzit");
+    expect(normalizeInviteCode("TEST-INVITE")).toBe("test-invite");
+    expect(isSyntacticallyValidCode(normalizeInviteCode("Amber-Fox-7"))).toBe(
+      true,
+    );
+    expect(normalizeInviteCode("   ")).toBe("");
   });
 });
 

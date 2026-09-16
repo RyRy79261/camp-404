@@ -1,4 +1,5 @@
 import { and, eq, isNull, or, sql, gt } from "drizzle-orm";
+import { normalizeInviteCode } from "@camp404/core";
 import { writeAuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
@@ -34,7 +35,7 @@ export async function findUsableInviteCode(
     .from(schema.inviteCodes)
     .where(
       and(
-        eq(schema.inviteCodes.code, code),
+        eq(schema.inviteCodes.code, normalizeInviteCode(code)),
         isNull(schema.inviteCodes.revokedAt),
         or(
           isNull(schema.inviteCodes.expiresAt),
@@ -65,7 +66,7 @@ export async function consumeInviteCode(
     .set({ useCount: sql`${schema.inviteCodes.useCount} + 1` })
     .where(
       and(
-        eq(schema.inviteCodes.code, code),
+        eq(schema.inviteCodes.code, normalizeInviteCode(code)),
         isNull(schema.inviteCodes.revokedAt),
         or(
           isNull(schema.inviteCodes.expiresAt),
@@ -95,7 +96,7 @@ export async function createInviteCode(input: {
   const [row] = await db
     .insert(schema.inviteCodes)
     .values({
-      code: input.code,
+      code: normalizeInviteCode(input.code),
       createdByUserId: input.createdByUserId,
       note: input.note ?? null,
       maxUses: input.maxUses ?? null,
@@ -124,7 +125,7 @@ export async function findInviteCodeByCode(
   const rows = await db
     .select()
     .from(schema.inviteCodes)
-    .where(eq(schema.inviteCodes.code, code))
+    .where(eq(schema.inviteCodes.code, normalizeInviteCode(code)))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -145,7 +146,7 @@ export async function revokeInviteCode(input: {
       .set({ revokedAt: new Date() })
       .where(
         and(
-          eq(schema.inviteCodes.code, input.code),
+          eq(schema.inviteCodes.code, normalizeInviteCode(input.code)),
           isNull(schema.inviteCodes.revokedAt),
         ),
       )
