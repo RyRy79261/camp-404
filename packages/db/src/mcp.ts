@@ -1,6 +1,7 @@
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
+import { currentCycleNumber } from "./cycles";
 
 export type Team = (typeof schema.teamEnum.enumValues)[number];
 
@@ -26,6 +27,12 @@ export interface McpScopeRows {
  * know about its caller: the user row, their team memberships, and
  * whether they've registered intent to drive. Returns null if the camp
  * user row doesn't exist.
+ *
+ * The memberships and the driver intent are read for THIS YEAR only. Both are
+ * year-scoped facts, and this scope is a privilege grant: unscoped, last year's
+ * team lead would keep lead-level MCP access forever, which is the opposite of
+ * "team lead roles ... have to be fresh". Last year's rows stay on file; they
+ * just do not grant anything this year.
  */
 export async function getMcpScopeRows(
   campUserId: string,
@@ -44,18 +51,33 @@ export async function getMcpScopeRows(
 
   if (!userRow) return null;
 
+  const cycle = await currentCycleNumber();
+
   const memberships = await db
     .select({
       team: schema.teamMemberships.team,
       isLead: schema.teamMemberships.isLead,
     })
     .from(schema.teamMemberships)
-    .where(eq(schema.teamMemberships.userId, campUserId));
+    .where(
+      and(
+        eq(schema.teamMemberships.userId, campUserId),
+        eq(schema.teamMemberships.cycle, cycle),
+      ),
+    );
 
+  // The cycle predicate is what makes this `.limit(1)` deterministic: there is
+  // one driver profile per user PER YEAR, and without it an ORDER BY-less limit
+  // would pick an arbitrary year's intent.
   const [driver] = await db
     .select({ intendsToDrive: schema.driverProfiles.intendsToDrive })
     .from(schema.driverProfiles)
-    .where(eq(schema.driverProfiles.userId, campUserId))
+    .where(
+      and(
+        eq(schema.driverProfiles.userId, campUserId),
+        eq(schema.driverProfiles.cycle, cycle),
+      ),
+    )
     .limit(1);
 
   return {

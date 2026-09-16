@@ -3,7 +3,15 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, Copy, FileText, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  BarChart3,
+  ChevronRight,
+  Copy,
+  FileText,
+  Loader2,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { Card } from "@camp404/ui/components/card";
@@ -163,6 +171,21 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
                     />
                   </Link>
                   <div className="flex items-center gap-1 pr-3">
+                    {/* Results only exist once something has been published and
+                        sent — a draft has no answers to show, and an empty
+                        metrics page reads as broken rather than as "not yet". */}
+                    {item.status !== "draft" && (
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`See results for ${item.title}`}
+                      >
+                        <Link href={`/captains/questionnaires/${item.key}/metrics`}>
+                          <BarChart3 />
+                        </Link>
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"

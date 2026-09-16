@@ -1,13 +1,19 @@
 import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
-import { isTeamLead } from "@camp404/db/roster";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import { getOpenActivationForKey } from "@camp404/db/questionnaire-lifecycle";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+// Via the lib facade so E2E reads the test store, not Neon — see the note on
+// the same import in ../page.tsx.
+import {
+  ensureCampUser,
+  hasCampAccess,
+  isApproved,
+  isTeamLead,
+} from "@/lib/users";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { BuilderCanvas } from "./builder-canvas";
 

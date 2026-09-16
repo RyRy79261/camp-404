@@ -64,9 +64,14 @@ export default async function QuestionnaireRunnerPage({
     return <RunnerEdgeCard kind="empty" />;
   }
 
+  // The activation's FROZEN year namespace, never the live config: a rollover
+  // landing mid-form must not change which row this page prefills from or the
+  // row the save writes to. `carryOver` picks the prefill rule — carry reads the
+  // newest answer at or below this cycle, fresh reads strictly this one.
   const stored = await loadQuestionnaireResponse(
     campUser.id,
     activation.questionnaireKey,
+    { cycle: activation.cycle, carryOver: activation.carryOver },
   );
   const initialResponses: QuestionnaireResponses = stored?.responses ?? {};
 
@@ -76,6 +81,7 @@ export default async function QuestionnaireRunnerPage({
         activationId={activation.id}
         definition={definition}
         initialResponses={initialResponses}
+        seededFromPriorCycle={stored?.seededFromCycle != null}
         title={activation.title}
       />
     </main>

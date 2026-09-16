@@ -117,3 +117,29 @@ export function promotionStepState(
   if (!request) return { sent: false, accepted: false };
   return { sent: true, accepted: request.status === "accepted" };
 }
+
+/** Why account erasure was refused. One code today; the union is the seam. */
+export type LeaveCampDenyReason = "sole_captain";
+
+export type LeaveCampResult =
+  | { ok: true }
+  | { ok: false; reason: LeaveCampDenyReason };
+
+/**
+ * May this member erase their account? The camp must never lose its last
+ * captain: /setup latches shut once bootstrap stamps `camp_settings`, no
+ * demotion path exists, and the admin CLI refuses to mint a captain invite
+ * without a captain to attribute it to — so an erased sole captain strands the
+ * camp with nobody who can promote a successor. `captainCount` is the number of
+ * REAL captains INCLUDING the caller (tombstones and system actors excluded —
+ * see getBootstrapState).
+ */
+export function canLeaveCamp(params: {
+  isCaptain: boolean;
+  captainCount: number;
+}): LeaveCampResult {
+  if (params.isCaptain && params.captainCount <= 1) {
+    return { ok: false, reason: "sole_captain" };
+  }
+  return { ok: true };
+}

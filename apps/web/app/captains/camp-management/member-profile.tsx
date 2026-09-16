@@ -9,10 +9,16 @@ import { Divider } from "@camp404/ui/components/divider";
 import { Spinner } from "@camp404/ui/components/spinner";
 import type { RosterRow } from "@/lib/camp-roster";
 import type { DetailItem, PresentedMember } from "@/lib/member-detail";
-import { decideApprovalAction, getMemberDetailAction } from "./actions";
+import {
+  decideApprovalAction,
+  getMemberDetailAction,
+  type AssignableTeam,
+  type TeamMembership,
+} from "./actions";
 import { AssignCaptainDialog } from "./assign-captain-dialog";
 import { RejectConfirmDialog } from "./reject-confirm-dialog";
 import { RoleBadge, RosterAvatar, TeamBadge } from "./roster-presentation";
+import { TeamAssignment } from "./team-assignment";
 
 // Inline member profile (board S17 MemberProfile). A row selection expands this
 // panel below the roster (not a modal). The head paints instantly from the row;
@@ -29,6 +35,10 @@ type DetailState =
       promotionStep: { sent: boolean; accepted: boolean };
       promotionRequestId: string | null;
       promotionRequestIsMine: boolean;
+      /** This member's teams for the camp's current year. */
+      teams: TeamMembership[];
+      /** Active teams a captain may assign (archived excluded server-side). */
+      assignableTeams: AssignableTeam[];
     }
   | { state: "error"; message: string };
 
@@ -76,16 +86,24 @@ export function MemberProfile({
   const router = useRouter();
   const panelRef = useRef<HTMLElement>(null);
   const [detail, setDetail] = useState<DetailState>({ state: "loading" });
+  const [reloadToken, setReloadToken] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Fetch detail whenever a (new) row is selected; abandon a stale response if
-  // the captain has since clicked a different member.
+  // A new selection starts on a clean error slate. Deliberately NOT folded into
+  // the fetch effect below: a reload driven by a refused decision has to keep
+  // the error that caused it on screen.
+  useEffect(() => {
+    setActionError(null);
+  }, [row.id]);
+
+  // Fetch detail whenever a (new) row is selected, or `reloadToken` says the
+  // loaded copy is known-stale; abandon a stale response if the captain has
+  // since clicked a different member.
   useEffect(() => {
     let cancelled = false;
-    setActionError(null);
     setRejectOpen(false);
     setAssignOpen(false);
     setDetail({ state: "loading" });
@@ -101,6 +119,8 @@ export function MemberProfile({
                 promotionStep: res.promotionStep,
                 promotionRequestId: res.promotionRequestId,
                 promotionRequestIsMine: res.promotionRequestIsMine,
+                teams: res.teams,
+                assignableTeams: res.assignableTeams,
               }
             : { state: "error", message: res.error },
         );
@@ -114,7 +134,7 @@ export function MemberProfile({
     return () => {
       cancelled = true;
     };
-  }, [row.id]);
+  }, [row.id, reloadToken]);
 
   // Move focus into the panel on open (a11y); the island returns focus to the
   // triggering row on close.
@@ -128,6 +148,14 @@ export function MemberProfile({
       const res = await decideApprovalAction(row.id, decision);
       if (!res.ok) {
         setActionError(res.error);
+        // The decision may have lost the compare-and-set to another captain.
+        // `router.refresh()` re-renders the server components behind the panel
+        // but leaves this client component's `detail` untouched, so re-run the
+        // fetch too — otherwise `approvalStatus` stays "pending" and the panel
+        // keeps offering the decision that was just refused. Harmless for the
+        // other error branches, which reload an unchanged member.
+        setReloadToken((n) => n + 1);
+        router.refresh();
         return;
       }
       // Reflect the decision locally so the action buttons clear, then refresh
@@ -143,6 +171,14 @@ export function MemberProfile({
       setRejectOpen(false);
       router.refresh();
     });
+  }
+
+  // A team write answers with the refreshed membership list; fold it into the
+  // panel state and pull the roster behind it down again, since the row's team
+  // chips and lead badge are the same rows.
+  function applyTeams(teams: TeamMembership[]) {
+    setDetail((prev) => (prev.state === "loaded" ? { ...prev, teams } : prev));
+    router.refresh();
   }
 
   function markPromotionSent(requestId: string) {
@@ -185,6 +221,9 @@ export function MemberProfile({
     detail.state === "loaded" ? detail.promotionRequestId : null;
   const promotionRequestIsMine =
     detail.state === "loaded" ? detail.promotionRequestIsMine : false;
+  const teams = detail.state === "loaded" ? detail.teams : [];
+  const assignableTeams =
+    detail.state === "loaded" ? detail.assignableTeams : [];
   const isAwaiting = member?.approvalStatus === "pending";
   const status = member ? STATUS_BADGE[member.approvalStatus] : null;
 
@@ -305,6 +344,18 @@ export function MemberProfile({
               </div>
             ))
           )}
+
+          <Divider />
+
+          {/* Team assignment — the write path behind every team-scoped
+              broadcast, questionnaire send and roster badge. */}
+          <TeamAssignment
+            userId={row.id}
+            teams={teams}
+            assignableTeams={assignableTeams}
+            teamLabels={teamLabels}
+            onChange={applyTeams}
+          />
 
           <Divider />
 

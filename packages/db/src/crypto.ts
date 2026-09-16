@@ -68,12 +68,50 @@ export function decrypt(stored: string): string {
   );
 }
 
-/** Decrypt-or-null helper for nullable stored columns. */
-export function decryptOrNull(stored: string | null | undefined): string | null {
-  if (!stored) return null;
+/**
+ * Tri-state read of a nullable encrypted column.
+ *
+ * `decryptOrNull` collapses "the column is NULL" and "ciphertext is present
+ * but this process cannot read it" into the same `null`, which makes a
+ * PGCRYPTO_KEY rotation look exactly like a member who never supplied the
+ * field. Callers that show the value to a human — or that decide whether to
+ * overwrite it — need the two apart.
+ *
+ * `unreadable` means the column holds a non-empty string that AES-256-GCM
+ * refused: wrong key, corrupt/truncated base64, or a tampered auth tag. It is
+ * never a reason to write NULL over the stored value.
+ */
+export type DecryptedField =
+  | { state: "absent"; value: null }
+  | { state: "ok"; value: string }
+  | { state: "unreadable"; value: null };
+
+export function decryptField(
+  stored: string | null | undefined,
+): DecryptedField {
+  if (!stored) return { state: "absent", value: null };
   try {
-    return decrypt(stored);
-  } catch {
-    return null;
+    return { state: "ok", value: decrypt(stored) };
+  } catch (err) {
+    // No plaintext, no ciphertext, no key material in the log — only the fact
+    // that a stored value could not be read, so a key rotation is loud in the
+    // server logs instead of silently presenting as "nothing on file".
+    console.error(
+      "[crypto] a stored ciphertext could not be decrypted (wrong PGCRYPTO_KEY, or a corrupt value). Treating it as unreadable, NOT as absent:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return { state: "unreadable", value: null };
   }
+}
+
+/**
+ * Decrypt-or-null helper for nullable stored columns.
+ *
+ * Lossy by design — an unreadable value comes back as `null`, the same as an
+ * absent one. Prefer `decryptField` anywhere the difference is visible to a
+ * user or drives a write; keep this only where the caller genuinely has
+ * nothing to say about the difference.
+ */
+export function decryptOrNull(stored: string | null | undefined): string | null {
+  return decryptField(stored).value;
 }

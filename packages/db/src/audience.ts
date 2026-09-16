@@ -1,14 +1,15 @@
 // Audience resolution for broadcasts. Given a broadcast's scope and the
 // relevant membership data, compute the set of recipient user ids. This half
 // is PURE (no DB) so it is fully unit-testable; `broadcasts.ts` fetches the
-// data and calls `computeAudience`. Mirrors `broadcastScopeEnum` in schema.ts.
+// data and calls `computeAudience`.
 
-export type BroadcastScope =
-  | "everyone"
-  | "team"
-  | "team_leads"
-  | "drivers"
-  | "individual";
+// Type-only, so this module stays runtime-pure — nothing from drizzle is
+// emitted. Deriving the union (rather than restating it) means a new
+// `broadcastScopeEnum` member is a compile error in the switch below, not a
+// broadcast that silently resolves to nobody.
+import type { broadcastScopeEnum } from "./schema";
+
+export type BroadcastScope = (typeof broadcastScopeEnum.enumValues)[number];
 
 export interface AudienceData {
   /** Every camp user, with the flags needed to exclude non-real recipients. */
@@ -56,8 +57,14 @@ export function computeAudience(
     case "individual":
       ids = data.targetUserIds;
       break;
-    default:
-      ids = [];
+    default: {
+      // Exhaustiveness guard: a new BroadcastScope without a case here is a
+      // compile error. Throwing (rather than falling back to []) means a scope
+      // that somehow reaches this at runtime fails loudly instead of shipping a
+      // send that silently reaches nobody.
+      const _exhaustive: never = broadcast.scope;
+      throw new Error(`Unhandled broadcast scope: ${String(_exhaustive)}`);
+    }
   }
 
   return [...new Set(ids)].filter((id) => real.has(id) && id !== senderId);

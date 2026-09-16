@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  OTHER_PREFIX,
   Question,
   QuestionnaireResponses,
   type QuestionnaireResponseValue,
@@ -270,8 +271,10 @@ export function regenerateBuilderIds(
 /**
  * Validate a response map against a builder questionnaire. Visibility-aware:
  * required checks are skipped for fields hidden by an unmet `visibleIf`, and a
- * hidden field's stored value is retained untouched (never pruned). Mirrors the
- * legacy `validateResponses` contract; reuses the per-question `validateOne`.
+ * hidden field's value is retained if it is a legal answer for that field
+ * (never pruned merely for being hidden, never trusted merely for being
+ * hidden). Mirrors the legacy `validateResponses` contract; reuses the
+ * per-question `validateOne`.
  */
 export function validateBuilderResponses(
   q: BuilderQuestionnaire,
@@ -294,8 +297,18 @@ export function validateBuilderResponses(
       const id = block.question.id;
       const hidden = !pageVisible || !isVisible(block.visibleIf, data);
       if (hidden) {
-        // Retain any previously-entered value untouched; do not validate.
-        if (data[id] !== undefined) responses[id] = data[id];
+        // Spec §5.1: a hidden field's value is RETAINED (re-showing the field
+        // restores what was typed) and never *required*. Retention is not a
+        // free pass though — `data` is the CLIENT payload, so without a type
+        // check a hand-made request could write arbitrary data under any
+        // hidden question's id straight into the responses JSONB. Reuse
+        // `validateOne` and keep the value only if it is a legal answer for
+        // this field; a failure here is silent (missing ⇒ nothing to retain,
+        // invalid ⇒ dropped), never a submit-blocking error.
+        const retained = validateOne(block.question, data[id]);
+        if (retained.ok && retained.value !== undefined) {
+          responses[id] = retained.value;
+        }
         continue;
       }
       const result = validateOne(block.question, data[id]);
@@ -311,18 +324,93 @@ export function validateBuilderResponses(
   return { ok: true, responses };
 }
 
+// --- Draft (non-final) response bounds ----------------------------------
+// A partial save can't be validated per-field — the respondent hasn't finished
+// — but it must still be bounded: a server action accepts whatever the client
+// posts and the result lands verbatim in a JSONB column. Serves BOTH the
+// builder and the legacy routes (it takes ids, not a questionnaire). Sized for
+// text answers; mirrors the hard-cap idiom in app/api/uploads/avatar/route.ts.
+// `.length` on the serialized JSON is UTF-16 units, not bytes — deliberately
+// dependency- and Buffer-free so this module stays browser-safe.
+const MAX_DRAFT_KEYS = 500;
+const MAX_DRAFT_JSON_LENGTH = 128 * 1024;
+
+/**
+ * Bound an unvalidated draft response map: structurally parse it, drop every
+ * key that is not a field id in `allowedIds`, and reject it outright past the
+ * key-count / serialized-length caps. Per-field and required checks
+ * deliberately do NOT run — a draft is allowed to be incomplete and wrong —
+ * but nothing outside the definition, and nothing unbounded, reaches storage.
+ */
+export function boundDraftResponses(
+  raw: unknown,
+  allowedIds: Iterable<string>,
+):
+  | { ok: true; responses: QuestionnaireResponses }
+  | { ok: false; error: string } {
+  const parsed = QuestionnaireResponses.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Malformed response payload" };
+  }
+  const entries = Object.entries(parsed.data);
+  if (entries.length > MAX_DRAFT_KEYS) {
+    return { ok: false, error: "Too many answers" };
+  }
+  const allowed = new Set(allowedIds);
+  const responses: QuestionnaireResponses = {};
+  for (const [key, value] of entries) {
+    if (allowed.has(key)) responses[key] = value;
+  }
+  if (JSON.stringify(responses).length > MAX_DRAFT_JSON_LENGTH) {
+    return { ok: false, error: "Answers are too large" };
+  }
+  return { ok: true, responses };
+}
+
 // --- Publish-time validity ----------------------------------------------
 
 // Defence-in-depth: duplicates the schema's options.min(2) guarantee on parsed
 // input. `toggle` is omitted — it isn't authorable in the builder palette.
 const OPTION_KINDS = new Set(["single_select", "multi_select", "combobox"]);
 
+/** The option/step values a question offers, or null for the kinds with none. */
+function offeredValues(field: Question): string[] | null {
+  if ("options" in field) return field.options.map((o) => o.value);
+  if (field.kind === "scale") return field.steps.map((s) => s.value);
+  return null;
+}
+
+/**
+ * Ranges a respondent could never satisfy. Returns member-visible messages.
+ * `slider` and `number` are the only kinds carrying a numeric range; both are
+ * refused when the maximum is not above the minimum (a slider with nothing to
+ * drag, a cell row with a single cell), and a slider is refused when its step
+ * strides past the whole range so no value but the minimum is reachable.
+ */
+function rangeErrors(field: Question): string[] {
+  const out: string[] = [];
+  if (field.kind !== "slider" && field.kind !== "number") return out;
+  if (field.max <= field.min) {
+    out.push(
+      `"${field.prompt}" needs a maximum above its minimum (currently ${field.min}–${field.max}).`,
+    );
+    return out;
+  }
+  if (field.kind === "slider" && field.step > field.max - field.min) {
+    out.push(
+      `"${field.prompt}" has a step of ${field.step}, larger than its ${field.min}–${field.max} range.`,
+    );
+  }
+  return out;
+}
+
 /**
  * Hard publish blockers (member-visible messages). An empty array means the
  * questionnaire is publishable. Enforces structural validity beyond what the
  * Zod schema guarantees: at least one input, no inputs on content pages,
- * earlier-only `visibleIf` references, alt text on images, and that the form is
- * completable (at least one page visible under empty responses).
+ * unique ids, earlier-only `visibleIf` references, satisfiable numeric ranges,
+ * no option value on the reserved `other:` prefix, alt text on images, and that
+ * the form is completable (at least one page visible under empty responses).
  */
 export function validateBuilderQuestionnaire(
   q: BuilderQuestionnaire,
@@ -337,9 +425,33 @@ export function validateBuilderQuestionnaire(
 
   let inputCount = 0;
   const earlier = new Set<string>();
+  // Pages, content blocks and questions share ONE flat id namespace, and a
+  // duplicate is a publish blocker for two reasons — the second is the one
+  // that hides:
+  //   1. Two question blocks with the same id collapse onto a single response
+  //      key, so one field silently overwrites the other's answer.
+  //   2. `earlier` (the shows-when forward-reference check) is keyed by that
+  //      same id, so the SECOND block's `visibleIf` reference passes
+  //      spuriously — a dangling condition gets accepted because its twin
+  //      already seeded the set. Rejecting the duplicate closes both.
+  // Content-block and page ids join the namespace because `classifyChange`
+  // keys its visibleIf map by them: a collision there can read a branching
+  // edit as cosmetic and skip the re-submit gate.
+  const seen = new Map<string, string>();
+  const claimId = (id: string, where: string) => {
+    const first = seen.get(id);
+    if (first !== undefined) {
+      errors.push(
+        `The id "${id}" is used twice (${first} and ${where}) — ids must be unique so answers stay attached to the right question.`,
+      );
+      return;
+    }
+    seen.set(id, where);
+  };
 
   q.pages.forEach((page, pi) => {
     const pageLabel = page.title.trim() || `Page ${pi + 1}`;
+    claimId(page.id, pageLabel);
     if (page.blocks.length === 0) {
       errors.push(`${pageLabel} has no blocks.`);
     }
@@ -357,23 +469,36 @@ export function validateBuilderQuestionnaire(
       if (block.kind === "image_block" && block.altText.trim().length === 0) {
         errors.push(`An image on ${pageLabel} is missing alt text.`);
       }
-      if (block.kind === "question") {
-        inputCount += 1;
-        if (page.type === "content") {
-          errors.push(
-            `${pageLabel} is a content page and can't contain input fields.`,
-          );
-        }
-        const field = block.question;
-        if (
-          OPTION_KINDS.has(field.kind) &&
-          "options" in field &&
-          field.options.length < 2
-        ) {
-          errors.push(`"${field.prompt}" needs at least 2 options.`);
-        }
-        earlier.add(field.id);
+      if (block.kind !== "question") {
+        claimId(block.id, `a ${block.kind} block on ${pageLabel}`);
+        continue;
       }
+      inputCount += 1;
+      if (page.type === "content") {
+        errors.push(
+          `${pageLabel} is a content page and can't contain input fields.`,
+        );
+      }
+      const field = block.question;
+      claimId(field.id, `"${field.prompt}" on ${pageLabel}`);
+      if (
+        OPTION_KINDS.has(field.kind) &&
+        "options" in field &&
+        field.options.length < 2
+      ) {
+        errors.push(`"${field.prompt}" needs at least 2 options.`);
+      }
+      // The `other:` prefix is reserved for in-band free-text answers. An
+      // authored option value on it would be indistinguishable from something
+      // a respondent typed — so it is refused at definition time, which is
+      // what lets every reader trust the encoding.
+      if (offeredValues(field)?.some((v) => v.startsWith(OTHER_PREFIX))) {
+        errors.push(
+          `"${field.prompt}" has an option value starting with "${OTHER_PREFIX}", which is reserved for free-text "Other" answers.`,
+        );
+      }
+      errors.push(...rangeErrors(field));
+      earlier.add(field.id);
     }
   });
 
@@ -426,6 +551,23 @@ function breakingParamChange(prev: Question, next: Question): boolean {
     (next.min > prev.min || next.max < prev.max)
   ) {
     return true;
+  }
+  // Turning "Other…" off invalidates every stored `other:` answer, exactly the
+  // way removing an option does.
+  if (
+    (prev.kind === "single_select" || prev.kind === "multi_select") &&
+    (next.kind === "single_select" || next.kind === "multi_select") &&
+    prev.allowOther === true &&
+    next.allowOther !== true
+  ) {
+    return true;
+  }
+  // Adding or tightening a text format can invalidate stored free text;
+  // dropping to plain "text" only ever widens.
+  if (prev.kind === "short_text" && next.kind === "short_text") {
+    const before = prev.format ?? "text";
+    const after = next.format ?? "text";
+    if (after !== before && after !== "text") return true;
   }
   return false;
 }

@@ -7,6 +7,11 @@ const skipWebServer = process.env.PLAYWRIGHT_SKIP_WEB_SERVER === "1";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  // Playwright's default testMatch claims `*.test.ts` as well as `*.spec.ts`,
+  // and vitest's `include` is `**/*.test.{ts,tsx}` — so a unit test co-located
+  // with a helper in here (e.g. tests/e2e/lib/mailtm.ts) would be collected by
+  // BOTH runners and fail the e2e job. Every spec here is `.spec.ts`.
+  testMatch: "**/*.spec.ts",
   timeout: 60_000,
   // MUST stay serial. The E2E_TEST_MODE harness backs auth + DB with a
   // single process-wide in-memory store (apps/web/lib/test-store.ts) shared

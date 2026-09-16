@@ -1,9 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
+import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
-import { decryptOrNull } from "@camp404/db/crypto";
+import { decryptField } from "@camp404/db/crypto";
 import { canSeeIdDocuments } from "../consent";
 import { notFound, runTool, truncateList } from "../tool-utils";
 
@@ -35,7 +36,13 @@ export function registerPeopleTools(server: McpServer): void {
           if (!args.includeSystem) rows = rows.filter((r) => !r.isSystem);
           if (args.rank) rows = rows.filter((r) => r.rank === args.rank);
 
-          const memberships = await db.select().from(schema.teamMemberships);
+          // THIS YEAR's memberships. Team membership is year-scoped, so an
+          // unscoped read would list a member on every team they have ever
+          // been on, and `team` / `isLead` filters would match on last year.
+          const memberships = await db
+            .select()
+            .from(schema.teamMemberships)
+            .where(eq(schema.teamMemberships.cycle, await currentCycleNumber()));
           const byUser = new Map<
             string,
             { team: typeof schema.teamMemberships.$inferSelect.team; isLead: boolean }[]
@@ -89,7 +96,12 @@ export function registerPeopleTools(server: McpServer): void {
               isLead: schema.teamMemberships.isLead,
             })
             .from(schema.teamMemberships)
-            .where(eq(schema.teamMemberships.userId, args.userId));
+            .where(
+              and(
+                eq(schema.teamMemberships.userId, args.userId),
+                eq(schema.teamMemberships.cycle, await currentCycleNumber()),
+              ),
+            );
           return shapeUser(row, memberships, scope);
         },
       }),
@@ -135,11 +147,20 @@ function shapeUser(
       { id: row.id, aiDataConsent: row.aiDataConsent },
     )
   ) {
+    const passport = decryptField(row.passportEncrypted);
+    const saId = decryptField(row.saIdEncrypted);
+    const eft = decryptField(row.eftDetailsEncrypted);
     return {
       ...extended,
-      passport: decryptOrNull(row.passportEncrypted),
-      saId: decryptOrNull(row.saIdEncrypted),
-      eft: decryptOrNull(row.eftDetailsEncrypted),
+      passport: passport.value,
+      saId: saId.value,
+      eft: eft.value,
+      // On file but undecryptable here — never report these as "not provided".
+      unreadableFields: [
+        ...(passport.state === "unreadable" ? ["passport"] : []),
+        ...(saId.state === "unreadable" ? ["saId"] : []),
+        ...(eft.state === "unreadable" ? ["eft"] : []),
+      ],
     };
   }
   return extended;

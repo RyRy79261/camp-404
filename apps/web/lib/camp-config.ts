@@ -2,9 +2,17 @@ import "server-only";
 
 import {
   getTeamsConfig as dbGetTeamsConfig,
+  getCurrentCycle as dbGetCurrentCycle,
   mutateTeamsConfig as dbMutateTeamsConfig,
   activeTeams,
+  audienceLabel,
+  currentCycle,
+  memberTeamsLabel,
+  resolveCycles,
   teamLabelMap,
+  teamPickerOptions,
+  AUDIENCE_SCOPE_LABELS,
+  type CycleEntry,
   type TeamsConfig,
   type TeamConfigEntry,
 } from "@camp404/db/camp-config";
@@ -17,12 +25,20 @@ import { testStore } from "./test-store";
 // split lib/roster.ts / lib/notifications.ts use. The store seeds with the same
 // DEFAULT_CAMP_CONFIG the column default seeds, so reads match Phase-1 behaviour
 // while now also reflecting edits made via mutateTeamsConfig in the same run.
-// The pure shaping helpers (activeTeams/teamLabelMap) are re-exported so server
-// pages compute serialisable lists/maps to pass into client islands; the
-// @camp404/db module is never imported client-side (it pulls the DB driver).
+// The pure shaping helpers (activeTeams/teamLabelMap/audienceLabel) are
+// re-exported so server pages compute serialisable lists/maps to pass into
+// client islands; the @camp404/db module is never imported client-side (it
+// pulls the DB driver).
 
-export type { TeamsConfig, TeamConfigEntry };
-export { activeTeams, teamLabelMap };
+export type { CycleEntry, TeamsConfig, TeamConfigEntry };
+export {
+  activeTeams,
+  audienceLabel,
+  memberTeamsLabel,
+  teamLabelMap,
+  teamPickerOptions,
+  AUDIENCE_SCOPE_LABELS,
+};
 
 export function getTeamsConfig(): Promise<TeamsConfig> {
   return isE2ETestMode()
@@ -45,4 +61,22 @@ export function mutateTeamsConfig(
     return Promise.resolve(next);
   }
   return dbMutateTeamsConfig(transform);
+}
+
+/**
+ * The year the camp is in — the namespace an activation is stamped with at Send.
+ * NULL until a captain names the founding year on the cycle page. Callers that
+ * already hold an activation must read `activation.cycle` instead: that copy is
+ * frozen, and a rollover landing mid-collection must not move an in-flight form
+ * into the next year.
+ *
+ * The E2E branch runs the same pure resolve over the test store, which seeds
+ * DEFAULT_CAMP_CONFIG — no `cycles` key — so `resolveCycles` yields an empty
+ * list and this returns null. Playwright keeps running with no database and no
+ * test-store change, and it stays honest if the store ever grows a cycles key.
+ */
+export function getCurrentCycle(): Promise<CycleEntry | null> {
+  return isE2ETestMode()
+    ? Promise.resolve(currentCycle(resolveCycles(testStore.getTeamsConfig())))
+    : dbGetCurrentCycle();
 }

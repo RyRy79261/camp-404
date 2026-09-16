@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useParams } from "next/navigation";
 import type {
   LongTextQuestion,
   Question,
@@ -26,6 +27,13 @@ import { cropResizeToSquare } from "@/lib/image";
 // board affordances + the shared @camp404/ui primitives. The data model is
 // unchanged: every kind emits the same QuestionnaireResponseValue it always did
 // (scale/toggle emit the chosen option's string value; slider a number; …).
+
+// The burner-profile photo question. Its answer IS the member's profile photo —
+// onboarding/questionnaire/actions.ts mirrors `profile.image` onto
+// users.profile_image_url — so it alone uploads through the avatar route. Every
+// other image question is a separate picture and gets its own blob folder;
+// sharing the avatar path made each upload delete the other's object.
+const PROFILE_IMAGE_QUESTION_ID = "profile.image";
 
 interface QuestionFieldProps {
   question: Question;
@@ -99,6 +107,21 @@ function FieldInput({
     "required" in question && question.required
       ? `${question.prompt} (required)`
       : question.prompt;
+  // The activation this field is being answered under, when the runner is
+  // mounted at /questionnaires/[activationId] — the upload route resolves the
+  // question against THAT activation's pinned definition rather than trusting
+  // the id (see api/uploads/questionnaire-image/route.ts). Absent everywhere
+  // else: onboarding's burner profile resolves against its own definition, and
+  // the author preview has no definition to be answered against at all. Typed
+  // non-null but null outside a route context (a unit test rendering the field
+  // bare), so it is read defensively.
+  const routeParams: Partial<Record<string, string | string[]>> | null =
+    useParams();
+  const activationId =
+    typeof routeParams?.activationId === "string"
+      ? routeParams.activationId
+      : undefined;
+
   switch (question.kind) {
     case "slider": {
       if (question.display === "segmented") {
@@ -368,10 +391,25 @@ function FieldInput({
             value={typeof value === "string" ? value : null}
             onChange={(url) => onChange(url)}
             preprocessImage={cropResizeToSquare}
+            uploadUrl={
+              question.id === PROFILE_IMAGE_QUESTION_ID
+                ? undefined
+                : questionnaireImageUploadUrl(question.id, activationId)
+            }
           />
         </div>
       );
   }
+}
+
+/** Upload endpoint for one image answer, carrying the activation when there is one. */
+function questionnaireImageUploadUrl(
+  questionId: string,
+  activationId: string | undefined,
+): string {
+  const params = new URLSearchParams({ question: questionId });
+  if (activationId) params.set("activation", activationId);
+  return `/api/uploads/questionnaire-image?${params}`;
 }
 
 /**

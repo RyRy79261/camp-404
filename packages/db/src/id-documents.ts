@@ -48,3 +48,12 @@ export function idColumnsFor(
   // default / passport
   return { passportEncrypted: value, saIdEncrypted: null };
 }
+
+/**
+ * What a read-only view shows in place of an ID number whose ciphertext this
+ * deployment cannot decrypt. Deliberately NOT used as an editable pre-fill —
+ * the replay wizard leaves the field blank and shows a banner instead, so this
+ * string can never be saved back over a member's real document number.
+ */
+export const ID_UNREADABLE_LABEL =
+  "Unreadable — encryption key problem, tell an admin";

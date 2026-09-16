@@ -9,6 +9,105 @@ import { z } from "zod";
 // (7–15, the E.164 range) without pulling in a phone library.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[\d\s().-]{7,20}$/;
+const URL_RE = /^https?:\/\/[^\s/$.?#][^\s]*$/i;
+const ALNUM_RE = /^[a-z0-9 ]+$/i;
+
+// --- Text-format presets -------------------------------------------------
+// A CLOSED enum, deliberately: an author-supplied regex would be a ReDoS
+// surface in a field a captain can type into. Every pattern above is anchored
+// at both ends and uses a single non-backtracking character class, so a
+// pathological answer costs one linear pass.
+//
+// DECISION — no `number` / `integer` format. The donor enum carried both, but
+// Camp 404 already has a distinct `number` question kind (a whole-number cell
+// row with its own min/max), so a `format: "number"` would be a second way to
+// ask the same thing with a different stored type (string vs number) and a
+// different aggregation story. The `number` KIND wins; the palette says so
+// (see BUILDER_FIELD_KINDS / TEXT_FORMATS in the builder's field-kinds.ts).
+// `email` and `phone` stay in the enum even though dedicated kinds exist —
+// there they are a refinement of a short-text field, not a rival card, and the
+// palette records that too.
+export const TextFormat = z.enum([
+  "text",
+  "email",
+  "url",
+  "phone",
+  "alphanumeric",
+]);
+export type TextFormat = z.infer<typeof TextFormat>;
+
+/**
+ * Check a raw text answer against a format preset. Returns the member-visible
+ * error, or `null` when the value passes (or when there is no format to
+ * check). Operates on the TRIMMED value — surrounding whitespace is never the
+ * thing a respondent got wrong — but the stored value is left untouched.
+ *
+ * Emptiness is NOT this function's business: `validateOne` decides missing vs
+ * present (and required vs optional) before it is called. A whitespace-only
+ * answer under a real format therefore fails the format, which is correct —
+ * "   " is not an email address.
+ */
+export function checkTextFormat(
+  format: TextFormat | undefined,
+  raw: string,
+): string | null {
+  if (format === undefined || format === "text") return null;
+  const value = raw.trim();
+  switch (format) {
+    case "email":
+      return EMAIL_RE.test(value) ? null : "Enter a valid email address";
+    case "url":
+      return URL_RE.test(value)
+        ? null
+        : "Enter a link starting with http:// or https://";
+    case "phone": {
+      const digits = value.replace(/\D/g, "");
+      const ok = PHONE_RE.test(value) && digits.length >= 7 && digits.length <= 15;
+      return ok ? null : "Enter a valid phone number";
+    }
+    case "alphanumeric":
+      return ALNUM_RE.test(value) ? null : "Letters and numbers only";
+    default: {
+      // Exhaustiveness guard — a new format member without an arm above is a
+      // compile error here rather than a silently-accepted answer.
+      const _exhaustive: never = format;
+      throw new Error(`Unhandled text format: ${String(_exhaustive)}`);
+    }
+  }
+}
+
+// --- "Other…" free-text answers -----------------------------------------
+// Encoded IN BAND: the stored value is `other:<text>`. Keeping it in the same
+// flat response map (rather than a companion key) means the choice kinds need
+// NO change to `questionnaire_responses.responses` — no migration, no second
+// lookup, and every existing reader keeps working on a plain string.
+//
+// The prefix is reserved: `validateBuilderQuestionnaire` refuses to publish a
+// definition whose option values start with it, so a stored `other:` value can
+// only ever mean "the respondent typed this".
+export const OTHER_PREFIX = "other:";
+
+/**
+ * True when a stored value is an in-band "Other…" answer.
+ *
+ * Deliberately NOT a `value is string` type predicate: a predicate narrows the
+ * ELSE branch too, so `if (isOtherAnswer(v)) … else …` would leave every
+ * ordinary-answer path believing `v` can no longer be a string — which is
+ * exactly wrong for the option-label lookups that follow it.
+ */
+export function isOtherAnswer(value: unknown): boolean {
+  return typeof value === "string" && value.startsWith(OTHER_PREFIX);
+}
+
+/** The text the respondent typed, with the reserved prefix stripped. */
+export function otherAnswerText(value: string): string {
+  return isOtherAnswer(value) ? value.slice(OTHER_PREFIX.length) : value;
+}
+
+/** Encode typed free text as an "Other…" answer. */
+export function toOtherAnswer(text: string): string {
+  return `${OTHER_PREFIX}${text}`;
+}
 
 export const SliderQuestion = z.object({
   id: z.string().min(1),
@@ -54,6 +153,10 @@ export const SingleSelectQuestion = z.object({
   options: z
     .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
     .min(2),
+  // Opt-in "Other…" free text. Absent/false ⇒ the respondent may only pick a
+  // listed option. When on, the stored value may be `other:<typed text>` (see
+  // OTHER_PREFIX) — still one string in the same flat response map.
+  allowOther: z.boolean().optional(),
   required: z.boolean().default(true),
 });
 export type SingleSelectQuestion = z.infer<typeof SingleSelectQuestion>;
@@ -66,6 +169,9 @@ export const MultiSelectQuestion = z.object({
   options: z
     .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
     .min(2),
+  // Opt-in "Other…" free text — one `other:<typed text>` entry alongside the
+  // picked option values.
+  allowOther: z.boolean().optional(),
   required: z.boolean().default(false),
 });
 export type MultiSelectQuestion = z.infer<typeof MultiSelectQuestion>;
@@ -77,6 +183,11 @@ export const ShortTextQuestion = z.object({
   helper: z.string().optional(),
   placeholder: z.string().optional(),
   maxLength: z.number().int().positive().default(120),
+  // Format preset applied on top of the length bound. Absent ⇒ "text" (no
+  // check). Deliberately short_text ONLY — `long_text` is a paragraph and is
+  // never format-checked, which is why `validateOne` narrows on the kind
+  // inside the shared text arm.
+  format: TextFormat.optional(),
   required: z.boolean().default(true),
 });
 export type ShortTextQuestion = z.infer<typeof ShortTextQuestion>;
@@ -314,6 +425,15 @@ export function flattenQuestions(questionnaire: Questionnaire): Question[] {
 const EMPTY_DISPLAY = "—";
 
 /**
+ * Render one in-band "Other…" answer. Without this the `default:` arm below
+ * would print the storage encoding — `other:pizza` — straight to a captain.
+ */
+function otherDisplay(value: string): string {
+  const text = otherAnswerText(value).trim();
+  return `Other: ${text === "" ? EMPTY_DISPLAY : text}`;
+}
+
+/**
  * Render a stored response value as the string a human would recognise —
  * option labels instead of raw values, lists joined, empty answers as a
  * dash. Falls back to the raw value for unknown options.
@@ -324,6 +444,14 @@ export function displayResponseValue(
 ): string {
   if (value === undefined || value === null || value === "") {
     return EMPTY_DISPLAY;
+  }
+  // An `other:` value can reach any string-answered choice kind (a definition
+  // is editable after publish, so `allowOther` can be turned off or a field
+  // morphed under a stored answer). Decode it before the per-kind arms rather
+  // than in one of them, so no path can fall through to `default:` and print
+  // the raw encoding.
+  if (typeof value === "string" && isOtherAnswer(value)) {
+    return otherDisplay(value);
   }
   switch (question.kind) {
     case "single_select":
@@ -339,7 +467,11 @@ export function displayResponseValue(
     case "multi_select": {
       if (!Array.isArray(value) || value.length === 0) return EMPTY_DISPLAY;
       return value
-        .map((v) => question.options.find((o) => o.value === v)?.label ?? v)
+        .map((v) =>
+          isOtherAnswer(v)
+            ? otherDisplay(v)
+            : (question.options.find((o) => o.value === v)?.label ?? v),
+        )
         .join(", ");
     }
     case "boolean":
@@ -487,6 +619,15 @@ export function validateOne(
     case "single_select": {
       if (typeof raw !== "string")
         return { ok: false, error: "Expected a choice" };
+      if (isOtherAnswer(raw)) {
+        // An `other:` value from a field that never offered "Other…" is not a
+        // near-miss to be salvaged — it is a payload for an option that does
+        // not exist, so it gets the same refusal as any unlisted value.
+        if (!q.allowOther) return { ok: false, error: "Not a valid option" };
+        if (otherAnswerText(raw).trim() === "")
+          return { ok: false, error: "Tell us what your 'other' answer is" };
+        return { ok: true, value: raw };
+      }
       if (!q.options.some((o) => o.value === raw))
         return { ok: false, error: "Not a valid option" };
       return { ok: true, value: raw };
@@ -495,7 +636,15 @@ export function validateOne(
       if (!Array.isArray(raw) || raw.some((v) => typeof v !== "string"))
         return { ok: false, error: "Expected a list of choices" };
       const allowed = new Set(q.options.map((o) => o.value));
-      const filtered = (raw as string[]).filter((v) => allowed.has(v));
+      // Unknown values are DROPPED here rather than erroring (an option may
+      // have been removed since the answer was given). A disallowed or empty
+      // `other:` entry drops the same way; if that empties a required answer
+      // the required check below still catches it.
+      const filtered = (raw as string[]).filter((v) =>
+        isOtherAnswer(v)
+          ? q.allowOther === true && otherAnswerText(v).trim() !== ""
+          : allowed.has(v),
+      );
       if (q.required && filtered.length === 0)
         return { ok: false, error: "Pick at least one option" };
       return { ok: true, value: filtered };
@@ -505,6 +654,12 @@ export function validateOne(
       if (typeof raw !== "string") return { ok: false, error: "Expected text" };
       if (raw.length > q.maxLength)
         return { ok: false, error: `Max ${q.maxLength} characters` };
+      // Narrowed on purpose: `long_text` shares this arm but has no `format`,
+      // and a paragraph is never format-checked.
+      if (q.kind === "short_text") {
+        const formatError = checkTextFormat(q.format, raw);
+        if (formatError) return { ok: false, error: formatError };
+      }
       return { ok: true, value: raw };
     }
     case "date": {
@@ -542,6 +697,22 @@ export function validateOne(
       if (typeof raw !== "string")
         return { ok: false, error: "Expected an image URL" };
       return { ok: true, value: raw };
+    }
+    default: {
+      // Exhaustiveness guard: a new member of the `Question` union without a
+      // case above is a compile error here. `noImplicitReturns` is off and
+      // this function's declared return type is a union of object shapes, so
+      // without this arm a fifteenth kind would fall off the end, return
+      // `undefined`, and be read by every caller as "no error" — a validator
+      // that silently accepts anything.
+      //
+      // Throwing costs nothing over the status quo: the returned `undefined`
+      // already crashed every caller on `.ok`, just with a bare TypeError
+      // naming nothing. This says which kind.
+      const _exhaustive: never = q;
+      throw new Error(
+        `Unhandled question kind: ${String((_exhaustive as Question).kind)}`,
+      );
     }
   }
 }

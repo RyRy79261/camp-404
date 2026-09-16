@@ -1,5 +1,11 @@
 import { redirect } from "next/navigation";
-import { ClipboardList, Megaphone, Shield, Users } from "lucide-react";
+import {
+  CalendarClock,
+  ClipboardList,
+  Megaphone,
+  Shield,
+  Users,
+} from "lucide-react";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
@@ -53,6 +59,16 @@ const TOOLS: ToolEntry[] = [
       "Manage your camp's teams — rename them, reorder them, or archive ones you're not using. Changes flow through to the roster's team filter.",
     icon: <Users className="text-primary" />,
   },
+  {
+    href: "/captains/camp-settings/cycle",
+    // Covers BOTH screens behind this route: a camp that has never said what
+    // year it is gets asked, and one that has gets the rollover. "Start a new
+    // year" would misdescribe the first of those.
+    title: "The camp's year",
+    description:
+      "Say what year the camp is in, and when it moves on to the next burn, say so here. See exactly which questionnaires go out again before anything changes — and everything that stays untouched.",
+    icon: <CalendarClock className="text-primary" />,
+  },
 ];
 
 export default async function CaptainToolsPage() {
@@ -66,6 +82,16 @@ export default async function CaptainToolsPage() {
   }
   // Captain-clearance gate (D3): render the shell for everyone, withhold the
   // tool list from non-captains rather than redirecting.
+  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
+  // and `team_lead < captain`, so the real flag cannot change the outcome —
+  // passing it would only buy a DB round-trip. If this bar ever drops to
+  // `team_lead`, it MUST become `await isTeamLead(campUser.id)`.
+  //
+  // NOTE for whoever revisits this: the Questionnaires card below points at a
+  // TEAM-LEAD+ surface, so this captain-only hub is currently the only link to a
+  // page a lead is cleared for. Opening the hub to leads is a surface-rank
+  // decision (which cards a lead may see, and the home tile group that routes
+  // here) — not a flag fix, and deliberately not made here.
   const { cleared } = requireClearance(
     deriveViewerRank(campUser.rank, false),
     "captain",

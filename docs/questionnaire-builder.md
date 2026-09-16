@@ -291,9 +291,11 @@ per-operator per §2.1; referenced unanswered ⇒ false (hide) except
 `is_empty`/`is_answered`; **dangling fieldId ⇒ visible at runtime (defensive) but
 a hard publish error** so it can't ship.
 
-- A hidden field's stored value is **retained** (never pruned), but **excluded
-  from validation and diff while hidden**; re-showing it (by changing the gating
-  answer) restores the previously-entered value (no blanking).
+- A hidden field's stored value is **retained if it still type-checks against
+  that field** (never pruned merely for being hidden; a smuggled or malformed
+  value is dropped), and is **excluded from required checks and diff while
+  hidden**; re-showing it (by changing the gating answer) restores the
+  previously-entered value (no blanking).
 - `validateResponses` is **visibility-aware**: it skips required checks for hidden
   fields.
 - If the visible-page set is empty, show an empty/error state and **do not

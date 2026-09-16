@@ -9,9 +9,26 @@ import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import {
+  audienceLabel,
+  getTeamsConfig,
+  memberTeamsLabel,
+  teamLabelMap,
+  teamPickerOptions,
+} from "@/lib/camp-config";
 import { getCampManagementRoster } from "@/lib/roster";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
-import { SendForm, type MemberOption } from "./send-form";
+import {
+  SendForm,
+  type AudienceOption,
+  type MemberOption,
+} from "./send-form";
+
+// The scopes this screen offers, in picker order. `drivers` is broadcast-only
+// and `opt_in` has no send path yet, so neither is listed — but both are named
+// by the shared vocabulary, which is what keeps this list a CHOICE rather than
+// an accident.
+const SEND_SCOPES = ["everyone", "team", "team_leads", "individual"] as const;
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +64,21 @@ export default async function SendPage({
     </main>
   );
 
+  // The lead flag is hardcoded `false`, and this PAGE is still captain-only.
+  //
+  // KNOWN GAP, not a claim that sending is captain-only: `sendAction` and
+  // `previewAudienceCount` now admit a team lead (rank gate, then
+  // `canSendToAudience` for the specific audience — see the send-gate note in
+  // ../../actions.ts). This page has not been reshaped to match, so a lead who
+  // may send through the action cannot reach the form that calls it. That is
+  // fail-SAFE — the action is the enforcement boundary and it still refuses
+  // every audience wider than a team they lead — but it is not finished.
+  //
+  // Opening it is a reshape, not a flag flip: pass
+  // `await isTeamLead(campUser.id)`, gate on `team_lead` instead of `captain`,
+  // and narrow SEND_SCOPES for a lead to `team` over the teams they actually
+  // lead — otherwise the form offers `everyone` and the action refuses it,
+  // which is a worse experience than the lock.
   const rank = deriveViewerRank(campUser.rank, false);
   if (rank !== "captain") {
     return chrome(
@@ -75,14 +107,27 @@ export default async function SendPage({
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  const [openActivation, roster] = await Promise.all([
+  const [openActivation, roster, config] = await Promise.all([
     getOpenActivationForKey(key),
     getCampManagementRoster(),
+    getTeamsConfig(),
   ]);
+
+  // Both pickers and the member subtitles come from the camp config through the
+  // one audience vocabulary — teamPickerOptions drops ARCHIVED teams, and
+  // memberTeamsLabel renders "Kitchen" where the raw `power_and_lighting` used
+  // to print, ten lines from where the pretty string lives.
+  const teamOptions: AudienceOption[] = teamPickerOptions(config);
+  const scopeOptions: AudienceOption[] = SEND_SCOPES.map((scope) => ({
+    value: scope,
+    label: audienceLabel(scope),
+  }));
+
+  const labels = teamLabelMap(config);
   const members: MemberOption[] = roster.map((m) => ({
     id: m.id,
     label: m.displayName ?? (m.handle ? `@${m.handle}` : "Unnamed member"),
-    sub: m.teams.join(", "),
+    sub: memberTeamsLabel(m.teams, labels),
   }));
 
   return chrome(
@@ -90,6 +135,8 @@ export default async function SendPage({
       questionnaireKey={key}
       title={definition.title}
       members={members}
+      scopeOptions={scopeOptions}
+      teamOptions={teamOptions}
       openActivationId={openActivation?.id ?? null}
     />,
   );

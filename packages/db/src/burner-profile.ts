@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
 
@@ -65,14 +65,22 @@ export async function setUserApprovalStatus(
 /**
  * Record a captain's vetting decision on a pending member. Stamps who
  * decided and when for the camp-management audit trail.
+ *
+ * Compare-and-set: ONLY a row still `pending` flips. Two captains working the
+ * same queue from separately-rendered rosters can both still see the Approve /
+ * Reject buttons, so without the precondition the second write silently
+ * overwrites the first decision AND its audit stamp. Returns true when this
+ * call was the decision, false when the row was already decided (or no such
+ * user) — the same fail-closed shape as `decideCaptainPromotion`'s
+ * `eq(status, "sent")` guard in `captain-promotion.ts`.
  */
 export async function setUserApproval(input: {
   userId: string;
   status: "approved" | "rejected";
   decidedByUserId: string;
-}) {
+}): Promise<boolean> {
   const db = createHttpDb();
-  await db
+  const rows = await db
     .update(schema.users)
     .set({
       approvalStatus: input.status,
@@ -80,7 +88,14 @@ export async function setUserApproval(input: {
       approvalDecidedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(schema.users.id, input.userId));
+    .where(
+      and(
+        eq(schema.users.id, input.userId),
+        eq(schema.users.approvalStatus, "pending"),
+      ),
+    )
+    .returning({ id: schema.users.id });
+  return rows.length > 0;
 }
 
 export async function setUserInviteCode(userId: string, code: string) {

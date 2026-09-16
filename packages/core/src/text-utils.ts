@@ -36,3 +36,23 @@ export function slugify(input: string): string {
     .slice(0, 48)
     .replace(/-+$/, "");
 }
+
+/**
+ * Humanise a snake_case enum key for display: "art_and_activities" →
+ * "Art and Activities". Connectives ("and", "of") stay lowercase unless they
+ * lead. The LAST-RESORT rendering of a stored key — a configured label always
+ * wins (see `audienceLabel` / `teamLabelMap` in @camp404/db/camp-config) — but
+ * it lives here, beside the other display-string rules, because both the
+ * client-side roster chips and the server-side audience vocabulary need the
+ * same fallback and neither may own it alone.
+ */
+export function humanizeKey(key: string): string {
+  return key
+    .split("_")
+    .map((word, index) =>
+      index > 0 && (word === "and" || word === "of")
+        ? word
+        : word.charAt(0).toUpperCase() + word.slice(1),
+    )
+    .join(" ");
+}

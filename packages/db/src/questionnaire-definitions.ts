@@ -192,6 +192,28 @@ export async function updateDefinitionRow(input: {
     .where(eq(questionnaireDefinitions.key, input.key));
 }
 
+/**
+ * Set one questionnaire's year policy: `true` (carry) means a cycle rollover
+ * leaves it alone, `false` (fresh) means everyone in scope answers it again on
+ * a blank form the next time the camp starts a new year.
+ *
+ * A COLUMN rather than a field inside the definition jsonb precisely so
+ * flipping it needs no re-publish — it never changes what a member is asked,
+ * only whether they are asked again. `updated_at` is deliberately NOT bumped:
+ * the builder hub sorts by it, and a year policy is not an edit to the
+ * questionnaire's content.
+ */
+export async function setDefinitionCarryOver(
+  key: string,
+  carryOver: boolean,
+): Promise<void> {
+  const db = createHttpDb();
+  await db
+    .update(questionnaireDefinitions)
+    .set({ carryOver })
+    .where(eq(questionnaireDefinitions.key, key));
+}
+
 /** A row's title + definition for cloning, or null. */
 export async function getDefinitionRowForClone(
   key: string,

@@ -15,17 +15,33 @@
 //     descendantCountLabel (./family-tree) — all cycle-guarded (OD9)
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
 //     (./invites)
-//   - text utils: initialsFrom (./text-utils)
+//   - text utils: initialsFrom, slugify, humanizeKey (./text-utils)
 //   - text redaction: redactPii, sanitizeReportText, redactSecrets +
 //     SECRET_ENV_KEYS (./text-redaction)
 //   - shake detector: createShakeDetector + ShakeSample/ShakeDetectorConfig
 //     (./shake); the React hook + DOM permission helpers stay in apps/web
 //   - id validation: validateIdNumber, IdValidationResult (./id-validation)
 //   - promotion: canSendPromotion, canDecidePromotion, nextPromotionStatus,
-//     promotionStepState — the captain-handshake guards + state machine
+//     promotionStepState, canLeaveCamp — the captain-handshake guards +
+//     state machine, and the sole-captain erasure guard
 //     (./promotion)
 //   - field privacy: ALWAYS_PRIVATE, SAFETY_VISIBLE, isFieldLocked,
 //     isSafetyVisible (./privacy)
+//   - audience authz: canSendToAudience + AudienceScope/AudienceActor/
+//     AudienceSpec — who may send to which audience (./audience-authz)
+//   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,
+//     neutraliseFormula, csvFilenamePart (./csv) — the ONE spreadsheet
+//     serialiser; the questionnaire export and WP9's roster export share it
+//   - questionnaire CSV: EMPTY_ANSWER, buildQuestionnaireCsv(Rows|Export),
+//     questionnaireCsvFilename, displayOrphanedAnswer, collectOrphanFieldIds,
+//     ORPHAN_LABEL/ORPHAN_COLUMN_SUFFIX
+//     (./questionnaire-csv)
+//   - questionnaire results: aggregateResponses + tallyActivationCompletion,
+//     with KIND_SHAPE and the Choice/Numeric/Count aggregate shapes — the
+//     per-question read-back engine and the activation completion figure
+//     (./questionnaire-results)
+//   - time zone: CAMP_TIME_ZONE, the zone every human-read date is formatted
+//     in (./time-zone)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -41,3 +57,8 @@ export * from "./shake";
 export * from "./id-validation";
 export * from "./promotion";
 export * from "./privacy";
+export * from "./audience-authz";
+export * from "./csv";
+export * from "./questionnaire-csv";
+export * from "./questionnaire-results";
+export * from "./time-zone";

@@ -9,6 +9,7 @@ import {
   jsonb,
   numeric,
   primaryKey,
+  foreignKey,
   index,
   uniqueIndex,
   check,
@@ -22,8 +23,10 @@ import type {
   QuestionnaireResponses,
 } from "@camp404/types";
 // Type-only (erased at runtime — no import cycle with camp-config.ts, which
-// imports this schema): types the camp_settings.config JSONB column.
-import type { TeamsConfig } from "./camp-config";
+// imports this schema): types the camp_settings.config JSONB column. The
+// SQL default literal below stays teams-only — cycles and the carry-over map
+// are absent on every existing row and resolve to their defaults.
+import type { CampConfig } from "./camp-config";
 
 // Camp 404 schema. Authentication is handled by Neon Auth (Better Auth) —
 // the managed auth service holds credentials, sessions, and identity. Our
@@ -413,58 +416,104 @@ export const dietaryRequirements = pgTable("dietary_requirements", {
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// --- Year-scoped facts ----------------------------------------------------
+// driver_profiles, car_members and team_memberships each carry a `cycle`. They
+// are the camp owner's "must be established again" set: "who's driving in
+// whose car and who's part of what team have to be fresh so that wouldn't
+// carry over to the next year. Same with team lead roles."
+//
+// A carry-over flag on a questionnaire cannot deliver that, because these
+// facts live in their own tables rather than in questionnaire_responses — with
+// no year on the row, a rollover would leave every team, lead and car seat
+// exactly as it was.
+//
+// Freshness is a READ rule, never a delete: the rollover touches none of these
+// tables, and a query scoped to the new year simply finds no rows. Last year's
+// roster and car lists stay on file and readable forever.
+
 // --- Driver profiles -----------------------------------------------------
 // Opt-in: a member registers intent to drive (`intends_to_drive`), which
 // triggers a blocking questionnaire to capture vehicle + proficiency
-// detail. Its own bespoke page and table.
+// detail. Its own bespoke page and table. One row per driver PER YEAR — a
+// driver re-registers intent (and re-confirms the vehicle) each burn.
 
-export const driverProfiles = pgTable("driver_profiles", {
-  userId: uuid("user_id")
-    .primaryKey()
-    .references(() => users.id, { onDelete: "cascade" }),
-  intendsToDrive: boolean("intends_to_drive").notNull().default(false),
-  intentRegisteredAt: timestamp("intent_registered_at", { mode: "date" }),
+export const driverProfiles = pgTable(
+  "driver_profiles",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The burn year this profile belongs to. Defaults to 1 for the same reason
+    // questionnaire_activations.cycle does: a migration cannot know what year
+    // it is, so setFoundingYear() adopts every sentinel-stamped row into the
+    // real founding year in the transaction that records it.
+    cycle: integer("cycle").notNull().default(1),
+    intendsToDrive: boolean("intends_to_drive").notNull().default(false),
+    intentRegisteredAt: timestamp("intent_registered_at", { mode: "date" }),
 
-  vehicleMake: text("vehicle_make"),
-  vehicleModel: text("vehicle_model"),
-  vehicleRegistration: text("vehicle_registration"),
-  seatsTotal: integer("seats_total"),
-  seatsOffered: integer("seats_offered"),
-  canOfferLifts: boolean("can_offer_lifts").notNull().default(false),
+    vehicleMake: text("vehicle_make"),
+    vehicleModel: text("vehicle_model"),
+    vehicleRegistration: text("vehicle_registration"),
+    seatsTotal: integer("seats_total"),
+    seatsOffered: integer("seats_offered"),
+    canOfferLifts: boolean("can_offer_lifts").notNull().default(false),
 
-  offroadExperienced: boolean("offroad_experienced").notNull().default(false),
-  canTow: boolean("can_tow").notNull().default(false),
-  proficiencyNotes: text("proficiency_notes"),
+    offroadExperienced: boolean("offroad_experienced").notNull().default(false),
+    canTow: boolean("can_tow").notNull().default(false),
+    proficiencyNotes: text("proficiency_notes"),
 
-  departureCity: text("departure_city"),
-  arrivalAt: timestamp("arrival_at", { mode: "date" }),
-  departureAt: timestamp("departure_at", { mode: "date" }),
-  notes: text("notes"),
+    departureCity: text("departure_city"),
+    arrivalAt: timestamp("arrival_at", { mode: "date" }),
+    departureAt: timestamp("departure_at", { mode: "date" }),
+    notes: text("notes"),
 
-  version: text("version").notNull(),
-  completedAt: timestamp("completed_at", { mode: "date" }),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
-});
+    version: text("version").notNull(),
+    completedAt: timestamp("completed_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    // Widened from bare `user_id`. Safe on live data: every existing row is
+    // already distinct on user_id, so (user_id, 1) stays unique.
+    pk: primaryKey({ columns: [d.userId, d.cycle] }),
+  }),
+);
 
 // --- Car members ---------------------------------------------------------
 // A driver assigns riders to their car. "Driver" and "car group" are
 // derived facets of a user profile, not ranks. This group can be a
 // notification audience (broadcast scope 'drivers', or individual targets).
+// Seats are per-year: who rides with whom is re-agreed every burn.
 
 export const carMembers = pgTable(
   "car_members",
   {
-    driverUserId: uuid("driver_user_id")
-      .notNull()
-      .references(() => driverProfiles.userId, { onDelete: "cascade" }),
+    // No column-level .references(): driver_profiles.user_id is no longer
+    // unique on its own, so the reference has to carry the year with it — see
+    // driverFk below.
+    driverUserId: uuid("driver_user_id").notNull(),
     memberUserId: uuid("member_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull().default(1),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (c) => ({
-    pk: primaryKey({ columns: [c.driverUserId, c.memberUserId] }),
+    // The same rider may sit in the same driver's car in two different years,
+    // but never twice in one.
+    pk: primaryKey({ columns: [c.driverUserId, c.memberUserId, c.cycle] }),
+    // Widened rather than dropped: the seat points at THAT year's driver
+    // profile, so a 2027 seat can never hang off a 2026 car. ON UPDATE CASCADE
+    // because the referenced key is now mutable in exactly one place —
+    // setFoundingYear() moving pre-namespace rows off the sentinel — and the
+    // seats have to ride along with the car rather than block the adoption.
+    driverFk: foreignKey({
+      columns: [c.driverUserId, c.cycle],
+      foreignColumns: [driverProfiles.userId, driverProfiles.cycle],
+      name: "car_members_driver_cycle_fk",
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
     memberIdx: index("car_members_member_idx").on(c.memberUserId),
   }),
 );
@@ -480,11 +529,16 @@ export const teamMemberships = pgTable(
     team: teamEnum("team").notNull(),
     // Authoritative answer to "does this user lead this team". A user who
     // is a lead on any team should also carry `users.rank = 'team_lead'`.
+    // Year-scoped like the membership itself: a lead stops leading at the
+    // rollover until a captain says otherwise, which is the owner's ruling.
     isLead: boolean("is_lead").notNull().default(false),
+    cycle: integer("cycle").notNull().default(1),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (tm) => ({
-    pk: primaryKey({ columns: [tm.userId, tm.team] }),
+    // The same member may be on the same team in 2026 and 2027, but is listed
+    // at most once in either.
+    pk: primaryKey({ columns: [tm.userId, tm.team, tm.cycle] }),
     teamIdx: index("team_memberships_team_idx").on(tm.team),
   }),
 );
@@ -559,6 +613,18 @@ export const questionnaireActivations = pgTable(
     closedAt: timestamp("closed_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+
+    // The camp cycle current at Send time. Immutable afterwards, so a response
+    // inherits the cycle its form was OPENED in rather than the config's cycle
+    // at submit time (which kills the mid-submit rollover race). Default 1
+    // stamps every existing row into the founding cycle — no backfill script.
+    cycle: integer("cycle").notNull().default(1),
+
+    // The carry-over policy, COPIED off the definition at Send time exactly as
+    // `version` and `title` already are, and exactly as
+    // notification_deliveries.presentation is copied off broadcasts. Flipping
+    // the definition toggle affects the NEXT send, never the one in flight.
+    carryOver: boolean("carry_over").notNull().default(true),
   },
   (a) => ({
     keyIdx: index("questionnaire_activations_key_idx").on(a.questionnaireKey),
@@ -1434,7 +1500,7 @@ export const campSettings = pgTable(
     // teams; the seed mirrors DEFAULT_CAMP_CONFIG in camp-config.ts (a test
     // guards the two against drift). See camp-config.ts for the accessor.
     config: jsonb("config")
-      .$type<TeamsConfig>()
+      .$type<CampConfig>()
       .notNull()
       .default(
         sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and Water","order":3,"archived":false},{"key":"health_and_safety","label":"Health and Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false}]}'::jsonb`,
@@ -1472,6 +1538,17 @@ export const questionnaireDefinitions = pgTable("questionnaire_definitions", {
   }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+
+  // Per-questionnaire rollover policy. TRUE (the default) = answers carry over
+  // and the rollover leaves this questionnaire alone. FALSE = the rollover
+  // closes the open send and opens a fresh one, so members answer again on a
+  // blank form. A COLUMN, not a field inside `definition`: classifyChange reads
+  // only the field map and the visibleIf map, so a toggle would classify as
+  // `cosmetic` — and a cosmetic re-publish overwrites the immutable version
+  // snapshot in place, letting a policy switch retroactively rewrite what a
+  // past collection ran under. As a column it is also togglable with no
+  // re-publish, and readable in one SELECT by the rollover planner.
+  carryOver: boolean("carry_over").notNull().default(true),
 });
 
 // Immutable published snapshots. Publishing copies the definition head into a
@@ -1524,12 +1601,21 @@ export const questionnaireResponses = pgTable(
     ),
     completedAt: timestamp("completed_at", { mode: "date" }),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+
+    // Copied from questionnaire_activations.cycle at write time. Carry-over
+    // keeps ONE row a member amends forever; `fresh` grows a NEW row each
+    // cycle. "Fresh" means the member must answer again — never that the old
+    // answer is destroyed.
+    cycle: integer("cycle").notNull().default(1),
   },
   (r) => ({
-    userDefIdx: uniqueIndex("questionnaire_responses_user_def_idx").on(
-      r.userId,
-      r.definitionKey,
-    ),
+    // Renamed rather than redefined so drizzle-kit emits a clean DROP INDEX +
+    // CREATE UNIQUE INDEX. The three-column index is strictly WEAKER than the
+    // two-column one it replaces, and the ADD COLUMN immediately before stamps
+    // every existing row cycle = 1, so no duplicate can appear mid-swap.
+    userDefCycleIdx: uniqueIndex(
+      "questionnaire_responses_user_def_cycle_idx",
+    ).on(r.userId, r.definitionKey, r.cycle),
     defIdx: index("questionnaire_responses_def_idx").on(r.definitionKey),
   }),
 );

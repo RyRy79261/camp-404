@@ -55,8 +55,10 @@ describe("AcknowledgementGate — board S22", () => {
       screen.getByText(/can.t dismiss this until you acknowledge/i),
     ).toBeDefined();
     expect(screen.getByRole("button", { name: "Acknowledge" })).toBeDefined();
-    // Body scroll is locked while the takeover is up.
-    expect(document.body.style.overflow).toBe("hidden");
+    // Body scroll is locked while the takeover is up. The lock lands in a
+    // passive effect, which React commits after the DOM node `findByRole`
+    // resolved on — so await it rather than reading it synchronously.
+    await waitFor(() => expect(document.body.style.overflow).toBe("hidden"));
   });
 
   it("POSTs the acknowledgement and refreshes server components", async () => {

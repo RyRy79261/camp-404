@@ -6,6 +6,12 @@ import { isE2ETestMode } from "@/lib/test-mode";
 
 export const runtime = "nodejs";
 
+// Content types this proxy will hand back. Blobs written before the upload
+// route's allow-list landed could carry any `image/*` type, including
+// script-bearing `image/svg+xml`, which would execute same-origin on direct
+// navigation. Anything unrecognised is treated as missing.
+const SERVABLE_TYPES = new Set(["image/webp", "image/png", "image/jpeg"]);
+
 /**
  * Stream a member's private avatar blob.
  *
@@ -53,6 +59,9 @@ export async function GET(req: Request) {
     // `get` returns null when the blob is missing, and a 304 variant (with a
     // null stream) for conditional requests. We only stream a full 200.
     if (!result || result.statusCode !== 200) {
+      return new NextResponse("Not found", { status: 404 });
+    }
+    if (!SERVABLE_TYPES.has(result.blob.contentType)) {
       return new NextResponse("Not found", { status: 404 });
     }
     return new NextResponse(result.stream, {

@@ -2,6 +2,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
+import { currentCycleNumber } from "./cycles";
 
 // Camp-management roster — the captain-only "who is on camp and where are
 // they up to" view. One row per real (non-system) camp member, aggregating
@@ -51,6 +52,12 @@ export async function getCampManagementRoster(): Promise<
   CampManagementMember[]
 > {
   const db = createHttpDb();
+  // Teams, team leads and driver profiles are year-scoped, so this asks for
+  // THIS year's. At a rollover those three columns go blank across the roster
+  // and fill back in as captains re-establish them — which is the camp owner's
+  // ruling ("who's part of what team ... same with team lead roles"). Last
+  // year's rows are untouched and still readable; only the question changed.
+  const cycle = await currentCycleNumber();
   const rows = await db
     .select({
       id: schema.users.id,
@@ -69,10 +76,11 @@ export async function getCampManagementRoster(): Promise<
       isLead: sql<boolean>`exists (
         select 1 from team_memberships tm
         where tm.user_id = ${schema.users.id} and tm.is_lead = true
+          and tm.cycle = ${cycle}
       )`,
       teams: sql<
         string[]
-      >`coalesce((select array_agg(tm.team order by tm.team) from team_memberships tm where tm.user_id = ${schema.users.id}), '{}')`,
+      >`coalesce((select array_agg(tm.team order by tm.team) from team_memberships tm where tm.user_id = ${schema.users.id} and tm.cycle = ${cycle}), '{}')`,
       pendingRequiredActions: sql<number>`(
         select count(*)::int from required_actions ra
         where ra.user_id = ${schema.users.id}
@@ -86,8 +94,14 @@ export async function getCampManagementRoster(): Promise<
       eq(schema.burnerProfiles.userId, schema.users.id),
     )
     .leftJoin(
+      // The cycle predicate belongs in the JOIN, not the WHERE: driver_profiles
+      // now holds one row per driver PER YEAR, so joining on user_id alone
+      // would multiply a member into one roster row per year they drove.
       schema.driverProfiles,
-      eq(schema.driverProfiles.userId, schema.users.id),
+      and(
+        eq(schema.driverProfiles.userId, schema.users.id),
+        eq(schema.driverProfiles.cycle, cycle),
+      ),
     )
     .where(
       and(eq(schema.users.isSystem, false), eq(schema.users.sanitised, false)),
@@ -130,9 +144,14 @@ export interface CampMemberDetail {
   onboardingVersion: string | null;
   /** Raw burner-profile answers, keyed by question id, for the profile tabs. */
   responses: Record<string, unknown>;
-  /** Encrypted government ID columns. Decrypt only behind the captain gate. */
-  passportEncrypted: string | null;
-  saIdEncrypted: string | null;
+  /**
+   * Encrypted government ID columns. Present ONLY when the caller passed
+   * `includeIdDocuments: true` — absent from every member-facing read, so the
+   * ciphertext never enters a non-captain render scope. Decrypt only behind
+   * the captain gate.
+   */
+  passportEncrypted?: string | null;
+  saIdEncrypted?: string | null;
   /** The code this member redeemed to join (NULL for god/founder accounts). */
   inviteCode: string | null;
   /** Free-text note the inviter left when minting the code. */
@@ -142,9 +161,20 @@ export interface CampMemberDetail {
   createdAt: Date;
 }
 
+export interface CampMemberDetailOptions {
+  /**
+   * SELECT the encrypted government-ID columns. Defaults to FALSE. Only a
+   * caller that is already captain-gated AND about to decrypt should opt in;
+   * a member-facing read must never pull the ciphertext out of Postgres.
+   */
+  includeIdDocuments?: boolean;
+}
+
 export async function getCampMemberDetail(
   userId: string,
+  options: CampMemberDetailOptions = {},
 ): Promise<CampMemberDetail | null> {
+  const includeIdDocuments = options.includeIdDocuments === true;
   const db = createHttpDb();
   const decider = alias(schema.users, "decider");
   const inviter = alias(schema.users, "inviter");
@@ -159,8 +189,12 @@ export async function getCampMemberDetail(
       onboardingCompletedAt: schema.burnerProfiles.completedAt,
       onboardingVersion: schema.burnerProfiles.version,
       responses: schema.burnerProfiles.responses,
-      passportEncrypted: schema.users.passportEncrypted,
-      saIdEncrypted: schema.users.saIdEncrypted,
+      ...(includeIdDocuments
+        ? {
+            passportEncrypted: schema.users.passportEncrypted,
+            saIdEncrypted: schema.users.saIdEncrypted,
+          }
+        : {}),
       inviteCode: schema.users.inviteCode,
       inviteNote: schema.inviteCodes.note,
       invitedByName: inviter.displayName,
@@ -192,8 +226,12 @@ export async function getCampMemberDetail(
     onboardingComplete: r.onboardingCompletedAt != null,
     onboardingVersion: r.onboardingVersion,
     responses: (r.responses as Record<string, unknown>) ?? {},
-    passportEncrypted: r.passportEncrypted,
-    saIdEncrypted: r.saIdEncrypted,
+    ...(includeIdDocuments
+      ? {
+          passportEncrypted: r.passportEncrypted,
+          saIdEncrypted: r.saIdEncrypted,
+        }
+      : {}),
     inviteCode: r.inviteCode,
     inviteNote: r.inviteNote,
     invitedByName: r.invitedByName,
@@ -202,11 +240,18 @@ export async function getCampMemberDetail(
 }
 
 /**
- * Whether a user leads at least one team — the derived `team_lead` rank used
- * to unlock the control panel's team-lead layer. Cheap existence check.
+ * Whether a user leads at least one team THIS YEAR — the derived `team_lead`
+ * rank used to unlock the control panel's team-lead layer. Cheap existence
+ * check.
+ *
+ * Year-scoped, so a lead stops being one the moment the camp rolls over and
+ * becomes one again when a captain reappoints them: "team lead roles ... have
+ * to be fresh". Last year's `is_lead` row is still on file; it just does not
+ * answer this year's question.
  */
 export async function isTeamLead(userId: string): Promise<boolean> {
   const db = createHttpDb();
+  const cycle = await currentCycleNumber();
   const rows = await db
     .select({ team: schema.teamMemberships.team })
     .from(schema.teamMemberships)
@@ -214,6 +259,7 @@ export async function isTeamLead(userId: string): Promise<boolean> {
       and(
         eq(schema.teamMemberships.userId, userId),
         eq(schema.teamMemberships.isLead, true),
+        eq(schema.teamMemberships.cycle, cycle),
       ),
     )
     .limit(1);

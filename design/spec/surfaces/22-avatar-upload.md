@@ -145,7 +145,8 @@ Buttons carry `disabled={uploading}`. There is no separate full-disabled prop; t
 - **Account deletion** — `sanitisedUserPatch` sets `profileImageUrl: null` on anonymisation. The Vercel Blob object itself is not explicitly deleted (existing gap, not in scope for this component).
 - **Empty string normalisation** — consumers store `image.length > 0 ? image : null`; empty string is treated as null in both profile-edit and onboarding actions.
 - **Optional in questionnaire** — `profile.image` has `required: false`; undefined / null / empty string passes validation. When present, value must be a string (any string; no URL-format check).
-- **Test / unconfigured mode** — under `E2E_TEST_MODE=1` or absent `BLOB_READ_WRITE_TOKEN`, POST echoes a deterministic `test-avatar.webp` proxy URL and skips blob storage; GET returns 404 (nothing to serve). First-class path, not dead code.
+- **Test mode** — under `E2E_TEST_MODE=1`, POST echoes a deterministic `test-avatar.webp` proxy URL and skips blob storage; GET returns 404 (nothing to serve). First-class path, not dead code.
+- **Unconfigured store** — with no `BLOB_READ_WRITE_TOKEN` and test mode off, POST returns **501** `"Photo uploads aren't configured on this deployment."`; the uploader surfaces it in the S11 ERROR state and never calls `onChange`. GET returns 404.
 - **Re-select same file** — file input value reset in `finally` ensures `change` event fires again for the same file.
 
 ---

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
 import * as schema from "@camp404/db/schema";
-import { decryptOrNull, encrypt } from "@camp404/db/crypto";
+import { decryptField, encrypt } from "@camp404/db/crypto";
 import { runTool, truncateList } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
@@ -92,7 +92,16 @@ export function registerReimbursementTools(server: McpServer): void {
             .where(and(...conditions))
             .orderBy(desc(schema.reimbursements.createdAt));
           return truncateList(
-            rows.map((r) => ({ ...r, accountDetails: decryptOrNull(r.accountDetailsEncrypted) })),
+            rows.map((r) => {
+              const account = decryptField(r.accountDetailsEncrypted);
+              return {
+                ...r,
+                accountDetails: account.value,
+                // Bank details are on file but undecryptable here — never
+                // report this to the user as "no account details saved".
+                accountDetailsUnreadable: account.state === "unreadable",
+              };
+            }),
           );
         },
       }),

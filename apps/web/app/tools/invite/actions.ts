@@ -2,7 +2,7 @@
 
 import { createInviteCode, findInviteCodeByCode } from "@camp404/db/invite-codes";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import {
   generateInviteCode,
   isSyntacticallyValidCode,
@@ -55,6 +55,12 @@ export async function createInviteAction(
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     return { ok: false, error: "Your account isn't camp-active yet." };
+  }
+  // Mirror the page's gate (spec 11-invite-tool: "signed-in, camp-active,
+  // approved"). The action is a directly-reachable POST, and a pending captain
+  // would otherwise be able to mint pre-approved multi-use codes here.
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    return { ok: false, error: "Your account is still awaiting approval." };
   }
   const isCaptain = campUser.rank === "captain";
 
