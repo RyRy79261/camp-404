@@ -80,7 +80,7 @@ export async function answerGate(
     page.getByRole("heading", { level: 1, name: input.title }),
   ).toBeVisible();
   await page.getByRole("textbox", { name: input.prompt }).fill(input.text);
-  await page.getByRole("button", { name: "Finish" }).click();
+  await page.getByRole("button", { name: "Submit" }).click();
   await expect(
     page.getByRole("heading", { level: 1, name: "Questionnaire complete" }),
   ).toBeVisible();

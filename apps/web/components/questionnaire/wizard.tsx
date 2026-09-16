@@ -15,6 +15,7 @@ import { ProgressBar } from "@camp404/ui/components/progress-bar";
 import { CloudOff, TriangleAlert } from "lucide-react";
 import { QuestionField } from "./question";
 import { BlockingNotice, BlockingTopBar } from "./blocking-chrome";
+import { useStepFocus } from "./use-step-focus";
 import { identityAnswerErrors } from "@/lib/id-validation";
 import type { SaveResult } from "@camp404/types";
 import { SignOutLink } from "@/components/auth/sign-out-link";
@@ -58,6 +59,9 @@ interface QuestionnaireWizardProps {
   variant?: "onboarding" | "runner";
   // Title shown in the runner top bar (ignored in the onboarding variant).
   title?: string;
+  // Called on every answer change. The replay flow uses it to take down its
+  // "Saved" banner once the member edits again.
+  onResponsesChange?: () => void;
 }
 
 export function QuestionnaireWizard({
@@ -70,6 +74,7 @@ export function QuestionnaireWizard({
   firstStepSignOut = false,
   variant = "onboarding",
   title,
+  onResponsesChange,
 }: QuestionnaireWizardProps) {
   const [pageIndex, setPageIndex] = React.useState(0);
   const [responses, setResponses] =
@@ -79,11 +84,13 @@ export function QuestionnaireWizard({
 
   const page = questionnaire.pages[pageIndex];
   const isLast = pageIndex === questionnaire.pages.length - 1;
+  const headingRef = useStepFocus<HTMLHeadingElement>(pageIndex);
 
   if (!page) return null;
 
   function setResponse(id: string, value: QuestionnaireResponseValue) {
     setResponses((prev) => ({ ...prev, [id]: value }));
+    onResponsesChange?.();
     setErrors((prev) => {
       if (!prev[id]) return prev;
       const next = { ...prev };
@@ -140,6 +147,14 @@ export function QuestionnaireWizard({
   }
 
   function handleBack() {
+    // A save failure belongs to the page it happened on.
+    setErrors((prev) => {
+      if (!(FORM_ERROR_KEY in prev) && !(ROOT_ERROR_KEY in prev)) return prev;
+      const next = { ...prev };
+      delete next[FORM_ERROR_KEY];
+      delete next[ROOT_ERROR_KEY];
+      return next;
+    });
     setPageIndex((i) => Math.max(0, i - 1));
   }
 
@@ -228,8 +243,15 @@ export function QuestionnaireWizard({
       )}
 
       {page.kind === "intro" ? (
-        <section className="flex flex-1 flex-col items-center justify-center gap-6 py-12 text-center">
-          <h2 className="text-3xl font-bold leading-tight md:text-4xl">
+        <section
+          key={pageIndex}
+          className="flex flex-1 flex-col items-center justify-center gap-6 py-12 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+        >
+          <h2
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-3xl font-bold leading-tight outline-none md:text-4xl"
+          >
             {page.heading}
           </h2>
           <p className="max-w-prose text-balance text-lg leading-relaxed text-muted-foreground md:text-xl">
@@ -237,9 +259,23 @@ export function QuestionnaireWizard({
           </p>
         </section>
       ) : (
-        <>
+        // Keyed by page, so each page fades in (motion-safe).
+        <div
+          key={pageIndex}
+          className={
+            isFullScreen
+              ? "flex flex-1 flex-col gap-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+              : "flex flex-col gap-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+          }
+        >
           <section className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold">{page.title}</h2>
+            <h2
+              ref={headingRef}
+              tabIndex={-1}
+              className="text-lg font-semibold outline-none"
+            >
+              {page.title}
+            </h2>
             {page.subtitle && (
               <p className="text-sm text-muted-foreground">{page.subtitle}</p>
             )}
@@ -262,7 +298,7 @@ export function QuestionnaireWizard({
               />
             ))}
           </div>
-        </>
+        </div>
       )}
 
       <div className="mt-auto flex items-center justify-between pt-6">

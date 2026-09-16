@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { RecorderPanel } from "../voice/recorder-panel";
+import { useDictationToggle } from "../voice/use-dictation-toggle";
 import { useVoiceSupported } from "../voice/use-voice-recorder";
 import {
   submitFeedbackAction,
@@ -60,7 +61,7 @@ export function ReportBugDialog({
 }: ReportBugDialogProps) {
   const [kind, setKind] = React.useState<FeedbackKind>(defaultKind);
   const [description, setDescription] = React.useState("");
-  const [dictating, setDictating] = React.useState(false);
+  const dictation = useDictationToggle();
   const voiceSupported = useVoiceSupported();
   const [dictated, setDictated] = React.useState(false);
   const [useAi, setUseAi] = React.useState(true);
@@ -81,7 +82,7 @@ export function ReportBugDialog({
     setKind(defaultKind);
     setDescription(defaultDescription);
     setAttached(null);
-    setDictating(false);
+    dictation.setDictating(false);
     setDictated(false);
     setUseAi(true);
     setError(null);
@@ -238,17 +239,18 @@ export function ReportBugDialog({
 
               {/* Voice dictation — appends to the description. Hidden in a
                   browser that cannot record. */}
-              {!voiceSupported ? null : dictating ? (
+              {!voiceSupported ? null : dictation.dictating ? (
                 // No promptKey: the transcribe route has no bug-report prompt,
                 // and free-form feedback doesn't benefit from one. Dictation
                 // runs with the generic (unbiased) transcription.
                 <RecorderPanel
                   onTranscript={appendTranscript}
-                  onDismiss={() => setDictating(false)}
+                  onDismiss={dictation.close}
                 />
               ) : (
                 <DictatePill
-                  onActivate={() => setDictating(true)}
+                  ref={dictation.pillRef}
+                  onActivate={dictation.open}
                   className="self-start"
                 />
               )}

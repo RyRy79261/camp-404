@@ -108,12 +108,12 @@ describe("BuilderWizard", () => {
 
   it("blocks Continue on a missing required field, then advances when filled", () => {
     renderWizard();
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText("This question is required")).toBeTruthy();
     expect(screen.getByText("Page 1 of 2")).toBeTruthy(); // still page 1
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Ada" } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText("Page 2 of 2")).toBeTruthy();
     expect(screen.getByText("Lead a team?")).toBeTruthy();
   });
@@ -121,7 +121,7 @@ describe("BuilderWizard", () => {
   it("skips a required field hidden by visibleIf, so the form can finish", () => {
     const action = renderWizard();
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Ada" } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     // `team` is required but hidden (lead ≠ true), so it must not block submit.
     expect(screen.queryByText("Which team?")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
@@ -149,7 +149,7 @@ describe("BuilderWizard — persisted saves (persistProgress)", () => {
       errors: { name: "Server says no" },
     }));
     renderPersisting(action);
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await waitFor(() => expect(screen.getByText("Server says no")).toBeTruthy());
     expect(action).toHaveBeenCalledWith({ name: "Ada" }, false);
     expect(screen.getByText("Page 1 of 2")).toBeTruthy(); // did not advance
@@ -160,7 +160,7 @@ describe("BuilderWizard — persisted saves (persistProgress)", () => {
       throw new Error("boom");
     });
     renderPersisting(action);
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await waitFor(() =>
       expect(screen.getByText(/couldn't save your answers/i)).toBeTruthy(),
     );
@@ -235,5 +235,66 @@ describe("BuilderWizard — resume & single-page (spec §5)", () => {
       />,
     );
     expect(screen.queryByText(/Page 1 of 1/)).toBeNull();
+  });
+});
+
+describe("BuilderWizard — moving between pages", () => {
+  it("focuses the new page's heading after Next, but not on first render", () => {
+    renderWizard();
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Ada" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "Leadership" }),
+    );
+  });
+
+  it("drops a save failure when the member goes Back", async () => {
+    const action = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    render(
+      <BuilderWizard
+        questionnaire={def}
+        initialResponses={{ name: "Ada", lead: true }}
+        action={action}
+        persistProgress
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: /Which team/ }), {
+      target: { value: "Kitchen" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await waitFor(() =>
+      expect(screen.getByText(/couldn't save your answers/i)).toBeTruthy(),
+    );
+    // Back stays disabled until the failed save has settled.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Back" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.queryByText(/couldn't save your answers/i)).toBeNull();
+    expect(screen.getByRole("heading", { name: "About you" })).toBeTruthy();
+  });
+
+  it("uses the board's labels: Next, Submit, Submitting…", async () => {
+    render(
+      <BuilderWizard
+        questionnaire={def}
+        initialResponses={{ name: "Ada", lead: true }}
+        action={() => new Promise(() => {})}
+        persistProgress
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: /Which team/ }), {
+      target: { value: "Kitchen" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Submitting…" })).toBeTruthy(),
+    );
   });
 });

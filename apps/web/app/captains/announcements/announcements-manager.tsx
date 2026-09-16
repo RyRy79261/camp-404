@@ -47,6 +47,7 @@ import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
 import { RecorderPanel } from "@/components/voice/recorder-panel";
+import { useDictationToggle } from "@/components/voice/use-dictation-toggle";
 import { useVoiceSupported } from "@/components/voice/use-voice-recorder";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import {
@@ -163,7 +164,7 @@ export function AnnouncementsManager({
   };
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
-  const [dictating, setDictating] = useState(false);
+  const dictation = useDictationToggle();
   const voiceSupported = useVoiceSupported();
   const [pending, startTransition] = useTransition();
   // A one-tap action on a draft card: which card, and which button spins.
@@ -196,7 +197,7 @@ export function AnnouncementsManager({
   const reset = () => {
     setForm(emptyForm);
     setError(null);
-    setDictating(false);
+    dictation.setDictating(false);
   };
 
   // Append a dictated transcript to the message body (mirrors the questionnaire
@@ -345,14 +346,15 @@ export function AnnouncementsManager({
           />
           {/* Voice dictation — same pattern as the questionnaire long-text
               fields: tap to swap in the recorder, each transcript appends. */}
-          {!voiceSupported ? null : dictating ? (
+          {!voiceSupported ? null : dictation.dictating ? (
             <RecorderPanel
               onTranscript={appendToBody}
-              onDismiss={() => setDictating(false)}
+              onDismiss={dictation.close}
             />
           ) : (
             <DictatePill
-              onActivate={() => setDictating(true)}
+              ref={dictation.pillRef}
+              onActivate={dictation.open}
               disabled={pending}
               className="self-end"
             />
