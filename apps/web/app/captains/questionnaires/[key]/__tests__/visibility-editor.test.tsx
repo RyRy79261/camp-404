@@ -108,6 +108,25 @@ describe("VisibilityEditor", () => {
     expect(screen.getByText("Shown when “Diet” is Everything.")).toBeTruthy();
   });
 
+  it("says on the answer box when a number is one the question cannot give", () => {
+    const crew = Question.parse({
+      id: "crew",
+      kind: "number",
+      prompt: "Crew size",
+      min: 0,
+      max: 6,
+    });
+    renderEditor({ fieldId: "crew", op: "eq", value: 9 }, [crew]);
+    const answer = screen.getByLabelText("Answer");
+    expect(answer.getAttribute("aria-invalid")).toBe("true");
+    expect(answer.getAttribute("max")).toBe("6");
+    expect(screen.getByRole("alert").textContent).toBe(
+      "A whole number from 0 to 6.",
+    );
+    // A slip in the number is not a changed question.
+    expect(screen.queryByText(/The question this depends on/)).toBeNull();
+  });
+
   it("warns when the question it depends on is gone", () => {
     renderEditor({ fieldId: "gone", op: "is_answered" });
     expect(

@@ -4,6 +4,7 @@ import { useId } from "react";
 import { TriangleAlert } from "lucide-react";
 import {
   choiceValues,
+  numberFits,
   visibleIfOpsFor,
   type Question,
   type VisibleIf,
@@ -55,6 +56,15 @@ export function VisibilityEditor({
   const field = value ? fields.find((f) => f.id === value.fieldId) : undefined;
   const summary = value ? describeVisibleIf(value, fields) : null;
   const noFields = fields.length === 0;
+  // A number the question cannot give is a typing slip, not a changed
+  // question: say so on the answer box instead of the warning above.
+  const numberOutOfRange =
+    value !== undefined &&
+    field !== undefined &&
+    (field.kind === "number" || field.kind === "slider") &&
+    takesValue(value.op) &&
+    typeof value.value === "number" &&
+    !numberFits(field, value.value);
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
@@ -87,7 +97,7 @@ export function VisibilityEditor({
 
       {value !== undefined && (
         <>
-          {summary?.broken && (
+          {summary?.broken && !numberOutOfRange && (
             <Alert variant="warning">
               <TriangleAlert aria-hidden />
               <span>
@@ -152,6 +162,7 @@ export function VisibilityEditor({
               id={valueId}
               field={field}
               value={value.value}
+              outOfRange={numberOutOfRange}
               onChange={(v) => onChange({ ...value, value: v })}
             />
           )}
@@ -165,15 +176,29 @@ export function VisibilityEditor({
   );
 }
 
+/** The numbers a number or slider question can give, in words. */
+function rangeText(
+  field: Extract<Question, { kind: "number" | "slider" }>,
+): string {
+  if (field.kind === "number") {
+    return `A whole number from ${field.min} to ${field.max}.`;
+  }
+  return field.step === 1
+    ? `A number from ${field.min} to ${field.max}.`
+    : `A number from ${field.min} to ${field.max}, in steps of ${field.step}.`;
+}
+
 function ValueInput({
   id,
   field,
   value,
+  outOfRange,
   onChange,
 }: {
   id: string;
   field: Question;
   value: VisibleIf["value"];
+  outOfRange: boolean;
   onChange: (value: string | number | boolean) => void;
 }) {
   if (field.kind === "boolean") {
@@ -198,6 +223,11 @@ function ValueInput({
         id={id}
         label="Answer"
         type="number"
+        min={field.min}
+        max={field.max}
+        step={field.kind === "slider" ? field.step : 1}
+        helper={rangeText(field)}
+        error={outOfRange ? rangeText(field) : undefined}
         value={typeof value === "number" ? String(value) : ""}
         onChange={(e) => {
           const raw = e.currentTarget.value;

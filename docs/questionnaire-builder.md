@@ -104,7 +104,7 @@ rejects forward references). Operators by referenced kind:
 | single_select, combobox | `eq`, `ne` | option value (string) |
 | boolean | `eq`, `ne` | `true`/`false` |
 | multi_select | `includes`, `not_includes` | option value (string) |
-| number, slider | `eq`, `ne`, `gt`, `gte`, `lt`, `lte` | number |
+| number, slider | `eq`, `ne`, `gt`, `gte`, `lt`, `lte` | number the field can give (see below) |
 | any kind | `is_answered`, `is_empty` | omitted |
 
 `value` must match the referenced field's response type. An **unanswered**
@@ -114,7 +114,10 @@ referenced field makes the condition evaluate **false (hide)**, except
 **Enforced (B5a).** `visibleIfOpsFor` (`@camp404/types`) is this table in code
 (`toggle`/`scale` compare like choices; `date`, text, email, phone and image get
 only `is_answered`/`is_empty`), and `visibleIfProblem` checks the field exists,
-the operator fits and the value is one the field can hold. Publish refuses a
+the operator fits and the value is one the field can hold. For a number or
+slider that means `numberFits`: inside `min`–`max`, a whole number for
+`number`, and on a `step` from `min` for `slider`. A condition on any other
+number can never match, so what it hides would never show. Publish refuses a
 condition that fails it. The builder's editor ("Show only when…" in the block
 editor and in page settings) offers only fitting operators and answers, and the
 canvas marks each conditional block and flags a broken one.

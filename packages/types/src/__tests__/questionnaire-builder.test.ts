@@ -8,13 +8,14 @@ import {
   classifyChange,
   evalVisibleIf,
   isBuilderDefinition,
+  numberFits,
   regenerateBuilderIds,
   validateBuilderQuestionnaire,
   validateBuilderResponses,
   visibleIfOpsFor,
   visibleIfProblem,
 } from "../questionnaire-builder";
-import { Question } from "../questionnaire";
+import { Question, SliderQuestion } from "../questionnaire";
 
 // Parse raw fixtures so Zod fills the defaulted fields (maxLength, required, …).
 function build(raw: unknown): BuilderQuestionnaire {
@@ -306,6 +307,35 @@ describe("conditions fit the field they reference", () => {
     expect(visibleIfProblem({ fieldId: "lead", op: "ne", value: false }, yesNo)).toBeNull();
     expect(visibleIfProblem({ fieldId: "n", op: "gte", value: 3 }, count)).toBeNull();
     expect(visibleIfProblem({ fieldId: "t", op: "is_answered" }, text)).toBeNull();
+  });
+
+  it("accepts only a number the number or slider question can give", () => {
+    // A number row is whole numbers from min to max (0–6 by default).
+    const cond = (value: number) => ({
+      fieldId: "n",
+      op: "eq" as const,
+      value,
+    });
+    expect(visibleIfProblem(cond(0), count)).toBeNull();
+    expect(visibleIfProblem(cond(6), count)).toBeNull();
+    expect(visibleIfProblem(cond(7), count)).toBe("wrong_value");
+    expect(visibleIfProblem(cond(-1), count)).toBe("wrong_value");
+    expect(visibleIfProblem(cond(2.5), count)).toBe("wrong_value");
+
+    const volume = SliderQuestion.parse({
+      id: "v",
+      kind: "slider",
+      prompt: "How loud?",
+      min: 0,
+      max: 1,
+      step: 0.1,
+    });
+    const on = (value: number) => ({ fieldId: "v", op: "gte" as const, value });
+    expect(visibleIfProblem(on(0.3), volume)).toBeNull();
+    expect(visibleIfProblem(on(1), volume)).toBeNull();
+    expect(visibleIfProblem(on(0.35), volume)).toBe("wrong_value");
+    expect(visibleIfProblem(on(1.1), volume)).toBe("wrong_value");
+    expect(numberFits(volume, Number.NaN)).toBe(false);
   });
 
   it("names what is wrong with a condition that does not fit", () => {

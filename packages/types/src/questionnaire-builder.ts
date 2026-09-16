@@ -246,6 +246,23 @@ export function choiceValues(field: Question): string[] | null {
 }
 
 /**
+ * Whether a number is an answer a number or slider question can give: inside
+ * its range, a whole number for a number row, and on a step for a slider. A
+ * condition on any other number can never match, so the page or block it hides
+ * would never show.
+ */
+export function numberFits(
+  field: Extract<Question, { kind: "number" | "slider" }>,
+  n: number,
+): boolean {
+  if (!Number.isFinite(n) || n < field.min || n > field.max) return false;
+  if (field.kind === "number") return Number.isInteger(n);
+  // Steps count from min. The tolerance absorbs float error such as 0.1 * 3.
+  const steps = (n - field.min) / field.step;
+  return Math.abs(steps - Math.round(steps)) < 1e-9;
+}
+
+/**
  * Why a condition does not fit the field it references, or null when it does:
  * the field must exist, the operator must suit its kind, and the value must be
  * one the field can hold. The builder's editor and the publish check share it.
@@ -266,7 +283,7 @@ export function visibleIfProblem(
     return typeof v === "string" && choices.includes(v) ? null : "wrong_value";
   }
   if (field.kind === "number" || field.kind === "slider") {
-    return typeof v === "number" && Number.isFinite(v) ? null : "wrong_value";
+    return typeof v === "number" && numberFits(field, v) ? null : "wrong_value";
   }
   return "wrong_value";
 }
