@@ -20,7 +20,7 @@ import { OptionCardGroup } from "@camp404/ui/components/option-card-group";
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { Slider } from "@camp404/ui/components/slider";
 import { Switch } from "@camp404/ui/components/switch";
-import { Textarea } from "@camp404/ui/components/textarea";
+import { TextareaWithCount } from "@camp404/ui/components/textarea-with-count";
 import { CircleAlert } from "lucide-react";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { RecorderPanel } from "../voice/recorder-panel";
@@ -45,6 +45,11 @@ interface QuestionFieldProps {
    * fixed height.
    */
   fullScreen?: boolean;
+  /**
+   * The author preview: nothing is saved, so an upload has nowhere to go (the
+   * upload route needs a real send). An image field says so instead.
+   */
+  uploadsOff?: boolean;
 }
 
 export function QuestionField({
@@ -53,6 +58,7 @@ export function QuestionField({
   onChange,
   error,
   fullScreen,
+  uploadsOff,
 }: QuestionFieldProps) {
   const fieldId = `q-${question.id}`;
 
@@ -73,6 +79,7 @@ export function QuestionField({
         value={value}
         onChange={onChange}
         fullScreen={fullScreen}
+        uploadsOff={uploadsOff}
       />
       {error && (
         <p
@@ -93,12 +100,14 @@ function FieldInput({
   value,
   onChange,
   fullScreen,
+  uploadsOff,
 }: {
   id: string;
   question: Question;
   value: QuestionnaireResponseValue | undefined;
   onChange: (value: QuestionnaireResponseValue) => void;
   fullScreen?: boolean;
+  uploadsOff?: boolean;
 }) {
   // The choice/group controls (radiogroup, group) aren't bound by the prompt's
   // `<Label htmlFor>`, so their aria-label carries the required state too.
@@ -419,6 +428,16 @@ function FieldInput({
         />
       );
     case "image":
+      if (uploadsOff) {
+        return (
+          <p
+            id={id}
+            className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground"
+          >
+            Uploads are off in the preview. Members can add a photo here.
+          </p>
+        );
+      }
       return (
         <div className="flex flex-1 flex-col items-center justify-center py-4">
           <AvatarUpload
@@ -548,13 +567,16 @@ function LongTextField({
 
   return (
     <div className={fullScreen ? "flex flex-1 flex-col gap-3" : "flex flex-col gap-3"}>
-      <Textarea
+      <TextareaWithCount
         id={id}
         maxLength={question.maxLength}
         value={value}
         onChange={(e) => onChange(e.currentTarget.value)}
         rows={fullScreen ? undefined : 6}
-        className={fullScreen ? "min-h-[40dvh] flex-1 resize-none" : undefined}
+        className={fullScreen ? "flex-1" : undefined}
+        textareaClassName={
+          fullScreen ? "min-h-[40dvh] flex-1 resize-none" : undefined
+        }
       />
       {question.enableDictation &&
         voiceSupported &&

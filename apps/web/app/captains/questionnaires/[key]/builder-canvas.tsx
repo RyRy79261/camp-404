@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
@@ -257,6 +258,9 @@ export function BuilderCanvas({
   // dialog stays mounted through close and its exit animation can run.
   const [editorOpen, setEditorOpen] = useState(false);
   const [settingsPageId, setSettingsPageId] = useState<string | null>(null);
+  // The block being dragged, shown in a floating copy under the pointer (the
+  // home Customize pattern), so the row stays readable while it moves.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [addingToPageId, setAddingToPageId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -321,6 +325,7 @@ export function BuilderCanvas({
   }
 
   function onBlockDragEnd(pageId: string, event: DragEndEvent) {
+    setDraggingId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const page = working.pages.find((p) => p.id === pageId);
@@ -432,6 +437,8 @@ export function BuilderCanvas({
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
+                onDragStart={(e) => setDraggingId(String(e.active.id))}
+                onDragCancel={() => setDraggingId(null)}
                 onDragEnd={(e) => onBlockDragEnd(page.id, e)}
               >
                 <SortableContext
@@ -465,6 +472,27 @@ export function BuilderCanvas({
                     ))}
                   </ul>
                 </SortableContext>
+                <DragOverlay>
+                  {(() => {
+                    const dragged = page.blocks.find(
+                      (b) => blockId(b) === draggingId,
+                    );
+                    if (!dragged) return null;
+                    const { label, icon: DragIcon } = describeBlock(dragged);
+                    return (
+                      <div className="flex items-center gap-2.5 rounded-lg border border-accent bg-card px-3 py-2.5 shadow-lg">
+                        <GripVertical
+                          aria-hidden
+                          className="size-4 text-accent"
+                        />
+                        <DragIcon aria-hidden className="size-4 text-accent" />
+                        <span className="truncate text-sm font-medium">
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </DragOverlay>
               </DndContext>
             ) : (
               <p className="rounded-lg border border-dashed border-border py-4 text-center text-xs text-muted-foreground">
