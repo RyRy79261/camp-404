@@ -10,6 +10,7 @@ vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(() => true),
+  isApproved: vi.fn(() => true),
   setCampUserRank: vi.fn(),
 }));
 vi.mock("@/lib/promotion", () => ({
@@ -25,7 +26,12 @@ import {
 } from "./actions";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, setCampUserRank } from "@/lib/users";
+import {
+  ensureCampUser,
+  hasCampAccess,
+  isApproved,
+  setCampUserRank,
+} from "@/lib/users";
 import {
   decideCaptainPromotion,
   getPromotionRequestById,
@@ -60,6 +66,7 @@ function signInAs(campUserId: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(hasCampAccess).mockReturnValue(true);
+  vi.mocked(isApproved).mockReturnValue(true);
   // Default: the decide write succeeds and returns the flipped row.
   vi.mocked(decideCaptainPromotion).mockImplementation(
     async ({ requestId, status }) => sentRow({ id: requestId, status }) as never,
@@ -96,6 +103,20 @@ describe("acceptCaptainPromotionAction", () => {
       error: "Your account isn't camp-active yet.",
     });
     expect(getPromotionRequestById).not.toHaveBeenCalled();
+    expect(setCampUserRank).not.toHaveBeenCalled();
+  });
+
+  it("refuses a pending applicant, so a rank change never lands on them", async () => {
+    signInAs(TARGET);
+    vi.mocked(isApproved).mockReturnValue(false);
+
+    const res = await acceptCaptainPromotionAction(REQUEST_ID);
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Your account is still awaiting approval.",
+    });
+    expect(decideCaptainPromotion).not.toHaveBeenCalled();
     expect(setCampUserRank).not.toHaveBeenCalled();
   });
 

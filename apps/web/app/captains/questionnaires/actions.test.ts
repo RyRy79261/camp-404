@@ -350,7 +350,7 @@ const LIN = "33333333-3333-4333-8333-333333333333";
 type RosterRow = Awaited<ReturnType<typeof getCampManagementRoster>>[number];
 
 function rosterRow(id: string, teams: string[], isLead = false): RosterRow {
-  return { id, teams, isLead } as unknown as RosterRow;
+  return { id, teams, isLead, approvalStatus: "approved" } as unknown as RosterRow;
 }
 
 const ROSTER: RosterRow[] = [
@@ -366,6 +366,7 @@ const AUDIENCE_DATA: AudienceData = {
     id: m.id,
     isSystem: false,
     sanitised: false,
+    approvalStatus: m.approvalStatus,
   })),
   memberships: ROSTER.flatMap((m) =>
     m.teams.map((team) => ({ userId: m.id, team, isLead: m.isLead })),

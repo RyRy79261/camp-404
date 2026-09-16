@@ -254,6 +254,7 @@ function audienceData(): AudienceData {
       id: m.id,
       isSystem: false,
       sanitised: false,
+      approvalStatus: m.approvalStatus,
     })),
     memberships: roster.flatMap((m) =>
       m.teams.map((team) => ({ userId: m.id, team, isLead: m.isLead })),

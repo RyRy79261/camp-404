@@ -442,6 +442,7 @@ export async function previewAudienceCount(
           id: m.id,
           isSystem: false,
           sanitised: false,
+          approvalStatus: m.approvalStatus,
         })),
         memberships: roster.flatMap((m) =>
           m.teams.map((t) => ({ userId: m.id, team: t, isLead: m.isLead })),

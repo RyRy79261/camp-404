@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPendingAcknowledgements } from "@/lib/notifications";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +21,12 @@ export async function GET() {
   // no camp access yet; querying with that empty id 500s on a real DB. They
   // have no deliveries anyway, so return the same empty list as anon callers.
   if (!hasCampAccess(campUser, user.primaryEmail)) {
+    return NextResponse.json({ pending: [] });
+  }
+  // The full-screen takeover is for camp members. A pending or rejected
+  // applicant still reads their inbox, but nothing takes over their screen
+  // (owner's call, 2026-09-16: camp-wide messages are approved members only).
+  if (!isApproved(campUser, user.primaryEmail)) {
     return NextResponse.json({ pending: [] });
   }
   const pending = await getPendingAcknowledgements(campUser.id);

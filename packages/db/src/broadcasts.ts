@@ -67,6 +67,7 @@ export async function resolveAudience(
         id: schema.users.id,
         isSystem: schema.users.isSystem,
         sanitised: schema.users.sanitised,
+        approvalStatus: schema.users.approvalStatus,
       })
       .from(schema.users),
     db

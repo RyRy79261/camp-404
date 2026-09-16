@@ -13,6 +13,7 @@ vi.mock("@/lib/auth", () => ({ getAuthenticatedUserOrRedirect: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(),
+  isApproved: vi.fn(),
 }));
 vi.mock("@/lib/forms", () => ({
   getReplayableForm: vi.fn(),
@@ -27,7 +28,7 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
 import { saveFormReplay } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getReplayableForm, recordFormEdit } from "@/lib/forms";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 
@@ -73,7 +74,19 @@ describe("saveFormReplay — archive invariant", () => {
     } as never);
     vi.mocked(ensureCampUser).mockResolvedValue({ id: "camp-1" } as never);
     vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(isApproved).mockReturnValue(true);
     vi.mocked(getQuestionnaireForResponses).mockResolvedValue(fullCatalogue);
+  });
+
+  it("refuses a pending applicant before reading or saving anything", async () => {
+    vi.mocked(isApproved).mockReturnValue(false);
+    const result = await saveFormReplay("burner_profile", { ...required }, true);
+    expect(result).toEqual({
+      ok: false,
+      errors: { _root: "Your account is still awaiting approval." },
+    });
+    expect(getReplayableForm).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
   });
 
   it("preserves a since-archived team pick on re-save (validates against the full set)", async () => {

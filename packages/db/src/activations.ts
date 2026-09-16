@@ -208,6 +208,7 @@ export async function openActivation(
         id: schema.users.id,
         isSystem: schema.users.isSystem,
         sanitised: schema.users.sanitised,
+        approvalStatus: schema.users.approvalStatus,
       })
       .from(schema.users),
     // Team membership is year-scoped, so "who is on the kitchen team" has to be
@@ -311,6 +312,7 @@ export async function reconcileOpenActivations(
       id: schema.users.id,
       isSystem: schema.users.isSystem,
       sanitised: schema.users.sanitised,
+      approvalStatus: schema.users.approvalStatus,
     })
     .from(schema.users)
     .where(eq(schema.users.id, userId))

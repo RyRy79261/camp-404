@@ -3,11 +3,36 @@ import { computeAudience, type AudienceData } from "@camp404/db/audience";
 
 const data: AudienceData = {
   members: [
-    { id: "u1", isSystem: false, sanitised: false },
-    { id: "u2", isSystem: false, sanitised: false },
-    { id: "u3", isSystem: false, sanitised: false },
-    { id: "sys", isSystem: true, sanitised: false },
-    { id: "gone", isSystem: false, sanitised: true },
+    {
+      id: "u1",
+      isSystem: false,
+      sanitised: false,
+      approvalStatus: "approved",
+    },
+    {
+      id: "u2",
+      isSystem: false,
+      sanitised: false,
+      approvalStatus: "approved",
+    },
+    {
+      id: "u3",
+      isSystem: false,
+      sanitised: false,
+      approvalStatus: "approved",
+    },
+    {
+      id: "sys",
+      isSystem: true,
+      sanitised: false,
+      approvalStatus: "approved",
+    },
+    {
+      id: "gone",
+      isSystem: false,
+      sanitised: true,
+      approvalStatus: "approved",
+    },
   ],
   memberships: [
     { userId: "u1", team: "kitchen", isLead: true },

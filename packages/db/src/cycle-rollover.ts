@@ -331,6 +331,7 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
         id: schema.users.id,
         isSystem: schema.users.isSystem,
         sanitised: schema.users.sanitised,
+        approvalStatus: schema.users.approvalStatus,
       })
       .from(schema.users),
     openCycles.length > 0
@@ -824,6 +825,7 @@ export async function advanceCycle(
           id: schema.users.id,
           isSystem: schema.users.isSystem,
           sanitised: schema.users.sanitised,
+          approvalStatus: schema.users.approvalStatus,
         })
         .from(schema.users);
       const audience = computeAudience(

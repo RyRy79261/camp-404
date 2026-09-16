@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { canDecidePromotion, type PromotionParticipants } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, setCampUserRank } from "@/lib/users";
+import {
+  ensureCampUser,
+  hasCampAccess,
+  isApproved,
+  setCampUserRank,
+} from "@/lib/users";
 import {
   decideCaptainPromotion,
   getPromotionRequestById,
@@ -45,6 +50,11 @@ async function loadActorAndRequest(requestId: string): Promise<LoadedActor> {
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     return { ok: false, error: "Your account isn't camp-active yet." };
+  }
+  // Owner's call (2026-09-16): a pending applicant can read their inbox, but a
+  // rank change must never land on an account a captain has not approved.
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    return { ok: false, error: "Your account is still awaiting approval." };
   }
 
   const request = await getPromotionRequestById(requestId);
