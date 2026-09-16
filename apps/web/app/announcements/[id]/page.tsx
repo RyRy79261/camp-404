@@ -48,7 +48,7 @@ export default async function AnnouncementPage({
   return (
     <main className="mx-auto w-full max-w-lg">
       <DetailHeader
-        as="h2"
+        as="p"
         title="Notifications"
         className="px-3 py-3.5"
         leading={

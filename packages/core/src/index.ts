@@ -14,8 +14,9 @@
 //     (./access)
 //   - approval review: availableReviewActions, reviewRefusal,
 //     isReviewTransition — which vetting decisions exist (./approval-review)
-//   - family tree: buildTree, computeMatchIds, subtreeHasMatch,
-//     descendantCountLabel (./family-tree) — all cycle-guarded (OD9)
+//   - family tree: buildTree, computeLiteralMatchIds, computeMatchIds,
+//     subtreeHasMatch, descendantCountLabel (./family-tree) — all
+//     cycle-guarded (OD9)
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
 //     (./invites)
 //   - text utils: initialsFrom, slugify, humanizeKey (./text-utils)

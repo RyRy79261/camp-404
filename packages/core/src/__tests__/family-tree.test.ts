@@ -3,6 +3,7 @@ import type { ReferralUser, TreeNode } from "@camp404/types";
 
 import {
   buildTree,
+  computeLiteralMatchIds,
   computeMatchIds,
   descendantCountLabel,
   subtreeHasMatch,
@@ -67,6 +68,11 @@ describe("computeMatchIds", () => {
 
   it("matches by name/code and promotes ancestors", () => {
     expect(computeMatchIds(roster, "dust")).toEqual(new Set(["c", "b", "a"]));
+  });
+
+  it("keeps the literal matches apart from the path to them", () => {
+    expect(computeLiteralMatchIds(roster, "dust")).toEqual(new Set(["c"]));
+    expect(computeLiteralMatchIds(roster, "")).toBeNull();
   });
 
   it("does not hang on a cyclic ancestor chain (OD9)", () => {

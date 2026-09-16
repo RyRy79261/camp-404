@@ -67,11 +67,10 @@ export function buildTree(roster: readonly ReferralUser[]): TreeNode[] {
 }
 
 /**
- * Ids matching `query` (over display name + invite code), with every ancestor
- * of a match promoted so the path to it stays visible. Returns null for an
- * empty query. Ancestor promotion is cycle-guarded.
+ * Ids whose display name or invite code contains `query`, and nothing else:
+ * the people a search found, for highlighting. Returns null for an empty query.
  */
-export function computeMatchIds(
+export function computeLiteralMatchIds(
   roster: readonly ReferralUser[],
   query: string,
 ): Set<string> | null {
@@ -83,6 +82,23 @@ export function computeMatchIds(
     const hay = `${u.displayName ?? ""} ${u.inviteCode ?? ""}`.toLowerCase();
     if (hay.includes(q)) matches.add(u.id);
   }
+  return matches;
+}
+
+/**
+ * Ids matching `query` (over display name + invite code), with every ancestor
+ * of a match promoted so the path to it stays visible. Returns null for an
+ * empty query. Ancestor promotion is cycle-guarded. For which rows to
+ * highlight, use computeLiteralMatchIds: an ancestor is on the path, not a
+ * match.
+ */
+export function computeMatchIds(
+  roster: readonly ReferralUser[],
+  query: string,
+): Set<string> | null {
+  const literal = computeLiteralMatchIds(roster, query);
+  if (!literal) return null;
+  const matches = new Set(literal);
 
   const parentById = new Map<string, string | null>(
     roster.map((u) => [u.id, u.inviterId]),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   CircleCheck,
   Copy,
@@ -25,7 +25,7 @@ import {
 } from "@/lib/invite-words";
 import { createInviteAction, type CreateInviteResult } from "./actions";
 import { AvailabilityHint } from "./availability-hint";
-import { Stepper } from "./stepper";
+import { NumberStepper } from "./number-stepper";
 import type { Availability } from "./types";
 
 export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
@@ -92,6 +92,13 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
     };
   }, [code]);
 
+  // Someone else saved this code after the live check said it was free. Show
+  // it as taken until the code changes, so the button cannot resend it.
+  const shownAvailability: Availability =
+    result && !result.ok && result.taken === code
+      ? { state: "taken" }
+      : availability;
+
   if (result?.ok) {
     return (
       <SuccessPanel
@@ -127,12 +134,15 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
             aria-label="Generate a new silly code"
             onClick={() => setCode(generateInviteCode())}
           >
-            <Shuffle />
+            <Shuffle aria-hidden />
           </Button>
         </div>
-        <AvailabilityHint availability={availability} code={code} />
+        <AvailabilityHint availability={shownAvailability} code={code} />
       </div>
 
+      {/* Board S14 draws a "Why you're inviting them" textarea. The owner
+          chose a one-line name instead (ba8a003): the code is what matters,
+          and the name only helps a captain place the person. */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="note">Name (optional)</Label>
         <Input id="note" name="note" autoComplete="off" placeholder="Sara" />
@@ -159,7 +169,7 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
 
       {result && !result.ok && (
         <Alert variant="error">
-          <TriangleAlert />
+          <TriangleAlert aria-hidden />
           <span>{result.error}</span>
         </Alert>
       )}
@@ -170,15 +180,15 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
         // matrix) and the required code input guards the empty case natively.
         disabled={
           isPending ||
-          availability.state === "checking" ||
-          availability.state === "taken" ||
-          availability.state === "invalid"
+          shownAvailability.state === "checking" ||
+          shownAvailability.state === "taken" ||
+          shownAvailability.state === "invalid"
         }
         className="w-full"
       >
         {isPending ? (
           <>
-            <Loader2 className="animate-spin" /> Creating…
+            <Loader2 className="animate-spin" aria-hidden /> Creating…
           </>
         ) : (
           "Create invite"
@@ -229,7 +239,7 @@ function CaptainOptions({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="maxUses">How many people can use this code</Label>
-        <Stepper
+        <NumberStepper
           id="maxUses"
           name="maxUses"
           value={maxUses}
@@ -260,6 +270,12 @@ function SuccessPanel({
 }) {
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  // The form the member was in is gone. Move focus to the result, so a
+  // keyboard or screen-reader user lands on "Invite ready".
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
 
   // Flip "Copied" back after a beat; clear the timer on unmount so a fast
   // navigate-away can't setState on an unmounted component.
@@ -278,10 +294,16 @@ function SuccessPanel({
     : "They'll be pre-approved — no captain sign-off needed.";
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">
       <div className="flex items-center gap-2.5">
         <CircleCheck className="h-5 w-5 text-success" aria-hidden />
-        <h2 className="text-lg font-bold text-foreground">Invite ready</h2>
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-lg font-bold text-foreground outline-none"
+        >
+          Invite ready
+        </h2>
       </div>
       <p className="text-sm text-muted-foreground">
         {recipientName
@@ -325,7 +347,7 @@ function SuccessPanel({
             }
           }}
         >
-          <Copy /> {copied ? "Copied" : "Copy"}
+          <Copy aria-hidden /> {copied ? "Copied" : "Copy"}
         </Button>
         {copyFailed && (
           <p className="text-center text-xs text-muted-foreground" role="status">

@@ -54,7 +54,7 @@ export default async function ToolsPage() {
       {/* Board S13: the bar reads "Tools", as does the hero below. The bar stays
           an h2, so the page keeps one h1. */}
       <DetailHeader
-        as="h2"
+        as="p"
         title="Tools"
         className="px-3 py-3.5"
         leading={

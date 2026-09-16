@@ -51,22 +51,27 @@ export default async function NotificationsPage() {
   // exactly those rows — a delivery that arrives after the snapshot stays
   // unread, and so do older ones until they are scrolled into view.
   const { items, nextCursor } = await listInbox(campUser.id);
-  await markRead(
-    campUser.id,
-    items.map((i) => i.id),
-  );
+  try {
+    await markRead(
+      campUser.id,
+      items.map((i) => i.id),
+    );
+  } catch (err) {
+    // The list is still worth showing. The badge stays until the next visit.
+    console.error("notifications markRead failed", err);
+  }
 
   return (
     <main className="mx-auto w-full max-w-lg">
       <DetailHeader
-        as="h2"
+        as="p"
         title="Home"
         className="px-3 py-3.5"
         leading={<BackButton linkAs={Link} href="/" label="Back to home" />}
       />
 
       <div className="flex flex-col gap-1.5 px-4 pb-2 pt-3">
-        <h1 className="text-2xl font-bold">Notifications</h1>
+        <h1 className="text-title-compact font-bold">Notifications</h1>
         <p className="text-label text-muted-foreground">
           Everything that&apos;s been sent your way.
         </p>
@@ -121,11 +126,11 @@ export default async function NotificationsPage() {
       {items.length === 0 ? (
         pending.length === 0 &&
         promotions.length === 0 && (
-          <div className="px-4 py-6">
+          <div className="px-4 py-2">
+            {/* Board S12's empty variant: the circle and one line. */}
             <EmptyState
-              icon={<BellOff className="h-5 w-5" aria-hidden />}
+              icon={<BellOff aria-hidden />}
               title="No notifications yet."
-              description="Everything sent your way will appear here."
             />
           </div>
         )
