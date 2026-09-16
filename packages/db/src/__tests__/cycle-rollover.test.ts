@@ -529,6 +529,42 @@ describe("advanceCycle", () => {
     expect(await db.select().from(schema.auditLog)).toHaveLength(1);
   });
 
+  it("does not open a send into the year the camp just left", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    await makeDefinition(db, {
+      key: "late_send",
+      title: "Late send",
+      carryOver: false,
+    });
+    await foundedAt(db, 2026);
+
+    // sendActivation stamps the year on a draft, then opens it in a second
+    // transaction, so a rollover can commit in between. The rollover's plan
+    // cannot see a draft, so opening it would gate the new year's members
+    // under last year's number. PGlite serves one connection, so the race is
+    // asserted in its serialised form: draft in 2026, advance, then open.
+    const draft = await makeActivation(db, {
+      questionnaireKey: "late_send",
+      version: "late_send-v1",
+      title: "Late send",
+      carryOver: false,
+      cycle: 2026,
+    });
+    expect((await advanceCycle({ year: 2027, actorUserId: null })).ok).toBe(
+      true,
+    );
+
+    expect(await openActivation(draft.id)).toEqual({
+      ok: false,
+      error: expect.stringMatching(/new year/),
+    });
+    // Nobody was gated, and the draft never opened.
+    expect(await requiredActionsFor(db, member.id)).toEqual([]);
+    const [row] = await activationsFor(db, "late_send");
+    expect(row!.status).toBe("draft");
+  });
+
   it("refuses an implausible year without opening a transaction", async () => {
     const db = h.db();
     await seedCamp(db);

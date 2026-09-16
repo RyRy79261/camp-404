@@ -2,6 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { createHttpDb, withTransaction, type PooledDatabase } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
+import { currentCycle, resolveCycles, UNSET_CYCLE } from "./camp-config";
 import { meetsRequiredVersion } from "./versions";
 import type { QuestionnaireResponses } from "@camp404/types";
 
@@ -37,6 +38,9 @@ export interface PendingRequiredAction {
 export type OpenActivationResult =
   | { ok: true; created: number }
   | { ok: false; error: string };
+
+const YEAR_MOVED_ERROR =
+  "The camp moved to a new year while this was being sent. Send it again.";
 
 /**
  * The transaction handle a pooled `db.transaction()` callback receives. Named
@@ -194,8 +198,8 @@ export async function openActivation(
       .from(schema.users),
     // Team membership is year-scoped, so "who is on the kitchen team" has to be
     // asked of a particular year — and the year that governs a send is the one
-    // FROZEN on the activation, never the live config. A rollover landing
-    // between draft and open therefore cannot move this send's audience.
+    // FROZEN on the activation, never the live config. If a rollover lands
+    // between draft and open, the transaction below refuses to open the send.
     httpDb
       .select({
         userId: schema.teamMemberships.userId,
@@ -223,10 +227,37 @@ export async function openActivation(
     null,
   );
 
-  return await withTransaction(async (tx) => ({
-    ok: true as const,
-    created: await openActivationTx(tx, act, recipientIds),
-  }));
+  return await withTransaction(async (tx) => {
+    // Serialise with the year. advanceCycle and setFoundingYear hold FOR UPDATE
+    // on the camp_settings row while they move the camp to another year, so
+    // this FOR SHARE waits for them to commit. Once it is held, the year cannot
+    // move until this send has opened, and a rollover that starts now waits,
+    // then re-reads its plan and finds this send open.
+    //
+    // The year stamped on the draft was read before any of this, so compare it
+    // under the lock. A draft from the year the camp just left must not open:
+    // the rollover's plan never saw it, and its gates would land under last
+    // year's number. Re-read the row too, because setFoundingYear rewrites the
+    // stamp on rows made before the camp had a year.
+    const [settings] = await tx
+      .select({ config: schema.campSettings.config })
+      .from(schema.campSettings)
+      .where(eq(schema.campSettings.id, true))
+      .for("share");
+    const [stamped] = await tx
+      .select({ cycle: schema.questionnaireActivations.cycle })
+      .from(schema.questionnaireActivations)
+      .where(eq(schema.questionnaireActivations.id, act.id));
+    const year =
+      currentCycle(resolveCycles(settings?.config))?.year ?? UNSET_CYCLE;
+    if (stamped?.cycle !== act.cycle || act.cycle !== year) {
+      return { ok: false as const, error: YEAR_MOVED_ERROR };
+    }
+    return {
+      ok: true as const,
+      created: await openActivationTx(tx, act, recipientIds),
+    };
+  });
 }
 
 /**

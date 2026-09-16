@@ -102,9 +102,30 @@ describe("openActivation — fan-out", () => {
       team: "kitchen",
       cycle: 2027,
     });
+    // The camp is in 2027 too: openActivation refuses a draft stamped with a
+    // year the camp has left (see cycle-rollover.test.ts).
+    const [settings] = await db
+      .insert(schema.campSettings)
+      .values({ id: true })
+      .returning({ config: schema.campSettings.config });
+    await db
+      .update(schema.campSettings)
+      .set({
+        config: {
+          ...settings!.config,
+          cycles: [
+            {
+              year: 2027,
+              startedAt: "2027-01-01T00:00:00.000Z",
+              endedAt: null,
+            },
+          ],
+        },
+      })
+      .where(eq(schema.campSettings.id, true));
 
-    // The activation's own cycle decides, never the live config — so a
-    // rollover landing between draft and open cannot move this audience.
+    // The activation's own year decides who is on the team, so last year's
+    // kitchen crew is not asked.
     expect(await openActivation(act.id)).toEqual({ ok: true, created: 1 });
     expect(await requiredActionsFor(db, thisYear.id)).toHaveLength(1);
     expect(await requiredActionsFor(db, lastYear.id)).toHaveLength(0);
