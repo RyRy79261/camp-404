@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction, type PooledDatabase } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
@@ -497,6 +497,62 @@ export async function getPendingRequiredActions(
       ),
     )
     .orderBy(asc(schema.requiredActions.createdAt));
+}
+
+/** One questionnaire a member still has to answer, from a send that is open. */
+export interface PendingQuestionnaire {
+  activationId: string;
+  title: string;
+  /** Blocking holds the whole app; optional ones only wait in the inbox. */
+  blocking: boolean;
+  dueAt: Date | null;
+  createdAt: Date;
+}
+
+/**
+ * Every questionnaire this member still has to answer, blocking or not.
+ * getPendingRequiredActions above is the gate spine and only sees BLOCKING
+ * rows, so an optional send reached nobody: nothing listed it anywhere. This
+ * is the reader for the "Needs your answer" section of the inbox, which stays
+ * until the member finishes (owner's call, 2026-09-16: "shout until it's
+ * done").
+ *
+ * Only gates on an OPEN send count. A closed send expires its pending gates,
+ * but a pending gate whose activation was closed some other way must not
+ * point the member at a form that refuses them. Blocking first, then the
+ * nearest deadline, then the oldest.
+ */
+export async function listPendingQuestionnaires(
+  userId: string,
+): Promise<PendingQuestionnaire[]> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      activationId: schema.questionnaireActivations.id,
+      title: schema.requiredActions.title,
+      blocking: schema.requiredActions.blocking,
+      dueAt: schema.requiredActions.dueAt,
+      createdAt: schema.requiredActions.createdAt,
+    })
+    .from(schema.requiredActions)
+    .innerJoin(
+      schema.questionnaireActivations,
+      eq(schema.requiredActions.activationId, schema.questionnaireActivations.id),
+    )
+    .where(
+      and(
+        eq(schema.requiredActions.userId, userId),
+        eq(schema.requiredActions.status, "pending"),
+        eq(schema.requiredActions.type, "questionnaire"),
+        eq(schema.questionnaireActivations.status, "open"),
+      ),
+    )
+    .orderBy(
+      desc(schema.requiredActions.blocking),
+      sql`${schema.requiredActions.dueAt} asc nulls last`,
+      asc(schema.requiredActions.createdAt),
+    );
+  return rows;
 }
 
 export interface ActivationRow {

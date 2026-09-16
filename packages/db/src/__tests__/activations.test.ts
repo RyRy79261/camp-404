@@ -13,6 +13,7 @@ import {
   getActivationById,
   getPendingRequiredActions,
   getRequiredAction,
+  listPendingQuestionnaires,
   openActivation,
   reconcileOpenActivations,
   satisfyRequiredAction,
@@ -447,6 +448,78 @@ describe("reconcileOpenActivations — members who arrive after a send", () => {
     const gone = await makeUser(db, { sanitised: true });
     expect(await reconcileOpenActivations(gone.id)).toBe(0);
     expect(await requiredActionsFor(db, gone.id)).toEqual([]);
+  });
+});
+
+describe("listPendingQuestionnaires — what the inbox shouts about", () => {
+  const h = useTestDb();
+
+  it("lists optional and blocking sends, blocking first, then by deadline", async () => {
+    const db = h.db();
+    const u = await makeUser(db);
+    const optionalLate = await makeActivation(db, {
+      questionnaireKey: "skills",
+      title: "Skills",
+      blocking: false,
+      dueAt: new Date("2026-10-20T10:00:00Z"),
+    });
+    const optionalSoon = await makeActivation(db, {
+      questionnaireKey: "photos",
+      title: "Photo consent",
+      blocking: false,
+      dueAt: new Date("2026-10-01T10:00:00Z"),
+    });
+    const required = await makeActivation(db, {
+      questionnaireKey: "safety",
+      title: "Safety",
+      blocking: true,
+    });
+    for (const act of [optionalLate, optionalSoon, required]) {
+      await openActivation(act.id);
+    }
+
+    const pending = await listPendingQuestionnaires(u.id);
+    expect(pending.map((p) => p.title)).toEqual([
+      "Safety",
+      "Photo consent",
+      "Skills",
+    ]);
+    expect(pending[1]).toMatchObject({
+      activationId: optionalSoon.id,
+      blocking: false,
+    });
+  });
+
+  it("drops a questionnaire once it is answered, or once its send closes", async () => {
+    const db = h.db();
+    const u = await makeUser(db);
+    const answered = await makeActivation(db, {
+      questionnaireKey: "skills",
+      blocking: false,
+    });
+    const closed = await makeActivation(db, {
+      questionnaireKey: "photos",
+      blocking: false,
+    });
+    await openActivation(answered.id);
+    await openActivation(closed.id);
+    expect(await listPendingQuestionnaires(u.id)).toHaveLength(2);
+
+    await satisfyRequiredAction(u.id, "skills", answered.version);
+    await closeActivation(closed.id);
+    expect(await listPendingQuestionnaires(u.id)).toEqual([]);
+  });
+
+  it("ignores the burner profile gate, which has no send", async () => {
+    const db = h.db();
+    const u = await makeUser(db);
+    await db.insert(schema.requiredActions).values({
+      userId: u.id,
+      type: "questionnaire",
+      actionKey: "burner_profile",
+      title: "Complete your burner profile",
+    });
+    expect(await listPendingQuestionnaires(u.id)).toEqual([]);
   });
 });
 

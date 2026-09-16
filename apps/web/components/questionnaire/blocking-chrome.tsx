@@ -1,4 +1,4 @@
-import { Lock, TriangleAlert } from "lucide-react";
+import { Circle, Lock, TriangleAlert } from "lucide-react";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -10,14 +10,28 @@ import { ProgressBar } from "@camp404/ui/components/progress-bar";
 // action, so — unlike the welcoming onboarding chrome — it reads as a hold: a
 // Required chip, a question-paced progress bar, and a banner that doesn't dismiss.
 
-/** A small "Required" pill with a lock — marks a blocking required action. */
-export function RequiredChip() {
-  return (
+/**
+ * Whether a questionnaire holds the app ("Required", with a lock) or only waits
+ * in the inbox ("Optional"). One badge for both, so a member, and the captain
+ * sending it, can always tell which kind a questionnaire is.
+ */
+export function BlockingBadge({ blocking }: { blocking: boolean }) {
+  return blocking ? (
     <Badge variant="destructive">
       <Lock aria-hidden className="size-3" />
       Required
     </Badge>
+  ) : (
+    <Badge variant="outline">
+      <Circle aria-hidden className="size-3" />
+      Optional
+    </Badge>
   );
+}
+
+/** A small "Required" pill with a lock — marks a blocking required action. */
+export function RequiredChip() {
+  return <BlockingBadge blocking />;
 }
 
 /**

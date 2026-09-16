@@ -22,7 +22,9 @@ import {
   ensureRequiredAction,
   satisfyRequiredAction as dbSatisfyRequiredAction,
   getPendingRequiredActions as dbGetPendingRequiredActions,
+  listPendingQuestionnaires as dbListPendingQuestionnaires,
   reconcileOpenActivations,
+  type PendingQuestionnaire,
   type PendingRequiredAction,
 } from "@camp404/db/activations";
 import { claimInviteCode, isGodEmail } from "./access-control";
@@ -242,6 +244,18 @@ export async function satisfyBurnerProfileAction(
 export async function syncOpenGates(userId: string): Promise<void> {
   if (isE2ETestMode()) return;
   await reconcileOpenActivations(userId);
+}
+
+/**
+ * Every questionnaire the member still has to answer from an open send,
+ * blocking or optional (empty under E2E test mode, like the gate spine). The
+ * inbox's "Needs your answer" section and the bell count read this.
+ */
+export async function getPendingQuestionnaires(
+  userId: string,
+): Promise<PendingQuestionnaire[]> {
+  if (isE2ETestMode()) return [];
+  return dbListPendingQuestionnaires(userId);
 }
 
 /** The user's pending blocking required actions (empty under E2E test mode). */
