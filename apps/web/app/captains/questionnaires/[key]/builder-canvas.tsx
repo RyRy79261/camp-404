@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   ChevronDown,
@@ -38,10 +38,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type {
-  Block,
-  BuilderQuestionnaire,
-  Question,
+import {
+  builderQuestionnaireIssues,
+  type Block,
+  type BuilderQuestionnaire,
+  type DefinitionIssue,
+  type Question,
 } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -129,15 +131,25 @@ function describeBlock(block: Block): {
   }
 }
 
+/** Condition problems are shown by the condition's own badge and line. */
+const CONDITION_CODES: ReadonlySet<DefinitionIssue["code"]> = new Set([
+  "dangling_visible_if",
+  "visible_if_wrong_operator",
+  "visible_if_wrong_value",
+]);
+
 function BlockRow({
   block,
   condition,
+  problems,
   onEdit,
   onDelete,
 }: {
   block: Block;
   /** The block's show-when rule as a sentence, when it has one. */
   condition: { text: string; broken: boolean } | null;
+  /** What publish would refuse about this block, as sentences. */
+  problems: string[];
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -172,6 +184,16 @@ function BlockRow({
           {required && (
             <Badge variant="default" className="px-1.5 py-0 text-[10px]">
               Required
+            </Badge>
+          )}
+          {problems.length > 0 && (
+            <Badge
+              variant="warning"
+              className="px-1.5 py-0 text-[10px]"
+              title={problems.join(" ")}
+            >
+              Fix before publishing
+              <span className="sr-only">: {problems.join(" ")}</span>
             </Badge>
           )}
           {condition && (
@@ -258,6 +280,18 @@ export function BuilderCanvas({
   // dialog stays mounted through close and its exit animation can run.
   const [editorOpen, setEditorOpen] = useState(false);
   const [settingsPageId, setSettingsPageId] = useState<string | null>(null);
+  // What publish would refuse, shown on the page or block that has it, so a
+  // captain sees a problem where it is instead of only in the publish dialog.
+  const issues = useMemo(() => builderQuestionnaireIssues(working), [working]);
+  const problemsAt = (pageId: string, blockId?: string) =>
+    issues
+      .filter(
+        (i) =>
+          i.pageId === pageId &&
+          i.blockId === blockId &&
+          !CONDITION_CODES.has(i.code),
+      )
+      .map((i) => i.message);
   // The block being dragged, shown in a floating copy under the pointer (the
   // home Customize pattern), so the row stays readable while it moves.
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -381,6 +415,11 @@ export function BuilderCanvas({
                 <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                   Page {pageIndex + 1} · {page.type === "content" ? "Content" : "Questions"}
                 </span>
+                {problemsAt(page.id).map((message) => (
+                  <span key={message} className="text-xs text-warning">
+                    {message}
+                  </span>
+                ))}
                 {page.visibleIf && (
                   <PageCondition
                     {...describeVisibleIf(
@@ -450,6 +489,7 @@ export function BuilderCanvas({
                       <BlockRow
                         key={blockId(block)}
                         block={block}
+                        problems={problemsAt(page.id, blockId(block))}
                         condition={
                           block.visibleIf
                             ? describeVisibleIf(

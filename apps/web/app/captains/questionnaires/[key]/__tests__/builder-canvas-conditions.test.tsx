@@ -106,4 +106,53 @@ describe("BuilderCanvas conditions", () => {
     expect(screen.getByText("Fix condition")).toBeTruthy();
     expect(screen.getByText("Shown when “Driving?” is No.")).toBeTruthy();
   });
+
+  it("shows what publish would refuse on the block and the page that have it", () => {
+    render(
+      <BuilderCanvas
+        questionnaireKey="diet"
+        definition={
+          {
+            version: "1",
+            title: "Diet",
+            pages: [
+              {
+                id: "p1",
+                type: "question",
+                title: "Food",
+                blocks: [
+                  {
+                    kind: "question",
+                    question: {
+                      id: "diet",
+                      kind: "single_select",
+                      prompt: "Diet",
+                      required: false,
+                      options: [
+                        { value: "veg", label: "Vegetarian" },
+                        { value: "veg", label: "Vegan" },
+                      ],
+                    },
+                  },
+                ],
+              },
+              { id: "p2", type: "question", title: "Later", blocks: [] },
+            ],
+          } as unknown as BuilderQuestionnaire
+        }
+        canPublish={false}
+        status="draft"
+        publishedVersion={null}
+        openActivationId={null}
+      />,
+    );
+
+    expect(screen.getByText("Fix before publishing")).toBeTruthy();
+    expect(
+      screen.getByText(
+        ': "Diet" has two options with the value "veg". Each option needs its own value.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("Later has no blocks.")).toBeTruthy();
+  });
 });

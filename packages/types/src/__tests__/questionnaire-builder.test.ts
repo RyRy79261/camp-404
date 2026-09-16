@@ -10,6 +10,7 @@ import {
   isBuilderDefinition,
   numberFits,
   regenerateBuilderIds,
+  builderQuestionnaireIssues,
   validateBuilderQuestionnaire,
   validateBuilderResponses,
   visibleIfOpsFor,
@@ -375,6 +376,54 @@ describe("conditions fit the field they reference", () => {
     );
     expect(errors).toContain(
       'A block on About you shows-when uses a condition that doesn\'t fit "Name".',
+    );
+  });
+});
+
+describe("builderQuestionnaireIssues", () => {
+  it("places each problem on its page and block, with a code", () => {
+    const q = build({
+      version: "1",
+      title: "",
+      pages: [
+        {
+          id: "p1",
+          type: "question",
+          title: "About you",
+          blocks: [
+            {
+              kind: "question",
+              question: {
+                id: "diet",
+                kind: "single_select",
+                prompt: "Diet",
+                options: [
+                  { value: "veg", label: "Vegetarian" },
+                  { value: "veg", label: "Vegan" },
+                ],
+              },
+            },
+            { id: "pic", kind: "image_block", imageUrl: "", altText: "", sizeFit: "fit" },
+          ],
+        },
+        { id: "p2", type: "question", title: "Empty", blocks: [] },
+      ],
+    });
+    expect(
+      builderQuestionnaireIssues(q).map((i) => [i.code, i.pageId, i.blockId]),
+    ).toEqual([
+      ["missing_title", undefined, undefined],
+      ["duplicate_option_value", "p1", "diet"],
+      ["image_alt_missing", "p1", "pic"],
+      ["image_missing", "p1", "pic"],
+      ["empty_page", "p2", undefined],
+    ]);
+  });
+
+  it("gives the same sentences as validateBuilderQuestionnaire", () => {
+    const q = build({ version: "1", title: "", pages: [QUESTION_PAGE] });
+    expect(builderQuestionnaireIssues(q).map((i) => i.message)).toEqual(
+      validateBuilderQuestionnaire(q),
     );
   });
 });
