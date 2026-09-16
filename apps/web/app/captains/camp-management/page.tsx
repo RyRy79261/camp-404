@@ -1,4 +1,5 @@
 import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { ExportCsvButton } from "@/components/export-csv-button";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getCampManagementRoster } from "@/lib/roster";
 import { rosterForViewer } from "@/lib/camp-roster";
@@ -70,6 +71,12 @@ export default async function CampManagementPage() {
             ? "The full roster. Open a member to read their profile, approve or reject pending sign-ups, and — captain to captain — assign captain rank."
             : "Browse who's at camp — names, teams, and what folks are bringing. Approval status and contact details stay captain-only."}
         </p>
+
+        {/* One export for every rank; the file holds only what this viewer
+            may read (lib/member-export.ts). */}
+        <div className="self-start">
+          <ExportCsvButton href="/captains/camp-management/export" />
+        </div>
       </header>
 
       {roster.isCaptain ? (

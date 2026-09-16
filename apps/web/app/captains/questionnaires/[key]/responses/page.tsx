@@ -25,7 +25,7 @@ import {
 } from "../metrics/results-shell";
 import { answerColumns, formatAnswer } from "./answer-values";
 import { responsesCsvHref } from "./csv-export";
-import { ExportCsvButton } from "./export-csv";
+import { ExportCsvButton } from "@/components/export-csv-button";
 
 export const dynamic = "force-dynamic";
 

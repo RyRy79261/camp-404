@@ -36,6 +36,8 @@
 //     erasure provers uncoveredPrivateUserColumns, patchLeaksAny (./privacy)
 //   - audience authz: canSendToAudience + AudienceScope/AudienceActor/
 //     AudienceSpec — who may send to which audience (./audience-authz)
+//   - member export: MEMBER_EXPORT_COLUMNS, memberExportColumnsFor — the
+//     roster CSV's columns by rank, from the field list (./member-export)
 //   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,
 //     neutraliseFormula, csvFilenamePart (./csv) — the ONE spreadsheet
 //     serialiser; the questionnaire export and WP9's roster export share it
@@ -67,6 +69,7 @@ export * from "./shake";
 export * from "./id-validation";
 export * from "./promotion";
 export * from "./privacy";
+export * from "./member-export";
 export * from "./audience-authz";
 export * from "./csv";
 export * from "./questionnaire-csv";
