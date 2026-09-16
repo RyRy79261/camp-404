@@ -10,6 +10,7 @@ import {
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
+  getBurnerProfile,
   hasCampAccess,
   satisfyBurnerProfileAction,
   setIdDocuments,
@@ -33,6 +34,23 @@ export async function saveBurnerProfile(
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     redirect("/signup/required");
+  }
+
+  // Onboarding writes a profile once. After it is complete, a change goes
+  // through My forms (saveFormReplay), which validates the whole form, keeps
+  // the change log and gates on approval. The page already sends a completed
+  // member home, but this action takes a direct POST: without this check a
+  // draft save would replace a finished profile with partial answers, with no
+  // record, including an applicant's while a captain reviews it.
+  const existing = await getBurnerProfile(campUser.id);
+  if (existing?.completedAt) {
+    return {
+      ok: false,
+      errors: {
+        _form:
+          "Your profile is already complete. To change an answer, use My forms.",
+      },
+    };
   }
 
   // Validate against ALL teams (incl. archived), so a team archived between
@@ -71,13 +89,12 @@ export async function saveBurnerProfile(
     // column instead (decryptable only by the owner and captains).
     const { cleaned, idType, idNumber } = splitIdNumber(responses);
 
-    await upsertBurnerProfile({
-      userId: campUser.id,
-      version: QUESTIONNAIRE_VERSION,
-      responses: cleaned,
-      markComplete: final,
-    });
-
+    // The side writes come BEFORE the write that can mark the profile
+    // complete. If one of them fails, nothing is complete yet, so the member
+    // can simply submit again. The other way round, a failure left a
+    // "complete" profile with the ID number or photo missing, and the check
+    // above would then refuse the retry.
+    //
     // Encryption here throws if PGCRYPTO_KEY is unset/short. We catch it and
     // return a typed error so the wizard can show a retry message instead of
     // silently failing to advance. The boot-time env check (instrumentation.ts)
@@ -91,6 +108,13 @@ export async function saveBurnerProfile(
     if (typeof image === "string") {
       await setProfileImage(campUser.id, image.length > 0 ? image : null);
     }
+
+    await upsertBurnerProfile({
+      userId: campUser.id,
+      version: QUESTIONNAIRE_VERSION,
+      responses: cleaned,
+      markComplete: final,
+    });
 
     if (final) {
       // Completing the profile satisfies the burner-profile required action

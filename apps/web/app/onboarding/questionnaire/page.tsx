@@ -6,6 +6,7 @@ import {
   getBurnerProfile,
   getIdDocuments,
   hasCampAccess,
+  satisfyBurnerProfileAction,
 } from "@/lib/users";
 import { mergeIdNumber } from "@camp404/db/id-documents";
 import { getQuestionnaireForPicker } from "@/lib/questionnaire-config";
@@ -38,6 +39,11 @@ export default async function QuestionnairePage({
   const profile = await getBurnerProfile(campUser.id);
 
   if (profile?.completedAt) {
+    // Heal the gate before sending them home. If the final submit marked the
+    // profile complete but failed to satisfy the burner_profile required
+    // action, home would send them straight back here, forever. Satisfying an
+    // already-satisfied action is a no-op.
+    await satisfyBurnerProfileAction(campUser.id);
     redirect("/");
   }
 
