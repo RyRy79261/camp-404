@@ -6,7 +6,9 @@ import { del, list } from "@vercel/blob";
 // `addRandomSuffix: true`, so each re-upload leaves the previous object behind;
 // account anonymisation nulls `profileImageUrl` but never deletes the object.
 // This is the cleanup seam for both — list a member's avatar prefix and delete
-// the stale objects. Best-effort: a missing store token is a no-op (E2E / local
+// the stale objects. A replaced photo is pruned only once the new one is SAVED
+// to the profile (pruneReplacedProfilePhotos), never at upload: an upload the
+// member then abandons must not delete the photo their profile still shows. Best-effort: a missing store token is a no-op (E2E / local
 // dev), and callers should not let a cleanup failure fail their main operation.
 // Questionnaire `image` answers live in nested `answers/<question>/` folders
 // under the same prefix — see `questionnaireImageDir` and
@@ -92,6 +94,53 @@ export async function deleteAvatarBlobs(
   await pruneBlobs(PREFIX(userId), keepPathname, {
     flatOnly: keepPathname !== undefined,
   });
+}
+
+/** The same-origin proxy URL the upload route hands back for a stored photo. */
+export function avatarProxyUrl(pathname: string): string {
+  return `/api/avatar?pathname=${encodeURIComponent(pathname)}`;
+}
+
+/**
+ * The blob pathname a saved profile photo URL points at, when it is one of this
+ * member's own flat avatar objects. Anything else (another member's path, a
+ * nested answer, a foreign URL) is null, so it can never steer a prune.
+ */
+export function ownProfilePhotoPathname(
+  authUserId: string,
+  url: string,
+): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url, "http://camp404.invalid");
+  } catch {
+    return null;
+  }
+  if (parsed.pathname !== "/api/avatar") return null;
+  const pathname = parsed.searchParams.get("pathname");
+  if (!pathname?.startsWith(PREFIX(authUserId))) return null;
+  if (pathname.slice(PREFIX(authUserId).length).includes("/")) return null;
+  return pathname;
+}
+
+/**
+ * After a profile save commits: delete every photo object sitting directly in
+ * the member's folder except the one the profile now points at. A cleared photo
+ * keeps none. A saved URL this module did not mint prunes nothing, because we
+ * cannot tell which object it means. Best-effort: logs and never throws, since
+ * the save already succeeded.
+ */
+export async function pruneReplacedProfilePhotos(
+  authUserId: string,
+  savedUrl: string | null,
+): Promise<void> {
+  const keep = savedUrl ? ownProfilePhotoPathname(authUserId, savedUrl) : null;
+  if (savedUrl && !keep) return;
+  try {
+    await pruneBlobs(PREFIX(authUserId), keep ?? undefined, { flatOnly: true });
+  } catch (err) {
+    console.error("avatar-cleanup error", err);
+  }
 }
 
 /**

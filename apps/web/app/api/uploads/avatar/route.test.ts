@@ -26,7 +26,12 @@ vi.mock("@/lib/rate-limit", () => ({
   getClientIp: vi.fn(() => "1.2.3.4"),
 }));
 vi.mock("@vercel/blob", () => ({ put: vi.fn() }));
-vi.mock("@/lib/avatar-blob", () => ({ deleteAvatarBlobs: vi.fn() }));
+vi.mock("@/lib/avatar-blob", () => ({
+  avatarProxyUrl: (pathname: string) =>
+    `/api/avatar?pathname=${encodeURIComponent(pathname)}`,
+  deleteAvatarBlobs: vi.fn(),
+  pruneReplacedProfilePhotos: vi.fn(),
+}));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(async () => ({ id: "camp-1" })),
   hasCampAccess: vi.fn(() => true),
@@ -37,6 +42,10 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { isE2ETestMode } from "@/lib/test-mode";
 import { rateLimiter } from "@/lib/rate-limit";
 import { put } from "@vercel/blob";
+import {
+  deleteAvatarBlobs,
+  pruneReplacedProfilePhotos,
+} from "@/lib/avatar-blob";
 import { hasCampAccess } from "@/lib/users";
 
 const TOKEN = "vercel_blob_rw_test_token";
@@ -165,6 +174,10 @@ describe("POST /api/uploads/avatar", () => {
       "/api/avatar?pathname=avatars%2Fu1%2Favatar-x7f2.webp",
     );
     expect(body.url).not.toContain("blob.vercel-storage.com");
+    // The profile still shows the old photo until the member saves, and they
+    // may never save, so an upload deletes nothing.
+    expect(deleteAvatarBlobs).not.toHaveBeenCalled();
+    expect(pruneReplacedProfilePhotos).not.toHaveBeenCalled();
   });
 
   it("accepts image/png (the canvas WebP-encode fallback)", async () => {

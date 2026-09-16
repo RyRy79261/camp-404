@@ -12,6 +12,7 @@ import {
   type SaveResult,
 } from "@camp404/types";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
+import { pruneReplacedProfilePhotos } from "@/lib/avatar-blob";
 import {
   ensureCampUser,
   getBurnerProfile,
@@ -143,7 +144,10 @@ export async function saveBurnerProfile(
     const photoId = questionIdForRole(questionnaire, "profile_photo");
     const image = photoId ? cleaned[photoId] : undefined;
     if (typeof image === "string") {
-      await setProfileImage(campUser.id, image.length > 0 ? image : null);
+      const saved = image.length > 0 ? image : null;
+      await setProfileImage(campUser.id, saved);
+      // Only now is the old photo unreferenced.
+      await pruneReplacedProfilePhotos(authUser.id, saved);
     }
 
     await upsertBurnerProfile({

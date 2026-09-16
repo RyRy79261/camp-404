@@ -6,7 +6,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // pre-check cannot speak for. These assert BOTH refusals reach the member as
 // the same sentence, and that a refusal never signs them out.
 
-vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(),
+  unstable_rethrow: vi.fn(),
+}));
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUserOrRedirect: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
@@ -18,11 +21,13 @@ vi.mock("@/lib/bootstrap", () => ({
   countActiveCaptains: vi.fn(async () => 2),
 }));
 vi.mock("@/lib/account", () => ({ deleteAccount: vi.fn() }));
+vi.mock("@/lib/avatar-blob", () => ({ pruneReplacedProfilePhotos: vi.fn() }));
 
 import { redirect } from "next/navigation";
-import { deleteOwnAccount } from "./actions";
+import { deleteOwnAccount, updateProfile } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, setProfileImage } from "@/lib/users";
+import { pruneReplacedProfilePhotos } from "@/lib/avatar-blob";
 import { countActiveCaptains } from "@/lib/bootstrap";
 import { deleteAccount } from "@/lib/account";
 
@@ -98,5 +103,48 @@ describe("deleteOwnAccount", () => {
 
     expect(res).toEqual({ ok: false, error: SOLE_CAPTAIN_ERROR });
     expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateProfile — the old photo", () => {
+  function edited(image: string): FormData {
+    const fd = new FormData();
+    fd.set("displayName", "Nova");
+    fd.set("profileImageUrl", image);
+    return fd;
+  }
+
+  it("is pruned only after the new photo is saved, keeping the new one", async () => {
+    signIn("member");
+    const order: string[] = [];
+    vi.mocked(setProfileImage).mockImplementation(async () => {
+      order.push("save");
+    });
+    vi.mocked(pruneReplacedProfilePhotos).mockImplementation(async () => {
+      order.push("prune");
+    });
+
+    await updateProfile(
+      null,
+      edited("/api/avatar?pathname=avatars%2Fauth-1%2Fnew.webp"),
+    );
+
+    expect(order).toEqual(["save", "prune"]);
+    expect(pruneReplacedProfilePhotos).toHaveBeenCalledWith(
+      "auth-1",
+      "/api/avatar?pathname=avatars%2Fauth-1%2Fnew.webp",
+    );
+  });
+
+  it("is not pruned when the save fails", async () => {
+    signIn("member");
+    vi.mocked(setProfileImage).mockRejectedValue(new Error("db down"));
+
+    await updateProfile(
+      null,
+      edited("/api/avatar?pathname=avatars%2Fauth-1%2Fnew.webp"),
+    );
+
+    expect(pruneReplacedProfilePhotos).not.toHaveBeenCalled();
   });
 });
