@@ -1019,7 +1019,9 @@ export const testStore = {
   // 0) — enough for the captain roster to render in E2E without touching Neon.
   // `isLead` and `teams` come from the membership rows and are year-scoped, the
   // same two facts the real query aggregates out of `team_memberships`.
-  getCampManagementRoster(): CampManagementMember[] {
+  getCampManagementRoster(
+    options: { includeEmail?: boolean } = {},
+  ): CampManagementMember[] {
     const cycle = currentCycleNumber();
     const thisYear = teamMemberships.filter((m) => m.cycle === cycle);
     return Array.from(usersByAuthId.values())
@@ -1045,6 +1047,8 @@ export const testStore = {
           intendsToDrive: false,
           driverProfileComplete: false,
           country,
+          // The test store keeps no sign-in email for a member.
+          ...(options.includeEmail ? { email: null } : {}),
           createdAt: u.createdAt,
         };
       })

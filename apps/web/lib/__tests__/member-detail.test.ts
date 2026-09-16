@@ -309,3 +309,22 @@ describe("presentMemberDetail — emergency contacts", () => {
     expect(valueOf(m.overview, "Emergency contact")).toBeUndefined();
   });
 });
+
+describe("presentMemberDetail — captain-only facts", () => {
+  it("shows email and this year's arrival when the captain query read them", () => {
+    const m = presentMemberDetail(
+      detail({
+        email: "nova.reyes@gmail.com",
+        arrivalAt: new Date("2026-08-12T10:00:00Z"),
+      }),
+    );
+    expect(valueOf(m.overview, "Email")).toBe("nova.reyes@gmail.com");
+    expect(valueOf(m.overview, "Arrival date")).toBe("12 Aug 2026");
+  });
+
+  it("shows neither row when the detail carries neither", () => {
+    const m = presentMemberDetail(detail());
+    expect(valueOf(m.overview, "Email")).toBeUndefined();
+    expect(valueOf(m.overview, "Arrival date")).toBeUndefined();
+  });
+});

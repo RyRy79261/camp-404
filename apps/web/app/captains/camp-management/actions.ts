@@ -213,6 +213,8 @@ export async function getMemberDetailAction(
     // the ID ciphertext out of the database.
     const detail = await getCampMemberDetail(userId, {
       includeIdDocuments: true,
+      includeEmail: true,
+      includeArrival: true,
     });
     if (!detail) return { ok: false, error: "Member not found." };
 

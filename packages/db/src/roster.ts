@@ -1,6 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { createHttpDb } from "./index";
+import { neonAuthUsers } from "./neon-auth";
 import * as schema from "./schema";
 import { currentCycleNumber } from "./cycles";
 
@@ -37,7 +38,17 @@ export interface CampManagementMember {
   driverProfileComplete: boolean;
   /** ISO alpha-2 country code from the burner profile (NULL if unanswered). */
   country: string | null;
+  /**
+   * Sign-in email, from Neon Auth. Present ONLY when the caller passed
+   * `includeEmail: true` (a captain); members never see another's email.
+   */
+  email?: string | null;
   createdAt: Date;
+}
+
+export interface CampManagementRosterOptions {
+  /** SELECT each member's sign-in email. Captain callers only. */
+  includeEmail?: boolean;
 }
 
 /**
@@ -48,9 +59,10 @@ export interface CampManagementMember {
  * Captain-only data: callers MUST gate this behind a captain rank check —
  * the page renders a locked, data-free shell for everyone else.
  */
-export async function getCampManagementRoster(): Promise<
-  CampManagementMember[]
-> {
+export async function getCampManagementRoster(
+  options: CampManagementRosterOptions = {},
+): Promise<CampManagementMember[]> {
+  const includeEmail = options.includeEmail === true;
   const db = createHttpDb();
   // Teams, team leads and driver profiles are year-scoped, so this asks for
   // THIS year's. At a rollover those three columns go blank across the roster
@@ -58,7 +70,7 @@ export async function getCampManagementRoster(): Promise<
   // ruling ("who's part of what team ... same with team lead roles"). Last
   // year's rows are untouched and still readable; only the question changed.
   const cycle = await currentCycleNumber();
-  const rows = await db
+  const query = db
     .select({
       id: schema.users.id,
       displayName: schema.users.displayName,
@@ -86,9 +98,20 @@ export async function getCampManagementRoster(): Promise<
         where ra.user_id = ${schema.users.id}
           and ra.status = 'pending' and ra.blocking = true
       )`,
+      ...(includeEmail ? { email: neonAuthUsers.email } : {}),
       createdAt: schema.users.createdAt,
     })
     .from(schema.users)
+    .$dynamic();
+  // Neon Auth's user table is joined only when email was asked for, so a
+  // member-facing read never touches it.
+  const withEmail = includeEmail
+    ? query.leftJoin(
+        neonAuthUsers,
+        eq(neonAuthUsers.id, schema.users.authUserId),
+      )
+    : query;
+  const rows = await withEmail
     .leftJoin(
       schema.burnerProfiles,
       eq(schema.burnerProfiles.userId, schema.users.id),
@@ -123,6 +146,7 @@ export async function getCampManagementRoster(): Promise<
     intendsToDrive: r.intendsToDrive,
     driverProfileComplete: r.driverCompletedAt != null,
     country: r.country,
+    ...(includeEmail ? { email: r.email ?? null } : {}),
     createdAt: r.createdAt,
   }));
 }
@@ -152,6 +176,10 @@ export interface CampMemberDetail {
    */
   passportEncrypted?: string | null;
   saIdEncrypted?: string | null;
+  /** Sign-in email. Present ONLY with `includeEmail: true` (captain). */
+  email?: string | null;
+  /** This year's arrival, from the driver profile. ONLY with `includeArrival`. */
+  arrivalAt?: Date | null;
   /** The code this member redeemed to join (NULL for god/founder accounts). */
   inviteCode: string | null;
   /** Free-text note the inviter left when minting the code. */
@@ -168,6 +196,10 @@ export interface CampMemberDetailOptions {
    * a member-facing read must never pull the ciphertext out of Postgres.
    */
   includeIdDocuments?: boolean;
+  /** SELECT the member's sign-in email. Captain callers only. */
+  includeEmail?: boolean;
+  /** SELECT this year's arrival date. Captain callers only. */
+  includeArrival?: boolean;
 }
 
 export async function getCampMemberDetail(
@@ -175,10 +207,15 @@ export async function getCampMemberDetail(
   options: CampMemberDetailOptions = {},
 ): Promise<CampMemberDetail | null> {
   const includeIdDocuments = options.includeIdDocuments === true;
+  const includeEmail = options.includeEmail === true;
+  const includeArrival = options.includeArrival === true;
   const db = createHttpDb();
   const decider = alias(schema.users, "decider");
   const inviter = alias(schema.users, "inviter");
-  const rows = await db
+  // Arrival is a year-scoped fact, so it is this year's driver profile.
+  // -1 matches no row, so the join is inert when arrival was not asked for.
+  const cycle = includeArrival ? await currentCycleNumber() : -1;
+  const query = db
     .select({
       id: schema.users.id,
       displayName: schema.users.displayName,
@@ -195,12 +232,30 @@ export async function getCampMemberDetail(
             saIdEncrypted: schema.users.saIdEncrypted,
           }
         : {}),
+      ...(includeEmail ? { email: neonAuthUsers.email } : {}),
+      ...(includeArrival ? { arrivalAt: schema.driverProfiles.arrivalAt } : {}),
       inviteCode: schema.users.inviteCode,
       inviteNote: schema.inviteCodes.note,
       invitedByName: inviter.displayName,
       createdAt: schema.users.createdAt,
     })
     .from(schema.users)
+    .$dynamic();
+  // Neon Auth's user table is joined only when email was asked for.
+  const withEmail = includeEmail
+    ? query.leftJoin(
+        neonAuthUsers,
+        eq(neonAuthUsers.id, schema.users.authUserId),
+      )
+    : query;
+  const rows = await withEmail
+    .leftJoin(
+      schema.driverProfiles,
+      and(
+        eq(schema.driverProfiles.userId, schema.users.id),
+        eq(schema.driverProfiles.cycle, cycle),
+      ),
+    )
     .leftJoin(decider, eq(decider.id, schema.users.approvalDecidedByUserId))
     .leftJoin(
       schema.burnerProfiles,
@@ -232,6 +287,8 @@ export async function getCampMemberDetail(
           saIdEncrypted: r.saIdEncrypted,
         }
       : {}),
+    ...(includeEmail ? { email: r.email ?? null } : {}),
+    ...(includeArrival ? { arrivalAt: r.arrivalAt ?? null } : {}),
     inviteCode: r.inviteCode,
     inviteNote: r.inviteNote,
     invitedByName: r.invitedByName,

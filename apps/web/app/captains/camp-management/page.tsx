@@ -43,7 +43,7 @@ export default async function CampManagementPage() {
   // Fetch once; project to the captain (full) or member (public) row shape.
   // The public projection carries no approval/onboarding/driver facets, so the
   // member branch literally has no private data to leak.
-  const members = await getCampManagementRoster();
+  const members = await getCampManagementRoster({ includeEmail: isCaptain });
   const roster = rosterForViewer(members, isCaptain);
 
   // The team data comes from the editable camp config (not a hardcoded const).

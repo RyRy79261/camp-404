@@ -155,12 +155,24 @@ export function presentMemberDetail(
     });
   }
   const displayName = detail.displayName?.trim() || "Unnamed burner";
+  // Captain-only facts (board S17 order: Country, Email, Emergency contact,
+  // Arrival date). Each is on the detail only when the captain action asked
+  // the query for it.
+  if (detail.email) {
+    overview.push({ label: "Email", value: detail.email });
+  }
   if (safety) {
     overview.push({
       label: "Emergency contact",
       value: safety.emergencyContacts
         ? "Listed ✓"
         : `Not provided yet — we’ll show it here once ${displayName} adds it.`,
+    });
+  }
+  if (detail.arrivalAt) {
+    overview.push({
+      label: "Arrival date",
+      value: dateFmt.format(detail.arrivalAt),
     });
   }
   overview.push({

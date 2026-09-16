@@ -192,6 +192,12 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "carMembers.cycle": "captain",
   "carMembers.createdAt": "captain",
 
+  // neon_auth.user — the sign-in identity. Captains read email to assign DDT
+  // tickets; members never see another member's email.
+  "neonAuthUsers.id": "captain",
+  "neonAuthUsers.email": "captain",
+  "neonAuthUsers.emailVerified": "captain",
+
   // team_memberships — the roster shows teams and leads
   "teamMemberships.userId": "camp_member",
   "teamMemberships.team": "camp_member",

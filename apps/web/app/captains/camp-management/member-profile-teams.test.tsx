@@ -32,6 +32,7 @@ const row: RosterRow = {
   teams: [],
   country: "South Africa",
   inSouthAfrica: true,
+  email: null,
   status: "ready",
   statusLabel: "Ready",
   approvalStatus: "approved",

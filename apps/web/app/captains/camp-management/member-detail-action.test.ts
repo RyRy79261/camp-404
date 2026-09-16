@@ -116,6 +116,8 @@ describe("getMemberDetailAction — promotion surfacing", () => {
     // of Postgres; a dropped flag would silently blank the ID field instead.
     expect(getCampMemberDetail).toHaveBeenCalledExactlyOnceWith("member-1", {
       includeIdDocuments: true,
+      includeEmail: true,
+      includeArrival: true,
     });
   });
 

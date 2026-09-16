@@ -224,6 +224,20 @@ describe("matchesRosterQuery", () => {
   it("returns false when nothing matches", () => {
     expect(matchesRosterQuery(row, "zzz-nope")).toBe(false);
   });
+
+  it("matches a team by its configured label", () => {
+    expect(matchesRosterQuery(row, "cuisine", { kitchen: "Cuisine" })).toBe(
+      true,
+    );
+    expect(matchesRosterQuery(row, "cuisine")).toBe(false);
+  });
+
+  it("matches a captain's row by email", () => {
+    const withEmail = toRosterRow(member({ email: "Dusty@Example.com" }));
+    expect(matchesRosterQuery(withEmail, "dusty@example")).toBe(true);
+    // A row built without an email (the member view) cannot match on one.
+    expect(matchesRosterQuery(row, "@example")).toBe(false);
+  });
 });
 
 describe("deriveRosterStats", () => {
