@@ -10,6 +10,7 @@ import { Divider } from "@camp404/ui/components/divider";
 import { InputField } from "@camp404/ui/components/input-field";
 import { OAuthButton } from "@camp404/ui/components/google-button";
 import { authClient } from "@/lib/auth-client";
+import { safeInternalPath } from "@/lib/safe-redirect";
 
 /**
  * Email/password + Google sign-in form, mirroring the intake-tracker
@@ -17,17 +18,10 @@ import { authClient } from "@/lib/auth-client";
  * after auth at the /signup/required gate.
  */
 
-function safeCallbackUrl(raw: string | null | undefined): string {
-  if (!raw) return "/";
-  if (!raw.startsWith("/")) return "/";
-  if (raw.startsWith("//")) return "/";
-  return raw;
-}
-
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackURL = safeCallbackUrl(searchParams.get("callbackURL"));
+  const callbackURL = safeInternalPath(searchParams.get("callbackURL"));
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
