@@ -62,7 +62,7 @@ export async function runTool<T>(opts: {
       durationMs: Date.now() - started,
     });
     return errorContent(
-      "Your camp profile no longer exists — complete signup in the app before reconnecting.",
+      "Your Camp 404 account isn't active right now — sign in to the app, then reconnect.",
     );
   }
 

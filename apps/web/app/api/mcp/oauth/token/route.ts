@@ -201,7 +201,14 @@ async function readBody(req: Request): Promise<Record<string, unknown> & { __err
     if (ct.includes("application/json")) {
       const text = await req.text();
       if (!text.trim()) return {};
-      return JSON.parse(text) as Record<string, unknown>;
+      const parsed: unknown = JSON.parse(text);
+      // `null`, a number or an array parse fine, and then `"__error" in body`
+      // throws a TypeError: a bare 500 with no no-store or CORS headers
+      // instead of an OAuth error.
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return { __error: "Body must be a JSON object." };
+      }
+      return parsed as Record<string, unknown>;
     }
     const form = await req.formData();
     const out: Record<string, unknown> = {};

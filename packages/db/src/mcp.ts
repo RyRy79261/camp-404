@@ -1,9 +1,41 @@
 import { and, eq, gt, isNull } from "drizzle-orm";
+import type { DbOrTx } from "./audit";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
 import { currentCycleNumber } from "./cycles";
 
 export type Team = (typeof schema.teamEnum.enumValues)[number];
+
+/**
+ * A token's user may still use MCP only while they are a real, approved camp
+ * member. The authorize screen checks this once, but an access token lives for
+ * hours and each refresh issues a new 30-day refresh token. So it is checked
+ * again on every tool call (getMcpScopeRows) and every refresh
+ * (isActiveMcpUser): a member who is rejected, or put back into review, stops
+ * being served even though their token has not expired. Erasure also deletes
+ * their tokens.
+ */
+function activeMember(userId: string) {
+  return and(
+    eq(schema.users.id, userId),
+    eq(schema.users.isSystem, false),
+    eq(schema.users.sanitised, false),
+    eq(schema.users.approvalStatus, "approved"),
+  );
+}
+
+/** Whether this user may still refresh an MCP token. See activeMember. */
+export async function isActiveMcpUser(
+  db: DbOrTx,
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(activeMember(userId))
+    .limit(1);
+  return row !== undefined;
+}
 
 /**
  * Rows needed to compute an MCP caller's effective scope.
@@ -26,7 +58,7 @@ export interface McpScopeRows {
  * Single round-trip read of the three things every MCP tool needs to
  * know about its caller: the user row, their team memberships, and
  * whether they've registered intent to drive. Returns null if the camp
- * user row doesn't exist.
+ * user row doesn't exist, or is no longer an active member (activeMember).
  *
  * The memberships and the driver intent are read for THIS YEAR only. Both are
  * year-scoped facts, and this scope is a privilege grant: unscoped, last year's
@@ -46,7 +78,7 @@ export async function getMcpScopeRows(
       aiDataConsent: schema.users.aiDataConsent,
     })
     .from(schema.users)
-    .where(eq(schema.users.id, campUserId))
+    .where(activeMember(campUserId))
     .limit(1);
 
   if (!userRow) return null;
