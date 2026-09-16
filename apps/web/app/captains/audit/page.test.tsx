@@ -1,12 +1,13 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as AuditModule from "@camp404/db/audit";
 
 // The audit page reads nothing for a viewer who is not a captain, and pages
 // newest first for one who is.
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@camp404/db/audit", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@camp404/db/audit")>()),
+  ...(await importOriginal<typeof AuditModule>()),
   listAuditLog: vi.fn(),
 }));
 vi.mock("@/lib/camp-config", () => ({

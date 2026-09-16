@@ -12,7 +12,7 @@ import {
 import { auditEntry, type AuditEntry } from "@/lib/audit-format";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
-import { isE2ETestMode } from "@/lib/test-mode";
+import { usesTestStore } from "@/lib/test-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +66,7 @@ export default async function AuditLogPage({
   const data = cleared
     ? await (async () => {
         // The E2E test store keeps no audit trail.
-        if (isE2ETestMode()) return { entries: [], nextCursor: null };
+        if (usesTestStore()) return { entries: [], nextCursor: null };
         const [page, teams] = await Promise.all([
           listAuditLog({ before: cursor }),
           getTeamsConfig(),

@@ -24,7 +24,7 @@ import {
   parseStoredBuilderDefinition,
   parseStoredDefinition,
 } from "./questionnaire";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 
 // Questionnaire-definition data facade. Reads the stored catalogue from the
 // Neon-backed `questionnaire_definitions` table, validating the JSONB with the
@@ -48,7 +48,7 @@ export async function getQuestionnaireDefinition(
   key: string,
 ): Promise<Questionnaire | null> {
   const template = TEMPLATES[key] ?? null;
-  if (isE2ETestMode()) return template;
+  if (usesTestStore()) return template;
 
   const row = await getQuestionnaireDefinitionRow(key);
   if (!row) return template;
@@ -69,7 +69,7 @@ export async function getBuilderDefinition(
   key: string,
   version?: string,
 ): Promise<BuilderQuestionnaire | null> {
-  if (isE2ETestMode()) return null;
+  if (usesTestStore()) return null;
   const raw = version
     ? (await getQuestionnaireVersionRow(key, version))?.definition
     : (await getQuestionnaireDefinitionRow(key))?.definition;
@@ -180,7 +180,7 @@ export async function listDefinitionsForViewer(viewer: {
 }): Promise<DefinitionSummary[]> {
   // The test store models no builder questionnaires: in E2E the hub opens
   // empty, honestly, rather than failing on a database that is not there.
-  if (isE2ETestMode()) return [];
+  if (usesTestStore()) return [];
   const rows = await listDefinitionRows();
   return rows
     .filter((r) => canViewBuilderDefinition(viewer, r))
@@ -205,6 +205,6 @@ export async function listDefinitionsForViewer(viewer: {
  * E2E, where no sends are modelled.
  */
 export async function listOpenSendBlocking(): Promise<Map<string, boolean>> {
-  if (isE2ETestMode()) return new Map();
+  if (usesTestStore()) return new Map();
   return dbListOpenSendBlocking();
 }

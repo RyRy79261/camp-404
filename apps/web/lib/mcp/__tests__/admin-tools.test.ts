@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as AuditModule from "@camp404/db/audit";
 
 // The captain-tier admin tools: each refuses a non-captain before any write,
 // calls the app's own db helper with the caller as the actor, and turns a
@@ -46,7 +47,7 @@ vi.mock("@camp404/db/invite-codes", () => ({
   findInviteCodeByCode: vi.fn(async () => null),
 }));
 vi.mock("@camp404/db/audit", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@camp404/db/audit")>()),
+  ...(await importOriginal<typeof AuditModule>()),
   listAuditLog: vi.fn(async () => ({ rows: [], nextCursor: null })),
 }));
 vi.mock("@/lib/camp-config", () => {

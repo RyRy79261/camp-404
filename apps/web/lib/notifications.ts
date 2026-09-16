@@ -26,7 +26,7 @@ import {
   type PendingAcknowledgement,
   type PublishResult,
 } from "@camp404/db/broadcasts";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
 // Announcements / notifications facade. Routes every read and write through
@@ -165,7 +165,7 @@ const testBackend: NotificationsBackend = {
 };
 
 function backend(): NotificationsBackend {
-  return isE2ETestMode() ? testBackend : realBackend;
+  return usesTestStore() ? testBackend : realBackend;
 }
 
 export function countUnread(userId: string): Promise<number> {

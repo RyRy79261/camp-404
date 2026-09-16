@@ -231,6 +231,70 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 7
 
+  # The real-database Playwright run (apps/web playwright.db.config.ts): the
+  # questionnaire engine and the year rollover, which the in-memory store
+  # cannot run (owner's call E2E-DB). Postgres and the local Neon proxy run as
+  # service containers, so it needs no Neon branch and no secrets.
+  e2e-db:
+    needs: [changes]
+    if: needs.changes.outputs.src == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: main
+        options: >-
+          --health-cmd "pg_isready -U postgres -d main"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      neon-proxy:
+        image: ghcr.io/timowilhelm/local-neon-http-proxy:main
+        env:
+          PG_CONNECTION_STRING: postgres://postgres:postgres@postgres:5432/main
+        ports:
+          - 4444:4444
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright browser + system deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @camp404/web exec playwright install --with-deps chromium
+      - name: Install Playwright system deps (cached browser)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @camp404/web exec playwright install-deps chromium
+      - name: Migrate the service database
+        # The proxy container can take a moment after Postgres is healthy.
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            pnpm db:local:migrate && exit 0
+            sleep 5
+          done
+          exit 1
+      - name: Run real-database e2e tests
+        run: pnpm --filter @camp404/web test:e2e:db
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-db
+          path: apps/web/playwright-report-db/
+          retention-days: 7
+
   # Commit messages on a PR follow commitlint.config.mjs. Only the PR's own
   # commits are checked (base..head); merge commits are ignored.
   commitlint:
@@ -254,7 +318,7 @@ jobs:
 
   ci-pass:
     if: always()
-    needs: [changes, lint, typecheck, test, build, e2e, schema-migration, supply-chain, commitlint]
+    needs: [changes, lint, typecheck, test, build, e2e, e2e-db, schema-migration, supply-chain, commitlint]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -279,6 +343,7 @@ jobs:
           echo "=== Gated jobs (success or skipped) ==="
           echo "test: ${{ needs.test.result }}"
           echo "e2e: ${{ needs.e2e.result }}"
+          echo "e2e-db: ${{ needs.e2e-db.result }}"
           echo "schema-migration: ${{ needs.schema-migration.result }}"
           echo "commitlint: ${{ needs.commitlint.result }}"
 
@@ -286,6 +351,7 @@ jobs:
           for result in \
             "${{ needs.test.result }}" \
             "${{ needs.e2e.result }}" \
+            "${{ needs.e2e-db.result }}" \
             "${{ needs.schema-migration.result }}" \
             "${{ needs.commitlint.result }}"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then

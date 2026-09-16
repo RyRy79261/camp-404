@@ -5,7 +5,7 @@ import {
   type CampManagementMember,
   type CampManagementRosterOptions,
 } from "@camp404/db/roster";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
 // Camp-management roster data facade. Routes through the Neon-backed
@@ -34,7 +34,7 @@ const testBackend: RosterBackend = {
 };
 
 function backend(): RosterBackend {
-  return isE2ETestMode() ? testBackend : realBackend;
+  return usesTestStore() ? testBackend : realBackend;
 }
 
 /** Pass `includeEmail` only for a captain viewer. */

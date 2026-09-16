@@ -4,7 +4,7 @@ import {
   upsertPushToken as dbUpsertPushToken,
   deletePushTokenForUser as dbDeletePushTokenForUser,
 } from "@camp404/db/push";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 
 type Platform = "web" | "ios" | "android";
 
@@ -20,7 +20,7 @@ export async function registerPushToken(input: {
   platform: Platform;
   topics?: string[];
 }): Promise<void> {
-  if (isE2ETestMode()) return;
+  if (usesTestStore()) return;
   await dbUpsertPushToken(input);
 }
 
@@ -29,6 +29,6 @@ export async function unregisterPushToken(
   userId: string,
   token: string,
 ): Promise<void> {
-  if (isE2ETestMode()) return;
+  if (usesTestStore()) return;
   await dbDeletePushTokenForUser(userId, token);
 }

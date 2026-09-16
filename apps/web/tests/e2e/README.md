@@ -44,6 +44,33 @@ pnpm --filter @camp404/web test:e2e
 pnpm --filter @camp404/web test:e2e:mobile
 ```
 
+### The real-database run
+
+The in-memory store cannot run the questionnaire engine or the year rollover,
+and the owner chose a real Postgres per run over growing the store (E2E-DB,
+2026-09-16). `playwright.db.config.ts` keeps the test login and the
+outside-service stubs, but sets `E2E_DATABASE=real`, so every query goes to
+the local stack (`docker-compose.local.yml`):
+
+```bash
+pnpm db:local:up && pnpm db:local:migrate      # from the repo root
+pnpm --filter @camp404/web test:e2e:db
+```
+
+- Specs live in `tests/e2e-db/`, with shared steps in `_flows.ts`:
+  `questionnaire-lifecycle.spec.ts` (build, publish, a blocking send, a
+  late-joining member answers, metrics, responses, CSV) and
+  `year-rollover.spec.ts` (name the year, answer, start the next year, be
+  asked again, each year keeps its answer).
+- `usesTestStore()` in `lib/test-mode.ts` is the data switch;
+  `isE2ETestMode()` still turns on the test login and the stubs for GitHub,
+  Blob and the rate limiter. The `/api/test/*` seams write the store or the
+  local database, whichever the run uses; `/api/test/inspect` is store-only.
+- `/api/test/reset` empties the local database. Every helper in
+  `@camp404/db/e2e` refuses unless the process points at the local stack.
+- CI runs it as the `e2e-db` job, with Postgres and the Neon proxy as service
+  containers.
+
 ### Helpers
 
 - `_helpers.ts`: the test-mode seams (`login`, `resetTestState`,

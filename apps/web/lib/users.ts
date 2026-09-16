@@ -42,7 +42,7 @@ import {
 } from "@camp404/core";
 import { QUESTIONNAIRE_VERSION } from "./questionnaire";
 import type { AuthenticatedUser } from "./auth";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
 type Rank = "captain" | "member";
@@ -79,7 +79,7 @@ export async function ensureCampUser(
   authUser: AuthenticatedUser,
 ): Promise<CampUser> {
   const god = isGodEmail(authUser.primaryEmail);
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   const existing = await store.findUserByAuthId(authUser.id);
   if (existing) return existing;
 
@@ -134,7 +134,7 @@ export async function redeemInviteForUser(
   const code = rawCode.trim();
   if (!code) return { ok: false, error: "Please enter an invite code." };
 
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   const existing = await store.findUserByAuthId(authUser.id);
 
   // Already past the gate (god or a code on file) — don't spend another use.
@@ -196,7 +196,7 @@ export interface BurnerProfileSummary {
 export async function getBurnerProfile(
   campUserId: string,
 ): Promise<BurnerProfileSummary | null> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   return store.getBurnerProfile(campUserId);
 }
 
@@ -208,7 +208,7 @@ export async function getBurnerProfile(
 export async function findCampUserByAuthId(
   authUserId: string,
 ): Promise<CampUser | null> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   return store.findUserByAuthId(authUserId);
 }
 
@@ -216,7 +216,7 @@ export async function findCampUserByAuthId(
 export async function findCampUserById(
   userId: string,
 ): Promise<CampUser | null> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   return store.findUserById(userId);
 }
 
@@ -231,7 +231,7 @@ export async function findCampUserById(
  * store's twin rows, so the member ladder gates E2E users the same way.
  */
 export async function seedBurnerProfileAction(userId: string): Promise<void> {
-  if (isE2ETestMode()) {
+  if (usesTestStore()) {
     testStore.ensureRequiredAction({
       userId,
       actionKey: "burner_profile",
@@ -253,7 +253,7 @@ export async function seedBurnerProfileAction(userId: string): Promise<void> {
 export async function satisfyBurnerProfileAction(
   userId: string,
 ): Promise<void> {
-  if (isE2ETestMode()) {
+  if (usesTestStore()) {
     testStore.satisfyRequiredAction(userId, "burner_profile");
     return;
   }
@@ -271,7 +271,7 @@ export async function satisfyBurnerProfileAction(
  * there are no required actions at all.
  */
 export async function syncOpenGates(userId: string): Promise<void> {
-  if (isE2ETestMode()) return;
+  if (usesTestStore()) return;
   await reconcileOpenActivations(userId);
 }
 
@@ -283,7 +283,7 @@ export async function syncOpenGates(userId: string): Promise<void> {
 export async function getPendingQuestionnaires(
   userId: string,
 ): Promise<PendingQuestionnaire[]> {
-  if (isE2ETestMode()) return [];
+  if (usesTestStore()) return [];
   return dbListPendingQuestionnaires(userId);
 }
 
@@ -291,7 +291,7 @@ export async function getPendingQuestionnaires(
 export async function getPendingRequiredActions(
   userId: string,
 ): Promise<PendingRequiredAction[]> {
-  if (isE2ETestMode()) return testStore.getPendingRequiredActions(userId);
+  if (usesTestStore()) return testStore.getPendingRequiredActions(userId);
   return dbGetPendingRequiredActions(userId);
 }
 
@@ -328,7 +328,7 @@ export function isApproved(
  * reads false.
  */
 export async function isTeamLead(userId: string): Promise<boolean> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   return store.isTeamLead(userId);
 }
 
@@ -342,7 +342,7 @@ export async function isTeamLead(userId: string): Promise<boolean> {
  * captains reappoint leads.
  */
 export async function getLeadTeams(userId: string): Promise<string[]> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   return store.getLeadTeams(userId);
 }
 
@@ -360,7 +360,7 @@ export async function decideUserApproval(input: {
   /** Shown to the member on /pending-approval; blank means none. */
   reason?: string | null;
 }): Promise<boolean> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   return store.setUserApproval(input);
 }
 
@@ -374,7 +374,7 @@ export async function setCampUserRank(
   userId: string,
   rank: Rank,
 ): Promise<void> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   await store.setUserRank(userId, rank);
 }
 
@@ -450,7 +450,7 @@ export interface BurnerProfileReplayInput {
 export async function saveBurnerProfileReplay(
   input: BurnerProfileReplayInput,
 ): Promise<void> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   await store.saveBurnerProfileReplay(input);
 }
 
@@ -460,7 +460,7 @@ export async function upsertBurnerProfile(input: {
   responses: Record<string, unknown>;
   markComplete: boolean;
 }): Promise<void> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   await store.upsertBurnerProfile(input);
 }
 
@@ -469,7 +469,7 @@ export async function setProfileImage(
   userId: string,
   url: string | null,
 ): Promise<void> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   await store.setUserProfileImage(userId, url);
 }
 
@@ -478,7 +478,7 @@ export async function setDisplayName(
   userId: string,
   name: string | null,
 ): Promise<void> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   await store.setUserDisplayName(userId, name);
 }
 
@@ -491,7 +491,7 @@ export async function setIdDocuments(
   userId: string,
   id: { idType: string | null; idNumber: string | null },
 ): Promise<void> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   await store.setIdDocuments(userId, id);
 }
 
@@ -503,7 +503,7 @@ export async function setEmergencyContacts(
   userId: string,
   contacts: readonly EmergencyContact[],
 ): Promise<void> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   await store.setEmergencyContacts(userId, contacts);
 }
 
@@ -514,7 +514,7 @@ export async function setEmergencyContacts(
 export async function getEmergencyContacts(
   userId: string,
 ): Promise<EmergencyContact[] | null> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   return store.getEmergencyContacts(userId);
 }
 
@@ -523,7 +523,7 @@ export async function getEmergencyContacts(
 export async function getIdDocuments(
   userId: string,
 ): Promise<{ idType: string | null; idNumber: string | null } | null> {
-  const store = isE2ETestMode() ? testBackend : realBackend;
+  const store = usesTestStore() ? testBackend : realBackend;
   return store.getIdDocuments(userId);
 }
 

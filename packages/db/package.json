@@ -17,6 +17,7 @@
     "./member-notes": "./src/member-notes.ts",
     "./member-export": "./src/member-export.ts",
     "./payments": "./src/payments.ts",
+    "./e2e": "./src/e2e.ts",
     "./mcp-oauth": "./src/mcp-oauth.ts",
     "./cars": "./src/cars.ts",
     "./documents": "./src/documents.ts",

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { isE2ETestMode } from "@/lib/test-mode";
-import { testStore } from "@/lib/test-store";
+import { findCampUserByAuthId, setCampUserRank } from "@/lib/users";
 
 // Forces a test user's rank, so specs can exercise captain-only surfaces
 // (announcements, camp management) without minting a captain-tier invite and
 // walking the redeem flow. The user row must already exist (created lazily on
-// their first authenticated page load). Mirrors /api/test/set-approval.
+// their first authenticated page load). Mirrors /api/test/set-approval, and
+// writes the store or the local database through lib/users.
 
 export const runtime = "nodejs";
 
@@ -25,13 +26,13 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const user = testStore.findUserByAuthId(body.authUserId);
+  const user = await findCampUserByAuthId(body.authUserId);
   if (!user) {
     return NextResponse.json(
       { error: `No user for authUserId ${body.authUserId}` },
       { status: 404 },
     );
   }
-  testStore.setUserRank(user.id, body.rank);
+  await setCampUserRank(user.id, body.rank);
   return NextResponse.json({ ok: true });
 }

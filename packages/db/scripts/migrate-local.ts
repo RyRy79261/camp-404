@@ -19,6 +19,17 @@ if (process.env.NEON_LOCAL_PROXY !== "1" || !url.includes(LOCAL_PROXY_HOST)) {
 
 const { db, pool } = createPooledDb();
 try {
+  // Neon Auth owns the neon_auth schema on Neon, and no migration creates it.
+  // Locally, make the columns the app reads (src/neon-auth.ts), so a join on a
+  // member's email works.
+  await pool.query(`
+    create schema if not exists neon_auth;
+    create table if not exists neon_auth."user" (
+      id text primary key,
+      email text,
+      "emailVerified" boolean
+    );
+  `);
   await migrate(db, {
     migrationsFolder: fileURLToPath(new URL("../migrations", import.meta.url)),
   });

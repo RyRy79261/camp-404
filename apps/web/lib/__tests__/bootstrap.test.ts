@@ -13,7 +13,7 @@ vi.mock("@camp404/db/bootstrap", () => ({
   bootstrapFirstCaptain,
 }));
 vi.mock("../users", () => ({ seedBurnerProfileAction }));
-vi.mock("../test-mode", () => ({ isE2ETestMode: isE2E }));
+vi.mock("../test-mode", () => ({ isE2ETestMode: isE2E, usesTestStore: isE2E }));
 
 import { isCampBootstrapped, runFirstTimeSetup } from "../bootstrap";
 

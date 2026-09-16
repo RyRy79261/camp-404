@@ -21,7 +21,10 @@ vi.mock("../questionnaire-config", () => ({
     pages: [],
   })),
 }));
-vi.mock("../test-mode", () => ({ isE2ETestMode: () => false }));
+vi.mock("../test-mode", () => ({
+  isE2ETestMode: () => false,
+  usesTestStore: () => false,
+}));
 
 import { appendAuditEvent } from "@camp404/db/audit";
 import { decryptField } from "@camp404/db/crypto";

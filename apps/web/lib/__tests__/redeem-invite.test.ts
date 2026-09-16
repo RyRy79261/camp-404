@@ -29,7 +29,10 @@ vi.mock("../access-control", () => ({
   claimInviteCode: vi.fn(),
   isGodEmail: vi.fn(() => false),
 }));
-vi.mock("../test-mode", () => ({ isE2ETestMode: () => false }));
+vi.mock("../test-mode", () => ({
+  isE2ETestMode: () => false,
+  usesTestStore: () => false,
+}));
 
 import { redeemInviteForUser } from "../users";
 import { createCampUser, findUserByAuthId } from "@camp404/db/burner-profile";

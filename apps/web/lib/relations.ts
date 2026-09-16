@@ -2,7 +2,7 @@ import "server-only";
 
 import type { ReferralUser } from "@camp404/types";
 import { getReferralRoster as dbGetReferralRoster } from "@camp404/db/relations";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
 // The family tree's referral list, from the database normally and from the
@@ -10,7 +10,7 @@ import { testStore } from "./test-store";
 // so /family-tree renders during Playwright runs.
 
 export async function getReferralRoster(): Promise<ReferralUser[]> {
-  return isE2ETestMode()
+  return usesTestStore()
     ? testStore.getReferralRoster()
     : dbGetReferralRoster();
 }
