@@ -37,16 +37,26 @@ import { canSendToAudience } from "@camp404/core";
 import { computeAudience, type AudienceData } from "@camp404/db/audience";
 import {
   closeActivationAction,
+  createDraftAction,
+  deleteDraftAction,
+  duplicateDraftAction,
   previewAudienceCount,
   publishAction,
   remindPendingAction,
   sendAction,
   unpublishAction,
+  updateDefinitionAction,
 } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getLeadTeams, isTeamLead } from "@/lib/users";
 import { getCampManagementRoster } from "@/lib/roster";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
+import {
+  createDraft,
+  deleteDraft,
+  duplicateDefinition,
+  updateDefinition,
+} from "@/lib/questionnaire-definitions";
 import {
   publishDefinition,
   sendActivation,
@@ -662,5 +672,152 @@ describe("remindPendingAction — what the captain is told", () => {
       error: "Something went wrong. Please try again.",
     });
     spy.mockRestore();
+  });
+});
+
+// --- Draft authoring: create / update / delete / duplicate -----------------
+// A team lead authors their OWN drafts; a captain may touch any. Every refusal
+// is asserted to reach no writer, because these actions take any POST.
+
+const BLANK = {
+  version: "1",
+  title: "Kitchen rota",
+  pages: [
+    {
+      id: "00000000-0000-4000-8000-000000000001",
+      type: "question",
+      title: "",
+      blocks: [],
+    },
+  ],
+};
+
+function definitionRow(
+  status: "draft" | "published" | "unpublished",
+  createdBy: string | null,
+) {
+  vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+    key: "kitchen-rota",
+    status,
+    version: "1",
+    createdBy,
+  } as Awaited<ReturnType<typeof getDefinitionMetaRow>>);
+}
+
+describe("draft authoring — a plain member is refused at the rank gate", () => {
+  it("writes nothing for any draft action", async () => {
+    asViewer("member", false);
+    definitionRow("draft", "u1");
+
+    const refused = { ok: false, error: "Team-lead access only." };
+    expect(await createDraftAction("Kitchen rota")).toEqual(refused);
+    expect(await updateDefinitionAction("kitchen-rota", BLANK)).toEqual(
+      refused,
+    );
+    expect(await deleteDraftAction("kitchen-rota")).toEqual(refused);
+    expect(await duplicateDraftAction("kitchen-rota")).toEqual(refused);
+
+    expect(createDraft).not.toHaveBeenCalled();
+    expect(updateDefinition).not.toHaveBeenCalled();
+    expect(deleteDraft).not.toHaveBeenCalled();
+    expect(duplicateDefinition).not.toHaveBeenCalled();
+    expect(getDefinitionMetaRow).not.toHaveBeenCalled();
+  });
+});
+
+describe("draft authoring — a team lead and another author's draft", () => {
+  it("cannot edit it", async () => {
+    asViewer("member", true);
+    definitionRow("draft", "someone-else");
+
+    expect(await updateDefinitionAction("kitchen-rota", BLANK)).toEqual({
+      ok: false,
+      error: "You can only edit your own questionnaires.",
+    });
+    expect(updateDefinition).not.toHaveBeenCalled();
+  });
+
+  it("cannot delete it", async () => {
+    asViewer("member", true);
+    definitionRow("draft", "someone-else");
+
+    expect(await deleteDraftAction("kitchen-rota")).toEqual({
+      ok: false,
+      error: "You can only delete your own drafts.",
+    });
+    expect(deleteDraft).not.toHaveBeenCalled();
+  });
+
+  it("cannot copy it, and cannot tell it exists", async () => {
+    asViewer("member", true);
+    definitionRow("draft", "someone-else");
+
+    expect(await duplicateDraftAction("kitchen-rota")).toEqual({
+      ok: false,
+      error: "Questionnaire not found.",
+    });
+    expect(duplicateDefinition).not.toHaveBeenCalled();
+  });
+
+  it("may copy another author's published questionnaire", async () => {
+    asViewer("member", true);
+    definitionRow("published", "someone-else");
+    vi.mocked(duplicateDefinition).mockResolvedValue("kitchen-rota-2");
+
+    expect(await duplicateDraftAction("kitchen-rota")).toEqual({
+      ok: true,
+      key: "kitchen-rota-2",
+    });
+    expect(duplicateDefinition).toHaveBeenCalledWith({
+      key: "kitchen-rota",
+      createdBy: "u1",
+    });
+  });
+
+  it("creates, edits and deletes their own draft", async () => {
+    asViewer("member", true);
+    definitionRow("draft", "u1");
+    vi.mocked(createDraft).mockResolvedValue("kitchen-rota");
+
+    expect(await createDraftAction("Kitchen rota")).toEqual({
+      ok: true,
+      key: "kitchen-rota",
+    });
+    expect(createDraft).toHaveBeenCalledWith({
+      title: "Kitchen rota",
+      createdBy: "u1",
+    });
+    expect(await updateDefinitionAction("kitchen-rota", BLANK)).toEqual({
+      ok: true,
+    });
+    expect(await deleteDraftAction("kitchen-rota")).toEqual({ ok: true });
+    expect(deleteDraft).toHaveBeenCalledWith("kitchen-rota");
+  });
+});
+
+describe("draft authoring — a captain", () => {
+  it("may edit, copy and delete another author's draft", async () => {
+    asViewer("captain");
+    definitionRow("draft", "someone-else");
+    vi.mocked(duplicateDefinition).mockResolvedValue("kitchen-rota-2");
+
+    expect(await updateDefinitionAction("kitchen-rota", BLANK)).toEqual({
+      ok: true,
+    });
+    expect(updateDefinition).toHaveBeenCalledWith("kitchen-rota", BLANK);
+    expect((await duplicateDraftAction("kitchen-rota")).ok).toBe(true);
+    expect(await deleteDraftAction("kitchen-rota")).toEqual({ ok: true });
+    expect(deleteDraft).toHaveBeenCalledWith("kitchen-rota");
+  });
+
+  it("cannot delete a published questionnaire", async () => {
+    asViewer("captain");
+    definitionRow("published", "u1");
+
+    expect(await deleteDraftAction("kitchen-rota")).toEqual({
+      ok: false,
+      error: "Only drafts can be deleted — unpublish it first.",
+    });
+    expect(deleteDraft).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canViewBuilderDefinition,
   deriveViewerRank,
   hasCampAccess,
   hasClearance,
@@ -98,5 +99,37 @@ describe("requireClearance", () => {
       viewerRank: "team_lead",
       requiredRank: "captain",
     });
+  });
+});
+
+describe("canViewBuilderDefinition", () => {
+  const lead = { rank: "team_lead" as const, userId: "lead-1" };
+  const captain = { rank: "captain" as const, userId: "cap-1" };
+
+  it("shows a captain every questionnaire, drafts included", () => {
+    expect(
+      canViewBuilderDefinition(captain, { status: "draft", createdBy: "x" }),
+    ).toBe(true);
+  });
+
+  it("shows a lead their own draft but not another author's", () => {
+    expect(
+      canViewBuilderDefinition(lead, { status: "draft", createdBy: "lead-1" }),
+    ).toBe(true);
+    expect(
+      canViewBuilderDefinition(lead, { status: "draft", createdBy: "x" }),
+    ).toBe(false);
+    expect(
+      canViewBuilderDefinition(lead, { status: "draft", createdBy: null }),
+    ).toBe(false);
+  });
+
+  it("shows a lead any published or unpublished questionnaire", () => {
+    expect(
+      canViewBuilderDefinition(lead, { status: "published", createdBy: "x" }),
+    ).toBe(true);
+    expect(
+      canViewBuilderDefinition(lead, { status: "unpublished", createdBy: "x" }),
+    ).toBe(true);
   });
 });

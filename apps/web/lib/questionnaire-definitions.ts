@@ -6,8 +6,8 @@ import {
   flattenBuilderQuestions,
   regenerateBuilderIds,
 } from "@camp404/types";
-import type { Questionnaire } from "@camp404/types";
-import { slugify } from "@camp404/core";
+import type { Questionnaire, ViewerRank } from "@camp404/types";
+import { canViewBuilderDefinition, slugify } from "@camp404/core";
 import {
   definitionKeyExists,
   deleteDefinitionRow,
@@ -169,19 +169,17 @@ export interface DefinitionSummary {
 }
 
 /**
- * The hub list for a viewer. Captains see every builder questionnaire;
- * team-leads see published ones plus their own drafts. Newest first.
+ * The hub list for a viewer, newest first. Who sees what is
+ * `canViewBuilderDefinition`: a captain sees every builder questionnaire; a
+ * team lead sees published and unpublished ones plus their own drafts.
  */
-export async function listDefinitionsForViewer(input: {
+export async function listDefinitionsForViewer(viewer: {
   userId: string;
-  canSeeAll: boolean;
+  rank: ViewerRank;
 }): Promise<DefinitionSummary[]> {
   const rows = await listDefinitionRows();
   return rows
-    .filter(
-      (r) =>
-        input.canSeeAll || r.status !== "draft" || r.createdBy === input.userId,
-    )
+    .filter((r) => canViewBuilderDefinition(viewer, r))
     .map((r) => {
       const parsed = BuilderQuestionnaire.safeParse(r.definition);
       return {

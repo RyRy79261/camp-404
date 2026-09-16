@@ -11,6 +11,7 @@ import type { ViewerRank } from "@camp404/types";
 import {
   CAMP_TIME_ZONE,
   canSendToAudience,
+  canViewBuilderDefinition,
   deriveViewerRank,
   requireClearance,
   type AudienceSpec,
@@ -237,9 +238,10 @@ export async function duplicateDraftAction(
   const meta = await getDefinitionMetaRow(key);
   if (!meta) return { ok: false, error: "Questionnaire not found." };
   if (
-    gate.rank !== "captain" &&
-    meta.status === "draft" &&
-    meta.createdBy !== gate.campUser.id
+    !canViewBuilderDefinition(
+      { rank: gate.rank, userId: gate.campUser.id },
+      meta,
+    )
   ) {
     return { ok: false, error: "Questionnaire not found." };
   }
