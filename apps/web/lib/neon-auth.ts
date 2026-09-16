@@ -22,6 +22,15 @@ const PLACEHOLDER_BASE_URL = "https://build-placeholder.neon-auth.invalid";
 const PLACEHOLDER_COOKIE_SECRET =
   "build-placeholder-secret-build-placeholder-secret"; // 50 chars
 
+/**
+ * How long, in seconds, a signed session cookie is trusted before Neon Auth is
+ * asked again. This is also the revocation lag: a session signed out or
+ * revoked elsewhere keeps working here for up to this long. Any screen that
+ * revokes sessions must state this number. 300 is the library default, set
+ * here so it is a choice, not an accident.
+ */
+export const SESSION_DATA_TTL_SECONDS = 300;
+
 export const auth = createNeonAuth({
   baseUrl: process.env.NEON_AUTH_BASE_URL ?? PLACEHOLDER_BASE_URL,
   cookies: {
@@ -31,5 +40,6 @@ export const auth = createNeonAuth({
     // carry the session cookie. Strict drops the cookie on cross-site
     // GETs and breaks the OAuth round-trip.
     sameSite: "lax",
+    sessionDataTtl: SESSION_DATA_TTL_SECONDS,
   },
 });
