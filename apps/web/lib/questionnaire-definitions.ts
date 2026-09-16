@@ -18,6 +18,7 @@ import {
   listDefinitionRows,
   updateDefinitionRow,
 } from "@camp404/db/questionnaire-definitions";
+import { listOpenSendBlocking as dbListOpenSendBlocking } from "@camp404/db/questionnaire-lifecycle";
 import {
   BURNER_PROFILE_TEMPLATE,
   parseStoredBuilderDefinition,
@@ -177,6 +178,9 @@ export async function listDefinitionsForViewer(viewer: {
   userId: string;
   rank: ViewerRank;
 }): Promise<DefinitionSummary[]> {
+  // The test store models no builder questionnaires: in E2E the hub opens
+  // empty, honestly, rather than failing on a database that is not there.
+  if (isE2ETestMode()) return [];
   const rows = await listDefinitionRows();
   return rows
     .filter((r) => canViewBuilderDefinition(viewer, r))
@@ -194,4 +198,13 @@ export async function listDefinitionsForViewer(viewer: {
       };
     })
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+}
+
+/**
+ * Whether each questionnaire's open send is blocking, for the hub. Empty in
+ * E2E, where no sends are modelled.
+ */
+export async function listOpenSendBlocking(): Promise<Map<string, boolean>> {
+  if (isE2ETestMode()) return new Map();
+  return dbListOpenSendBlocking();
 }

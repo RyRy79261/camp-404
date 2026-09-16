@@ -27,7 +27,7 @@ the following fixture env (see `playwright.config.ts`):
 
 | Var | Value | Purpose |
 |---|---|---|
-| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,inspect,complete-onboarding,set-approval}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
+| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,seed-team,inspect,complete-onboarding,set-approval,set-rank}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
 | `INVITE_CODES` | `test-invite-e2e-only-code` | One known bootstrap (env-list) code for redemption specs. The specs type it in capitals to prove redemption ignores case. It is at least 20 characters, so it lets a member in without approval. |
 | `GOD_EMAILS` | `god@example.com` | One whitelisted god account that bypasses the invite gate. |
 
@@ -121,6 +121,11 @@ complete and jump straight to the gates that follow it (home vs.
   invite, then onboarding, then approval, then the page itself.
   `/notifications` stays open past the invite rung (owner's call: an
   applicant reads their inbox).
+- `team-lead.spec.ts` — a member who leads a team this year (seeded with
+  `seedTeam`, POST `/api/test/seed-team`) gets the Questionnaires tool and
+  the builder hub, with a lock on the captain tools; a member on a team who
+  does not lead it stays locked out. The hub opens empty in test mode: the
+  store models no builder questionnaires.
 - `invite-tracking.spec.ts` — env (bootstrap) code redemption survives
   signup, DB-backed codes record their issuer and use count, an
   approval-required code creates a `pending` account and a pre-approved

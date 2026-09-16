@@ -97,6 +97,23 @@ export async function setRank(
   if (!res.ok()) throw new Error(`setRank failed: ${res.status()}`);
 }
 
+/**
+ * Put a test user on a team for this year via the test seam, leading it when
+ * `isLead` is true. A lead is a team-lead persona: the builder and the
+ * Questionnaires tool open for them. The user row must already exist.
+ */
+export async function seedTeam(
+  request: APIRequestContext,
+  authUserId: string,
+  team: string,
+  isLead = false,
+): Promise<void> {
+  const res = await request.post("/api/test/seed-team", {
+    data: { authUserId, team, isLead },
+  });
+  if (!res.ok()) throw new Error(`seedTeam failed: ${res.status()}`);
+}
+
 /** Clear cookies for an existing Browser context. */
 export async function logoutAll(context: BrowserContext): Promise<void> {
   await context.clearCookies();
