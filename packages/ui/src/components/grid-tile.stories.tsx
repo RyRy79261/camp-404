@@ -62,6 +62,16 @@ export const Locked: Story = {
   },
 };
 
+export const ComingSoon: Story = {
+  args: {
+    icon: ClipboardList,
+    title: "Camp Tasks",
+    hint: "Camp-wide work board",
+    disabled: true,
+    disabledReason: "Not built yet. It comes in a later update.",
+  },
+};
+
 export const WithDragHandle: Story = {
   args: {
     icon: ClipboardList,

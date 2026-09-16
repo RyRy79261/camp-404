@@ -1,5 +1,5 @@
 import * as React from "react"
-import type { LucideIcon } from "lucide-react"
+import { Lock, type LucideIcon } from "lucide-react"
 
 import { IconBadge, type IconBadgeTone } from "./icon-badge"
 import { cn } from "../lib/utils"
@@ -29,6 +29,12 @@ export interface GridTileProps {
   href?: string
   /** Inert state (coming-soon / locked): non-interactive, dimmed. */
   disabled?: boolean
+  /**
+   * Why a disabled tile can't be opened, in words a member reads. Shown on the
+   * tile (a phone has no hover) and as its title. An inert tile with no reason
+   * reads as broken.
+   */
+  disabledReason?: string
   /** Drag-handle slot injected by Customize mode's DraggableTileRow. */
   dragHandle?: React.ReactNode
   /** Press handler for button-mode tiles (no `href`). */
@@ -44,6 +50,7 @@ function GridTile({
   badge,
   href,
   disabled = false,
+  disabledReason,
   dragHandle,
   onPress,
   className,
@@ -72,6 +79,12 @@ function GridTile({
         {hint ? (
           <span className="text-xs text-muted-foreground">{hint}</span>
         ) : null}
+        {disabled && disabledReason ? (
+          <span className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Lock aria-hidden="true" className="mt-px size-3 shrink-0" />
+            {disabledReason}
+          </span>
+        ) : null}
       </div>
     </>
   )
@@ -80,7 +93,13 @@ function GridTile({
     return (
       <div
         aria-disabled="true"
-        className={cn(base, "cursor-default opacity-50", className)}
+        title={disabledReason}
+        className={cn(
+          base,
+          "cursor-default border-dashed",
+          disabledReason ? "opacity-70" : "opacity-50",
+          className,
+        )}
       >
         {body}
       </div>

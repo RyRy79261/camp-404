@@ -69,6 +69,7 @@ export function RankGroupCard({
               hint={tile.hint}
               href={tile.comingSoon ? undefined : tile.href ?? undefined}
               disabled={tile.comingSoon}
+              disabledReason={tile.reason}
             />
           ))}
         </div>
