@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, lte } from "drizzle-orm";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import {
   BuilderQuestionnaire,
@@ -652,7 +652,8 @@ export type ReminderResult =
  */
 export async function sendReminder(input: {
   activationId: string;
-  senderId: string;
+  /** Null for the deadline cron: the camp, not a captain, is nudging. */
+  senderId: string | null;
   /** Injectable clock — the dedup window is the whole feature, so tests own it. */
   now?: Date;
 }): Promise<ReminderResult> {
@@ -773,4 +774,47 @@ export async function sendReminder(input: {
       broadcastId,
     };
   });
+}
+
+/** How far ahead the daily cron looks for a deadline. */
+export const DUE_SOON_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * The daily deadline nudge (WP10.reminders-cron). Every open send whose
+ * deadline falls within the next {@link DUE_SOON_WINDOW_MS} gets a reminder to
+ * the members still pending, through sendReminder, so its 24-hour dedup still
+ * holds: a member a captain nudged this morning is not nudged again. The camp
+ * is the sender (senderId null).
+ *
+ * A send that is already overdue is left alone: the deadline has passed, and a
+ * daily nudge for a form nobody closed would never stop.
+ */
+export async function remindDueSoon(input: { now?: Date } = {}): Promise<{
+  activations: number;
+  reminded: number;
+}> {
+  const now = input.now ?? new Date();
+  const until = new Date(now.getTime() + DUE_SOON_WINDOW_MS);
+  const db = createHttpDb();
+  const due = await db
+    .select({ id: schema.questionnaireActivations.id })
+    .from(schema.questionnaireActivations)
+    .where(
+      and(
+        eq(schema.questionnaireActivations.status, "open"),
+        gt(schema.questionnaireActivations.dueAt, now),
+        lte(schema.questionnaireActivations.dueAt, until),
+      ),
+    );
+
+  let reminded = 0;
+  for (const act of due) {
+    const result = await sendReminder({
+      activationId: act.id,
+      senderId: null,
+      now,
+    });
+    if (result.ok && result.outcome === "sent") reminded += result.sent;
+  }
+  return { activations: due.length, reminded };
 }

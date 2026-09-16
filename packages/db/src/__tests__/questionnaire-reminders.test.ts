@@ -6,6 +6,7 @@ import {
   REMINDER_REF_TYPE,
   REMINDER_WINDOW_MS,
   reminderBody,
+  remindDueSoon,
   sendReminder,
 } from "../questionnaire-lifecycle";
 import * as schema from "../schema";
@@ -383,5 +384,62 @@ describe("reminderBody", () => {
     expect(body).toContain(TITLE);
     expect(body).not.toMatch(/due/);
     expect(body).not.toMatch(/undefined|null|Invalid/);
+  });
+});
+
+describe("remindDueSoon — the daily deadline nudge", () => {
+  const h = useTestDb();
+  const NOW = new Date("2026-03-01T09:00:00Z");
+  const inHours = (hours: number) =>
+    new Date(NOW.getTime() + hours * 60 * 60 * 1000);
+
+  it("nudges pending members of sends due within 48 hours, and no others", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const soon = await makeActivation(db, { status: "open", dueAt: inHours(30) });
+    const later = await makeActivation(db, {
+      questionnaireKey: "later",
+      status: "open",
+      dueAt: inHours(72),
+    });
+    const overdue = await makeActivation(db, {
+      questionnaireKey: "overdue",
+      status: "open",
+      dueAt: inHours(-2),
+    });
+    const closed = await makeActivation(db, {
+      questionnaireKey: "closed",
+      status: "closed",
+      dueAt: inHours(10),
+    });
+    await gate(db, { userId: member.id, activationId: soon.id });
+
+    expect(await remindDueSoon({ now: NOW })).toEqual({
+      activations: 1,
+      reminded: 1,
+    });
+    expect(await remindedUserIds(db, soon.id)).toEqual([member.id]);
+    for (const act of [later, overdue, closed]) {
+      expect(await remindedUserIds(db, act.id)).toEqual([]);
+    }
+  });
+
+  it("does not nudge a member a captain already reminded today", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    const act = await makeActivation(db, { status: "open", dueAt: inHours(20) });
+    await gate(db, { userId: member.id, activationId: act.id });
+
+    await sendReminder({
+      activationId: act.id,
+      senderId: captain.id,
+      now: inHours(-3),
+    });
+    expect(await remindDueSoon({ now: NOW })).toEqual({
+      activations: 1,
+      reminded: 0,
+    });
+    expect(await remindedUserIds(db, act.id)).toEqual([member.id]);
   });
 });
