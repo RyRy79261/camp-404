@@ -216,6 +216,14 @@ const STATUS_BADGE: Record<
   unpublished: { label: "Unpublished", variant: "secondary" },
 };
 
+/** The question before closing an open send, wherever a captain can close one. */
+export const CLOSE_SEND_CONFIRM = {
+  title: "Close the current send?",
+  description:
+    "Members who haven't answered stop being asked. Answers already in are kept, and you can send again with new settings.",
+  confirmLabel: "Close send",
+} as const;
+
 /**
  * Captain lifecycle bar: status, and the dispatch affordances for a published
  * questionnaire — Send to members (or close the current open send to re-send,
@@ -261,12 +269,7 @@ export function LifecycleBar({
 
   async function closeSend() {
     if (!openActivationId) return;
-    const sure = await confirm({
-      title: "Close the current send?",
-      description:
-        "Members who haven't answered stop being asked. Answers already in are kept, and you can send again with new settings.",
-      confirmLabel: "Close send",
-    });
+    const sure = await confirm(CLOSE_SEND_CONFIRM);
     if (!sure) return;
     startTransition(async () => {
       const result = await closeActivationAction(

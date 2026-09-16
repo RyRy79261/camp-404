@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@camp404/ui/components/select";
 import { Switch } from "@camp404/ui/components/switch";
+import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { toast } from "@camp404/ui/components/toast";
 import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
@@ -33,6 +34,7 @@ import {
   previewAudienceCount,
   sendAction,
 } from "../../actions";
+import { CLOSE_SEND_CONFIRM } from "../lifecycle-controls";
 
 export interface MemberOption {
   id: string;
@@ -150,6 +152,7 @@ export function SendForm({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   // A lead is offered `team` alone, so start on the first scope offered.
   const [scope, setScope] = useState<Scope>(
@@ -251,8 +254,11 @@ export function SendForm({
     doSend();
   }
 
-  function closeCurrent() {
+  async function closeCurrent() {
     if (!openActivationId) return;
+    // Closing expires every unanswered gate, so it asks first, like the
+    // editor's Close send.
+    if (!(await confirm(CLOSE_SEND_CONFIRM))) return;
     startTransition(async () => {
       const result = await closeActivationAction(
         openActivationId,
@@ -270,6 +276,7 @@ export function SendForm({
   if (openActivationId) {
     return (
       <Card className="flex flex-col gap-4 p-4">
+        {confirmDialog}
         <Alert variant="warning">
           <TriangleAlert aria-hidden />
           <span>
@@ -280,7 +287,11 @@ export function SendForm({
         </Alert>
         <div className="flex gap-2">
           {!asLead && (
-            <Button type="button" onClick={closeCurrent} disabled={pending}>
+            <Button
+              type="button"
+              onClick={() => void closeCurrent()}
+              disabled={pending}
+            >
               {pending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (

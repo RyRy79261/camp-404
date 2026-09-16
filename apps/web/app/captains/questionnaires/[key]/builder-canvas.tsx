@@ -227,6 +227,40 @@ export function BuilderCanvas({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  // Every delete asks first: persist() saves to the server at once, and there
+  // is no undo. Returns whether the delete went ahead.
+  async function confirmRemoveBlock(
+    pageId: string,
+    block: Block,
+  ): Promise<boolean> {
+    const sure = await confirm({
+      title: `Delete “${describeBlock(block).label}”?`,
+      description: "This can't be undone.",
+      confirmLabel: "Delete block",
+      destructive: true,
+    });
+    if (sure) persist(removeBlock(working, pageId, blockId(block)));
+    return sure;
+  }
+
+  async function confirmRemovePage(
+    page: BuilderQuestionnaire["pages"][number],
+  ): Promise<boolean> {
+    const blocks = page.blocks.length;
+    const pageNumber = working.pages.findIndex((p) => p.id === page.id) + 1;
+    const sure = await confirm({
+      title: `Delete page ${pageNumber}?`,
+      description:
+        blocks === 0
+          ? "It has no blocks. This can't be undone."
+          : `Its ${blocks === 1 ? "1 block goes" : `${blocks} blocks go`} with it. This can't be undone.`,
+      confirmLabel: "Delete page",
+      destructive: true,
+    });
+    if (sure) persist(removePage(working, page.id));
+    return sure;
+  }
+
   function persist(next: BuilderQuestionnaire) {
     const previous = working; // last-good snapshot for rollback
     setWorking(next); // optimistic
@@ -330,20 +364,7 @@ export function BuilderCanvas({
                   size="icon"
                   aria-label="Delete page"
                   disabled={working.pages.length <= 1}
-                  onClick={async () => {
-                    const blocks = page.blocks.length;
-                    const sure = await confirm({
-                      title: `Delete page ${pageIndex + 1}?`,
-                      description:
-                        blocks === 0
-                          ? "It has no blocks. This can't be undone."
-                          : `Its ${blocks === 1 ? "1 block goes" : `${blocks} blocks go`} with it. This can't be undone.`,
-                      confirmLabel: "Delete page",
-                      destructive: true,
-                    });
-                    if (!sure) return;
-                    persist(removePage(working, page.id));
-                  }}
+                  onClick={() => void confirmRemovePage(page)}
                 >
                   <Trash2 className="text-destructive" />
                 </Button>
@@ -373,7 +394,7 @@ export function BuilderCanvas({
                           setEditorOpen(true);
                         }}
                         onDelete={() =>
-                          persist(removeBlock(working, page.id, blockId(block)))
+                          void confirmRemoveBlock(page.id, block)
                         }
                       />
                     ))}
@@ -460,11 +481,15 @@ export function BuilderCanvas({
             persist(replaceBlock(working, editing.pageId, editing.blockId, next));
             setEditorOpen(false);
           }}
-          onDelete={() => {
-            persist(removeBlock(working, editing.pageId, editing.blockId));
-            setEditorOpen(false);
-            setEditing(null); // block is gone — nothing left to animate over
-          }}
+          onDelete={() =>
+            void confirmRemoveBlock(editing.pageId, editingBlock).then(
+              (removed) => {
+                if (!removed) return;
+                setEditorOpen(false);
+                setEditing(null); // block is gone — nothing left to animate over
+              },
+            )
+          }
           onClose={() => setEditorOpen(false)}
         />
       )}
@@ -478,10 +503,11 @@ export function BuilderCanvas({
             persist(patchPage(working, settingsPageId, patch));
             setSettingsPageId(null);
           }}
-          onDelete={() => {
-            persist(removePage(working, settingsPageId));
-            setSettingsPageId(null);
-          }}
+          onDelete={() =>
+            void confirmRemovePage(settingsPage).then((removed) => {
+              if (removed) setSettingsPageId(null);
+            })
+          }
           onClose={() => setSettingsPageId(null)}
         />
       )}
