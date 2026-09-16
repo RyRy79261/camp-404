@@ -8,12 +8,15 @@ import { Checkbox } from "@camp404/ui/components/checkbox";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { StatTile } from "@camp404/ui/components/stat-tile";
 import {
+  DEFAULT_ROSTER_SORT,
   deriveRosterStats,
   matchesChip,
   matchesRosterQuery,
   matchesTeam,
+  sortRosterRows,
   type RosterChip,
   type RosterRow,
+  type RosterSort,
 } from "@/lib/camp-roster";
 import { decideApprovalsAction, type BulkApprovalResult } from "./actions";
 import { MemberProfile } from "./member-profile";
@@ -80,6 +83,7 @@ export function CampManagementRoster({
   const [chip, setChip] = useState<RosterChip>("all");
   const [team, setTeam] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sort, setSort] = useState<RosterSort>(DEFAULT_ROSTER_SORT);
   // Members decided since the filters last changed.
   const [pinned, setPinned] = useState<ReadonlySet<string>>(new Set());
   // Members ticked for a bulk decision.
@@ -106,14 +110,17 @@ export function CampManagementRoster({
 
   const filtered = useMemo(
     () =>
-      rows.filter(
-        (r) =>
-          pinned.has(r.id) ||
-          (matchesRosterQuery(r, query, teamLabels) &&
-            matchesChip(r, chip) &&
-            (team === null || matchesTeam(r, team))),
+      sortRosterRows(
+        rows.filter(
+          (r) =>
+            pinned.has(r.id) ||
+            (matchesRosterQuery(r, query, teamLabels) &&
+              matchesChip(r, chip) &&
+              (team === null || matchesTeam(r, team))),
+        ),
+        sort,
       ),
-    [rows, query, chip, team, teamLabels, pinned],
+    [rows, query, chip, team, teamLabels, pinned, sort],
   );
 
   // Resolve the open profile from the FILTERED rows, so narrowing the list to
@@ -236,6 +243,7 @@ export function CampManagementRoster({
         onTeamChange={(value) => narrow(() => setTeam(value))}
         teams={teams}
         stats={stats}
+        sort={{ value: sort, onChange: setSort }}
       />
 
       {selection && (
@@ -305,6 +313,7 @@ export function CampManagementRoster({
             selectedId={selectedId}
             onSelect={setSelectedId}
             selection={selection}
+            sort={{ value: sort, onChange: setSort }}
           />
           <RosterList
             className="sm:hidden"

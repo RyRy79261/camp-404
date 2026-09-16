@@ -6,6 +6,7 @@ import {
   matchesRosterQuery,
   matchesTeam,
   rankLabel,
+  sortRosterRows,
   toRosterRow,
 } from "@/lib/camp-roster";
 
@@ -208,9 +209,9 @@ describe("matchesRosterQuery", () => {
   });
 
   it("matches on rank label", () => {
-    expect(matchesRosterQuery(toRosterRow(member({ rank: "captain" })), "captain")).toBe(
-      true,
-    );
+    expect(
+      matchesRosterQuery(toRosterRow(member({ rank: "captain" })), "captain"),
+    ).toBe(true);
   });
 
   it("tolerates a null handle / null country", () => {
@@ -244,9 +245,7 @@ describe("deriveRosterStats", () => {
   it("derives all six counts in one reconciling pass", () => {
     const rows = [
       // approved captain, all done
-      toRosterRow(
-        member({ rank: "captain", approvalStatus: "approved" }),
-      ),
+      toRosterRow(member({ rank: "captain", approvalStatus: "approved" })),
       // approved member with a blocking action left (incomplete/outstanding)
       toRosterRow(
         member({ approvalStatus: "approved", pendingRequiredActions: 2 }),
@@ -275,5 +274,66 @@ describe("deriveRosterStats", () => {
       captains: 0,
       outstanding: 0,
     });
+  });
+});
+
+describe("sortRosterRows", () => {
+  const rows = [
+    toRosterRow(
+      member({ id: "a", displayName: "zed", handle: "z", country: "ZA" }),
+    ),
+    toRosterRow(
+      member({
+        id: "b",
+        displayName: "Amy",
+        handle: null,
+        country: null,
+        rank: "captain",
+      }),
+    ),
+    toRosterRow(
+      member({
+        id: "c",
+        displayName: "mo",
+        handle: "m",
+        country: "BE",
+        approvalStatus: "pending",
+        isLead: true,
+      }),
+    ),
+  ];
+  const names = (sorted: typeof rows) => sorted.map((r) => r.displayName);
+
+  it("sorts names without caring about case, both ways", () => {
+    expect(
+      names(sortRosterRows(rows, { key: "name", direction: "asc" })),
+    ).toEqual(["Amy", "mo", "zed"]);
+    expect(
+      names(sortRosterRows(rows, { key: "name", direction: "desc" })),
+    ).toEqual(["zed", "mo", "Amy"]);
+  });
+
+  it("keeps a missing value last in either direction", () => {
+    expect(
+      names(sortRosterRows(rows, { key: "handle", direction: "asc" })),
+    ).toEqual(["mo", "zed", "Amy"]);
+    expect(
+      names(sortRosterRows(rows, { key: "country", direction: "desc" })),
+    ).toEqual(["zed", "mo", "Amy"]);
+  });
+
+  it("puts captains, then leads, first by role, and a pending decision first by status", () => {
+    expect(
+      names(sortRosterRows(rows, { key: "role", direction: "asc" })),
+    ).toEqual(["Amy", "mo", "zed"]);
+    expect(
+      names(sortRosterRows(rows, { key: "status", direction: "asc" }))[0],
+    ).toBe("mo");
+  });
+
+  it("does not change the rows it was given", () => {
+    const before = names(rows);
+    sortRosterRows(rows, { key: "name", direction: "desc" });
+    expect(names(rows)).toEqual(before);
   });
 });

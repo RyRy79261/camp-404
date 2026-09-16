@@ -2,7 +2,20 @@
 
 import { ChevronDown, TriangleAlert } from "lucide-react";
 import { cn } from "@camp404/ui/lib/utils";
-import type { RosterChip } from "@/lib/camp-roster";
+import type { RosterChip, RosterSort } from "@/lib/camp-roster";
+
+// The sort choices a phone gets, where the table's column headers are hidden.
+const SORT_OPTIONS: { value: string; label: string; sort: RosterSort }[] = [
+  { value: "name-asc", label: "Name A–Z", sort: { key: "name", direction: "asc" } },
+  { value: "name-desc", label: "Name Z–A", sort: { key: "name", direction: "desc" } },
+  {
+    value: "status-asc",
+    label: "Needs a decision first",
+    sort: { key: "status", direction: "asc" },
+  },
+  { value: "role-asc", label: "Captains first", sort: { key: "role", direction: "asc" } },
+  { value: "country-asc", label: "Country", sort: { key: "country", direction: "asc" } },
+];
 
 // Search + multi-chip filter row for the roster (board S17 toolbar). Controlled:
 // it owns no data, it reports query / chip / team changes up to the island. The
@@ -39,6 +52,7 @@ export function RosterToolbar({
   onTeamChange,
   teams,
   stats,
+  sort,
   publicOnly = false,
 }: {
   query: string;
@@ -50,6 +64,8 @@ export function RosterToolbar({
   /** Active teams (key + label), order-resolved from the camp config. */
   teams: readonly { key: string; label: string }[];
   stats: ToolbarStats;
+  /** The captain roster's sort, offered as a select below `sm`. */
+  sort?: { value: RosterSort; onChange: (sort: RosterSort) => void };
   publicOnly?: boolean;
 }) {
   return (
@@ -139,6 +155,44 @@ export function RosterToolbar({
           </select>
           <ChevronDown aria-hidden className="h-3.5 w-3.5" />
         </span>
+
+        {/* Sort — phones only; the table's column headers sort on wider
+            screens. A native select, styled as a chip like Team. */}
+        {sort && (
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3.5 py-2 font-mono text-label font-semibold text-muted-foreground sm:hidden">
+            <span aria-hidden>Sort:</span>
+            <select
+              aria-label="Sort the roster"
+              value={
+                SORT_OPTIONS.find(
+                  (o) =>
+                    o.sort.key === sort.value.key &&
+                    o.sort.direction === sort.value.direction,
+                )?.value ?? ""
+              }
+              onChange={(e) => {
+                const picked = SORT_OPTIONS.find(
+                  (o) => o.value === e.target.value,
+                );
+                if (picked) sort.onChange(picked.sort);
+              }}
+              className="cursor-pointer appearance-none bg-transparent pr-1 font-mono font-semibold focus:outline-none focus-visible:underline"
+            >
+              {/* A header-chosen sort with no phone equivalent still shows. */}
+              {!SORT_OPTIONS.some(
+                (o) =>
+                  o.sort.key === sort.value.key &&
+                  o.sort.direction === sort.value.direction,
+              ) && <option value="">Custom</option>}
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden className="h-3.5 w-3.5" />
+          </span>
+        )}
 
         {/* Outstanding — captain-only (an approval-derived facet). */}
         {!publicOnly && (

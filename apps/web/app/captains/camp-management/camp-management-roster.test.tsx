@@ -155,7 +155,8 @@ describe("CampManagementRoster — deciding in bulk", () => {
 
     await waitFor(() =>
       expect(decideApprovalsAction).toHaveBeenCalledWith({
-        userIds: ["m1", "m2"],
+        // In roster order: sorted by name, Ash before Nova.
+        userIds: ["m2", "m1"],
         to: "approved",
         reason: undefined,
       }),
