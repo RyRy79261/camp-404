@@ -75,6 +75,15 @@ describe("auditDetail", () => {
     );
   });
 
+  it("names a document and its new version", () => {
+    expect(auditDetail("document.published", { title: "Kitchen safety" })).toBe(
+      "Kitchen safety",
+    );
+    expect(auditDetail("document.updated", { version: 3 })).toBe(
+      "Now version 3",
+    );
+  });
+
   it("shows nothing for a shape it does not know", () => {
     expect(auditDetail("member.rank_changed", { to: 42 })).toBeNull();
     expect(auditDetail("member.approval_decided", null)).toBeNull();

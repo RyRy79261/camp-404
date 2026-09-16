@@ -12,6 +12,10 @@ export const AUDIT_ACTION_LABELS = {
   "camp.teams.moved": "Moved a team in the list",
   "camp.teams.renamed": "Renamed a team",
   "camp.teams.unarchived": "Restored a team",
+  "document.created": "Started a camp document",
+  "document.published": "Published a camp document",
+  "document.unpublished": "Unpublished a camp document",
+  "document.updated": "Edited a camp document",
   "invite.revoked": "Revoked an invite code",
   "member.approval_decided": "Decided an application",
   "member.export": "Exported the member list",
@@ -148,6 +152,14 @@ export function auditDetail(
     case "team_budget.set": {
       const team = text(metadata, "team");
       return team ? teamLabel(team) : null;
+    }
+    case "document.created":
+    case "document.published":
+    case "document.unpublished":
+      return text(metadata, "title");
+    case "document.updated": {
+      const version = count(metadata, "version");
+      return version === null ? null : `Now version ${version}`;
     }
     case "camp.cycle.renamed": {
       const to = text(metadata, "to");
