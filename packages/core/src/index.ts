@@ -10,8 +10,8 @@
 // Phase-3 extractions land here progressively (see architecture.md
 // §hybrid-extraction). Landed so far:
 //   - access/clearance: rankLevel, hasClearance, requireClearance,
-//     deriveViewerRank, hasCampAccess, isApproved, nextGate,
-//     canViewBuilderDefinition (./access)
+//     deriveViewerRank, hasCampAccess, isApproved, canViewBuilderDefinition
+//     (./access)
 //   - family tree: buildTree, computeMatchIds, subtreeHasMatch,
 //     descendantCountLabel (./family-tree) — all cycle-guarded (OD9)
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
