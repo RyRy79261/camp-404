@@ -31,6 +31,7 @@ describe("MCP tool listing", () => {
       "create_document",
       "create_questionnaire_draft",
       "update_questionnaire_draft",
+      "add_car_rider",
     ]) {
       expect(names).toContain(name);
     }

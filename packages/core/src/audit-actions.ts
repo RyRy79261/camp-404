@@ -5,6 +5,8 @@
 
 export const AUDIT_ACTION_LABELS = {
   "account.sanitized": "Erased their account",
+  "car.rider_added": "Put a member in a car",
+  "car.rider_removed": "Took a member out of a car",
   "camp.cycle.advanced": "Moved the camp to a new year",
   "camp.cycle.founded": "Set the camp's first year",
   "camp.cycle.renamed": "Renamed a year",
