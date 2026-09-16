@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
+import { createHttpDb } from "../index";
 import { getMcpScopeRows, isActiveMcpUser } from "../mcp";
 
 // An MCP token outlives the moment it was authorized. Every tool call and
@@ -13,7 +14,8 @@ describe("MCP access follows camp membership", () => {
     const db = h.db();
     const member = await makeUser(db, { approvalStatus: "approved" });
     expect((await getMcpScopeRows(member.id))?.user.id).toBe(member.id);
-    expect(await isActiveMcpUser(db, member.id)).toBe(true);
+    // The app handle, which the harness routes to the test database.
+    expect(await isActiveMcpUser(createHttpDb(), member.id)).toBe(true);
   });
 
   it("stops serving a member who is pending, rejected, erased or a system actor", async () => {
@@ -26,7 +28,7 @@ describe("MCP access follows camp membership", () => {
     ];
     for (const user of users) {
       expect(await getMcpScopeRows(user.id)).toBeNull();
-      expect(await isActiveMcpUser(db, user.id)).toBe(false);
+      expect(await isActiveMcpUser(createHttpDb(), user.id)).toBe(false);
     }
   });
 });
