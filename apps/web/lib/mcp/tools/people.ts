@@ -142,10 +142,7 @@ function shapeUser(
   };
 
   if (
-    canSeeIdDocuments(
-      { ...scope, rank: scope.isCaptain ? "captain" : "member" } as never,
-      { id: row.id, aiDataConsent: row.aiDataConsent },
-    )
+    canSeeIdDocuments(scope, { id: row.id, aiDataConsent: row.aiDataConsent })
   ) {
     const passport = decryptField(row.passportEncrypted);
     const saId = decryptField(row.saIdEncrypted);

@@ -22,6 +22,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // jsdom environment; node:crypto is available there.
 
 vi.mock("@camp404/db", () => ({ createHttpDb: vi.fn() }));
+vi.mock("@camp404/db/activations", () => ({
+  satisfyRequiredAction: vi.fn(),
+}));
 vi.mock("@camp404/db/mcp", () => ({
   getMcpScopeRows: vi.fn(),
   appendMcpAuditLog: vi.fn(),
@@ -33,6 +36,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { createHttpDb } from "@camp404/db";
+import { satisfyRequiredAction } from "@camp404/db/activations";
 import { appendMcpAuditLog, getMcpScopeRows } from "@camp404/db/mcp";
 import { decrypt, encrypt } from "@camp404/db/crypto";
 import { registerProfileTools } from "@/lib/mcp/tools/profile";
@@ -68,6 +72,16 @@ const dbUpdate = vi.fn(() => ({
   },
 }));
 
+/** Every row handed to `db.insert(...).values(...)` (the upsert tools). */
+let inserts: Record<string, unknown>[] = [];
+
+const dbInsert = vi.fn(() => ({
+  values: (row: Record<string, unknown>) => {
+    inserts.push(row);
+    return { onConflictDoUpdate: () => ({ returning: async () => [row] }) };
+  },
+}));
+
 const fakeDb = {
   select: () => ({
     from: () => ({
@@ -75,6 +89,7 @@ const fakeDb = {
     }),
   }),
   update: dbUpdate,
+  insert: dbInsert,
 };
 
 /**
@@ -132,6 +147,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   tools.clear();
   patches = [];
+  inserts = [];
   idColumns = null;
   registerProfileTools({
     registerTool: (
@@ -162,12 +178,12 @@ describe("update_my_id_documents holds the one-document invariant", () => {
     idColumns = { passport: encrypt("P123456"), saId: null, eft: null };
 
     const result = await call("update_my_id_documents", {
-      saId: "9001015800085",
+      saId: "8001015009087",
     });
     expect(payload(result)).toEqual({ ok: true });
 
     const patch = onlyPatch();
-    expect(decrypt(patch.saIdEncrypted as string)).toBe("9001015800085");
+    expect(decrypt(patch.saIdEncrypted as string)).toBe("8001015009087");
     // The defect: this used to be absent from the patch, leaving both columns
     // populated for idColumnsFor to silently resolve in passport's favour on
     // the member's next ordinary profile save.
@@ -175,7 +191,7 @@ describe("update_my_id_documents holds the one-document invariant", () => {
   });
 
   it("setting only passport clears the SA ID column in the same patch", async () => {
-    idColumns = { passport: null, saId: encrypt("9001015800085"), eft: null };
+    idColumns = { passport: null, saId: encrypt("8001015009087"), eft: null };
 
     await call("update_my_id_documents", { passport: "P123456" });
 
@@ -187,7 +203,7 @@ describe("update_my_id_documents holds the one-document invariant", () => {
   it("refuses both documents in one call and writes NOTHING", async () => {
     const result = await call("update_my_id_documents", {
       passport: "P123456",
-      saId: "9001015800085",
+      saId: "8001015009087",
     });
 
     expect(errorText(result)).toBe(
@@ -222,7 +238,7 @@ describe("update_my_id_documents holds the one-document invariant", () => {
   });
 
   it("audit-logs the change as flags only — never the document numbers", async () => {
-    await call("update_my_id_documents", { saId: "9001015800085" });
+    await call("update_my_id_documents", { saId: "8001015009087" });
 
     expect(appendMcpAuditLog).toHaveBeenCalledTimes(1);
     const entry = vi.mocked(appendMcpAuditLog).mock.calls[0]![0];
@@ -232,7 +248,7 @@ describe("update_my_id_documents holds the one-document invariant", () => {
       saId: "set",
       eft: "unchanged",
     });
-    expect(JSON.stringify(entry)).not.toContain("9001015800085");
+    expect(JSON.stringify(entry)).not.toContain("8001015009087");
   });
 
   it("audits an empty string as the clear it actually performs", async () => {
@@ -254,7 +270,7 @@ describe("update_my_id_documents holds the one-document invariant", () => {
     // The both-documents guard reads as arity but branches on the classifier,
     // so `{ passport: "", saId: "X" }` is one set and one clear — a legal call,
     // not a refusal.
-    await call("update_my_id_documents", { passport: "", saId: "9001015800085" });
+    await call("update_my_id_documents", { passport: "", saId: "8001015009087" });
 
     const patch = onlyPatch();
     expect(patch.saIdEncrypted).not.toBeNull();
@@ -340,5 +356,95 @@ describe("get_my_id_documents distinguishes absent from unreadable", () => {
     expect(errorText(await call("get_my_id_documents"))).toBe(
       "User row not found.",
     );
+  });
+});
+
+// --- the web form's checks hold here too -----------------------------------
+
+describe("ID numbers the web form would refuse", () => {
+  it("refuses a malformed passport and writes nothing", async () => {
+    const result = await call("update_my_id_documents", {
+      passport: "P-12 34",
+    });
+
+    expect(errorText(result)).toBe(
+      "Letters and digits only — typically 6–12 characters.",
+    );
+    expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses an SA ID whose check digit is wrong and writes nothing", async () => {
+    const result = await call("update_my_id_documents", {
+      saId: "8001015009088",
+    });
+
+    expect(errorText(result)).toBe(
+      "Check digit doesn't match — double-check the number.",
+    );
+    expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
+  it("still lets a caller clear a document without a number to check", async () => {
+    await call("update_my_id_documents", { saId: null });
+
+    expect(onlyPatch().saIdEncrypted).toBeNull();
+  });
+
+  it("refuses a burner profile with a bad ID number or birth date", async () => {
+    const badId = await call("update_my_burner_profile", {
+      version: "3",
+      responses: { "id.type": "sa_id", "id.number": "12345" },
+    });
+    expect(errorText(badId)).toBe("Must be exactly 13 digits.");
+
+    const future = await call("update_my_burner_profile", {
+      version: "3",
+      responses: { birthday: "2999-01-01" },
+    });
+    expect(errorText(future)).toBe("Date of birth can't be in the future.");
+
+    expect(dbInsert).not.toHaveBeenCalled();
+    expect(dbUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("a form marked complete through MCP clears its gate", () => {
+  it("satisfies the burner profile action at the version written", async () => {
+    await call("update_my_burner_profile", {
+      version: "3",
+      responses: { birthday: "1990-01-15" },
+      markComplete: true,
+    });
+
+    expect(inserts[0]?.completedAt).toBeInstanceOf(Date);
+    expect(satisfyRequiredAction).toHaveBeenCalledWith(
+      USER_ID,
+      "burner_profile",
+      "3",
+    );
+  });
+
+  it("satisfies the dietary requirements action", async () => {
+    await call("update_my_dietary_requirements", {
+      version: "2",
+      markComplete: true,
+    });
+
+    expect(satisfyRequiredAction).toHaveBeenCalledWith(
+      USER_ID,
+      "dietary_requirements",
+      "2",
+    );
+  });
+
+  it("leaves the gate alone for a progress save", async () => {
+    await call("update_my_burner_profile", {
+      version: "3",
+      responses: { birthday: "1990-01-15" },
+    });
+    await call("update_my_dietary_requirements", { version: "2" });
+
+    expect(inserts).toHaveLength(2);
+    expect(satisfyRequiredAction).not.toHaveBeenCalled();
   });
 });
