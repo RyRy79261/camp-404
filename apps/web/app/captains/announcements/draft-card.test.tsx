@@ -163,6 +163,12 @@ describe("draft actions", () => {
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("That draft is gone."),
     );
+    // The buttons stay disabled until the failed delete has settled.
+    await waitFor(() =>
+      expect(
+        first.getByRole("button", { name: /Publish to camp/ }),
+      ).toHaveProperty("disabled", false),
+    );
     fireEvent.click(first.getByRole("button", { name: /Publish to camp/ }));
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("Pick an active team."),
