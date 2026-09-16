@@ -168,7 +168,7 @@ Transient strip (board: `$popover`/`$border`, full-width row): leading status ic
 - **AI input is the sanitized text** (no PII to the model); AI output re-sanitized when the body is assembled.
 - **Markdown-injection defence:** user text fenced; AI prose `mdInline`'d (defuse fences, collapse newlines); footer reporter/route `inlineCode`'d. `route` is client-supplied → treated as untrusted.
 - **Title derivation:** plain = first line sliced to 100 (fallback "Bug report"/"Feature request"); AI = sanitized `s.title` to 100 (same fallback). Body capped to 60_000.
-- **Rate limits are shared** — counted in Postgres (`action_rate_limit`) across every instance; the per-instance in-memory bucket decides only when the database cannot store a count.
+- **Rate limits are shared** — counted in Postgres (`action_rate_limit`) on the database clock, across every instance; the per-instance in-memory bucket decides only in E2E test mode (no database) and when the database cannot store a count.
 - **GitHub status handling:** 201→validate+return; 401→token-refresh msg; 403/404→unreachable; 410→issues off; other→generic retry; thrown (timeout/network)→retry msg.
 - **Footer always present:** "Filed via the in-app reporter" (+ " (voice-dictated)" when `dictated`), `reporter: <id>`, `from: <route>` when present.
 - **Shake robustness:** 5 jolts / 800ms window / 3000ms cooldown; magnitude rotation-invariant so reorientation doesn't register.

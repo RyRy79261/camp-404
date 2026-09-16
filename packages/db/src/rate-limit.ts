@@ -28,6 +28,11 @@ const ALLOWED: RateLimitVerdict = { ok: true, retryAfterSeconds: 0 };
 /**
  * Count one attempt for `key` and say whether it may go ahead.
  *
+ * Every time in the statement comes from ONE clock: the database's `now()`,
+ * read once for the whole statement. Instances' own clocks can drift, and an
+ * instance running ahead would otherwise end a shared window early. `now` is a
+ * fixed clock for tests only.
+ *
  * Returns null when the database cannot be reached (the error is logged), so
  * the caller picks the fallback. It throws only for a limit or window that no
  * caller should pass.
@@ -37,6 +42,7 @@ export async function consumeRateLimit(input: {
   /** Attempts allowed in one window. */
   limit: number;
   windowMs: number;
+  /** Tests only: a fixed clock instead of the database's. */
   now?: Date;
 }): Promise<RateLimitVerdict | null> {
   const { key, limit, windowMs } = input;
@@ -55,9 +61,11 @@ export async function consumeRateLimit(input: {
     );
   }
 
-  const nowMs = (input.now ?? new Date()).getTime();
-  const windowCutoff = nowMs - windowMs;
-  const staleCutoff = nowMs - RATE_LIMIT_ROW_HORIZON_MS;
+  // Epoch milliseconds. `now()` is fixed for the whole statement, so every use
+  // below reads the same instant.
+  const nowMs = input.now
+    ? sql`${input.now.getTime()}::bigint`
+    : sql`(extract(epoch from now()) * 1000)::bigint`;
 
   try {
     // One statement, so two instances cannot both read "under the limit"
@@ -67,21 +75,23 @@ export async function consumeRateLimit(input: {
     const result = (await createHttpDb().execute(sql`
       WITH swept AS (
         DELETE FROM action_rate_limit
-         WHERE window_start < ${staleCutoff}
+         WHERE window_start < ${nowMs} - ${RATE_LIMIT_ROW_HORIZON_MS}::bigint
            AND key <> ${key}
       )
       INSERT INTO action_rate_limit (key, count, window_start)
       VALUES (${key}, 1, ${nowMs})
       ON CONFLICT (key) DO UPDATE SET
         count = CASE
-          WHEN action_rate_limit.window_start <= ${windowCutoff} THEN 1
+          WHEN action_rate_limit.window_start <= ${nowMs} - ${windowMs}::bigint
+            THEN 1
           ELSE action_rate_limit.count + 1
         END,
         window_start = CASE
-          WHEN action_rate_limit.window_start <= ${windowCutoff} THEN ${nowMs}
+          WHEN action_rate_limit.window_start <= ${nowMs} - ${windowMs}::bigint
+            THEN ${nowMs}
           ELSE action_rate_limit.window_start
         END
-      RETURNING count, window_start
+      RETURNING count, window_start, ${nowMs} AS now_ms
     `)) as unknown as { rows?: RateLimitRow[] } | RateLimitRow[];
 
     // The Neon HTTP driver and PGlite both return { rows }; other drivers
@@ -94,7 +104,10 @@ export async function consumeRateLimit(input: {
     const windowEndsAt = Number(row.window_start) + windowMs;
     return {
       ok: false,
-      retryAfterSeconds: Math.max(1, Math.ceil((windowEndsAt - nowMs) / 1000)),
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil((windowEndsAt - Number(row.now_ms)) / 1000),
+      ),
     };
   } catch (err) {
     console.error("[rate-limit] the counter could not be stored", err);
@@ -105,4 +118,5 @@ export async function consumeRateLimit(input: {
 interface RateLimitRow {
   count: number | string;
   window_start: number | string;
+  now_ms: number | string;
 }
