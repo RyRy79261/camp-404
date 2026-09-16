@@ -1,5 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, getTableColumns } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { patchLeaksAny, uncoveredPrivateUserColumns } from "@camp404/core";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
 import { sanitiseAccount, sanitisedUserPatch } from "../account";
@@ -28,6 +29,33 @@ describe("sanitisedUserPatch", () => {
     // here so the rank drop can never be mistaken for the whole defence.
     expect(patch.sanitised).toBe(true);
     expect(patch.authUserId).toBe("deleted:user-123");
+  });
+
+  it("clears every always-private and safety column on users", () => {
+    expect(uncoveredPrivateUserColumns(patch)).toEqual([]);
+  });
+
+  it("clears or deliberately keeps every users column", () => {
+    // Erasure keeps the row, so a column the patch does not touch survives.
+    // Each kept column is here with its reason; a NEW column fails this test
+    // until it is either cleared by the patch or added here on purpose.
+    const KEPT_ON_PURPOSE = {
+      id: "the row itself: authorship and audit references point at it",
+      inviteCode: "lineage: who invited whom stays on the family tree",
+      isSystem: "always false for a person",
+      membershipTier: "camp accounting, not identity",
+      duesPaid: "camp accounting, not identity",
+      duesPaidAt: "camp accounting, not identity",
+      approvalStatus: "a captain's recorded decision",
+      approvalDecidedByUserId: "a captain's recorded decision",
+      approvalDecidedAt: "a captain's recorded decision",
+      createdAt: "row history",
+    };
+    const columns = Object.keys(getTableColumns(schema.users));
+    const unclassified = columns.filter(
+      (c) => !(c in patch) && !(c in KEPT_ON_PURPOSE),
+    );
+    expect(unclassified).toEqual([]);
   });
 });
 
@@ -159,6 +187,49 @@ describe("sanitiseAccount", () => {
     expect(othersTokens).toHaveLength(1);
   });
 
+  it("leaves nothing of the person on the row, and writes one proof row", async () => {
+    const db = h.db();
+    await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db, {
+      displayName: "Grace Hopper",
+      telegramHandle: "gracehop",
+      skills: ["cobol-whisperer"],
+      previousAfrikaburns: 4,
+      aiDataConsent: true,
+      emergencyContacts: [
+        { name: "Ada Byron", phone: "+27 82 555 0199", relationship: "friend" },
+      ],
+    });
+
+    const result = await sanitiseAccount(member.id);
+    expect(result.ok).toBe(true);
+
+    const row = await readUser(db, member.id);
+    expect(
+      patchLeaksAny(row, [
+        "Grace Hopper",
+        "gracehop",
+        "cobol-whisperer",
+        "Ada Byron",
+        "+27 82 555 0199",
+      ]),
+    ).toBe(false);
+    expect(row.previousAfrikaburns).toBeNull();
+    expect(row.aiDataConsent).toBe(false);
+
+    const proofs = await db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.target, member.id));
+    expect(proofs).toEqual([
+      expect.objectContaining({
+        actorId: member.id,
+        action: "account.sanitized",
+        metadata: { lostCatNumber: row.lostCatNumber },
+      }),
+    ]);
+  });
+
   it("refuses the camp's sole captain and writes nothing", async () => {
     const db = h.db();
     const captain = await makeUser(db, { rank: "captain" });
@@ -174,6 +245,12 @@ describe("sanitiseAccount", () => {
     expect(row.authUserId).toBe(captain.authUserId);
     // The refusal returns before the first delete, so nothing downstream ran.
     expect(await responsesFor(db, captain.id)).toHaveLength(1);
+    expect(
+      await db
+        .select()
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.target, captain.id)),
+    ).toEqual([]);
   });
 
   it("lets a captain who has a peer go", async () => {

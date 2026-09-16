@@ -9,6 +9,8 @@ import {
   canReadProfileAnswer,
   isFieldLocked,
   isSafetyVisible,
+  patchLeaksAny,
+  uncoveredPrivateUserColumns,
 } from "../privacy";
 
 describe("ALWAYS_PRIVATE", () => {
@@ -163,5 +165,46 @@ describe("canReadProfileAnswer", () => {
     expect(canReadProfileAnswer(lead, "id.number")).toBe(false);
     expect(canReadProfileAnswer(captain, "id.number")).toBe(true);
     expect(canReadProfileAnswer(captain, "phone")).toBe(true);
+  });
+});
+
+describe("uncoveredPrivateUserColumns", () => {
+  it("names each private users column the patch leaves set", () => {
+    expect(
+      uncoveredPrivateUserColumns({
+        passportEncrypted: null,
+        saIdEncrypted: "ciphertext",
+        emergencyContacts: [],
+      }).sort(),
+    ).toEqual(["eftDetailsEncrypted", "emergencyContacts", "saIdEncrypted"]);
+  });
+
+  it("ignores keys that do not live on users", () => {
+    // id.number, allergies and isAnaphylactic live in rows erasure deletes.
+    expect(
+      uncoveredPrivateUserColumns({
+        passportEncrypted: null,
+        saIdEncrypted: null,
+        eftDetailsEncrypted: null,
+        emergencyContacts: null,
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("patchLeaksAny", () => {
+  it("finds a person's value anywhere in the patch, in any case", () => {
+    expect(
+      patchLeaksAny({ nested: { note: "Call GRACE on Sunday" } }, ["grace"]),
+    ).toBe(true);
+  });
+
+  it("is false for a clean patch or no values to look for", () => {
+    expect(patchLeaksAny({ displayName: "Lost Cat #7" }, ["Grace"])).toBe(
+      false,
+    );
+    expect(
+      patchLeaksAny({ displayName: "Grace" }, [null, "  ", undefined]),
+    ).toBe(false);
   });
 });

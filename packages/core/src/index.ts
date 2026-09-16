@@ -28,7 +28,10 @@
 //     state machine, and the sole-captain erasure guard
 //     (./promotion)
 //   - field privacy: ALWAYS_PRIVATE, SAFETY_VISIBLE, isFieldLocked,
-//     isSafetyVisible (./privacy)
+//     isSafetyVisible; who reads each member field (MEMBER_FIELD_READERS,
+//     PROFILE_ANSWER_READERS, canReadMemberField, canReadProfileAnswer); and
+//     the erasure provers uncoveredPrivateUserColumns, patchLeaksAny
+//     (./privacy)
 //   - audience authz: canSendToAudience + AudienceScope/AudienceActor/
 //     AudienceSpec — who may send to which audience (./audience-authz)
 //   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,

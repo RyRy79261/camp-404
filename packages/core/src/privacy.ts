@@ -236,3 +236,36 @@ export function canReadProfileAnswer(
     PROFILE_ANSWER_READERS[questionId] ?? "captain",
   );
 }
+
+// --- Erasure provers -----------------------------------------------------------
+
+/**
+ * The always-private and safety `users` columns an erasure patch leaves set.
+ * Empty means the patch clears every one. A key added to ALWAYS_PRIVATE or
+ * SAFETY_VISIBLE that names a `users` column fails this until erasure clears
+ * it too. (Answer keys and dietary columns live in rows erasure deletes.)
+ */
+export function uncoveredPrivateUserColumns(
+  patch: Record<string, unknown>,
+): string[] {
+  return [...ALWAYS_PRIVATE, ...SAFETY_VISIBLE].filter(
+    (key) => `users.${key}` in MEMBER_FIELD_READERS && patch[key] !== null,
+  );
+}
+
+/**
+ * Whether any value in `patch` still contains one of the person's own values
+ * (their name, handle, phone). The leak detector for erasure tests, like
+ * `notificationMentionsAny` for notifications.
+ */
+export function patchLeaksAny(
+  patch: Record<string, unknown>,
+  forbidden: readonly (string | null | undefined)[],
+): boolean {
+  const needles = forbidden
+    .filter((v): v is string => typeof v === "string" && v.trim() !== "")
+    .map((v) => v.toLowerCase());
+  if (needles.length === 0) return false;
+  const haystack = JSON.stringify(patch).toLowerCase();
+  return needles.some((needle) => haystack.includes(needle));
+}
