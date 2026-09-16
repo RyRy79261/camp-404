@@ -9,7 +9,9 @@ import {
   hasCampAccess,
   isApproved,
 } from "@/lib/users";
-import { listCompletedForms } from "@/lib/forms";
+import { getCycles } from "@/lib/camp-config";
+import { listAnsweredQuestionnaires, listCompletedForms } from "@/lib/forms";
+import { UNSET_CYCLE } from "@camp404/db/camp-config";
 import { FormCard } from "./form-card";
 
 // Reads the Neon Auth session on every request.
@@ -35,7 +37,16 @@ export default async function FormsListPage() {
     redirect("/pending-approval");
   }
 
-  const forms = await listCompletedForms(campUser.id);
+  const [forms, answered, cycles] = await Promise.all([
+    listCompletedForms(campUser.id),
+    listAnsweredQuestionnaires(campUser.id),
+    getCycles(),
+  ]);
+  const yearName = (cycle: number) => {
+    if (cycle === UNSET_CYCLE) return null;
+    const name = cycles.find((c) => c.year === cycle)?.name;
+    return name ? `${cycle} (${name})` : String(cycle);
+  };
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-4">
@@ -47,12 +58,14 @@ export default async function FormsListPage() {
         <div className="flex flex-col gap-1.5">
           <h1 className="text-2xl font-bold">My forms</h1>
           <p className="text-sm text-muted-foreground">
-            Questionnaires you&apos;ve completed this year. Open one to review
-            and update your answers — we&apos;ll keep a log of what you change.
+            Questionnaires you&apos;ve completed. Your burner profile can be
+            updated any time, and we keep a log of what you change. Other
+            questionnaires open read-only: their answers are fixed once you
+            submit.
           </p>
         </div>
 
-        {forms.length === 0 ? (
+        {forms.length === 0 && answered.length === 0 ? (
           <EmptyState
             title="No forms yet"
             description="You haven't completed any forms yet."
@@ -70,6 +83,20 @@ export default async function FormsListPage() {
                 )}
               />
             ))}
+            {answered.map((a) => {
+              const year = yearName(a.cycle);
+              return (
+                <FormCard
+                  key={`${a.definitionKey}:${a.cycle}`}
+                  href={`/tools/forms/answers/${encodeURIComponent(a.definitionKey)}/${a.cycle}`}
+                  title={a.questionnaire.title}
+                  description={
+                    year ? `Your answers for ${year}.` : "Your answers."
+                  }
+                  lastEdited={dateFmt.format(a.updatedAt)}
+                />
+              );
+            })}
           </div>
         )}
       </div>
