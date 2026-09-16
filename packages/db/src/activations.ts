@@ -6,7 +6,7 @@ import { currentCycle, resolveCycles, UNSET_CYCLE } from "./camp-config";
 import { meetsRequiredVersion } from "./versions";
 import { currentCycleNumber } from "./cycles";
 import type { DbOrTx } from "./audit";
-import type { QuestionnaireResponses } from "@camp404/types";
+import type { QuestionnaireResponses, RoleMirror } from "@camp404/types";
 
 // The required_actions gating producer + satisfaction. A questionnaire
 // activation fans out one required_actions row per matched member (the generic
@@ -687,6 +687,59 @@ export async function getRequiredAction(
  * never coexist with a still-pending gate. Honours satisfyRequiredAction's
  * version rule (a completion against an older version leaves the gate open).
  */
+/**
+ * Copy a submit's role answers into dietary_requirements (one row per member)
+ * and driver_profiles (one row per member per year: the send's year). Only the
+ * columns the questionnaire has a role question for are touched.
+ */
+async function writeRoleMirror(
+  tx: DbOrTx,
+  input: {
+    userId: string;
+    definitionKey: string;
+    definitionVersion: string;
+    cycle: number;
+    mirror?: RoleMirror;
+  },
+  now: Date,
+): Promise<void> {
+  const version = `${input.definitionKey}@${input.definitionVersion}`;
+  const dietary = input.mirror?.dietary;
+  if (dietary) {
+    await tx
+      .insert(schema.dietaryRequirements)
+      .values({
+        userId: input.userId,
+        ...dietary,
+        version,
+        completedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: schema.dietaryRequirements.userId,
+        set: { ...dietary, version, completedAt: now, updatedAt: now },
+      });
+  }
+  const driver = input.mirror?.driver;
+  if (driver) {
+    const intent =
+      driver.intendsToDrive === true ? { intentRegisteredAt: now } : {};
+    await tx
+      .insert(schema.driverProfiles)
+      .values({
+        userId: input.userId,
+        cycle: input.cycle,
+        ...driver,
+        ...intent,
+        version,
+        completedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [schema.driverProfiles.userId, schema.driverProfiles.cycle],
+        set: { ...driver, ...intent, version, completedAt: now, updatedAt: now },
+      });
+  }
+}
+
 export async function completeBuilderResponse(input: {
   userId: string;
   definitionKey: string;
@@ -695,9 +748,16 @@ export async function completeBuilderResponse(input: {
   cycle: number;
   responses: QuestionnaireResponses;
   activationId: string;
+  /**
+   * Answers the definition marks for the app's own tables (builderRoleMirror in
+   * @camp404/types). Written in the same transaction, so the roster, export and
+   * drivers audience never see a submit half applied.
+   */
+  mirror?: RoleMirror;
 }): Promise<void> {
   const now = new Date();
   await withTransaction(async (tx) => {
+    await writeRoleMirror(tx, input, now);
     await tx
       .insert(schema.questionnaireResponses)
       .values({

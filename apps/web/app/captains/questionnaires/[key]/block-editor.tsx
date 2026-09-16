@@ -3,7 +3,10 @@
 import { useEffect, useId, useState } from "react";
 import { Trash2 } from "lucide-react";
 import {
+  BUILDER_ROLES,
+  builderRolesFor,
   isAllowedBuilderImageUrl,
+  isBuilderRole,
   visibleIfProblem,
   type Block,
   type ContentBlock,
@@ -211,6 +214,9 @@ function QuestionEditor({
   const kindId = useId();
   const requiredId = useId();
   const dictationId = useId();
+  const roleId = useId();
+  const roles = builderRolesFor(question.kind);
+  const role = "role" in question ? question.role : undefined;
   const num = (raw: string, fallback: number) => {
     if (raw.trim() === "") return fallback; // clearing the box keeps the prior value (not 0)
     const n = Number(raw);
@@ -257,6 +263,28 @@ function QuestionEditor({
         />
       </div>
 
+      {roles.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={roleId}>The app uses this answer as</Label>
+          <select
+            id={roleId}
+            className={SELECT_CLASS}
+            value={isBuilderRole(role) ? role : ""}
+            onChange={(e) => patch({ role: e.currentTarget.value || undefined })}
+          >
+            <option value="">Nothing else</option>
+            {roles.map((r) => (
+              <option key={r} value={r}>
+                {BUILDER_ROLES[r].label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            On submit, the answer is also saved where the roster, the member
+            export and messages to drivers read it.
+          </p>
+        </div>
+      )}
       {(question.kind === "short_text" || question.kind === "long_text") && (
         <InputField
           label="Max length"

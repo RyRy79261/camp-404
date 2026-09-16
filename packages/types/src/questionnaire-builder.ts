@@ -628,6 +628,10 @@ export function validateBuilderQuestionnaire(
   let inputCount = 0;
   // Every input field seen so far, by id: a condition may reference only these.
   const earlier = new Map<string, Question>();
+  // A role the app copies somewhere (allergies, arrival day…) may sit on one
+  // question only, or two answers would race for one column. Emergency
+  // contact roles repeat by design: the Nth of each makes contact N.
+  const roleOwners = new Map<string, string>();
   // Pages, content blocks and questions share ONE flat id namespace, and a
   // duplicate is a publish blocker for two reasons — the second is the one
   // that hides:
@@ -707,6 +711,17 @@ export function validateBuilderQuestionnaire(
       }
       errors.push(...rangeErrors(field));
       earlier.set(field.id, field);
+      const role = "role" in field ? field.role : undefined;
+      if (role && !role.startsWith("emergency_contact_")) {
+        const owner = roleOwners.get(role);
+        if (owner !== undefined) {
+          errors.push(
+            `"${owner}" and "${field.prompt}" are both marked for the same use. Mark only one.`,
+          );
+        } else {
+          roleOwners.set(role, field.prompt);
+        }
+      }
     }
   });
 

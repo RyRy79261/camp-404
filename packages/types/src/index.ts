@@ -5,6 +5,7 @@ export * from "./notification";
 export * from "./questionnaire";
 export * from "./question-roles";
 export * from "./questionnaire-builder";
+export * from "./builder-roles";
 export * from "./questionnaire-queue";
 export * from "./promotion";
 export * from "./referral";

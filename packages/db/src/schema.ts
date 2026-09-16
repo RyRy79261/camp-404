@@ -441,10 +441,11 @@ export const burnerProfiles = pgTable("burner_profiles", {
 });
 
 // --- Dietary requirements ------------------------------------------------
-// The formal dietary questionnaire — its own bespoke page and table (the
-// single source of truth for dietary data; there are no dietary columns on
-// `users`). Re-requested by activating the questionnaire with a new
-// `version`; AI recipe analysis reads from here.
+// The member's dietary facts (the single source of truth for dietary data;
+// there are no dietary columns on `users`). Written by a builder
+// questionnaire's role questions on submit (allergies, anaphylactic, notes)
+// and by the MCP tools; re-asked by sending that questionnaire again. AI
+// recipe analysis reads from here.
 
 export const dietaryRequirements = pgTable("dietary_requirements", {
   userId: uuid("user_id")
@@ -478,10 +479,11 @@ export const dietaryRequirements = pgTable("dietary_requirements", {
 // roster and car lists stay on file and readable forever.
 
 // --- Driver profiles -----------------------------------------------------
-// Opt-in: a member registers intent to drive (`intends_to_drive`), which
-// triggers a blocking questionnaire to capture vehicle + proficiency
-// detail. Its own bespoke page and table. One row per driver PER YEAR — a
-// driver re-registers intent (and re-confirms the vehicle) each burn.
+// Opt-in: a member registers intent to drive (`intends_to_drive`), plus
+// arrival and departure days and vehicle detail. Written by a builder
+// questionnaire's role questions on submit (driving this year, arrival day,
+// departure day) and by the MCP tools. One row per member PER YEAR — a driver
+// re-registers intent (and re-confirms the vehicle) each burn.
 
 export const driverProfiles = pgTable(
   "driver_profiles",

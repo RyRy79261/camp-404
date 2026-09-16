@@ -274,45 +274,38 @@ describe("planRollover", () => {
     expect(await storedConfig(db)).toBeUndefined(); // singleton never created
   });
 
-  it("carries the reserved code keys off the config map, flagged unsendable", async () => {
+  it("carries the reserved code key off the config map, flagged unsendable", async () => {
     const db = h.db();
     await setConfig(db, {
-      questionnaireCarryOver: { driver_profile: "carry" },
+      questionnaireCarryOver: { burner_profile: "fresh" },
     });
 
     const plan = await planRollover();
 
-    // An explicit entry wins over the seeded default, in both directions.
-    expect(plan.carriesOver.map((e) => e.key)).toEqual([
-      "burner_profile",
-      "dietary_requirements",
-      "driver_profile",
-    ]);
-    expect(plan.notSent).toEqual([]);
-  });
-
-  it("applies the owner's per-key defaults when the map is unset", async () => {
-    // No config at all: the bio and the diet carry (a member re-saves or
-    // updates them), the driver profile is fresh — "who's driving in whose car
-    // ... have to be fresh".
-    const plan = await planRollover();
-
-    expect(plan.carriesOver.map((e) => e.key)).toEqual([
-      "burner_profile",
-      "dietary_requirements",
-    ]);
-    // A `fresh` code key lands in notSent and can never be acted on: only
-    // sendActivation inserts an activation and it needs a definitions row. The
-    // plan says so rather than pretending the rollover will handle it.
+    // An explicit entry wins over the seeded default. A `fresh` code key lands
+    // in notSent and can never be acted on: only sendActivation inserts an
+    // activation and it needs a definitions row. The plan says so rather than
+    // pretending the rollover will handle it.
+    expect(plan.carriesOver).toEqual([]);
     expect(plan.notSent).toEqual([
       {
-        key: "driver_profile",
-        title: "Driver profile",
+        key: "burner_profile",
+        title: "Burner profile",
         activationId: null,
         recipientCount: 0,
         sendable: false,
       },
     ]);
+  });
+
+  it("applies the owner's default when the map is unset, and plans no dietary or driver code keys", async () => {
+    // No config at all: the burner profile carries. Dietary requirements and
+    // the driver profile moved onto the builder (OD3), so they are not code
+    // keys any more.
+    const plan = await planRollover();
+
+    expect(plan.carriesOver.map((e) => e.key)).toEqual(["burner_profile"]);
+    expect(plan.notSent).toEqual([]);
   });
 
   it("has no year on a camp that has never said what year it is", async () => {

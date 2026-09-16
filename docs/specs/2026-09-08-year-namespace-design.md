@@ -870,7 +870,12 @@ onto the questionnaire builder (which gets them cycle-scoped responses and rollo
 (b) The stale-driver hazard (§10) is live either way: after a rollover, a "drivers" broadcast
 reaches last year's drivers. Fix it now with a time bound, or accept it until the pages exist?
 **Owner's call:** (a) move both onto the builder when they need to be asked each year; until
-then a `fresh` policy on them is reported as *not sent* (§7.1, As built). (b) Fixed: driver
+then a `fresh` policy on them is reported as *not sent* (§7.1, As built).
+**Built (B5c):** both keys are no longer reserved. A captain builds a Dietary or Transport
+questionnaire and marks the questions that feed the tables (builder roles: allergies,
+anaphylactic, dietary notes, driving this year, arrival day, departure day). A final submit
+copies those answers into `dietary_requirements` and this year's `driver_profiles` row in the
+same transaction, and the rollover re-asks the questionnaire like any other. (b) Fixed: driver
 profiles are year-scoped, and the drivers audience reads only the current year.
 
 **OD4 — the cycle label.** Free text the captain types ("2027", "AfrikaBurn 2027"), never

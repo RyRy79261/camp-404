@@ -435,8 +435,10 @@ with no push token; no custom-message UI in v1.
 ## 8. Non-goals (v1)
 
 Native/Capacitor (builder is **web-only**); **opt-in / pull-model** audience
-(captains dictate audience); editing the bespoke code questionnaires
-(burner/dietary/driver) in the builder — **burner profile stays fully separate**;
+(captains dictate audience); editing the burner profile in the builder —
+**burner profile stays fully separate** (dietary requirements and the driver
+profile moved onto the builder in B5c, OD3: their facts arrive through builder
+roles);
 government-ID-grade encrypted fields and the **mirror-to-profile-column PII** half
 (mockup frame 11); arbitrary image aspect on the respondent `image` **input**
 field (square-crop only — `image_block` is exempt and supports landscape/full-

@@ -186,6 +186,16 @@ export const QUESTION_ROLES = [
   "emergency_contact_name",
   "emergency_contact_phone",
   "emergency_contact_relationship",
+  // Builder questionnaires: copied into dietary_requirements / driver_profiles
+  // on submit, so a camp-authored Dietary or Transport questionnaire feeds the
+  // roster, the export and the drivers audience (see BUILDER_ROLES in
+  // ./builder-roles).
+  "dietary_allergies",
+  "dietary_anaphylactic",
+  "dietary_notes",
+  "driving_this_year",
+  "arrival_date",
+  "departure_date",
 ] as const;
 export type QuestionRole = (typeof QUESTION_ROLES)[number];
 
@@ -202,7 +212,12 @@ export const ShortTextQuestion = z.object({
   // inside the shared text arm.
   format: TextFormat.optional(),
   role: z
-    .enum(["emergency_contact_name", "emergency_contact_relationship"])
+    .enum([
+      "emergency_contact_name",
+      "emergency_contact_relationship",
+      "dietary_allergies",
+      "dietary_notes",
+    ])
     .optional(),
   required: z.boolean().default(true),
 });
@@ -218,7 +233,7 @@ export const LongTextQuestion = z.object({
   // Opt-in voice dictation (the Groq transcription path). Absent/false ⇒ the
   // dictate affordance is hidden; shown only where the author enabled it.
   enableDictation: z.boolean().optional(),
-  role: z.literal("bio").optional(),
+  role: z.enum(["bio", "dietary_allergies", "dietary_notes"]).optional(),
   required: z.boolean().default(false),
 });
 export type LongTextQuestion = z.infer<typeof LongTextQuestion>;
@@ -229,6 +244,7 @@ export const DateQuestion = z.object({
   kind: z.literal("date"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  role: z.enum(["arrival_date", "departure_date"]).optional(),
   required: z.boolean().default(true),
 });
 export type DateQuestion = z.infer<typeof DateQuestion>;
@@ -308,6 +324,7 @@ export const BooleanQuestion = z.object({
   kind: z.literal("boolean"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  role: z.enum(["dietary_anaphylactic", "driving_this_year"]).optional(),
   required: z.boolean().default(false),
 });
 export type BooleanQuestion = z.infer<typeof BooleanQuestion>;

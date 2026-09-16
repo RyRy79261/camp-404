@@ -70,17 +70,15 @@ import {
 // does for sends and answers.
 
 /**
- * The RESERVED code questionnaires (schema.ts:666). They can never hold a
- * `questionnaire_definitions` row, so their policy lives in the config map
- * (`camp_settings.config.questionnaireCarryOver`) and the planner carries its
- * own titles — the plan is a captain-facing preview and a bare key is not a
- * sentence. `driver_profiles` is only a defensive alias of `driver_profile` in
- * RESERVED_DEFINITION_KEYS, so it is not listed twice here.
+ * The RESERVED code questionnaires (RESERVED_DEFINITION_KEYS). They can never
+ * hold a `questionnaire_definitions` row, so their policy lives in the config
+ * map (`camp_settings.config.questionnaireCarryOver`) and the planner carries
+ * its own titles — the plan is a captain-facing preview and a bare key is not a
+ * sentence. Dietary requirements and the driver profile moved onto the builder
+ * (OD3), so the rollover plans them like any builder questionnaire.
  */
 const CODE_QUESTIONNAIRES: ReadonlyArray<{ key: string; title: string }> = [
   { key: "burner_profile", title: "Burner profile" },
-  { key: "dietary_requirements", title: "Dietary requirements" },
-  { key: "driver_profile", title: "Driver profile" },
 ];
 
 /**
