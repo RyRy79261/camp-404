@@ -2,6 +2,7 @@ import {
   CalendarClock,
   ClipboardList,
   Megaphone,
+  ScrollText,
   Shield,
   Users,
   Wallet,
@@ -83,6 +84,14 @@ const TOOLS: ToolEntry[] = [
     description:
       "Say what year the camp is in, and when it moves on to the next burn, say so here. See exactly which questionnaires go out again before anything changes — and everything that stays untouched.",
     icon: <CalendarClock className="text-primary" />,
+    rank: "captain",
+  },
+  {
+    href: "/captains/audit",
+    title: "Audit log",
+    description:
+      "See who approved, changed or read whose data, and when. Newest first.",
+    icon: <ScrollText className="text-primary" />,
     rank: "captain",
   },
 ];

@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { announcementNotification } from "@camp404/core";
+import { announcementNotification, type AuditAction } from "@camp404/core";
 import { createHttpDb, withTransaction, type Database } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
@@ -599,7 +599,7 @@ export async function setFoundingYear(input: {
       .insert(schema.auditLog)
       .values({
         actorId: input.actorUserId,
-        action: "camp.cycle.founded",
+        action: "camp.cycle.founded" satisfies AuditAction,
         target: String(input.year),
         metadata: {
           year: input.year,
@@ -875,7 +875,7 @@ export async function advanceCycle(
       .insert(schema.auditLog)
       .values({
         actorId: input.actorUserId,
-        action: "camp.cycle.advanced",
+        action: "camp.cycle.advanced" satisfies AuditAction,
         target: String(to.year),
         metadata,
       })
