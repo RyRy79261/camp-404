@@ -33,6 +33,33 @@ messaging.onBackgroundMessage(function (payload) {
     data: (payload && payload.data) || {},
   });
 });
+
+// A tap on a notification this worker showed opens the page it is about.
+// \`data.link\` is an in-app path (notificationLink); anything that is not one
+// opens the inbox. An open Camp 404 tab is reused rather than opening another.
+self.addEventListener("notificationclick", function (event) {
+  const data = (event.notification && event.notification.data) || {};
+  const raw = typeof data.link === "string" ? data.link : "";
+  const link =
+    raw.startsWith("/") && !raw.startsWith("//") && raw.indexOf("\\\\") === -1
+      ? raw
+      : "/notifications";
+  event.notification.close();
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then(function (windows) {
+        for (const w of windows) {
+          if (new URL(w.url).origin === self.location.origin && "navigate" in w) {
+            return w.navigate(link).then(function (c) {
+              return (c || w).focus();
+            });
+          }
+        }
+        return self.clients.openWindow(link);
+      }),
+  );
+});
 `;
   return new Response(body, {
     headers: {

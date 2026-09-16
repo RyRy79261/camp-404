@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { NOTIFICATION_FALLBACK_LINK, notificationLink } from "@camp404/core";
 import { BellOff, ChevronLeft } from "lucide-react";
 import { DetailHeader } from "@camp404/ui/components/detail-header";
 import { EmptyState } from "@camp404/ui/components/empty-state";
@@ -22,6 +23,12 @@ export const metadata = { title: "Notifications — Camp 404" };
 // ones that were still unread on arrival. Opening the inbox clears the unread
 // badge (marks everything read) — acknowledgements are handled separately by
 // the full-screen gate, so reading here never counts as acknowledging.
+/** A row links only when it is about something other than this inbox. */
+function linkFor(item: { refType: string | null; refId: string | null }) {
+  const link = notificationLink(item.refType, item.refId);
+  return link === NOTIFICATION_FALLBACK_LINK ? undefined : link;
+}
+
 export default async function NotificationsPage() {
   const authUser = await getAuthenticatedUserOrRedirect();
   const campUser = await ensureCampUser(authUser);
@@ -121,6 +128,7 @@ export default async function NotificationsPage() {
               isNew={item.readAt === null}
               acknowledgedAt={item.acknowledgedAt}
               createdAt={item.createdAt}
+              href={linkFor(item)}
             />
           ))}
         </ul>

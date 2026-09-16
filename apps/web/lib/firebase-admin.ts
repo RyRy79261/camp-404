@@ -3,6 +3,7 @@ import "server-only";
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { mapSendResponses, type PushSend } from "@camp404/db/push-status";
+import { SITE_URL } from "./site";
 
 // Lazy firebase-admin singleton. Initialised only on first send so the app
 // builds and runs with no Firebase config (the groq.ts / telegram.ts pattern);
@@ -50,6 +51,12 @@ export const sendPush: PushSend = async (tokens, notification, data) => {
     tokens,
     notification,
     data,
+    // FCM shows a message that has a `notification` itself, and a tap opens
+    // `fcmOptions.link`. It must be absolute HTTPS, so the in-app path from
+    // notificationLink is resolved against the site origin.
+    ...(data?.link
+      ? { webpush: { fcmOptions: { link: new URL(data.link, SITE_URL).href } } }
+      : {}),
   });
   return mapSendResponses(tokens, res.responses);
 };

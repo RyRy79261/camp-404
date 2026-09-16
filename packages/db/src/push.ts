@@ -8,6 +8,7 @@ import {
   type PushSend,
   type TokenSendResult,
 } from "./push-status";
+import { notificationLink } from "@camp404/core";
 
 // Push-token + delivery-drain data layer. Deliberately Firebase-free: the FCM
 // send fn is INJECTED into `drainQueuedPush` (apps/web supplies the
@@ -94,7 +95,11 @@ export async function planPushDrain(
       statusById.set(d.id, "skipped");
       continue;
     }
-    const data: Record<string, string> = { deliveryId: d.id };
+    // `link` is the in-app path a tap opens, the same one the inbox row uses.
+    const data: Record<string, string> = {
+      deliveryId: d.id,
+      link: notificationLink(d.refType, d.refId),
+    };
     if (d.refType) data.refType = d.refType;
     if (d.refId) data.refId = d.refId;
 

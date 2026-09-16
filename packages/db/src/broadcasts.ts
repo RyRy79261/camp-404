@@ -475,6 +475,9 @@ export interface InboxItem {
   readAt: Date | null;
   acknowledgedAt: Date | null;
   createdAt: Date;
+  /** What the notification is about; notificationLink maps it to a page. */
+  refType: string | null;
+  refId: string | null;
 }
 
 /** A user's notification inbox (everything delivered to them), newest first. */
@@ -490,6 +493,8 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       readAt: schema.notificationDeliveries.readAt,
       acknowledgedAt: schema.notificationDeliveries.acknowledgedAt,
       createdAt: schema.notificationDeliveries.createdAt,
+      refType: schema.notificationDeliveries.refType,
+      refId: schema.notificationDeliveries.refId,
     })
     .from(schema.notificationDeliveries)
     .leftJoin(

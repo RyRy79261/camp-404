@@ -612,6 +612,8 @@ export const testStore = {
     readAt: Date | null;
     acknowledgedAt: Date | null;
     createdAt: Date;
+    refType: string | null;
+    refId: string | null;
   }> {
     return deliveries
       .filter((d) => d.userId === userId)
@@ -629,6 +631,9 @@ export const testStore = {
           readAt: d.readAt,
           acknowledgedAt: d.acknowledgedAt,
           createdAt: d.createdAt,
+          // Test-store deliveries are announcements, which link to the inbox.
+          refType: "announcement",
+          refId: d.broadcastId,
         };
       });
   },

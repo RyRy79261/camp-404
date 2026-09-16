@@ -102,4 +102,23 @@ describe("planPushDrain", () => {
     expect([...deadTokens]).toEqual(["dead"]);
     expect(calls).toBe(1); // only d1 attempted a send
   });
+
+  it("sends the in-app link a tap opens, the same one the inbox row uses", async () => {
+    const seen: Record<string, string>[] = [];
+    const send: PushSend = async (toks, _n, data) => {
+      seen.push(data ?? {});
+      return toks.map((t) => ({ token: t, success: true, errorCode: null }));
+    };
+    const activation = "3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44";
+    await planPushDrain(
+      [
+        { ...delivery("d1", "u1"), refType: "questionnaire_activation", refId: activation },
+        delivery("d2", "u1"),
+      ],
+      new Map([["u1", ["tA"]]]),
+      send,
+    );
+    expect(seen[0]).toMatchObject({ link: `/questionnaires/${activation}` });
+    expect(seen[1]).toMatchObject({ link: "/notifications" });
+  });
 });
