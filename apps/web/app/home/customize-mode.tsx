@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { GripVertical, Plus, SlidersHorizontal } from "lucide-react";
+import { GripVertical, Plus, RotateCcw, SlidersHorizontal } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -10,11 +10,13 @@ import {
   closestCorners,
   useSensor,
   useSensors,
+  type Announcements,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import {
   type Section,
   createCustomSection,
@@ -68,16 +70,47 @@ function indexInContainer(sections: Section[], key: string, tileId: string): num
   return i >= 0 ? i : sec.tiles.length;
 }
 
+/**
+ * What dnd-kit's live region says during a keyboard or pointer drag. Its
+ * defaults read ids ("draggable item tile-roster"); these use the tile and
+ * group names on screen.
+ */
+export function dragAnnouncements(sections: Section[]): Announcements {
+  const tileName = (id: string | number) =>
+    resolveTiles([String(id)])[0]?.title ?? "the tile";
+  const placeName = (id: string | number) => {
+    const key = containerOf(sections, String(id));
+    const section = key ? sections.find((s) => sectionKey(s) === key) : null;
+    return section ? sectionLabel(section) : "another group";
+  };
+  return {
+    onDragStart: ({ active }) => `Picked up ${tileName(active.id)}.`,
+    onDragOver: ({ active, over }) =>
+      over
+        ? `${tileName(active.id)} is over ${placeName(over.id)}.`
+        : `${tileName(active.id)} is not over a group.`,
+    onDragEnd: ({ active, over }) =>
+      over
+        ? `Dropped ${tileName(active.id)} in ${placeName(over.id)}.`
+        : `Dropped ${tileName(active.id)}. It stays where it was.`,
+    onDragCancel: ({ active }) =>
+      `Stopped moving ${tileName(active.id)}. It is back where it was.`,
+  };
+}
+
 export function CustomizeMode({
   sections,
   setSections,
   lockedGroupIds,
   onDone,
+  onReset,
 }: {
   sections: Section[];
   setSections: (updater: Section[] | ((prev: Section[]) => Section[])) => void;
   lockedGroupIds: string[];
   onDone: () => void;
+  /** Put the default layout back (useHomeLayout's reset). */
+  onReset: () => void;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   // In-flight working copy during a drag (committed on drag end); null when idle.
@@ -85,6 +118,7 @@ export function CustomizeMode({
   // Polite SR announcement for the non-drag controls (dissolve / Move menu),
   // which dnd-kit's own announcer doesn't cover.
   const [status, setStatus] = useState("");
+  const [confirm, confirmDialog] = useConfirm();
 
   const reducedMotion = useReducedMotion();
   const sensors = useSensors(
@@ -133,6 +167,22 @@ export function CustomizeMode({
     setStatus(`Dissolved ${sectionLabel(section)} — its tiles are now ungrouped`);
     refocusHeading();
   }
+
+  async function handleReset() {
+    const sure = await confirm({
+      title: "Reset your layout?",
+      description:
+        "Every tile goes back to its first place, and your own groups are removed. The tiles in them stay on the panel.",
+      confirmLabel: "Reset layout",
+      destructive: true,
+    });
+    if (!sure) return;
+    onReset();
+    setStatus("Layout reset to the default");
+    refocusHeading();
+  }
+
+  const announcements = dragAnnouncements(display);
 
   function onDragStart(event: DragStartEvent) {
     setActiveId(String(event.active.id));
@@ -188,8 +238,9 @@ export function CustomizeMode({
   return (
     <section
       aria-labelledby="customize-layout-heading"
-      className="flex flex-col gap-4 rounded-xl border border-border bg-muted/40 p-3.5"
+      className="flex flex-col gap-4 rounded-xl border border-border bg-muted/40 p-3.5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
     >
+      {confirmDialog}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <SlidersHorizontal aria-hidden className="h-4 w-4 text-accent" />
@@ -225,6 +276,13 @@ export function CustomizeMode({
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}
         onDragCancel={onDragCancel}
+        accessibility={{
+          announcements,
+          screenReaderInstructions: {
+            draggable:
+              "To pick up a tile, press Space or Enter. Move it with the arrow keys. Press Space or Enter again to drop it, or Escape to cancel.",
+          },
+        }}
       >
         <div className="flex flex-col gap-3">
           {display.map((section) => (
@@ -293,6 +351,17 @@ export function CustomizeMode({
       >
         <Plus aria-hidden className="h-4 w-4" />
         New group
+      </button>
+
+      {/* Not on board S08: a quiet text button, built from the kit, with a
+          confirm because it throws away the member's arrangement. */}
+      <button
+        type="button"
+        onClick={() => void handleReset()}
+        className="inline-flex items-center justify-center gap-1.5 self-center rounded-md px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <RotateCcw aria-hidden className="h-3.5 w-3.5" />
+        Reset layout
       </button>
 
       {lockedGroups.length > 0 && (

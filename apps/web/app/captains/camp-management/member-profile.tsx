@@ -341,7 +341,7 @@ export function MemberProfile({
       ref={panelRef}
       tabIndex={-1}
       aria-label={`${row.displayName} profile`}
-      className="flex flex-col gap-5 rounded-lg border bg-card p-5 outline-none sm:p-6"
+      className="flex flex-col gap-5 rounded-lg border bg-card p-5 outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200 sm:p-6"
     >
       {/* PanelBar: console prompt + record index + close. */}
       <div className="flex items-center gap-2 border-b pb-3.5">

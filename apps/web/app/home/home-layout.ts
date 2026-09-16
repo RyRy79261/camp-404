@@ -201,13 +201,35 @@ export function dropIndex(
   return i >= 0 ? i : without.length;
 }
 
-/** Append a new empty custom section with a generated id. */
+/**
+ * Append a new empty custom section with a generated id. Without a title it is
+ * "New group", then "New group 2", "New group 3"…, so two new groups never
+ * share a name in the Move menu.
+ */
 export function createCustomSection(
   sections: Section[],
   newId: string,
-  title = "New group",
+  title?: string,
 ): Section[] {
-  return [...sections, { kind: "custom", id: newId, title, tiles: [] }];
+  return [
+    ...sections,
+    {
+      kind: "custom",
+      id: newId,
+      title: title ?? nextNewGroupTitle(sections),
+      tiles: [],
+    },
+  ];
+}
+
+function nextNewGroupTitle(sections: Section[]): string {
+  const taken = new Set(
+    sections.flatMap((s) => (s.kind === "custom" ? [s.title.trim()] : [])),
+  );
+  if (!taken.has("New group")) return "New group";
+  let n = 2;
+  while (taken.has(`New group ${n}`)) n++;
+  return `New group ${n}`;
 }
 
 /** Rename a custom section. */

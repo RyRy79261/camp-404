@@ -44,7 +44,7 @@ export function DraggableTileRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5",
+        "flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5 motion-safe:transition-[border-color,box-shadow,opacity] motion-safe:duration-150",
         isDragging ? "z-10 border-accent opacity-95 shadow-lg" : "border-border",
       )}
     >
@@ -54,11 +54,14 @@ export function DraggableTileRow({
         {...attributes}
         {...listeners}
         aria-label={`Reorder ${title}`}
-        className="cursor-grab touch-none rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="-m-1.5 cursor-grab touch-none rounded p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <GripVertical
           aria-hidden
-          className={cn("h-4 w-4", isDragging ? "text-accent" : "text-muted-foreground")}
+          className={cn(
+            "h-4 w-4 transition-colors",
+            isDragging ? "text-accent" : "text-muted-foreground",
+          )}
         />
       </button>
       <Icon aria-hidden className="h-4 w-4 text-primary" />

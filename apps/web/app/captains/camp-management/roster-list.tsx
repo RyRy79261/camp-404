@@ -79,7 +79,7 @@ export function RosterList({
                 <span className="min-w-0 flex-1">
                   <span
                     className={cn(
-                      "block truncate font-semibold",
+                      "block truncate font-semibold transition-colors",
                       selected ? "text-accent" : "text-foreground",
                     )}
                   >
