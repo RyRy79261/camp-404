@@ -1,4 +1,5 @@
 import { and, eq, gte, inArray } from "drizzle-orm";
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import {
   BuilderQuestionnaire,
   classifyChange,
@@ -429,6 +430,7 @@ export const REMINDER_REF_TYPE = "questionnaire_activation";
 const DUE_ON = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",
+  timeZone: CAMP_TIME_ZONE,
 });
 
 /**

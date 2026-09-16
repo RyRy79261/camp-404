@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
-import { buildQuestionnaireCsvExport } from "@camp404/core";
+import { buildQuestionnaireCsvExport, CAMP_TIME_ZONE } from "@camp404/core";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import {
   Table,
@@ -33,6 +33,7 @@ const COMPLETED = new Intl.DateTimeFormat("en-GB", {
   month: "short",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: CAMP_TIME_ZONE,
 });
 
 // Responses (docs/questionnaire-builder.md §7.3) — one row per member who

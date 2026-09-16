@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
-import { deriveViewerRank, requireClearance } from "@camp404/core";
+import {
+  CAMP_TIME_ZONE,
+  deriveViewerRank,
+  requireClearance,
+} from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
@@ -30,6 +34,7 @@ const EDITED = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",
   year: "numeric",
+  timeZone: CAMP_TIME_ZONE,
 });
 
 export default async function QuestionnairesPage() {

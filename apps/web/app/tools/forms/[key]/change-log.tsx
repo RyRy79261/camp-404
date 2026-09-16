@@ -1,8 +1,10 @@
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import type { FormEdit } from "@/lib/forms";
 
 const dateFmt = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: CAMP_TIME_ZONE,
 });
 
 // The running edit history beneath a replayed form (board S15 detail view):

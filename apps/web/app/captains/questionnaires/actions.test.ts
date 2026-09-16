@@ -636,8 +636,10 @@ describe("remindPendingAction — what the captain is told", () => {
     expect(res.sent).toBe(0);
     expect(res.message).toContain("All 3 members still outstanding were");
     expect(res.message).toContain("last 24 hours");
-    // The captain is told WHEN, not just that nothing happened.
+    // The captain is told WHEN, not just that nothing happened, and in camp
+    // time: 09:00Z is 11:00 in South Africa whatever zone the server runs in.
     expect(res.message).toMatch(/You can nudge again from .+\./);
+    expect(res.message).toContain("11:00");
   });
 
   it("passes a DB-level refusal straight through", async () => {

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { BuilderQuestionnaire, Team } from "@camp404/types";
 import type { ViewerRank } from "@camp404/types";
 import {
+  CAMP_TIME_ZONE,
   canSendToAudience,
   deriveViewerRank,
   requireClearance,
@@ -529,6 +530,7 @@ const NEXT_NUDGE = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: CAMP_TIME_ZONE,
 });
 
 export type ReminderActionResult =

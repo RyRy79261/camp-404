@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
 const dateFmt = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: CAMP_TIME_ZONE,
 });
 
 export default async function FormsListPage() {

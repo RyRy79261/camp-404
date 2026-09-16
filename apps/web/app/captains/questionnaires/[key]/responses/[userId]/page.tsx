@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
@@ -19,6 +20,7 @@ const COMPLETED = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: CAMP_TIME_ZONE,
 });
 
 // One member's answers to one questionnaire in one year (§7.3, "per-respondent

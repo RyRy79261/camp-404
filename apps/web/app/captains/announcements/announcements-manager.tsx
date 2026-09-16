@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import {
   CheckCircle2,
   Inbox,
@@ -93,6 +94,7 @@ const PRESENTATION_META: Record<
 const dateFmt = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: CAMP_TIME_ZONE,
 });
 
 interface FormState {

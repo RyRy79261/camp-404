@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
@@ -15,6 +16,7 @@ const SENT_ON = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",
   year: "numeric",
+  timeZone: CAMP_TIME_ZONE,
 });
 
 /** The frame with no data behind it — the locked / not-yet-published states. */

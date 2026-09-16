@@ -40,6 +40,8 @@
 //     with KIND_SHAPE and the Choice/Numeric/Count aggregate shapes — the
 //     per-question read-back engine and the activation completion figure
 //     (./questionnaire-results)
+//   - time zone: CAMP_TIME_ZONE, the zone every human-read date is formatted
+//     in (./time-zone)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -59,3 +61,4 @@ export * from "./audience-authz";
 export * from "./csv";
 export * from "./questionnaire-csv";
 export * from "./questionnaire-results";
+export * from "./time-zone";

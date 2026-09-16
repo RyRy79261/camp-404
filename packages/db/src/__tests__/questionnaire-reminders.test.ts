@@ -365,6 +365,19 @@ describe("reminderBody", () => {
     expect(body).toMatch(/Tap to complete\.$/);
   });
 
+  // The deadline is read in camp time (SAST, UTC+2), never the host's zone:
+  // Vercel runs in UTC, and a captain in Cape Town who picks 00:30 on 11 Mar
+  // stores 22:30Z on the 10th. Two instants, one either side of each midnight,
+  // so a host east of SAST fails the second case as surely as UTC fails the first.
+  it("dates the deadline in camp time, not the server's time zone", () => {
+    expect(reminderBody(TITLE, new Date("2026-03-10T22:30:00Z"))).toMatch(
+      /due 11 Mar/,
+    );
+    expect(reminderBody(TITLE, new Date("2026-03-11T21:59:00Z"))).toMatch(
+      /due 11 Mar/,
+    );
+  });
+
   it("says something true when the send has no deadline", () => {
     const body = reminderBody(TITLE, null);
     expect(body).toContain(TITLE);

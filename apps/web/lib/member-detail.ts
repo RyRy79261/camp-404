@@ -1,3 +1,4 @@
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import type { Question, Questionnaire } from "@camp404/types";
 import type { CampMemberDetail } from "@camp404/db/roster";
 import { COUNTRIES } from "./countries";
@@ -40,7 +41,10 @@ export interface PresentedMember {
 
 const COUNTRY_NAME = new Map(COUNTRIES.map((c) => [c.value, c.label]));
 
-const dateFmt = new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium" });
+const dateFmt = new Intl.DateTimeFormat("en-ZA", {
+  dateStyle: "medium",
+  timeZone: CAMP_TIME_ZONE,
+});
 
 // The bio answer is promoted to its own lead paragraph (board S17), so it is
 // pulled out separately and skipped when grouping the remaining answers (no dupe).
