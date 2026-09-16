@@ -445,9 +445,30 @@ export async function publishAnnouncement(input: {
   );
 }
 
+export interface DispatchFailure {
+  broadcastId: string;
+  /** The error message, unredacted: the caller scrubs it before showing it. */
+  error: string;
+}
+
+/**
+ * The database's own words for a failure. Drizzle wraps a Postgres error in
+ * one whose message is the whole query and its parameters (announcement text,
+ * member ids), and keeps the Postgres error as `cause`.
+ */
+function failureMessage(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  return err.cause instanceof Error ? err.cause.message : err.message;
+}
+
 export interface DispatchResult {
   dispatched: number;
   deliveries: number;
+  /**
+   * Broadcasts that threw. Each one's claim rolled back, so it is still due
+   * and the next run tries it again.
+   */
+  failures: DispatchFailure[];
 }
 
 /**
@@ -458,6 +479,9 @@ export interface DispatchResult {
  * the `(broadcast_id, user_id)` dedupe index makes the insert idempotent too.
  * Immediate camp-wide announcements still fan out inline via
  * {@link publishAnnouncement} — this drains the deferred / scheduled tail.
+ *
+ * One broadcast that throws does not stop the others. It is reported in
+ * `failures` and stays due.
  */
 export async function dispatchDueBroadcasts(
   now: Date = new Date(),
@@ -489,53 +513,58 @@ export async function dispatchDueBroadcasts(
       ),
     );
 
-  if (due.length === 0) return { dispatched: 0, deliveries: 0 };
+  if (due.length === 0) return { dispatched: 0, deliveries: 0, failures: [] };
 
   const { db, pool } = createPooledDb();
   let dispatched = 0;
   let deliveries = 0;
+  const failures: DispatchFailure[] = [];
   try {
     for (const b of due) {
-      const recipientIds = await resolveAudience(
-        { id: b.id, scope: b.scope, team: b.team },
-        b.senderId,
-      );
-      const claimedOk = await db.transaction(async (tx) => {
-        const claimed = await tx
-          .update(schema.broadcasts)
-          .set({ dispatchedAt: now })
-          .where(
-            and(
-              eq(schema.broadcasts.id, b.id),
-              isNull(schema.broadcasts.dispatchedAt),
-            ),
-          )
-          .returning({ id: schema.broadcasts.id });
-        if (!claimed[0]) return false; // another run already dispatched it
-        if (recipientIds.length > 0) {
-          const payload = scheduledBroadcastNotification(b);
-          await tx
-            .insert(schema.notificationDeliveries)
-            .values(
-              recipientIds.map((userId) =>
-                deliveryValues(payload, {
-                  userId,
-                  broadcastId: b.id,
-                  channel: b.channel,
-                  presentation: b.presentation,
-                }),
+      try {
+        const recipientIds = await resolveAudience(
+          { id: b.id, scope: b.scope, team: b.team },
+          b.senderId,
+        );
+        const claimedOk = await db.transaction(async (tx) => {
+          const claimed = await tx
+            .update(schema.broadcasts)
+            .set({ dispatchedAt: now })
+            .where(
+              and(
+                eq(schema.broadcasts.id, b.id),
+                isNull(schema.broadcasts.dispatchedAt),
               ),
             )
-            .onConflictDoNothing();
+            .returning({ id: schema.broadcasts.id });
+          if (!claimed[0]) return false; // another run already dispatched it
+          if (recipientIds.length > 0) {
+            const payload = scheduledBroadcastNotification(b);
+            await tx
+              .insert(schema.notificationDeliveries)
+              .values(
+                recipientIds.map((userId) =>
+                  deliveryValues(payload, {
+                    userId,
+                    broadcastId: b.id,
+                    channel: b.channel,
+                    presentation: b.presentation,
+                  }),
+                ),
+              )
+              .onConflictDoNothing();
+          }
+          return true;
+        });
+        if (claimedOk) {
+          dispatched += 1;
+          deliveries += recipientIds.length;
         }
-        return true;
-      });
-      if (claimedOk) {
-        dispatched += 1;
-        deliveries += recipientIds.length;
+      } catch (err) {
+        failures.push({ broadcastId: b.id, error: failureMessage(err) });
       }
     }
-    return { dispatched, deliveries };
+    return { dispatched, deliveries, failures };
   } finally {
     await pool.end();
   }

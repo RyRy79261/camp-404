@@ -17,9 +17,15 @@ export async function GET(req: Request) {
   try {
     client = getTelegramClient();
   } catch {
+    // Telegram stays off until the owner turns it on (DEFERRED.md). Say so,
+    // not a success that sent nothing.
     return NextResponse.json({
       ok: true,
-      skipped: "telegram_bot_not_configured",
+      job: "telegram/dispatch",
+      status: "not_configured",
+      scheduled: false,
+      message:
+        "Telegram is off: the bot is not configured. This run did nothing.",
     });
   }
 

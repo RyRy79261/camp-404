@@ -1,17 +1,15 @@
-import { NextResponse } from "next/server";
 import { assertCron } from "@/lib/cron-auth";
+import { cronStubResponse } from "@/lib/cron-stub";
 
 export const runtime = "nodejs";
 
 /**
- * Picks up `pending` recipes, runs them through Claude Opus structured-output
- * normalisation, and writes the result back. Scheduled in vercel.json every
- * 15 minutes during the planning window.
- *
- * Stub for Phase 0 — full implementation lands in Phase 3 (Recipes & meal planning).
+ * Will pick up `pending` recipes, normalise them with Claude structured
+ * output, and write the result back. Not built yet (Phase 3, recipes and meal
+ * planning): it says so and does nothing. Scheduled daily in vercel.json.
  */
 export async function GET(req: Request) {
   const deny = assertCron(req);
   if (deny) return deny;
-  return NextResponse.json({ ok: true, processed: 0 });
+  return cronStubResponse("recipes/analyse");
 }
