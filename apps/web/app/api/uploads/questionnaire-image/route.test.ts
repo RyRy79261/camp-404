@@ -39,7 +39,10 @@ vi.mock("@camp404/db/activations", () => ({
   getActivationById: vi.fn(),
   getRequiredAction: vi.fn(),
 }));
-vi.mock("@/lib/users", () => ({ ensureCampUser: vi.fn() }));
+vi.mock("@/lib/users", () => ({
+  ensureCampUser: vi.fn(),
+  hasCampAccess: vi.fn(() => true),
+}));
 
 import { POST } from "./route";
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -50,10 +53,10 @@ import { deleteQuestionnaireImageBlobs } from "@/lib/avatar-blob";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { getActivationById, getRequiredAction } from "@camp404/db/activations";
-import { ensureCampUser } from "@/lib/users";
+import { ensureCampUser, hasCampAccess } from "@/lib/users";
 
 const TOKEN = "vercel_blob_rw_test_token";
-const ACTIVATION = "act-1";
+const ACTIVATION = "3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44";
 
 // A burner-profile-shaped definition: one image question and one that is not.
 const BURNER = {
@@ -147,6 +150,7 @@ describe("POST /api/uploads/questionnaire-image", () => {
     } as never);
     vi.mocked(getQuestionnaireForResponses).mockResolvedValue(BURNER as never);
     vi.mocked(ensureCampUser).mockResolvedValue({ id: "camp-1" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
     vi.mocked(getActivationById).mockResolvedValue({
       id: ACTIVATION,
       questionnaireKey: "gear-check",
@@ -170,6 +174,23 @@ describe("POST /api/uploads/questionnaire-image", () => {
   afterEach(() => {
     if (savedToken === undefined) delete process.env.BLOB_READ_WRITE_TOKEN;
     else process.env.BLOB_READ_WRITE_TOKEN = savedToken;
+  });
+
+  it("refuses a signed-in account with no invite before reading anything", async () => {
+    vi.mocked(hasCampAccess).mockReturnValue(false);
+    const res = await POST(upload("?question=kitchen.setup_photo"));
+    expect(res.status).toBe(403);
+    expect(getQuestionnaireForResponses).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it("refuses an activation id that is not a uuid, without a database read", async () => {
+    const res = await POST(
+      upload("?question=gear.photo&activation=not-a-uuid"),
+    );
+    expect(res.status).toBe(403);
+    expect(getActivationById).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
   });
 
   it("still answers 400 when `question` is missing", async () => {

@@ -27,12 +27,17 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 vi.mock("@vercel/blob", () => ({ put: vi.fn() }));
 vi.mock("@/lib/avatar-blob", () => ({ deleteAvatarBlobs: vi.fn() }));
+vi.mock("@/lib/users", () => ({
+  ensureCampUser: vi.fn(async () => ({ id: "camp-1" })),
+  hasCampAccess: vi.fn(() => true),
+}));
 
 import { POST } from "./route";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { isE2ETestMode } from "@/lib/test-mode";
 import { rateLimiter } from "@/lib/rate-limit";
 import { put } from "@vercel/blob";
+import { hasCampAccess } from "@/lib/users";
 
 const TOKEN = "vercel_blob_rw_test_token";
 
@@ -62,7 +67,18 @@ describe("POST /api/uploads/avatar", () => {
       ok: true,
       retryAfterSeconds: 0,
     } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
     delete process.env.BLOB_READ_WRITE_TOKEN;
+  });
+
+  it("refuses a signed-in account with no invite, and stores nothing", async () => {
+    // Sign-up is open: an account with no camp row would leave files nothing
+    // ever sweeps.
+    vi.mocked(hasCampAccess).mockReturnValue(false);
+    process.env.BLOB_READ_WRITE_TOKEN = TOKEN;
+    const res = await POST(upload("image/webp"));
+    expect(res.status).toBe(403);
+    expect(put).not.toHaveBeenCalled();
   });
 
   afterEach(() => {
