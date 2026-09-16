@@ -2,10 +2,14 @@
 
 import * as React from "react";
 import { useParams } from "next/navigation";
-import type {
-  LongTextQuestion,
-  Question,
-  QuestionnaireResponseValue,
+import {
+  isOtherAnswer,
+  otherAnswerText,
+  toOtherAnswer,
+  type LongTextQuestion,
+  type Question,
+  type QuestionnaireResponseValue,
+  type TextFormat,
 } from "@camp404/types";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { Combobox } from "@camp404/ui/components/combobox";
@@ -227,22 +231,48 @@ function FieldInput({
         </div>
       );
     }
-    case "single_select":
+    case "single_select": {
       // Board S04/S11 (Divergence #4, "boards win → RadioCardGroup"): a single
       // pick renders as stacked option cards, not a dropdown. OptionCardGroup is
       // the leaf for exactly this — same affordance as `scale` above.
+      // "Other…" (no board draws it) is one more card; picking it shows a text
+      // box, and the answer is stored in band as `other:<typed text>`.
+      const current = typeof value === "string" ? value : undefined;
+      const otherPicked = current !== undefined && isOtherAnswer(current);
       return (
-        <OptionCardGroup
-          id={id}
-          aria-label={ariaLabel}
-          options={question.options.map((o) => ({
-            value: o.value,
-            label: o.label,
-          }))}
-          value={typeof value === "string" ? value : undefined}
-          onValueChange={onChange}
-        />
+        <div className="flex flex-col gap-2">
+          <OptionCardGroup
+            id={id}
+            aria-label={ariaLabel}
+            options={[
+              ...question.options.map((o) => ({
+                value: o.value,
+                label: o.label,
+              })),
+              ...(question.allowOther
+                ? [{ value: OTHER_CARD, label: "Other…" }]
+                : []),
+            ]}
+            value={otherPicked ? OTHER_CARD : current}
+            onValueChange={(v) =>
+              onChange(
+                v === OTHER_CARD
+                  ? toOtherAnswer(otherPicked ? otherAnswerText(current!) : "")
+                  : v,
+              )
+            }
+          />
+          {question.allowOther && otherPicked && (
+            <Input
+              aria-label={`Your other answer to: ${question.prompt}`}
+              maxLength={OTHER_MAX_LENGTH}
+              value={otherAnswerText(current!)}
+              onChange={(e) => onChange(toOtherAnswer(e.currentTarget.value))}
+            />
+          )}
+        </div>
       );
+    }
     case "multi_select": {
       const selected = Array.isArray(value)
         ? new Set(value as string[])
@@ -274,6 +304,14 @@ function FieldInput({
               </div>
             );
           })}
+          {question.allowOther && (
+            <MultiOther
+              id={`${id}-other`}
+              prompt={question.prompt}
+              values={Array.isArray(value) ? (value as string[]) : []}
+              onChange={onChange}
+            />
+          )}
         </div>
       );
     }
@@ -282,6 +320,7 @@ function FieldInput({
         <Input
           id={id}
           maxLength={question.maxLength}
+          {...FORMAT_INPUT[question.format ?? "text"]}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.currentTarget.value)}
         />
@@ -400,6 +439,69 @@ function FieldInput({
         </div>
       );
   }
+}
+
+/** The card value that stands for "Other…" in a single pick. Never stored. */
+const OTHER_CARD = "__other__";
+
+/** The longest typed "Other…" answer. */
+const OTHER_MAX_LENGTH = 200;
+
+/** The keyboard and autofill a short text format should get on a phone. */
+const FORMAT_INPUT: Record<
+  TextFormat,
+  Pick<React.ComponentProps<"input">, "type" | "inputMode" | "autoComplete">
+> = {
+  text: {},
+  email: { type: "email", inputMode: "email", autoComplete: "email" },
+  url: { type: "url", inputMode: "url" },
+  phone: { type: "tel", inputMode: "tel", autoComplete: "tel" },
+  alphanumeric: {},
+};
+
+/**
+ * The "Other…" row of a multi pick: a checkbox that adds one `other:` entry,
+ * and, once ticked, a text box for it. Keeps the picked options as they are.
+ */
+function MultiOther({
+  id,
+  prompt,
+  values,
+  onChange,
+}: {
+  id: string;
+  prompt: string;
+  values: string[];
+  onChange: (value: QuestionnaireResponseValue) => void;
+}) {
+  const other = values.find((v) => isOtherAnswer(v));
+  const rest = values.filter((v) => !isOtherAnswer(v));
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2.5">
+        <Checkbox
+          id={id}
+          checked={other !== undefined}
+          onCheckedChange={(checked) =>
+            onChange(checked === true ? [...rest, toOtherAnswer("")] : rest)
+          }
+        />
+        <Label htmlFor={id} className="text-sm font-normal">
+          Other…
+        </Label>
+      </div>
+      {other !== undefined && (
+        <Input
+          aria-label={`Your other answer to: ${prompt}`}
+          maxLength={OTHER_MAX_LENGTH}
+          value={otherAnswerText(other)}
+          onChange={(e) =>
+            onChange([...rest, toOtherAnswer(e.currentTarget.value)])
+          }
+        />
+      )}
+    </div>
+  );
 }
 
 /** Upload endpoint for one image answer, carrying the activation when there is one. */

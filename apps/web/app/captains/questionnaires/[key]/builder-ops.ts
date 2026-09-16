@@ -120,3 +120,33 @@ export function patchPage(
     pages: def.pages.map((p) => (p.id === pageId ? { ...p, ...patch } : p)),
   };
 }
+
+/**
+ * Split a page before block `atIndex`: the blocks from there on move to a new
+ * page placed right after it, of the same type. At the end of the page this
+ * starts an empty page. The catalog's "Page break" uses it.
+ */
+export function splitPage(
+  def: BuilderQuestionnaire,
+  pageId: string,
+  atIndex: number,
+  newPageId: string,
+): BuilderQuestionnaire {
+  const index = def.pages.findIndex((p) => p.id === pageId);
+  const page = def.pages[index];
+  if (!page) return def;
+  const cut = Math.max(0, Math.min(atIndex, page.blocks.length));
+  const pages = [...def.pages];
+  pages.splice(
+    index,
+    1,
+    { ...page, blocks: page.blocks.slice(0, cut) },
+    {
+      id: newPageId,
+      type: page.type,
+      title: "",
+      blocks: page.blocks.slice(cut),
+    },
+  );
+  return { ...def, pages };
+}

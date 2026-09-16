@@ -33,8 +33,10 @@ import { OptionsEditor } from "./options-editor";
 import { VisibilityEditor } from "./visibility-editor";
 import {
   BUILDER_FIELD_KINDS,
+  TEXT_FORMATS,
   isChoiceKind,
   morphQuestion,
+  supportsAllowOther,
   type BuilderFieldKind,
 } from "./field-kinds";
 
@@ -215,6 +217,8 @@ function QuestionEditor({
   const requiredId = useId();
   const dictationId = useId();
   const roleId = useId();
+  const formatId = useId();
+  const otherId = useId();
   const roles = builderRolesFor(question.kind);
   const role = "role" in question ? question.role : undefined;
   const num = (raw: string, fallback: number) => {
@@ -295,6 +299,30 @@ function QuestionEditor({
           }
         />
       )}
+      {question.kind === "short_text" && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={formatId}>Format</Label>
+          <select
+            id={formatId}
+            className={SELECT_CLASS}
+            value={question.format ?? "text"}
+            onChange={(e) =>
+              patch({
+                format:
+                  e.currentTarget.value === "text"
+                    ? undefined
+                    : e.currentTarget.value,
+              })
+            }
+          >
+            {TEXT_FORMATS.map((f) => (
+              <option key={f.format} value={f.format}>
+                {f.label} — {f.desc}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       {(question.kind === "short_text" ||
         question.kind === "email" ||
         question.kind === "phone") && (
@@ -351,6 +379,21 @@ function QuestionEditor({
             ]}
             value={question.display ?? "continuous"}
             onValueChange={(v) => patch({ display: v })}
+          />
+        </div>
+      )}
+      {supportsAllowOther(question) && (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col">
+            <Label htmlFor={otherId}>Offer “Other…”</Label>
+            <p className="text-xs text-muted-foreground">
+              Members can type their own answer.
+            </p>
+          </div>
+          <Switch
+            id={otherId}
+            checked={question.allowOther === true}
+            onCheckedChange={(c) => patch({ allowOther: c || undefined })}
           />
         </div>
       )}

@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
   Minus,
   Search,
+  SeparatorHorizontal,
   StickyNote,
   type LucideIcon,
 } from "lucide-react";
@@ -77,6 +78,16 @@ interface Tile {
   make: () => Block;
 }
 
+// Not a block: picking it starts a new page right after this one (spec §2,
+// "the marker itself is never stored"). Blocks are added at the end of a page,
+// so the new page starts empty.
+const PAGE_BREAK_TILE = {
+  key: "page_break",
+  label: "Page break",
+  desc: "Start a new page after this one",
+  icon: SeparatorHorizontal,
+};
+
 const CONTENT_TILES: Tile[] = [
   { key: "header_break", label: "Header break", desc: "A heading inside a page", icon: Heading, make: () => makeContent("header_break") },
   { key: "explainer", label: "Explainer", desc: "A paragraph of notes or text", icon: StickyNote, make: () => makeContent("explainer") },
@@ -94,7 +105,13 @@ const INPUT_TILES: Tile[] = BUILDER_FIELD_KINDS.map(
   }),
 );
 
-function TileButton({ tile, onPick }: { tile: Tile; onPick: () => void }) {
+function TileButton({
+  tile,
+  onPick,
+}: {
+  tile: Pick<Tile, "label" | "desc" | "icon">;
+  onPick: () => void;
+}) {
   const Icon = tile.icon;
   return (
     <button
@@ -119,10 +136,13 @@ function TileButton({ tile, onPick }: { tile: Tile; onPick: () => void }) {
 export function BlockCatalogDialog({
   pageType,
   onSelect,
+  onPageBreak,
   onClose,
 }: {
   pageType: "question" | "content";
   onSelect: (block: Block) => void;
+  /** Start a new page after this one. */
+  onPageBreak?: () => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -131,6 +151,8 @@ export function BlockCatalogDialog({
     !q || t.label.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q);
 
   const content = CONTENT_TILES.filter(match);
+  const pageBreak =
+    onPageBreak && match(PAGE_BREAK_TILE as Tile) ? PAGE_BREAK_TILE : null;
   const inputs = pageType === "content" ? [] : INPUT_TILES.filter(match);
 
   return (
@@ -159,7 +181,7 @@ export function BlockCatalogDialog({
           />
         </div>
 
-        {content.length > 0 && (
+        {(content.length > 0 || pageBreak) && (
           <section className="flex flex-col gap-2">
             <h3 className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
               Content &amp; layout
@@ -171,6 +193,9 @@ export function BlockCatalogDialog({
                 onPick={() => onSelect(tile.make())}
               />
             ))}
+            {pageBreak && onPageBreak && (
+              <TileButton tile={pageBreak} onPick={onPageBreak} />
+            )}
           </section>
         )}
 
@@ -189,7 +214,7 @@ export function BlockCatalogDialog({
           </section>
         )}
 
-        {content.length === 0 && inputs.length === 0 && (
+        {content.length === 0 && inputs.length === 0 && !pageBreak && (
           <p className="py-4 text-center text-sm text-muted-foreground">
             No blocks match “{query}”.
           </p>

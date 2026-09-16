@@ -60,6 +60,7 @@ import {
   removeBlock,
   removePage,
   replaceBlock,
+  splitPage,
 } from "./builder-ops";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { BlockEditorDialog } from "./block-editor";
@@ -240,7 +241,13 @@ export function BuilderCanvas({
   openActivationBlocking?: boolean | null;
 }) {
   const [working, setWorking] = useState<BuilderQuestionnaire>(definition);
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  // What the footer says about autosave. Nothing until the first edit, so a
+  // fresh page does not claim a save it never made.
+  const [save, setSave] = useState<
+    | { kind: "idle" | "saving" | "saved" }
+    | { kind: "error"; attempted: BuilderQuestionnaire }
+  >({ kind: "idle" });
   const [confirm, confirmDialog] = useConfirm();
   const [editing, setEditing] = useState<{
     pageId: string;
@@ -294,12 +301,22 @@ export function BuilderCanvas({
   function persist(next: BuilderQuestionnaire) {
     const previous = working; // last-good snapshot for rollback
     setWorking(next); // optimistic
+    setSave({ kind: "saving" });
     startTransition(async () => {
-      const result = await updateDefinitionAction(questionnaireKey, next);
-      if (!result.ok) {
-        toast.error(result.error);
-        setWorking(previous); // a rejected save must not leave the bad state on screen
+      let error: string | null = null;
+      try {
+        const result = await updateDefinitionAction(questionnaireKey, next);
+        if (!result.ok) error = result.error;
+      } catch {
+        error = "We couldn't reach the server. Your last change was not saved.";
       }
+      if (error === null) {
+        setSave({ kind: "saved" });
+        return;
+      }
+      toast.error(error);
+      setWorking(previous); // a rejected save must not leave the bad state on screen
+      setSave({ kind: "error", attempted: next });
     });
   }
 
@@ -486,13 +503,33 @@ export function BuilderCanvas({
 
       <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-lg items-center gap-3">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {pending ? (
+          <span
+            role="status"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          >
+            {save.kind === "saving" && (
               <>
-                <Loader2 className="size-3.5 animate-spin" /> Saving…
+                <Loader2
+                  aria-hidden
+                  className="size-3.5 motion-safe:animate-spin"
+                />{" "}
+                Saving…
               </>
-            ) : (
-              "Saved"
+            )}
+            {save.kind === "saved" && "All changes saved"}
+            {save.kind === "error" && (
+              <>
+                <span className="text-destructive">Couldn&apos;t save.</span>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => persist(save.attempted)}
+                >
+                  Retry
+                </Button>
+              </>
             )}
           </span>
           <div className="ml-auto flex items-center gap-2">
@@ -565,6 +602,17 @@ export function BuilderCanvas({
       {addingToPageId && addingPage && (
         <BlockCatalogDialog
           pageType={addingPage.type}
+          onPageBreak={() => {
+            persist(
+              splitPage(
+                working,
+                addingToPageId,
+                addingPage.blocks.length,
+                newId(),
+              ),
+            );
+            setAddingToPageId(null);
+          }}
           onSelect={(block) => {
             persist(addBlock(working, addingToPageId, block));
             setAddingToPageId(null);
