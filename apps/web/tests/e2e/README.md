@@ -62,6 +62,12 @@ pnpm --filter @camp404/web test:e2e:db
   late-joining member answers, metrics, responses, CSV) and
   `year-rollover.spec.ts` (name the year, answer, start the next year, be
   asked again, each year keeps its answer).
+- `personas.ts` makes each persona the way the app would (invite, onboarding,
+  approval, lead, rank) in its own browser context: `anonymous`, `pending`,
+  `camp_member`, `team_lead`, `captain`. `forbidden-matrix.spec.ts` checks
+  every captain page against every persona, with a meta-test that keeps the
+  table complete. `captain-review.spec.ts` covers the member panel, the ID
+  read, approve and reject.
 - `usesTestStore()` in `lib/test-mode.ts` is the data switch;
   `isE2ETestMode()` still turns on the test login and the stubs for GitHub,
   Blob and the rate limiter. The `/api/test/*` seams write the store or the
