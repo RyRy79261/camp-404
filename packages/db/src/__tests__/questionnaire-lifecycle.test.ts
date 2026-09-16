@@ -9,7 +9,6 @@ import {
   getOpenActivationForKey,
   listOpenSendBlocking,
   publishDefinition,
-  releaseBody,
   sendActivation,
   sendReminder,
   unpublishDefinition,
@@ -607,16 +606,5 @@ describe("data survival across the full lifecycle", () => {
       .where(eq(schema.questionnaireResponses.userId, u.id));
     expect(afterRepublish).toHaveLength(1);
     expect(afterRepublish[0]!.responses).toEqual({ q1: "kept" });
-  });
-});
-
-describe("releaseBody", () => {
-  it("says whether the questionnaire holds the app, with the deadline in camp time", () => {
-    expect(releaseBody("Safety", new Date("2026-03-10T22:30:00Z"), true)).toBe(
-      "New questionnaire: Safety, due 11 Mar. You need to answer it before using the app.",
-    );
-    expect(releaseBody("Skills", null, false)).toBe(
-      "New questionnaire: Skills. Tap to answer.",
-    );
   });
 });

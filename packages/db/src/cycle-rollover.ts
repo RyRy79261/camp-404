@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { announcementNotification } from "@camp404/core";
 import { createHttpDb, withTransaction, type Database } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
@@ -10,6 +11,7 @@ import {
 } from "./activations";
 import { closeActivationTx } from "./questionnaire-lifecycle";
 import { writeAuditEvent } from "./audit";
+import { deliveryValues } from "./deliveries";
 import {
   advanceCycles,
   currentCycle,
@@ -839,17 +841,20 @@ export async function advanceCycle(
         input.actorUserId,
       );
       if (audience.length > 0) {
+        const payload = announcementNotification({
+          broadcastId: broadcast!.id,
+          title: input.announcement.title,
+          body: input.announcement.body,
+        });
         await tx.insert(schema.notificationDeliveries).values(
-          audience.map((userId) => ({
-            broadcastId: broadcast!.id,
-            userId,
-            title: input.announcement!.title,
-            body: input.announcement!.body,
-            channel: broadcast!.channel,
-            presentation: "acknowledge" as const,
-            refType: "announcement",
-            refId: broadcast!.id,
-          })),
+          audience.map((userId) =>
+            deliveryValues(payload, {
+              userId,
+              broadcastId: broadcast!.id,
+              channel: broadcast!.channel,
+              presentation: "acknowledge",
+            }),
+          ),
         );
       }
     }

@@ -1,5 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
-import { createHttpDb } from "./index";
+import { approvalNotification } from "@camp404/core";
+import { deliveryValues } from "./deliveries";
+import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 
 export async function findUserByAuthId(authUserId: string) {
@@ -73,29 +75,46 @@ export async function setUserApprovalStatus(
  * call was the decision, false when the row was already decided (or no such
  * user) — the same fail-closed shape as `decideCaptainPromotion`'s
  * `eq(status, "sent")` guard in `captain-promotion.ts`.
+ *
+ * An approval also tells the member, in the same transaction: a pop-up and a
+ * push saying they are in. Only the call that won the compare-and-set writes
+ * it, so a second captain's click cannot send it twice. A rejection sends
+ * nothing (see approvalNotification).
  */
 export async function setUserApproval(input: {
   userId: string;
   status: "approved" | "rejected";
   decidedByUserId: string;
 }): Promise<boolean> {
-  const db = createHttpDb();
-  const rows = await db
-    .update(schema.users)
-    .set({
-      approvalStatus: input.status,
-      approvalDecidedByUserId: input.decidedByUserId,
-      approvalDecidedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(schema.users.id, input.userId),
-        eq(schema.users.approvalStatus, "pending"),
-      ),
-    )
-    .returning({ id: schema.users.id });
-  return rows.length > 0;
+  return await withTransaction(async (tx) => {
+    const rows = await tx
+      .update(schema.users)
+      .set({
+        approvalStatus: input.status,
+        approvalDecidedByUserId: input.decidedByUserId,
+        approvalDecidedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.users.id, input.userId),
+          eq(schema.users.approvalStatus, "pending"),
+        ),
+      )
+      .returning({ id: schema.users.id });
+    if (rows.length === 0) return false;
+    if (input.status === "approved") {
+      await tx.insert(schema.notificationDeliveries).values(
+        deliveryValues(approvalNotification(), {
+          userId: input.userId,
+          broadcastId: null,
+          channel: "both",
+          presentation: "popup",
+        }),
+      );
+    }
+    return true;
+  });
 }
 
 export async function setUserInviteCode(userId: string, code: string) {

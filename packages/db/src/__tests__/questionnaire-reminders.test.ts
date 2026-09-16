@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
+import { reminderBody } from "@camp404/core";
 import { useTestDb } from "./_harness";
 import { makeActivation, makeUser } from "./_factories";
 import {
   REMINDER_REF_TYPE,
   REMINDER_WINDOW_MS,
-  reminderBody,
   remindDueSoon,
   sendReminder,
 } from "../questionnaire-lifecycle";
@@ -355,35 +355,6 @@ describe("sendReminder — what it writes", () => {
       ok: false,
       error: "This send is closed, so nobody is waiting on it any more.",
     });
-  });
-});
-
-describe("reminderBody", () => {
-  it("names the questionnaire and its deadline", () => {
-    const body = reminderBody(TITLE, new Date("2026-03-10T12:00:00Z"));
-    expect(body).toContain(TITLE);
-    expect(body).toMatch(/due 10 Mar/);
-    expect(body).toMatch(/Tap to complete\.$/);
-  });
-
-  // The deadline is read in camp time (SAST, UTC+2), never the host's zone:
-  // Vercel runs in UTC, and a captain in Cape Town who picks 00:30 on 11 Mar
-  // stores 22:30Z on the 10th. Two instants, one either side of each midnight,
-  // so a host east of SAST fails the second case as surely as UTC fails the first.
-  it("dates the deadline in camp time, not the server's time zone", () => {
-    expect(reminderBody(TITLE, new Date("2026-03-10T22:30:00Z"))).toMatch(
-      /due 11 Mar/,
-    );
-    expect(reminderBody(TITLE, new Date("2026-03-11T21:59:00Z"))).toMatch(
-      /due 11 Mar/,
-    );
-  });
-
-  it("says something true when the send has no deadline", () => {
-    const body = reminderBody(TITLE, null);
-    expect(body).toContain(TITLE);
-    expect(body).not.toMatch(/due/);
-    expect(body).not.toMatch(/undefined|null|Invalid/);
   });
 });
 

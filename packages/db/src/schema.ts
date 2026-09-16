@@ -16,11 +16,12 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type {
-  BuilderQuestionnaire,
-  Questionnaire,
-  QuestionnaireFieldChange,
-  QuestionnaireResponses,
+import {
+  NOTIFICATION_KINDS,
+  type BuilderQuestionnaire,
+  type Questionnaire,
+  type QuestionnaireFieldChange,
+  type QuestionnaireResponses,
 } from "@camp404/types";
 // Type-only (erased at runtime — no import cycle with camp-config.ts, which
 // imports this schema): types the camp_settings.config JSONB column. The
@@ -163,6 +164,13 @@ export const broadcastKindEnum = pgEnum("broadcast_kind", [
   "reminder",
   "system",
 ]);
+
+// What a delivery is about, for the member (NOTIFICATION_KINDS in
+// @camp404/types is the one list; the TypeScript union comes from it too).
+export const notificationKindEnum = pgEnum(
+  "notification_kind",
+  NOTIFICATION_KINDS,
+);
 
 export const broadcastScopeEnum = pgEnum("broadcast_scope", [
   "everyone",
@@ -977,6 +985,10 @@ export const notificationDeliveries = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
 
+    // Set from the payload builder in @camp404/core. The default only covers
+    // rows written before the column existed (migration 0024 backfills the
+    // questionnaire ones); every writer passes it.
+    kind: notificationKindEnum("kind").notNull().default("announcement"),
     title: text("title").notNull(),
     body: text("body").notNull(),
     channel: notificationChannelEnum("channel").notNull(),

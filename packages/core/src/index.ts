@@ -64,4 +64,5 @@ export * from "./csv";
 export * from "./questionnaire-csv";
 export * from "./questionnaire-results";
 export * from "./notification-links";
+export * from "./notifications";
 export * from "./time-zone";

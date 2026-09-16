@@ -1,6 +1,13 @@
 import "server-only";
 
-import { normalizeInviteCode } from "@camp404/core";
+import {
+  announcementNotification,
+  approvalNotification,
+  normalizeInviteCode,
+  notificationLink,
+  type NotificationKind,
+  type NotificationPayload,
+} from "@camp404/core";
 import {
   DRAFT_MISSING,
   DRAFT_NOT_YOURS,
@@ -100,8 +107,11 @@ interface TestDelivery {
   id: string;
   broadcastId: string | null;
   userId: string;
+  kind: NotificationKind;
   title: string;
   body: string;
+  refType: string | null;
+  refId: string | null;
   presentation: TestPresentation;
   readAt: Date | null;
   acknowledgedAt: Date | null;
@@ -193,6 +203,31 @@ const inviteCodes = S.inviteCodes;
 const questionnaireEdits = S.questionnaireEdits;
 const broadcasts = S.broadcasts;
 const deliveries = S.deliveries;
+
+/** The store's twin of deliveryValues: every delivery comes from a builder. */
+function pushDelivery(
+  payload: NotificationPayload,
+  input: {
+    userId: string;
+    broadcastId: string | null;
+    presentation: TestPresentation;
+  },
+): void {
+  deliveries.push({
+    id: crypto.randomUUID(),
+    broadcastId: input.broadcastId,
+    userId: input.userId,
+    kind: payload.kind,
+    title: payload.title,
+    body: payload.body,
+    refType: payload.refType,
+    refId: payload.refId,
+    presentation: input.presentation,
+    readAt: null,
+    acknowledgedAt: null,
+    createdAt: new Date(),
+  });
+}
 const promotionRequests = S.promotionRequests;
 const teamMemberships = S.teamMemberships;
 
@@ -308,6 +343,14 @@ export const testStore = {
         user.approvalDecidedByUserId = input.decidedByUserId;
         user.approvalDecidedAt = new Date();
         user.updatedAt = new Date();
+        // As in production: an approval tells the member, a rejection does not.
+        if (input.status === "approved") {
+          pushDelivery(approvalNotification(), {
+            userId: user.id,
+            broadcastId: null,
+            presentation: "popup",
+          });
+        }
         return true;
       }
     }
@@ -515,17 +558,16 @@ export const testStore = {
     const recipients = [...usersByAuthId.values()].filter(
       (u) => u.id !== input.senderId,
     );
+    const payload = announcementNotification({
+      broadcastId: row.id,
+      title: row.title,
+      body: row.body,
+    });
     for (const u of recipients) {
-      deliveries.push({
-        id: crypto.randomUUID(),
-        broadcastId: row.id,
+      pushDelivery(payload, {
         userId: u.id,
-        title: row.title,
-        body: row.body,
+        broadcastId: row.id,
         presentation: row.presentation,
-        readAt: null,
-        acknowledgedAt: null,
-        createdAt: new Date(),
       });
     }
     return { ok: true, recipientCount: recipients.length };
@@ -631,9 +673,8 @@ export const testStore = {
           deliveryId: d.id,
           title: d.title,
           body: d.body,
-          // Test-store deliveries are announcements.
-          refType: "announcement",
-          refId: d.broadcastId,
+          refType: d.refType,
+          refId: d.refId,
           createdAt: d.createdAt,
         };
       });
@@ -661,8 +702,8 @@ export const testStore = {
     readAt: Date | null;
     acknowledgedAt: Date | null;
     createdAt: Date;
-    refType: string | null;
-    refId: string | null;
+    kind: NotificationKind;
+    link: string;
   }> {
     return deliveries
       .filter((d) => d.userId === userId)
@@ -680,9 +721,8 @@ export const testStore = {
           readAt: d.readAt,
           acknowledgedAt: d.acknowledgedAt,
           createdAt: d.createdAt,
-          // Test-store deliveries are announcements, which open their read page.
-          refType: "announcement",
-          refId: d.broadcastId,
+          kind: d.kind,
+          link: notificationLink(d.refType, d.refId),
         };
       });
   },
@@ -704,7 +744,10 @@ export const testStore = {
   } | null {
     // The delivery row is the permission, as in production.
     const d = deliveries.find(
-      (x) => x.userId === userId && x.broadcastId === broadcastId,
+      (x) =>
+        x.userId === userId &&
+        x.broadcastId === broadcastId &&
+        x.kind === "announcement",
     );
     if (!d) return null;
     const b = broadcasts.find((x) => x.id === broadcastId);

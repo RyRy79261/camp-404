@@ -1,5 +1,11 @@
 import { and, eq, gt, gte, inArray, lte } from "drizzle-orm";
-import { CAMP_TIME_ZONE } from "@camp404/core";
+import {
+  QUESTIONNAIRE_REF_TYPE,
+  questionnaireReleaseNotification,
+  questionnaireReminderNotification,
+  type NotificationPayload,
+} from "@camp404/core";
+import { deliveryValues } from "./deliveries";
 import {
   BuilderQuestionnaire,
   classifyChange,
@@ -450,25 +456,7 @@ export const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
  * The deep-link discriminator every questionnaire reminder carries on both the
  * broadcast and each delivery — and, per the note above, half of the dedup key.
  */
-export const REMINDER_REF_TYPE = "questionnaire_activation";
-
-const DUE_ON = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  timeZone: CAMP_TIME_ZONE,
-});
-
-/**
- * The auto-filled reminder body (§7.4 — there is no custom-message UI in v1).
- * Pure, so the one line every member reads is unit-testable without a database.
- * A send with no deadline gets the deadline-free phrasing rather than the word
- * "undefined" where a date should be.
- */
-export function reminderBody(title: string, dueAt: Date | null): string {
-  return dueAt
-    ? `Reminder: ${title} is due ${DUE_ON.format(dueAt)}. Tap to complete.`
-    : `Reminder: ${title} is still waiting for your answer. Tap to complete.`;
-}
+export const REMINDER_REF_TYPE = QUESTIONNAIRE_REF_TYPE;
 
 /**
  * Write one questionnaire notice: a published, already-dispatched broadcast
@@ -486,25 +474,24 @@ async function insertQuestionnaireNotice(
     senderId: string | null;
     kind: "reminder" | "system";
     presentation: "popup" | "feed";
-    activation: { id: string; title: string };
-    body: string;
+    payload: NotificationPayload;
     targets: string[];
     now: Date;
   },
 ): Promise<string> {
-  const { activation, body, now } = input;
+  const { payload, now } = input;
   const [broadcast] = await tx
     .insert(schema.broadcasts)
     .values({
       senderId: input.senderId,
       kind: input.kind,
       scope: "individual",
-      title: activation.title,
-      body,
+      title: payload.title,
+      body: payload.body,
       channel: "both",
       presentation: input.presentation,
-      refType: REMINDER_REF_TYPE,
-      refId: activation.id,
+      refType: payload.refType,
+      refId: payload.refId,
       publishedAt: now,
       dispatchedAt: now,
     })
@@ -518,32 +505,18 @@ async function insertQuestionnaireNotice(
   await tx
     .insert(schema.notificationDeliveries)
     .values(
-      input.targets.map((userId) => ({
-        broadcastId,
-        userId,
-        title: activation.title,
-        body,
-        channel: "both" as const,
-        presentation: input.presentation,
-        refType: REMINDER_REF_TYPE,
-        refId: activation.id,
-        createdAt: now,
-      })),
+      input.targets.map((userId) =>
+        deliveryValues(payload, {
+          userId,
+          broadcastId,
+          channel: "both",
+          presentation: input.presentation,
+          createdAt: now,
+        }),
+      ),
     )
     .onConflictDoNothing();
   return broadcastId;
-}
-
-/** The line a member reads when a questionnaire is sent to them. */
-export function releaseBody(
-  title: string,
-  dueAt: Date | null,
-  blocking: boolean,
-): string {
-  const due = dueAt ? `, due ${DUE_ON.format(dueAt)}` : "";
-  return blocking
-    ? `New questionnaire: ${title}${due}. You need to answer it before using the app.`
-    : `New questionnaire: ${title}${due}. Tap to answer.`;
 }
 
 /**
@@ -600,8 +573,12 @@ export async function notifyQuestionnaireReleased(input: {
       senderId: input.senderId,
       kind: "system",
       presentation: "feed",
-      activation: act,
-      body: releaseBody(act.title, act.dueAt, act.blocking),
+      payload: questionnaireReleaseNotification({
+        activationId: act.id,
+        title: act.title,
+        dueAt: act.dueAt,
+        blocking: act.blocking,
+      }),
       targets,
       now,
     });
@@ -683,7 +660,11 @@ export async function sendReminder(input: {
     };
   }
 
-  const body = reminderBody(act.title, act.dueAt);
+  const payload = questionnaireReminderNotification({
+    activationId: act.id,
+    title: act.title,
+    dueAt: act.dueAt,
+  });
 
   return await withTransaction(async (tx): Promise<ReminderResult> => {
     const pending = await tx
@@ -760,8 +741,7 @@ export async function sendReminder(input: {
       senderId: input.senderId,
       kind: "reminder",
       presentation: "popup",
-      activation: act,
-      body,
+      payload,
       targets,
       now,
     });

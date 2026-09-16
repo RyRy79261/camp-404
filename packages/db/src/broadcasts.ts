@@ -10,6 +10,13 @@ import {
   sql,
 } from "drizzle-orm";
 import type { DbOrTx } from "./audit";
+import {
+  announcementNotification,
+  notificationLink,
+  scheduledBroadcastNotification,
+  type NotificationKind,
+} from "@camp404/core";
+import { deliveryValues } from "./deliveries";
 import { createHttpDb, createPooledDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
@@ -328,19 +335,22 @@ export async function publishAnnouncement(input: {
       return { ok: true as const, recipientCount: 0 };
     }
 
+    const payload = announcementNotification({
+      broadcastId: broadcast.id,
+      title: broadcast.title,
+      body: broadcast.body,
+    });
     await tx
       .insert(schema.notificationDeliveries)
       .values(
-        recipientIds.map((userId) => ({
-          broadcastId: broadcast.id,
-          userId,
-          title: broadcast.title,
-          body: broadcast.body,
-          channel: broadcast.channel,
-          presentation: broadcast.presentation,
-          refType: "announcement",
-          refId: broadcast.id,
-        })),
+        recipientIds.map((userId) =>
+          deliveryValues(payload, {
+            userId,
+            broadcastId: broadcast.id,
+            channel: broadcast.channel,
+            presentation: broadcast.presentation,
+          }),
+        ),
       )
       .onConflictDoNothing();
 
@@ -377,6 +387,7 @@ export async function dispatchDueBroadcasts(
   const due = await httpDb
     .select({
       id: schema.broadcasts.id,
+      kind: schema.broadcasts.kind,
       senderId: schema.broadcasts.senderId,
       scope: schema.broadcasts.scope,
       team: schema.broadcasts.team,
@@ -423,19 +434,18 @@ export async function dispatchDueBroadcasts(
           .returning({ id: schema.broadcasts.id });
         if (!claimed[0]) return false; // another run already dispatched it
         if (recipientIds.length > 0) {
+          const payload = scheduledBroadcastNotification(b);
           await tx
             .insert(schema.notificationDeliveries)
             .values(
-              recipientIds.map((userId) => ({
-                broadcastId: b.id,
-                userId,
-                title: b.title,
-                body: b.body,
-                channel: b.channel,
-                presentation: b.presentation,
-                refType: b.refType ?? null,
-                refId: b.refId ?? b.id,
-              })),
+              recipientIds.map((userId) =>
+                deliveryValues(payload, {
+                  userId,
+                  broadcastId: b.id,
+                  channel: b.channel,
+                  presentation: b.presentation,
+                }),
+              ),
             )
             .onConflictDoNothing();
         }
@@ -606,15 +616,16 @@ export interface InboxItem {
   readAt: Date | null;
   acknowledgedAt: Date | null;
   createdAt: Date;
-  /** What the notification is about; notificationLink maps it to a page. */
-  refType: string | null;
-  refId: string | null;
+  /** What the notification is about. */
+  kind: NotificationKind;
+  /** Where tapping it goes (notificationLink; the inbox when it points nowhere). */
+  link: string;
 }
 
 /** A user's notification inbox (everything delivered to them), newest first. */
 export async function listInbox(userId: string): Promise<InboxItem[]> {
   const db = createHttpDb();
-  return db
+  const rows = await db
     .select({
       id: schema.notificationDeliveries.id,
       title: schema.notificationDeliveries.title,
@@ -624,6 +635,7 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       readAt: schema.notificationDeliveries.readAt,
       acknowledgedAt: schema.notificationDeliveries.acknowledgedAt,
       createdAt: schema.notificationDeliveries.createdAt,
+      kind: schema.notificationDeliveries.kind,
       refType: schema.notificationDeliveries.refType,
       refId: schema.notificationDeliveries.refId,
     })
@@ -635,6 +647,10 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
     .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
     .where(eq(schema.notificationDeliveries.userId, userId))
     .orderBy(desc(schema.notificationDeliveries.createdAt));
+  return rows.map(({ refType, refId, ...row }) => ({
+    ...row,
+    link: notificationLink(refType, refId),
+  }));
 }
 
 export interface AnnouncementReading {
