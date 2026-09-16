@@ -17,7 +17,6 @@ vi.mock("@/lib/users", () => ({
 }));
 vi.mock("@/lib/forms", () => ({
   getReplayableForm: vi.fn(),
-  recordFormEdit: vi.fn(),
 }));
 vi.mock("@/lib/questionnaire-config", () => ({
   getQuestionnaireForResponses: vi.fn(),
@@ -32,7 +31,7 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 import { saveFormReplay } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { getReplayableForm, recordFormEdit } from "@/lib/forms";
+import { getReplayableForm } from "@/lib/forms";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 
 // Every required answer, so validateResponses passes and we can observe how the
@@ -68,7 +67,11 @@ const fullCatalogue = buildQuestionnaire(
 
 describe("saveFormReplay — archive invariant", () => {
   const save = vi.fn(
-    async (_userId: string, _responses: Record<string, unknown>) => {},
+    async (
+      _userId: string,
+      _responses: Record<string, unknown>,
+      _edit: unknown,
+    ) => {},
   );
 
   beforeEach(() => {
@@ -117,7 +120,6 @@ describe("saveFormReplay — archive invariant", () => {
       },
     });
     expect(save).not.toHaveBeenCalled();
-    expect(recordFormEdit).not.toHaveBeenCalled();
   });
 
   it("preserves a since-archived team pick on re-save (validates against the full set)", async () => {
@@ -147,6 +149,40 @@ describe("saveFormReplay — archive invariant", () => {
     const saved = save.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(saved["team_lead.interests"]).toEqual(["kitchen", ARCHIVED_KEY]);
     // Unchanged answers → no spurious change-log entry (no false "removal").
-    expect(recordFormEdit).not.toHaveBeenCalled();
+    expect(save.mock.calls[0]?.[2] ?? null).toBeNull();
+  });
+
+  it("hands the change-log row to the same save as the answers", async () => {
+    vi.mocked(getReplayableForm).mockResolvedValue({
+      key: "burner_profile",
+      title: "Burner profile",
+      description: "",
+      questionnaire: activePicker,
+      load: vi.fn(async () => ({
+        responses: required,
+        completedAt: new Date("2026-01-01"),
+        updatedAt: null,
+      })),
+      save,
+    } as never);
+
+    const result = await saveFormReplay(
+      "burner_profile",
+      { ...required, "bio.statement": "Changed my mind." },
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    // One call carries both, so the form can write them in one transaction.
+    expect(save).toHaveBeenCalledOnce();
+    expect(save.mock.calls[0]?.[2]).toEqual({
+      editedByUserId: "camp-1",
+      changes: [
+        expect.objectContaining({
+          fieldId: "bio.statement",
+          to: "Changed my mind.",
+        }),
+      ],
+    });
   });
 });

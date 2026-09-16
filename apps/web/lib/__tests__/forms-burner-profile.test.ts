@@ -8,10 +8,7 @@ vi.mock("@/lib/users", () => ({
   getBurnerProfile: vi.fn(),
   getEmergencyContacts: vi.fn(),
   getIdDocuments: vi.fn(),
-  satisfyBurnerProfileAction: vi.fn(),
-  setEmergencyContacts: vi.fn(),
-  setIdDocuments: vi.fn(),
-  upsertBurnerProfile: vi.fn(),
+  saveBurnerProfileReplay: vi.fn(),
 }));
 vi.mock("@/lib/questionnaire-config", () => ({
   getQuestionnaireForPicker: vi.fn(),
@@ -36,8 +33,7 @@ import {
   getBurnerProfile,
   getEmergencyContacts,
   getIdDocuments,
-  setEmergencyContacts,
-  upsertBurnerProfile,
+  saveBurnerProfileReplay,
 } from "@/lib/users";
 
 const catalogue = buildQuestionnaire(
@@ -76,20 +72,40 @@ describe("burner profile replay", () => {
     });
   });
 
-  it("saves the contacts on the member and the rest as answers", async () => {
+  it("saves answers, contacts and the change log in one write", async () => {
     const form = await getReplayableForm("burner_profile");
-    await form!.save("user-1", {
-      "bio.statement": "Hi",
-      "emergency.1.name": "Ada Byron",
-      "emergency.1.phone": "+27 82 555 0199",
-      "emergency.1.relationship": "sister",
-    });
+    const changes = [
+      {
+        fieldId: "bio.statement",
+        label: "Tell us about yourself",
+        from: "",
+        to: "Hi",
+      },
+    ];
+    await form!.save(
+      "user-1",
+      {
+        "bio.statement": "Hi",
+        "id.type": "passport",
+        "id.number": "A1234567",
+        "emergency.1.name": "Ada Byron",
+        "emergency.1.phone": "+27 82 555 0199",
+        "emergency.1.relationship": "sister",
+      },
+      { editedByUserId: "user-1", changes },
+    );
 
-    expect(setEmergencyContacts).toHaveBeenCalledExactlyOnceWith("user-1", [
-      ADA,
-    ]);
-    expect(vi.mocked(upsertBurnerProfile).mock.calls[0]![0].responses).toEqual({
-      "bio.statement": "Hi",
+    expect(saveBurnerProfileReplay).toHaveBeenCalledExactlyOnceWith({
+      userId: "user-1",
+      version: expect.any(String),
+      responses: { "bio.statement": "Hi", "id.type": "passport" },
+      id: { idType: "passport", idNumber: "A1234567" },
+      emergencyContacts: [ADA],
+      edit: {
+        questionnaireKey: "burner_profile",
+        editedByUserId: "user-1",
+        changes,
+      },
     });
   });
 });

@@ -1,7 +1,12 @@
 import { and, eq, sql } from "drizzle-orm";
 import { approvalNotification } from "@camp404/core";
-import type { EmergencyContact } from "@camp404/types";
-import { writeAuditEvent } from "./audit";
+import type {
+  EmergencyContact,
+  QuestionnaireFieldChange,
+} from "@camp404/types";
+import { satisfyRequiredAction } from "./activations";
+import { writeAuditEvent, type DbOrTx } from "./audit";
+import { recordQuestionnaireEdit } from "./questionnaire-edits";
 import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
@@ -186,13 +191,15 @@ export async function getBurnerProfileByUserId(userId: string) {
   return rows[0] ?? null;
 }
 
-export async function upsertBurnerProfile(input: {
-  userId: string;
-  version: string;
-  responses: Record<string, unknown>;
-  markComplete: boolean;
-}) {
-  const db = createHttpDb();
+export async function upsertBurnerProfile(
+  input: {
+    userId: string;
+    version: string;
+    responses: Record<string, unknown>;
+    markComplete: boolean;
+  },
+  db: DbOrTx = createHttpDb(),
+) {
   const now = new Date();
   await db
     .insert(schema.burnerProfiles)
@@ -254,8 +261,8 @@ export async function getEmergencyContactsColumn(
 export async function setEmergencyContactsColumn(
   userId: string,
   contacts: readonly EmergencyContact[],
+  db: DbOrTx = createHttpDb(),
 ) {
-  const db = createHttpDb();
   await db
     .update(schema.users)
     .set({
@@ -269,10 +276,76 @@ export async function setEmergencyContactsColumn(
 export async function setIdDocumentColumns(
   userId: string,
   cols: { passportEncrypted: string | null; saIdEncrypted: string | null },
+  db: DbOrTx = createHttpDb(),
 ) {
-  const db = createHttpDb();
   await db
     .update(schema.users)
     .set({ ...cols, updatedAt: new Date() })
     .where(eq(schema.users.id, userId));
+}
+
+export interface BurnerProfileReplay {
+  userId: string;
+  version: string;
+  /** The answers with the ID number and emergency contacts already split out. */
+  responses: Record<string, unknown>;
+  /** The ID ciphertext columns to write, or null to leave the ID alone. */
+  idColumns: {
+    passportEncrypted: string | null;
+    saIdEncrypted: string | null;
+  } | null;
+  /** The whole list; an empty list clears the column. */
+  emergencyContacts: readonly EmergencyContact[];
+  /** The change-log row, or null when the replay changed nothing. */
+  edit: {
+    questionnaireKey: string;
+    editedByUserId: string | null;
+    changes: QuestionnaireFieldChange[];
+  } | null;
+}
+
+/**
+ * Save a My forms replay of the burner profile in ONE transaction: the
+ * answers, the ID number, the emergency contacts, the gate, and the
+ * change-log row. Before this each was its own write, so a failure after the
+ * answers saved left them changed with no change-log row saying so.
+ */
+export async function saveBurnerProfileReplay(
+  input: BurnerProfileReplay,
+): Promise<void> {
+  await withTransaction(async (tx) => {
+    await upsertBurnerProfile(
+      {
+        userId: input.userId,
+        version: input.version,
+        responses: input.responses,
+        // A replay only happens on a completed form, so it stays complete.
+        markComplete: true,
+      },
+      tx,
+    );
+    if (input.idColumns) {
+      await setIdDocumentColumns(input.userId, input.idColumns, tx);
+    }
+    await setEmergencyContactsColumn(input.userId, input.emergencyContacts, tx);
+    // A re-submit also re-satisfies the gate (e.g. after a new version).
+    await satisfyRequiredAction(
+      input.userId,
+      "burner_profile",
+      input.version,
+      tx,
+    );
+    if (input.edit && input.edit.changes.length > 0) {
+      await recordQuestionnaireEdit(
+        {
+          userId: input.userId,
+          questionnaireKey: input.edit.questionnaireKey,
+          version: input.version,
+          editedByUserId: input.edit.editedByUserId,
+          changes: input.edit.changes,
+        },
+        tx,
+      );
+    }
+  });
 }

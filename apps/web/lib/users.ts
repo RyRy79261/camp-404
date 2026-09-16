@@ -15,8 +15,12 @@ import {
   setIdDocumentColumns,
   getEmergencyContactsColumn,
   setEmergencyContactsColumn,
+  saveBurnerProfileReplay as dbSaveBurnerProfileReplay,
 } from "@camp404/db/burner-profile";
-import type { EmergencyContact } from "@camp404/types";
+import type {
+  EmergencyContact,
+  QuestionnaireFieldChange,
+} from "@camp404/types";
 import { encrypt, decryptOrNull } from "@camp404/db/crypto";
 import { idColumnsFor } from "@camp404/db/id-documents";
 import { isTeamLead as dbIsTeamLead } from "@camp404/db/roster";
@@ -397,6 +401,35 @@ interface UserBackend {
     contacts: readonly EmergencyContact[],
   ): Promise<void>;
   getEmergencyContacts(userId: string): Promise<EmergencyContact[] | null>;
+  saveBurnerProfileReplay(input: BurnerProfileReplayInput): Promise<void>;
+}
+
+export interface BurnerProfileReplayInput {
+  userId: string;
+  version: string;
+  /** Answers with the ID number and emergency contacts split out. */
+  responses: Record<string, unknown>;
+  /** The ID number to store, or null to leave it alone. */
+  id: { idType: string | null; idNumber: string } | null;
+  emergencyContacts: readonly EmergencyContact[];
+  /** The change-log row, or null when nothing changed. */
+  edit: {
+    questionnaireKey: string;
+    editedByUserId: string | null;
+    changes: QuestionnaireFieldChange[];
+  } | null;
+}
+
+/**
+ * Save a My forms replay of the burner profile: answers, ID number, emergency
+ * contacts, gate and change-log row, all or nothing (one transaction in the
+ * real backend).
+ */
+export async function saveBurnerProfileReplay(
+  input: BurnerProfileReplayInput,
+): Promise<void> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  await store.saveBurnerProfileReplay(input);
 }
 
 export async function upsertBurnerProfile(input: {
@@ -533,6 +566,20 @@ const realBackend: UserBackend = {
   async getEmergencyContacts(userId) {
     return getEmergencyContactsColumn(userId);
   },
+  async saveBurnerProfileReplay(input) {
+    await dbSaveBurnerProfileReplay({
+      userId: input.userId,
+      version: input.version,
+      responses: input.responses,
+      // Encrypt before the transaction opens, so a key problem fails the save
+      // before anything is written.
+      idColumns: input.id
+        ? idColumnsFor(input.id.idType, encrypt(input.id.idNumber))
+        : null,
+      emergencyContacts: input.emergencyContacts,
+      edit: input.edit,
+    });
+  },
   async getIdDocuments(userId) {
     const cols = await getIdDocumentColumns(userId);
     if (!cols) return null;
@@ -603,6 +650,25 @@ const testBackend: UserBackend = {
   },
   async getEmergencyContacts(userId) {
     return testStore.getEmergencyContacts(userId);
+  },
+  async saveBurnerProfileReplay(input) {
+    // The in-memory store cannot fail part-way, so plain writes stand in for
+    // the transaction.
+    testStore.upsertProfile({
+      userId: input.userId,
+      version: input.version,
+      responses: input.responses,
+      markComplete: true,
+    });
+    if (input.id) testStore.setIdDocuments(input.userId, input.id);
+    testStore.setEmergencyContacts(input.userId, input.emergencyContacts);
+    if (input.edit && input.edit.changes.length > 0) {
+      testStore.recordQuestionnaireEdit({
+        userId: input.userId,
+        version: input.version,
+        ...input.edit,
+      });
+    }
   },
 };
 

@@ -9,7 +9,6 @@ import {
 } from "@camp404/types";
 import {
   listQuestionnaireEdits as listEditsDb,
-  recordQuestionnaireEdit as recordEditDb,
 } from "@camp404/db/questionnaire-edits";
 import { splitIdNumber, mergeIdNumber } from "@camp404/db/id-documents";
 import {
@@ -25,10 +24,7 @@ import {
   getBurnerProfile,
   getEmergencyContacts,
   getIdDocuments,
-  satisfyBurnerProfileAction,
-  setEmergencyContacts,
-  setIdDocuments,
-  upsertBurnerProfile,
+  saveBurnerProfileReplay,
 } from "./users";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
@@ -54,8 +50,21 @@ export interface ReplayableForm {
     completedAt: Date | null;
     updatedAt: Date | null;
   } | null>;
-  /** Persist edited answers back to the domain table (a full re-submit). */
-  save(userId: string, responses: QuestionnaireResponses): Promise<void>;
+  /**
+   * Persist edited answers back to the domain table (a full re-submit), with
+   * the change-log row when something changed, all or nothing.
+   */
+  save(
+    userId: string,
+    responses: QuestionnaireResponses,
+    edit: ReplayEdit | null,
+  ): Promise<void>;
+}
+
+/** One replay's change-log entry. */
+export interface ReplayEdit {
+  editedByUserId: string | null;
+  changes: QuestionnaireFieldChange[];
 }
 
 // The static half of a form (everything except its config-derived catalogue).
@@ -90,28 +99,24 @@ const BURNER_PROFILE: ReplayableFormDef = {
       updatedAt: profile.updatedAt,
     };
   },
-  async save(userId, responses) {
+  async save(userId, responses, edit) {
     const split = splitIdNumber(responses);
     const { idType, idNumber } = split;
     const { cleaned, contacts } = splitEmergencyContacts(
       await getQuestionnaireForResponses(),
       split.cleaned,
     );
-    // A replay is a full re-submit, so the contacts on the form are the
-    // contacts: clearing them all clears the column.
-    await setEmergencyContacts(userId, contacts);
-    await upsertBurnerProfile({
+    // One transaction: the answers, the ID number, the contacts (a replay is a
+    // full re-submit, so clearing them all clears the column), the gate, and
+    // the change-log row.
+    await saveBurnerProfileReplay({
       userId,
       version: QUESTIONNAIRE_VERSION,
       responses: cleaned,
-      // A replay only happens on an already-completed form, so it stays
-      // complete. markComplete is idempotent on completedAt.
-      markComplete: true,
+      id: idNumber ? { idType, idNumber } : null,
+      emergencyContacts: contacts,
+      edit: edit ? { questionnaireKey: "burner_profile", ...edit } : null,
     });
-    if (idNumber) await setIdDocuments(userId, { idType, idNumber });
-    // A re-submit also re-satisfies the gate (e.g. after a captain re-activates
-    // the questionnaire with a new version).
-    await satisfyBurnerProfileAction(userId);
   },
 };
 
@@ -198,20 +203,6 @@ export interface FormEdit {
   editedByUserId: string | null;
   changes: QuestionnaireFieldChange[];
   createdAt: Date;
-}
-
-export async function recordFormEdit(input: {
-  userId: string;
-  questionnaireKey: string;
-  version: string;
-  editedByUserId: string | null;
-  changes: QuestionnaireFieldChange[];
-}): Promise<void> {
-  if (isE2ETestMode()) {
-    testStore.recordQuestionnaireEdit(input);
-    return;
-  }
-  await recordEditDb(input);
 }
 
 export async function listFormEdits(
