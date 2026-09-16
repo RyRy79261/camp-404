@@ -160,7 +160,6 @@ describe("submitFeedbackAction", () => {
     vi.mocked(structureWithAi).mockResolvedValue({
       title: "AI title",
       summary: "AI summary",
-      severity: "low",
     });
     const fetchFn = mockFetch({
       status: 201,
@@ -203,6 +202,22 @@ describe("submitFeedbackAction", () => {
     const text = vi.mocked(structureWithAi).mock.calls[0]![1];
     expect(text).not.toContain("jane@example.com");
     expect(text).toContain("[email]");
+  });
+
+  it("files an issue without the raw PII that says what was removed", async () => {
+    const fetchFn = mockFetch({
+      status: 201,
+      json: async () => ({ number: 5, html_url: "https://x/y/issues/5" }),
+    });
+    await submitFeedbackAction({
+      kind: "bug",
+      description: "Roster breaks for jane@example.com",
+    });
+    const body = JSON.parse(
+      (fetchFn.mock.calls[0]![1] as RequestInit).body as string,
+    );
+    expect(body.body).not.toContain("jane@example.com");
+    expect(body.body).toContain("removed before filing: email addresses");
   });
 
   it("files a plain issue when AI restructuring returns null", async () => {

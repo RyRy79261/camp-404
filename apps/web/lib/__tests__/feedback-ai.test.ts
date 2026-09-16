@@ -26,15 +26,37 @@ describe("structureWithAi", () => {
         {
           type: "tool_use",
           name: "format_report",
-          input: { title: "T", summary: "S", severity: "low" },
+          input: { title: "T", summary: "S" },
         },
       ]) as never,
     );
     expect(await structureWithAi("bug", "it broke")).toEqual({
       title: "T",
       summary: "S",
-      severity: "low",
     });
+  });
+
+  it("drops a severity the model sends anyway", async () => {
+    vi.mocked(anthropic).mockReturnValue(
+      clientReturning([
+        {
+          type: "tool_use",
+          name: "format_report",
+          input: { title: "T", summary: "S", severity: "critical" },
+        },
+      ]) as never,
+    );
+    expect(await structureWithAi("bug", "it broke")).toEqual({
+      title: "T",
+      summary: "S",
+    });
+  });
+
+  it("does not ask the model for a severity", async () => {
+    const create = vi.fn(async () => ({ content: [] }));
+    vi.mocked(anthropic).mockReturnValue({ messages: { create } } as never);
+    await structureWithAi("bug", "it broke");
+    expect(JSON.stringify(create.mock.calls[0])).not.toMatch(/severity/i);
   });
 
   it("returns null when the client throws (e.g. no API key)", async () => {

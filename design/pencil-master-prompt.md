@@ -687,7 +687,7 @@ Three ambient full-bleed layers sit behind everything (`absolute inset-0`, `poin
 - AI-unavailable → checkbox hidden, useAi forced false.
 - Config-error → inline error banner (missing token / bad repo).
 - Error boundary → full-screen retry + home, focus on heading.
-**Options & exact values:** Kind: "bug"|"feature" (default "bug"). Labels: ["bug","from-app"]/["enhancement","from-app"]. Severity: critical|high|medium|low. Presentation surfaced: "acknowledge" only. DESCRIPTION_MAX=5000; TITLE_MAX=100; ISSUE_BODY_MAX=60000; POLL_INTERVAL_MS=45000. Shake: threshold=8, requiredJolts=5, windowMs=800, cooldownMs=3000, SAMPLE_THROTTLE_MS=60. Rate limits: burst 3/60000ms, daily 20/86400000ms. Repo default "RyRy79261/camp-404". AI model "claude-haiku-4-5-20251001", max_tokens 1024, temp 0, timeout 30000; GitHub timeout 8000. Env: GITHUB_FEEDBACK_TOKEN, GITHUB_FEEDBACK_REPO, ANTHROPIC_API_KEY, E2E_TEST_MODE.
+**Options & exact values:** Kind: "bug"|"feature" (default "bug"). Labels: ["bug","from-app"]/["enhancement","from-app"]. Presentation surfaced: "acknowledge" only. DESCRIPTION_MAX=5000; TITLE_MAX=100; ISSUE_BODY_MAX=60000; POLL_INTERVAL_MS=45000. Shake: threshold=8, requiredJolts=5, windowMs=800, cooldownMs=3000, SAMPLE_THROTTLE_MS=60. Rate limits: burst 3/60000ms, daily 20/86400000ms. Repo default "RyRy79261/camp-404". AI model "claude-haiku-4-5-20251001", max_tokens 1024, temp 0, timeout 30000; GitHub timeout 8000. Env: GITHUB_FEEDBACK_TOKEN, GITHUB_FEEDBACK_REPO, ANTHROPIC_API_KEY, E2E_TEST_MODE.
 **Validation & rules:**
 - Description required/trimmed/≤5000; blank/HTML-only/all-PII → "Please describe the issue." (no issue filed).
 - deliveryId must be UUID (400); ack is owner+presentation-scoped.

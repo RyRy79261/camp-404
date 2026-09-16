@@ -71,7 +71,7 @@ Supporting imports read for accuracy: `apps/web/app/layout.tsx` (mount point + `
 - Optional "Improve with AI" pass; restructures a (already-sanitized) raw report into a structured issue. **Additive and fail-safe — any problem returns `null` and the caller files the plain template** (`:7-12` comment).
 - Calls `anthropic().messages.create` with `model: MODELS.haiku` (`"claude-haiku-4-5-20251001"`), `max_tokens: 1024`, `temperature: 0`, the `SYSTEM_PROMPT`, a single `format_report` tool, forced `tool_choice: { type:"tool", name:"format_report" }`, request `{ timeout: 30_000 }` (`:76-92`).
 - Extracts the `tool_use` block named `format_report`; if absent → null (`:94-97`). Validates the tool input against `StructuredSchema`; returns the parsed data or null (`:99-100`). Any thrown error is logged and returns null (`:101-104`).
-- `SYSTEM_PROMPT` rules (verbatim, `:56-65`): faithful to the user's report (never invent steps/symptoms/facts); concise specific title (not "App is broken"); for a bug extract steps/expected/actual only if provided (leave empty otherwise, don't guess); for a feature put the request in summary and leave steps/expected/actual empty; severity is a rough triage hint (crash/data-loss = critical or high); leave PII placeholders like `[email]`/`[redacted]` as-is; always call the `format_report` tool, never reply with prose only.
+- `SYSTEM_PROMPT` rules (verbatim, `:56-65`): faithful to the user's report (never invent steps/symptoms/facts); concise specific title (not "App is broken"); for a bug extract steps/expected/actual only if provided (leave empty otherwise, don't guess); for a feature put the request in summary and leave steps/expected/actual empty; leave PII placeholders like `[email]`/`[redacted]` as-is; always call the `format_report` tool, never reply with prose only.
 
 ### github-feedback.ts (lib/github-feedback.ts)
 - Pure, I/O-free helpers (the action does the fetch) so they stay unit-testable (`:1-2` comment). Repo is PUBLIC, so issue bodies are world-readable: every free-text piece is PII-redacted and a reporter's name/email is never put in the body — only the opaque camp user id (`:3-7` comment).
@@ -118,7 +118,7 @@ Global-states rows that apply to this unit:
 ## Enums, options & configurable values
 - `FeedbackKind = "bug" | "feature"` (`github-feedback.ts:9`); default in dialog is `"bug"` (`report-bug-dialog.tsx:49`).
 - `FeedbackResult = { ok:true; number:number; url:string } | { ok:false; error:string }` (`actions.ts:15-17`).
-- `StructuredReport.severity` enum: `"critical" | "high" | "medium" | "low"` (`github-feedback.ts:18`, `feedback-ai.ts:20`).
+- `StructuredReport` has no severity field (removed 2026-09-16, owner's call).
 - `AnnouncementPresentation` / `broadcast_presentation` pgEnum: `"acknowledge" | "popup" | "feed"` — only `"acknowledge"` deliveries surface in the gate (`schema.ts:166-170`).
 - `DESCRIPTION_MAX = 5000` (`github-feedback.ts:21`).
 - `TITLE_MAX = 100` (private, `github-feedback.ts:22`).

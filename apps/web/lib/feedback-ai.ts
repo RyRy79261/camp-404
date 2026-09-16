@@ -10,6 +10,10 @@ import type { FeedbackKind, StructuredReport } from "@/lib/github-feedback";
 // invalid shape) returns null and the caller files the plain template instead.
 // The caller passes ALREADY-SANITIZED text, and the output is re-sanitized when
 // the issue body is assembled (the model can echo PII).
+//
+// No severity field (owner's call, 2026-09-16): the issue tracker is public,
+// and a model-assigned priority is one wiring mistake away from deciding who
+// gets help first.
 
 const StructuredSchema = z.object({
   title: z.string().min(1).max(140),
@@ -17,7 +21,6 @@ const StructuredSchema = z.object({
   stepsToReproduce: z.array(z.string().max(500)).max(20).optional(),
   expected: z.string().max(1000).optional(),
   actual: z.string().max(1000).optional(),
-  severity: z.enum(["critical", "high", "medium", "low"]).optional(),
 });
 
 const FORMAT_TOOL = {
@@ -43,11 +46,6 @@ const FORMAT_TOOL = {
       },
       expected: { type: "string", description: "What the user expected." },
       actual: { type: "string", description: "What actually happened." },
-      severity: {
-        type: "string",
-        enum: ["critical", "high", "medium", "low"],
-        description: "Rough triage hint from the description alone. Optional.",
-      },
     },
     required: ["title", "summary"],
   },
@@ -60,7 +58,6 @@ Rules:
 - Write a concise, specific title (not "App is broken").
 - For a bug: extract reproduction steps, expected behaviour, and actual behaviour IF the user provided them. Leave fields empty otherwise — do not guess.
 - For a feature request: put the request in summary; leave stepsToReproduce/expected/actual empty.
-- severity is a rough triage hint from the description alone (crash/data-loss = critical or high).
 - Placeholders like [email] or [redacted] may appear (the text was PII-stripped) — leave them as-is.
 - Always call the format_report tool. Never reply with prose only.`;
 

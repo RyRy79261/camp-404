@@ -19,8 +19,9 @@
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
 //     (./invites)
 //   - text utils: initialsFrom, slugify, humanizeKey (./text-utils)
-//   - text redaction: redactPii, sanitizeReportText, redactSecrets +
-//     SECRET_ENV_KEYS (./text-redaction)
+//   - text redaction: redactPii, sanitizeReportText (both return a
+//     RedactionResult: the text and the RedactionKind[] found),
+//     describeRedactions, redactSecrets + SECRET_ENV_KEYS (./text-redaction)
 //   - shake detector: createShakeDetector + ShakeSample/ShakeDetectorConfig
 //     (./shake); the React hook + DOM permission helpers stay in apps/web
 //   - id validation: validateIdNumber, validateBirthDate, IdValidationResult
