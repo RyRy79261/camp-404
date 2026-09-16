@@ -26,7 +26,7 @@ const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({
 // sensitive and stays in `responses`. Date of birth (`birthday`) intentionally
 // stays in `responses` as ordinary profile data — it is not in the
 // encrypted-PII class (passport / SA-ID / bank details). See
-// docs/superpowers/specs/2026-05-30-pii-at-rest-encryption-design.md.
+// docs/specs/2026-05-30-pii-at-rest-encryption-design.md.
 //
 // NOTE on the team-specific questionnaires: the team-interest 0–6 pickers on
 // the "Team interests" page drive which follow-up questionnaires the user

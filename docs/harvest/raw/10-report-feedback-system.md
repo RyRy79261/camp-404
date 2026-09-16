@@ -18,7 +18,7 @@ Camp 404 already has a *thin* version of this feature (`apps/web/components/feed
 Two Camp 404 backlog items land squarely here:
 - **WP10 (#134) item (h)** — "no manual 'Report a problem' entry point (shake is the only trigger)". The donor's `ReportLauncher` corner pill is exactly that entry point.
 - **WP10 (#134) item (i)** — "no screenshot attach on the bug dialog (board S22)". The donor does *not* do screenshots either, but its `ReportDiagnosticsPanel` is the disclosure surface a screenshot attach would have to live beside.
-- Also relevant: the shake-to-report spec's own open follow-up "a shared Upstash-backed rate limiter to replace the per-instance in-memory one" (`docs/superpowers/specs/2026-05-31-shake-to-report-design.md:79-85`) — the donor solves this with a Postgres-backed fixed-window limiter (`packages/db/src/rate-limit.ts`).
+- Also relevant: the shake-to-report spec's own open follow-up "a shared Upstash-backed rate limiter to replace the per-instance in-memory one" (`docs/specs/2026-05-31-shake-to-report-design.md:79-85`) — the donor solves this with a Postgres-backed fixed-window limiter (`packages/db/src/rate-limit.ts`).
 
 ---
 

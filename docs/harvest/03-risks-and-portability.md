@@ -221,7 +221,7 @@ JSONB-only.
 | M6 | `users.ref_code text unique` | existing | **NO** | Unit 24. A `UNIQUE` on an existing populated table is not additive — see below. |
 | M7 | `broadcasts.pinned boolean NOT NULL DEFAULT false` | existing | yes | Unit 09, pinned banner. Also collides with home's existing "Pinned favourites" group (`design/spec/surfaces/06-home.md:89`) — **rename before building**. |
 | M8 | `security_events` + `security_event_kind` enum | **new** | yes | Unit 11. Gated on a product decision; six of nine donor kinds have no producer here. |
-| M9 | `account_deletion_requests` + partial unique `(user_id) WHERE status='pending'` | **new** | yes | Unit 12/13. **Reverses a recorded owner decision** (`docs/superpowers/specs/2026-05-30-account-deletion-design.md` §Decisions). Product call, not a port. |
+| M9 | `account_deletion_requests` + partial unique `(user_id) WHERE status='pending'` | **new** | yes | Unit 12/13. **Reverses a recorded owner decision** (`docs/specs/2026-05-30-account-deletion-design.md` §Decisions). Product call, not a port. |
 | M10 | `ALTER TYPE task_status ADD VALUE 'awaiting_confirmation'` | existing enum | **NO** | Unit 24 tasks model. Enum growth is not additive in the useful sense — see below. |
 | M11 | `users.privacy_flags jsonb NOT NULL DEFAULT '{}'` | existing | yes | Unit 22. Needs a **dedicated** writer separate from the questionnaire save path, or `resolvePrivacyFlagsUpdate`'s omitted-map-is-empty-patch rule has nowhere to send a deliberate change. |
 | M12 | `documents` gains `url`, `source_type` enum, `required_ack`, `step_key`, `sort` | existing | yes | Only if the document-ack engine is built. Recommended SKIP. |

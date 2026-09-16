@@ -367,7 +367,7 @@ chk: ok = adversarial verifier upheld; REFUTED = verifier disagreed (read the pe
 | 10 | report-feedback-system | ReportDiagnosticsPanel — informed-consent disclosure that renders the REAL payload | MISSING | COPY | high | S | ok |  |
 | 10 | report-feedback-system | ReportSettingsCard — the disclosure readable without filing anything | MISSING | ADAPT | medium | S | ok |  |
 | 10 | report-feedback-system | Report route handlers + report-viewer helpers (the looser-gate pattern) | ALREADY_HAVE | SKIP | medium | S | REFUTED |  |
-| 10 | report-feedback-system | consumeRateLimit + action_rate_limit — single-statement fixed-window limiter | MISSING | ADAPT | high | M | ok | docs/superpowers/specs/2026-05-31-shake-to-report-design.md — 'Possible follow-ups (not built): A shared (Upst |
+| 10 | report-feedback-system | consumeRateLimit + action_rate_limit — single-statement fixed-window limiter | MISSING | ADAPT | high | M | ok | docs/specs/2026-05-31-shake-to-report-design.md — 'Possible follow-ups (not built): A shared (Upst |
 | 10 | report-feedback-system | docs/triage.md — the triage contract for a Claude-routine queue | MISSING | ADAPT | medium | S | ok |  |
 | 10 | report-feedback-system | Issue templates + issue-forms.test.ts (the label-drift guard) | MISSING | ADAPT | medium | S | ok |  |
 | 10 | report-feedback-system | Coverage ratchet with 100% per-file floors on the privacy core | MISSING | ADAPT | medium | S | ok |  |
@@ -388,10 +388,10 @@ chk: ok = adversarial verifier upheld; REFUTED = verifier disagreed (read the pe
 | 11 | account-security-surfaces | AccountDeleteElsewhere — the Delete tab in an app that does not own deletion | NOT_APPLICABLE | SKIP | low | S | ok |  |
 | 11 | account-security-surfaces | assessPassword + PASSWORD_MIN_LENGTH/MAX_LENGTH (NIST SP 800-63B-4 policy) | MISSING | ADAPT | medium | S | ok |  |
 | 11 | account-security-surfaces | Enumeration-safe messaging vocabulary + leak detector | MISSING | ADAPT | medium | S | REFUTED |  |
-| 11 | account-security-surfaces | Deletion grace-period state machine | MISSING | ADAPT | medium | L | REFUTED | docs/superpowers/specs/2026-05-30-account-deletion-design.md (§Decisions records 'Irreversible, behind an expl |
+| 11 | account-security-surfaces | Deletion grace-period state machine | MISSING | ADAPT | medium | L | REFUTED | docs/specs/2026-05-30-account-deletion-design.md (§Decisions records 'Irreversible, behind an expl |
 | 11 | account-security-surfaces | assessDeletionEligibility — the three anti-lockout guards | MISSING | ADAPT | high | M | ok | WP1 (#125) — 'deleteOwnAccount does not block the sole captain, permanently stranding the camp because /setup  |
 | 11 | account-security-surfaces | Email-change 48h-revocable state machine | MISSING | SKIP | low | L | ok |  |
-| 11 | account-security-surfaces | buildSanitizationPlan + the erase/preserve/purge/identity table lists | PARTIAL | INSPIRE | medium | M | ok | docs/superpowers/specs/2026-05-30-account-deletion-design.md (the shipped sub-project F design) |
+| 11 | account-security-surfaces | buildSanitizationPlan + the erase/preserve/purge/identity table lists | PARTIAL | INSPIRE | medium | M | ok | docs/specs/2026-05-30-account-deletion-design.md (the shipped sub-project F design) |
 | 11 | account-security-surfaces | AUTH_CAPABILITIES matrix + assertCapability + capabilityVerdict | MISSING | ADAPT | high | M | ok |  |
 | 11 | account-security-surfaces | describeSecurityEvent + SECURITY_EVENT_TITLES | MISSING | COPY | medium | S | ok |  |
 | 11 | account-security-surfaces | Security notification + email builders (maskEmail, securityMessageLeaks) | PARTIAL | ADAPT | medium | M | ok |  |
@@ -399,7 +399,7 @@ chk: ok = adversarial verifier upheld; REFUTED = verifier disagreed (read the pe
 | 11 | account-security-surfaces | parseSetCookies — hand the provider's rotated session cookie back to the browser | MISSING | ADAPT | medium | S | REFUTED |  |
 | 11 | account-security-surfaces | withReauth / isReauth — the AsyncLocalStorage re-authentication marker | MISSING | INSPIRE | low | S | ok |  |
 | 11 | account-security-surfaces | cancelPendingDeletion — the 'just sign in and it's cancelled' promise | MISSING | ADAPT | medium | M | ok |  |
-| 11 | account-security-surfaces | consumeRateLimit + rateLimitIp — a fixed-window limiter for server actions | PARTIAL | ADAPT | high | M | ok | docs/superpowers/specs/2026-05-31-shake-to-report-design.md §Possible follow-ups — 'a shared Upstash-backed ra |
+| 11 | account-security-surfaces | consumeRateLimit + rateLimitIp — a fixed-window limiter for server actions | PARTIAL | ADAPT | high | M | ok | docs/specs/2026-05-31-shake-to-report-design.md §Possible follow-ups — 'a shared Upstash-backed ra |
 | 11 | account-security-surfaces | Email-change single-use token helpers (newToken/hashToken/tokensMatch) | PARTIAL | SKIP | low | S | ok |  |
 | 11 | account-security-surfaces | account-actions.ts — the ten server actions | MISSING | ADAPT | high | L | ok | DEFERRED.md — 'result-object server actions still throw raw on DB errors (only createInviteAction try/catches) |
 | 11 | account-security-surfaces | sanitizeAccount + sweepDueDeletions — the erasure runner | PARTIAL | ADAPT | medium | L | ok |  |
@@ -431,8 +431,8 @@ chk: ok = adversarial verifier upheld; REFUTED = verifier disagreed (read the pe
 | 12 | privacy-pii-retention | medical unreadable UI branch (role=alert) | MISSING | ADAPT | medium | S | ok |  |
 | 12 | privacy-pii-retention | medical-audit.ts — the audit-trail READER and the census argument | NOT_APPLICABLE | INSPIRE | low | M | ok |  |
 | 12 | privacy-pii-retention | id-retention.ts — POPIA storage limitation as a pure rule | MISSING | ADAPT | medium | M | ok |  |
-| 12 | privacy-pii-retention | account-sanitization.ts — the pure 'Lost Cat' erasure plan | PARTIAL | ADAPT | high | M | ok | docs/superpowers/specs/2026-05-30-account-deletion-design.md (built; 'Deferred' section names captain-initiate |
-| 12 | privacy-pii-retention | assertNotSanitized — the resurrection guard | MISSING | INSPIRE | medium | S | ok | docs/superpowers/specs/2026-05-30-account-deletion-design.md ('Sever authUserId so the anonymised row can't be |
+| 12 | privacy-pii-retention | account-sanitization.ts — the pure 'Lost Cat' erasure plan | PARTIAL | ADAPT | high | M | ok | docs/specs/2026-05-30-account-deletion-design.md (built; 'Deferred' section names captain-initiate |
+| 12 | privacy-pii-retention | assertNotSanitized — the resurrection guard | MISSING | INSPIRE | medium | S | ok | docs/specs/2026-05-30-account-deletion-design.md ('Sever authUserId so the anonymised row can't be |
 | 12 | privacy-pii-retention | publicMemberName — the tombstone-aware render fallback | PARTIAL | INSPIRE | low | S | ok |  |
 | 12 | privacy-pii-retention | account-security.ts deletion half — 14-day grace state machine + three guards | MISSING | ADAPT | high | M | ok | WP1 (#125) — 'Block deleteOwnAccount when caller is sole captain, require hand-off first (profile/actions.ts:5 |
 | 12 | privacy-pii-retention | sanitizeAccount — the transactional erasure runner | PARTIAL | INSPIRE | medium | L | ok |  |
@@ -442,7 +442,7 @@ chk: ok = adversarial verifier upheld; REFUTED = verifier disagreed (read the pe
 | 12 | privacy-pii-retention | Refuse-don't-drop + no-plaintext-lock-box guards | PARTIAL | ADAPT | medium | S | ok |  |
 | 12 | privacy-pii-retention | crypto-guard.ts — isCryptoConfigured / safeEncrypt | MISSING | COPY | medium | S | ok |  |
 | 12 | privacy-pii-retention | keys.ts — ECDSA P-256 keypair + human-comparable fingerprint | NOT_APPLICABLE | SKIP | low | M | ok |  |
-| 12 | privacy-pii-retention | report-sanitize.ts — redaction before a public GitHub issue | PARTIAL | ADAPT | high | M | ok | docs/superpowers/specs/2026-05-31-shake-to-report-design.md (shipped; the two repos' redactors are siblings) |
+| 12 | privacy-pii-retention | report-sanitize.ts — redaction before a public GitHub issue | PARTIAL | ADAPT | high | M | ok | docs/specs/2026-05-31-shake-to-report-design.md (shipped; the two repos' redactors are siblings) |
 | 12 | privacy-pii-retention | account/delete page — honest consequences UI | PARTIAL | ADAPT | high | M | ok | WP1 (#125) — sole-captain deletion guard |
 | 12 | privacy-pii-retention | requestAccountDeletion / cancelAccountDeletion server actions | PARTIAL | REWRITE | medium | M | ok | design/spec/open-questions.md D8 — 'Profile-edit gating asymmetry … a user who became pending/rejected can sti |
 | 12 | privacy-pii-retention | security-notifications deletion emails + maskEmail | MISSING | INSPIRE | low | M | ok |  |
@@ -453,8 +453,8 @@ chk: ok = adversarial verifier upheld; REFUTED = verifier disagreed (read the pe
 | 12 | privacy-pii-retention | grace_ends_at / revocable_until — store the promised deadline | MISSING | COPY | medium | S | ok |  |
 | 12 | privacy-pii-retention | partial unique index for 'one live X per user' | MISSING | COPY | medium | S | REFUTED |  |
 | 12 | privacy-pii-retention | audit_events meta PII scrub (SQL) | NOT_APPLICABLE | INSPIRE | low | S | ok |  |
-| 13 | db-layer-patterns | consumeRateLimit — single-statement fixed-window limiter | PARTIAL | ADAPT | high | S | ok | docs/superpowers/specs/2026-05-31-shake-to-report-design.md:84 ("A shared (Upstash-backed) rate limiter — toda |
-| 13 | db-layer-patterns | action_rate_limit table (own table, not a Better Auth namespace) | MISSING | COPY | high | S | ok | docs/superpowers/specs/2026-05-31-shake-to-report-design.md:84 |
+| 13 | db-layer-patterns | consumeRateLimit — single-statement fixed-window limiter | PARTIAL | ADAPT | high | S | ok | docs/specs/2026-05-31-shake-to-report-design.md:84 ("A shared (Upstash-backed) rate limiter — toda |
+| 13 | db-layer-patterns | action_rate_limit table (own table, not a Better Auth namespace) | MISSING | COPY | high | S | ok | docs/specs/2026-05-31-shake-to-report-design.md:84 |
 | 13 | db-layer-patterns | planMigration / isPoolerConnection / connectionHost | MISSING | INSPIRE | low | S | ok |  |
 | 13 | db-layer-patterns | runDeployMigrations — advisory-locked deploy-time runner | MISSING | INSPIRE | low | M | ok |  |
 | 13 | db-layer-patterns | configureLocalProxy — point both Neon drivers at local proxies | PARTIAL | ADAPT | medium | S | ok |  |
@@ -693,7 +693,7 @@ chk: ok = adversarial verifier upheld; REFUTED = verifier disagreed (read the pe
 | 19 | e2e-harness | Passkey enrolment via a CDP virtual authenticator (e2e/specs/new-burner/passkeys.spec.ts) | MISSING | SKIP | low | L | ok |  |
 | 19 | e2e-harness | Session-list / revoke / password-rotation / delete-with-grace spec | PARTIAL | INSPIRE | medium | L | ok | /home/ryan/repos/Personal/camp-404/DEFERRED.md:46-52 (account deletion is a hard no-op under E2E_TEST_MODE, no |
 | 19 | e2e-harness | Password reset over a real inbox (e2e/specs/new-burner/password-reset.spec.ts) | MISSING | ADAPT | high | M | ok | /home/ryan/repos/Personal/camp-404/docs/e2e-true-auth.md |
-| 19 | e2e-harness | DB-backed cross-request rate-limit spec (e2e/specs/new-burner/auth-rate-limit.spec.ts) | PARTIAL | INSPIRE | medium | S | ok | /home/ryan/repos/Personal/camp-404/docs/superpowers/specs/2026-05-31-shake-to-report-design.md:79-85 (shared U |
+| 19 | e2e-harness | DB-backed cross-request rate-limit spec (e2e/specs/new-burner/auth-rate-limit.spec.ts) | PARTIAL | INSPIRE | medium | S | ok | /home/ryan/repos/Personal/camp-404/docs/specs/2026-05-31-shake-to-report-design.md:79-85 (shared U |
 | 19 | e2e-harness | Enumeration-safe sign-in copy spec (e2e/specs/new-burner/session-lifecycle.spec.ts:54-87) | MISSING | COPY | high | S | ok |  |
 | 19 | e2e-harness | Blocking-gate trap-and-release specs (two release paths: submit, and activation-close) | PARTIAL | ADAPT | high | M | REFUTED | WP4 (#128) questionnaire delivery |
 | 19 | e2e-harness | Questionnaire build → activate → answer → aggregate spec | MISSING | INSPIRE | high | L | ok | /home/ryan/repos/Personal/camp-404/docs/questionnaire-builder.md §9 Phase E; WP10 (#134); WP4 (#128) |
@@ -812,8 +812,8 @@ chk: ok = adversarial verifier upheld; REFUTED = verifier disagreed (read the pe
 | 22 | directory-profile-public | name-dedupe.ts — normalizeName + a JS reimplementation of pg_trgm similarity (SIMILARITY_WARN_THRESHOLD 0.55) | MISSING | INSPIRE | low | S | ? |  |
 | 22 | directory-profile-public | camp-categories.ts — 8 canonical categories with emoji, label normalisation, usage counting, and the pure directory filter predicate | NOT_APPLICABLE | SKIP | low | S | ? |  |
 | 22 | directory-profile-public | member-ref-code.ts — deterministic {PREFIX}-M{NNN} member reference codes for off-platform EFT reconciliation | MISSING | ADAPT | medium | S | ok | GitHub issue WP10 #134 (dues write path + Finances UI — users.duesPaid is read but written by nothing; reimbur |
-| 22 | directory-profile-public | id-retention.ts — POPIA storage-limitation rule (ID_RETENTION_GRACE_DAYS 30, buildIdPurgePatch, never purge on NaN) | MISSING | ADAPT | medium | M | ? | Not planned anywhere — docs/superpowers/specs/2026-05-30-pii-at-rest-encryption-design.md covers encryption at |
-| 22 | directory-profile-public | account-sanitization.ts — the erasure plan plus uncoveredHardLockedFields, the guard that fails when a new always-private field has no erasure path | PARTIAL | ADAPT | medium | S | ? | docs/superpowers/specs/2026-05-30-account-deletion-design.md (BUILT — the erasure plan itself is shipped) |
+| 22 | directory-profile-public | id-retention.ts — POPIA storage-limitation rule (ID_RETENTION_GRACE_DAYS 30, buildIdPurgePatch, never purge on NaN) | MISSING | ADAPT | medium | M | ? | Not planned anywhere — docs/specs/2026-05-30-pii-at-rest-encryption-design.md covers encryption at |
+| 22 | directory-profile-public | account-sanitization.ts — the erasure plan plus uncoveredHardLockedFields, the guard that fails when a new always-private field has no erasure path | PARTIAL | ADAPT | medium | S | ? | docs/specs/2026-05-30-account-deletion-design.md (BUILT — the erasure plan itself is shipped) |
 | 22 | directory-profile-public | searchAccounts — a search field whose PREDICATE narrows with the caller's rank (and looksLikeId /^[0-9a-f-]{8,}$/i) | PARTIAL | INSPIRE | medium | S | ok | GitHub issue WP5 #129 (member email absent from the captain profile despite owner decision OD4; roster search  |
 | 22 | directory-profile-public | loading.tsx boundaries that mirror the destination page's own container classes | MISSING | ADAPT | high | M | ok | GitHub issue WP7 #131 (zero loading.tsx across 24 force-dynamic pages) |
 | 22 | directory-profile-public | scoped route error boundary + shared ErrorRecovery body with a frame variant | PARTIAL | ADAPT | high | S | ok | GitHub issue WP7 #131 (exactly one error boundary exists, so any nested captain-route query failure nukes the  |

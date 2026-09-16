@@ -1,14 +1,12 @@
 # PII-at-rest Encryption Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Stop storing government ID numbers in plaintext — encrypt `id.number` into the existing `users` encrypted columns at every write boundary, gate decryption to owner‖captain, and backfill existing rows.
 
 **Architecture:** A pure split/merge helper (`@camp404/db/id-documents`) moves `id.number` out of `burner_profiles.responses`; the `users.ts` real backend encrypts on write / decrypts on read (test backend keeps raw, so E2E needs no key); the crypto helper moves to `@camp404/db/crypto` so the `admin-cli` backfill can reuse it. Decryption surfaces unchanged in shape: owner replay + MCP self tool, captain member-detail + MCP people tool.
 
 **Tech Stack:** TypeScript, Drizzle (Neon Postgres), Node AES-256-GCM (`crypto.ts`), Vitest, pnpm/turbo.
 
-**Spec:** `docs/superpowers/specs/2026-05-30-pii-at-rest-encryption-design.md`
+**Spec:** `docs/specs/2026-05-30-pii-at-rest-encryption-design.md`
 
 ---
 

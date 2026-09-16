@@ -23,7 +23,7 @@ import {
 } from "./camp-config";
 
 // The year rollover — the captain-facing half of the cycle feature. See
-// docs/superpowers/specs/2026-09-08-year-namespace-design.md §8.
+// docs/specs/2026-09-08-year-namespace-design.md §8.
 //
 // A cycle IS a year: one number, which increments and namespaces the rows
 // stamped with it. Nothing here has a name.

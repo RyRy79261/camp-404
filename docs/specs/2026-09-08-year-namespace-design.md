@@ -6,7 +6,7 @@ notes marked **As built** say where the code settled a question this text left o
 **Program:** Camp 404, post-harvest. Answers harvest item §14
 (`docs/harvest/00-harvest-and-roadmap.md:54`, "the unasked product question: what happens in
 year two?"). Builds on sub-project E (the `required_actions` gating engine,
-`docs/superpowers/specs/2026-05-30-gating-engine-design.md`) and the builder's activation
+`docs/specs/2026-05-30-gating-engine-design.md`) and the builder's activation
 lifecycle (migration `0018_workable_praxagora`).
 
 **Decision in one paragraph.** The year is an integer stamped on two tables and a list in

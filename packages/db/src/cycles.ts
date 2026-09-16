@@ -13,7 +13,7 @@ import { RESERVED_DEFINITION_KEYS } from "./questionnaire-definitions";
 
 // The year namespace, read side. A "cycle" is one burn year and the year IS the
 // cycle — a single number that both names the year and namespaces its rows. See
-// docs/superpowers/specs/2026-09-08-year-namespace-design.md for why it is an
+// docs/specs/2026-09-08-year-namespace-design.md for why it is an
 // integer on two tables rather than an entity with foreign keys.
 //
 // The policy for one questionnaire lives in one of two disjoint places:

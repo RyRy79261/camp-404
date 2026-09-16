@@ -69,7 +69,7 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > profile actions; the duplicate `ActionResult<T>` that lived in
   > `announcements/actions.ts` was deleted in favour of the shared module.
 - **Shake-to-report bug/feature modal** — spec written at
-  `docs/superpowers/specs/2026-05-31-shake-to-report-design.md`; **not built**, pending
+  `docs/specs/2026-05-31-shake-to-report-design.md`; **not built**, pending
   maintainer review of the open decisions (storage target, Intake-Tracker relationship,
   accessibility affordance). The "manual" section of the modal is explicitly out of
   scope for now. **[spec 2026-05-31]**

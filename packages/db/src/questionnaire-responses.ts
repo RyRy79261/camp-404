@@ -8,7 +8,7 @@ import { questionnaireResponses } from "./schema";
 // cycle); the per-field change history lives in questionnaire_edits.
 //
 // `cycle` is the year namespace (see
-// docs/superpowers/specs/2026-09-08-year-namespace-design.md). Both functions
+// docs/specs/2026-09-08-year-namespace-design.md). Both functions
 // take it as a REQUIRED argument rather than defaulting to 1: every caller
 // holds an activation and can supply `activation.cycle`, and a default would
 // let a future caller silently write into the founding cycle.

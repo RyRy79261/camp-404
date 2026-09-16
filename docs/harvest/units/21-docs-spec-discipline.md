@@ -2,7 +2,7 @@
 
 **Headline:** Camp 404 has excellent, voluminous docs and *zero* drift control — six verified-stale claims live in the repo right now — so take the donor's cheap honesty mechanics (dated correction blocks, `UNRESOLVED` markers, a doc-status header, a `.gitattributes`, a `.github/` governance set) and leave its Requirement-ID machine behind.
 
-**Camp 404 today:** 13 top-level `docs/*.md`, 31 `design/feature-set/*`, 27 per-surface specs under `design/spec/impl/app/`, and a genuinely good index-as-rulebook at `design/spec/README.md` — but no header convention outside two families (`design/feature-set/00-overview.md:3-6`, `docs/superpowers/specs/2026-05-30-notifications-engine-design.md:3-5`), no single precedence chain, and `grep -rn UNRESOLVED --include=*.md` returns **0**. `.github/` contains only `workflows/` — no ISSUE_TEMPLATE, no PR template, no CODEOWNERS — and the repo root has no `CONTRIBUTING.md`, `SECURITY.md`, `.gitattributes`, `commitlint.config.*` or `.husky/` (all re-verified this pass).
+**Camp 404 today:** 13 top-level `docs/*.md`, 31 `design/feature-set/*`, 27 per-surface specs under `design/spec/impl/app/`, and a genuinely good index-as-rulebook at `design/spec/README.md` — but no header convention outside two families (`design/feature-set/00-overview.md:3-6`, `docs/specs/2026-05-30-notifications-engine-design.md:3-5`), no single precedence chain, and `grep -rn UNRESOLVED --include=*.md` returns **0**. `.github/` contains only `workflows/` — no ISSUE_TEMPLATE, no PR template, no CODEOWNERS — and the repo root has no `CONTRIBUTING.md`, `SECURITY.md`, `.gitattributes`, `commitlint.config.*` or `.husky/` (all re-verified this pass).
 
 ## Take these
 
@@ -45,7 +45,7 @@
 - **Flows that name their enforcing code** — `design/spec/flows.md:12-13` ("Live spine = `apps/web/app/page.tsx:29-63` + `apps/web/lib/required-actions.ts`"), `design/spec/information-architecture.md:23`.
 - **Adversarial verification culture** — `design/feature-set-verification-report.md:24-26` (2097 claims / 2027 verified / 96.66% / 0 HIGH) over 31 per-unit files.
 - **Component library discipline** — `design/spec/component-library.md` folds 57 candidates to 49 canonical with a `mapsTo` legend and a build order.
-- **Notifications engine** — `packages/db/src/broadcasts.ts` (`resolveAudience:52`, `dispatchDueBroadcasts:306`) + `docs/superpowers/specs/2026-05-30-notifications-engine-design.md`; deeper than the donor's spec. Only the *laws* are missing.
+- **Notifications engine** — `packages/db/src/broadcasts.ts` (`resolveAudience:52`, `dispatchDueBroadcasts:306`) + `docs/specs/2026-05-30-notifications-engine-design.md`; deeper than the donor's spec. Only the *laws* are missing.
 - **Seeding law satisfied by construction** — no `db:seed` script in `packages/db/package.json`; first boot is `apps/web/lib/bootstrap.ts` + `/setup`. (Write the rule anyway; note `apps/web/app/api/test/seed-invite/route.ts` exists and is E2E-gated, so the rule must be written against what's actually there.)
 - **Core purity rule with its reason** — `packages/core/src/index.ts:4-8`.
 - **e2e honest-limitations section** — `apps/web/tests/e2e/README.md:100-125`.
@@ -79,7 +79,7 @@
 ## Corrections applied
 
 - **commitlint (the one REFUTED row): `rec_holds=False`, effort is M not S.** The claim that Camp 404 "already conforms de facto" is wrong. Re-verified this pass: **18 of the last 40 subjects exceed 72 characters** (14 of them non-merge), so `header-max-length: 72` is a deliberate decision, not a free win. And the proposed scope enum is wrong — actual scopes in the last 60 commits are `web, db, ui, types, e2e, turbo, deps, invite, questionnaire, questionnaire-builder, design, db+web, web+ui`. Worse, `design(questionnaire-builder): …` uses `design` as a **type**, which `@commitlint/config-conventional`'s `type-enum` rejects outright. Adopting this means either widening the enums or rewriting the convention; either way it is not a drop-in.
-- `docs/` holds **13** top-level `.md` files, not 15 (repeated twice in the original framing). `docs/superpowers/` holds 7 specs + 1 plan.
+- `docs/` holds **13** top-level `.md` files, not 15 (repeated twice in the original framing). `docs/specs/` holds 7 specs and `docs/plans/` holds 1 plan.
 - `turbo.json`'s outputs array is line **31**, not `:30` (the original said `:30` twice). Re-verified.
 - Camp 404 has **28** `pgEnum`s, not 29; **41** non-story `.tsx` in `packages/ui/src/components/`, not 40; **12** open WP issues (#125–#136), not 13; `packages/core/vitest.config.ts` is **8** lines, not 7.
 - The core-purity **rule** is at `packages/core/src/index.ts:4-8`, not `:26-30` (`:26-28` is the "deliberately NOT here" exclusion list).
