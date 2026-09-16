@@ -11,6 +11,7 @@ import {
   setProfileImage,
 } from "@/lib/users";
 import { deleteAccount } from "@/lib/account";
+import { runAction } from "@/lib/action-result";
 
 export type UpdateProfileResult = { ok: false; error: string };
 export type DeleteAccountResult = { ok: false; error: string };
@@ -33,26 +34,31 @@ export async function updateProfile(
   _prev: UpdateProfileResult | null,
   formData: FormData,
 ): Promise<UpdateProfileResult> {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
+  return runAction("updateProfile", async () => {
+    const authUser = await getAuthenticatedUserOrRedirect();
+    const campUser = await ensureCampUser(authUser);
+    if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+      redirect("/signup/required");
+    }
 
-  const rawName = formData.get("displayName");
-  const name = typeof rawName === "string" ? rawName.trim() : "";
-  if (!name) return { ok: false, error: "Display name can't be empty." };
-  if (name.length > MAX_NAME_LENGTH) {
-    return { ok: false, error: `Display name must be ${MAX_NAME_LENGTH} characters or fewer.` };
-  }
+    const rawName = formData.get("displayName");
+    const name = typeof rawName === "string" ? rawName.trim() : "";
+    if (!name) return { ok: false, error: "Display name can't be empty." };
+    if (name.length > MAX_NAME_LENGTH) {
+      return {
+        ok: false,
+        error: `Display name must be ${MAX_NAME_LENGTH} characters or fewer.`,
+      };
+    }
 
-  const rawImage = formData.get("profileImageUrl");
-  const image = typeof rawImage === "string" ? rawImage.trim() : "";
+    const rawImage = formData.get("profileImageUrl");
+    const image = typeof rawImage === "string" ? rawImage.trim() : "";
 
-  await setDisplayName(campUser.id, name);
-  await setProfileImage(campUser.id, image.length > 0 ? image : null);
+    await setDisplayName(campUser.id, name);
+    await setProfileImage(campUser.id, image.length > 0 ? image : null);
 
-  redirect("/profile");
+    redirect("/profile");
+  });
 }
 
 /**
@@ -64,26 +70,28 @@ export async function deleteOwnAccount(
   _prev: DeleteAccountResult | null,
   formData: FormData,
 ): Promise<DeleteAccountResult> {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (formData.get("confirm") !== "DELETE") {
-    return { ok: false, error: "Type DELETE to confirm." };
-  }
-  // The camp must never lose its last captain — /setup latches shut after
-  // bootstrap and there is no demotion or CLI rescue path, so this is
-  // unrecoverable. Checked at the moment of erasure, not at page render — and
-  // checked again inside the erasure transaction, which is where the count and
-  // the write are actually inseparable. This one is here to give a good error
-  // before any work happens.
-  const guard = canLeaveCamp({
-    isCaptain: campUser.rank === "captain",
-    captainCount: await countActiveCaptains(),
+  return runAction("deleteOwnAccount", async () => {
+    const authUser = await getAuthenticatedUserOrRedirect();
+    const campUser = await ensureCampUser(authUser);
+    if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+      redirect("/signup/required");
+    }
+    if (formData.get("confirm") !== "DELETE") {
+      return { ok: false, error: "Type DELETE to confirm." };
+    }
+    // The camp must never lose its last captain — /setup latches shut after
+    // bootstrap and there is no demotion or CLI rescue path, so this is
+    // unrecoverable. Checked at the moment of erasure, not at page render — and
+    // checked again inside the erasure transaction, which is where the count and
+    // the write are actually inseparable. This one is here to give a good error
+    // before any work happens.
+    const guard = canLeaveCamp({
+      isCaptain: campUser.rank === "captain",
+      captainCount: await countActiveCaptains(),
+    });
+    if (!guard.ok) return { ok: false, error: SOLE_CAPTAIN_ERROR };
+    const erased = await deleteAccount(campUser.id);
+    if (!erased.ok) return { ok: false, error: SOLE_CAPTAIN_ERROR };
+    redirect("/auth/sign-out");
   });
-  if (!guard.ok) return { ok: false, error: SOLE_CAPTAIN_ERROR };
-  const erased = await deleteAccount(campUser.id);
-  if (!erased.ok) return { ok: false, error: SOLE_CAPTAIN_ERROR };
-  redirect("/auth/sign-out");
 }
