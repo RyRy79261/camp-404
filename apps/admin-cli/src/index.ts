@@ -8,10 +8,7 @@ import {
   revokeInviteCode,
 } from "@camp404/db/invite-codes";
 import { findUserById } from "@camp404/db/burner-profile";
-import {
-  backfillBurnerProfileActions,
-  backfillIdEncryption,
-} from "@camp404/db/maintenance";
+import { backfillIdEncryption } from "@camp404/db/maintenance";
 import { parseMintArgs } from "./parse-mint-args";
 
 const [, , command, ...rest] = process.argv;
@@ -35,9 +32,6 @@ async function main() {
       break;
     case "backfill-id-encryption":
       await runBackfillIdEncryption();
-      break;
-    case "backfill-required-actions":
-      await runBackfillRequiredActions();
       break;
     case undefined:
     case "help":
@@ -225,21 +219,6 @@ async function runBackfillIdEncryption() {
   );
 }
 
-/**
- * Idempotent one-off: seed a burner_profile required action for every member
- * who joined before signup started seeding one. A finished profile gets a
- * completed row, so nobody is sent back to onboarding. Run once in prod; after
- * that the completedAt fallback in the member gate can be removed.
- */
-async function runBackfillRequiredActions() {
-  const result = await backfillBurnerProfileActions();
-  console.log(JSON.stringify(result, null, 2));
-  console.log(
-    `\nChecked ${result.scanned} member(s); added ${result.seededPending} open ` +
-      `and ${result.seededCompleted} already-finished burner profile gate(s).`,
-  );
-}
-
 function printHelp() {
   console.log(
     `camp404 — admin CLI
@@ -263,9 +242,6 @@ Usage:
                                     already joined keep their place.
   camp404 backfill-id-encryption    Encrypt any plaintext id.number values left
                                     in burner_profiles.responses (idempotent).
-  camp404 backfill-required-actions Give members who joined before signup
-                                    seeding their burner_profile gate row
-                                    (idempotent; finished profiles stay done).
   camp404 help                      Show this help`,
   );
 }

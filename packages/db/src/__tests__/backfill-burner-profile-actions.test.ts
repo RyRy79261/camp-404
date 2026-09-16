@@ -1,13 +1,23 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import * as schema from "../schema";
 import { useTestDb } from "./_harness";
 import { makeUser, requiredActionsFor } from "./_factories";
-import { backfillBurnerProfileActions } from "../maintenance";
 
-// The one-off seed of burner_profile required actions for members who joined
-// before signup seeding, on real rows.
+// The data migration that seeds burner_profile required actions for members
+// who joined before signup seeding. The harness applies every migration to an
+// empty database, so these tests add the rows first and then run the
+// migration's own SQL again, on real rows.
 
-describe("backfillBurnerProfileActions", () => {
+const BACKFILL_SQL = readFileSync(
+  new URL(
+    "../../migrations/0029_backfill_burner_profile_actions.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+
+describe("0029_backfill_burner_profile_actions", () => {
   const h = useTestDb();
 
   it("gates an unfinished member and never re-gates a finished one", async () => {
@@ -23,15 +33,13 @@ describe("backfillBurnerProfileActions", () => {
     const system = await makeUser(h.db(), { isSystem: true });
     const erased = await makeUser(h.db(), { sanitised: true });
 
-    expect(await backfillBurnerProfileActions()).toEqual({
-      scanned: 2,
-      seededPending: 1,
-      seededCompleted: 1,
-    });
+    await h.client().exec(BACKFILL_SQL);
 
     const [done] = await requiredActionsFor(h.db(), finished.id);
     expect(done).toMatchObject({
+      type: "questionnaire",
       actionKey: "burner_profile",
+      title: "Complete your burner profile",
       status: "completed",
       completedAt: finishedAt,
     });
@@ -41,12 +49,13 @@ describe("backfillBurnerProfileActions", () => {
       status: "pending",
       version: null,
       blocking: true,
+      completedAt: null,
     });
     expect(await requiredActionsFor(h.db(), system.id)).toEqual([]);
     expect(await requiredActionsFor(h.db(), erased.id)).toEqual([]);
   });
 
-  it("leaves an existing row alone, so a second run seeds nothing", async () => {
+  it("leaves an existing row alone, so running it twice changes nothing", async () => {
     const member = await makeUser(h.db());
     await h.db().insert(schema.requiredActions).values({
       userId: member.id,
@@ -56,12 +65,11 @@ describe("backfillBurnerProfileActions", () => {
       version: "2026.06.04-v9",
     });
 
-    expect(await backfillBurnerProfileActions()).toEqual({
-      scanned: 1,
-      seededPending: 0,
-      seededCompleted: 0,
-    });
-    const [row] = await requiredActionsFor(h.db(), member.id);
-    expect(row?.version).toBe("2026.06.04-v9");
+    await h.client().exec(BACKFILL_SQL);
+    await h.client().exec(BACKFILL_SQL);
+
+    const rows = await requiredActionsFor(h.db(), member.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.version).toBe("2026.06.04-v9");
   });
 });
