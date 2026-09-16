@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { humanDuration } from "@camp404/core";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { redeemInviteForUser } from "@/lib/users";
 import { rateLimiter } from "@/lib/rate-limit";
@@ -29,7 +30,7 @@ export async function submitInviteCode(
   if (!limited.ok) {
     return {
       ok: false,
-      error: "Too many attempts — wait a few minutes and try again.",
+      error: `Too many attempts. Try again in ${humanDuration(limited.retryAfterSeconds)}.`,
     };
   }
 

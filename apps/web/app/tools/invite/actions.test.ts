@@ -218,7 +218,7 @@ describe("createInviteAction — throttling", () => {
     });
     expect(res).toEqual({
       ok: false,
-      error: "You've made a lot of invites just now. Try again in 3 min.",
+      error: "You've made a lot of invites just now. Try again in 3 minutes.",
     });
     expect(createInviteCode).not.toHaveBeenCalled();
   });

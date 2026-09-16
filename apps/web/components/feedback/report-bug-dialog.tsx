@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@camp404/ui/components/dialog";
 import { Button } from "@camp404/ui/components/button";
-import { Checkbox } from "@camp404/ui/components/checkbox";
+import { AckRow } from "@camp404/ui/components/checkbox";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { Label } from "@camp404/ui/components/label";
 import {
@@ -245,50 +245,40 @@ export function ReportBugDialog({
 
               {/* Improve with AI — only when the server has a Claude key. */}
               {aiAvailable && (
-                <div className="flex items-start gap-3 rounded-md border border-[color:var(--color-border)] p-3">
-                  <Checkbox
-                    id="feedback-use-ai"
-                    checked={useAi}
-                    onCheckedChange={(c) => setUseAi(c === true)}
-                  />
-                  <Label
-                    htmlFor="feedback-use-ai"
-                    className="flex flex-col gap-0.5 font-normal"
-                  >
-                    <span className="text-sm font-medium">Improve with AI</span>
-                    <span className="text-xs text-[color:var(--color-muted-foreground)]">
-                      Restructures your report into a clear title and steps
-                      before filing.
-                    </span>
-                  </Label>
-                </div>
+                <AckRow
+                  id="feedback-use-ai"
+                  checked={useAi}
+                  onCheckedChange={(c) => setUseAi(c === true)}
+                  rowClassName="rounded-md border border-[color:var(--color-border)] px-3"
+                >
+                  <span className="block font-medium">Improve with AI</span>
+                  <span className="block text-xs text-[color:var(--color-muted-foreground)]">
+                    Restructures your report into a clear title and steps
+                    before filing.
+                  </span>
+                </AckRow>
               )}
 
               {/* Diagnostics: off until the member ticks it, and then they see
                   every line that will be sent. No board draws this panel; it
                   reuses the AI toggle's row and a plain list. */}
               <div className="flex flex-col gap-3 rounded-md border border-[color:var(--color-border)] p-3">
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    id="feedback-attach-diagnostics"
-                    checked={attached !== null}
-                    onCheckedChange={(c) =>
-                      setAttached(c === true ? collectDiagnostics() : null)
-                    }
-                  />
-                  <Label
-                    htmlFor="feedback-attach-diagnostics"
-                    className="flex flex-col gap-0.5 font-normal"
-                  >
-                    <span className="text-sm font-medium">
-                      Attach device details and recent errors
-                    </span>
-                    <span className="text-xs text-[color:var(--color-muted-foreground)]">
-                      Helps find the fault. You see everything that is sent
-                      below.
-                    </span>
-                  </Label>
-                </div>
+                <AckRow
+                  id="feedback-attach-diagnostics"
+                  checked={attached !== null}
+                  onCheckedChange={(c) =>
+                    setAttached(c === true ? collectDiagnostics() : null)
+                  }
+                  rowClassName="py-0"
+                >
+                  <span className="block font-medium">
+                    Attach device details and recent errors
+                  </span>
+                  <span className="block text-xs text-[color:var(--color-muted-foreground)]">
+                    Helps find the fault. You see everything that is sent
+                    below.
+                  </span>
+                </AckRow>
                 {attached && <DiagnosticsList diagnostics={attached} />}
               </div>
 

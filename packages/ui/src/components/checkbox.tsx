@@ -27,4 +27,31 @@ const Checkbox = React.forwardRef<
 ))
 Checkbox.displayName = CheckboxPrimitive.Root.displayName
 
-export { Checkbox }
+// AckRow — a checkbox and its text as one row you can tap anywhere, at least
+// 44px tall (the touch-target minimum). Ported from the AfrikaBurn
+// contributors app. A disabled box dims the whole row.
+export interface AckRowProps
+  extends React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root> {
+  /** The row's text; wraps freely. */
+  children: React.ReactNode
+  /** Class for the row (the checkbox keeps `className`). */
+  rowClassName?: string
+}
+
+const AckRow = React.forwardRef<
+  React.ElementRef<typeof CheckboxPrimitive.Root>,
+  AckRowProps
+>(({ children, className, rowClassName, ...props }, ref) => (
+  <label
+    className={cn(
+      "flex min-h-[44px] cursor-pointer items-start gap-3 py-2 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60",
+      rowClassName
+    )}
+  >
+    <Checkbox ref={ref} className={cn("mt-0.5", className)} {...props} />
+    <span className="min-w-0 flex-1 text-sm leading-snug">{children}</span>
+  </label>
+))
+AckRow.displayName = "AckRow"
+
+export { Checkbox, AckRow }

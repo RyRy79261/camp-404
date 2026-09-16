@@ -750,6 +750,7 @@ export const testStore = {
     createdAt: Date;
     recipientCount: number;
     acknowledgedCount: number;
+    readCount: number;
   }> {
     return [...broadcasts]
       .filter((b) => !options.senderId || b.senderId === options.senderId)
@@ -771,6 +772,7 @@ export const testStore = {
           recipientCount: own.length,
           acknowledgedCount: own.filter((d) => d.acknowledgedAt !== null)
             .length,
+          readCount: own.filter((d) => d.readAt !== null).length,
         };
       });
   },

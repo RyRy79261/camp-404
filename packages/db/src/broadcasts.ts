@@ -220,6 +220,11 @@ export interface AnnouncementSummary {
   recipientCount: number;
   /** How many recipients have acknowledged (acknowledge variant only). */
   acknowledgedCount: number;
+  /**
+   * How many recipients have seen it: its inbox row is marked read, which
+   * happens when they open their inbox (or acknowledge a full-screen one).
+   */
+  readCount: number;
 }
 
 /**
@@ -252,6 +257,11 @@ export async function listAnnouncements(
         where nd.broadcast_id = ${schema.broadcasts.id}
           and nd.acknowledged_at is not null
       )`,
+      readCount: sql<number>`(
+        select count(*)::int from notification_deliveries nd
+        where nd.broadcast_id = ${schema.broadcasts.id}
+          and nd.read_at is not null
+      )`,
     })
     .from(schema.broadcasts)
     .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
@@ -270,6 +280,7 @@ export async function listAnnouncements(
     audience: audienceOf({ scope, team }),
     recipientCount: r.recipientCount ?? 0,
     acknowledgedCount: r.acknowledgedCount ?? 0,
+    readCount: r.readCount ?? 0,
   }));
 }
 
