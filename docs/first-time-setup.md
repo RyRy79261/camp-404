@@ -99,7 +99,10 @@ Then sign in → `/setup` runs again.
 
 ## Notes / follow-ups
 
-- **God-emails** (`GOD_EMAILS`) still work, but setup is now the universal
-  bootstrap path. Full god-email deprecation is a deferred follow-up.
+- **God-emails** (`GOD_EMAILS`) stay as a recovery path, but setup is the
+  universal bootstrap path. A god address only counts once Neon Auth has
+  verified it (owner's call, 2026-09-16): an unverified session that claims
+  one keeps its account but not the email (`apps/web/lib/session-user.ts`),
+  so sign-up with the owner's address cannot walk past the gates.
 - **Configurable teams** is a planned follow-up; today the eight teams are the
   hardcoded `teamEnum` (`packages/db/src/schema.ts`).

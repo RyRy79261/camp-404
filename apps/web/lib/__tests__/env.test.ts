@@ -45,4 +45,30 @@ describe("assertServerEnv", () => {
       assertServerEnv({ E2E_TEST_MODE: "1" }),
     ).not.toThrow();
   });
+
+  describe("E2E test mode", () => {
+    // The flag enables /api/test/login, which signs anyone in as anyone.
+    it("skips the secrets for a local or CI test run", () => {
+      expect(() =>
+        assertServerEnv({ E2E_TEST_MODE: "1", NODE_ENV: "development" }),
+      ).not.toThrow();
+      expect(() =>
+        assertServerEnv({ E2E_TEST_MODE: "1", NODE_ENV: "production", CI: "true" }),
+      ).not.toThrow();
+    });
+
+    it("refuses to boot on a Vercel deploy", () => {
+      for (const VERCEL_ENV of ["production", "preview"]) {
+        expect(() =>
+          assertServerEnv({ E2E_TEST_MODE: "1", VERCEL_ENV, [KEY]: VALID }),
+        ).toThrow(/E2E_TEST_MODE=1 is set on a deployed server/);
+      }
+    });
+
+    it("refuses a production server outside CI", () => {
+      expect(() =>
+        assertServerEnv({ E2E_TEST_MODE: "1", NODE_ENV: "production" }),
+      ).toThrow(/E2E_TEST_MODE/);
+    });
+  });
 });

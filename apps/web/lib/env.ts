@@ -26,13 +26,30 @@ const REQUIRED: RequiredVar[] = [
 ];
 
 /**
- * Throw if any required env var is missing/invalid. No-op under E2E test mode.
+ * Throw if any required env var is missing/invalid. Under E2E test mode the
+ * secrets are skipped, but only off a real deploy (see below).
  * Pure on its inputs (reads process.env) so it can be unit-tested directly.
  */
 export function assertServerEnv(
   env: Record<string, string | undefined> = process.env,
 ): void {
-  if (env.E2E_TEST_MODE === "1") return;
+  if (env.E2E_TEST_MODE === "1") {
+    // The test harness turns on /api/test/login, which signs anyone in as any
+    // user and any email, god addresses included. A deploy with this flag set
+    // is an open door, so refuse to boot rather than trust nobody sets it.
+    // Playwright runs `next dev` (NODE_ENV=development); CI may also run a
+    // production build, and it sets CI. A Vercel deploy is refused whatever
+    // NODE_ENV says.
+    const onVercel =
+      env.VERCEL_ENV === "production" || env.VERCEL_ENV === "preview";
+    const productionOutsideCi = env.NODE_ENV === "production" && !env.CI;
+    if (onVercel || productionOutsideCi) {
+      throw new Error(
+        "Camp 404: E2E_TEST_MODE=1 is set on a deployed server. It enables a test login that signs anyone in as anyone. Remove E2E_TEST_MODE from this environment.",
+      );
+    }
+    return;
+  }
 
   const problems: string[] = [];
   for (const v of REQUIRED) {
