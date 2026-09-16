@@ -56,6 +56,13 @@ vi.mock("@/lib/camp-config", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ auditReadAfterResponse: vi.fn() }));
+vi.mock("@/lib/safety-data", () => ({
+  resolveSafetyDataForViewer: vi.fn(async () => ({
+    allowed: true,
+    basis: "captain",
+    emergencyContacts: null,
+  })),
+}));
 
 import { getMemberDetailAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -173,6 +180,7 @@ describe("getMemberDetailAction — an unreadable ID is present, not absent", ()
 
     expect(presentMemberDetail).toHaveBeenCalledWith(
       expect.objectContaining({ id: "member-1", responses: merged }),
+      expect.anything(),
       expect.anything(),
     );
   });

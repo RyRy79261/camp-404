@@ -30,8 +30,8 @@
 //   - field privacy: ALWAYS_PRIVATE, SAFETY_VISIBLE, isFieldLocked,
 //     isSafetyVisible; who reads each member field (MEMBER_FIELD_READERS,
 //     PROFILE_ANSWER_READERS, canReadMemberField, canReadProfileAnswer); and
-//     the erasure provers uncoveredPrivateUserColumns, patchLeaksAny
-//     (./privacy)
+//     the safety read rule safetyReadBasis + MEDICAL_AUDIENCE_NOTE; and the
+//     erasure provers uncoveredPrivateUserColumns, patchLeaksAny (./privacy)
 //   - audience authz: canSendToAudience + AudienceScope/AudienceActor/
 //     AudienceSpec — who may send to which audience (./audience-authz)
 //   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,

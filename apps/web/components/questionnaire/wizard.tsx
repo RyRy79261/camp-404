@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import {
+  incompleteContactErrors,
   validateOne,
   type Questionnaire,
   type QuestionnairePage,
@@ -107,6 +108,9 @@ export function QuestionnaireWizard({
       // possible date of birth): the same ones the server runs on submit.
       const identity = identityAnswerErrors(responses, new Date())[q.id];
       if (identity) next[q.id] = identity;
+      // An emergency contact is all or nothing, like the server requires.
+      const contact = incompleteContactErrors(questionnaire, responses)[q.id];
+      if (contact) next[q.id] = contact;
     }
     setErrors(next);
     return Object.keys(next).length === 0;

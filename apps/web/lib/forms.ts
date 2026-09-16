@@ -1,9 +1,11 @@
 import "server-only";
 
-import type {
-  Questionnaire,
-  QuestionnaireFieldChange,
-  QuestionnaireResponses,
+import {
+  mergeEmergencyContacts,
+  splitEmergencyContacts,
+  type Questionnaire,
+  type QuestionnaireFieldChange,
+  type QuestionnaireResponses,
 } from "@camp404/types";
 import {
   listQuestionnaireEdits as listEditsDb,
@@ -15,11 +17,16 @@ import {
   type CompletedQuestionnaireAnswers,
 } from "@camp404/db/questionnaire-responses";
 import { QUESTIONNAIRE_VERSION } from "./questionnaire";
-import { getQuestionnaireForPicker } from "./questionnaire-config";
+import {
+  getQuestionnaireForPicker,
+  getQuestionnaireForResponses,
+} from "./questionnaire-config";
 import {
   getBurnerProfile,
+  getEmergencyContacts,
   getIdDocuments,
   satisfyBurnerProfileAction,
+  setEmergencyContacts,
   setIdDocuments,
   upsertBurnerProfile,
 } from "./users";
@@ -68,17 +75,31 @@ const BURNER_PROFILE: ReplayableFormDef = {
       idType: null,
       idNumber: null,
     };
+    // And the emergency contacts, which live on `users` by question role.
+    const [questionnaire, contacts] = await Promise.all([
+      getQuestionnaireForResponses(),
+      getEmergencyContacts(userId),
+    ]);
     return {
-      responses: mergeIdNumber(
-        (profile.responses as Record<string, unknown>) ?? {},
-        id,
+      responses: mergeEmergencyContacts(
+        questionnaire,
+        mergeIdNumber((profile.responses as Record<string, unknown>) ?? {}, id),
+        contacts,
       ) as QuestionnaireResponses,
       completedAt: profile.completedAt,
       updatedAt: profile.updatedAt,
     };
   },
   async save(userId, responses) {
-    const { cleaned, idType, idNumber } = splitIdNumber(responses);
+    const split = splitIdNumber(responses);
+    const { idType, idNumber } = split;
+    const { cleaned, contacts } = splitEmergencyContacts(
+      await getQuestionnaireForResponses(),
+      split.cleaned,
+    );
+    // A replay is a full re-submit, so the contacts on the form are the
+    // contacts: clearing them all clears the column.
+    await setEmergencyContacts(userId, contacts);
     await upsertBurnerProfile({
       userId,
       version: QUESTIONNAIRE_VERSION,

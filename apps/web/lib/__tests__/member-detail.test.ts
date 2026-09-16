@@ -273,3 +273,39 @@ describe("presentMemberDetail — unreadable ID document", () => {
     expect(valueOf(items, "Document number")).toBeUndefined();
   });
 });
+
+describe("presentMemberDetail — emergency contacts", () => {
+  const contacts = [
+    { name: "Ada Byron", phone: "+27 82 555 0199", relationship: "sister" },
+  ];
+
+  it("lists them as Listed and in their own section when the caller read them", () => {
+    const m = presentWithCatalogue(detail(), DEFAULT_QUESTIONNAIRE, {
+      emergencyContacts: contacts,
+    });
+    expect(valueOf(m.overview, "Emergency contact")).toBe("Listed ✓");
+    const section = m.profileSections.find(
+      (s) => s.title === "Emergency contacts",
+    );
+    expect(section?.items).toEqual([
+      { label: "Ada Byron (sister)", value: "+27 82 555 0199" },
+    ]);
+  });
+
+  it("says not provided yet when the member has none on file", () => {
+    const m = presentWithCatalogue(detail(), DEFAULT_QUESTIONNAIRE, {
+      emergencyContacts: null,
+    });
+    expect(valueOf(m.overview, "Emergency contact")).toBe(
+      "Not provided yet — we’ll show it here once Dusty Boot adds it.",
+    );
+    expect(
+      m.profileSections.some((s) => s.title === "Emergency contacts"),
+    ).toBe(false);
+  });
+
+  it("shows no emergency row at all without the safety read", () => {
+    const m = presentMemberDetail(detail());
+    expect(valueOf(m.overview, "Emergency contact")).toBeUndefined();
+  });
+});

@@ -15,6 +15,7 @@ vi.mock("@/lib/users", () => ({
   hasCampAccess: vi.fn(),
   upsertBurnerProfile: vi.fn(),
   setIdDocuments: vi.fn(),
+  setEmergencyContacts: vi.fn(),
   setProfileImage: vi.fn(),
   satisfyBurnerProfileAction: vi.fn(),
 }));
@@ -31,6 +32,7 @@ import {
   ensureCampUser,
   getBurnerProfile,
   hasCampAccess,
+  setEmergencyContacts,
   setIdDocuments,
   setProfileImage,
   upsertBurnerProfile,
@@ -266,5 +268,90 @@ describe("saveBurnerProfile response bounds", () => {
       "camp-1",
       "https://blob.example/avatar.png",
     );
+  });
+});
+
+describe("saveBurnerProfile emergency contacts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getAuthenticatedUserOrRedirect).mockResolvedValue({
+      id: "auth-1",
+      primaryEmail: "member@example.com",
+      displayName: "Member",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({
+      id: "camp-1",
+      inviteCode: "INV",
+      rank: "member",
+      approvalStatus: "approved",
+    } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(getBurnerProfile).mockResolvedValue(null);
+    vi.mocked(getQuestionnaireForResponses).mockResolvedValue(catalogue);
+  });
+
+  it("stores the contacts on the member and keeps them out of the answers", async () => {
+    const result = await saveBurnerProfile(
+      {
+        "emergency.1.name": "Ada Byron",
+        "emergency.1.phone": "+27 82 555 0199",
+        "emergency.1.relationship": "sister",
+        "bio.statement": "Hi",
+      },
+      false,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(setEmergencyContacts).toHaveBeenCalledExactlyOnceWith("camp-1", [
+      { name: "Ada Byron", phone: "+27 82 555 0199", relationship: "sister" },
+    ]);
+    const { responses } = vi.mocked(upsertBurnerProfile).mock.calls[0]![0]!;
+    expect(responses).toEqual({ "bio.statement": "Hi" });
+  });
+
+  it("leaves stored contacts alone on a save from another page", async () => {
+    await saveBurnerProfile({ "bio.statement": "Hi" }, false);
+
+    expect(setEmergencyContacts).not.toHaveBeenCalled();
+  });
+
+  it("refuses a final submit with a half-filled second contact", async () => {
+    const minimal: Questionnaire = {
+      version: "test-1",
+      pages: [
+        {
+          id: "p",
+          kind: "questions",
+          title: "Emergency contacts",
+          questions: catalogue.pages.flatMap((page) =>
+            page.kind === "questions" && page.id === "emergency_contacts"
+              ? page.questions
+              : [],
+          ),
+        },
+      ],
+    };
+    vi.mocked(getQuestionnaireForResponses).mockResolvedValue(minimal);
+
+    const result = await saveBurnerProfile(
+      {
+        "emergency.1.name": "Ada Byron",
+        "emergency.1.phone": "+27 82 555 0199",
+        "emergency.1.relationship": "sister",
+        "emergency.2.name": "Grace",
+      },
+      true,
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      errors: {
+        "emergency.2.phone": expect.any(String),
+        "emergency.2.relationship": expect.any(String),
+        _form: "Finish or clear your second emergency contact.",
+      },
+    });
+    expect(upsertBurnerProfile).not.toHaveBeenCalled();
+    expect(setEmergencyContacts).not.toHaveBeenCalled();
   });
 });

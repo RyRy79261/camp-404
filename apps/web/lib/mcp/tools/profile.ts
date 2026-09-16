@@ -7,7 +7,13 @@ import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
 import { decryptField, encrypt } from "@camp404/db/crypto";
 import { splitIdNumber, idColumnsFor } from "@camp404/db/id-documents";
+import {
+  incompleteContactErrors,
+  questionsWithRole,
+  splitEmergencyContacts,
+} from "@camp404/types";
 import { identityAnswerErrors, validateIdNumber } from "../../id-validation";
+import { BURNER_PROFILE_TEMPLATE } from "../../questionnaire";
 import { runTool, ToolError } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
@@ -99,15 +105,30 @@ export function registerProfileTools(server: McpServer): void {
         handler: async ({ scope }) => {
           // The web form's identity checks: the ID number against its type
           // and a possible date of birth. Nothing is written if one fails.
-          const identity = identityAnswerErrors(args.responses, new Date());
+          const identity = {
+            ...identityAnswerErrors(args.responses, new Date()),
+            ...incompleteContactErrors(BURNER_PROFILE_TEMPLATE, args.responses),
+          };
           if (Object.keys(identity).length > 0) {
             throw new ToolError(Object.values(identity).join(" "));
           }
           const db = createHttpDb();
           const now = new Date();
           // Route any government ID number to the encrypted users column
-          // instead of persisting it plaintext in responses.
-          const { cleaned, idType, idNumber } = splitIdNumber(args.responses);
+          // instead of persisting it plaintext in responses, and the emergency
+          // contacts to users.emergency_contacts, as the web form does. The
+          // burner profile is a reserved code questionnaire, so its question
+          // roles are the template's.
+          const split = splitIdNumber(args.responses);
+          const { idType, idNumber } = split;
+          const { cleaned, contacts } = splitEmergencyContacts(
+            BURNER_PROFILE_TEMPLATE,
+            split.cleaned,
+          );
+          const carriesContacts = questionsWithRole(
+            BURNER_PROFILE_TEMPLATE,
+            "emergency_contact_name",
+          ).some((q) => q.id in args.responses);
           const [row] = await db
             .insert(schema.burnerProfiles)
             .values({
@@ -131,6 +152,15 @@ export function registerProfileTools(server: McpServer): void {
               .update(schema.users)
               .set({
                 ...idColumnsFor(idType, encrypt(idNumber)),
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.users.id, scope.campUserId));
+          }
+          if (carriesContacts) {
+            await db
+              .update(schema.users)
+              .set({
+                emergencyContacts: contacts.length > 0 ? contacts : null,
                 updatedAt: new Date(),
               })
               .where(eq(schema.users.id, scope.campUserId));
@@ -568,7 +598,8 @@ export function registerProfileTools(server: McpServer): void {
           if (passportOp === "set") {
             assertValidIdNumber("passport", args.passport as string);
           }
-          if (saIdOp === "set") assertValidIdNumber("sa_id", args.saId as string);
+          if (saIdOp === "set")
+            assertValidIdNumber("sa_id", args.saId as string);
           if (passportOp !== "unchanged") {
             patch.passportEncrypted =
               passportOp === "set" ? encrypt(args.passport as string) : null;

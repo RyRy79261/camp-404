@@ -13,7 +13,10 @@ import {
   upsertBurnerProfile as upsertBurnerProfileDb,
   getIdDocumentColumns,
   setIdDocumentColumns,
+  getEmergencyContactsColumn,
+  setEmergencyContactsColumn,
 } from "@camp404/db/burner-profile";
+import type { EmergencyContact } from "@camp404/types";
 import { encrypt, decryptOrNull } from "@camp404/db/crypto";
 import { idColumnsFor } from "@camp404/db/id-documents";
 import { isTeamLead as dbIsTeamLead } from "@camp404/db/roster";
@@ -383,6 +386,11 @@ interface UserBackend {
   getIdDocuments(
     userId: string,
   ): Promise<{ idType: string | null; idNumber: string | null } | null>;
+  setEmergencyContacts(
+    userId: string,
+    contacts: readonly EmergencyContact[],
+  ): Promise<void>;
+  getEmergencyContacts(userId: string): Promise<EmergencyContact[] | null>;
 }
 
 export async function upsertBurnerProfile(input: {
@@ -424,6 +432,29 @@ export async function setIdDocuments(
 ): Promise<void> {
   const store = isE2ETestMode() ? testBackend : realBackend;
   await store.setIdDocuments(userId, id);
+}
+
+/**
+ * Store the member's emergency contacts (split out of their burner profile
+ * answers by question role). An empty list clears them.
+ */
+export async function setEmergencyContacts(
+  userId: string,
+  contacts: readonly EmergencyContact[],
+): Promise<void> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  await store.setEmergencyContacts(userId, contacts);
+}
+
+/**
+ * Read a member's emergency contacts, or null when none are on file. The
+ * caller authorises: the member's own form, or resolveSafetyDataForViewer.
+ */
+export async function getEmergencyContacts(
+  userId: string,
+): Promise<EmergencyContact[] | null> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  return store.getEmergencyContacts(userId);
 }
 
 /** Read + decrypt the member's government ID number (owner/captain gated by
@@ -490,6 +521,12 @@ const realBackend: UserBackend = {
       idColumnsFor(id.idType, id.idNumber ? encrypt(id.idNumber) : null),
     );
   },
+  async setEmergencyContacts(userId, contacts) {
+    await setEmergencyContactsColumn(userId, contacts);
+  },
+  async getEmergencyContacts(userId) {
+    return getEmergencyContactsColumn(userId);
+  },
   async getIdDocuments(userId) {
     const cols = await getIdDocumentColumns(userId);
     if (!cols) return null;
@@ -554,6 +591,12 @@ const testBackend: UserBackend = {
   },
   async getIdDocuments(userId) {
     return testStore.getIdDocuments(userId);
+  },
+  async setEmergencyContacts(userId, contacts) {
+    testStore.setEmergencyContacts(userId, contacts);
+  },
+  async getEmergencyContacts(userId) {
+    return testStore.getEmergencyContacts(userId);
   },
 };
 

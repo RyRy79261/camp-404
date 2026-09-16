@@ -50,6 +50,13 @@ vi.mock("@/lib/camp-config", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ auditReadAfterResponse: vi.fn() }));
+vi.mock("@/lib/safety-data", () => ({
+  resolveSafetyDataForViewer: vi.fn(async () => ({
+    allowed: true,
+    basis: "captain",
+    emergencyContacts: null,
+  })),
+}));
 
 import { getMemberDetailAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -59,6 +66,8 @@ import { getOpenPromotionForTarget } from "@/lib/promotion";
 import { getCampMemberDetail } from "@camp404/db/roster";
 import { decryptField } from "@camp404/db/crypto";
 import { auditReadAfterResponse } from "@/lib/audit";
+import { presentMemberDetail } from "@/lib/member-detail";
+import { resolveSafetyDataForViewer } from "@/lib/safety-data";
 
 const CAPTAIN = "cap-1";
 
@@ -396,5 +405,30 @@ describe("getMemberDetailAction — the ID read leaves an audit trail", () => {
     await getMemberDetailAction(CAPTAIN);
 
     expect(auditReadAfterResponse).not.toHaveBeenCalled();
+  });
+});
+
+describe("getMemberDetailAction — emergency contacts", () => {
+  it("reads them through the audited safety path, as the captain", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+    const contacts = [
+      { name: "Ada", phone: "+27 82 555 0199", relationship: "sister" },
+    ];
+    vi.mocked(resolveSafetyDataForViewer).mockResolvedValueOnce({
+      allowed: true,
+      basis: "captain",
+      emergencyContacts: contacts,
+    });
+
+    await getMemberDetailAction("member-1");
+
+    expect(resolveSafetyDataForViewer).toHaveBeenCalledExactlyOnceWith(
+      { userId: CAPTAIN, rank: "captain" },
+      "member-1",
+    );
+    expect(vi.mocked(presentMemberDetail).mock.calls[0]![2]).toMatchObject({
+      emergencyContacts: contacts,
+    });
   });
 });

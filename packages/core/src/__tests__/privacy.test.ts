@@ -10,6 +10,7 @@ import {
   isFieldLocked,
   isSafetyVisible,
   patchLeaksAny,
+  safetyReadBasis,
   uncoveredPrivateUserColumns,
 } from "../privacy";
 
@@ -206,5 +207,22 @@ describe("patchLeaksAny", () => {
     expect(
       patchLeaksAny({ displayName: "Grace" }, [null, "  ", undefined]),
     ).toBe(false);
+  });
+});
+
+describe("safetyReadBasis", () => {
+  it("names the basis for the member, a captain and any team lead", () => {
+    expect(safetyReadBasis({ rank: "camp_member", isSelf: true })).toBe("self");
+    expect(safetyReadBasis({ rank: "captain", isSelf: false })).toBe("captain");
+    expect(safetyReadBasis({ rank: "team_lead", isSelf: false })).toBe(
+      "team_lead",
+    );
+  });
+
+  it("refuses another member and an unknown rank", () => {
+    expect(safetyReadBasis({ rank: "camp_member", isSelf: false })).toBeNull();
+    expect(
+      safetyReadBasis({ rank: "medic" as never, isSelf: false }),
+    ).toBeNull();
   });
 });

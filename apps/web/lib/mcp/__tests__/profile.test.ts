@@ -448,3 +448,33 @@ describe("a form marked complete through MCP clears its gate", () => {
     expect(satisfyRequiredAction).not.toHaveBeenCalled();
   });
 });
+
+describe("update_my_burner_profile and emergency contacts", () => {
+  it("stores the contacts on the member, not in the answers", async () => {
+    await call("update_my_burner_profile", {
+      version: "3",
+      responses: {
+        "bio.statement": "Hi",
+        "emergency.1.name": "Ada Byron",
+        "emergency.1.phone": "+27 82 555 0199",
+        "emergency.1.relationship": "sister",
+      },
+    });
+
+    expect(inserts[0]?.responses).toEqual({ "bio.statement": "Hi" });
+    expect(onlyPatch().emergencyContacts).toEqual([
+      { name: "Ada Byron", phone: "+27 82 555 0199", relationship: "sister" },
+    ]);
+  });
+
+  it("refuses a half-filled contact and writes nothing", async () => {
+    const result = await call("update_my_burner_profile", {
+      version: "3",
+      responses: { "emergency.1.name": "Ada Byron" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(dbInsert).not.toHaveBeenCalled();
+    expect(dbUpdate).not.toHaveBeenCalled();
+  });
+});

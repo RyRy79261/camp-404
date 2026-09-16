@@ -176,6 +176,19 @@ export const MultiSelectQuestion = z.object({
 });
 export type MultiSelectQuestion = z.infer<typeof MultiSelectQuestion>;
 
+// What an answer is FOR, when the app does something with it beyond storing it.
+// Code keys its mirrors and routes on the role, never on a question id, so a
+// renamed or re-authored question keeps working. A role may sit only on a
+// kind that can hold its value (see each schema below).
+export const QUESTION_ROLES = [
+  "profile_photo",
+  "bio",
+  "emergency_contact_name",
+  "emergency_contact_phone",
+  "emergency_contact_relationship",
+] as const;
+export type QuestionRole = (typeof QUESTION_ROLES)[number];
+
 export const ShortTextQuestion = z.object({
   id: z.string().min(1),
   kind: z.literal("short_text"),
@@ -188,6 +201,9 @@ export const ShortTextQuestion = z.object({
   // never format-checked, which is why `validateOne` narrows on the kind
   // inside the shared text arm.
   format: TextFormat.optional(),
+  role: z
+    .enum(["emergency_contact_name", "emergency_contact_relationship"])
+    .optional(),
   required: z.boolean().default(true),
 });
 export type ShortTextQuestion = z.infer<typeof ShortTextQuestion>;
@@ -202,6 +218,7 @@ export const LongTextQuestion = z.object({
   // Opt-in voice dictation (the Groq transcription path). Absent/false ⇒ the
   // dictate affordance is hidden; shown only where the author enabled it.
   enableDictation: z.boolean().optional(),
+  role: z.literal("bio").optional(),
   required: z.boolean().default(false),
 });
 export type LongTextQuestion = z.infer<typeof LongTextQuestion>;
@@ -274,6 +291,9 @@ export const ImageQuestion = z.object({
   kind: z.literal("image"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  // The member's own profile photo: uploads through the avatar route and is
+  // mirrored onto users.profile_image_url.
+  role: z.literal("profile_photo").optional(),
   required: z.boolean().default(false),
 });
 export type ImageQuestion = z.infer<typeof ImageQuestion>;
@@ -311,6 +331,7 @@ export const PhoneQuestion = z.object({
   prompt: z.string().min(1),
   helper: z.string().optional(),
   placeholder: z.string().optional(),
+  role: z.literal("emergency_contact_phone").optional(),
   required: z.boolean().default(true),
 });
 export type PhoneQuestion = z.infer<typeof PhoneQuestion>;

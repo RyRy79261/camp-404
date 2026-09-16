@@ -33,6 +33,7 @@ import type {
   TeamMembership,
 } from "@camp404/db/team-memberships";
 import type {
+  EmergencyContact,
   IncomingPromotionRequest,
   QuestionnaireFieldChange,
   Team,
@@ -151,6 +152,7 @@ interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
   idDocsByUserId: Map<string, { idType: string | null; idNumber: string | null }>;
+  emergencyContactsByUserId: Map<string, EmergencyContact[]>;
   inviteCodes: Map<string, TestInviteCode>;
   questionnaireEdits: TestQuestionnaireEdit[];
   broadcasts: TestBroadcast[];
@@ -185,6 +187,7 @@ function globalState(): TestStoreState {
         string,
         { idType: string | null; idNumber: string | null }
       >(),
+      emergencyContactsByUserId: new Map<string, EmergencyContact[]>(),
       inviteCodes: new Map<string, TestInviteCode>(),
       questionnaireEdits: [] as TestQuestionnaireEdit[],
       broadcasts: [] as TestBroadcast[],
@@ -204,6 +207,7 @@ const S = globalState();
 const usersByAuthId = S.usersByAuthId;
 const profilesByUserId = S.profilesByUserId;
 const idDocsByUserId = S.idDocsByUserId;
+const emergencyContactsByUserId = S.emergencyContactsByUserId;
 const inviteCodes = S.inviteCodes;
 const questionnaireEdits = S.questionnaireEdits;
 const broadcasts = S.broadcasts;
@@ -418,6 +422,16 @@ export const testStore = {
     userId: string,
   ): { idType: string | null; idNumber: string | null } | null {
     return idDocsByUserId.get(userId) ?? null;
+  },
+  setEmergencyContacts(
+    userId: string,
+    contacts: readonly EmergencyContact[],
+  ): void {
+    if (contacts.length === 0) emergencyContactsByUserId.delete(userId);
+    else emergencyContactsByUserId.set(userId, [...contacts]);
+  },
+  getEmergencyContacts(userId: string): EmergencyContact[] | null {
+    return emergencyContactsByUserId.get(userId) ?? null;
   },
 
   // --- Questionnaire edit log -------------------------------------------
@@ -1144,6 +1158,7 @@ export const testStore = {
     usersByAuthId.clear();
     profilesByUserId.clear();
     idDocsByUserId.clear();
+    emergencyContactsByUserId.clear();
     inviteCodes.clear();
     questionnaireEdits.length = 0;
     broadcasts.length = 0;

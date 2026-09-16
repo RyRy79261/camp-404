@@ -42,6 +42,7 @@ import {
 } from "@/lib/public-member";
 import { runAction, type ActionFailure } from "@/lib/action-result";
 import { auditReadAfterResponse } from "@/lib/audit";
+import { resolveSafetyDataForViewer } from "@/lib/safety-data";
 
 export type MemberDetailResult =
   | {
@@ -278,6 +279,13 @@ export async function getMemberDetailAction(
     // a since-archived team still shows its label, not the raw key.
     const questionnaire = await getQuestionnaireForResponses();
 
+    // Emergency contacts come only through the safety read path, which
+    // authorises and audits the read.
+    const safety = await resolveSafetyDataForViewer(
+      { userId: gate.captainId, rank: "captain" },
+      userId,
+    );
+
     // The assignment control's two inputs: what this member is on THIS YEAR,
     // and what a captain may put them on. `activeTeams` drops archived teams,
     // so an archived team is unpickable before the client ever sees the list.
@@ -288,7 +296,11 @@ export async function getMemberDetailAction(
 
     return {
       ok: true,
-      member: presentMemberDetail({ ...detail, responses }, questionnaire),
+      member: presentMemberDetail(
+        { ...detail, responses },
+        questionnaire,
+        safety.allowed ? safety : undefined,
+      ),
       canAssignCaptain,
       promotionStep,
       promotionRequestId: openRequest?.id ?? null,

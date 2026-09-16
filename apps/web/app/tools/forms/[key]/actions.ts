@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { diffResponses, validateResponses } from "@camp404/types";
+import {
+  diffResponses,
+  incompleteContactErrors,
+  validateResponses,
+} from "@camp404/types";
 import { ID_NUMBER_KEY } from "@camp404/db/id-documents";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
@@ -63,6 +67,16 @@ export async function saveFormReplay(
     return {
       ok: false,
       errors: { ...identity, _root: "Check your ID number and date of birth." },
+    };
+  }
+  const contactErrors = incompleteContactErrors(catalogue, result.responses);
+  if (Object.keys(contactErrors).length > 0) {
+    return {
+      ok: false,
+      errors: {
+        ...contactErrors,
+        _root: "Finish or clear your second emergency contact.",
+      },
     };
   }
 

@@ -49,6 +49,15 @@ export const SAFETY_VISIBLE: ReadonlySet<string> = new Set([
   "isAnaphylactic",
 ]);
 
+/**
+ * Who can see safety data, in the words a member reads where they give it (the
+ * emergency contacts and dietary pages). It must match SAFETY_VISIBLE's
+ * readers in MEMBER_FIELD_READERS; the owner's ruling (2026-09-16) is the
+ * member, captains and any team lead.
+ */
+export const MEDICAL_AUDIENCE_NOTE =
+  "Only you, captains and team leads can see this.";
+
 /** The minimum a caller's field descriptor must carry to be classified. */
 export interface PrivacyField {
   /** Locked by the questionnaire/config author, independent of the law below. */
@@ -200,6 +209,11 @@ export const PROFILE_ANSWER_READERS: Readonly<Record<string, ViewerRank>> = {
   country: "camp_member",
   "bio.statement": "camp_member",
   "ideas.this_year": "camp_member",
+  // The burner profile's dietary page is safety data, like the
+  // dietary_requirements columns.
+  "dietary.dislikes": "team_lead",
+  "dietary.allergies": "team_lead",
+  "dietary.notes": "team_lead",
 };
 
 /** Who is reading, and whether the data is their own. */
@@ -235,6 +249,21 @@ export function canReadProfileAnswer(
     viewer.rank,
     PROFILE_ANSWER_READERS[questionId] ?? "captain",
   );
+}
+
+/** Why a viewer may read someone's safety data; recorded on the audit row. */
+export type SafetyReadBasis = "self" | "captain" | "team_lead";
+
+/**
+ * The basis on which a viewer may read a member's safety data (emergency
+ * contacts, allergies), or null when they may not. The owner's ruling: the
+ * member, captains and any team lead (lead rank is global). Fail-closed on an
+ * unknown rank. Every non-self read must be audited by the caller.
+ */
+export function safetyReadBasis(viewer: FieldViewer): SafetyReadBasis | null {
+  if (viewer.isSelf) return "self";
+  if (!canReadMemberField(viewer, "users.emergencyContacts")) return null;
+  return viewer.rank === "captain" ? "captain" : "team_lead";
 }
 
 // --- Erasure provers -----------------------------------------------------------

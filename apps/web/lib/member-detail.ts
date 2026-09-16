@@ -1,5 +1,10 @@
 import { CAMP_TIME_ZONE } from "@camp404/core";
-import type { Question, Questionnaire } from "@camp404/types";
+import {
+  questionIdForRole,
+  type EmergencyContact,
+  type Question,
+  type Questionnaire,
+} from "@camp404/types";
 import type { CampMemberDetail } from "@camp404/db/roster";
 import { COUNTRIES } from "./countries";
 
@@ -45,10 +50,6 @@ const dateFmt = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
   timeZone: CAMP_TIME_ZONE,
 });
-
-// The bio answer is promoted to its own lead paragraph (board S17), so it is
-// pulled out separately and skipped when grouping the remaining answers (no dupe).
-const BIO_QUESTION_ID = "bio.statement";
 
 /** Resolve a stored answer to a human label, mapping option values where the
  * question carries a label set. Returns null for empty/absent answers so the
@@ -118,20 +119,29 @@ function describeApproval(detail: CampMemberDetail): string {
   }
 }
 
+/**
+ * Build the captain panel's view of a member. `safety` carries the emergency
+ * contacts when the caller read them through resolveSafetyDataForViewer (which
+ * authorises and audits); without it the panel shows no emergency contact row.
+ */
 export function presentMemberDetail(
   detail: CampMemberDetail,
   questionnaire: Questionnaire,
+  safety?: { emergencyContacts: EmergencyContact[] | null },
 ): PresentedMember {
   const responses = detail.responses;
 
-  const bioRaw = responses[BIO_QUESTION_ID];
+  // The bio answer is promoted to its own lead paragraph (board S17), so it is
+  // pulled out separately and skipped when grouping the remaining answers (no
+  // dupe). Both it and the photo are found by question role, not by id.
+  const bioId = questionIdForRole(questionnaire, "bio");
+  const bioRaw = bioId ? responses[bioId] : undefined;
   const bio =
     typeof bioRaw === "string" && bioRaw.trim() !== "" ? bioRaw : null;
 
-  const profileImageUrl =
-    typeof responses["profile.image"] === "string"
-      ? (responses["profile.image"] as string)
-      : null;
+  const photoId = questionIdForRole(questionnaire, "profile_photo");
+  const photoRaw = photoId ? responses[photoId] : undefined;
+  const profileImageUrl = typeof photoRaw === "string" ? photoRaw : null;
 
   const overview: DetailItem[] = [];
   const country =
@@ -142,6 +152,15 @@ export function presentMemberDetail(
     overview.push({
       label: "Country",
       value: COUNTRY_NAME.get(country) ?? country,
+    });
+  }
+  const displayName = detail.displayName?.trim() || "Unnamed burner";
+  if (safety) {
+    overview.push({
+      label: "Emergency contact",
+      value: safety.emergencyContacts
+        ? "Listed ✓"
+        : `Not provided yet — we’ll show it here once ${displayName} adds it.`,
     });
   }
   overview.push({
@@ -171,7 +190,7 @@ export function presentMemberDetail(
     const items: DetailItem[] = [];
     for (const question of page.questions) {
       // The bio is rendered as the lead paragraph, not as a grouped field.
-      if (question.id === BIO_QUESTION_ID) continue;
+      if (question.id === bioId) continue;
       const value = renderAnswer(question, responses[question.id]);
       if (value != null) items.push({ label: question.prompt, value });
     }
@@ -180,9 +199,21 @@ export function presentMemberDetail(
     }
   }
 
+  // The contacts are not in `responses` (they live on users, split out by
+  // role), so they get their own section when the caller was allowed them.
+  if (safety?.emergencyContacts) {
+    profileSections.push({
+      title: "Emergency contacts",
+      items: safety.emergencyContacts.map((contact) => ({
+        label: `${contact.name} (${contact.relationship})`,
+        value: contact.phone,
+      })),
+    });
+  }
+
   return {
     id: detail.id,
-    displayName: detail.displayName?.trim() || "Unnamed burner",
+    displayName,
     rankLabel: detail.rank === "captain" ? "Captain" : "Member",
     approvalStatus: detail.approvalStatus,
     approvalSummary: describeApproval(detail),

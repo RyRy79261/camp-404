@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { approvalNotification } from "@camp404/core";
+import type { EmergencyContact } from "@camp404/types";
 import { writeAuditEvent } from "./audit";
 import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction } from "./index";
@@ -217,6 +218,39 @@ export async function getIdDocumentColumns(userId: string) {
     .where(eq(schema.users.id, userId))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * The member's emergency contacts, or null when none are on file (or there is
+ * no such member). Safety data: a caller reading someone else's goes through
+ * resolveSafetyDataForViewer, which authorises and audits.
+ */
+export async function getEmergencyContactsColumn(
+  userId: string,
+): Promise<EmergencyContact[] | null> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({ contacts: schema.users.emergencyContacts })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  const contacts = rows[0]?.contacts;
+  return contacts && contacts.length > 0 ? contacts : null;
+}
+
+/** Replace the member's emergency contacts; an empty list clears them. */
+export async function setEmergencyContactsColumn(
+  userId: string,
+  contacts: readonly EmergencyContact[],
+) {
+  const db = createHttpDb();
+  await db
+    .update(schema.users)
+    .set({
+      emergencyContacts: contacts.length > 0 ? [...contacts] : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.users.id, userId));
 }
 
 /** Raw text write of the two ID-number ciphertext columns. */
