@@ -261,6 +261,23 @@ export async function closeActivation(
   return await withTransaction((tx) => closeActivationTx(tx, activationId));
 }
 
+/**
+ * Whether each questionnaire's open send is blocking, keyed by questionnaire
+ * key. The hub marks an open send Required or Optional; a key with no open
+ * send is absent.
+ */
+export async function listOpenSendBlocking(): Promise<Map<string, boolean>> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      key: schema.questionnaireActivations.questionnaireKey,
+      blocking: schema.questionnaireActivations.blocking,
+    })
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.status, "open"));
+  return new Map(rows.map((r) => [r.key, r.blocking]));
+}
+
 /** The currently-open activation for a key, or null (the one-open invariant). */
 export async function getOpenActivationForKey(
   key: string,

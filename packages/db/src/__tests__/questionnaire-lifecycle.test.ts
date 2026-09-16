@@ -2,11 +2,12 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import type { BuilderQuestionnaire } from "@camp404/types";
 import { useTestDb } from "./_harness";
-import { makeUser, requiredActionsFor } from "./_factories";
+import { makeActivation, makeUser, requiredActionsFor } from "./_factories";
 import { insertDefinitionDraft } from "../questionnaire-definitions";
 import {
   closeActivation,
   getOpenActivationForKey,
+  listOpenSendBlocking,
   publishDefinition,
   sendActivation,
   unpublishDefinition,
@@ -73,6 +74,25 @@ async function versionRows(
     .from(schema.questionnaireVersions)
     .where(eq(schema.questionnaireVersions.definitionKey, key));
 }
+
+describe("listOpenSendBlocking", () => {
+  const h = useTestDb();
+
+  it("maps each open send to its blocking flag, skipping drafts and closed sends", async () => {
+    const db = h.db();
+    const send = (questionnaireKey: string, status: "open" | "closed" | "draft", blocking: boolean) =>
+      makeActivation(db, { questionnaireKey, status, blocking });
+    await send("safety", "open", true);
+    await send("skills", "open", false);
+    await send("old", "closed", true);
+    await send("draft", "draft", false);
+
+    expect(Object.fromEntries(await listOpenSendBlocking())).toEqual({
+      safety: true,
+      skills: false,
+    });
+  });
+});
 
 describe("publishDefinition", () => {
   const h = useTestDb();

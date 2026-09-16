@@ -27,6 +27,7 @@ import {
 } from "@camp404/ui/components/select";
 import { Switch } from "@camp404/ui/components/switch";
 import { toast } from "@camp404/ui/components/toast";
+import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
   closeActivationAction,
   previewAudienceCount,
@@ -367,7 +368,10 @@ export function SendForm({
 
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-col">
-          <Label htmlFor="send-blocking">Blocking</Label>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="send-blocking">Blocking</Label>
+            <BlockingBadge blocking={blocking} />
+          </div>
           <span className="text-xs text-muted-foreground">
             Members must answer before they can use the rest of the app.
           </span>

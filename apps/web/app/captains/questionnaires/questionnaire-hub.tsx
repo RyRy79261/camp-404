@@ -18,6 +18,7 @@ import { Card } from "@camp404/ui/components/card";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { InputField } from "@camp404/ui/components/input-field";
 import { toast } from "@camp404/ui/components/toast";
+import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
   createDraftAction,
   deleteDraftAction,
@@ -31,6 +32,8 @@ export interface HubItem {
   questionCount: number;
   editedLabel: string;
   canDelete: boolean;
+  /** Its open send's blocking flag, or null when nothing is sent right now. */
+  openSendBlocking: boolean | null;
 }
 
 const STATUS: Record<
@@ -158,6 +161,9 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{item.title}</span>
                         <Badge variant={status.variant}>{status.label}</Badge>
+                        {item.openSendBlocking !== null && (
+                          <BlockingBadge blocking={item.openSendBlocking} />
+                        )}
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {item.questionCount} question

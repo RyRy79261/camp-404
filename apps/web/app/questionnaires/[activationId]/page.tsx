@@ -87,6 +87,7 @@ export default async function QuestionnaireRunnerPage({
         initialResponses={initialResponses}
         seededFromPriorCycle={stored?.seededFromCycle != null}
         title={activation.title}
+        blocking={activation.blocking}
       />
     </main>
   );

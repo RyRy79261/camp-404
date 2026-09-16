@@ -35,8 +35,10 @@ export function RequiredChip() {
 }
 
 /**
- * The sticky runner header: title + Required chip, a Sign-out escape (the runner
- * has no first-page "Back"), and a progress bar over the scrolling wizard body.
+ * The sticky runner header: title + Required/Optional badge, an escape, and a
+ * progress bar over the scrolling wizard body. A blocking questionnaire holds
+ * the whole app, so its only escape is Sign out. An optional one can wait, so
+ * its escape is "Later", back to the inbox where it stays listed.
  */
 export function BlockingTopBar({
   title,
@@ -44,12 +46,14 @@ export function BlockingTopBar({
   total,
   signOutHref = "/auth/sign-out",
   showProgress = true,
+  blocking = true,
 }: {
   title: string;
   current: number;
   total: number;
   signOutHref?: string;
   showProgress?: boolean;
+  blocking?: boolean;
 }) {
   return (
     <div className="sticky top-0 z-20 -mx-4 flex flex-col gap-2 border-b bg-card px-4 py-3">
@@ -58,9 +62,13 @@ export function BlockingTopBar({
         <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">
           {title}
         </h1>
-        <RequiredChip />
+        <BlockingBadge blocking={blocking} />
         <Button type="button" variant="ghost" size="sm" asChild>
-          <a href={signOutHref}>Sign out</a>
+          {blocking ? (
+            <a href={signOutHref}>Sign out</a>
+          ) : (
+            <a href="/notifications">Later</a>
+          )}
         </Button>
       </div>
       {showProgress && (

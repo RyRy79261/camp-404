@@ -197,6 +197,7 @@ export function BuilderCanvas({
   status,
   publishedVersion,
   openActivationId,
+  openActivationBlocking = null,
 }: {
   questionnaireKey: string;
   definition: BuilderQuestionnaire;
@@ -204,6 +205,8 @@ export function BuilderCanvas({
   status: Status;
   publishedVersion: string | null;
   openActivationId: string | null;
+  /** The open send's blocking flag, shown beside "Currently sent". */
+  openActivationBlocking?: boolean | null;
 }) {
   const [working, setWorking] = useState<BuilderQuestionnaire>(definition);
   const [pending, startTransition] = useTransition();
@@ -277,6 +280,7 @@ export function BuilderCanvas({
           status={status}
           version={publishedVersion}
           openActivationId={openActivationId}
+          openActivationBlocking={openActivationBlocking}
         />
       )}
 

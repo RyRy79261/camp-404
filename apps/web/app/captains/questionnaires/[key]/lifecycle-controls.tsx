@@ -25,6 +25,7 @@ import {
 import { Label } from "@camp404/ui/components/label";
 import { Switch } from "@camp404/ui/components/switch";
 import { toast } from "@camp404/ui/components/toast";
+import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
   closeActivationAction,
   getCarryOverAction,
@@ -224,11 +225,13 @@ export function LifecycleBar({
   status,
   version,
   openActivationId,
+  openActivationBlocking = null,
 }: {
   questionnaireKey: string;
   status: Status;
   version: string | null;
   openActivationId: string | null;
+  openActivationBlocking?: boolean | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -284,8 +287,11 @@ export function LifecycleBar({
           </span>
         )}
         {openActivationId && (
-          <span className="ml-auto text-xs text-muted-foreground">
+          <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
             Currently sent to members
+            {openActivationBlocking !== null && (
+              <BlockingBadge blocking={openActivationBlocking} />
+            )}
           </span>
         )}
       </div>

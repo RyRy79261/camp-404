@@ -18,6 +18,7 @@ import {
   isApproved,
   isTeamLead,
 } from "@/lib/users";
+import { listOpenSendBlocking } from "@camp404/db/questionnaire-lifecycle";
 import { listDefinitionsForViewer } from "@/lib/questionnaire-definitions";
 import { QuestionnaireHub, type HubItem } from "./questionnaire-hub";
 
@@ -51,16 +52,21 @@ export default async function QuestionnairesPage() {
   const canAuthor = requireClearance(rank, "team_lead").cleared;
   const canSeeAll = rank === "captain";
 
+  const [definitions, openSends] = canAuthor
+    ? await Promise.all([
+        listDefinitionsForViewer({ userId: campUser.id, canSeeAll }),
+        listOpenSendBlocking(),
+      ])
+    : [[], new Map<string, boolean>()];
   const items: HubItem[] = canAuthor
-    ? (
-        await listDefinitionsForViewer({ userId: campUser.id, canSeeAll })
-      ).map((d) => ({
+    ? definitions.map((d) => ({
         key: d.key,
         title: d.title,
         status: d.status,
         questionCount: d.questionCount,
         editedLabel: EDITED.format(d.updatedAt),
         canDelete: d.status === "draft",
+        openSendBlocking: openSends.get(d.key) ?? null,
       }))
     : [];
 
