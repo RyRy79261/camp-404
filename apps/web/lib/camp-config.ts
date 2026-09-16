@@ -3,6 +3,7 @@ import "server-only";
 import {
   getTeamsConfig as dbGetTeamsConfig,
   getCurrentCycle as dbGetCurrentCycle,
+  getCycles as dbGetCycles,
   mutateTeamsConfig as dbMutateTeamsConfig,
   activeTeams,
   audienceLabel,
@@ -79,4 +80,14 @@ export function getCurrentCycle(): Promise<CycleEntry | null> {
   return isE2ETestMode()
     ? Promise.resolve(currentCycle(resolveCycles(testStore.getTeamsConfig())))
     : dbGetCurrentCycle();
+}
+
+/**
+ * Every year the camp has had, oldest first, with their optional names. Empty
+ * until a captain names the founding year. Same E2E split as getCurrentCycle.
+ */
+export function getCycles(): Promise<CycleEntry[]> {
+  return isE2ETestMode()
+    ? Promise.resolve(resolveCycles(testStore.getTeamsConfig()))
+    : dbGetCycles();
 }

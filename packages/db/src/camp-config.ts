@@ -101,6 +101,37 @@ export interface CycleEntry {
   startedAt: string;
   /** null on exactly ONE entry: the year the camp is in now. */
   endedAt: string | null;
+  /**
+   * An optional name for the year, e.g. the burn's theme (owner's call,
+   * 2026-09-16). A label only: the number stays the key, the stamp on every
+   * row and the type-to-confirm value, so a captain can set, change or remove
+   * the name at any time without moving anything.
+   */
+  name?: string;
+}
+
+/** The longest name a year can have. A label, not a description. */
+export const MAX_CYCLE_NAME_LENGTH = 60;
+
+/** A trimmed, non-empty name within the limit, or undefined. */
+export function cleanCycleName(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed.length <= MAX_CYCLE_NAME_LENGTH
+    ? trimmed
+    : undefined;
+}
+
+/**
+ * A stored name that is not a usable label is dropped. It never rejects the
+ * entry: resolveCycles falls back wholesale, so rejecting the entry would read
+ * a bad NAME as "this camp has no year".
+ */
+function withCleanName(entry: CycleEntry): CycleEntry {
+  const next: CycleEntry = { ...entry };
+  delete next.name;
+  const name = cleanCycleName(entry.name);
+  return name ? { ...next, name } : next;
 }
 
 /**
@@ -178,7 +209,9 @@ export function resolveCycles(raw: unknown): CycleEntry[] {
   ) {
     return [];
   }
-  return [...(cycles as CycleEntry[])].sort((a, b) => a.year - b.year);
+  return (cycles as CycleEntry[])
+    .map(withCleanName)
+    .sort((a, b) => a.year - b.year);
 }
 
 /**
@@ -238,6 +271,33 @@ export function advanceCycles(
     ),
     { year, startedAt: stamp, endedAt: null },
   ];
+}
+
+/**
+ * PURE: set, change or remove the name of one year. The year number never
+ * changes. A blank name removes the name. Throws for a year the camp has never
+ * had or a name over the limit; setCycleName checks both first.
+ */
+export function renameCycle(
+  cycles: CycleEntry[],
+  year: number,
+  name: string | null,
+): CycleEntry[] {
+  if (!cycles.some((c) => c.year === year)) {
+    throw new Error(`The camp has never had a ${year}.`);
+  }
+  const trimmed = (name ?? "").trim();
+  if (trimmed.length > MAX_CYCLE_NAME_LENGTH) {
+    throw new Error(
+      `A year's name has to be ${MAX_CYCLE_NAME_LENGTH} characters or fewer.`,
+    );
+  }
+  return cycles.map((c) => {
+    if (c.year !== year) return c;
+    const next: CycleEntry = { ...c };
+    delete next.name;
+    return trimmed ? { ...next, name: trimmed } : next;
+  });
 }
 
 /**
@@ -438,12 +498,20 @@ export async function getCampConfig(): Promise<CampConfig> {
  * cycle page's first screen is what asks. One SELECT against the singleton.
  */
 export async function getCurrentCycle(): Promise<CycleEntry | null> {
+  return currentCycle(await getCycles());
+}
+
+/**
+ * Every year the camp has had, oldest first, with their names. Empty until a
+ * captain names the founding year. One SELECT against the singleton.
+ */
+export async function getCycles(): Promise<CycleEntry[]> {
   const db = createHttpDb();
   const [row] = await db
     .select({ config: campSettings.config })
     .from(campSettings)
     .limit(1);
-  return currentCycle(resolveCycles(row?.config));
+  return resolveCycles(row?.config);
 }
 
 /**

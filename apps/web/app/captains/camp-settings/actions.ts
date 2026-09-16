@@ -8,11 +8,13 @@ import {
   renameTeam,
   setTeamArchived,
   TeamNameConflictError,
+  MAX_CYCLE_NAME_LENGTH,
   MAX_CYCLE_YEAR,
   MIN_CYCLE_YEAR,
 } from "@camp404/db/camp-config";
 import {
   advanceCycle,
+  setCycleName,
   setFoundingYear,
   type FoundingReport,
   type RolloverReport,
@@ -204,6 +206,19 @@ const CycleYear = z.coerce
 
 const SetFoundingYearForm = z.object({ year: CycleYear });
 
+const CYCLE_NAME_TOO_LONG =
+  `Keep the name to ${MAX_CYCLE_NAME_LENGTH} characters or fewer.`;
+
+const SetCycleNameForm = z.object({
+  year: CycleYear,
+  /** Blank removes the name. */
+  name: z.string().trim().max(MAX_CYCLE_NAME_LENGTH, CYCLE_NAME_TOO_LONG),
+});
+
+export type SetCycleNameActionResult =
+  | { ok: true; name: string | null }
+  | { ok: false; error: string };
+
 const AdvanceCycleForm = z
   .object({
     year: CycleYear,
@@ -327,4 +342,45 @@ export async function advanceCycleAction(
   }
   revalidateRolloverSurfaces();
   return { ok: true, report: result.report };
+}
+
+/**
+ * Set, change or remove the optional name of a year. The year number does not
+ * change, so nothing is filed anywhere new: only the label beside the number
+ * does, which is why this saves straight away with no confirm step.
+ */
+export async function setCycleNameAction(
+  rawInput: unknown,
+): Promise<SetCycleNameActionResult> {
+  const gate = await requireCaptain();
+  if (!gate.ok) return gate;
+  const parsed = SetCycleNameForm.safeParse(rawInput);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid request.",
+    };
+  }
+
+  const authUser = await getAuthenticatedUser();
+  const actorUserId = authUser ? (await ensureCampUser(authUser)).id : null;
+
+  const result = await setCycleName({
+    year: parsed.data.year,
+    name: parsed.data.name,
+    actorUserId: actorUserId || null,
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.reason === "unknown-year"
+          ? "The camp has never had that year. Reload the page."
+          : CYCLE_NAME_TOO_LONG,
+    };
+  }
+  // The name shows beside the year on the cycle page and on every results page.
+  revalidatePath("/captains/camp-settings/cycle");
+  revalidatePath("/captains/questionnaires", "layout");
+  return { ok: true, name: result.cycle.name ?? null };
 }

@@ -92,9 +92,13 @@ export function ResultsShell({
   children: ReactNode;
 }) {
   const active = view.activeActivation;
-  const year = cycleLabel(view.cycle, view.currentCycle);
+  const year = cycleLabel(view.cycle, view.currentCycle, view.cycleNames);
   const isPastYear =
     view.currentCycle !== null && view.cycle < view.currentCycle;
+  const currentYear =
+    view.currentCycle === null
+      ? null
+      : cycleLabel(view.currentCycle, view.currentCycle, view.cycleNames);
 
   return (
     <ResultsFrame questionnaireKey={view.key} wide={wide}>
@@ -121,7 +125,7 @@ export function ResultsShell({
           cycle={view.cycle}
           cycles={view.cycleOptions.map((c) => ({
             value: c,
-            label: cycleLabel(c, view.currentCycle),
+            label: cycleLabel(c, view.currentCycle, view.cycleNames),
           }))}
         />
       </div>
@@ -136,7 +140,7 @@ export function ResultsShell({
         <Alert variant="info" className="mb-4">
           <span>
             You&rsquo;re looking at {year}. These answers are kept as they were;
-            this year&rsquo;s are under {view.currentCycle}.
+            this year&rsquo;s are under {currentYear}.
           </span>
         </Alert>
       )}

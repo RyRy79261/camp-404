@@ -13,6 +13,7 @@ import {
 import {
   advanceCycle,
   planRollover,
+  setCycleName,
   setFoundingYear,
   type AdvanceCycleInput,
 } from "../cycle-rollover";
@@ -707,6 +708,74 @@ describe("advanceCycle", () => {
     expect(deliveries.map((d) => d.userId)).toEqual([member.id]);
     expect(deliveries[0]!.presentation).toBe("acknowledge");
     expect(deliveries[0]!.title).toBe("It's 2027");
+  });
+});
+
+describe("setCycleName", () => {
+  const h = useTestDb();
+
+  it("names a year without touching the number, the teams or other years", async () => {
+    const db = h.db();
+    await foundedAt(db, 2026);
+    expect((await advance({ year: 2027, actorUserId: null })).ok).toBe(true);
+    const teamsBefore = (await storedConfig(db))?.teams;
+
+    const res = await setCycleName({
+      year: 2026,
+      name: " Temple of Tides ",
+      actorUserId: null,
+    });
+    expect(res.ok && res.cycle).toMatchObject({
+      year: 2026,
+      name: "Temple of Tides",
+    });
+
+    const config = await storedConfig(db);
+    expect(config?.cycles?.map((c) => c.year)).toEqual([2026, 2027]);
+    expect(config?.teams).toEqual(teamsBefore);
+    expect(await planRollover()).toMatchObject({ from: { year: 2027 } });
+
+    const audit = await db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "camp.cycle.renamed"));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.target).toBe("2026");
+    expect(audit[0]!.metadata).toEqual({ from: null, to: "Temple of Tides" });
+  });
+
+  it("changes and then removes a name", async () => {
+    const db = h.db();
+    await foundedAt(db, 2026);
+    await setCycleName({ year: 2026, name: "First", actorUserId: null });
+    await setCycleName({ year: 2026, name: "Second", actorUserId: null });
+    expect((await storedConfig(db))?.cycles?.[0]).toMatchObject({
+      name: "Second",
+    });
+
+    const cleared = await setCycleName({
+      year: 2026,
+      name: "",
+      actorUserId: null,
+    });
+    expect(cleared.ok && cleared.cycle).not.toHaveProperty("name");
+    expect((await storedConfig(db))?.cycles?.[0]).not.toHaveProperty("name");
+  });
+
+  it("refuses a year the camp never had, and a name that is too long", async () => {
+    const db = h.db();
+    await foundedAt(db, 2026);
+    expect(
+      await setCycleName({ year: 2030, name: "Nope", actorUserId: null }),
+    ).toEqual({ ok: false, reason: "unknown-year" });
+    expect(
+      await setCycleName({
+        year: 2026,
+        name: "x".repeat(61),
+        actorUserId: null,
+      }),
+    ).toEqual({ ok: false, reason: "invalid-name" });
+    expect(await db.select().from(schema.auditLog)).toHaveLength(0);
   });
 });
 

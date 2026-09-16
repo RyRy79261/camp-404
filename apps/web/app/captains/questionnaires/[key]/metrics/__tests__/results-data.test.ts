@@ -20,7 +20,7 @@ vi.mock("@camp404/db/questionnaire-results", () => ({
   listActivationsForCycle: vi.fn(),
   listResultCycles: vi.fn(),
 }));
-vi.mock("@/lib/camp-config", () => ({ getCurrentCycle: vi.fn() }));
+vi.mock("@/lib/camp-config", () => ({ getCycles: vi.fn() }));
 vi.mock("@/lib/questionnaire-definitions", () => ({
   getBuilderDefinition: vi.fn(),
 }));
@@ -33,7 +33,7 @@ import {
   listActivationsForCycle,
   listResultCycles,
 } from "@camp404/db/questionnaire-results";
-import { getCurrentCycle } from "@/lib/camp-config";
+import { getCycles } from "@/lib/camp-config";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { deriveViewerRank, hasClearance } from "@camp404/core";
 import type { StoredRank } from "@camp404/types";
@@ -100,11 +100,14 @@ beforeEach(() => {
     ],
   } as never);
   vi.mocked(listResultCycles).mockResolvedValue([2027, 2026]);
-  vi.mocked(getCurrentCycle).mockResolvedValue({
-    year: 2027,
-    startedAt: "2027-01-01T00:00:00Z",
-    endedAt: null,
-  });
+  vi.mocked(getCycles).mockResolvedValue([
+    {
+      year: 2026,
+      startedAt: "2026-01-01T00:00:00Z",
+      endedAt: "2027-01-01T00:00:00Z",
+    },
+    { year: 2027, startedAt: "2027-01-01T00:00:00Z", endedAt: null },
+  ]);
   vi.mocked(listActivationResponses).mockResolvedValue([]);
   vi.mocked(listActivationsForCycle).mockResolvedValue([]);
 });
@@ -205,10 +208,32 @@ describe("loadResults — which year", () => {
 
   it("falls back to the sentinel year on a camp that hasn't named one", async () => {
     vi.mocked(listResultCycles).mockResolvedValue([]);
-    vi.mocked(getCurrentCycle).mockResolvedValue(null);
+    vi.mocked(getCycles).mockResolvedValue([]);
     const access = await loadResults(KEY);
     expect(access.ok && access.view.cycle).toBe(1);
     expect(cycleLabel(1, null)).toBe("This year");
+  });
+
+  it("puts a year's name beside its number", async () => {
+    vi.mocked(getCycles).mockResolvedValue([
+      {
+        year: 2026,
+        startedAt: "2026-01-01T00:00:00Z",
+        endedAt: "2027-01-01T00:00:00Z",
+        name: "Temple of Tides",
+      },
+      { year: 2027, startedAt: "2027-01-01T00:00:00Z", endedAt: null },
+    ]);
+    const access = await loadResults(KEY, "2026");
+    expect(access.ok && access.view.cycleNames).toEqual({
+      2026: "Temple of Tides",
+    });
+    if (!access.ok) throw new Error("unreachable");
+    const { view } = access;
+    expect(cycleLabel(2026, view.currentCycle, view.cycleNames)).toBe(
+      "2026 (Temple of Tides)",
+    );
+    expect(cycleLabel(2027, view.currentCycle, view.cycleNames)).toBe("2027");
   });
 });
 
@@ -236,6 +261,7 @@ function viewWith(over: Partial<ResultsView>): ResultsView {
     cycle: 2027,
     cycleOptions: [2027],
     currentCycle: 2027,
+    cycleNames: {},
     rows: [],
     activations: [],
     activeActivation: null,

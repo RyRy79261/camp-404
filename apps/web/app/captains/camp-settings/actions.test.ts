@@ -18,6 +18,7 @@ vi.mock("@/lib/users", () => ({
 vi.mock("@/lib/camp-config", () => ({ mutateTeamsConfig: vi.fn() }));
 vi.mock("@camp404/db/cycle-rollover", () => ({
   advanceCycle: vi.fn(),
+  setCycleName: vi.fn(),
   setFoundingYear: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -25,12 +26,17 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { deriveViewerRank, hasClearance } from "@camp404/core";
 import {
   advanceCycleAction,
+  setCycleNameAction,
   moveTeamAction,
   renameTeamAction,
   setFoundingYearAction,
   setTeamArchivedAction,
 } from "./actions";
-import { advanceCycle, setFoundingYear } from "@camp404/db/cycle-rollover";
+import {
+  advanceCycle,
+  setCycleName,
+  setFoundingYear,
+} from "@camp404/db/cycle-rollover";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { mutateTeamsConfig } from "@/lib/camp-config";
@@ -493,5 +499,83 @@ describe("advanceCycleAction", () => {
       error: "Write something for the announcement.",
     });
     expect(advanceCycle).not.toHaveBeenCalled();
+  });
+});
+
+describe("setCycleNameAction", () => {
+  it("rejects a non-captain without writing", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-m",
+      primaryEmail: "m@example.com",
+      displayName: "M",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ rank: "member" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(isApproved).mockReturnValue(true);
+
+    const result = await setCycleNameAction({ year: 2026, name: "Tides" });
+    expect(result).toEqual({ ok: false, error: "Captain access only." });
+    expect(setCycleName).not.toHaveBeenCalled();
+  });
+
+  it("refuses a name over the limit before it reaches the database", async () => {
+    asCaptain();
+    const result = await setCycleNameAction({
+      year: 2026,
+      name: "x".repeat(61),
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "Keep the name to 60 characters or fewer.",
+    });
+    expect(setCycleName).not.toHaveBeenCalled();
+  });
+
+  it("trims the name and passes the year and the actor through", async () => {
+    asCaptain();
+    vi.mocked(setCycleName).mockResolvedValue({
+      ok: true,
+      cycle: {
+        year: 2026,
+        startedAt: "2026-01-01T00:00:00Z",
+        endedAt: null,
+        name: "Temple of Tides",
+      },
+    });
+
+    const result = await setCycleNameAction({
+      year: "2026",
+      name: "  Temple of Tides ",
+    });
+    expect(setCycleName).toHaveBeenCalledWith({
+      year: 2026,
+      name: "Temple of Tides",
+      actorUserId: "cap-1",
+    });
+    expect(result).toEqual({ ok: true, name: "Temple of Tides" });
+  });
+
+  it("reports a blank name as removed", async () => {
+    asCaptain();
+    vi.mocked(setCycleName).mockResolvedValue({
+      ok: true,
+      cycle: { year: 2026, startedAt: "2026-01-01T00:00:00Z", endedAt: null },
+    });
+    expect(await setCycleNameAction({ year: 2026, name: "  " })).toEqual({
+      ok: true,
+      name: null,
+    });
+  });
+
+  it("explains a year the camp never had", async () => {
+    asCaptain();
+    vi.mocked(setCycleName).mockResolvedValue({
+      ok: false,
+      reason: "unknown-year",
+    });
+    expect(await setCycleNameAction({ year: 2030, name: "Nope" })).toEqual({
+      ok: false,
+      error: "The camp has never had that year. Reload the page.",
+    });
   });
 });

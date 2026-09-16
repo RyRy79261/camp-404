@@ -9,12 +9,15 @@ import {
   type PooledTx,
 } from "./activations";
 import { closeActivationTx } from "./questionnaire-lifecycle";
+import { writeAuditEvent } from "./audit";
 import {
   advanceCycles,
   currentCycle,
   foundingCycles,
   isCycleYear,
+  MAX_CYCLE_NAME_LENGTH,
   MAX_CYCLE_YEAR,
+  renameCycle,
   resolveCodeCarryOver,
   resolveCycles,
   UNSET_CYCLE,
@@ -208,6 +211,10 @@ export interface AdvanceCycleInput {
   /** Optional camp-wide announcement, delivered as a full-screen acknowledge. */
   announcement?: { title: string; body: string } | null;
 }
+
+export type SetCycleNameResult =
+  | { ok: true; cycle: CycleEntry }
+  | { ok: false; reason: "unknown-year" | "invalid-name" };
 
 export type AdvanceCycleResult =
   | { ok: true; report: RolloverReport }
@@ -879,6 +886,63 @@ export async function advanceCycle(
         announcementBroadcastId,
         auditLogId: audit!.id,
       },
+    };
+  });
+}
+
+/**
+ * Set, change or remove a year's optional name. The number stays the
+ * namespace, so this moves nothing: it touches one entry in the cycle list and
+ * writes one audit row.
+ *
+ * It takes the same FOR UPDATE lock as every other config write, and SPREADS
+ * the stored object, so the team config and every other year are kept.
+ */
+export async function setCycleName(input: {
+  year: number;
+  /** Null or blank removes the name. */
+  name: string | null;
+  actorUserId: string | null;
+}): Promise<SetCycleNameResult> {
+  const name = (input.name ?? "").trim();
+  if (name.length > MAX_CYCLE_NAME_LENGTH) {
+    return { ok: false, reason: "invalid-name" };
+  }
+
+  return await withTransaction(async (tx) => {
+    await tx
+      .insert(schema.campSettings)
+      .values({ id: true })
+      .onConflictDoNothing({ target: schema.campSettings.id });
+    const [locked] = await tx
+      .select({ config: schema.campSettings.config })
+      .from(schema.campSettings)
+      .where(eq(schema.campSettings.id, true))
+      .for("update");
+
+    const stored =
+      locked?.config && typeof locked.config === "object"
+        ? (locked.config as CampConfig)
+        : ({} as CampConfig);
+    const cycles = resolveCycles(stored);
+    const before = cycles.find((c) => c.year === input.year);
+    if (!before) return { ok: false as const, reason: "unknown-year" as const };
+
+    const next = renameCycle(cycles, input.year, name);
+    await tx
+      .update(schema.campSettings)
+      .set({ config: { ...stored, cycles: next }, updatedAt: new Date() })
+      .where(eq(schema.campSettings.id, true));
+    await writeAuditEvent(tx, {
+      actorId: input.actorUserId,
+      action: "camp.cycle.renamed",
+      target: String(input.year),
+      metadata: { from: before.name ?? null, to: name || null },
+    });
+
+    return {
+      ok: true as const,
+      cycle: next.find((c) => c.year === input.year)!,
     };
   });
 }
