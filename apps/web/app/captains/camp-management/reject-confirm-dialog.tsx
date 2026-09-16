@@ -1,21 +1,12 @@
 "use client";
 
-import { TriangleAlert } from "lucide-react";
-import { Button } from "@camp404/ui/components/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@camp404/ui/components/dialog";
-import { Spinner } from "@camp404/ui/components/spinner";
+import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 
 // Reject-confirm dialog (board S17 RejectConfirm). Rejecting an applicant is
 // terminal, so it goes through a confirm step (was a one-click reject before).
 // The decision itself runs in the parent (MemberProfile.decide); this only
-// gates it behind a confirmation and suppresses dismissal mid-send.
+// gates it behind a confirmation and suppresses dismissal mid-send. Built on
+// the shared ConfirmDialog, with the board's own copy.
 
 export function RejectConfirmDialog({
   name,
@@ -34,59 +25,21 @@ export function RejectConfirmDialog({
   error?: string | null;
 }) {
   return (
-    <Dialog
+    <ConfirmDialog
       open={open}
-      onOpenChange={(o) => {
-        if (!pending) onOpenChange(o);
-      }}
+      onOpenChange={onOpenChange}
+      onConfirm={onConfirm}
+      pending={pending}
+      error={error}
+      destructive
+      title="Reject application"
+      description="They'll be told the application wasn't approved. This can't be undone here."
+      cancelLabel="Keep pending"
+      confirmLabel="Reject"
     >
-      <DialogContent
-        className="border-destructive sm:max-w-md"
-        showCloseButton={!pending}
-      >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <TriangleAlert
-              aria-hidden
-              className="h-4 w-4 text-destructive"
-            />
-            Reject application
-          </DialogTitle>
-          <DialogDescription>
-            They&apos;ll be told the application wasn&apos;t approved. This
-            can&apos;t be undone here.
-          </DialogDescription>
-        </DialogHeader>
-        <p className="font-mono text-lg font-bold text-foreground">
-          Reject {name}&apos;s application?
-        </p>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            disabled={pending}
-            onClick={() => onOpenChange(false)}
-          >
-            Keep pending
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            className="w-full sm:w-auto"
-            disabled={pending}
-            onClick={onConfirm}
-          >
-            {pending && <Spinner size="sm" />}
-            Reject
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <p className="font-mono text-lg font-bold text-foreground">
+        Reject {name}&apos;s application?
+      </p>
+    </ConfirmDialog>
   );
 }

@@ -25,6 +25,7 @@ import {
 import { Label } from "@camp404/ui/components/label";
 import { Switch } from "@camp404/ui/components/switch";
 import { toast } from "@camp404/ui/components/toast";
+import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
   closeActivationAction,
@@ -235,15 +236,18 @@ export function LifecycleBar({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
   const badge = STATUS_BADGE[status];
 
-  function unpublish() {
-    if (
-      !window.confirm(
-        "Unpublish this questionnaire? Members will stop being able to answer it; their existing responses are kept.",
-      )
-    )
-      return;
+  async function unpublish() {
+    const sure = await confirm({
+      title: "Unpublish this questionnaire?",
+      description:
+        "Members stop being able to answer it, and any open send closes. Their answers so far are kept.",
+      confirmLabel: "Unpublish",
+      destructive: true,
+    });
+    if (!sure) return;
     startTransition(async () => {
       const result = await unpublishAction(questionnaireKey);
       if (!result.ok) {
@@ -255,14 +259,15 @@ export function LifecycleBar({
     });
   }
 
-  function closeSend() {
+  async function closeSend() {
     if (!openActivationId) return;
-    if (
-      !window.confirm(
-        "Close the current send? Members who haven't answered will no longer be asked. You can then send again with new settings.",
-      )
-    )
-      return;
+    const sure = await confirm({
+      title: "Close the current send?",
+      description:
+        "Members who haven't answered stop being asked. Answers already in are kept, and you can send again with new settings.",
+      confirmLabel: "Close send",
+    });
+    if (!sure) return;
     startTransition(async () => {
       const result = await closeActivationAction(
         openActivationId,
@@ -279,6 +284,7 @@ export function LifecycleBar({
 
   return (
     <Card className="flex flex-col gap-3 p-4">
+      {confirmDialog}
       <div className="flex items-center gap-2">
         <Badge variant={badge.variant}>{badge.label}</Badge>
         {status === "published" && version && (
@@ -302,7 +308,7 @@ export function LifecycleBar({
             <Button
               type="button"
               variant="outline"
-              onClick={closeSend}
+              onClick={() => void closeSend()}
               disabled={pending}
             >
               {pending ? (
@@ -334,7 +340,7 @@ export function LifecycleBar({
             type="button"
             variant="outline"
             className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={unpublish}
+            onClick={() => void unpublish()}
             disabled={pending}
           >
             Unpublish
