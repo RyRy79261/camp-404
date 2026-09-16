@@ -1,7 +1,8 @@
 # Year namespace + per-questionnaire carry-over (design + plan)
 
 **Date:** 2026-09-08
-**Status:** Proposed — awaiting the owner's calls in §12.
+**Status:** Built in #145. The owner's calls are recorded under each decision in §12, and
+notes marked **As built** say where the code settled a question this text left open.
 **Program:** Camp 404, post-harvest. Answers harvest item §14
 (`docs/harvest/00-harvest-and-roadmap.md:54`, "the unasked product question: what happens in
 year two?"). Builds on sub-project E (the `required_actions` gating engine,
@@ -420,6 +421,13 @@ have a definitions row, and a builder key is never in the map. The layering mirr
 stored definition already resolves team bindings against live camp config at read time
 (`schema.ts:1452-1455`).
 
+**As built (OD3).** A `fresh` policy on a code key cannot re-ask anyone, because a code key
+cannot hold an activation. So no screen lets a captain set a code key's policy, and
+`planRollover` lists a code key set to `fresh` under *not sent* instead of *re-gate*. The
+confirm screen says it will not be asked again, rather than failing silently. The owner's
+call on OD3 closes the gap: when `dietary_requirements` or `driver_profile` needs to be asked
+each year, it moves onto the builder, where the rollover can re-gate it.
+
 **Default `carry` is the safe default here**, and this is a deliberate reversal of two of the
 three source designs. Their argument for defaulting to `fresh` — "a needless re-ask costs two
 minutes, a wrongly-carried answer is silent" — is right about a *single answer* and wrong
@@ -439,6 +447,20 @@ default. **This is OD1 in §12; the owner can flip it with a one-word change.**
 downstream read uses the **activation's** frozen copy, never the definition's live one. A
 captain flipping the toggle mid-collection affects the next send, never the one in flight —
 and a member mid-form is never kicked out.
+
+**As built — a send cannot straddle a rollover.** `sendActivation` stamps the year on a
+draft, then `openActivation` opens it in a second transaction, so a rollover could commit in
+between. The rollover's plan cannot see a draft, so that send would open under last year's
+number and never be re-gated. To prevent this, `openActivation` takes `FOR SHARE` on the
+`camp_settings` row inside its transaction. `advanceCycle` and `setFoundingYear` hold
+`FOR UPDATE` on the same row. Under that lock, `openActivation` refuses a draft whose year the
+camp has left, and the captain is told to send again. There are two outcomes, and both are
+correct:
+
+- The send opens first. The rollover then re-reads its plan (§8.3 step 2) and finds the send.
+- The rollover commits first. The send is refused, and nobody is gated under the old year.
+
+Test: `cycle-rollover.test.ts`, "does not open a send into the year the camp just left".
 
 ### 7.3 Enforced in exactly three places
 
@@ -592,6 +614,8 @@ One pooled transaction (`createPooledDb` — the HTTP driver has no transactions
    `{ ok: false, reason: "already-advanced" }`.
 2. **Re-read the plan inside the lock**, so a send racing in just before the commit is caught
    — the pattern `unpublishDefinition` already uses at `questionnaire-lifecycle.ts:185-197`.
+   A send opens under `FOR SHARE` on the same row (§7.2, As built), so it cannot open between
+   this re-read and the commit.
 3. `config.cycles = advanceCycles(...)`: stamp `endedAt` on the current entry, append
    `{ number: next, label, startedAt: now, endedAt: null }`. Write back with the spread from
    §3.0 so nothing else in `config` is lost.
@@ -661,6 +685,18 @@ send, not the rollover) sees their previous answers prefilled, with:
 > *Prefilled from your 2026 answer. Check it's still right.*
 
 — and `completedAt` reported as null, so they must actually press submit.
+
+**As built — one contract for carry-over.** The skip rule in §7.3(a) stands. A member who
+already completed at a satisfying version gets no gate, and the runner opens only for a
+pending gate. So the prefill above reaches only members who are still gated under `carry`:
+
+- a member who saved answers but never submitted, or
+- a member whose completion is against an older version, after a breaking edit.
+
+A member who was skipped cannot reopen the form to change an answer yet. That path is a
+*My forms* entry for builder answers (plan item WP4.replay), and it does not need a pending
+gate. The §16 tests do not conflict with this rule: they test the skip in `openActivation` and
+the prefill in `loadQuestionnaireResponse` separately.
 
 ---
 
@@ -810,6 +846,7 @@ nothing until a questionnaire is opted in, and relies on the confirm screen to m
 visible. Two of three designers argued for **fresh** ("a wrongly-carried answer is silent; a
 needless re-ask costs two minutes"). Their argument is strong for a single answer and weak
 for a camp-wide button. One-word change either way. **Your call.**
+**Owner's call:** carry is the default, and each questionnaire has its own setting.
 
 **OD2 — should the rollover be able to re-ask the burner profile?** `schema.ts:374-377` says
 `burner_profiles` "persists across the yearly reset", and `burner_profile` is the one code
@@ -826,15 +863,21 @@ changed" asked annually — and if so, is the answer to build those two pages, o
 onto the questionnaire builder (which gets them cycle-scoped responses and rollover for free)?
 (b) The stale-driver hazard (§10) is live either way: after a rollover, a "drivers" broadcast
 reaches last year's drivers. Fix it now with a time bound, or accept it until the pages exist?
+**Owner's call:** (a) move both onto the builder when they need to be asked each year; until
+then a `fresh` policy on them is reported as *not sent* (§7.1, As built). (b) Fixed: driver
+profiles are year-scoped, and the drivers audience reads only the current year.
 
 **OD4 — the cycle label.** Free text the captain types ("2027", "AfrikaBurn 2027"), never
 parsed, and it is also the type-to-confirm string. Confirm that is what you want rather than a
 year integer.
+**Owner's call:** the year is an integer. It is the key, the stamp on every row and the
+type-to-confirm value. An optional name that a captain can edit later goes on top of it.
 
 **OD5 — `revertCycle` in scope or not?** It is Phase 5 (~half a day) and the first thing to
 cut. The safety story without it is plan-then-type-to-confirm plus "nothing is destroyed",
 which is genuinely sufficient — but you would recover from an accidental rollover by hand
 (close the new activations, re-open the old ones), not by a button.
+**Owner's call:** no undo button.
 
 **OD6 — dues.** This spec does **not** reset `users.dues_paid` (nothing writes it), and
 instead records the rule that the dues ledger must be cycle-keyed when built. Confirm you are
@@ -863,6 +906,10 @@ Named so they are decisions, not surprises.
   `questionnaire_activations.cycle` and the config. A hand-edited config could orphan a
   stamped number. Accepted for an array written once a year by one person — the same trade
   the teams config already makes.
+  **As built:** only `setFoundingYear` and `advanceCycle` write the list, both under
+  `FOR UPDATE`. A hand-edited list is read, not rejected. If exactly one entry is open,
+  `currentCycle` returns it. Otherwise it returns the latest year. `advanceCycles` refuses a
+  year that is already in the list.
 
 ---
 
