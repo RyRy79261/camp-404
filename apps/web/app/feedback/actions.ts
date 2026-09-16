@@ -38,6 +38,32 @@ const GithubIssueSchema = z.object({
   html_url: z.string().url(),
 });
 
+type FeedbackTracker =
+  | { ok: true; token: string; owner: string; name: string }
+  | { ok: false; error: string };
+
+/** The GitHub token and repo the reports go to, or why they are not usable. */
+function feedbackTracker(): FeedbackTracker {
+  const token = process.env.GITHUB_FEEDBACK_TOKEN;
+  if (!token) {
+    console.error("submitFeedbackAction: GITHUB_FEEDBACK_TOKEN is not set");
+    return {
+      ok: false,
+      error: "Feedback isn't set up yet. Let a camp captain know.",
+    };
+  }
+  const repo = (process.env.GITHUB_FEEDBACK_REPO || DEFAULT_REPO).trim();
+  const segments = repo.split("/").map((s) => s.trim()).filter(Boolean);
+  if (segments.length !== 2) {
+    console.error("submitFeedbackAction: GITHUB_FEEDBACK_REPO is misconfigured");
+    return {
+      ok: false,
+      error: "Feedback isn't configured correctly. Let a camp captain know.",
+    };
+  }
+  return { ok: true, token, owner: segments[0]!, name: segments[1]! };
+}
+
 /**
  * File an in-app bug/feature report as a GitHub issue. Nothing is stored in our
  * DB — GitHub Issues is the store. Requires sign-in (so the report is
@@ -49,6 +75,13 @@ export async function submitFeedbackAction(
 ): Promise<FeedbackResult> {
   const user = await getAuthenticatedUser();
   if (!user) return { ok: false, error: "Please sign in to send feedback." };
+
+  // Configuration first. A camp with no tracker set up refuses before it
+  // spends the member's rate limit or a paid AI call on a report it cannot
+  // file. E2E mode never calls GitHub, so it skips this and short-circuits
+  // further down.
+  const tracker = isE2ETestMode() ? null : feedbackTracker();
+  if (tracker && !tracker.ok) return tracker;
 
   // Burst + daily caps. In-memory + per-instance (the app-wide limiter), so
   // best-effort against a determined member — but the destination is a public
@@ -111,25 +144,11 @@ export async function submitFeedbackAction(
     structured,
   });
 
-  const token = process.env.GITHUB_FEEDBACK_TOKEN;
-  if (!token) {
-    console.error("submitFeedbackAction: GITHUB_FEEDBACK_TOKEN is not set");
-    return {
-      ok: false,
-      error: "Feedback isn't set up yet. Let a camp captain know.",
-    };
+  if (!tracker?.ok) {
+    // Unreachable: E2E returned above, and a failed config returned first.
+    return { ok: false, error: "Feedback isn't set up yet. Let a camp captain know." };
   }
-
-  const repo = (process.env.GITHUB_FEEDBACK_REPO || DEFAULT_REPO).trim();
-  const segments = repo.split("/").map((s) => s.trim()).filter(Boolean);
-  if (segments.length !== 2) {
-    console.error("submitFeedbackAction: GITHUB_FEEDBACK_REPO is misconfigured:", repo);
-    return {
-      ok: false,
-      error: "Feedback isn't configured correctly. Let a camp captain know.",
-    };
-  }
-  const [owner, name] = segments;
+  const { token, owner, name } = tracker;
 
   try {
     const res = await fetch(
@@ -168,10 +187,9 @@ export async function submitFeedbackAction(
       return { ok: true, number: parsed.data.number, url: parsed.data.html_url };
     }
 
-    console.error(
-      `submitFeedbackAction: GitHub responded ${res.status}`,
-      await res.text().catch(() => ""),
-    );
+    // The status only. GitHub's error body can echo the request, which holds
+    // the member's report, so it never goes to the log.
+    console.error(`submitFeedbackAction: GitHub responded ${res.status}`);
     if (res.status === 401) {
       return { ok: false, error: "GitHub rejected the token — a captain needs to refresh it." };
     }
