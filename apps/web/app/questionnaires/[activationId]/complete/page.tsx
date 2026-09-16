@@ -11,6 +11,7 @@ import {
 import { nextGate } from "@/lib/required-actions";
 import { QueueCard } from "@/components/questionnaire/queue-card";
 import { CompletionHero } from "./completion-hero";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +65,10 @@ export default async function QuestionnaireCompletePage({
       {pending.length > 0 && (
         <>
           <Divider />
-          <section aria-labelledby="queue-heading" className="flex flex-col gap-3">
+          <section
+            aria-labelledby="queue-heading"
+            className="flex flex-col gap-3"
+          >
             <div className="flex flex-col gap-1.5">
               <h2 id="queue-heading" className="text-xl font-bold">
                 {required.length > 0
@@ -106,15 +110,10 @@ export default async function QuestionnaireCompletePage({
             {required.length > 0 && (
               <div className="flex flex-col items-center gap-3.5 pt-1 text-center">
                 <p className="text-caption text-muted-foreground">
-                  You can&rsquo;t use Camp 404 until every required questionnaire
-                  is done.
+                  You can&rsquo;t use Camp 404 until every required
+                  questionnaire is done.
                 </p>
-                <a
-                  href="/auth/sign-out"
-                  className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground"
-                >
-                  Sign out
-                </a>
+                <SignOutLink className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground" />
               </div>
             )}
           </section>

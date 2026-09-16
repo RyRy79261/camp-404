@@ -3,6 +3,7 @@ import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { ProgressBar } from "@camp404/ui/components/progress-bar";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 
 // Chrome for the blocking-questionnaire RUNNER (surface 24): the sticky top bar,
 // the "Required" chip, and the persistent notice. Presentational; rendered by the
@@ -65,7 +66,7 @@ export function BlockingTopBar({
         <BlockingBadge blocking={blocking} />
         <Button type="button" variant="ghost" size="sm" asChild>
           {blocking ? (
-            <a href={signOutHref}>Sign out</a>
+            <SignOutLink href={signOutHref} />
           ) : (
             <a href="/notifications">Later</a>
           )}

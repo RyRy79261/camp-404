@@ -10,6 +10,7 @@ import {
   hasCampAccess,
   isApproved,
 } from "@/lib/users";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
@@ -81,7 +82,7 @@ export default async function PendingApprovalPage() {
         )}
 
         <Button asChild variant="outline" className="w-full">
-          <a href="/auth/sign-out">Sign out</a>
+          <SignOutLink />
         </Button>
       </div>
     </AuthShell>

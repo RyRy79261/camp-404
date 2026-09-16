@@ -6,6 +6,7 @@ import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
 import { InputField } from "@camp404/ui/components/input-field";
 import { submitInviteCode, type SubmitInviteResult } from "./actions";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 
 /**
  * Invite-code entry for an already-signed-in user. Posts to the
@@ -59,12 +60,7 @@ export function InviteGateForm({ email }: { email: string | null }) {
       </Button>
 
       <div className="flex justify-center">
-        <a
-          href="/auth/sign-out"
-          className="text-label font-medium text-accent hover:underline"
-        >
-          Sign out
-        </a>
+        <SignOutLink className="text-label font-medium text-accent hover:underline" />
       </div>
     </form>
   );

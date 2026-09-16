@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getToken, onMessage } from "firebase/messaging";
+import { onMessage } from "firebase/messaging";
 import { z } from "zod";
 import { Button } from "@camp404/ui/components/button";
-import { getMessagingIfSupported, VAPID_KEY } from "@/lib/firebase-client";
+import { Spinner } from "@camp404/ui/components/spinner";
+import { getMessagingIfSupported } from "@/lib/firebase-client";
+import { registerDeviceToken } from "./device-token";
 
 // Web push opt-in, mounted on the authenticated home control panel (so it never
 // prompts signed-out visitors). Web-only and best-effort: when permission is
@@ -12,8 +14,16 @@ import { getMessagingIfSupported, VAPID_KEY } from "@/lib/firebase-client";
 // undecided it shows a small "Enable notifications" button that requests
 // permission on the click (a user gesture — required by Safari). Renders
 // nothing when push is unsupported/unconfigured or already denied.
+//
+// "Granted" means the server stored this device's token, not only that the
+// browser said yes: a token that never reached the server reads as
+// notifications on while nothing can arrive. If storing it fails, the button
+// comes back with the reason and tries again.
 
 type State = "loading" | "unavailable" | "default" | "granted" | "denied";
+
+export const PUSH_REGISTER_FAILED =
+  "Notifications didn't turn on. Check your connection and try again.";
 
 // Validate the FCM payload before constructing a Notification (it's external
 // input from the push service).
@@ -22,27 +32,10 @@ const FcmNotification = z.object({
   body: z.string().optional(),
 });
 
-async function registerToken(): Promise<boolean> {
-  const messaging = await getMessagingIfSupported();
-  if (!messaging || !VAPID_KEY) return false;
-  const registration = await navigator.serviceWorker.register(
-    "/firebase-messaging-sw.js",
-  );
-  const token = await getToken(messaging, {
-    vapidKey: VAPID_KEY,
-    serviceWorkerRegistration: registration,
-  });
-  if (!token) return false;
-  await fetch("/api/push/tokens", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, platform: "web" }),
-  });
-  return true;
-}
-
 export function EnablePush() {
   const [state, setState] = useState<State>("loading");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Detect support + current permission; register the token if already granted.
   useEffect(() => {
@@ -59,8 +52,15 @@ export function EnablePush() {
         return;
       }
       if (Notification.permission === "granted") {
-        setState("granted");
-        registerToken().catch(() => {});
+        // Refresh the stored token. If it cannot be stored, offer the button.
+        const ok = await registerDeviceToken().catch(() => false);
+        if (!active) return;
+        if (ok) {
+          setState("granted");
+        } else {
+          setState("default");
+          setError(PUSH_REGISTER_FAILED);
+        }
       } else if (Notification.permission === "denied") {
         setState("denied");
       } else {
@@ -99,27 +99,46 @@ export function EnablePush() {
 
   if (state !== "default") return null;
 
+  const enable = async () => {
+    setPending(true);
+    setError(null);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setState(permission === "denied" ? "denied" : "default");
+        return;
+      }
+      if (await registerDeviceToken()) {
+        setState("granted");
+      } else {
+        setError(PUSH_REGISTER_FAILED);
+      }
+    } catch {
+      setError(PUSH_REGISTER_FAILED);
+    } finally {
+      setPending(false);
+    }
+  };
+
   // Full-width outline CTA per board S08 (`Button-Outline {w:fill_container}`);
-  // the home shell's flex gap handles spacing, so no wrapper/margin here.
+  // the home shell's flex gap handles spacing, so no wrapper/margin here. It
+  // fades in once detection resolves, so it does not pop into place.
   return (
-    <Button
-      variant="outline"
-      className="w-full"
-      onClick={async () => {
-        try {
-          const permission = await Notification.requestPermission();
-          if (permission !== "granted") {
-            setState(permission === "denied" ? "denied" : "default");
-            return;
-          }
-          await registerToken();
-          setState("granted");
-        } catch {
-          setState("unavailable");
-        }
-      }}
-    >
-      Enable notifications
-    </Button>
+    <div className="flex w-full flex-col gap-2 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
+      <Button
+        variant="outline"
+        className="w-full gap-2"
+        onClick={() => void enable()}
+        disabled={pending}
+      >
+        {pending && <Spinner size="sm" label="Turning on notifications…" />}
+        {error ? "Try again" : "Enable notifications"}
+      </Button>
+      {error && (
+        <p role="alert" className="text-center text-caption text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
