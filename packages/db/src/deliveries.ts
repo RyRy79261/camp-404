@@ -2,7 +2,7 @@ import {
   shouldEmailNotification,
   type NotificationPayload,
 } from "@camp404/core";
-import * as schema from "./schema";
+import type * as schema from "./schema";
 
 // The one way a notification_deliveries row is shaped from a payload. Every
 // writer (announcements, scheduled broadcasts, questionnaire notices, the year
