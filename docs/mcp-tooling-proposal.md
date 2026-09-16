@@ -336,7 +336,10 @@ claim. `tools/teams.ts` adds `set_team_budget` (captain or the team's lead); bud
 since migration 0034. `tools/documents.ts` adds `list_document_drafts`, `get_document_draft`,
 `create_document`, `update_document` (on the version read) and `publish_document`: a captain for
 any document, a team lead for their team's; members still read published documents only. Recipe
-review is not built: nothing moves a recipe out of `pending` until the analyse cron exists. `set_user_rank` is not built: a rank change is a
+review is not built: nothing moves a recipe out of `pending` until the analyse cron exists. `tools/questionnaires.ts` adds `list_questionnaire_drafts`,
+`get_questionnaire_draft`, `create_questionnaire_draft` and `update_questionnaire_draft` for
+authors (captain, or team lead for their own), with the builder's edit rule and size limits;
+publishing and sending stay in the app. `set_user_rank` is not built: a rank change is a
 two-sided request the member accepts in the app.
 
 Out of scope:
