@@ -1,5 +1,11 @@
 # The rollover is an event, not a namespace
 
+> **Not chosen.** This is one of three drafts compared on 2026-09-08. The chosen design is
+> [`2026-09-08-year-namespace-design.md`](../2026-09-08-year-namespace-design.md), and #145
+> built it. This draft is kept as a record of the options. It is not maintained, so review
+> findings against it are not fixed here. Where a finding also applies to the chosen design,
+> the chosen design answers it.
+
 *A year design for Camp 404. Every claim about today's code is cited `file:line`.*
 
 ---
