@@ -173,7 +173,7 @@ The live code **hard-redirects** non-captains to `/` and the actions return "Cap
 - **Acknowledged roll-up** shown only for `presentation='acknowledge'`; popup/feed never stamp `acknowledgedAt`.
 - **No edit/recall after publish** — published rows have no controls; the owned-draft predicate's `publishedAt IS NULL` also blocks server-side mutation. No unpublish/republish exists.
 - **Deleted sender** — `senderId` is `set null` on user delete; `senderName` then null; "by you" check uses `senderId === currentUserId` so a null sender is never "by you".
-- **Long content** — body display wraps (`whitespace-pre-wrap`); title/body capped by maxLength.
+- **Long content** — body display wraps (`whitespace-pre-wrap`); title/body capped by maxLength. A draft or published card shows the first three lines of the body, with "Show all" when there is more (2026-09-16). The member's inbox row clips at three lines when the row opens the full announcement.
 - **Dictation edge cases** (per S21) — mic permission denied / unreachable → ERROR state with "Try again"; transcript is editable before "Use this text"; cancelling the recorder leaves the body unchanged.
 
 ## Flows

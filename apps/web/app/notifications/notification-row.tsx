@@ -68,7 +68,13 @@ export function NotificationRow({
             {formatRelativeTime(createdAt)}
           </time>
         </div>
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+        {/* Clipped only when the row opens the whole message. */}
+        <p
+          className={cn(
+            "whitespace-pre-wrap text-sm text-muted-foreground",
+            href && "line-clamp-3",
+          )}
+        >
           {body}
         </p>
         {attribution ? (

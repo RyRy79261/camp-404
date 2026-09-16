@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useLayoutEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import {
@@ -78,7 +78,7 @@ const PRESENTATION_META: Record<
   popup: {
     label: "Pop-up — dismissable",
     short: "Pop-up",
-    hint: "A transient pop-up. No acknowledgement required.",
+    hint: "Shows once as a pop-up on each member's screen, then stays in their inbox.",
     icon: MessageSquare,
     badge: "secondary",
   },
@@ -478,6 +478,47 @@ function AnnouncementHeader({
   );
 }
 
+/**
+ * A card body clipped to three lines, with "Show all" when the text runs past
+ * them. A captain can always read the whole of what they wrote: the read page
+ * is for recipients, and the author is not one.
+ */
+function ClampedBody({ body }: { body: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return;
+    setOverflows(el.scrollHeight > el.clientHeight + 1);
+  }, [body, expanded]);
+
+  return (
+    <div className="space-y-1">
+      <p
+        ref={ref}
+        className={cn(
+          "whitespace-pre-wrap text-sm text-muted-foreground [overflow-wrap:anywhere]",
+          !expanded && "line-clamp-3",
+        )}
+      >
+        {body}
+      </p>
+      {(overflows || expanded) && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+          className="rounded-sm text-xs font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {expanded ? "Show less" : "Show all"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function DraftCard({
   announcement: a,
   pending,
@@ -495,9 +536,7 @@ function DraftCard({
     <li>
       <Card className="space-y-3 p-4">
         <AnnouncementHeader announcement={a} />
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-          {a.body}
-        </p>
+        <ClampedBody body={a.body} />
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
@@ -545,9 +584,7 @@ function PublishedCard({
     <li>
       <Card className="space-y-3 p-4">
         <AnnouncementHeader announcement={a} />
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-          {a.body}
-        </p>
+        <ClampedBody body={a.body} />
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
           <span className="text-muted-foreground">
             Sent to {a.recipientCount} member
