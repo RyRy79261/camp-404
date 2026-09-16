@@ -161,6 +161,12 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.workshopRsvps)
       .where(eq(schema.workshopRsvps.userId, userId));
+    // Captains' notes ABOUT the member are about the person, so they go.
+    // Notes the member wrote about others stay; their author link is kept to
+    // the tombstone row.
+    await tx
+      .delete(schema.memberNotes)
+      .where(eq(schema.memberNotes.userId, userId));
     await tx
       .delete(schema.broadcastTargets)
       .where(eq(schema.broadcastTargets.userId, userId));

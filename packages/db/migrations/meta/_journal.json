@@ -211,6 +211,13 @@
       "when": 1789571900709,
       "tag": "0029_backfill_burner_profile_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1789575077996,
+      "tag": "0030_member_notes",
+      "breakpoints": true
     }
   ]
 }

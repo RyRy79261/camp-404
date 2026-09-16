@@ -90,6 +90,7 @@ function detail(
     teams: [],
     assignableTeams: [],
     reviewOptions,
+    notes: [],
   };
 }
 

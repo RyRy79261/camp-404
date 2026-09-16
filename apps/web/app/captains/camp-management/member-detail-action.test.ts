@@ -12,6 +12,7 @@ vi.mock("@/lib/users", () => ({
   hasCampAccess: vi.fn(() => true),
   isApproved: vi.fn(() => true),
   decideUserApproval: vi.fn(),
+  findCampUserById: vi.fn(async (id: string) => ({ id, rank: "member" })),
 }));
 vi.mock("@/lib/promotion", () => ({
   getOpenPromotionForTarget: vi.fn(),
@@ -50,6 +51,11 @@ vi.mock("@/lib/camp-config", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ auditReadAfterResponse: vi.fn() }));
+vi.mock("@camp404/db/member-notes", () => ({
+  MAX_MEMBER_NOTE_LENGTH: 2000,
+  addMemberNote: vi.fn(),
+  listMemberNotes: vi.fn(async () => []),
+}));
 vi.mock("@/lib/safety-data", () => ({
   resolveSafetyDataForViewer: vi.fn(async () => ({
     allowed: true,
@@ -58,7 +64,8 @@ vi.mock("@/lib/safety-data", () => ({
   })),
 }));
 
-import { getMemberDetailAction } from "./actions";
+import { addMemberNoteAction, getMemberDetailAction } from "./actions";
+import { addMemberNote, listMemberNotes } from "@camp404/db/member-notes";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { deriveViewerRank, hasClearance } from "@camp404/core";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
@@ -433,5 +440,79 @@ describe("getMemberDetailAction — emergency contacts", () => {
     expect(vi.mocked(presentMemberDetail).mock.calls[0]![2]).toMatchObject({
       emergencyContacts: contacts,
     });
+  });
+});
+
+describe("captain notes", () => {
+  const NOTE = {
+    id: "n1",
+    body: "Brings a generator.",
+    createdAt: new Date("2026-09-01T10:00:00Z"),
+    authorId: CAPTAIN,
+    authorName: "Cap",
+  };
+
+  it("hands the panel the notes and audits a read that shows any", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+    vi.mocked(listMemberNotes).mockResolvedValue([NOTE]);
+
+    const res = await getMemberDetailAction("member-1");
+
+    expect(res.ok && res.notes).toEqual([NOTE]);
+    expect(auditReadAfterResponse).toHaveBeenCalledWith({
+      actorId: CAPTAIN,
+      action: "member.notes.viewed",
+      target: "member-1",
+      metadata: { count: 1 },
+    });
+  });
+
+  it("audits nothing when there are no notes to see", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+    vi.mocked(listMemberNotes).mockResolvedValue([]);
+
+    await getMemberDetailAction("member-1");
+
+    expect(auditReadAfterResponse).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: "member.notes.viewed" }),
+    );
+  });
+
+  it("adds a trimmed note as the captain and returns the fresh list", async () => {
+    signInAsCaptain();
+    vi.mocked(listMemberNotes).mockResolvedValue([NOTE]);
+
+    const res = await addMemberNoteAction("member-1", "  Brings a generator. ");
+
+    expect(res).toEqual({ ok: true, notes: [NOTE] });
+    expect(addMemberNote).toHaveBeenCalledExactlyOnceWith({
+      userId: "member-1",
+      authorId: CAPTAIN,
+      body: "Brings a generator.",
+    });
+  });
+
+  it("refuses a blank or over-long note, and a non-captain", async () => {
+    signInAsCaptain();
+    expect(await addMemberNoteAction("member-1", "   ")).toEqual({
+      ok: false,
+      error: "Write the note first.",
+    });
+    expect(await addMemberNoteAction("member-1", "x".repeat(2001))).toEqual({
+      ok: false,
+      error: "Keep a note under 2000 characters.",
+    });
+
+    vi.mocked(ensureCampUser).mockResolvedValue({
+      id: "member-x",
+      rank: "member",
+    } as never);
+    expect(await addMemberNoteAction("member-1", "Hi")).toEqual({
+      ok: false,
+      error: "Captain access only.",
+    });
+    expect(addMemberNote).not.toHaveBeenCalled();
   });
 });

@@ -566,6 +566,34 @@ export const teamMemberships = pgTable(
   }),
 );
 
+// --- Captain notes ---------------------------------------------------------
+// A captain's private notes about a member (owner's call, 2026-09-16: captains
+// only, every read and write audited, never in a roster or an export).
+// Append-only: a note is never edited, so the list is its own history. The
+// author is kept as a link that goes null if that account is erased; the note
+// itself is about the member and is deleted when THEY are erased.
+
+export const memberNotes = pgTable(
+  "member_notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (n) => ({
+    userCreatedIdx: index("member_notes_user_created_idx").on(
+      n.userId,
+      n.createdAt,
+    ),
+  }),
+);
+
 // --- Captain-promotion requests ------------------------------------------
 // The durable pending state behind the two-sided "make captain" handshake —
 // the redesign's ONLY schema change. `setUserRank` is a one-sided write and

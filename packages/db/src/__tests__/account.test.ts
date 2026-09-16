@@ -120,6 +120,25 @@ describe("sanitiseAccount", () => {
     expect(await responsesFor(db, other.id)).toHaveLength(1);
   });
 
+  it("deletes captains' notes about the member, and keeps the notes they wrote", async () => {
+    const db = h.db();
+    const member = await makeUser(db, { rank: "captain" });
+    const peer = await makeUser(db, { rank: "captain" });
+    const other = await makeUser(db);
+    await db.insert(schema.memberNotes).values([
+      { userId: member.id, authorId: peer.id, body: "Brings a generator." },
+      { userId: other.id, authorId: member.id, body: "Needs a lift." },
+    ]);
+
+    const result = await sanitiseAccount(member.id);
+
+    expect(result.ok).toBe(true);
+    const notes = await db.select().from(schema.memberNotes);
+    expect(notes.map((n) => [n.userId, n.authorId, n.body])).toEqual([
+      [other.id, member.id, "Needs a lift."],
+    ]);
+  });
+
   it("revokes every live access grant, so an erased account cannot still act", async () => {
     // Same class as the answers above, and the one a member would assume
     // happened FIRST. All three tables declare onDelete: "cascade" on users.id,

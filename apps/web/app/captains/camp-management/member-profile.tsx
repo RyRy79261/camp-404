@@ -21,9 +21,11 @@ import {
   decideApprovalAction,
   getMemberDetailAction,
   type AssignableTeam,
+  type MemberDetailResult,
   type TeamMembership,
 } from "./actions";
 import { AssignCaptainDialog } from "./assign-captain-dialog";
+import { MemberNotes } from "./member-notes";
 import { RejectConfirmDialog } from "./reject-confirm-dialog";
 import { RoleBadge, RosterAvatar, TeamBadge } from "./roster-presentation";
 import { TeamAssignment } from "./team-assignment";
@@ -57,6 +59,8 @@ type DetailState =
       assignableTeams: AssignableTeam[];
       /** Every decision from this status, with its refusal or null. */
       reviewOptions: ReviewOption[];
+      /** Captains' private notes on this member. */
+      notes: Extract<MemberDetailResult, { ok: true }>["notes"];
     }
   | { state: "error"; message: string };
 
@@ -149,6 +153,7 @@ export function MemberProfile({
                 teams: res.teams,
                 assignableTeams: res.assignableTeams,
                 reviewOptions: res.reviewOptions,
+                notes: res.notes,
               }
             : { state: "error", message: res.error },
         );
@@ -431,6 +436,18 @@ export function MemberProfile({
             assignableTeams={assignableTeams}
             teamLabels={teamLabels}
             onChange={applyTeams}
+          />
+
+          <Divider />
+
+          <MemberNotes
+            userId={row.id}
+            notes={detail.state === "loaded" ? detail.notes : []}
+            onChange={(notes) =>
+              setDetail((prev) =>
+                prev.state === "loaded" ? { ...prev, notes } : prev,
+              )
+            }
           />
 
           <Divider />

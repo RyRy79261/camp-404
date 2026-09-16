@@ -11,6 +11,12 @@ import {
   type TeamMembership,
 } from "@camp404/db/team-memberships";
 import { decryptField } from "@camp404/db/crypto";
+import {
+  MAX_MEMBER_NOTE_LENGTH,
+  addMemberNote,
+  listMemberNotes,
+  type MemberNote,
+} from "@camp404/db/member-notes";
 import { ID_UNREADABLE_LABEL, mergeIdNumber } from "@camp404/db/id-documents";
 import {
   availableReviewActions,
@@ -62,6 +68,8 @@ export type MemberDetailResult =
        * with the sentence to show when it is refused (null when allowed).
        */
       reviewOptions: ReviewOption[];
+      /** Captains' private notes on this member, newest first. */
+      notes: MemberNote[];
       /** This member's team memberships FOR THE CAMP'S CURRENT YEAR. */
       teams: TeamMembership[];
       /** The teams a captain may assign — active only, order-sorted. Archived
@@ -260,10 +268,12 @@ export async function getMemberDetailAction(
     // The assignment control's two inputs: what this member is on THIS YEAR,
     // and what a captain may put them on. `activeTeams` drops archived teams,
     // so an archived team is unpickable before the client ever sees the list.
-    const [teams, config] = await Promise.all([
+    const [teams, config, notes] = await Promise.all([
       getTeamMemberships(userId),
       getTeamsConfig(),
+      listMemberNotes(userId),
     ]);
+    auditNotesRead(gate.captainId, userId, notes);
 
     return {
       ok: true,
@@ -284,6 +294,7 @@ export async function getMemberDetailAction(
       promotionRequestedByName: await requesterName(
         openRequest?.requestedByUserId ?? null,
       ),
+      notes,
       teams,
       assignableTeams: activeTeams(config).map((t) => ({
         key: t.key,
@@ -488,6 +499,61 @@ export async function decideApprovalsAction(input: {
     }
     revalidatePath("/captains/camp-management");
     return { ok: true, decided, lost, refused };
+  });
+}
+
+export type MemberNotesResult =
+  | { ok: true; notes: MemberNote[] }
+  | { ok: false; error: string };
+
+/**
+ * Every read of captains' notes that shows at least one note leaves an audit
+ * row (owner's call: notes are audited). An empty list discloses nothing.
+ */
+function auditNotesRead(
+  captainId: string,
+  userId: string,
+  notes: readonly MemberNote[],
+): void {
+  if (notes.length === 0) return;
+  auditReadAfterResponse({
+    actorId: captainId,
+    action: "member.notes.viewed",
+    target: userId,
+    metadata: { count: notes.length },
+  });
+}
+
+/**
+ * Add a captain's note to a member and hand back the refreshed list. Notes are
+ * captain-only, the member never sees them, and they stay out of every roster
+ * row and export.
+ */
+export async function addMemberNoteAction(
+  userId: string,
+  body: string,
+): Promise<MemberNotesResult> {
+  return runAction("addMemberNoteAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+    if (!UserId.safeParse(userId).success) {
+      return { ok: false, error: "Invalid member." };
+    }
+    const text = typeof body === "string" ? body.trim() : "";
+    if (!text) return { ok: false, error: "Write the note first." };
+    if (text.length > MAX_MEMBER_NOTE_LENGTH) {
+      return {
+        ok: false,
+        error: `Keep a note under ${MAX_MEMBER_NOTE_LENGTH} characters.`,
+      };
+    }
+    if (!(await findCampUserById(userId))) {
+      return { ok: false, error: "Member not found." };
+    }
+    await addMemberNote({ userId, authorId: gate.captainId, body: text });
+    const notes = await listMemberNotes(userId);
+    auditNotesRead(gate.captainId, userId, notes);
+    return { ok: true, notes };
   });
 }
 

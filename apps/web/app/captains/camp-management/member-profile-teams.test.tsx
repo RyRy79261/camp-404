@@ -64,6 +64,7 @@ function loaded(overrides: Record<string, unknown> = {}) {
     teams: [],
     assignableTeams: [{ key: "kitchen", label: "Kitchen" }],
     reviewOptions: [],
+    notes: [],
     ...overrides,
   };
 }
