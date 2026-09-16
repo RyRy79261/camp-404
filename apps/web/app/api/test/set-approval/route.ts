@@ -13,6 +13,8 @@ export const runtime = "nodejs";
 interface Body {
   authUserId?: string;
   status?: "pending" | "approved" | "rejected";
+  /** What the captain told the member (optional). */
+  reason?: string;
 }
 
 export async function POST(req: Request) {
@@ -38,6 +40,6 @@ export async function POST(req: Request) {
       { status: 404 },
     );
   }
-  testStore.setUserApprovalStatus(user.id, body.status);
+  testStore.setUserApprovalStatus(user.id, body.status, body.reason ?? null);
   return NextResponse.json({ ok: true });
 }

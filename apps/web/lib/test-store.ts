@@ -56,6 +56,7 @@ interface TestUser {
   approvalStatus: TestApprovalStatus;
   approvalDecidedByUserId: string | null;
   approvalDecidedAt: Date | null;
+  approvalDecisionReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -304,6 +305,7 @@ export const testStore = {
       approvalStatus: input.approvalStatus ?? "approved",
       approvalDecidedByUserId: null,
       approvalDecidedAt: null,
+      approvalDecisionReason: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -328,10 +330,17 @@ export const testStore = {
       }
     }
   },
-  setUserApprovalStatus(userId: string, status: TestApprovalStatus): void {
+  setUserApprovalStatus(
+    userId: string,
+    status: TestApprovalStatus,
+    // Only the /api/test/set-approval seam passes one, to stand in for a
+    // captain's decision; the production writer always clears it.
+    reason: string | null = null,
+  ): void {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
         user.approvalStatus = status;
+        user.approvalDecisionReason = reason;
         user.updatedAt = new Date();
         return;
       }
@@ -341,6 +350,7 @@ export const testStore = {
     userId: string;
     status: "approved" | "rejected";
     decidedByUserId: string;
+    reason?: string | null;
   }): boolean {
     // Mirrors the db's compare-and-set: only a `pending` row flips, so a second
     // captain deciding the same applicant is a no-op (false) rather than a
@@ -351,6 +361,7 @@ export const testStore = {
         user.approvalStatus = input.status;
         user.approvalDecidedByUserId = input.decidedByUserId;
         user.approvalDecidedAt = new Date();
+        user.approvalDecisionReason = input.reason?.trim() || null;
         user.updatedAt = new Date();
         // As in production: an approval tells the member, a rejection does not.
         if (input.status === "approved") {

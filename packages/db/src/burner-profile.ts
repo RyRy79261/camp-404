@@ -62,7 +62,13 @@ export async function setUserApprovalStatus(
   const db = createHttpDb();
   await db
     .update(schema.users)
-    .set({ approvalStatus: status, updatedAt: new Date() })
+    // A reason belongs to the decision it was written for, so it goes when
+    // the status moves.
+    .set({
+      approvalStatus: status,
+      approvalDecisionReason: null,
+      updatedAt: new Date(),
+    })
     .where(eq(schema.users.id, userId));
 }
 
@@ -88,7 +94,10 @@ export async function setUserApproval(input: {
   userId: string;
   status: "approved" | "rejected";
   decidedByUserId: string;
+  /** What the captain tells the member; null or blank means none. */
+  reason?: string | null;
 }): Promise<boolean> {
+  const reason = input.reason?.trim() || null;
   return await withTransaction(async (tx) => {
     const rows = await tx
       .update(schema.users)
@@ -96,6 +105,7 @@ export async function setUserApproval(input: {
         approvalStatus: input.status,
         approvalDecidedByUserId: input.decidedByUserId,
         approvalDecidedAt: new Date(),
+        approvalDecisionReason: reason,
         updatedAt: new Date(),
       })
       .where(
@@ -110,7 +120,9 @@ export async function setUserApproval(input: {
       actorId: input.decidedByUserId,
       action: "member.approval_decided",
       target: input.userId,
-      metadata: { status: input.status },
+      // Whether a reason was given, not the words: the audit row records the
+      // decision, and the reason lives on the member's row.
+      metadata: { status: input.status, withReason: reason !== null },
     });
     if (input.status === "approved") {
       await tx.insert(schema.notificationDeliveries).values(

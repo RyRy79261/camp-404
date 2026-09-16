@@ -41,6 +41,8 @@ export function sanitisedUserPatch(
     saIdEncrypted: null,
     eftDetailsEncrypted: null,
     emergencyContacts: null,
+    // A captain's words about this person.
+    approvalDecisionReason: null,
     // What they told the camp about themselves.
     skills: [],
     previousAfrikaburns: null,

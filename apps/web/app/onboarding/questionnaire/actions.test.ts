@@ -67,6 +67,7 @@ describe("saveBurnerProfile persistence error handling", () => {
       inviteCode: "INV",
       rank: "member",
       approvalStatus: "approved",
+      approvalDecisionReason: null,
     });
     vi.mocked(hasCampAccess).mockReturnValue(true);
     vi.mocked(getBurnerProfile).mockResolvedValue(null);

@@ -156,6 +156,27 @@ describe("MemberProfile — a decision that lost the race", () => {
     expect(screen.queryByRole("button", { name: /Approve/ })).toBeNull();
   });
 
+  it("sends the reason typed in the reject confirmation", async () => {
+    vi.mocked(getMemberDetailAction).mockResolvedValue(detail("pending"));
+    vi.mocked(decideApprovalAction).mockResolvedValue({ ok: true });
+
+    renderProfile();
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const confirm = await screen.findByRole("dialog");
+    fireEvent.change(within(confirm).getByLabelText(/Reason for/), {
+      target: { value: "We are full this year." },
+    });
+    fireEvent.click(within(confirm).getByRole("button", { name: "Reject" }));
+
+    await waitFor(() =>
+      expect(decideApprovalAction).toHaveBeenCalledWith(
+        "m1",
+        "rejected",
+        "We are full this year.",
+      ),
+    );
+  });
+
   it("does not refetch when the decision is accepted", async () => {
     vi.mocked(getMemberDetailAction).mockResolvedValue(detail("pending"));
     vi.mocked(decideApprovalAction).mockResolvedValue({ ok: true });

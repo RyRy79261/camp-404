@@ -55,6 +55,8 @@ export interface CampUser {
   inviteCode: string | null;
   rank: Rank;
   approvalStatus: ApprovalStatus;
+  /** What the deciding captain told the member, if anything. */
+  approvalDecisionReason: string | null;
 }
 
 /**
@@ -102,6 +104,7 @@ export async function ensureCampUser(
     inviteCode: null,
     rank: "member",
     approvalStatus: "approved",
+    approvalDecisionReason: null,
   };
 }
 
@@ -330,6 +333,8 @@ export async function decideUserApproval(input: {
   userId: string;
   status: "approved" | "rejected";
   decidedByUserId: string;
+  /** Shown to the member on /pending-approval; blank means none. */
+  reason?: string | null;
 }): Promise<boolean> {
   const store = isE2ETestMode() ? testBackend : realBackend;
   return store.setUserApproval(input);
@@ -367,6 +372,7 @@ interface UserBackend {
     userId: string;
     status: "approved" | "rejected";
     decidedByUserId: string;
+    reason?: string | null;
   }): Promise<boolean>;
   setUserProfileImage(userId: string, url: string | null): Promise<void>;
   setUserDisplayName(userId: string, name: string | null): Promise<void>;
@@ -608,6 +614,7 @@ function toCampUser(row: {
   inviteCode: string | null;
   rank: Rank;
   approvalStatus?: ApprovalStatus | null;
+  approvalDecisionReason?: string | null;
 }): CampUser {
   return {
     id: row.id,
@@ -617,5 +624,6 @@ function toCampUser(row: {
     inviteCode: row.inviteCode,
     rank: row.rank,
     approvalStatus: row.approvalStatus ?? "approved",
+    approvalDecisionReason: row.approvalDecisionReason ?? null,
   };
 }

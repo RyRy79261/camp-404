@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
-import { setUserApproval } from "../burner-profile";
+import { setUserApproval, setUserApprovalStatus } from "../burner-profile";
 import * as schema from "../schema";
 
 // setUserApproval is a compare-and-set on `pending`. Two captains working the
@@ -58,7 +58,7 @@ describe("setUserApproval", () => {
       expect.objectContaining({
         actorId: captain.id,
         action: "member.approval_decided",
-        metadata: { status: "approved" },
+        metadata: { status: "approved", withReason: false },
       }),
     ]);
   });
@@ -129,5 +129,50 @@ describe("setUserApproval", () => {
 
     expect(decided).toBe(false);
     expect((await readUser(db, bystander.id)).approvalStatus).toBe("pending");
+  });
+});
+
+describe("the approval decision reason", () => {
+  const h = useTestDb();
+
+  it("is stored with the decision and cleared when the status moves again", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const applicant = await makeUser(db, { approvalStatus: "pending" });
+
+    await setUserApproval({
+      userId: applicant.id,
+      status: "rejected",
+      decidedByUserId: captain.id,
+      reason: "  We are full this year.  ",
+    });
+    expect((await readUser(db, applicant.id)).approvalDecisionReason).toBe(
+      "We are full this year.",
+    );
+    const [audit] = await auditFor(db, applicant.id);
+    // The audit row says a reason was given, not what it said.
+    expect(audit?.metadata).toEqual({ status: "rejected", withReason: true });
+
+    await setUserApprovalStatus(applicant.id, "pending");
+    expect(
+      (await readUser(db, applicant.id)).approvalDecisionReason,
+    ).toBeNull();
+  });
+
+  it("stores a blank reason as none", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const applicant = await makeUser(db, { approvalStatus: "pending" });
+
+    await setUserApproval({
+      userId: applicant.id,
+      status: "approved",
+      decidedByUserId: captain.id,
+      reason: "   ",
+    });
+
+    expect(
+      (await readUser(db, applicant.id)).approvalDecisionReason,
+    ).toBeNull();
   });
 });

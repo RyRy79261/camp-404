@@ -38,6 +38,7 @@ function row(
     approvalStatus: "approved",
     approvalDecidedByUserId: null,
     approvalDecidedAt: null,
+    approvalDecisionReason: null,
     termsVersion: "1",
     termsConsentedAt: null,
     sanitised: false,

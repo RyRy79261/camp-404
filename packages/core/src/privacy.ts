@@ -133,6 +133,7 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "users.approvalStatus": "captain",
   "users.approvalDecidedByUserId": "captain",
   "users.approvalDecidedAt": "captain",
+  "users.approvalDecisionReason": "captain",
   "users.termsVersion": "captain",
   "users.termsConsentedAt": "captain",
   "users.sanitisedAt": "captain",

@@ -356,9 +356,13 @@ export async function getPublicMemberProfileAction(
  * so a captain acting on a stale roster cannot overwrite another captain's
  * standing decision — they are told about it instead.
  */
+/** The longest reason a captain may give the member, in characters. */
+const MAX_DECISION_REASON = 500;
+
 export async function decideApprovalAction(
   userId: string,
   decision: "approved" | "rejected",
+  reason?: string | null,
 ): Promise<ApprovalDecisionResult> {
   return runAction("decideApprovalAction", async () => {
     const gate = await requireCaptain();
@@ -373,11 +377,21 @@ export async function decideApprovalAction(
     if (userId === gate.captainId) {
       return { ok: false, error: "You can't decide on your own account." };
     }
+    if (reason != null && typeof reason !== "string") {
+      return { ok: false, error: "The reason must be text." };
+    }
+    if (reason && reason.trim().length > MAX_DECISION_REASON) {
+      return {
+        ok: false,
+        error: `Keep the reason under ${MAX_DECISION_REASON} characters.`,
+      };
+    }
 
     const decided = await decideUserApproval({
       userId,
       status: decision,
       decidedByUserId: gate.captainId,
+      reason: reason?.trim() || null,
     });
     // Revalidate either way: on the lost-CAS path the roster this captain is
     // looking at is stale, which is exactly why they got here.

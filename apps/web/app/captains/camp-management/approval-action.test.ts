@@ -93,6 +93,7 @@ describe("decideApprovalAction — the write", () => {
       userId: "member-1",
       status: "approved",
       decidedByUserId: CAPTAIN,
+      reason: null,
     });
     expect(revalidatePath).toHaveBeenCalledWith("/captains/camp-management");
   });
@@ -100,14 +101,43 @@ describe("decideApprovalAction — the write", () => {
   it("rejects a pending member through the same path", async () => {
     signInAsCaptain();
 
-    const res = await decideApprovalAction("member-1", "rejected");
+    const res = await decideApprovalAction(
+      "member-1",
+      "rejected",
+      "  We are full this year.  ",
+    );
 
     expect(res).toEqual({ ok: true });
     expect(decideUserApproval).toHaveBeenCalledExactlyOnceWith({
       userId: "member-1",
       status: "rejected",
       decidedByUserId: CAPTAIN,
+      reason: "We are full this year.",
     });
+  });
+
+  it("stores a blank reason as no reason", async () => {
+    signInAsCaptain();
+
+    await decideApprovalAction("member-1", "rejected", "   ");
+
+    expect(vi.mocked(decideUserApproval).mock.calls[0]![0].reason).toBeNull();
+  });
+
+  it("refuses a reason that is too long, deciding nothing", async () => {
+    signInAsCaptain();
+
+    const res = await decideApprovalAction(
+      "member-1",
+      "rejected",
+      "x".repeat(501),
+    );
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Keep the reason under 500 characters.",
+    });
+    expect(decideUserApproval).not.toHaveBeenCalled();
   });
 
   it("reports the lost compare-and-set instead of a false success", async () => {

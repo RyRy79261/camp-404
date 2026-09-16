@@ -90,6 +90,7 @@ export function MemberProfile({
   const [reloadToken, setReloadToken] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -144,10 +145,10 @@ export function MemberProfile({
     panelRef.current?.focus();
   }, [row.id]);
 
-  function decide(decision: "approved" | "rejected") {
+  function decide(decision: "approved" | "rejected", reason?: string) {
     setActionError(null);
     startTransition(async () => {
-      const res = await decideApprovalAction(row.id, decision);
+      const res = await decideApprovalAction(row.id, decision, reason);
       if (!res.ok) {
         setActionError(res.error);
         // The decision may have lost the compare-and-set to another captain.
@@ -422,9 +423,11 @@ export function MemberProfile({
               setRejectOpen(o);
               if (!o) setActionError(null);
             }}
-            onConfirm={() => decide("rejected")}
+            onConfirm={() => decide("rejected", rejectReason)}
             pending={isPending}
             error={actionError}
+            reason={rejectReason}
+            onReasonChange={setRejectReason}
           />
           {canAssignCaptain && (
             <AssignCaptainDialog

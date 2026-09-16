@@ -66,6 +66,12 @@ export default async function PendingApprovalPage() {
               approved for camp access this time. If you think this is a
               mistake, reach out to whoever invited you.
             </p>
+            {campUser.approvalDecisionReason && (
+              <p className="whitespace-pre-line text-balance text-label text-card-foreground">
+                <span className="font-semibold">The captain said: </span>
+                {campUser.approvalDecisionReason}
+              </p>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
