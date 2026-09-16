@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import type { DbOrTx } from "./audit";
 import { createHttpDb } from "./index";
 import { campSettings, questionnaireDefinitions } from "./schema";
 import {
@@ -64,8 +65,9 @@ export async function carryOverFor(key: string): Promise<CarryOverPolicy> {
  * so a send made before a captain gets to the cycle page is swept into the real
  * year by the same rewrite, rather than stranded under an invented one.
  */
-export async function currentCycleNumber(): Promise<number> {
-  const db = createHttpDb();
+export async function currentCycleNumber(
+  db: DbOrTx = createHttpDb(),
+): Promise<number> {
   const [row] = await db
     .select({ config: campSettings.config })
     .from(campSettings)

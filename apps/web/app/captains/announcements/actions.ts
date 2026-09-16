@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { ComposeAnnouncementInput } from "@camp404/types";
 import {
+  countAnnouncementAudience,
   createAnnouncementDraft,
   deleteAnnouncementDraft,
+  explainDraftRefusal,
   publishAnnouncement,
   updateAnnouncementDraft,
 } from "@/lib/notifications";
@@ -84,7 +86,10 @@ export async function updateDraftAction(
       ...parsed.data,
     });
     if (!ok) {
-      return { ok: false, error: "Draft not found or already published." };
+      return {
+        ok: false,
+        error: await explainDraftRefusal(id, gate.captainId),
+      };
     }
     revalidatePath("/captains/announcements");
     return { ok: true };
@@ -99,7 +104,10 @@ export async function deleteDraftAction(id: string): Promise<ActionResult> {
 
     const ok = await deleteAnnouncementDraft({ id, senderId: gate.captainId });
     if (!ok) {
-      return { ok: false, error: "Draft not found or already published." };
+      return {
+        ok: false,
+        error: await explainDraftRefusal(id, gate.captainId),
+      };
     }
     revalidatePath("/captains/announcements");
     return { ok: true };
@@ -121,5 +129,21 @@ export async function publishAction(
     if (!result.ok) return result;
     revalidatePath("/captains/announcements");
     return { ok: true, data: { recipientCount: result.recipientCount } };
+  });
+}
+
+/**
+ * How many members a publish would reach right now. The publish confirmation
+ * names the number, because a camp-wide announcement cannot be taken back
+ * (owner's call: publish a correction instead).
+ */
+export async function previewPublishAction(): Promise<
+  ActionResult<{ recipientCount: number }>
+> {
+  return runAction("previewPublishAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+    const recipientCount = await countAnnouncementAudience(gate.captainId);
+    return { ok: true, data: { recipientCount } };
   });
 }

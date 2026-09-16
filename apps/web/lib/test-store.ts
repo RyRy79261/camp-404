@@ -1,6 +1,11 @@
 import "server-only";
 
 import { normalizeInviteCode } from "@camp404/core";
+import {
+  DRAFT_MISSING,
+  DRAFT_NOT_YOURS,
+  DRAFT_PUBLISHED,
+} from "@camp404/db/broadcasts";
 import type { CampManagementMember } from "@camp404/db/roster";
 import {
   currentCycle,
@@ -504,10 +509,7 @@ export const testStore = {
         b.publishedAt === null,
     );
     if (!row) {
-      return {
-        ok: false,
-        error: "Draft not found, already published, or not yours.",
-      };
+      return { ok: false, error: testStore.explainDraftRefusal(input) };
     }
     row.publishedAt = new Date();
     const recipients = [...usersByAuthId.values()].filter(
@@ -527,6 +529,16 @@ export const testStore = {
       });
     }
     return { ok: true, recipientCount: recipients.length };
+  },
+  explainDraftRefusal(input: { id: string; senderId: string }): string {
+    const row = broadcasts.find((b) => b.id === input.id);
+    if (!row) return DRAFT_MISSING;
+    if (row.senderId !== input.senderId) return DRAFT_NOT_YOURS;
+    if (row.publishedAt) return DRAFT_PUBLISHED;
+    return DRAFT_MISSING;
+  },
+  countAnnouncementAudience(senderId: string): number {
+    return [...usersByAuthId.values()].filter((u) => u.id !== senderId).length;
   },
   listBroadcasts(): Array<{
     id: string;

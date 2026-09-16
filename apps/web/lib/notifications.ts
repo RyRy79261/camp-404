@@ -2,7 +2,9 @@ import "server-only";
 
 import {
   acknowledgeDelivery as dbAcknowledgeDelivery,
+  countAnnouncementAudience as dbCountAnnouncementAudience,
   countUnread as dbCountUnread,
+  explainDraftRefusal as dbExplainDraftRefusal,
   createAnnouncementDraft as dbCreateDraft,
   deleteAnnouncementDraft as dbDeleteDraft,
   getPendingAcknowledgements as dbGetPending,
@@ -66,6 +68,8 @@ interface NotificationsBackend {
     id: string;
     senderId: string;
   }): Promise<PublishResult>;
+  explainDraftRefusal(id: string, senderId: string): Promise<string>;
+  countAnnouncementAudience(senderId: string): Promise<number>;
 }
 
 const realBackend: NotificationsBackend = {
@@ -79,6 +83,8 @@ const realBackend: NotificationsBackend = {
   updateAnnouncementDraft: dbUpdateDraft,
   deleteAnnouncementDraft: dbDeleteDraft,
   publishAnnouncement: dbPublish,
+  explainDraftRefusal: dbExplainDraftRefusal,
+  countAnnouncementAudience: dbCountAnnouncementAudience,
 };
 
 const testBackend: NotificationsBackend = {
@@ -111,6 +117,12 @@ const testBackend: NotificationsBackend = {
   },
   async publishAnnouncement(input) {
     return testStore.publishBroadcast(input);
+  },
+  async explainDraftRefusal(id, senderId) {
+    return testStore.explainDraftRefusal({ id, senderId });
+  },
+  async countAnnouncementAudience(senderId) {
+    return testStore.countAnnouncementAudience(senderId);
   },
 };
 
@@ -178,4 +190,15 @@ export function publishAnnouncement(input: {
   senderId: string;
 }): Promise<PublishResult> {
   return backend().publishAnnouncement(input);
+}
+
+export function explainDraftRefusal(
+  id: string,
+  senderId: string,
+): Promise<string> {
+  return backend().explainDraftRefusal(id, senderId);
+}
+
+export function countAnnouncementAudience(senderId: string): Promise<number> {
+  return backend().countAnnouncementAudience(senderId);
 }

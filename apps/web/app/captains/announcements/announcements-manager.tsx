@@ -22,6 +22,7 @@ import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { Card } from "@camp404/ui/components/card";
+import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { InputField } from "@camp404/ui/components/input-field";
@@ -41,6 +42,7 @@ import { RecorderPanel } from "@/components/voice/recorder-panel";
 import { useVoiceSupported } from "@/components/voice/use-voice-recorder";
 import {
   deleteDraftAction,
+  previewPublishAction,
   publishAction,
   saveDraftAction,
   updateDraftAction,
@@ -126,6 +128,15 @@ export function AnnouncementsManager({
   const [dictating, setDictating] = useState(false);
   const voiceSupported = useVoiceSupported();
   const [pending, startTransition] = useTransition();
+  // The draft waiting on the publish confirmation, with the audience it would
+  // reach. Publishing cannot be taken back, so the captain sees who and how
+  // before it goes out.
+  const [confirming, setConfirming] = useState<{
+    announcement: AnnouncementSummary;
+    recipientCount: number;
+    error: string | null;
+  } | null>(null);
+  const [publishing, startPublish] = useTransition();
 
   const drafts = announcements.filter((a) => a.publishedAt === null);
   const published = announcements.filter((a) => a.publishedAt !== null);
@@ -188,17 +199,34 @@ export function AnnouncementsManager({
     });
   };
 
-  const handlePublish = (id: string) => {
+  const handlePublish = (announcement: AnnouncementSummary) => {
     setError(null);
     startTransition(async () => {
-      const result = await publishAction(id);
-      if (!result.ok) {
-        setError(result.error);
+      const preview = await previewPublishAction();
+      if (!preview.ok) {
+        setError(preview.error);
         return;
       }
+      setConfirming({
+        announcement,
+        recipientCount: preview.data.recipientCount,
+        error: null,
+      });
+    });
+  };
+
+  const confirmPublish = () => {
+    if (!confirming) return;
+    const { id } = confirming.announcement;
+    startPublish(async () => {
+      const result = await publishAction(id);
+      if (!result.ok) {
+        setConfirming((c) => c && { ...c, error: result.error });
+        return;
+      }
+      setConfirming(null);
       if (form.editingId === id) reset();
-      const n = result.data.recipientCount;
-      toast.success(`Published to ${n} member${n === 1 ? "" : "s"}`);
+      toast.success(`Published to ${members(result.data.recipientCount)}`);
       router.refresh();
     });
   };
@@ -364,7 +392,67 @@ export function AnnouncementsManager({
           </ul>
         )}
       </section>
+
+      {confirming && (
+        <PublishConfirm
+          announcement={confirming.announcement}
+          recipientCount={confirming.recipientCount}
+          error={confirming.error}
+          pending={publishing}
+          onCancel={() => setConfirming(null)}
+          onConfirm={confirmPublish}
+        />
+      )}
     </div>
+  );
+}
+
+function members(n: number): string {
+  return `${n} member${n === 1 ? "" : "s"}`;
+}
+
+function PublishConfirm({
+  announcement: a,
+  recipientCount,
+  error,
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  announcement: AnnouncementSummary;
+  recipientCount: number;
+  error: string | null;
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const meta = PRESENTATION_META[a.presentation];
+  const Icon = meta.icon;
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+      title={`Publish "${a.title}"?`}
+      description={
+        recipientCount === 0
+          ? "No members would get it. Nobody else is in the camp yet."
+          : `It goes to ${members(recipientCount)} now. You can't edit or recall it after. To fix a mistake, publish a correction.`
+      }
+      confirmLabel={`Publish to ${members(recipientCount)}`}
+      pending={pending}
+      error={error}
+      onConfirm={onConfirm}
+    >
+      <div className="flex items-start gap-3 rounded-md border border-border p-3 text-sm">
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+        <div className="space-y-0.5">
+          <p className="font-medium">{meta.label}</p>
+          <p className="text-muted-foreground">{meta.hint}</p>
+        </div>
+      </div>
+    </ConfirmDialog>
   );
 }
 
@@ -401,7 +489,7 @@ function DraftCard({
   pending: boolean;
   onEdit: (a: AnnouncementSummary) => void;
   onDelete: (id: string) => void;
-  onPublish: (id: string) => void;
+  onPublish: (a: AnnouncementSummary) => void;
 }) {
   return (
     <li>
@@ -435,7 +523,7 @@ function DraftCard({
             type="button"
             size="sm"
             className="gap-1.5"
-            onClick={() => onPublish(a.id)}
+            onClick={() => onPublish(a)}
             disabled={pending}
           >
             <Send className="h-4 w-4" /> Publish to camp

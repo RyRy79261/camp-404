@@ -66,6 +66,13 @@ test.describe("captain announcements (test-mode)", () => {
     await page.getByLabel("Message").fill("Meet at the effigy at 20:00.");
     await page.getByRole("button", { name: "Save draft" }).click();
     await page.getByRole("button", { name: "Publish to camp" }).click();
+    // Publishing cannot be taken back, so a confirmation names the audience
+    // and how it will show before anything goes out.
+    const confirm = page.getByRole("dialog");
+    await expect(
+      confirm.getByText("Full-screen — must acknowledge"),
+    ).toBeVisible();
+    await confirm.getByRole("button", { name: "Publish to 1 member" }).click();
 
     // Only the member receives it — the author is excluded from fan-out.
     await expect(page.getByText(/Published to 1 member/)).toBeVisible();

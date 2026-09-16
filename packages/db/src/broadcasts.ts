@@ -9,6 +9,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { DbOrTx } from "./audit";
 import { createHttpDb, createPooledDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
@@ -44,6 +45,57 @@ function isOwnedAnnouncementDraft(id: string, senderId: string) {
   );
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const DRAFT_MISSING = "This draft no longer exists. Reload the page.";
+export const DRAFT_NOT_YOURS =
+  "Only the captain who wrote this draft can change or publish it.";
+export const DRAFT_PUBLISHED =
+  "This announcement is already published, so it can't be changed. Publish a correction instead.";
+
+/**
+ * Why an edit, delete or publish of a draft wrote nothing, as the sentence the
+ * captain reads. The writes claim a row with one predicate (owned, still a
+ * draft), so a refusal alone cannot say which part failed. This reads the row
+ * once to tell the three real causes apart, instead of one message that
+ * blames all three.
+ */
+export async function explainDraftRefusal(
+  id: string,
+  senderId: string,
+): Promise<string> {
+  if (!UUID.test(id)) return DRAFT_MISSING;
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      senderId: schema.broadcasts.senderId,
+      kind: schema.broadcasts.kind,
+      publishedAt: schema.broadcasts.publishedAt,
+    })
+    .from(schema.broadcasts)
+    .where(eq(schema.broadcasts.id, id))
+    .limit(1);
+  if (!row || row.kind !== "announcement") return DRAFT_MISSING;
+  if (row.senderId !== senderId) return DRAFT_NOT_YOURS;
+  if (row.publishedAt) return DRAFT_PUBLISHED;
+  return DRAFT_MISSING;
+}
+
+/**
+ * How many members a camp-wide announcement from this captain would reach
+ * right now: the same audience publishAnnouncement fans out to. The publish
+ * confirmation names it.
+ */
+export async function countAnnouncementAudience(
+  senderId: string,
+): Promise<number> {
+  const ids = await resolveAudience(
+    { id: "", scope: "everyone", team: null },
+    senderId,
+  );
+  return ids.length;
+}
+
 /**
  * Recipient user ids for a broadcast, resolved by scope — the single audience
  * primitive the inline publish and the scheduled dispatch worker share. Reads
@@ -58,9 +110,9 @@ function isOwnedAnnouncementDraft(id: string, senderId: string) {
 export async function resolveAudience(
   broadcast: { id: string; scope: BroadcastScope; team: string | null },
   senderId: string | null,
+  db: DbOrTx = createHttpDb(),
 ): Promise<string[]> {
-  const db = createHttpDb();
-  const cycle = await currentCycleNumber();
+  const cycle = await currentCycleNumber(db);
   const [members, memberships, drivers, targets] = await Promise.all([
     db
       .select({
@@ -243,7 +295,7 @@ export async function publishAnnouncement(input: {
   id: string;
   senderId: string;
 }): Promise<PublishResult> {
-  return await withTransaction(async (tx) => {
+  const published = await withTransaction(async (tx) => {
     // Claim the draft: only an unpublished row owned by this sender flips.
     const claimed = await tx
       .update(schema.broadcasts)
@@ -258,20 +310,18 @@ export async function publishAnnouncement(input: {
       });
 
     const broadcast = claimed[0];
-    if (!broadcast) {
-      return {
-        ok: false as const,
-        error: "Draft not found, already published, or not yours.",
-      };
-    }
+    if (!broadcast) return null;
 
     // Resolve the audience via the shared resolver (scope = 'everyone' for a
     // camp-wide announcement — same recipient set as before). ON CONFLICT DO
     // NOTHING pairs with the new (broadcast_id, user_id) dedupe index so a
     // retry can never double-deliver.
+    // Read inside the transaction: the audience is the camp as it stands when
+    // the claim commits, on the same connection that holds the claim.
     const recipientIds = await resolveAudience(
       { id: broadcast.id, scope: "everyone", team: null },
       input.senderId,
+      tx,
     );
 
     if (recipientIds.length === 0) {
@@ -296,6 +346,14 @@ export async function publishAnnouncement(input: {
 
     return { ok: true as const, recipientCount: recipientIds.length };
   });
+  // Explained after the transaction ends: the claim wrote nothing, and the
+  // explanation is a separate read.
+  return (
+    published ?? {
+      ok: false,
+      error: await explainDraftRefusal(input.id, input.senderId),
+    }
+  );
 }
 
 export interface DispatchResult {
