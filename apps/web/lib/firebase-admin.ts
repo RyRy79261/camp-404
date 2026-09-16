@@ -3,6 +3,7 @@ import "server-only";
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { mapSendResponses, type PushSend } from "@camp404/db/push-status";
+import { firebaseAdminCredentials } from "./integration-config";
 import { SITE_URL } from "./site";
 
 // Lazy firebase-admin singleton. Initialised only on first send so the app
@@ -15,10 +16,8 @@ let app: App | null = null;
 
 function getApp(): App {
   if (app) return app;
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const rawKey = process.env.FIREBASE_PRIVATE_KEY;
-  if (!projectId || !clientEmail || !rawKey) {
+  const credentials = firebaseAdminCredentials(process.env);
+  if (!credentials) {
     throw new Error(
       "Firebase admin is not configured — set FIREBASE_PROJECT_ID, " +
         "FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY.",
@@ -29,12 +28,7 @@ function getApp(): App {
     existing.length > 0
       ? existing[0]!
       : initializeApp({
-          credential: cert({
-            projectId,
-            clientEmail,
-            // Env stores the PEM with literal `\n`; cert() needs real newlines.
-            privateKey: rawKey.replace(/\\n/g, "\n"),
-          }),
+          credential: cert(credentials),
         });
   return app;
 }

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { NotificationEmail } from "@camp404/core";
+import { isEmailConfigured as isEmailConfiguredIn } from "./integration-config";
 
 // Resend adapter for notification email (W4.3). A plain fetch to Resend's REST
 // API, so no SDK dependency. One recipient per call: never several addresses in
@@ -13,7 +14,7 @@ import type { NotificationEmail } from "@camp404/core";
 const RESEND_URL = "https://api.resend.com/emails";
 
 export function isEmailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
+  return isEmailConfiguredIn(process.env);
 }
 
 export async function sendEmail(

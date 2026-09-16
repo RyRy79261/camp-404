@@ -5,6 +5,7 @@ import {
   initializeApp,
 } from "firebase/app";
 import { getMessaging, isSupported, type Messaging } from "firebase/messaging";
+import { isWebPushConfigured } from "./integration-config";
 
 // Browser-only Firebase web SDK init for push. NO `server-only` — but every
 // entry point guards on `isSupported()` and `typeof window`, so it is never
@@ -23,13 +24,7 @@ const config = {
 export const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
 
 function isConfigured(): boolean {
-  return Boolean(
-    config.apiKey &&
-      config.projectId &&
-      config.messagingSenderId &&
-      config.appId &&
-      VAPID_KEY,
-  );
+  return isWebPushConfigured({ ...config, vapidKey: VAPID_KEY });
 }
 
 function firebaseApp(): FirebaseApp {

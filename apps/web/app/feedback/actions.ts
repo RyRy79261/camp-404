@@ -7,6 +7,11 @@ import { findCampUserByAuthId } from "@/lib/users";
 import { rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
 import {
+  DEFAULT_FEEDBACK_REPO,
+  feedbackTracker,
+  type FeedbackTracker,
+} from "@/lib/integration-config";
+import {
   buildFeedbackIssue,
   DESCRIPTION_MAX,
   DIAGNOSTICS_LIMITS as DL,
@@ -63,8 +68,6 @@ function diagnosticsText(d: ReportDiagnostics): string[] {
   ];
 }
 
-const DEFAULT_REPO = "RyRy79261/camp-404";
-
 // GitHub's create-issue 201 payload — validated rather than blindly cast so a
 // caller never receives a malformed number/url.
 const GithubIssueSchema = z.object({
@@ -72,30 +75,24 @@ const GithubIssueSchema = z.object({
   html_url: z.string().url(),
 });
 
-type FeedbackTracker =
-  | { ok: true; token: string; owner: string; name: string }
-  | { ok: false; error: string };
-
-/** The GitHub token and repo the reports go to, or why they are not usable. */
-function feedbackTracker(): FeedbackTracker {
-  const token = process.env.GITHUB_FEEDBACK_TOKEN;
-  if (!token) {
+/** The GitHub token and repo the reports go to, or the error to show. */
+function resolveTracker():
+  | Extract<FeedbackTracker, { ok: true }>
+  | { ok: false; error: string } {
+  const tracker = feedbackTracker(process.env);
+  if (tracker.ok) return tracker;
+  if (tracker.reason === "no_token") {
     console.error("submitFeedbackAction: GITHUB_FEEDBACK_TOKEN is not set");
     return {
       ok: false,
       error: "Feedback isn't set up yet. Let a camp captain know.",
     };
   }
-  const repo = (process.env.GITHUB_FEEDBACK_REPO || DEFAULT_REPO).trim();
-  const segments = repo.split("/").map((s) => s.trim()).filter(Boolean);
-  if (segments.length !== 2) {
-    console.error("submitFeedbackAction: GITHUB_FEEDBACK_REPO is misconfigured");
-    return {
-      ok: false,
-      error: "Feedback isn't configured correctly. Let a camp captain know.",
-    };
-  }
-  return { ok: true, token, owner: segments[0]!, name: segments[1]! };
+  console.error("submitFeedbackAction: GITHUB_FEEDBACK_REPO is misconfigured");
+  return {
+    ok: false,
+    error: "Feedback isn't configured correctly. Let a camp captain know.",
+  };
 }
 
 /**
@@ -114,7 +111,7 @@ export async function submitFeedbackAction(
   // spends the member's rate limit or a paid AI call on a report it cannot
   // file. E2E mode never calls GitHub, so it skips this and short-circuits
   // further down.
-  const tracker = isE2ETestMode() ? null : feedbackTracker();
+  const tracker = isE2ETestMode() ? null : resolveTracker();
   if (tracker && !tracker.ok) return tracker;
 
   // Burst + daily caps. In-memory + per-instance (the app-wide limiter), so
@@ -164,7 +161,7 @@ export async function submitFeedbackAction(
 
   // E2E mode exercises auth + validation but never calls the AI or GitHub.
   if (isE2ETestMode()) {
-    return { ok: true, number: 0, url: `https://github.com/${DEFAULT_REPO}/issues` };
+    return { ok: true, number: 0, url: `https://github.com/${DEFAULT_FEEDBACK_REPO}/issues` };
   }
 
   // Screen before anything reads the report. A flagged report is held for a
