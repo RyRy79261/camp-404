@@ -1,4 +1,4 @@
-import type { ContentBlock } from "@camp404/types";
+import { isAllowedBuilderImageUrl, type ContentBlock } from "@camp404/types";
 import { Alert } from "@camp404/ui/components/alert";
 import { Divider } from "@camp404/ui/components/divider";
 import { Megaphone, TriangleAlert } from "lucide-react";
@@ -62,7 +62,12 @@ export function ContentBlockRenderer({ block }: { block: ContentBlock }) {
         <figure className="flex flex-col gap-2">
           {/* A plain img on purpose: next/image needs a configured domain
               allowlist, which an arbitrary author/Blob URL can't satisfy. */}
-          <img src={block.imageUrl} alt={block.altText} className={fitClass} />
+          {/* Only images Camp 404 stores. A definition saved before that
+              rule could hold another site's link, and rendering it would make
+              every member's browser call that site. */}
+          {isAllowedBuilderImageUrl(block.imageUrl) && (
+            <img src={block.imageUrl} alt={block.altText} className={fitClass} />
+          )}
           {block.caption && (
             <figcaption className="text-caption text-center text-muted-foreground">
               {block.caption}

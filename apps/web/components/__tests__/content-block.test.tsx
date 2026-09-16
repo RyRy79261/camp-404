@@ -40,15 +40,29 @@ describe("ContentBlockRenderer", () => {
     const block: ContentBlock = {
       id: "i",
       kind: "image_block",
-      imageUrl: "https://example.test/playa.jpg",
+      imageUrl: "https://camp404store.public.blob.vercel-storage.com/playa.jpg",
       altText: "Playa sunset",
       caption: "Golden hour",
       sizeFit: "fit",
     };
     render(<ContentBlockRenderer block={block} />);
     const img = screen.getByRole("img", { name: "Playa sunset" });
-    expect(img.getAttribute("src")).toBe("https://example.test/playa.jpg");
+    expect(img.getAttribute("src")).toBe("https://camp404store.public.blob.vercel-storage.com/playa.jpg");
     expect(screen.getByText("Golden hour")).toBeTruthy();
+  });
+
+  it("shows no picture for an image stored on another website", () => {
+    // A definition saved before the host rule could still hold one. Rendering
+    // it would make every member's browser call that site.
+    const block: ContentBlock = {
+      id: "i",
+      kind: "image_block",
+      imageUrl: "https://tracker.example/pixel.gif",
+      altText: "Playa sunset",
+      sizeFit: "fit",
+    };
+    render(<ContentBlockRenderer block={block} />);
+    expect(screen.queryByRole("img")).toBeNull();
   });
 
   it("renders a divider", () => {

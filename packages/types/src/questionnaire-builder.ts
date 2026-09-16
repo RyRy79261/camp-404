@@ -74,7 +74,9 @@ export type ExplainerBlock = z.infer<typeof ExplainerBlock>;
 export const ImageBlock = z.object({
   id: z.string().min(1),
   kind: z.literal("image_block"),
-  imageUrl: z.string().min(1),
+  // May be empty while drafting; publish requires an allowed URL
+  // (isAllowedBuilderImageUrl, checked in validateBuilderQuestionnaire).
+  imageUrl: z.string(),
   caption: z.string().optional(),
   // Required for accessibility (enforced again at publish).
   altText: z.string(),
@@ -412,6 +414,109 @@ function rangeErrors(field: Question): string[] {
  * no option value on the reserved `other:` prefix, alt text on images, and that
  * the form is completable (at least one page visible under empty responses).
  */
+// --- Size limits and image hosts --------------------------------------------
+// A definition is stored whole and rendered to every member, and team leads can
+// author one too. So the server bounds its size, and only renders images the
+// app hosts: a link to any other site would make every member's browser call
+// it (a tracking pixel), and it could change after a captain looked at it.
+
+export const BUILDER_LIMITS = {
+  /** The questionnaire's own title. */
+  titleLength: 200,
+  pages: 50,
+  blocksPerPage: 100,
+  optionsPerQuestion: 100,
+  /** Any single piece of authored text: a prompt, an option, an explainer. */
+  textLength: 5_000,
+  /** The whole definition, as stored JSON, in characters. */
+  totalLength: 250_000,
+} as const;
+
+// An HTTPS link into a Vercel Blob public store: a subdomain of
+// public.blob.vercel-storage.com, no user info, no port, no backslash or space.
+// A regex rather than URL: this package is runtime-neutral and has no DOM or
+// Node types.
+const BLOB_URL =
+  /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.public\.blob\.vercel-storage\.com(\/[^\s\\]*)?$/i;
+
+/**
+ * Whether an image block may show this URL to members: an HTTPS link into the
+ * app's Vercel Blob store, or a path on the app itself. Anything else is
+ * refused.
+ */
+export function isAllowedBuilderImageUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (trimmed.startsWith("/")) {
+    // "//host" and "/\\host" both leave the app in a browser.
+    return !trimmed.startsWith("//") && !/[\\\s]/.test(trimmed);
+  }
+  return BLOB_URL.test(trimmed);
+}
+
+const IMAGE_HOST_ERROR = (where: string) =>
+  `An image on ${where} links to another website. Only images stored by Camp 404 can be shown.`;
+
+function longTextIn(value: unknown, limit: number): boolean {
+  if (typeof value === "string") return value.length > limit;
+  if (Array.isArray(value)) return value.some((v) => longTextIn(v, limit));
+  if (value && typeof value === "object") {
+    return Object.values(value).some((v) => longTextIn(v, limit));
+  }
+  return false;
+}
+
+/**
+ * Why a definition may not be SAVED, as sentences for the author, or [] when
+ * it may. These are the server's bounds, checked on every save whatever the
+ * editor sent. Publish-only rules (alt text, a picture on every image block)
+ * stay in validateBuilderQuestionnaire, so a half-built draft still saves.
+ */
+export function builderDefinitionLimitErrors(q: BuilderQuestionnaire): string[] {
+  const L = BUILDER_LIMITS;
+  const errors: string[] = [];
+  if (q.title.length > L.titleLength) {
+    errors.push(`Keep the title to ${L.titleLength} characters or fewer.`);
+  }
+  if (q.pages.length > L.pages) {
+    errors.push(`A questionnaire can have at most ${L.pages} pages.`);
+  }
+  q.pages.forEach((page, pi) => {
+    const pageLabel = page.title.trim() || `Page ${pi + 1}`;
+    if (page.blocks.length > L.blocksPerPage) {
+      errors.push(`${pageLabel} has more than ${L.blocksPerPage} blocks.`);
+    }
+    for (const block of page.blocks) {
+      if (
+        block.kind === "question" &&
+        "options" in block.question &&
+        block.question.options.length > L.optionsPerQuestion
+      ) {
+        errors.push(
+          `"${block.question.prompt.slice(0, 60)}" has more than ${L.optionsPerQuestion} options.`,
+        );
+      }
+      if (
+        block.kind === "image_block" &&
+        block.imageUrl.trim().length > 0 &&
+        !isAllowedBuilderImageUrl(block.imageUrl)
+      ) {
+        errors.push(IMAGE_HOST_ERROR(pageLabel));
+      }
+    }
+  });
+  if (longTextIn(q, L.textLength)) {
+    errors.push(
+      `One piece of text is longer than ${L.textLength} characters. Shorten it or split it up.`,
+    );
+  }
+  if (JSON.stringify(q).length > L.totalLength) {
+    errors.push(
+      "This questionnaire is too large to save. Split it into smaller questionnaires.",
+    );
+  }
+  return errors;
+}
+
 export function validateBuilderQuestionnaire(
   q: BuilderQuestionnaire,
 ): string[] {
@@ -468,6 +573,13 @@ export function validateBuilderQuestionnaire(
       }
       if (block.kind === "image_block" && block.altText.trim().length === 0) {
         errors.push(`An image on ${pageLabel} is missing alt text.`);
+      }
+      if (block.kind === "image_block") {
+        if (block.imageUrl.trim().length === 0) {
+          errors.push(`An image on ${pageLabel} has no picture yet.`);
+        } else if (!isAllowedBuilderImageUrl(block.imageUrl)) {
+          errors.push(IMAGE_HOST_ERROR(pageLabel));
+        }
       }
       if (block.kind !== "question") {
         claimId(block.id, `a ${block.kind} block on ${pageLabel}`);

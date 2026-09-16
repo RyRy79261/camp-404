@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { BuilderQuestionnaire, Team } from "@camp404/types";
+import {
+  BuilderQuestionnaire,
+  builderDefinitionLimitErrors,
+  Team,
+} from "@camp404/types";
 import type { ViewerRank } from "@camp404/types";
 import {
   CAMP_TIME_ZONE,
@@ -211,6 +215,10 @@ export async function updateDefinitionAction(
       error: "The questionnaire is malformed and wasn't saved.",
     };
   }
+  // The server's bounds: size, counts and image hosts. The editor cannot be
+  // trusted to enforce them, because this action takes any POST.
+  const tooBig = builderDefinitionLimitErrors(parsed.data);
+  if (tooBig.length > 0) return { ok: false, error: tooBig[0]! };
   await updateDefinition(key, parsed.data);
   revalidateBuilder(key);
   return { ok: true };
