@@ -5,6 +5,7 @@ import { createHttpDb } from "@camp404/db";
 import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
 import { decryptField } from "@camp404/db/crypto";
+import { canReadMemberField } from "@camp404/core";
 import { canSeeIdDocuments } from "../consent";
 import { notFound, runTool, truncateList } from "../tool-utils";
 
@@ -108,38 +109,55 @@ export function registerPeopleTools(server: McpServer): void {
   );
 }
 
-function shapeUser(
+/**
+ * The `users` columns these tools offer, in output order. Whether a caller gets
+ * each one is `canReadMemberField` (the app's one field-access list), never a
+ * rule written here. The ID documents are not in this list: they also need the
+ * subject's consent, below.
+ */
+const USER_FIELDS = [
+  "id",
+  "displayName",
+  "rank",
+  "isSystem",
+  "sanitised",
+  "lostCatNumber",
+  "membershipTier",
+  "duesPaid",
+  "duesPaidAt",
+  "skills",
+  "previousAfrikaburns",
+  "previousBurningMans",
+  "firstTime",
+  "emergencyContacts",
+  "aiDataConsent",
+  "aiDataConsentAt",
+  "createdAt",
+] as const satisfies readonly (keyof typeof schema.users.$inferSelect)[];
+
+export function shapeUser(
   row: typeof schema.users.$inferSelect,
   memberships: { team: string; isLead: boolean }[],
   scope: { campUserId: string; isCaptain: boolean },
 ) {
-  const isSelf = row.id === scope.campUserId;
-  const base = {
-    id: row.id,
-    displayName: row.displayName,
-    rank: row.rank,
-    isSystem: row.isSystem,
-    sanitised: row.sanitised,
-    lostCatNumber: row.lostCatNumber,
-    memberships,
-    isLead: memberships.some((m) => m.isLead),
+  // MCP knows captain or not, so a team lead reads here as a member. That is
+  // the narrower rung, so it can only withhold, never over-share.
+  const viewer = {
+    rank: scope.isCaptain ? ("captain" as const) : ("camp_member" as const),
+    isSelf: row.id === scope.campUserId,
   };
-  if (!isSelf && !scope.isCaptain) return base;
-
-  const extended = {
-    ...base,
-    membershipTier: row.membershipTier,
-    duesPaid: row.duesPaid,
-    duesPaidAt: row.duesPaidAt,
-    skills: row.skills,
-    previousAfrikaburns: row.previousAfrikaburns,
-    previousBurningMans: row.previousBurningMans,
-    firstTime: row.firstTime,
-    emergencyContacts: row.emergencyContacts,
-    aiDataConsent: row.aiDataConsent,
-    aiDataConsentAt: row.aiDataConsentAt,
-    createdAt: row.createdAt,
-  };
+  const extended: Record<string, unknown> = {};
+  for (const field of USER_FIELDS) {
+    if (canReadMemberField(viewer, `users.${field}`)) {
+      extended[field] = row[field];
+    }
+  }
+  if (canReadMemberField(viewer, "teamMemberships.team")) {
+    extended.memberships = memberships;
+  }
+  if (canReadMemberField(viewer, "teamMemberships.isLead")) {
+    extended.isLead = memberships.some((m) => m.isLead);
+  }
 
   if (
     canSeeIdDocuments(scope, { id: row.id, aiDataConsent: row.aiDataConsent })

@@ -13,6 +13,9 @@
 // Pure and dependency-free — the same import works in a server action, an MCP
 // tool, and a client component.
 
+import type { ViewerRank } from "@camp404/types";
+import { hasClearance } from "./access";
+
 /**
  * Never shown to another member, at any rank, for any reason. There is no
  * emergency in which someone else needs a government ID number or your banking
@@ -68,4 +71,168 @@ export function isFieldLocked(key: string, field?: PrivacyField): boolean {
 /** Whether a field may be surfaced on a safety/emergency read. */
 export function isSafetyVisible(key: string): boolean {
   return SAFETY_VISIBLE.has(key);
+}
+
+// --- Who may read each member field ------------------------------------------
+//
+// One list for the whole app: every piece of member data mapped to the lowest
+// rank that may read it about SOMEONE ELSE. A member always reads their own.
+// The rungs are the global clearance ladder (camp_member < team_lead < captain),
+// because team lead clearance is sitewide (owner-ratified). Every surface that
+// shows member data (the member roster, the captain roster and panel, the MCP
+// tools, the member export) takes its columns from here, so an export can never
+// show more than the screen does.
+//
+// Columns are keyed `table.property` (the Drizzle table export and property
+// names). A test in packages/db checks that every column of every member-data
+// table has an entry, so a new column cannot ship unlisted.
+//
+// Owner's rulings behind the rungs (2026-09-16):
+// - Members see what the member roster shows: name, handle, rank, teams,
+//   country. Never email.
+// - Safety data (emergency contacts, dietary needs, allergies) is readable by
+//   the member, captains and any team lead, and every other-person read is
+//   audited.
+// - Captains read everything, including email (to assign DDT tickets) and
+//   decrypted ID numbers (to match tickets to ID), through audited paths.
+
+export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
+  // users — identity the roster shows
+  "users.id": "camp_member",
+  "users.displayName": "camp_member",
+  "users.profileImageUrl": "camp_member",
+  "users.rank": "camp_member",
+  "users.isSystem": "camp_member",
+  "users.telegramHandle": "camp_member",
+  "users.sanitised": "camp_member",
+  "users.lostCatNumber": "camp_member",
+  // users — safety
+  "users.emergencyContacts": "team_lead",
+  // users — captain-only
+  "users.authUserId": "captain",
+  "users.membershipTier": "captain",
+  "users.duesPaid": "captain",
+  "users.duesPaidAt": "captain",
+  "users.passportEncrypted": "captain",
+  "users.saIdEncrypted": "captain",
+  "users.eftDetailsEncrypted": "captain",
+  "users.skills": "captain",
+  "users.previousAfrikaburns": "captain",
+  "users.previousBurningMans": "captain",
+  "users.firstTime": "captain",
+  "users.inviteCode": "captain",
+  "users.approvalStatus": "captain",
+  "users.approvalDecidedByUserId": "captain",
+  "users.approvalDecidedAt": "captain",
+  "users.termsVersion": "captain",
+  "users.termsConsentedAt": "captain",
+  "users.sanitisedAt": "captain",
+  "users.telegramUserId": "captain",
+  "users.aiDataConsent": "captain",
+  "users.aiDataConsentAt": "captain",
+  "users.createdAt": "captain",
+  "users.updatedAt": "captain",
+
+  // burner_profiles — the answers are captain-only as a whole; the answers a
+  // member may read are listed one by one in PROFILE_ANSWER_READERS
+  "burnerProfiles.userId": "camp_member",
+  "burnerProfiles.version": "captain",
+  "burnerProfiles.responses": "captain",
+  "burnerProfiles.startedAt": "captain",
+  "burnerProfiles.completedAt": "captain",
+  "burnerProfiles.updatedAt": "captain",
+
+  // dietary_requirements — safety data
+  "dietaryRequirements.userId": "camp_member",
+  "dietaryRequirements.tags": "team_lead",
+  "dietaryRequirements.allergies": "team_lead",
+  "dietaryRequirements.intolerances": "team_lead",
+  "dietaryRequirements.isAnaphylactic": "team_lead",
+  "dietaryRequirements.notes": "team_lead",
+  "dietaryRequirements.version": "captain",
+  "dietaryRequirements.completedAt": "captain",
+  "dietaryRequirements.createdAt": "captain",
+  "dietaryRequirements.updatedAt": "captain",
+
+  // driver_profiles — travel logistics, captain-only
+  "driverProfiles.userId": "camp_member",
+  "driverProfiles.cycle": "captain",
+  "driverProfiles.intendsToDrive": "captain",
+  "driverProfiles.intentRegisteredAt": "captain",
+  "driverProfiles.vehicleMake": "captain",
+  "driverProfiles.vehicleModel": "captain",
+  "driverProfiles.vehicleRegistration": "captain",
+  "driverProfiles.seatsTotal": "captain",
+  "driverProfiles.seatsOffered": "captain",
+  "driverProfiles.canOfferLifts": "captain",
+  "driverProfiles.offroadExperienced": "captain",
+  "driverProfiles.canTow": "captain",
+  "driverProfiles.proficiencyNotes": "captain",
+  "driverProfiles.departureCity": "captain",
+  "driverProfiles.arrivalAt": "captain",
+  "driverProfiles.departureAt": "captain",
+  "driverProfiles.notes": "captain",
+  "driverProfiles.version": "captain",
+  "driverProfiles.completedAt": "captain",
+  "driverProfiles.createdAt": "captain",
+  "driverProfiles.updatedAt": "captain",
+
+  // car_members — who rides with whom, captain-only
+  "carMembers.driverUserId": "captain",
+  "carMembers.memberUserId": "captain",
+  "carMembers.cycle": "captain",
+  "carMembers.createdAt": "captain",
+
+  // team_memberships — the roster shows teams and leads
+  "teamMemberships.userId": "camp_member",
+  "teamMemberships.team": "camp_member",
+  "teamMemberships.isLead": "camp_member",
+  "teamMemberships.cycle": "camp_member",
+  "teamMemberships.createdAt": "captain",
+};
+
+/**
+ * Burner profile answers (question id → lowest reader) that are readable below
+ * captain. Every other answer is captain-only, like the `responses` column it
+ * lives in, so a new question never widens what a member can see.
+ */
+export const PROFILE_ANSWER_READERS: Readonly<Record<string, ViewerRank>> = {
+  country: "camp_member",
+  "bio.statement": "camp_member",
+  "ideas.this_year": "camp_member",
+};
+
+/** Who is reading, and whether the data is their own. */
+export interface FieldViewer {
+  rank: ViewerRank;
+  isSelf: boolean;
+}
+
+/**
+ * Whether a viewer may read one member column (`table.property`). A member
+ * reads all of their own. Anyone else needs the column's rung. An unlisted
+ * column or an unknown rank is refused.
+ */
+export function canReadMemberField(
+  viewer: FieldViewer,
+  field: string,
+): boolean {
+  if (viewer.isSelf) return true;
+  const reader = MEMBER_FIELD_READERS[field];
+  return reader !== undefined && hasClearance(viewer.rank, reader);
+}
+
+/**
+ * Whether a viewer may read one burner profile answer by question id. An
+ * unlisted answer needs captain, like the `responses` column.
+ */
+export function canReadProfileAnswer(
+  viewer: FieldViewer,
+  questionId: string,
+): boolean {
+  if (viewer.isSelf) return true;
+  return hasClearance(
+    viewer.rank,
+    PROFILE_ANSWER_READERS[questionId] ?? "captain",
+  );
 }
