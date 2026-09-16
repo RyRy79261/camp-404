@@ -41,7 +41,8 @@ describe("testStore.setUserApproval — the db's compare-and-set, mirrored", () 
     expect(
       testStore.setUserApproval({
         userId: applicant.id,
-        status: "approved",
+        from: "pending",
+        to: "approved",
         decidedByUserId: captainA.id,
       }),
     ).toBe(true);
@@ -58,14 +59,16 @@ describe("testStore.setUserApproval — the db's compare-and-set, mirrored", () 
     const { captainA, captainB, applicant } = seed();
     testStore.setUserApproval({
       userId: applicant.id,
-      status: "approved",
+      from: "pending",
+      to: "approved",
       decidedByUserId: captainA.id,
     });
     const afterA = { ...testStore.findUserByAuthId("auth-applicant")! };
 
     const second = testStore.setUserApproval({
       userId: applicant.id,
-      status: "rejected",
+      from: "pending",
+      to: "rejected",
       decidedByUserId: captainB.id,
     });
 
@@ -77,24 +80,56 @@ describe("testStore.setUserApproval — the db's compare-and-set, mirrored", () 
     expect(afterB.updatedAt).toEqual(afterA.updatedAt);
   });
 
-  it("refuses to re-decide a rejected member", () => {
+  it("reverses a rejection only from the rejection the captain saw", () => {
     const { captainA, applicant } = seed();
     testStore.setUserApproval({
       userId: applicant.id,
-      status: "rejected",
+      from: "pending",
+      to: "rejected",
       decidedByUserId: captainA.id,
     });
 
+    // A stale view (still pending) loses.
     expect(
       testStore.setUserApproval({
         userId: applicant.id,
-        status: "approved",
+        from: "pending",
+        to: "approved",
         decidedByUserId: captainA.id,
       }),
     ).toBe(false);
+    // The rejection the captain actually saw can be reversed.
+    expect(
+      testStore.setUserApproval({
+        userId: applicant.id,
+        from: "rejected",
+        to: "approved",
+        decidedByUserId: captainA.id,
+      }),
+    ).toBe(true);
     expect(testStore.findUserByAuthId("auth-applicant")!.approvalStatus).toBe(
-      "rejected",
+      "approved",
     );
+  });
+
+  it("takes a rejected member off this year's teams, as production does", () => {
+    const { captainA, applicant } = seed();
+    testStore.setUserApproval({
+      userId: applicant.id,
+      from: "pending",
+      to: "approved",
+      decidedByUserId: captainA.id,
+    });
+    testStore.assignTeam({ userId: applicant.id, team: "kitchen" });
+
+    testStore.setUserApproval({
+      userId: applicant.id,
+      from: "approved",
+      to: "rejected",
+      decidedByUserId: captainA.id,
+    });
+
+    expect(testStore.getTeamMemberships(applicant.id)).toEqual([]);
   });
 
   it("returns false for an unknown user id, changing nothing", () => {
@@ -103,7 +138,8 @@ describe("testStore.setUserApproval — the db's compare-and-set, mirrored", () 
     expect(
       testStore.setUserApproval({
         userId: "test-user-does-not-exist",
-        status: "approved",
+        from: "pending",
+        to: "approved",
         decidedByUserId: captainA.id,
       }),
     ).toBe(false);

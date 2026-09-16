@@ -3,6 +3,7 @@ import "server-only";
 import {
   createCampUser,
   findUserByAuthId,
+  findUserById,
   getBurnerProfileByUserId,
   setUserApproval,
   setUserApprovalStatus,
@@ -211,6 +212,14 @@ export async function findCampUserByAuthId(
   return store.findUserByAuthId(authUserId);
 }
 
+/** The camp user with this id (not the auth id), or null. */
+export async function findCampUserById(
+  userId: string,
+): Promise<CampUser | null> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  return store.findUserById(userId);
+}
+
 /**
  * Whether this user is allowed past the signup gate (god account or has
  * redeemed a valid invite code). Note this is the *invite* gate only — a
@@ -328,14 +337,15 @@ export async function getLeadTeams(userId: string): Promise<string[]> {
 }
 
 /**
- * Apply a captain's vetting decision. Captain-gated by the caller; this just
- * persists the decision and stamps the deciding captain for the audit trail.
- * Returns false when the compare-and-set found no `pending` row — another
- * captain already decided, so this call changed nothing.
+ * Apply a captain's vetting decision (approve, reject, or re-open). Captain-gated
+ * by the caller; this persists it and stamps the deciding captain. Returns false
+ * when the member is no longer in the `from` status the captain saw — another
+ * captain already moved them, so this call changed nothing.
  */
 export async function decideUserApproval(input: {
   userId: string;
-  status: "approved" | "rejected";
+  from: ApprovalStatus;
+  to: ApprovalStatus;
   decidedByUserId: string;
   /** Shown to the member on /pending-approval; blank means none. */
   reason?: string | null;
@@ -362,6 +372,7 @@ export async function setCampUserRank(
 
 interface UserBackend {
   findUserByAuthId(authUserId: string): Promise<CampUser | null>;
+  findUserById(userId: string): Promise<CampUser | null>;
   createUser(input: {
     authUserId: string;
     displayName: string | null;
@@ -374,7 +385,8 @@ interface UserBackend {
   setUserApprovalStatus(userId: string, status: ApprovalStatus): Promise<void>;
   setUserApproval(input: {
     userId: string;
-    status: "approved" | "rejected";
+    from: ApprovalStatus;
+    to: ApprovalStatus;
     decidedByUserId: string;
     reason?: string | null;
   }): Promise<boolean>;
@@ -510,6 +522,10 @@ const realBackend: UserBackend = {
     const row = await findUserByAuthId(authUserId);
     return row ? toCampUser(row) : null;
   },
+  async findUserById(userId) {
+    const row = await findUserById(userId);
+    return row ? toCampUser(row) : null;
+  },
   async createUser(input) {
     const row = await createCampUser(input);
     return toCampUser(row);
@@ -594,6 +610,10 @@ const realBackend: UserBackend = {
 const testBackend: UserBackend = {
   async findUserByAuthId(authUserId) {
     const row = testStore.findUserByAuthId(authUserId);
+    return row ? toCampUser(row) : null;
+  },
+  async findUserById(userId) {
+    const row = testStore.findUserById(userId);
     return row ? toCampUser(row) : null;
   },
   async createUser(input) {

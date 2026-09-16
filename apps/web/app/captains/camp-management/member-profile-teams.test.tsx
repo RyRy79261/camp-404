@@ -63,6 +63,7 @@ function loaded(overrides: Record<string, unknown> = {}) {
     promotionRequestedByName: null,
     teams: [],
     assignableTeams: [{ key: "kitchen", label: "Kitchen" }],
+    reviewOptions: [],
     ...overrides,
   };
 }

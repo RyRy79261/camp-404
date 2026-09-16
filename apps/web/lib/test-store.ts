@@ -3,6 +3,7 @@ import "server-only";
 import {
   announcementNotification,
   approvalNotification,
+  isReviewTransition,
   captainPromotionNotification,
   normalizeInviteCode,
   notificationLink,
@@ -312,6 +313,9 @@ export const testStore = {
     usersByAuthId.set(input.authUserId, user);
     return user;
   },
+  findUserById(userId: string): TestUser | null {
+    return findUserById(userId);
+  },
   setUserInviteCode(userId: string, code: string): void {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
@@ -348,34 +352,52 @@ export const testStore = {
   },
   setUserApproval(input: {
     userId: string;
-    status: "approved" | "rejected";
+    from: TestApprovalStatus;
+    to: TestApprovalStatus;
     decidedByUserId: string;
     reason?: string | null;
   }): boolean {
-    // Mirrors the db's compare-and-set: only a `pending` row flips, so a second
-    // captain deciding the same applicant is a no-op (false) rather than a
-    // silent overwrite — same shape as decideCaptainPromotion below.
+    // Mirrors the db: only a real decision, and only from the status the
+    // captain saw, so a second captain on a stale roster is a no-op (false)
+    // rather than a silent overwrite.
+    if (!isReviewTransition(input.from, input.to)) {
+      throw new Error(
+        `setUserApproval: ${input.from} -> ${input.to} is not a decision`,
+      );
+    }
     for (const user of usersByAuthId.values()) {
       if (user.id === input.userId) {
-        if (user.approvalStatus !== "pending") return false;
-        user.approvalStatus = input.status;
+        if (user.approvalStatus !== input.from) return false;
+        user.approvalStatus = input.to;
         user.approvalDecidedByUserId = input.decidedByUserId;
         user.approvalDecidedAt = new Date();
-        user.approvalDecisionReason = input.reason?.trim() || null;
+        user.approvalDecisionReason =
+          input.to === "pending" ? null : input.reason?.trim() || null;
         user.updatedAt = new Date();
-        // As in production: an approval tells the member, a rejection does not.
-        if (input.status === "approved") {
+        // As in production: an approval tells the member, nothing else does.
+        if (input.to === "approved") {
           pushDelivery(approvalNotification(), {
             userId: user.id,
             broadcastId: null,
             presentation: "popup",
           });
         }
+        // As in production: a rejected member leaves this year's teams.
+        if (input.to === "rejected") {
+          const cycle = currentCycleNumber();
+          for (let n = teamMemberships.length - 1; n >= 0; n--) {
+            const m = teamMemberships[n]!;
+            if (m.userId === user.id && m.cycle === cycle) {
+              teamMemberships.splice(n, 1);
+            }
+          }
+        }
         return true;
       }
     }
     return false;
   },
+
   setProfileImage(userId: string, url: string | null): void {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {

@@ -7,7 +7,7 @@ describe("RejectConfirmDialog", () => {
     const onConfirm = vi.fn();
     render(
       <RejectConfirmDialog
-        name="Nova"
+        mode={{ kind: "application", name: "Nova" }}
         open
         onOpenChange={() => {}}
         onConfirm={onConfirm}
@@ -26,7 +26,7 @@ describe("RejectConfirmDialog", () => {
     const onOpenChange = vi.fn();
     render(
       <RejectConfirmDialog
-        name="Nova"
+        mode={{ kind: "application", name: "Nova" }}
         open
         onOpenChange={onOpenChange}
         onConfirm={onConfirm}
@@ -44,7 +44,7 @@ describe("RejectConfirmDialog", () => {
     const onReasonChange = vi.fn();
     render(
       <RejectConfirmDialog
-        name="Nova"
+        mode={{ kind: "application", name: "Nova" }}
         open
         onOpenChange={() => {}}
         onConfirm={() => {}}
@@ -64,7 +64,7 @@ describe("RejectConfirmDialog", () => {
     const onOpenChange = vi.fn();
     render(
       <RejectConfirmDialog
-        name="Nova"
+        mode={{ kind: "application", name: "Nova" }}
         open
         onOpenChange={onOpenChange}
         onConfirm={onConfirm}
@@ -88,5 +88,57 @@ describe("RejectConfirmDialog", () => {
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
+  });
+
+  it("says the rejection can be re-opened, not that it is final", () => {
+    render(
+      <RejectConfirmDialog
+        mode={{ kind: "application", name: "Nova" }}
+        open
+        onOpenChange={() => {}}
+        onConfirm={() => {}}
+        reason=""
+        onReasonChange={() => {}}
+        pending={false}
+      />,
+    );
+    expect(screen.getByText(/You can re-open it later/)).toBeTruthy();
+    expect(screen.queryByText(/can't be undone/)).toBeNull();
+  });
+
+  it("names what offboarding an approved member does", () => {
+    const onConfirm = vi.fn();
+    render(
+      <RejectConfirmDialog
+        mode={{ kind: "offboard", name: "Nova" }}
+        open
+        onOpenChange={() => {}}
+        onConfirm={onConfirm}
+        reason=""
+        onReasonChange={() => {}}
+        pending={false}
+      />,
+    );
+    expect(screen.getByText("Remove Nova from camp?")).toBeTruthy();
+    expect(screen.getByText(/come off this year's teams/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove from camp" }));
+    expect(onConfirm).toHaveBeenCalled();
+  });
+
+  it("counts the applications in a bulk rejection", () => {
+    render(
+      <RejectConfirmDialog
+        mode={{ kind: "bulk", count: 3 }}
+        open
+        onOpenChange={() => {}}
+        onConfirm={() => {}}
+        reason=""
+        onReasonChange={() => {}}
+        pending={false}
+      />,
+    );
+    expect(screen.getByText("Reject 3 applications?")).toBeTruthy();
+    expect(screen.getByLabelText("Reason for all 3 (optional)")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reject 3" })).toBeTruthy();
   });
 });

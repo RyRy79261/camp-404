@@ -27,10 +27,11 @@ import {
   getMemberDetailAction,
   type MemberDetailResult,
 } from "./actions";
+import { availableReviewActions, type ReviewOption } from "@camp404/core";
 import type { RosterRow } from "@/lib/camp-roster";
 import type { PresentedMember } from "@/lib/member-detail";
 
-const LOST_CAS = "Another captain already decided on this member.";
+const LOST_CAS = "Another captain already changed this member's decision.";
 
 function row(over: Partial<RosterRow> = {}): RosterRow {
   return {
@@ -59,6 +60,11 @@ function row(over: Partial<RosterRow> = {}): RosterRow {
 
 function detail(
   approvalStatus: PresentedMember["approvalStatus"],
+  reviewOptions: ReviewOption[] = availableReviewActions({
+    status: approvalStatus,
+    isSelf: false,
+    isCaptain: false,
+  }),
 ): MemberDetailResult {
   return {
     ok: true,
@@ -83,13 +89,22 @@ function detail(
     // absent array is a crash, not an empty list.
     teams: [],
     assignableTeams: [],
+    reviewOptions,
   };
 }
 
 function renderProfile(over: Partial<RosterRow> = {}) {
   const onClose = vi.fn();
-  render(<MemberProfile row={row(over)} index={1} onClose={onClose} />);
-  return { onClose };
+  const onDecided = vi.fn();
+  render(
+    <MemberProfile
+      row={row(over)}
+      index={1}
+      onClose={onClose}
+      onDecided={onDecided}
+    />,
+  );
+  return { onClose, onDecided };
 }
 
 afterEach(() => {
@@ -153,7 +168,8 @@ describe("MemberProfile — a decision that lost the race", () => {
     // resolves, so the settled text is what says the reload is done.
     await waitFor(() => expect(screen.getByText("Rejected")).toBeTruthy());
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Approve/ })).toBeNull();
+    // The standing rejection offers its own next steps, not a second reject.
+    expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
   });
 
   it("sends the reason typed in the reject confirmation", async () => {
@@ -169,11 +185,12 @@ describe("MemberProfile — a decision that lost the race", () => {
     fireEvent.click(within(confirm).getByRole("button", { name: "Reject" }));
 
     await waitFor(() =>
-      expect(decideApprovalAction).toHaveBeenCalledWith(
-        "m1",
-        "rejected",
-        "We are full this year.",
-      ),
+      expect(decideApprovalAction).toHaveBeenCalledWith({
+        userId: "m1",
+        from: "pending",
+        to: "rejected",
+        reason: "We are full this year.",
+      }),
     );
   });
 
@@ -188,5 +205,89 @@ describe("MemberProfile — a decision that lost the race", () => {
     // and leaves the fetch alone.
     await waitFor(() => expect(screen.getByText("Approved")).toBeTruthy());
     expect(getMemberDetailAction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("MemberProfile — the decision panel", () => {
+  it("offers to remove an approved member or move them back to pending", async () => {
+    vi.mocked(getMemberDetailAction).mockResolvedValue(detail("approved"));
+    vi.mocked(decideApprovalAction).mockResolvedValue({ ok: true });
+
+    const { onDecided } = renderProfile({ approvalStatus: "approved" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Remove from camp/ }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText("Remove Nova Reyes from camp?"),
+    ).toBeTruthy();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Remove from camp" }),
+    );
+
+    await waitFor(() =>
+      expect(decideApprovalAction).toHaveBeenCalledWith({
+        userId: "m1",
+        from: "approved",
+        to: "rejected",
+        reason: "",
+      }),
+    );
+    // The roster is told, so the member stays on screen under its filter.
+    await waitFor(() => expect(onDecided).toHaveBeenCalledWith("m1"));
+    // And the panel now offers what follows a rejection.
+    expect(await screen.findByRole("button", { name: /Approve/ })).toBeTruthy();
+  });
+
+  it("asks before moving a decision back to pending", async () => {
+    vi.mocked(getMemberDetailAction).mockResolvedValue(detail("rejected"));
+    vi.mocked(decideApprovalAction).mockResolvedValue({ ok: true });
+
+    renderProfile({ approvalStatus: "rejected" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Move back to pending/ }),
+    );
+    await screen.findByText("Move Nova Reyes back to pending?");
+    expect(decideApprovalAction).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move to pending" }));
+    await waitFor(() =>
+      expect(decideApprovalAction).toHaveBeenCalledWith({
+        userId: "m1",
+        from: "rejected",
+        to: "pending",
+        reason: undefined,
+      }),
+    );
+  });
+
+  it("shows a refused decision disabled, with the server's sentence", async () => {
+    vi.mocked(getMemberDetailAction).mockResolvedValue(
+      detail(
+        "approved",
+        availableReviewActions({
+          status: "approved",
+          isSelf: false,
+          isCaptain: true,
+        }),
+      ),
+    );
+
+    renderProfile({ approvalStatus: "approved", rank: "captain" });
+    const remove = await screen.findByRole("button", {
+      name: /Remove from camp/,
+    });
+    expect((remove as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: /Move back to pending/,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    // Both are refused for the same reason, so it is said once.
+    expect(
+      screen.getAllByText("A captain can't be taken out of camp here."),
+    ).toHaveLength(1);
   });
 });

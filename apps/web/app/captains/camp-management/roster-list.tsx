@@ -1,5 +1,7 @@
+import { Checkbox } from "@camp404/ui/components/checkbox";
 import { cn } from "@camp404/ui/lib/utils";
 import type { RosterDisplayRow } from "@/lib/camp-roster";
+import type { RosterSelection } from "./roster-table";
 import {
   RosterAvatar,
   countryFlag,
@@ -17,11 +19,13 @@ export function RosterList({
   rows,
   selectedId,
   onSelect,
+  selection,
   className,
 }: {
   rows: RosterDisplayRow[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  selection?: RosterSelection;
   className?: string;
 }) {
   return (
@@ -35,14 +39,27 @@ export function RosterList({
         const selected = r.id === selectedId;
         const role = roleFor(r.rank, r.isLead);
         return (
-          <li key={r.id}>
+          <li key={r.id} className="flex items-stretch">
+            {/* A sibling of the row button, never inside it: a checkbox in a
+                button is two controls in one. */}
+            {selection && (
+              <span className="flex w-10 shrink-0 items-center justify-center">
+                {selection.canSelect(r) && (
+                  <Checkbox
+                    aria-label={`Select ${r.displayName}`}
+                    checked={selection.checked.has(r.id)}
+                    onCheckedChange={() => selection.onToggle(r.id)}
+                  />
+                )}
+              </span>
+            )}
             <button
               type="button"
               data-roster-trigger={r.id}
               aria-current={selected ? "true" : undefined}
               onClick={() => onSelect(r.id)}
               aria-label={`Open ${r.displayName}'s profile`}
-              className="flex w-full items-stretch text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+              className="flex w-full min-w-0 flex-1 items-stretch text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
             >
               <span
                 aria-hidden

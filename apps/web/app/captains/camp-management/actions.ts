@@ -13,14 +13,18 @@ import {
 import { decryptField } from "@camp404/db/crypto";
 import { ID_UNREADABLE_LABEL, mergeIdNumber } from "@camp404/db/id-documents";
 import {
+  availableReviewActions,
   canDecidePromotion,
   canSendPromotion,
   deriveViewerRank,
   promotionStepState,
+  reviewActionFor,
+  reviewRefusal,
+  type ReviewOption,
 } from "@camp404/core";
-import { Team } from "@camp404/types";
+import { Team, type ApprovalStatus } from "@camp404/types";
 import { captainActionGate } from "@/lib/captain-gate";
-import { decideUserApproval } from "@/lib/users";
+import { decideUserApproval, findCampUserById } from "@/lib/users";
 import {
   decideCaptainPromotion,
   getOpenPromotionForTarget,
@@ -53,6 +57,11 @@ export type MemberDetailResult =
       promotionRequestIsMine: boolean;
       /** Who sent the open request (null when none is open, or unnamed). */
       promotionRequestedByName: string | null;
+      /**
+       * Every vetting decision that exists from this member's status, each
+       * with the sentence to show when it is refused (null when allowed).
+       */
+      reviewOptions: ReviewOption[];
       /** This member's team memberships FOR THE CAMP'S CURRENT YEAR. */
       teams: TeamMembership[];
       /** The teams a captain may assign — active only, order-sorted. Archived
@@ -264,6 +273,11 @@ export async function getMemberDetailAction(
         safety.allowed ? safety : undefined,
       ),
       canAssignCaptain,
+      reviewOptions: availableReviewActions({
+        status: detail.approvalStatus,
+        isSelf: userId === gate.captainId,
+        isCaptain: detail.rank === "captain",
+      }),
       promotionStep,
       promotionRequestId: openRequest?.id ?? null,
       promotionRequestIsMine: openRequest?.requestedByUserId === gate.captainId,
@@ -309,60 +323,171 @@ export async function getPublicMemberProfileAction(
   });
 }
 
-/**
- * Apply a captain's vetting decision to a pending applicant. Approving
- * unblocks the app on their next load; rejecting holds them at the blocking
- * screen with a terminal message. The write is a compare-and-set on `pending`,
- * so a captain acting on a stale roster cannot overwrite another captain's
- * standing decision — they are told about it instead.
- */
 /** The longest reason a captain may give the member, in characters. */
 const MAX_DECISION_REASON = 500;
+/** The most members one bulk decision may cover. */
+const MAX_BULK_DECISIONS = 100;
 
-export async function decideApprovalAction(
-  userId: string,
-  decision: "approved" | "rejected",
-  reason?: string | null,
-): Promise<ApprovalDecisionResult> {
+const Status = z.enum(["pending", "approved", "rejected"]);
+
+/** A reason, trimmed, or the sentence saying why it can't be used. */
+function checkReason(
+  reason: unknown,
+): { ok: true; reason: string | null } | { ok: false; error: string } {
+  if (reason != null && typeof reason !== "string") {
+    return { ok: false, error: "The reason must be text." };
+  }
+  const trimmed = reason?.trim() || null;
+  if (trimmed && trimmed.length > MAX_DECISION_REASON) {
+    return {
+      ok: false,
+      error: `Keep the reason under ${MAX_DECISION_REASON} characters.`,
+    };
+  }
+  return { ok: true, reason: trimmed };
+}
+
+const LOST_RACE = "Another captain already changed this member's decision.";
+
+/**
+ * Apply a captain's vetting decision: approve, reject, or re-open, from the
+ * status the captain was looking at (owner's call, 2026-09-16: decisions can
+ * be reversed). Approving unblocks the app on the member's next load.
+ * Rejecting holds them at the blocking screen and takes them off this year's
+ * teams (offboarding). Re-opening puts them back in the queue.
+ *
+ * The write is a compare-and-set on `from`, so a captain acting on a stale
+ * roster cannot overwrite another captain's decision; they are told instead.
+ * The same refusals the panel shows beside a disabled control are enforced
+ * here (reviewRefusal): not on yourself, and not taking a captain's access.
+ */
+export async function decideApprovalAction(input: {
+  userId: string;
+  from: ApprovalStatus;
+  to: ApprovalStatus;
+  reason?: string | null;
+}): Promise<ApprovalDecisionResult> {
   return runAction("decideApprovalAction", async () => {
     const gate = await requireCaptain();
     if (!gate.ok) return gate;
 
-    if (!UserId.safeParse(userId).success) {
+    if (!UserId.safeParse(input?.userId).success) {
       return { ok: false, error: "Invalid member." };
     }
-    if (decision !== "approved" && decision !== "rejected") {
+    const from = Status.safeParse(input.from);
+    const to = Status.safeParse(input.to);
+    const action =
+      from.success && to.success ? reviewActionFor(from.data, to.data) : null;
+    if (!from.success || !to.success || !action) {
       return { ok: false, error: "Unknown decision." };
     }
-    if (userId === gate.captainId) {
-      return { ok: false, error: "You can't decide on your own account." };
-    }
-    if (reason != null && typeof reason !== "string") {
-      return { ok: false, error: "The reason must be text." };
-    }
-    if (reason && reason.trim().length > MAX_DECISION_REASON) {
-      return {
-        ok: false,
-        error: `Keep the reason under ${MAX_DECISION_REASON} characters.`,
-      };
-    }
+    const reason = checkReason(input.reason);
+    if (!reason.ok) return reason;
+
+    const target = await findCampUserById(input.userId);
+    if (!target) return { ok: false, error: "Member not found." };
+    const refusal = reviewRefusal(
+      {
+        status: from.data,
+        isSelf: input.userId === gate.captainId,
+        isCaptain: target.rank === "captain",
+      },
+      action,
+    );
+    if (refusal) return { ok: false, error: refusal };
 
     const decided = await decideUserApproval({
-      userId,
-      status: decision,
+      userId: input.userId,
+      from: from.data,
+      to: to.data,
       decidedByUserId: gate.captainId,
-      reason: reason?.trim() || null,
+      reason: reason.reason,
     });
     // Revalidate either way: on the lost-CAS path the roster this captain is
     // looking at is stale, which is exactly why they got here.
     revalidatePath("/captains/camp-management");
-    if (!decided) {
+    if (!decided) return { ok: false, error: LOST_RACE };
+    return { ok: true };
+  });
+}
+
+export type BulkApprovalResult =
+  | {
+      ok: true;
+      /** Members this call decided. */
+      decided: string[];
+      /** Members another captain had already moved out of pending. */
+      lost: string[];
+      /** Members this captain may not decide, with the reason. */
+      refused: { userId: string; error: string }[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * Approve or reject several pending applicants at once, from the Pending
+ * filter. Each member is its own compare-and-set on `pending`, exactly as if
+ * decided one by one, so a partial result is normal: the answer says who was
+ * decided, who another captain got to first, and who was refused.
+ */
+export async function decideApprovalsAction(input: {
+  userIds: string[];
+  to: "approved" | "rejected";
+  reason?: string | null;
+}): Promise<BulkApprovalResult> {
+  return runAction("decideApprovalsAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+
+    const ids = z.array(UserId).safeParse(input?.userIds);
+    if (!ids.success || ids.data.length === 0) {
+      return { ok: false, error: "Pick at least one member." };
+    }
+    const userIds = [...new Set(ids.data)];
+    if (userIds.length > MAX_BULK_DECISIONS) {
       return {
         ok: false,
-        error: "Another captain already decided on this member.",
+        error: `Decide at most ${MAX_BULK_DECISIONS} members at a time.`,
       };
     }
-    return { ok: true };
+    if (input.to !== "approved" && input.to !== "rejected") {
+      return { ok: false, error: "Unknown decision." };
+    }
+    const reason = checkReason(input.reason);
+    if (!reason.ok) return reason;
+    const action = input.to === "approved" ? "approve" : "reject";
+
+    const decided: string[] = [];
+    const lost: string[] = [];
+    const refused: { userId: string; error: string }[] = [];
+    for (const userId of userIds) {
+      const target = await findCampUserById(userId);
+      if (!target) {
+        refused.push({ userId, error: "Member not found." });
+        continue;
+      }
+      const refusal = reviewRefusal(
+        {
+          status: "pending",
+          isSelf: userId === gate.captainId,
+          isCaptain: target.rank === "captain",
+        },
+        action,
+      );
+      if (refusal) {
+        refused.push({ userId, error: refusal });
+        continue;
+      }
+      const won = await decideUserApproval({
+        userId,
+        from: "pending",
+        to: input.to,
+        decidedByUserId: gate.captainId,
+        reason: reason.reason,
+      });
+      (won ? decided : lost).push(userId);
+    }
+    revalidatePath("/captains/camp-management");
+    return { ok: true, decided, lost, refused };
   });
 }
 

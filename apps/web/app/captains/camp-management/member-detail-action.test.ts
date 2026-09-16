@@ -87,6 +87,7 @@ function detail(overrides: Record<string, unknown> = {}) {
   return {
     id: "member-1",
     rank: "member",
+    approvalStatus: "approved",
     responses: {},
     passportEncrypted: null,
     saIdEncrypted: null,

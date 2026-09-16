@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { Checkbox } from "@camp404/ui/components/checkbox";
 import { cn } from "@camp404/ui/lib/utils";
 import type { RosterDisplayRow } from "@/lib/camp-roster";
 import {
@@ -15,15 +16,28 @@ import {
 // clickable for pointer users. Serves both the captain view (coloured status
 // bar) and the member view (no `status` → a neutral bar, no approval signal).
 
+/**
+ * Ticking rows for a bulk decision (captain view, Pending filter). No board
+ * draws it; it reuses the shared Checkbox.
+ */
+export interface RosterSelection {
+  checked: ReadonlySet<string>;
+  /** Only a member still awaiting a decision can be ticked. */
+  canSelect: (row: RosterDisplayRow) => boolean;
+  onToggle: (id: string) => void;
+}
+
 export function RosterTable({
   rows,
   selectedId,
   onSelect,
+  selection,
   className,
 }: {
   rows: RosterDisplayRow[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  selection?: RosterSelection;
   className?: string;
 }) {
   return (
@@ -37,6 +51,11 @@ export function RosterTable({
         <thead>
           <tr className="border-b bg-black/20 font-mono text-micro font-bold uppercase tracking-wide text-muted-foreground">
             <th className="w-1 p-0" aria-hidden />
+            {selection && (
+              <th scope="col" className="w-10 py-3 pl-4">
+                <span className="sr-only">Select</span>
+              </th>
+            )}
             <th scope="col" className="px-4 py-3 font-bold">
               Member
             </th>
@@ -80,6 +99,20 @@ export function RosterTable({
                     <span className="sr-only">{r.statusLabel}</span>
                   )}
                 </td>
+                {selection && (
+                  <td
+                    className="w-10 py-3 pl-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {selection.canSelect(r) && (
+                      <Checkbox
+                        aria-label={`Select ${r.displayName}`}
+                        checked={selection.checked.has(r.id)}
+                        onCheckedChange={() => selection.onToggle(r.id)}
+                      />
+                    )}
+                  </td>
+                )}
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <RosterAvatar name={r.displayName} id={r.id} px={30} />
