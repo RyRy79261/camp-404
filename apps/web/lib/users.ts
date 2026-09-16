@@ -22,6 +22,7 @@ import {
   ensureRequiredAction,
   satisfyRequiredAction as dbSatisfyRequiredAction,
   getPendingRequiredActions as dbGetPendingRequiredActions,
+  reconcileOpenActivations,
   type PendingRequiredAction,
 } from "@camp404/db/activations";
 import { claimInviteCode, isGodEmail } from "./access-control";
@@ -215,6 +216,17 @@ export async function satisfyBurnerProfileAction(
     "burner_profile",
     QUESTIONNAIRE_VERSION,
   );
+}
+
+/**
+ * Give this member the gates of every open send they belong to but joined
+ * after it opened: a new member, a new team member, or a newly picked one.
+ * Call it before reading the gate spine. No-op under E2E test mode, where
+ * there are no required actions at all.
+ */
+export async function syncOpenGates(userId: string): Promise<void> {
+  if (isE2ETestMode()) return;
+  await reconcileOpenActivations(userId);
 }
 
 /** The user's pending blocking required actions (empty under E2E test mode). */

@@ -14,6 +14,7 @@ import {
   getPendingRequiredActions,
   getRequiredAction,
   openActivation,
+  reconcileOpenActivations,
   satisfyRequiredAction,
 } from "../activations";
 import {
@@ -327,6 +328,125 @@ describe("openActivation — the carry-over fan-out filter", () => {
       carryOver: true,
     });
     expect(await openActivation(act.id)).toEqual({ ok: true, created: 1 });
+  });
+});
+
+describe("reconcileOpenActivations — members who arrive after a send", () => {
+  const h = useTestDb();
+
+  it("gates a member who joined after an everyone send opened, once", async () => {
+    const db = h.db();
+    await makeUser(db);
+    const act = await makeActivation(db, { scope: "everyone" });
+    expect(await openActivation(act.id)).toEqual({ ok: true, created: 1 });
+    const [before] = await db
+      .select()
+      .from(schema.questionnaireActivations)
+      .where(eq(schema.questionnaireActivations.id, act.id));
+
+    const late = await makeUser(db);
+    // Before this, the late joiner had no gate: "not invited" in the runner.
+    expect(await requiredActionsFor(db, late.id)).toEqual([]);
+
+    expect(await reconcileOpenActivations(late.id)).toBe(1);
+    const [gate] = await requiredActionsFor(db, late.id);
+    expect(gate).toMatchObject({
+      activationId: act.id,
+      status: "pending",
+      actionKey: act.questionnaireKey,
+    });
+
+    // A second call writes nothing, and the send itself is untouched.
+    expect(await reconcileOpenActivations(late.id)).toBe(0);
+    const [after] = await db
+      .select()
+      .from(schema.questionnaireActivations)
+      .where(eq(schema.questionnaireActivations.id, act.id));
+    expect(after!.openedAt).toEqual(before!.openedAt);
+  });
+
+  it("never re-opens a gate the member already answered for this send", async () => {
+    const db = h.db();
+    const u = await makeUser(db);
+    const act = await makeActivation(db, { scope: "everyone" });
+    await openActivation(act.id);
+    await satisfyRequiredAction(u.id, act.questionnaireKey, act.version);
+
+    expect(await reconcileOpenActivations(u.id)).toBe(0);
+    expect((await requiredActionsFor(db, u.id))[0]!.status).toBe("completed");
+  });
+
+  it("gates a member put on the team after a team send opened, and nobody else", async () => {
+    const db = h.db();
+    const cook = await makeUser(db);
+    const other = await makeUser(db);
+    const act = await makeActivation(db, { scope: "team", team: "kitchen" });
+    expect(await openActivation(act.id)).toEqual({ ok: true, created: 0 });
+
+    await makeMembership(db, { userId: cook.id, team: "kitchen" });
+    expect(await reconcileOpenActivations(cook.id)).toBe(1);
+    expect(await reconcileOpenActivations(other.id)).toBe(0);
+    expect(await requiredActionsFor(db, other.id)).toEqual([]);
+  });
+
+  it("gates a member picked for an individual send after it opened", async () => {
+    const db = h.db();
+    const picked = await makeUser(db);
+    const act = await makeActivation(db, { scope: "individual" });
+    await openActivation(act.id);
+    expect(await reconcileOpenActivations(picked.id)).toBe(0);
+
+    await addTarget(db, act.id, picked.id);
+    expect(await reconcileOpenActivations(picked.id)).toBe(1);
+  });
+
+  it("under carry-over, skips a member who already answered a satisfying version", async () => {
+    const db = h.db();
+    const earlier = await makeActivation(db, {
+      questionnaireKey: "skills",
+      version: "skills-v1",
+    });
+    const late = await makeUser(db);
+    await addTarget(db, earlier.id, late.id);
+    await db
+      .update(schema.questionnaireActivations)
+      .set({ scope: "individual" })
+      .where(eq(schema.questionnaireActivations.id, earlier.id));
+    await openActivation(earlier.id);
+    await satisfyRequiredAction(late.id, "skills", "skills-v1");
+    await closeActivation(earlier.id);
+
+    const resend = await makeActivation(db, {
+      questionnaireKey: "skills",
+      version: "skills-v1",
+      scope: "team",
+      team: "kitchen",
+      carryOver: true,
+    });
+    await openActivation(resend.id);
+    await makeMembership(db, { userId: late.id, team: "kitchen" });
+
+    expect(await reconcileOpenActivations(late.id)).toBe(0);
+    const [gate] = await requiredActionsFor(db, late.id);
+    expect(gate).toMatchObject({ status: "completed", activationId: earlier.id });
+  });
+
+  it("does nothing for a closed send, or for an erased account", async () => {
+    const db = h.db();
+    const act = await makeActivation(db, { scope: "everyone" });
+    await openActivation(act.id);
+    await closeActivation(act.id);
+    const late = await makeUser(db);
+    expect(await reconcileOpenActivations(late.id)).toBe(0);
+
+    const open = await makeActivation(db, {
+      questionnaireKey: "other",
+      scope: "everyone",
+    });
+    await openActivation(open.id);
+    const gone = await makeUser(db, { sanitised: true });
+    expect(await reconcileOpenActivations(gone.id)).toBe(0);
+    expect(await requiredActionsFor(db, gone.id)).toEqual([]);
   });
 });
 

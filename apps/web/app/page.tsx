@@ -10,6 +10,7 @@ import {
   hasCampAccess,
   isApproved,
   isTeamLead,
+  syncOpenGates,
 } from "@/lib/users";
 import { nextGate } from "@/lib/required-actions";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
@@ -52,6 +53,9 @@ export default async function HomePage() {
   // Generic required_actions gate — the canonical "what blocks this user"
   // mechanism. Routes to the first pending blocking action's bespoke page
   // (today: the burner profile; future questionnaires slot in via the registry).
+  // A send only gates the people in its audience when it opens, so first hand
+  // this member the gates of any open send they have joined since.
+  await syncOpenGates(campUser.id);
   const gate = nextGate(await getPendingRequiredActions(campUser.id));
   if (gate) redirect(gate);
 

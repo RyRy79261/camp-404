@@ -717,6 +717,12 @@ routine. **`reconcileOpenActivations(userId)`, called from `ensureCampUser`, shi
 or the feature ships a hole.** It is a `SELECT` of open activations, `computeAudience` per
 activation, and the same `ensureRequiredAction` upsert.
 
+**As built:** `reconcileOpenActivations(userId)` shipped after the year namespace, in the A3
+close-out. It does not run in `ensureCampUser`, which runs on every request. `syncOpenGates`
+calls it on the home page and the questionnaire runner, just before the gate is read. It also
+covers a member who joins a team or is picked for a send after that send opened. Most calls
+make four reads and no writes, because a gate that already points at the send is left alone.
+
 **A member who never answered last year's questionnaire.** Gated under **both** policies.
 `fresh` re-gates everyone in scope. `carry` does not skip them, because they hold no
 `completed` row. This is the case a naive design gets wrong by only re-gating on `fresh`.
