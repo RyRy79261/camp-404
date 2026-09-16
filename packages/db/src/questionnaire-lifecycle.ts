@@ -401,6 +401,14 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
   try {
     const opened = await openActivation(activationId);
     if (!opened.ok) return { ok: false, error: opened.error };
+    // Tell the members it just gated. The send has committed, so a failure
+    // here is logged, not reported as a failed send.
+    await notifyQuestionnaireReleased({
+      activationId,
+      senderId: input.activatedByUserId,
+    }).catch((err: unknown) => {
+      console.error("sendActivation: release notice failed", err);
+    });
     return { ok: true, activationId, created: opened.created };
   } catch (err) {
     // Only the one-open conflict gets the friendly message; any other failure
@@ -460,6 +468,145 @@ export function reminderBody(title: string, dueAt: Date | null): string {
   return dueAt
     ? `Reminder: ${title} is due ${DUE_ON.format(dueAt)}. Tap to complete.`
     : `Reminder: ${title} is still waiting for your answer. Tap to complete.`;
+}
+
+/**
+ * Write one questionnaire notice: a published, already-dispatched broadcast
+ * addressed to exactly `targets`, and one delivery each. Pushes go out through
+ * the existing drain; the inbox row links to the form (refType/refId).
+ *
+ * Shared by the reminder and the release notice. They differ only in `kind`
+ * and `presentation`, and the kind matters: sendReminder's 24-hour dedup counts
+ * only `kind = 'reminder'` rows, so a release notice must not be one, or it
+ * would swallow the first real reminder.
+ */
+async function insertQuestionnaireNotice(
+  tx: PooledTx,
+  input: {
+    senderId: string | null;
+    kind: "reminder" | "system";
+    presentation: "popup" | "feed";
+    activation: { id: string; title: string };
+    body: string;
+    targets: string[];
+    now: Date;
+  },
+): Promise<string> {
+  const { activation, body, now } = input;
+  const [broadcast] = await tx
+    .insert(schema.broadcasts)
+    .values({
+      senderId: input.senderId,
+      kind: input.kind,
+      scope: "individual",
+      title: activation.title,
+      body,
+      channel: "both",
+      presentation: input.presentation,
+      refType: REMINDER_REF_TYPE,
+      refId: activation.id,
+      publishedAt: now,
+      dispatchedAt: now,
+    })
+    .returning({ id: schema.broadcasts.id });
+  const broadcastId = broadcast!.id;
+
+  await tx
+    .insert(schema.broadcastTargets)
+    .values(input.targets.map((userId) => ({ broadcastId, userId })));
+
+  await tx
+    .insert(schema.notificationDeliveries)
+    .values(
+      input.targets.map((userId) => ({
+        broadcastId,
+        userId,
+        title: activation.title,
+        body,
+        channel: "both" as const,
+        presentation: input.presentation,
+        refType: REMINDER_REF_TYPE,
+        refId: activation.id,
+        createdAt: now,
+      })),
+    )
+    .onConflictDoNothing();
+  return broadcastId;
+}
+
+/** The line a member reads when a questionnaire is sent to them. */
+export function releaseBody(
+  title: string,
+  dueAt: Date | null,
+  blocking: boolean,
+): string {
+  const due = dueAt ? `, due ${DUE_ON.format(dueAt)}` : "";
+  return blocking
+    ? `New questionnaire: ${title}${due}. You need to answer it before using the app.`
+    : `New questionnaire: ${title}${due}. Tap to answer.`;
+}
+
+/**
+ * Tell every member a send just gated that it is there (W4.4). The gate alone
+ * is silent: an optional send reached nobody, and even a blocking one only
+ * showed up on the member's next visit. Addressed to the members holding a
+ * PENDING gate on this activation, which after openActivation are exactly the
+ * ones it just asked (the carry-over skip leaves the others alone).
+ *
+ * Best-effort by design: the send has already committed, so the caller logs a
+ * failure here rather than reporting the send as failed.
+ */
+export async function notifyQuestionnaireReleased(input: {
+  activationId: string;
+  senderId: string | null;
+  now?: Date;
+}): Promise<number> {
+  const now = input.now ?? new Date();
+  const db = createHttpDb();
+  const [act] = await db
+    .select({
+      id: schema.questionnaireActivations.id,
+      title: schema.questionnaireActivations.title,
+      status: schema.questionnaireActivations.status,
+      blocking: schema.questionnaireActivations.blocking,
+      dueAt: schema.questionnaireActivations.dueAt,
+      questionnaireKey: schema.questionnaireActivations.questionnaireKey,
+    })
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.id, input.activationId))
+    .limit(1);
+  if (!act || act.status !== "open") return 0;
+
+  return await withTransaction(async (tx) => {
+    const gated = await tx
+      .select({ userId: schema.requiredActions.userId })
+      .from(schema.requiredActions)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.requiredActions.userId),
+      )
+      .where(
+        and(
+          eq(schema.requiredActions.activationId, act.id),
+          eq(schema.requiredActions.actionKey, act.questionnaireKey),
+          eq(schema.requiredActions.status, "pending"),
+          eq(schema.users.isSystem, false),
+          eq(schema.users.sanitised, false),
+        ),
+      );
+    const targets = [...new Set(gated.map((g) => g.userId))];
+    if (targets.length === 0) return 0;
+    await insertQuestionnaireNotice(tx, {
+      senderId: input.senderId,
+      kind: "system",
+      presentation: "feed",
+      activation: act,
+      body: releaseBody(act.title, act.dueAt, act.blocking),
+      targets,
+      now,
+    });
+    return targets.length;
+  });
 }
 
 export type ReminderResult =
@@ -604,48 +751,19 @@ export async function sendReminder(input: {
       };
     }
 
-    const [broadcast] = await tx
-      .insert(schema.broadcasts)
-      .values({
-        senderId: input.senderId,
-        kind: "reminder",
-        scope: "individual",
-        title: act.title,
-        body,
-        channel: "both",
-        // A nudge, not a takeover: `acknowledge` is the full-screen gate reserved
-        // for things every member must positively dismiss.
-        presentation: "popup",
-        refType: REMINDER_REF_TYPE,
-        refId: act.id,
-        publishedAt: now,
-        dispatchedAt: now,
-      })
-      .returning({ id: schema.broadcasts.id });
-    const broadcastId = broadcast!.id;
-
-    await tx
-      .insert(schema.broadcastTargets)
-      .values(targets.map((userId) => ({ broadcastId, userId })));
-
-    await tx
-      .insert(schema.notificationDeliveries)
-      .values(
-        targets.map((userId) => ({
-          broadcastId,
-          userId,
-          title: act.title,
-          body,
-          channel: "both" as const,
-          presentation: "popup" as const,
-          refType: REMINDER_REF_TYPE,
-          refId: act.id,
-          // Explicit rather than defaulted: this column IS the dedup clock, so
-          // it has to be the same `now` the window above was measured from.
-          createdAt: now,
-        })),
-      )
-      .onConflictDoNothing();
+    // A nudge, not a takeover: `acknowledge` is the full-screen gate reserved
+    // for things every member must positively dismiss. `now` is passed through
+    // explicitly because the delivery's createdAt IS the dedup clock, so it has
+    // to be the same `now` the window above was measured from.
+    const broadcastId = await insertQuestionnaireNotice(tx, {
+      senderId: input.senderId,
+      kind: "reminder",
+      presentation: "popup",
+      activation: act,
+      body,
+      targets,
+      now,
+    });
 
     return {
       ok: true,

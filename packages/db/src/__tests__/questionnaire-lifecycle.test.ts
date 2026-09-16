@@ -9,7 +9,9 @@ import {
   getOpenActivationForKey,
   listOpenSendBlocking,
   publishDefinition,
+  releaseBody,
   sendActivation,
+  sendReminder,
   unpublishDefinition,
 } from "../questionnaire-lifecycle";
 import { completeBuilderResponse, getActivationById } from "../activations";
@@ -347,6 +349,54 @@ describe("sendActivation — one-open invariant", () => {
     expect((await requiredActionsFor(db, b.id))[0]!.actionKey).toBe("feedback");
   });
 
+  it("tells every member it gated, without spending their first reminder", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await publishDefinition("feedback", null);
+
+    const res = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: false,
+      activatedByUserId: captain.id,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    const notices = await db
+      .select({
+        userId: schema.notificationDeliveries.userId,
+        body: schema.notificationDeliveries.body,
+        refType: schema.notificationDeliveries.refType,
+        refId: schema.notificationDeliveries.refId,
+        kind: schema.broadcasts.kind,
+      })
+      .from(schema.notificationDeliveries)
+      .innerJoin(
+        schema.broadcasts,
+        eq(schema.broadcasts.id, schema.notificationDeliveries.broadcastId),
+      );
+    expect(notices.map((n) => n.userId).sort()).toEqual(
+      [captain.id, member.id].sort(),
+    );
+    expect(notices[0]).toMatchObject({
+      body: "New questionnaire: Camp feedback. Tap to answer.",
+      refType: "questionnaire_activation",
+      refId: res.activationId,
+      kind: "system",
+    });
+
+    // The reminder's 24-hour window counts reminders only, so a captain can
+    // still nudge straight after sending.
+    const nudge = await sendReminder({
+      activationId: res.activationId,
+      senderId: captain.id,
+    });
+    expect(nudge).toMatchObject({ ok: true, outcome: "sent", sent: 2 });
+  });
+
   it("refuses to send an unpublished questionnaire", async () => {
     const db = h.db();
     const u = await makeUser(db);
@@ -557,5 +607,16 @@ describe("data survival across the full lifecycle", () => {
       .where(eq(schema.questionnaireResponses.userId, u.id));
     expect(afterRepublish).toHaveLength(1);
     expect(afterRepublish[0]!.responses).toEqual({ q1: "kept" });
+  });
+});
+
+describe("releaseBody", () => {
+  it("says whether the questionnaire holds the app, with the deadline in camp time", () => {
+    expect(releaseBody("Safety", new Date("2026-03-10T22:30:00Z"), true)).toBe(
+      "New questionnaire: Safety, due 11 Mar. You need to answer it before using the app.",
+    );
+    expect(releaseBody("Skills", null, false)).toBe(
+      "New questionnaire: Skills. Tap to answer.",
+    );
   });
 });
