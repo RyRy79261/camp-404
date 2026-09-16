@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateIdNumber } from "../id-validation";
+import { validateBirthDate, validateIdNumber } from "../id-validation";
 
 // Valid SA IDs (date prefix passes + SA Home Affairs Luhn check digit matches).
 // Derived from the implementation, not assumed:
@@ -154,5 +154,42 @@ describe("validateIdNumber — SA ID branch, impossible dates", () => {
     // YY=00 → 2000 is a leap year, so 29 Feb is a real date (and the check
     // digit here is valid), so it must NOT be rejected.
     expect(validateIdNumber("sa_id", "0002295009084")).toEqual({ ok: true });
+  });
+});
+
+describe("validateBirthDate", () => {
+  const TODAY = "2026-09-16";
+
+  it("accepts a real past date", () => {
+    expect(validateBirthDate("1990-01-15", TODAY)).toEqual({ ok: true });
+    expect(validateBirthDate("2000-02-29", TODAY)).toEqual({ ok: true });
+  });
+
+  it("accepts today, the last possible day", () => {
+    expect(validateBirthDate(TODAY, TODAY)).toEqual({ ok: true });
+  });
+
+  it("refuses a date that does not exist or is not YYYY-MM-DD", () => {
+    for (const raw of ["2001-02-29", "1990-13-01", "1990-1-5", "yesterday"]) {
+      expect(validateBirthDate(raw, TODAY)).toEqual({
+        ok: false,
+        error: "Not a real date.",
+      });
+    }
+  });
+
+  it("refuses a date after today", () => {
+    expect(validateBirthDate("2026-09-17", TODAY)).toEqual({
+      ok: false,
+      error: "Date of birth can't be in the future.",
+    });
+  });
+
+  it("refuses a date more than 120 years ago", () => {
+    expect(validateBirthDate("1906-09-16", TODAY)).toEqual({ ok: true });
+    expect(validateBirthDate("1906-09-15", TODAY)).toEqual({
+      ok: false,
+      error: "Check the year of birth.",
+    });
   });
 });

@@ -7,6 +7,7 @@ import { ID_NUMBER_KEY } from "@camp404/db/id-documents";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getReplayableForm, recordFormEdit } from "@/lib/forms";
+import { identityAnswerErrors } from "@/lib/id-validation";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 
 export type SaveResult =
@@ -56,6 +57,14 @@ export async function saveFormReplay(
   const catalogue = await getQuestionnaireForResponses();
   const result = validateResponses(catalogue, rawResponses);
   if (!result.ok) return { ok: false, errors: result.errors };
+  // The wizard checks these before it submits; a direct POST skips it.
+  const identity = identityAnswerErrors(result.responses, new Date());
+  if (Object.keys(identity).length > 0) {
+    return {
+      ok: false,
+      errors: { ...identity, _root: "Check your ID number and date of birth." },
+    };
+  }
 
   const state = await form.load(campUser.id);
   if (!state?.completedAt) {

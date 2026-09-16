@@ -18,8 +18,11 @@ import {
   upsertBurnerProfile,
 } from "@/lib/users";
 import { splitIdNumber } from "@camp404/db/id-documents";
+import { identityAnswerErrors } from "@/lib/id-validation";
 import { QUESTIONNAIRE_VERSION } from "@/lib/questionnaire";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
+
+const IDENTITY_REFUSED = "Check your ID number and date of birth.";
 
 /**
  * Persist questionnaire responses. If `final` is true the burner profile is
@@ -65,6 +68,11 @@ export async function saveBurnerProfile(
   if (final) {
     const result = validateResponses(questionnaire, rawResponses);
     if (!result.ok) return { ok: false, errors: result.errors };
+    // The wizard checks these before it submits; a direct POST skips it.
+    const identity = identityAnswerErrors(result.responses, new Date());
+    if (Object.keys(identity).length > 0) {
+      return { ok: false, errors: { ...identity, _form: IDENTITY_REFUSED } };
+    }
     responses = result.responses;
   } else {
     const draft = boundDraftResponses(

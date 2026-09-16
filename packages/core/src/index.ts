@@ -21,7 +21,8 @@
 //     SECRET_ENV_KEYS (./text-redaction)
 //   - shake detector: createShakeDetector + ShakeSample/ShakeDetectorConfig
 //     (./shake); the React hook + DOM permission helpers stay in apps/web
-//   - id validation: validateIdNumber, IdValidationResult (./id-validation)
+//   - id validation: validateIdNumber, validateBirthDate, IdValidationResult
+//     (./id-validation)
 //   - promotion: canSendPromotion, canDecidePromotion, nextPromotionStatus,
 //     promotionStepState, canLeaveCamp — the captain-handshake guards +
 //     state machine, and the sole-captain erasure guard

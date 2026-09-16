@@ -23,6 +23,37 @@ export function validateIdNumber(
   return { ok: false, error: "Pick the ID document type first" };
 }
 
+/** The oldest date of birth accepted, in years before today. */
+const MAX_AGE_YEARS = 120;
+
+/**
+ * Check a date of birth (YYYY-MM-DD) against today's camp date (YYYY-MM-DD,
+ * from `campDayKey`). It must be a real calendar date, not after today, and not
+ * more than 120 years ago. This only checks that the answer is possible: there
+ * is no minimum age here, because captains check age when they approve.
+ */
+export function validateBirthDate(
+  raw: string,
+  today: string,
+): IdValidationResult {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim());
+  if (
+    !match ||
+    !isRealCalendarDate(Number(match[1]), Number(match[2]), Number(match[3]))
+  ) {
+    return { ok: false, error: "Not a real date." };
+  }
+  // Zero-padded YYYY-MM-DD strings sort as dates do.
+  if (raw.trim() > today) {
+    return { ok: false, error: "Date of birth can't be in the future." };
+  }
+  const oldest = `${Number(today.slice(0, 4)) - MAX_AGE_YEARS}${today.slice(4)}`;
+  if (raw.trim() < oldest) {
+    return { ok: false, error: "Check the year of birth." };
+  }
+  return { ok: true };
+}
+
 function validatePassport(value: string): IdValidationResult {
   if (!PASSPORT_RE.test(value)) {
     return {

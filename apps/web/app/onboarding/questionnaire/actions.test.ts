@@ -227,6 +227,24 @@ describe("saveBurnerProfile response bounds", () => {
     expect(responses).toEqual({ birthday: "1990-04-12" });
   });
 
+  it("refuses a final submit with a date of birth after today, writing nothing", async () => {
+    // REFUSED CASE: the wizard checks the date locally, but this action takes
+    // any POST, so the server checks it again on the final submit.
+    vi.mocked(getQuestionnaireForResponses).mockResolvedValue(minimal);
+
+    const result = await saveBurnerProfile({ birthday: "2999-01-01" }, true);
+
+    expect(result).toEqual({
+      ok: false,
+      errors: {
+        birthday: "Date of birth can't be in the future.",
+        _form: "Check your ID number and date of birth.",
+      },
+    });
+    expect(upsertBurnerProfile).not.toHaveBeenCalled();
+    expect(setIdDocuments).not.toHaveBeenCalled();
+  });
+
   it("still captures id.number and profile.image on a non-final save", async () => {
     // The over-eager-allow-list guard: both ids ARE catalogue questions, so
     // splitIdNumber and setProfileImage must still see them on a draft save.

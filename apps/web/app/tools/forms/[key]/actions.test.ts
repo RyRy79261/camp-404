@@ -22,7 +22,10 @@ vi.mock("@/lib/forms", () => ({
 vi.mock("@/lib/questionnaire-config", () => ({
   getQuestionnaireForResponses: vi.fn(),
 }));
-vi.mock("@camp404/db/id-documents", () => ({ ID_NUMBER_KEY: "id.number" }));
+vi.mock("@camp404/db/id-documents", () => ({
+  ID_NUMBER_KEY: "id.number",
+  ID_TYPE_KEY: "id.type",
+}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
@@ -39,7 +42,7 @@ const required: Record<string, unknown> = {
   phone: "+27 82 555 1234",
   country: "ZA",
   "id.type": "sa_id",
-  "id.number": "1234567890123",
+  "id.number": "8001015009087",
   "competency.cooking": "teach",
   "logistics.driving": "yes",
   "logistics.onsite_before": "yes_full",
@@ -87,6 +90,31 @@ describe("saveFormReplay — archive invariant", () => {
     });
     expect(getReplayableForm).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it("refuses an SA ID number with a wrong check digit, saving nothing", async () => {
+    vi.mocked(getReplayableForm).mockResolvedValue({
+      key: "burner_profile",
+      questionnaire: activePicker,
+      load: vi.fn(),
+      save,
+    } as never);
+
+    const result = await saveFormReplay(
+      "burner_profile",
+      { ...required, "id.number": "8001015009088" },
+      true,
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      errors: {
+        "id.number": "Check digit doesn't match — double-check the number.",
+        _root: "Check your ID number and date of birth.",
+      },
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(recordFormEdit).not.toHaveBeenCalled();
   });
 
   it("preserves a since-archived team pick on re-save (validates against the full set)", async () => {
