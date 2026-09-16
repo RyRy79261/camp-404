@@ -9,9 +9,11 @@ import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { rankLabel } from "@/lib/camp-roster";
 import { requireMemberPage } from "@/lib/member-gate";
+import { getMemberRefCode } from "@/lib/payments";
 import { isTeamLead } from "@/lib/users";
 import { initialsFrom } from "@/lib/initials";
 import { SignOutLink } from "@/components/auth/sign-out-link";
+import { PaymentReference } from "./payment-reference";
 
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
@@ -22,7 +24,11 @@ export default async function ProfilePage() {
   const name = campUser.displayName ?? authUser.primaryEmail ?? "Burner";
   const initials = initialsFrom(campUser.displayName ?? authUser.primaryEmail);
   // The same pill the roster shows: a team lead reads "Team Lead", not "Member".
-  const rank = rankLabel(campUser.rank, await isTeamLead(campUser.id));
+  const [lead, refCode] = await Promise.all([
+    isTeamLead(campUser.id),
+    getMemberRefCode(campUser.id),
+  ]);
+  const rank = rankLabel(campUser.rank, lead);
 
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-sm flex-col justify-center px-5 py-8">
@@ -46,6 +52,8 @@ export default async function ProfilePage() {
               {authUser.primaryEmail}
             </p>
           )}
+
+          {refCode && <PaymentReference code={refCode} />}
 
           <Button asChild className="w-full gap-2">
             <Link href="/profile/edit">

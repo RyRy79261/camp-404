@@ -21,7 +21,7 @@ import type { IconBadgeTone } from "@camp404/ui/components/icon-badge";
  * `requireClearance` and withholds the tiles of locked groups, so this is the
  * single source of truth for what a *cleared* viewer sees.
  *
- * Only five destinations exist today; the rest are `comingSoon` — rendered
+ * Only six destinations exist today; the rest are `comingSoon` — rendered
  * inert with no href so they never 404 (the old quadrant model wired dead
  * `/members` / `/meals` links). Per-tile badge counts are deferred: their
  * destinations (tasks / team_memberships reads) aren't built, so no fabricated
@@ -84,10 +84,11 @@ export const TILE_CATALOGUE: RankGroupSpec[] = [
         id: "finances",
         icon: Wallet,
         title: "Finances",
-        hint: "Dues & reimbursements",
-        href: null,
-        comingSoon: true,
-        reason: "Not built yet. Dues and payments come in a later update.",
+        // Board S08 says "Dues & reimbursements"; reimbursements are not
+        // built, so the hint names what the page holds.
+        hint: "Dues & payments",
+        href: "/captains/payments",
+        comingSoon: false,
       },
       {
         id: "camp-tools",

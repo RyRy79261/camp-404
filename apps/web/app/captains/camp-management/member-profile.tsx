@@ -318,6 +318,8 @@ export function MemberProfile({
               ? `${row.pendingRequiredActions} to complete`
               : "All complete",
         },
+        // From the payments ledger: a received or waived payment this year.
+        { label: "Dues this year", value: row.duesPaid ? "Paid" : "Not paid" },
       ]
     : [];
 

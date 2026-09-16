@@ -54,6 +54,8 @@ export interface RosterRow extends PublicRosterRow {
   requiredComplete: boolean;
   isDriver: boolean;
   driverProfileComplete: boolean;
+  /** Dues settled for this year in the payments ledger (received or waived). */
+  duesPaid: boolean;
 }
 
 /**
@@ -111,6 +113,7 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
     requiredComplete,
     isDriver: member.intendsToDrive,
     driverProfileComplete: member.driverProfileComplete,
+    duesPaid: member.duesPaid,
   };
 }
 

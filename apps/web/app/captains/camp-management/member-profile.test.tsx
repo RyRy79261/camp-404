@@ -54,6 +54,7 @@ function row(over: Partial<RosterRow> = {}): RosterRow {
     requiredComplete: true,
     isDriver: false,
     driverProfileComplete: false,
+    duesPaid: false,
     ...over,
   };
 }

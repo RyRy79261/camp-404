@@ -4,6 +4,7 @@ import {
   Megaphone,
   Shield,
   Users,
+  Wallet,
 } from "lucide-react";
 import { hasClearance } from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
@@ -47,6 +48,14 @@ const TOOLS: ToolEntry[] = [
     description:
       "Review the member roster, approve or reject pending applications, and manage ranks.",
     icon: <Shield className="text-primary" />,
+    rank: "captain",
+  },
+  {
+    href: "/captains/payments",
+    title: "Dues & payments",
+    description:
+      "Record what the bank statement shows, mark promised payments received or waived, and see who has paid for this year.",
+    icon: <Wallet className="text-primary" />,
     rank: "captain",
   },
   {
