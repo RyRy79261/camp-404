@@ -66,4 +66,5 @@ export * from "./questionnaire-results";
 export * from "./notification-links";
 export * from "./notifications";
 export * from "./notification-days";
+export * from "./notification-email";
 export * from "./time-zone";

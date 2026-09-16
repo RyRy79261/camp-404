@@ -193,6 +193,17 @@ export const pushDeliveryStatusEnum = pgEnum("push_delivery_status", [
   "skipped",
 ]);
 
+// Whether a delivery also goes out by email, and how that went. Set from
+// shouldEmailNotification (@camp404/core) when the delivery is written; rows
+// from before email existed are `skipped`, so turning email on never mails
+// old notices.
+export const emailDeliveryStatusEnum = pgEnum("email_delivery_status", [
+  "queued",
+  "sent",
+  "failed",
+  "skipped",
+]);
+
 // How a notification demands the recipient's attention in-app. This is the
 // "variant" a sender picks when composing:
 //   - `acknowledge` — takes over the screen as a full-screen, scrollable
@@ -1000,6 +1011,9 @@ export const notificationDeliveries = pgTable(
     pushStatus: pushDeliveryStatusEnum("push_status")
       .notNull()
       .default("queued"),
+    emailStatus: emailDeliveryStatusEnum("email_status")
+      .notNull()
+      .default("skipped"),
 
     refType: text("ref_type"),
     refId: uuid("ref_id"),
@@ -1023,6 +1037,10 @@ export const notificationDeliveries = pgTable(
       n.userId,
       n.acknowledgedAt,
     ),
+    // The email drain reads only queued rows.
+    emailQueueIdx: index("notification_deliveries_email_queue_idx")
+      .on(n.createdAt)
+      .where(sql`${n.emailStatus} = 'queued'`),
     // The inbox pages newest first: (created_at, id) is its cursor.
     userCreatedIdx: index("notification_deliveries_user_created_idx").on(
       n.userId,

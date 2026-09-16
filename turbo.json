@@ -23,7 +23,9 @@
     "CRON_SECRET",
     "PGCRYPTO_KEY",
     "TELEGRAM_BOT_TOKEN",
-    "TELEGRAM_WEBHOOK_SECRET"
+    "TELEGRAM_WEBHOOK_SECRET",
+    "RESEND_API_KEY",
+    "RESEND_FROM_EMAIL"
   ],
   "tasks": {
     "build": {

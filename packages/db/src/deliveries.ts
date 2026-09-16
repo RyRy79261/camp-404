@@ -1,4 +1,7 @@
-import type { NotificationPayload } from "@camp404/core";
+import {
+  shouldEmailNotification,
+  type NotificationPayload,
+} from "@camp404/core";
 import * as schema from "./schema";
 
 // The one way a notification_deliveries row is shaped from a payload. Every
@@ -30,6 +33,9 @@ export function deliveryValues(
     presentation: input.presentation,
     refType: payload.refType,
     refId: payload.refId,
+    emailStatus: shouldEmailNotification(payload.kind, input.presentation)
+      ? "queued"
+      : "skipped",
     ...(input.createdAt ? { createdAt: input.createdAt } : {}),
   };
 }

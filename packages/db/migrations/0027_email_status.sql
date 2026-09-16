@@ -1,0 +1,3 @@
+CREATE TYPE "public"."email_delivery_status" AS ENUM('queued', 'sent', 'failed', 'skipped');--> statement-breakpoint
+ALTER TABLE "notification_deliveries" ADD COLUMN "email_status" "email_delivery_status" DEFAULT 'skipped' NOT NULL;--> statement-breakpoint
+CREATE INDEX "notification_deliveries_email_queue_idx" ON "notification_deliveries" USING btree ("created_at") WHERE "notification_deliveries"."email_status" = 'queued';
