@@ -66,7 +66,11 @@ describe("deleteOwnAccount", () => {
 
     await deleteOwnAccount(null, confirmed());
 
-    expect(deleteAccount).toHaveBeenCalledExactlyOnceWith("user-1");
+    // The camp row to scrub, and the auth id its blobs are filed under.
+    expect(deleteAccount).toHaveBeenCalledExactlyOnceWith({
+      userId: "user-1",
+      authUserId: "auth-1",
+    });
     expect(redirect).toHaveBeenCalledWith("/auth/sign-out");
   });
 

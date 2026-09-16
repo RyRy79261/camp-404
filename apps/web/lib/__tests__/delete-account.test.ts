@@ -26,18 +26,20 @@ describe("deleteAccount", () => {
 
   it("short-circuits under E2E mode without touching the DB or blobs", async () => {
     vi.mocked(isE2ETestMode).mockReturnValue(true);
-    const res = await deleteAccount("u1");
+    const res = await deleteAccount({ userId: "u1", authUserId: "auth-1" });
     expect(res).toEqual({ ok: true, lostCatNumber: 0 });
     expect(sanitiseAccount).not.toHaveBeenCalled();
     expect(deleteAvatarBlobs).not.toHaveBeenCalled();
   });
 
   it("scrubs the DB, then deletes all the member's avatar blobs", async () => {
-    const res = await deleteAccount("u1");
+    const res = await deleteAccount({ userId: "u1", authUserId: "auth-1" });
     expect(res).toEqual({ ok: true, lostCatNumber: 7 });
     expect(sanitiseAccount).toHaveBeenCalledWith("u1");
-    // No keepPathname — anonymisation removes every avatar object.
-    expect(deleteAvatarBlobs).toHaveBeenCalledExactlyOnceWith("u1");
+    // No keepPathname — anonymisation removes every avatar object. And the
+    // folder is the AUTH id's: the upload routes write avatars/<session user
+    // id>/, so sweeping the camp id deleted nothing.
+    expect(deleteAvatarBlobs).toHaveBeenCalledExactlyOnceWith("auth-1");
   });
 
   it("takes no avatar blobs with it when the DB refused the erasure", async () => {
@@ -48,7 +50,7 @@ describe("deleteAccount", () => {
       ok: false,
       reason: "sole_captain",
     });
-    const res = await deleteAccount("u1");
+    const res = await deleteAccount({ userId: "u1", authUserId: "auth-1" });
     expect(res).toEqual({ ok: false, reason: "sole_captain" });
     expect(deleteAvatarBlobs).not.toHaveBeenCalled();
   });
@@ -56,7 +58,7 @@ describe("deleteAccount", () => {
   it("swallows a blob-cleanup failure (the DB scrub stands) and logs it", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(deleteAvatarBlobs).mockRejectedValue(new Error("blob down"));
-    const res = await deleteAccount("u1");
+    const res = await deleteAccount({ userId: "u1", authUserId: "auth-1" });
     expect(res).toEqual({ ok: true, lostCatNumber: 7 }); // still returns the scrub result
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("avatar-cleanup"),
