@@ -90,6 +90,12 @@ Scheduled from `apps/web/vercel.json`:
 | `/api/cron/manuals/generate` | daily 08:30 UTC | 4 |
 | `/api/cron/notifications/reminders` | daily 09:00 UTC | 2 |
 
+> **[CORRECTION 2026-09-09]** The table above is stale: `apps/web/vercel.json`
+> declares **five** crons, not three. The two missing rows are
+> `/api/cron/notifications/dispatch` (daily 09:15 UTC) and
+> `/api/cron/notifications/push` (daily 09:25 UTC), both added with the
+> notifications work. `vercel.json` is the source of truth.
+
 All cron endpoints require `Authorization: Bearer ${CRON_SECRET}`.
 
 > Vercel's Hobby plan caps cron jobs at one run per day. Upgrade to Pro
