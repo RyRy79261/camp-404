@@ -21,6 +21,7 @@ import {
   type AnnouncementSummary,
   type ClaimedPopup,
   type InboxItem,
+  type InboxPage,
   type PendingAcknowledgement,
   type PublishResult,
 } from "@camp404/db/broadcasts";
@@ -40,13 +41,17 @@ export type {
   AnnouncementSummary,
   ClaimedPopup,
   InboxItem,
+  InboxPage,
   PendingAcknowledgement,
   PublishResult,
 };
 
 interface NotificationsBackend {
   countUnread(userId: string): Promise<number>;
-  listInbox(userId: string): Promise<InboxItem[]>;
+  listInbox(
+    userId: string,
+    options?: { before?: string | null; limit?: number },
+  ): Promise<InboxPage>;
   markRead(userId: string, ids: string[]): Promise<void>;
   getAnnouncementForMember(
     userId: string,
@@ -107,8 +112,8 @@ const testBackend: NotificationsBackend = {
   async countUnread(userId) {
     return testStore.countUnread(userId);
   },
-  async listInbox(userId) {
-    return testStore.listInbox(userId);
+  async listInbox(userId, options) {
+    return testStore.listInbox(userId, options);
   },
   async markRead(userId, ids) {
     testStore.markRead(userId, ids);
@@ -159,8 +164,11 @@ export function countUnread(userId: string): Promise<number> {
   return backend().countUnread(userId);
 }
 
-export function listInbox(userId: string): Promise<InboxItem[]> {
-  return backend().listInbox(userId);
+export function listInbox(
+  userId: string,
+  options?: { before?: string | null; limit?: number },
+): Promise<InboxPage> {
+  return backend().listInbox(userId, options);
 }
 
 export function markRead(userId: string, ids: string[]): Promise<void> {

@@ -176,6 +176,13 @@
       "when": 1789562117782,
       "tag": "0024_notification_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789562440889,
+      "tag": "0025_inbox_paging_index",
+      "breakpoints": true
     }
   ]
 }

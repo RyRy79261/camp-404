@@ -18,12 +18,18 @@ vi.mock("@/lib/promotion", () => ({
   decideCaptainPromotion: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/notifications", () => ({
+  listInbox: vi.fn(),
+  markRead: vi.fn(),
+}));
 
 import {
   acceptCaptainPromotionAction,
   cancelCaptainPromotionAction,
   declineCaptainPromotionAction,
+  loadOlderNotificationsAction,
 } from "./actions";
+import { listInbox, markRead } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
@@ -69,7 +75,8 @@ beforeEach(() => {
   vi.mocked(isApproved).mockReturnValue(true);
   // Default: the decide write succeeds and returns the flipped row.
   vi.mocked(decideCaptainPromotion).mockImplementation(
-    async ({ requestId, status }) => sentRow({ id: requestId, status }) as never,
+    async ({ requestId, status }) =>
+      sentRow({ id: requestId, status }) as never,
   );
 });
 
@@ -154,7 +161,10 @@ describe("acceptCaptainPromotionAction", () => {
 
     const res = await acceptCaptainPromotionAction(REQUEST_ID);
 
-    expect(res).toEqual({ ok: false, error: "This request is no longer open." });
+    expect(res).toEqual({
+      ok: false,
+      error: "This request is no longer open.",
+    });
     expect(setCampUserRank).not.toHaveBeenCalled();
   });
 
@@ -166,7 +176,10 @@ describe("acceptCaptainPromotionAction", () => {
 
     const res = await acceptCaptainPromotionAction(REQUEST_ID);
 
-    expect(res).toEqual({ ok: false, error: "This request is no longer open." });
+    expect(res).toEqual({
+      ok: false,
+      error: "This request is no longer open.",
+    });
     expect(decideCaptainPromotion).not.toHaveBeenCalled();
     expect(setCampUserRank).not.toHaveBeenCalled();
   });
@@ -194,7 +207,10 @@ describe("acceptCaptainPromotionAction", () => {
 
     const res = await acceptCaptainPromotionAction(REQUEST_ID);
 
-    expect(res).toEqual({ ok: false, error: "This request is no longer open." });
+    expect(res).toEqual({
+      ok: false,
+      error: "This request is no longer open.",
+    });
     expect(setCampUserRank).not.toHaveBeenCalled();
   });
 
@@ -288,7 +304,10 @@ describe("declineCaptainPromotionAction", () => {
 
     const res = await declineCaptainPromotionAction(REQUEST_ID);
 
-    expect(res).toEqual({ ok: false, error: "This request is no longer open." });
+    expect(res).toEqual({
+      ok: false,
+      error: "This request is no longer open.",
+    });
     expect(decideCaptainPromotion).not.toHaveBeenCalled();
   });
 
@@ -299,7 +318,10 @@ describe("declineCaptainPromotionAction", () => {
 
     const res = await declineCaptainPromotionAction(REQUEST_ID);
 
-    expect(res).toEqual({ ok: false, error: "This request is no longer open." });
+    expect(res).toEqual({
+      ok: false,
+      error: "This request is no longer open.",
+    });
   });
 
   it("treats an orphaned (audit-null) requester as gone", async () => {
@@ -365,7 +387,10 @@ describe("cancelCaptainPromotionAction", () => {
 
     const res = await cancelCaptainPromotionAction(REQUEST_ID);
 
-    expect(res).toEqual({ ok: false, error: "This request is no longer open." });
+    expect(res).toEqual({
+      ok: false,
+      error: "This request is no longer open.",
+    });
     expect(decideCaptainPromotion).not.toHaveBeenCalled();
   });
 
@@ -376,7 +401,10 @@ describe("cancelCaptainPromotionAction", () => {
 
     const res = await cancelCaptainPromotionAction(REQUEST_ID);
 
-    expect(res).toEqual({ ok: false, error: "This request is no longer open." });
+    expect(res).toEqual({
+      ok: false,
+      error: "This request is no longer open.",
+    });
   });
 
   it("treats an orphaned (audit-null) requester as gone", async () => {
@@ -389,5 +417,53 @@ describe("cancelCaptainPromotionAction", () => {
 
     expect(res).toEqual({ ok: false, error: "Request no longer available." });
     expect(decideCaptainPromotion).not.toHaveBeenCalled();
+  });
+});
+
+describe("loadOlderNotificationsAction", () => {
+  const CURSOR =
+    "2026-09-16T09:00:00.500000~7f5e2f7a-6f50-4c89-8df9-2f7b8f3dc31e";
+
+  beforeEach(() => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-1",
+      primaryEmail: "m@example.com",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ id: "user-1" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(listInbox).mockReset();
+    vi.mocked(markRead).mockReset();
+  });
+
+  it("returns the older page and marks exactly its rows read", async () => {
+    vi.mocked(listInbox).mockResolvedValue({
+      items: [{ id: "d1" }, { id: "d2" }] as never,
+      nextCursor: null,
+    });
+    const result = await loadOlderNotificationsAction(CURSOR);
+    expect(result).toEqual({
+      ok: true,
+      data: { items: [{ id: "d1" }, { id: "d2" }], nextCursor: null },
+    });
+    expect(listInbox).toHaveBeenCalledWith("user-1", { before: CURSOR });
+    expect(markRead).toHaveBeenCalledWith("user-1", ["d1", "d2"]);
+  });
+
+  it("reads nothing for a signed-out caller, no camp access, or a junk cursor", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
+    expect((await loadOlderNotificationsAction(CURSOR)).ok).toBe(false);
+
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: "a" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(false);
+    expect((await loadOlderNotificationsAction(CURSOR)).ok).toBe(false);
+
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    expect((await loadOlderNotificationsAction("")).ok).toBe(false);
+    expect((await loadOlderNotificationsAction("x".repeat(101))).ok).toBe(
+      false,
+    );
+
+    expect(listInbox).not.toHaveBeenCalled();
+    expect(markRead).not.toHaveBeenCalled();
   });
 });

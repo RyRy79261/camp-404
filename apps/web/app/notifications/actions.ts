@@ -14,6 +14,8 @@ import {
   decideCaptainPromotion,
   getPromotionRequestById,
 } from "@/lib/promotion";
+import { runAction, type ActionResult } from "@/lib/action-result";
+import { listInbox, markRead, type InboxPage } from "@/lib/notifications";
 
 export type PromotionDecisionResult =
   | { ok: true }
@@ -141,7 +143,10 @@ export async function declineCaptainPromotionAction(
     };
   }
 
-  const decided = await decideCaptainPromotion({ requestId, status: "declined" });
+  const decided = await decideCaptainPromotion({
+    requestId,
+    status: "declined",
+  });
   if (!decided) return { ok: false, error: "This request is no longer open." };
 
   revalidatePath("/");
@@ -182,4 +187,34 @@ export async function cancelCaptainPromotionAction(
   revalidatePath("/captains/camp-management");
   revalidatePath("/notifications");
   return { ok: true };
+}
+
+const InboxCursor = z.string().min(1).max(100);
+
+/**
+ * The next, older page of the signed-in member's inbox, for the list's
+ * load-more as they scroll. The rows it returns are about to be on screen, so
+ * they are marked read here, the same as the first page is on load. Each item
+ * keeps the read state it had before, so the list can still show "New".
+ */
+export async function loadOlderNotificationsAction(
+  cursor: string,
+): Promise<ActionResult<InboxPage>> {
+  return runAction("loadOlderNotificationsAction", async () => {
+    if (!InboxCursor.safeParse(cursor).success) {
+      return { ok: false, error: "Couldn't load older notifications." };
+    }
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) return { ok: false, error: "Not signed in." };
+    const campUser = await ensureCampUser(authUser);
+    if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+      return { ok: false, error: "Your account isn't camp-active yet." };
+    }
+    const page = await listInbox(campUser.id, { before: cursor });
+    await markRead(
+      campUser.id,
+      page.items.map((i) => i.id),
+    );
+    return { ok: true, data: page };
+  });
 }

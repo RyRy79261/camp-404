@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { NOTIFICATION_FALLBACK_LINK } from "@camp404/core";
 import { BellOff, ChevronLeft } from "lucide-react";
 import { DetailHeader } from "@camp404/ui/components/detail-header";
 import { EmptyState } from "@camp404/ui/components/empty-state";
@@ -12,7 +11,7 @@ import {
   syncOpenGates,
 } from "@/lib/users";
 import { QueueCard } from "@/components/questionnaire/queue-card";
-import { NotificationRow } from "./notification-row";
+import { InboxFeed } from "./inbox-feed";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +22,6 @@ export const metadata = { title: "Notifications — Camp 404" };
 // ones that were still unread on arrival. Opening the inbox clears the unread
 // badge (marks everything read) — acknowledgements are handled separately by
 // the full-screen gate, so reading here never counts as acknowledging.
-/** A row links only when it is about something other than this inbox. */
-function linkFor(item: { link: string }) {
-  return item.link === NOTIFICATION_FALLBACK_LINK ? undefined : item.link;
-}
 
 export default async function NotificationsPage() {
   const authUser = await getAuthenticatedUserOrRedirect();
@@ -42,9 +37,10 @@ export default async function NotificationsPage() {
   await syncOpenGates(campUser.id);
   const pending = await getPendingQuestionnaires(campUser.id);
 
-  // Snapshot the inbox (with pre-read state), then clear the badge for exactly
-  // those rows — a delivery that arrives after the snapshot stays unread.
-  const items = await listInbox(campUser.id);
+  // Snapshot the first page (with pre-read state), then clear the badge for
+  // exactly those rows — a delivery that arrives after the snapshot stays
+  // unread, and so do older ones until they are scrolled into view.
+  const { items, nextCursor } = await listInbox(campUser.id);
   await markRead(
     campUser.id,
     items.map((i) => i.id),
@@ -116,21 +112,11 @@ export default async function NotificationsPage() {
           </div>
         )
       ) : (
-        <ul className="flex flex-col gap-3 px-4 pb-5 pt-2">
-          {items.map((item) => (
-            <NotificationRow
-              key={item.id}
-              presentation={item.presentation}
-              title={item.title}
-              body={item.body}
-              senderName={item.senderName}
-              isNew={item.readAt === null}
-              acknowledgedAt={item.acknowledgedAt}
-              createdAt={item.createdAt}
-              href={linkFor(item)}
-            />
-          ))}
-        </ul>
+        <InboxFeed
+          initialItems={items}
+          initialCursor={nextCursor}
+          now={new Date()}
+        />
       )}
     </main>
   );

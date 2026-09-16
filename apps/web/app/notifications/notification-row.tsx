@@ -55,9 +55,9 @@ export function NotificationRow({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold leading-tight text-foreground">
+            <h3 className="text-sm font-semibold leading-tight text-foreground">
               {title}
-            </h2>
+            </h3>
             {isNew ? (
               <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-micro-xs font-bold text-primary-foreground">
                 New

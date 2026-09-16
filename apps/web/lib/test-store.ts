@@ -693,22 +693,46 @@ export const testStore = {
     d.readAt = now;
     return true;
   },
-  listInbox(userId: string): Array<{
-    id: string;
-    title: string;
-    body: string;
-    presentation: TestPresentation;
-    senderName: string | null;
-    readAt: Date | null;
-    acknowledgedAt: Date | null;
-    createdAt: Date;
-    kind: NotificationKind;
-    link: string;
-  }> {
-    return deliveries
+  listInbox(
+    userId: string,
+    options: { before?: string | null; limit?: number } = {},
+  ): {
+    items: Array<{
+      id: string;
+      title: string;
+      body: string;
+      presentation: TestPresentation;
+      senderName: string | null;
+      readAt: Date | null;
+      acknowledgedAt: Date | null;
+      createdAt: Date;
+      kind: NotificationKind;
+      link: string;
+    }>;
+    nextCursor: string | null;
+  } {
+    // Production's cursor shape (microsecond timestamp ~ id), so the same
+    // validation accepts it. The store's clock has milliseconds only.
+    const cursorOf = (d: TestDelivery) =>
+      `${d.createdAt.toISOString().slice(0, 23)}000~${d.id}`;
+    const limit = options.limit ?? 30;
+    const sorted = deliveries
       .filter((d) => d.userId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map((d) => {
+      .sort(
+        (a, b) =>
+          b.createdAt.getTime() - a.createdAt.getTime() ||
+          (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
+      );
+    let start = 0;
+    if (options.before != null) {
+      const at = sorted.findIndex((d) => cursorOf(d) === options.before);
+      if (at === -1) return { items: [], nextCursor: null };
+      start = at + 1;
+    }
+    const page = sorted.slice(start, start + limit);
+    const hasMore = sorted.length > start + limit;
+    return {
+      items: page.map((d) => {
         const b = broadcasts.find((x) => x.id === d.broadcastId);
         return {
           id: d.id,
@@ -724,7 +748,9 @@ export const testStore = {
           kind: d.kind,
           link: notificationLink(d.refType, d.refId),
         };
-      });
+      }),
+      nextCursor: hasMore && page.length ? cursorOf(page.at(-1)!) : null,
+    };
   },
   countUnread(userId: string): number {
     return deliveries.filter((d) => d.userId === userId && d.readAt === null)

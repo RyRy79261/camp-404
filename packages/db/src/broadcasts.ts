@@ -622,8 +622,43 @@ export interface InboxItem {
   link: string;
 }
 
-/** A user's notification inbox (everything delivered to them), newest first. */
-export async function listInbox(userId: string): Promise<InboxItem[]> {
+/** How many notifications the inbox shows at a time. */
+export const INBOX_PAGE_SIZE = 30;
+
+export interface InboxPage {
+  items: InboxItem[];
+  /** Pass back as `before` for the next (older) page; null on the last page. */
+  nextCursor: string | null;
+}
+
+// A cursor is the last row's created_at, to the microsecond, and its id. The
+// microseconds matter: a JavaScript Date keeps only milliseconds, and rows
+// written in the same millisecond would otherwise be skipped between pages.
+const INBOX_CURSOR =
+  /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6})~([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+/** True when a string from a client is a cursor listInbox made. */
+export function isInboxCursor(value: string): boolean {
+  return INBOX_CURSOR.test(value);
+}
+
+/**
+ * One page of a member's inbox, newest first. Pass the previous page's
+ * `nextCursor` as `before` to read further back. An unrecognised cursor reads
+ * nothing, rather than restarting from the top.
+ */
+export async function listInbox(
+  userId: string,
+  options: { before?: string | null; limit?: number } = {},
+): Promise<InboxPage> {
+  const limit = options.limit ?? INBOX_PAGE_SIZE;
+  let olderThan = undefined as ReturnType<typeof sql> | undefined;
+  if (options.before != null) {
+    const match = INBOX_CURSOR.exec(options.before);
+    if (!match) return { items: [], nextCursor: null };
+    olderThan = sql`(${schema.notificationDeliveries.createdAt}, ${schema.notificationDeliveries.id}) < (${match[1]}::timestamp, ${match[2]}::uuid)`;
+  }
+
   const db = createHttpDb();
   const rows = await db
     .select({
@@ -638,6 +673,7 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       kind: schema.notificationDeliveries.kind,
       refType: schema.notificationDeliveries.refType,
       refId: schema.notificationDeliveries.refId,
+      cursorAt: sql<string>`to_char(${schema.notificationDeliveries.createdAt}, 'YYYY-MM-DD"T"HH24:MI:SS.US')`,
     })
     .from(schema.notificationDeliveries)
     .leftJoin(
@@ -645,12 +681,24 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       eq(schema.broadcasts.id, schema.notificationDeliveries.broadcastId),
     )
     .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
-    .where(eq(schema.notificationDeliveries.userId, userId))
-    .orderBy(desc(schema.notificationDeliveries.createdAt));
-  return rows.map(({ refType, refId, ...row }) => ({
-    ...row,
-    link: notificationLink(refType, refId),
-  }));
+    .where(and(eq(schema.notificationDeliveries.userId, userId), olderThan))
+    .orderBy(
+      desc(schema.notificationDeliveries.createdAt),
+      desc(schema.notificationDeliveries.id),
+    )
+    // One extra row says whether there is another page.
+    .limit(limit + 1);
+
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
+  return {
+    items: page.map(({ refType, refId, cursorAt: _cursorAt, ...row }) => ({
+      ...row,
+      link: notificationLink(refType, refId),
+    })),
+    nextCursor:
+      rows.length > limit && last ? `${last.cursorAt}~${last.id}` : null,
+  };
 }
 
 export interface AnnouncementReading {

@@ -61,7 +61,7 @@ describe("notification kinds", () => {
     });
     await publishAnnouncement({ id, senderId: captain.id });
 
-    const [item] = await listInbox(member.id);
+    const [item] = (await listInbox(member.id)).items;
     expect(item).toMatchObject({
       kind: "announcement",
       link: `/announcements/${id}`,
@@ -88,7 +88,7 @@ describe("notification kinds", () => {
       now: new Date("2026-03-01T09:00:00Z"),
     });
 
-    const inbox = await listInbox(member.id);
+    const inbox = (await listInbox(member.id)).items;
     expect(inbox.map((i) => i.kind)).toEqual([
       "questionnaire_reminder",
       "questionnaire_release",

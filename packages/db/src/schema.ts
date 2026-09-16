@@ -1023,6 +1023,12 @@ export const notificationDeliveries = pgTable(
       n.userId,
       n.acknowledgedAt,
     ),
+    // The inbox pages newest first: (created_at, id) is its cursor.
+    userCreatedIdx: index("notification_deliveries_user_created_idx").on(
+      n.userId,
+      n.createdAt.desc(),
+      n.id.desc(),
+    ),
     broadcastIdx: index("notification_deliveries_broadcast_idx").on(
       n.broadcastId,
     ),
