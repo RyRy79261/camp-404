@@ -1,6 +1,6 @@
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getReferralRoster } from "@camp404/db/relations";
 import { requireMemberPage } from "@/lib/member-gate";
+import { getReferralRoster } from "@/lib/relations";
 import { FamilyTree } from "./family-tree";
 
 export const dynamic = "force-dynamic";

@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:mobile": "playwright test --project=mobile-360",
     "design:capture": "playwright test --config scripts/pencil/capture.config.ts",
     "design:cli": "bash ../../scripts/pencil/run.sh",
     "design:status": "bash ../../scripts/pencil/run.sh status"

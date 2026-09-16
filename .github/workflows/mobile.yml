@@ -1,0 +1,53 @@
+name: Mobile e2e (nightly)
+
+# The whole Playwright suite at 360 px wide, the narrowest phone the boards
+# draw for. Nightly, not on every PR: it doubles the e2e run, and a phone-only
+# break is rarely urgent enough to block a merge. Run it by hand from the
+# Actions tab before a release.
+on:
+  schedule:
+    # 02:00 in Cape Town (UTC+2).
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: mobile-e2e
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-360:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright browser + system deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @camp404/web exec playwright install --with-deps chromium
+      - name: Install Playwright system deps (cached browser)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @camp404/web exec playwright install-deps chromium
+      - name: Run e2e tests at 360 px
+        env:
+          CI: "true"
+        run: pnpm --filter @camp404/web test:e2e:mobile
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-mobile-360
+          path: apps/web/playwright-report/
+          retention-days: 7

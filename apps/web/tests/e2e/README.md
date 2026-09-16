@@ -37,9 +37,23 @@ Run with:
 # First time only:
 pnpm --filter @camp404/web exec playwright install chromium
 
-# Run the suite:
+# Run the suite (desktop, as every PR runs it):
 pnpm --filter @camp404/web test:e2e
+
+# The same suite at 360 px wide, as the nightly workflow runs it:
+pnpm --filter @camp404/web test:e2e:mobile
 ```
+
+### Helpers
+
+- `_helpers.ts`: the test-mode seams (`login`, `resetTestState`,
+  `completeOnboarding`, `redeemInviteAtGate`, `setRank`).
+- `lib/dom.ts`: `appAlerts(page, text?)` finds the app's own alerts and
+  skips Next's route announcer (a bare `getByRole("alert")` collides with
+  it); `desktopOnly(testInfo, reason)` skips a test on the `mobile-360`
+  project when it drives a desktop-only layout.
+- CI sets `forbidOnly`, so a stray `test.only` fails the run instead of
+  silently skipping the rest.
 
 ### How auth bypass works
 
@@ -100,6 +114,13 @@ complete and jump straight to the gates that follow it (home vs.
   not-approved screen, an unauthenticated visit to a protected page
   redirects to sign-in, the sign-up page is guarded by the invite cookie,
   and voice transcribe accepts an authed request while rejecting bad input.
+- `anon-routes.spec.ts` — the public pages render for a signed-out
+  visitor, and every member and captain page sends them to sign in, each
+  check proving the page it reached rendered its heading.
+- `gate-ladder.spec.ts` — the member ladder holds on every member page:
+  invite, then onboarding, then approval, then the page itself.
+  `/notifications` stays open past the invite rung (owner's call: an
+  applicant reads their inbox).
 - `invite-tracking.spec.ts` — env (bootstrap) code redemption survives
   signup, DB-backed codes record their issuer and use count, an
   approval-required code creates a `pending` account and a pre-approved

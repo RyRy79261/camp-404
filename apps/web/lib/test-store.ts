@@ -19,6 +19,7 @@ import {
   type Audience,
 } from "@camp404/db/broadcasts";
 import type { CampManagementMember } from "@camp404/db/roster";
+import type { ReferralUser } from "@camp404/types";
 import {
   currentCycle,
   DEFAULT_CAMP_CONFIG,
@@ -1115,6 +1116,22 @@ export const testStore = {
     return this.getTeamMemberships(userId)
       .filter((m) => m.isLead)
       .map((m) => m.team);
+  },
+
+  // The family tree's referral list: every user with the id of whoever made
+  // the invite code they redeemed, by name, as @camp404/db/relations does.
+  getReferralRoster(): ReferralUser[] {
+    return [...usersByAuthId.values()]
+      .map((user) => ({
+        id: user.id,
+        displayName: user.displayName,
+        rank: user.rank,
+        inviteCode: user.inviteCode,
+        inviterId: user.inviteCode
+          ? (inviteCodes.get(user.inviteCode)?.createdByUserId ?? null)
+          : null,
+      }))
+      .sort((a, b) => (a.displayName ?? "").localeCompare(b.displayName ?? ""));
   },
 
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
