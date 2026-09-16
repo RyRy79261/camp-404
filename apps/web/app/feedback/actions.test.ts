@@ -152,7 +152,9 @@ describe("submitFeedbackAction", () => {
     const [url, init] = fetchFn.mock.calls[0]!;
     expect(url).toContain("api.github.com/repos/RyRy79261/camp-404/issues");
     const body = JSON.parse((init as RequestInit).body as string);
-    expect(body).toMatchObject({ labels: ["bug", "from-app"] });
+    expect(body).toMatchObject({
+      labels: ["type: bug", "needs-triage", "source: in-app"],
+    });
     expect(body.title).toBeTruthy();
   });
 

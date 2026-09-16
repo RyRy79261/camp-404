@@ -12,6 +12,7 @@
 
 import {
   describeRedactions,
+  reportLabels,
   sanitizeReportText,
   type RedactionKind,
 } from "@camp404/core";
@@ -40,13 +41,10 @@ export const UNTRUSTED_BEGIN =
 export const UNTRUSTED_END =
   "<!-- untrusted: reporter-supplied content ends -->";
 
-/** Labels applied to a new issue. `from-app` marks provenance for triage;
- *  `bug`/`enhancement` are GitHub's default labels. Missing labels are
- *  auto-created by the issues API on first use. */
+/** Labels applied to a new issue, from the taxonomy in @camp404/core
+ *  (github-labels.ts): its type, `needs-triage` and `source: in-app`. */
 export function labelsFor(kind: FeedbackKind): string[] {
-  return kind === "bug"
-    ? ["bug", "from-app"]
-    : ["enhancement", "from-app"];
+  return reportLabels(kind);
 }
 
 /** Defuse backtick fences so user content can't break out of a code block. */

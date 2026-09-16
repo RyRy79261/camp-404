@@ -7,9 +7,13 @@ import {
 } from "@/lib/github-feedback";
 
 describe("labelsFor", () => {
-  it("maps kind to provenance-tagged labels", () => {
-    expect(labelsFor("bug")).toEqual(["bug", "from-app"]);
-    expect(labelsFor("feature")).toEqual(["enhancement", "from-app"]);
+  it("maps kind to the taxonomy's type, triage and source labels", () => {
+    expect(labelsFor("bug")).toEqual(["type: bug", "needs-triage", "source: in-app"]);
+    expect(labelsFor("feature")).toEqual([
+      "type: feature",
+      "needs-triage",
+      "source: in-app",
+    ]);
   });
 });
 
@@ -23,7 +27,7 @@ describe("buildFeedbackIssue", () => {
       route: "/captains/announcements",
     });
     expect(issue.title).toBe("Publish button does nothing");
-    expect(issue.labels).toEqual(["bug", "from-app"]);
+    expect(issue.labels).toEqual(["type: bug", "needs-triage", "source: in-app"]);
     expect(issue.body).toContain("Publish button does nothing");
     expect(issue.body).toContain("camp-user-123");
     expect(issue.body).toContain("/captains/announcements");

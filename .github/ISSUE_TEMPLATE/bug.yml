@@ -1,0 +1,83 @@
+name: Something is broken
+description: A screen, flow or control that does the wrong thing
+labels: ["type: bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. You do not need to know why it broke. A clear description
+        of what you saw is the useful part.
+
+        **Is it a security or privacy problem?** For example, you could see
+        someone else's details, or open a page you should not. Close this form
+        and report it privately. See SECURITY.md.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, and what the app did.
+      placeholder: |
+        I opened my profile, changed my arrival day and pressed Save. It said
+        "Saved", but when I came back the old day was still there.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: One line is enough.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did you see it?
+      options:
+        - The live site
+        - A pull request preview
+        - Running it locally
+        - The phone app
+    validations:
+      required: true
+
+  - type: input
+    id: address
+    attributes:
+      label: Page address
+      description: |
+        The part after the domain, and **stop at the `?`**. Some links carry a
+        sign-in token after it, and this repository is public. `/profile` is
+        enough.
+      placeholder: /captains/camp-management
+    validations:
+      required: false
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console error
+      description: |
+        Only if you know how to get one. Skip it otherwise.
+
+        **Remove anything that looks like a key**: a long random string, a
+        `token=`, an `Authorization:` header. Nothing on this form is cleaned
+        before it is published.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: personal-data
+    attributes:
+      label: Before you post
+      description: |
+        This repository is public. Camp screens show other people's phone
+        numbers, emergency contacts, ID numbers and allergy notes.
+      options:
+        - label: Nothing above shows somebody else's personal details.
+          required: true
+        - label: Nothing above holds a token, key or password, also not inside a link.
+          required: true

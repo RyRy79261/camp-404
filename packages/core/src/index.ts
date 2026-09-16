@@ -22,6 +22,8 @@
 //   - text redaction: redactPii, sanitizeReportText (both return a
 //     RedactionResult: the text and the RedactionKind[] found),
 //     describeRedactions, redactSecrets + SECRET_ENV_KEYS (./text-redaction)
+//   - GitHub labels: GITHUB_LABELS, the issue label taxonomy, and
+//     reportLabels for the in-app reporter (./github-labels)
 //   - shake detector: createShakeDetector + ShakeSample/ShakeDetectorConfig
 //     (./shake); the React hook + DOM permission helpers stay in apps/web
 //   - id validation: validateIdNumber, validateBirthDate, IdValidationResult
@@ -68,6 +70,7 @@ export * from "./family-tree";
 export * from "./invites";
 export * from "./text-utils";
 export * from "./text-redaction";
+export * from "./github-labels";
 export * from "./shake";
 export * from "./id-validation";
 export * from "./promotion";
