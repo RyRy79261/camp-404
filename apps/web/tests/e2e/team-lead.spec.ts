@@ -1,4 +1,9 @@
-import { test, expect } from "@playwright/test";
+import {
+  test,
+  expect,
+  type APIRequestContext,
+  type Page,
+} from "@playwright/test";
 import {
   completeOnboarding,
   login,
@@ -12,8 +17,8 @@ import {
 // team without leading it stays a plain member.
 
 async function approvedMember(
-  page: import("@playwright/test").Page,
-  request: import("@playwright/test").APIRequestContext,
+  page: Page,
+  request: APIRequestContext,
   id: string,
 ) {
   await login(page, { id, email: `${id}@example.com`, displayName: id });
