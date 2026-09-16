@@ -13,9 +13,16 @@ describe("notificationLink", () => {
     );
   });
 
+  it("opens the read page of an announcement", () => {
+    expect(notificationLink("announcement", ACTIVATION)).toBe(
+      `/announcements/${ACTIVATION}`,
+    );
+  });
+
   it("falls back to the inbox for anything it cannot open", () => {
     for (const [type, id] of [
-      ["announcement", ACTIVATION],
+      ["announcement", "not-a-uuid"],
+      ["announcement", null],
       ["questionnaire_activation", null],
       ["questionnaire_activation", "../../admin"],
       [null, null],

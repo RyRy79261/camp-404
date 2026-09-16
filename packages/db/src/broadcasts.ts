@@ -564,6 +564,77 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
     .orderBy(desc(schema.notificationDeliveries.createdAt));
 }
 
+export interface AnnouncementReading {
+  deliveryId: string;
+  title: string;
+  body: string;
+  presentation: AnnouncementPresentation;
+  senderName: string | null;
+  publishedAt: Date;
+  acknowledgedAt: Date | null;
+}
+
+/**
+ * One announcement, as the member it was delivered to reads it.
+ *
+ * The delivery row is the permission. Publishing wrote a delivery for exactly
+ * the members the announcement was for, so a member with no delivery gets
+ * null, and the broadcast row is not read at all: the answer for "not for you"
+ * and "does not exist" is the same. There is no second audience rule here to
+ * drift from resolveAudience.
+ *
+ * The member reads the copy delivered to them, not the broadcast's current
+ * text. A draft has no deliveries, so it can never be read here.
+ */
+export async function getAnnouncementForMember(
+  userId: string,
+  broadcastId: string,
+): Promise<AnnouncementReading | null> {
+  if (!UUID.test(broadcastId)) return null;
+  const db = createHttpDb();
+  const [delivery] = await db
+    .select({
+      id: schema.notificationDeliveries.id,
+      title: schema.notificationDeliveries.title,
+      body: schema.notificationDeliveries.body,
+      presentation: schema.notificationDeliveries.presentation,
+      acknowledgedAt: schema.notificationDeliveries.acknowledgedAt,
+    })
+    .from(schema.notificationDeliveries)
+    .where(
+      and(
+        eq(schema.notificationDeliveries.userId, userId),
+        eq(schema.notificationDeliveries.broadcastId, broadcastId),
+      ),
+    )
+    .limit(1);
+  if (!delivery) return null;
+
+  const [broadcast] = await db
+    .select({
+      kind: schema.broadcasts.kind,
+      publishedAt: schema.broadcasts.publishedAt,
+      senderName: schema.users.displayName,
+    })
+    .from(schema.broadcasts)
+    .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
+    .where(eq(schema.broadcasts.id, broadcastId))
+    .limit(1);
+  if (!broadcast?.publishedAt || broadcast.kind !== "announcement") {
+    return null;
+  }
+
+  return {
+    deliveryId: delivery.id,
+    title: delivery.title,
+    body: delivery.body,
+    presentation: delivery.presentation,
+    senderName: broadcast.senderName ?? null,
+    publishedAt: broadcast.publishedAt,
+    acknowledgedAt: delivery.acknowledgedAt,
+  };
+}
+
 /** Count of a user's unread deliveries — drives the header bell badge. */
 export async function countUnread(userId: string): Promise<number> {
   const db = createHttpDb();

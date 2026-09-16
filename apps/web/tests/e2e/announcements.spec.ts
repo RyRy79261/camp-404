@@ -97,5 +97,26 @@ test.describe("captain announcements (test-mode)", () => {
     const pending = await page.request.get("/api/notifications/pending");
     expect(pending.ok()).toBeTruthy();
     expect((await pending.json()).pending).toHaveLength(0);
+
+    // 6. The inbox row opens the whole announcement on its own page.
+    await page.goto("/notifications");
+    await page.getByRole("link", { name: /Burn-night briefing/ }).click();
+    await expect(page).toHaveURL(/\/announcements\/[0-9a-f-]{36}$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Burn-night briefing" }),
+    ).toBeVisible();
+    await expect(page.getByText("Meet at the effigy at 20:00.")).toBeVisible();
+    await expect(page.getByText(/You acknowledged this on/)).toBeVisible();
+    const readPage = page.url();
+
+    // 7. The delivery is the permission: the author got no delivery, so the
+    //    same link is a 404 for them.
+    await login(page, {
+      id: "captain-auth",
+      email: "god@example.com",
+      displayName: "Captain Jo",
+    });
+    const denied = await page.goto(readPage);
+    expect(denied?.status()).toBe(404);
   });
 });

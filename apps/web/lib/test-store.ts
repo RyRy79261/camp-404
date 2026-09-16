@@ -643,7 +643,7 @@ export const testStore = {
           readAt: d.readAt,
           acknowledgedAt: d.acknowledgedAt,
           createdAt: d.createdAt,
-          // Test-store deliveries are announcements, which link to the inbox.
+          // Test-store deliveries are announcements, which open their read page.
           refType: "announcement",
           refId: d.broadcastId,
         };
@@ -652,6 +652,37 @@ export const testStore = {
   countUnread(userId: string): number {
     return deliveries.filter((d) => d.userId === userId && d.readAt === null)
       .length;
+  },
+  getAnnouncementForMember(
+    userId: string,
+    broadcastId: string,
+  ): {
+    deliveryId: string;
+    title: string;
+    body: string;
+    presentation: TestPresentation;
+    senderName: string | null;
+    publishedAt: Date;
+    acknowledgedAt: Date | null;
+  } | null {
+    // The delivery row is the permission, as in production.
+    const d = deliveries.find(
+      (x) => x.userId === userId && x.broadcastId === broadcastId,
+    );
+    if (!d) return null;
+    const b = broadcasts.find((x) => x.id === broadcastId);
+    if (!b?.publishedAt) return null;
+    return {
+      deliveryId: d.id,
+      title: d.title,
+      body: d.body,
+      presentation: d.presentation,
+      senderName: b.senderId
+        ? (findUserById(b.senderId)?.displayName ?? null)
+        : null,
+      publishedAt: b.publishedAt,
+      acknowledgedAt: d.acknowledgedAt,
+    };
   },
   markRead(userId: string, ids: string[]): void {
     if (ids.length === 0) return;
