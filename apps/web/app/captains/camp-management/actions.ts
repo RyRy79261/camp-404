@@ -25,15 +25,13 @@ import {
   getPromotionRequestById,
   sendCaptainPromotion,
 } from "@/lib/promotion";
-import {
-  presentMemberDetail,
-  type PresentedMember,
-} from "@/lib/member-detail";
+import { presentMemberDetail, type PresentedMember } from "@/lib/member-detail";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 import {
   presentPublicMember,
   type PublicMemberProfile,
 } from "@/lib/public-member";
+import { runAction } from "@/lib/action-result";
 
 export type MemberDetailResult =
   | {
@@ -59,9 +57,7 @@ export type ApprovalDecisionResult =
   | { ok: true }
   | { ok: false; error: string };
 
-export type PromotionActionResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type PromotionActionResult = { ok: true } | { ok: false; error: string };
 
 export type SendPromotionResult =
   | { ok: true; requestId: string }
@@ -140,48 +136,50 @@ async function requireApprovedMember(): Promise<
 export async function getMemberDetailAction(
   userId: string,
 ): Promise<MemberDetailResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("getMemberDetailAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  const detail = await getCampMemberDetail(userId);
-  if (!detail) return { ok: false, error: "Member not found." };
+    const detail = await getCampMemberDetail(userId);
+    if (!detail) return { ok: false, error: "Member not found." };
 
-  // Captain-gated above — decrypt this member's government ID number and merge
-  // it back into the answers so the profile modal can show it. Captains and
-  // the owner are the only readers of this field.
-  const passport = decryptOrNull(detail.passportEncrypted);
-  const saId = decryptOrNull(detail.saIdEncrypted);
-  const id = passport
-    ? { idType: "passport", idNumber: passport }
-    : saId
-      ? { idType: "sa_id", idNumber: saId }
-      : { idType: null, idNumber: null };
-  const responses = mergeIdNumber(detail.responses, id);
+    // Captain-gated above — decrypt this member's government ID number and merge
+    // it back into the answers so the profile modal can show it. Captains and
+    // the owner are the only readers of this field.
+    const passport = decryptOrNull(detail.passportEncrypted);
+    const saId = decryptOrNull(detail.saIdEncrypted);
+    const id = passport
+      ? { idType: "passport", idNumber: passport }
+      : saId
+        ? { idType: "sa_id", idNumber: saId }
+        : { idType: null, idNumber: null };
+    const responses = mergeIdNumber(detail.responses, id);
 
-  // Assign-captain affordance for the modal: reuse the pure send-guard for
-  // visibility (captain viewer, target not already a captain, not self) and the
-  // pure step-state over the member's open request (if any).
-  const canAssignCaptain = canSendPromotion({
-    viewerRank: "captain",
-    viewerId: gate.captainId,
-    targetRank: deriveViewerRank(detail.rank, false),
-    targetId: userId,
-  }).ok;
-  const openRequest = await getOpenPromotionForTarget(userId);
-  const promotionStep = promotionStepState(openRequest);
+    // Assign-captain affordance for the modal: reuse the pure send-guard for
+    // visibility (captain viewer, target not already a captain, not self) and the
+    // pure step-state over the member's open request (if any).
+    const canAssignCaptain = canSendPromotion({
+      viewerRank: "captain",
+      viewerId: gate.captainId,
+      targetRank: deriveViewerRank(detail.rank, false),
+      targetId: userId,
+    }).ok;
+    const openRequest = await getOpenPromotionForTarget(userId);
+    const promotionStep = promotionStepState(openRequest);
 
-  // Resolve team picks against ALL teams (incl. archived) so a member who chose
-  // a since-archived team still shows its label, not the raw key.
-  const questionnaire = await getQuestionnaireForResponses();
+    // Resolve team picks against ALL teams (incl. archived) so a member who chose
+    // a since-archived team still shows its label, not the raw key.
+    const questionnaire = await getQuestionnaireForResponses();
 
-  return {
-    ok: true,
-    member: presentMemberDetail({ ...detail, responses }, questionnaire),
-    canAssignCaptain,
-    promotionStep,
-    promotionRequestId: openRequest?.id ?? null,
-    promotionRequestIsMine: openRequest?.requestedByUserId === gate.captainId,
-  };
+    return {
+      ok: true,
+      member: presentMemberDetail({ ...detail, responses }, questionnaire),
+      canAssignCaptain,
+      promotionStep,
+      promotionRequestId: openRequest?.id ?? null,
+      promotionRequestIsMine: openRequest?.requestedByUserId === gate.captainId,
+    };
+  });
 }
 
 /**
@@ -194,18 +192,20 @@ export async function getMemberDetailAction(
 export async function getPublicMemberProfileAction(
   userId: string,
 ): Promise<PublicMemberProfileResult> {
-  const gate = await requireApprovedMember();
-  if (!gate.ok) return gate;
+  return runAction("getPublicMemberProfileAction", async () => {
+    const gate = await requireApprovedMember();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(userId).success) {
-    return { ok: false, error: "Invalid member." };
-  }
+    if (!UserId.safeParse(userId).success) {
+      return { ok: false, error: "Invalid member." };
+    }
 
-  const detail = await getCampMemberDetail(userId);
-  if (!detail) return { ok: false, error: "Member not found." };
+    const detail = await getCampMemberDetail(userId);
+    if (!detail) return { ok: false, error: "Member not found." };
 
-  // Allowlist projection (no decrypt, no status, no email, no provenance).
-  return { ok: true, ...presentPublicMember(detail) };
+    // Allowlist projection (no decrypt, no status, no email, no provenance).
+    return { ok: true, ...presentPublicMember(detail) };
+  });
 }
 
 /**
@@ -217,23 +217,25 @@ export async function decideApprovalAction(
   userId: string,
   decision: "approved" | "rejected",
 ): Promise<ApprovalDecisionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("decideApprovalAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  if (decision !== "approved" && decision !== "rejected") {
-    return { ok: false, error: "Unknown decision." };
-  }
-  if (userId === gate.captainId) {
-    return { ok: false, error: "You can't decide on your own account." };
-  }
+    if (decision !== "approved" && decision !== "rejected") {
+      return { ok: false, error: "Unknown decision." };
+    }
+    if (userId === gate.captainId) {
+      return { ok: false, error: "You can't decide on your own account." };
+    }
 
-  await decideUserApproval({
-    userId,
-    status: decision,
-    decidedByUserId: gate.captainId,
+    await decideUserApproval({
+      userId,
+      status: decision,
+      decidedByUserId: gate.captainId,
+    });
+    revalidatePath("/captains/camp-management");
+    return { ok: true };
   });
-  revalidatePath("/captains/camp-management");
-  return { ok: true };
 }
 
 /**
@@ -246,37 +248,40 @@ export async function decideApprovalAction(
 export async function sendCaptainPromotionAction(
   targetUserId: string,
 ): Promise<SendPromotionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("sendCaptainPromotionAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(targetUserId).success) {
-    return { ok: false, error: "Invalid member." };
-  }
+    if (!UserId.safeParse(targetUserId).success) {
+      return { ok: false, error: "Invalid member." };
+    }
 
-  const target = await getCampMemberDetail(targetUserId);
-  if (!target) return { ok: false, error: "Member not found." };
+    const target = await getCampMemberDetail(targetUserId);
+    if (!target) return { ok: false, error: "Member not found." };
 
-  // The viewer is a captain by construction (requireCaptain). team-lead is
-  // irrelevant to this guard (it only checks `=== "captain"`), so isLead=false.
-  const guard = canSendPromotion({
-    viewerRank: "captain",
-    viewerId: gate.captainId,
-    targetRank: deriveViewerRank(target.rank, false),
-    targetId: targetUserId,
+    // The viewer is a captain by construction (requireCaptain). team-lead is
+    // irrelevant to this guard (it only checks `=== "captain"`), so isLead=false.
+    const guard = canSendPromotion({
+      viewerRank: "captain",
+      viewerId: gate.captainId,
+      targetRank: deriveViewerRank(target.rank, false),
+      targetId: targetUserId,
+    });
+    if (!guard.ok) {
+      return {
+        ok: false,
+        error:
+          SEND_PROMOTION_COPY[guard.reason] ?? "Couldn't send the request.",
+      };
+    }
+
+    const created = await sendCaptainPromotion({
+      targetUserId,
+      requestedByUserId: gate.captainId,
+    });
+    revalidatePath("/captains/camp-management");
+    return { ok: true, requestId: created.id };
   });
-  if (!guard.ok) {
-    return {
-      ok: false,
-      error: SEND_PROMOTION_COPY[guard.reason] ?? "Couldn't send the request.",
-    };
-  }
-
-  const created = await sendCaptainPromotion({
-    targetUserId,
-    requestedByUserId: gate.captainId,
-  });
-  revalidatePath("/captains/camp-management");
-  return { ok: true, requestId: created.id };
 }
 
 /**
@@ -287,45 +292,48 @@ export async function sendCaptainPromotionAction(
 export async function cancelCaptainPromotionAction(
   requestId: string,
 ): Promise<PromotionActionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("cancelCaptainPromotionAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(requestId).success) {
-    return { ok: false, error: "Invalid request." };
-  }
+    if (!UserId.safeParse(requestId).success) {
+      return { ok: false, error: "Invalid request." };
+    }
 
-  const request = await getPromotionRequestById(requestId);
-  if (
-    !request ||
-    request.targetUserId === null ||
-    request.requestedByUserId === null
-  ) {
-    return { ok: false, error: "Request not found." };
-  }
+    const request = await getPromotionRequestById(requestId);
+    if (
+      !request ||
+      request.targetUserId === null ||
+      request.requestedByUserId === null
+    ) {
+      return { ok: false, error: "Request not found." };
+    }
 
-  const guard = canDecidePromotion({
-    actorId: gate.captainId,
-    request: {
-      status: request.status,
-      targetUserId: request.targetUserId,
-      requestedByUserId: request.requestedByUserId,
-    },
-    action: "cancel",
+    const guard = canDecidePromotion({
+      actorId: gate.captainId,
+      request: {
+        status: request.status,
+        targetUserId: request.targetUserId,
+        requestedByUserId: request.requestedByUserId,
+      },
+      action: "cancel",
+    });
+    if (!guard.ok) {
+      return {
+        ok: false,
+        error:
+          CANCEL_PROMOTION_COPY[guard.reason] ?? "Couldn't cancel the request.",
+      };
+    }
+
+    // Bind the actor in the write predicate too (defense in depth): the cancel
+    // only flips a row this captain actually requested.
+    await decideCaptainPromotion({
+      requestId,
+      status: "cancelled",
+      actorUserId: gate.captainId,
+    });
+    revalidatePath("/captains/camp-management");
+    return { ok: true };
   });
-  if (!guard.ok) {
-    return {
-      ok: false,
-      error: CANCEL_PROMOTION_COPY[guard.reason] ?? "Couldn't cancel the request.",
-    };
-  }
-
-  // Bind the actor in the write predicate too (defense in depth): the cancel
-  // only flips a row this captain actually requested.
-  await decideCaptainPromotion({
-    requestId,
-    status: "cancelled",
-    actorUserId: gate.captainId,
-  });
-  revalidatePath("/captains/camp-management");
-  return { ok: true };
 }

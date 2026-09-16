@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { createHttpDb, createPooledDb } from "./index";
+import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 import { meetsRequiredVersion } from "./versions";
@@ -89,51 +89,46 @@ export async function openActivation(
     null,
   );
 
-  const { db, pool } = createPooledDb();
-  try {
-    return await db.transaction(async (tx) => {
-      await tx
-        .update(schema.questionnaireActivations)
-        .set({ status: "open", openedAt: new Date(), updatedAt: new Date() })
-        .where(eq(schema.questionnaireActivations.id, act.id));
+  return await withTransaction(async (tx) => {
+    await tx
+      .update(schema.questionnaireActivations)
+      .set({ status: "open", openedAt: new Date(), updatedAt: new Date() })
+      .where(eq(schema.questionnaireActivations.id, act.id));
 
-      if (recipientIds.length === 0) return { ok: true as const, created: 0 };
+    if (recipientIds.length === 0) return { ok: true as const, created: 0 };
 
-      await tx
-        .insert(schema.requiredActions)
-        .values(
-          recipientIds.map((userId) => ({
-            userId,
-            type: "questionnaire" as const,
-            actionKey: act.questionnaireKey,
-            version: act.version,
-            activationId: act.id,
-            title: act.title,
-            blocking: act.blocking,
-            dueAt: act.dueAt,
-          })),
-        )
-        .onConflictDoUpdate({
-          target: [
-            schema.requiredActions.userId,
-            schema.requiredActions.actionKey,
-          ],
-          set: {
-            version: act.version,
-            activationId: act.id,
-            title: act.title,
-            blocking: act.blocking,
-            dueAt: act.dueAt,
-            status: "pending",
-            completedAt: null,
-          },
-        });
+    await tx
+      .insert(schema.requiredActions)
+      .values(
+        recipientIds.map((userId) => ({
+          userId,
+          type: "questionnaire" as const,
+          actionKey: act.questionnaireKey,
+          version: act.version,
+          activationId: act.id,
+          title: act.title,
+          blocking: act.blocking,
+          dueAt: act.dueAt,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [
+          schema.requiredActions.userId,
+          schema.requiredActions.actionKey,
+        ],
+        set: {
+          version: act.version,
+          activationId: act.id,
+          title: act.title,
+          blocking: act.blocking,
+          dueAt: act.dueAt,
+          status: "pending",
+          completedAt: null,
+        },
+      });
 
-      return { ok: true as const, created: recipientIds.length };
-    });
-  } finally {
-    await pool.end();
-  }
+    return { ok: true as const, created: recipientIds.length };
+  });
 }
 
 /**
@@ -308,60 +303,54 @@ export async function completeBuilderResponse(input: {
   responses: QuestionnaireResponses;
   activationId: string;
 }): Promise<void> {
-  const { db, pool } = createPooledDb();
   const now = new Date();
-  try {
-    await db.transaction(async (tx) => {
-      await tx
-        .insert(schema.questionnaireResponses)
-        .values({
-          userId: input.userId,
-          definitionKey: input.definitionKey,
+  await withTransaction(async (tx) => {
+    await tx
+      .insert(schema.questionnaireResponses)
+      .values({
+        userId: input.userId,
+        definitionKey: input.definitionKey,
+        definitionVersion: input.definitionVersion,
+        responses: input.responses,
+        activationId: input.activationId,
+        completedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [
+          schema.questionnaireResponses.userId,
+          schema.questionnaireResponses.definitionKey,
+        ],
+        set: {
           definitionVersion: input.definitionVersion,
           responses: input.responses,
           activationId: input.activationId,
           completedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: [
-            schema.questionnaireResponses.userId,
-            schema.questionnaireResponses.definitionKey,
-          ],
-          set: {
-            definitionVersion: input.definitionVersion,
-            responses: input.responses,
-            activationId: input.activationId,
-            completedAt: now,
-            updatedAt: now,
-          },
-        });
-      const [ra] = await tx
-        .select({
-          id: schema.requiredActions.id,
-          version: schema.requiredActions.version,
-          status: schema.requiredActions.status,
-        })
-        .from(schema.requiredActions)
-        .where(
-          and(
-            eq(schema.requiredActions.userId, input.userId),
-            eq(schema.requiredActions.actionKey, input.definitionKey),
-          ),
-        )
-        .limit(1);
-      if (
-        ra &&
-        ra.status === "pending" &&
-        (!ra.version ||
-          meetsRequiredVersion(ra.version, input.definitionVersion))
-      ) {
-        await tx
-          .update(schema.requiredActions)
-          .set({ status: "completed", completedAt: now })
-          .where(eq(schema.requiredActions.id, ra.id));
-      }
-    });
-  } finally {
-    await pool.end();
-  }
+          updatedAt: now,
+        },
+      });
+    const [ra] = await tx
+      .select({
+        id: schema.requiredActions.id,
+        version: schema.requiredActions.version,
+        status: schema.requiredActions.status,
+      })
+      .from(schema.requiredActions)
+      .where(
+        and(
+          eq(schema.requiredActions.userId, input.userId),
+          eq(schema.requiredActions.actionKey, input.definitionKey),
+        ),
+      )
+      .limit(1);
+    if (
+      ra &&
+      ra.status === "pending" &&
+      (!ra.version || meetsRequiredVersion(ra.version, input.definitionVersion))
+    ) {
+      await tx
+        .update(schema.requiredActions)
+        .set({ status: "completed", completedAt: now })
+        .where(eq(schema.requiredActions.id, ra.id));
+    }
+  });
 }
