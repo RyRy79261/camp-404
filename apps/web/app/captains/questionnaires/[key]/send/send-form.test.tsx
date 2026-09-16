@@ -19,7 +19,7 @@ vi.mock("@camp404/ui/components/toast", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-import { AudienceCount, SendForm } from "./send-form";
+import { AudienceCount, SendForm, sendRefusal } from "./send-form";
 import {
   closeActivationAction,
   previewAudienceCount,
@@ -192,5 +192,34 @@ describe("SendForm — audience preview", () => {
       await new Promise((resolve) => setTimeout(resolve, 400));
     });
     expect(previewAudienceCount).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendRefusal", () => {
+  it("names the missing team", () => {
+    expect(sendRefusal({ scope: "team", team: "", selectedCount: 0 })).toBe(
+      "Pick a team to send this to.",
+    );
+    expect(
+      sendRefusal({ scope: "team", team: "kitchen", selectedCount: 0 }),
+    ).toBeNull();
+  });
+
+  it("names the missing members", () => {
+    expect(
+      sendRefusal({ scope: "individual", team: "", selectedCount: 0 }),
+    ).toBe("Pick at least one member to send this to.");
+    expect(
+      sendRefusal({ scope: "individual", team: "", selectedCount: 2 }),
+    ).toBeNull();
+  });
+
+  it("lets everyone and team-lead sends through", () => {
+    expect(
+      sendRefusal({ scope: "everyone", team: "", selectedCount: 0 }),
+    ).toBeNull();
+    expect(
+      sendRefusal({ scope: "team_leads", team: "", selectedCount: 0 }),
+    ).toBeNull();
   });
 });

@@ -23,11 +23,17 @@ describe("deleteAvatarBlobs", () => {
     delete process.env.BLOB_READ_WRITE_TOKEN;
   });
 
-  it("is a no-op when the store token is absent", async () => {
+  it("deletes nothing without the store token, and says so", async () => {
     delete process.env.BLOB_READ_WRITE_TOKEN;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await deleteAvatarBlobs("u1");
     expect(list).not.toHaveBeenCalled();
     expect(del).not.toHaveBeenCalled();
+    // Erasure must not skip a member's photos silently.
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("BLOB_READ_WRITE_TOKEN is not set"),
+    );
+    warn.mockRestore();
   });
 
   it("deletes every blob under the user's prefix (anonymisation)", async () => {

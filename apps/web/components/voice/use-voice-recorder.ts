@@ -48,6 +48,37 @@ function pickMimeType(): string | undefined {
 }
 
 /**
+ * Whether this browser can record a clip at all. Without MediaRecorder or
+ * getUserMedia (an older iOS, some in-app browsers, a page not served over
+ * HTTPS) the Dictate pill would open a recorder that can only fail, so the
+ * places that show the pill hide it instead.
+ */
+export function isVoiceRecordingSupported(): boolean {
+  return (
+    typeof MediaRecorder !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    typeof navigator.mediaDevices?.getUserMedia === "function"
+  );
+}
+
+// Browser support does not change while a page is open, so there is nothing
+// to subscribe to.
+const subscribeNever = () => () => {};
+
+/**
+ * {@link isVoiceRecordingSupported} as a hook. The server cannot know, so it
+ * renders the pill, and hydration removes it in a browser that cannot record.
+ * A browser that can record, which is most of them, never sees it flicker.
+ */
+export function useVoiceSupported(): boolean {
+  return React.useSyncExternalStore(
+    subscribeNever,
+    isVoiceRecordingSupported,
+    () => true,
+  );
+}
+
+/**
  * Cross-browser MediaRecorder wrapper. Records on `start()`, transcribes
  * via `/api/voice/transcribe` on `stop()`, and calls `onTranscript` with
  * the result. While recording, exposes an `AnalyserNode` consumers can
@@ -263,5 +294,18 @@ export function useVoiceRecorder({
     reset();
   }
 
-  return { state, error, start, stop, reset, accept, discard, analyser, transcript };
+  const supported = useVoiceSupported();
+
+  return {
+    state,
+    error,
+    start,
+    stop,
+    reset,
+    accept,
+    discard,
+    analyser,
+    transcript,
+    supported,
+  };
 }

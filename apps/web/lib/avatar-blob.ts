@@ -48,7 +48,15 @@ async function pruneBlobs(
   { flatOnly }: { flatOnly: boolean },
 ): Promise<void> {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) return;
+  if (!token) {
+    // Say so: without the token nothing is deleted, and on the account-erasure
+    // path that means a member's photos stay in the store. The upload route
+    // refuses loudly in the same state; this must not be the quiet twin.
+    console.warn(
+      `[avatar-blob] BLOB_READ_WRITE_TOKEN is not set, so blobs under "${prefix}" were not deleted.`,
+    );
+    return;
+  }
 
   const stale: string[] = [];
   let cursor: string | undefined;

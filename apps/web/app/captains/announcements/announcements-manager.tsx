@@ -38,6 +38,7 @@ import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
 import { RecorderPanel } from "@/components/voice/recorder-panel";
+import { useVoiceSupported } from "@/components/voice/use-voice-recorder";
 import {
   deleteDraftAction,
   publishAction,
@@ -123,6 +124,7 @@ export function AnnouncementsManager({
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [dictating, setDictating] = useState(false);
+  const voiceSupported = useVoiceSupported();
   const [pending, startTransition] = useTransition();
 
   const drafts = announcements.filter((a) => a.publishedAt === null);
@@ -248,7 +250,7 @@ export function AnnouncementsManager({
           />
           {/* Voice dictation — same pattern as the questionnaire long-text
               fields: tap to swap in the recorder, each transcript appends. */}
-          {dictating ? (
+          {!voiceSupported ? null : dictating ? (
             <RecorderPanel
               onTranscript={appendToBody}
               onDismiss={() => setDictating(false)}
