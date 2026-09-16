@@ -55,6 +55,7 @@ vi.mock("@/lib/camp-config", () => ({
   activeTeams: () => [],
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/audit", () => ({ auditReadAfterResponse: vi.fn() }));
 
 import { getMemberDetailAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";

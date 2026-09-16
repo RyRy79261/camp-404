@@ -41,6 +41,7 @@ import {
   type PublicMemberProfile,
 } from "@/lib/public-member";
 import { runAction, type ActionFailure } from "@/lib/action-result";
+import { auditReadAfterResponse } from "@/lib/audit";
 
 export type MemberDetailResult =
   | {
@@ -242,6 +243,18 @@ export async function getMemberDetailAction(
         ? { idType: unreadableType, idNumber: ID_UNREADABLE_LABEL }
         : { idType: null, idNumber: null };
     const responses = mergeIdNumber(detail.responses, id);
+
+    // A captain reading someone else's ID number leaves a trail. Only a value
+    // actually shown counts: an empty or unreadable column discloses nothing,
+    // and a captain reading their own is not a disclosure.
+    if (readable && userId !== gate.captainId) {
+      auditReadAfterResponse({
+        actorId: gate.captainId,
+        action: "member.id_document.viewed",
+        target: userId,
+        metadata: { basis: "captain", idType: id.idType },
+      });
+    }
 
     // Assign-captain affordance for the modal: reuse the pure send-guard for
     // visibility (captain viewer, target not already a captain, not self) and the

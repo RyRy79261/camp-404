@@ -49,6 +49,7 @@ vi.mock("@/lib/camp-config", () => ({
   activeTeams: () => [],
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/audit", () => ({ auditReadAfterResponse: vi.fn() }));
 
 import { getMemberDetailAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -57,6 +58,7 @@ import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getOpenPromotionForTarget } from "@/lib/promotion";
 import { getCampMemberDetail } from "@camp404/db/roster";
 import { decryptField } from "@camp404/db/crypto";
+import { auditReadAfterResponse } from "@/lib/audit";
 
 const CAPTAIN = "cap-1";
 
@@ -315,5 +317,84 @@ describe("getMemberDetailAction — open request id", () => {
     if (!res.ok) return;
     expect(res.promotionRequestId).toBeNull();
     expect(res.promotionRequestIsMine).toBe(false);
+  });
+});
+
+describe("getMemberDetailAction — the ID read leaves an audit trail", () => {
+  const MEMBER = "member-1";
+
+  function idColumns(
+    passport: unknown,
+    saId: unknown = { state: "absent", value: null },
+  ) {
+    vi.mocked(decryptField)
+      .mockReturnValueOnce(passport as never)
+      .mockReturnValueOnce(saId as never);
+  }
+
+  it("records a captain reading another member's ID number", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+    idColumns({ state: "ok", value: "P1234567" });
+
+    const res = await getMemberDetailAction(MEMBER);
+
+    expect(res.ok).toBe(true);
+    expect(auditReadAfterResponse).toHaveBeenCalledExactlyOnceWith({
+      actorId: CAPTAIN,
+      action: "member.id_document.viewed",
+      target: MEMBER,
+      metadata: { basis: "captain", idType: "passport" },
+    });
+  });
+
+  it("names the SA ID when that is the document shown", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+    idColumns(
+      { state: "absent", value: null },
+      { state: "ok", value: "8001015009087" },
+    );
+
+    await getMemberDetailAction(MEMBER);
+
+    expect(
+      vi.mocked(auditReadAfterResponse).mock.calls[0]![0].metadata,
+    ).toEqual({
+      basis: "captain",
+      idType: "sa_id",
+    });
+  });
+
+  it("records nothing when there is no ID number to show", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+    idColumns({ state: "absent", value: null });
+
+    await getMemberDetailAction(MEMBER);
+
+    expect(auditReadAfterResponse).not.toHaveBeenCalled();
+  });
+
+  it("records nothing when the ID cannot be decrypted", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+    idColumns({ state: "unreadable", value: null });
+
+    await getMemberDetailAction(MEMBER);
+
+    expect(auditReadAfterResponse).not.toHaveBeenCalled();
+  });
+
+  it("records nothing when a captain reads their own", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(
+      detail({ id: CAPTAIN, rank: "captain" }) as never,
+    );
+    idColumns({ state: "ok", value: "P1234567" });
+
+    await getMemberDetailAction(CAPTAIN);
+
+    expect(auditReadAfterResponse).not.toHaveBeenCalled();
   });
 });
