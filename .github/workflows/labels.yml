@@ -1,0 +1,34 @@
+name: Labels
+
+# Keeps the repository's issue labels in step with the taxonomy in
+# packages/core/src/github-labels.ts. Creates and updates; never deletes.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/core/src/github-labels.ts
+      - scripts/sync-github-labels.mts
+      - .github/workflows/labels.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: labels
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Sync labels
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node --experimental-strip-types scripts/sync-github-labels.mts

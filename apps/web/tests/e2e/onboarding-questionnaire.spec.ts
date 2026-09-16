@@ -11,7 +11,7 @@ import { login, resetTestState, redeemInviteAtGate } from "./_helpers";
 // wizard unit test, since E2E_TEST_MODE bypasses encryption (the in-memory
 // backend stores the ID raw) so the save cannot throw here.
 //
-// Relies on E2E_TEST_MODE=1 + INVITE_CODES=TEST-INVITE (see playwright.config.ts).
+// Relies on E2E_TEST_MODE=1 + INVITE_CODES=TEST-INVITE-E2E-ONLY-CODE (see playwright.config.ts).
 
 test.describe("onboarding questionnaire wizard", () => {
   test.beforeEach(async ({ request }) => {
@@ -20,7 +20,7 @@ test.describe("onboarding questionnaire wizard", () => {
 
   test("a member can advance past the ID-document page", async ({ page }) => {
     await login(page, { id: "wizard-user", email: "wizard@example.com" });
-    await redeemInviteAtGate(page, "TEST-INVITE");
+    await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     // Surface 23 — the gate interstitial lands first; start into the wizard

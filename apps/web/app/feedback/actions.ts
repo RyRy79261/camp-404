@@ -1,15 +1,12 @@
 "use server";
 
 import { z } from "zod";
+import { sanitizeReportText } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
 import { rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
-import {
-  buildFeedbackIssue,
-  DESCRIPTION_MAX,
-  sanitizeReportText,
-} from "@/lib/github-feedback";
+import { buildFeedbackIssue, DESCRIPTION_MAX } from "@/lib/github-feedback";
 import { structureWithAi } from "@/lib/feedback-ai";
 
 export type FeedbackResult =
@@ -116,7 +113,7 @@ export async function submitFeedbackAction(
   // Sanitize once: reject input that's empty after PII/HTML stripping (e.g.
   // HTML-only) so we never file a blank issue, and use the clean text as the
   // AI input so no PII is sent to the model.
-  const sanitized = sanitizeReportText(description, DESCRIPTION_MAX);
+  const sanitized = sanitizeReportText(description, DESCRIPTION_MAX).text;
   if (!sanitized) {
     return { ok: false, error: "Please describe the issue." };
   }
@@ -135,9 +132,11 @@ export async function submitFeedbackAction(
   // Optional "Improve with AI" restructuring; null on any failure → plain body.
   const structured = useAi ? await structureWithAi(kind, sanitized) : null;
 
+  // The raw description: the builder sanitizes it again and records what
+  // redaction removed, for the note on the issue.
   const issue = buildFeedbackIssue({
     kind,
-    description: sanitized,
+    description,
     dictated: dictated ?? false,
     reporterRef,
     route,

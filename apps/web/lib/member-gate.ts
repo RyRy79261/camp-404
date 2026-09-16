@@ -5,7 +5,6 @@ import { getAuthenticatedUserOrRedirect, type AuthenticatedUser } from "./auth";
 import { nextGate } from "./required-actions";
 import {
   ensureCampUser,
-  getBurnerProfile,
   getPendingRequiredActions,
   hasCampAccess,
   isApproved,
@@ -39,13 +38,12 @@ export async function memberBlock(
   }
   await syncOpenGates(campUser.id);
   const gate = nextGate(await getPendingRequiredActions(campUser.id));
-  if (gate) return { reason: "questionnaire", href: gate };
-  // Belt-and-braces: migration 0029 seeds every older member's burner_profile
-  // required action, but the E2E test store models no required actions, so
-  // this check is still what gates onboarding there.
-  const profile = await getBurnerProfile(campUser.id);
-  if (!profile?.completedAt) {
-    return { reason: "onboarding", href: "/onboarding/questionnaire" };
+  if (gate) {
+    // The burner profile is the onboarding rung; any other gate is a
+    // questionnaire someone sent.
+    return gate === "/onboarding/questionnaire"
+      ? { reason: "onboarding", href: gate }
+      : { reason: "questionnaire", href: gate };
   }
   if (!isApproved(campUser, email)) {
     return { reason: "approval", href: "/pending-approval" };

@@ -38,5 +38,7 @@ export async function POST(req: Request) {
     responses: {},
     markComplete: true,
   });
+  // Finishing the profile satisfies its gate, as the real save does.
+  testStore.satisfyRequiredAction(user.id, "burner_profile");
   return NextResponse.json({ ok: true });
 }

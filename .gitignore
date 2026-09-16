@@ -5,6 +5,9 @@ node_modules/
 
 # next.js
 .next/
+# Written by next dev, next build and next typegen, each pointing at its own
+# types folder, so a committed copy flips on every run (Next's docs say ignore it).
+next-env.d.ts
 out/
 .turbo/
 dist/

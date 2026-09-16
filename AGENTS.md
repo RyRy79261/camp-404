@@ -20,19 +20,16 @@ apps/
   mobile/     Capacitor host wrapping the web static export
   admin-cli/  Node CLI for data ops
 packages/
+  core/       Framework-free domain logic: access, privacy, redaction, … (@camp404/core)
   ui/         Shared shadcn/ui components (@camp404/ui)
   db/         Drizzle schema + migrations (@camp404/db)
   types/      Zod schemas + shared TS types (@camp404/types)
+  telegram/   Bot client and handlers; outbound built but off (@camp404/telegram)
   ai-prompts/ Versioned prompt templates (@camp404/ai-prompts)
   eslint-config/ typescript-config/
 ```
 
-> **[CORRECTION 2026-09-09]** The tree above omits two workspaces that exist
-> today: `packages/core/` (`@camp404/core` — framework-free domain logic:
-> access rules, invites, ID validation, promotion, family tree, text
-> redaction/utils, shake) and `packages/telegram/` (`@camp404/telegram` — bot
-> client, webhook, and handlers; outbound is built but deliberately not
-> activated, see `DEFERRED.md`). `pnpm-workspace.yaml` is the source of truth.
+`pnpm-workspace.yaml` is the source of truth.
 
 ## Commands
 
@@ -46,6 +43,29 @@ pnpm format                            # prettier --write
 ```
 
 Per-package work uses `--filter`, e.g. `pnpm --filter @camp404/web dev`.
+The web typecheck runs `next typegen` first, so typed routes are checked
+against the real route tree (`next-env.d.ts` is generated, not committed).
+
+Four traps that already cost real time:
+
+- **PGlite has one connection.** The db integration tests
+  (`packages/db/src/__tests__/_harness.ts`) back every driver with one
+  in-process Postgres. A `createHttpDb()` query issued while a
+  `withTransaction` callback is still open waits forever (a test timeout),
+  though production would use a second connection. Fix the code, not the
+  test: pass the `tx` down, or read after the transaction returns. Green on
+  PGlite is not proof of Neon pooling or cold starts.
+- **E2E runs on the in-memory test store.** Playwright starts `next dev` with
+  `E2E_TEST_MODE=1`, and `apps/web/lib/test-store.ts` stands in for Neon Auth
+  and the database. A data function with no test-store twin cannot be driven
+  by Playwright. Add the twin with the feature, or say in the PR that the flow
+  has no E2E cover.
+- **A `"use server"` file may export only async functions.** A `const`
+  export breaks the page under `next dev`, and neither typecheck nor lint
+  catches it. Put shared constants in a plain module.
+- **"branches limit exceeded" in the `schema-migration` job is capacity, not
+  code.** Each run makes a Neon branch; several stacked PRs pushed together
+  hit the project's limit. Re-run the failed job.
 
 ## Design (pencil.dev)
 
@@ -88,6 +108,30 @@ frozen — never regenerate, edit, or delete an existing migration. Each
 change is a new `0001_*.sql`, `0002_*.sql`, … `pnpm --filter @camp404/db
 exec drizzle-kit check` validates consistency.
 
+**One-off data fixes are migrations too.** `vercel-build` runs
+`db:migrate` before `next build`, so a data fix written as a custom migration
+(`pnpm --filter @camp404/db db:generate --custom --name <name>`, then fill in
+the SQL) runs on the next deploy. Never ship a fix that needs someone to run a
+CLI or SQL command against production by hand. Make it idempotent (`ON
+CONFLICT DO NOTHING`, `WHERE ... IS NULL`) and test it on PGlite.
+
+Two Postgres traps:
+
+- **A nullable column in a unique index drops uniqueness for NULL rows.**
+  Postgres treats NULLs as distinct, so `(user_id, definition_key,
+  activation_id)` would allow any number of duplicates whose
+  `activation_id` is NULL. `questionnaire_responses.activation_id` is
+  nullable, and `questionnaire_responses_user_def_cycle_idx` must stay on
+  `(user_id, definition_key, cycle)`. When a nullable column must be in the
+  rule, use two partial indexes.
+- **`ON CONFLICT (cols)` against a partial unique index fails with 42P10**
+  unless the statement repeats the index's `WHERE` (drizzle: `targetWhere`).
+  The partial unique indexes today: `users_ref_code_uniq`,
+  `captain_promotion_open_per_target_idx`,
+  `questionnaire_activations_one_open_per_key_idx`,
+  `notification_deliveries_broadcast_user_uniq`. A bare `ON CONFLICT DO
+  NOTHING`, with no target, is not affected.
+
 **Driver choice.** `@camp404/db` exposes two drivers: `createHttpDb()` is
 stateless, for route handlers and server components, and has **no
 transactions**; `createPooledDb()` is a WebSocket pool, for cron jobs and
@@ -119,11 +163,12 @@ Decisions baked into the schema — keep new code consistent with them:
   would buy privacy the camp does not ask for at the cost of a second,
   parallel authorization axis. A lead never reaches a captain-required
   surface, because `team_lead < captain` still holds.
-  - **Corollary — pass the real flag.** Several captain pages currently
-    hardcode `deriveViewerRank(rank, false)`. That is behaviour-preserving
-    only while the surface requires `captain`; on any surface requiring
-    `team_lead` it wrongly locks out a genuine lead. New gates must call
-    `isTeamLead()` and pass the result.
+  - **Corollary — one gate.** Captain pages and actions gate through
+    `apps/web/lib/captain-gate.ts` (`captainPageGate` / `captainActionGate`
+    with the rung they need). It walks the member ladder, then reads the
+    real `isTeamLead()` flag. Never hand-roll a gate with
+    `deriveViewerRank(rank, false)`: on a surface that requires `team_lead`
+    it locks out a genuine lead.
   - Team membership and the lead flag are **year-scoped**: `cycle` is part
     of `team_memberships`' primary key and every production read filters on
     the camp's current burn year, because the owner ruled that teams and
@@ -142,26 +187,25 @@ Decisions baked into the schema — keep new code consistent with them:
     scope they themselves lead, and everything wider — `everyone`,
     `team_leads`, `drivers`, `individual`, `opt_in` — is refused
     (fail-closed on an unknown rank or a missing team). It is pure and
-    tested, and it is now LIVE: `sendAction` and `previewAudienceCount` in
-    `apps/web/app/captains/questionnaires/actions.ts` gate in two moves —
+    tested, and LIVE on two send paths. Questionnaire sends
+    (`sendAction` and `previewAudienceCount` in
+    `apps/web/app/captains/questionnaires/actions.ts`) gate in two moves:
     `gateAuthor()` for the rank (>= `team_lead`), then this function for the
-    specific audience. Both moves are the safety property: the rank gate on
-    its own would put every member one questionnaire away from the whole
-    camp. Every other send path (announcements, publish / unpublish / close,
-    questionnaire reminders) is still captain-only. Change the rule in that
-    function, never at a call site.
-    - The questionnaire **Send page** (`[key]/send/page.tsx`) is still gated
-      to `captain`, so the widened action has no UI a lead can reach yet;
-      the action is the enforcement boundary either way, but until that page
-      passes `await isTeamLead()` and narrows its scope picker, "a lead may
-      send to their team" is true of the server and not of the app.
+    specific audience. The Send page offers a lead only the team scope, for
+    the teams they lead. Team announcements let a lead publish only to a team
+    they lead, checked again in the publish `WHERE`. Both moves are the
+    safety property: the rank gate on its own would put every member one
+    message away from the whole camp. Publishing, closing and reminding a
+    questionnaire stay captain-only. Change the rule in that function, never
+    at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping
   `status` to `completed` when it writes its domain table. A new blocking
   requirement is a `required_actions` row — never an ad-hoc `redirect()`.
-  (The hardcoded gates currently in `page.tsx` are tech debt to migrate,
-  not a pattern to copy.)
+  Every member page walks one ladder, `requireMemberPage` in
+  `apps/web/lib/member-gate.ts`: invite, blocking questionnaire, burner
+  profile, captain approval.
 - **Questionnaires — two classes.** *Code questionnaires* (`burner_profiles`,
   `dietary_requirements`, `driver_profiles`, …) are bespoke coded pages
   writing into their own distinct domain tables — keep these as-is.
@@ -223,19 +267,23 @@ version instead.
 ## Cron jobs
 
 All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
-Scheduled routes are registered in `apps/web/vercel.json` (recipes, manuals,
-reminders).
+`apps/web/vercel.json` schedules seven, daily (UTC): `maintenance` 07:30,
+`recipes/analyse` 08:00, `manuals/generate` 08:30,
+`notifications/reminders` 09:00, `notifications/dispatch` 09:15,
+`notifications/push` 09:25, `notifications/email` 09:35.
 
-> **[CORRECTION 2026-09-09]** `vercel.json` now schedules **five** crons, not
-> three: `notifications/dispatch` (09:15 UTC) and `notifications/push`
-> (09:25 UTC) were added with the notifications work. The sentence below about
-> `telegram/dispatch` still holds — that is a different route
-> (`/api/cron/telegram/dispatch`) and it remains unscheduled.
+- `maintenance` is where data upkeep lives instead of an operator script:
+  it encrypts any leftover plaintext ID number, and (on the production
+  deployment only) deletes avatar folders whose owner has no camp account.
 
-`telegram/dispatch` is intentionally **not** scheduled yet —
-nothing enqueues announcements until the notifications work lands, and Vercel's
-daily-cron cap means it will be scheduled (or folded into an inline send) only
-once there is a queue to drain (see the route's own comment).
+- A job must be honest on the cron dashboard. A run with failures answers
+  non-2xx; a job that is not built answers `{status: "stub"}` from
+  `apps/web/lib/cron-stub.ts` (recipes and manuals today), never
+  `{ok: true, processed: 0}`.
+- `apps/web/lib/__tests__/cron-stub.test.ts` checks that every scheduled path
+  has a route and every route is scheduled, except `telegram/dispatch`: it is
+  off on purpose (Telegram outbound stays off until the owner turns it on, see
+  `DEFERRED.md`) and answers `status: "not_configured"` without a bot.
 
 ## Conventions
 
@@ -259,6 +307,39 @@ once there is a queue to drain (see the route's own comment).
   `.returning()` tells the caller whether it won. A lost race returns a
   sentence the user can act on, never a silent overwrite. See
   `setUserApproval` and `decideCaptainPromotion`.
+- When a doc and the code disagree, fix the doc in the same PR, or mark the
+  line `[CORRECTION <date>]`. When only the owner can settle it, mark it
+  `[UNRESOLVED <date>]` and say what the choice is.
+
+## Verification
+
+Most expensive mistakes have one shape: a plausible belief, stated as fact,
+never measured.
+
+- **Measure before you claim.** Before you write "this is because…", run the
+  thing that would show it: a `git log`, the failing test alone, two
+  timestamps.
+- **Attribute before you blame.** A failing test on your branch is not
+  automatically yours, and not automatically a flake. Run it on `main`, and
+  run it alone.
+- **A test that cannot fail proves nothing.** After you write a regression
+  test, break the code on purpose and watch it go red.
+- **A test that passes for the wrong reason is worse than none**, because it
+  is counted. Two shapes:
+  - **An absence asserted against a page that has not rendered.**
+    `toHaveURL` resolves before the page paints, so `toHaveCount(0)` right
+    after it passes on an empty document. Assert something that is PRESENT
+    first (a heading), then the absence. The absence checks in
+    `camp-settings.spec.ts` do this.
+  - **A fixture value outside the domain vocabulary.** TypeScript guards the
+    enums in `_factories.ts`, but not the plain `text` columns:
+    `audit_log.action`, `questionnaire_key`, `definition_key`. A fixture with
+    `action: "member.approve"` where the code writes `"member.approved"`
+    matches nothing, and the test goes green for the wrong reason. Seed from
+    the constant the code uses, and check that the fixture moves the result:
+    seed the opposite case and watch the assertion change.
+- **Report what happened.** If a step was skipped, say so. If something is
+  not verified, say which part.
 
 ## Security / POPIA
 
@@ -273,12 +354,41 @@ once there is a queue to drain (see the route's own comment).
   value has no key id, so after a key change the old ciphertext cannot be
   read: the app shows it as unreadable and cannot recover it. Do not change
   the key in any environment that holds real data.
+- **Privacy classes** are enforced on the server in `@camp404/core`
+  (`packages/core/src/privacy.ts`), never only in the UI:
+  - `ALWAYS_PRIVATE`: ID and passport numbers, bank details. Never shown to
+    another member. Captains read an ID only through audited paths: the
+    member panel in camp-management and the member export.
+  - `SAFETY_VISIBLE`: emergency contacts, allergies, anaphylaxis. Private,
+    but readable by the member, captains and any team lead (owner's call,
+    2026-09-16), because withholding them in an emergency is the worse
+    failure. The capture pages name that audience (`MEDICAL_AUDIENCE_NOTE`).
+  - `MEMBER_FIELD_READERS` names the lowest rank that may read each member
+    column; a member always reads their own. `schema-invariants.test.ts`
+    fails when a member-data column has no entry. Captain notes are
+    deliberately not in it: the member must not read them.
+- **Reads of private data are recorded.** Opening a member's ID document,
+  their safety data or captain notes writes an `audit_log` row after the
+  response (`auditReadAfterResponse`: never blocks the read, logs if it
+  fails). A member export writes its row BEFORE the file and fails closed.
+- **A record, not monitoring.** The audit rows answer "who saw my data?" and
+  let an incident be rebuilt. Do not add volume thresholds, per-person
+  profiling or alerts on top of them. Reading many members' safety data in
+  one sitting is ordinary care, and flagging it teaches captains that the
+  tool watches them.
 
 ## Git & pull requests
 
 - Work on feature branches; never force-push a shared branch.
-- Commit subjects are imperative and explain *why*, not just *what*.
-- One PR per feature. Keep the CI gate green before requesting review.
+- Commits follow Conventional Commits, `type(scope): subject`, checked by
+  commitlint (`commitlint.config.mjs`): a husky `commit-msg` hook locally and
+  the `commitlint` CI job on PRs. Types come from this repo's history
+  (`design` included); scopes are free, lower-case kebab-case; the header
+  is 120 characters at most. The subject says *why*, not just *what*.
+- One PR per feature. The PR template leads with **Why** and **Decisions**;
+  fill in Database even when the answer is "None."
+- Keep the CI gate green before requesting review. `ci-pass` is the one
+  required check.
 
 ## Before you commit
 

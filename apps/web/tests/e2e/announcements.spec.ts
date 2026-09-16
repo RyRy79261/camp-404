@@ -42,7 +42,7 @@ test.describe("captain announcements (test-mode)", () => {
     // 1. The recipient must exist before fan-out — sign in and redeem an
     //    invite so their member row is persisted.
     await login(page, { id: "member-auth", email: "member@example.com" });
-    await redeemInviteAtGate(page, "TEST-INVITE");
+    await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     // 2. Become a captain (god email clears the access + approval gates; the
@@ -128,7 +128,7 @@ test.describe("captain announcements (test-mode)", () => {
     request,
   }) => {
     await login(page, { id: "member-auth", email: "member@example.com" });
-    await redeemInviteAtGate(page, "TEST-INVITE");
+    await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     await login(page, {

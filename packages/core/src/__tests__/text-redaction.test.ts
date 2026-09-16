@@ -2,21 +2,25 @@ import { describe, expect, it } from "vitest";
 
 import {
   SECRET_ENV_KEYS,
+  describeRedactions,
   redactPii,
   redactSecrets,
   sanitizeReportText,
 } from "../text-redaction";
 
+const redact = (text: string) => redactPii(text).text;
+
 describe("redactPii", () => {
-  it("redacts emails, phone numbers, ID and card numbers", () => {
+  it("redacts emails, phone numbers, ID and card numbers, and says so", () => {
     const out = redactPii(
       "reach me at jane@example.com or +27 82 555 1234, ID 8001015009087, card 4111 1111 1111 1111",
     );
-    expect(out).not.toContain("jane@example.com");
-    expect(out).toContain("[email]");
-    expect(out).toContain("[phone]");
-    expect(out).toContain("[id]");
-    expect(out).toContain("[card]");
+    expect(out.text).not.toContain("jane@example.com");
+    expect(out.text).toContain("[email]");
+    expect(out.text).toContain("[phone]");
+    expect(out.text).toContain("[id]");
+    expect(out.text).toContain("[card]");
+    expect(out.redacted).toEqual(["email", "phone", "id-number", "card"]);
   });
 
   it("fully redacts international phone numbers — no trailing digit group leaks", () => {
@@ -26,41 +30,122 @@ describe("redactPii", () => {
       "+44 20 7946 0958",
       "+49-123-4567890",
     ]) {
-      expect(redactPii(n)).toBe("[phone]");
+      expect(redact(n)).toBe("[phone]");
     }
   });
 
   it("redacts space-separated local phone numbers", () => {
-    expect(redactPii("082 555 1234")).toBe("[phone]");
-    expect(redactPii("call 082 555 1234 please")).toContain("[phone]");
+    expect(redact("082 555 1234")).toBe("[phone]");
+    expect(redact("call 082 555 1234 please")).toContain("[phone]");
   });
 
   it("redacts secrets: bearer tokens, JWTs, API keys, and token-bearing URLs", () => {
-    expect(redactPii("Authorization: Bearer abc.def-123")).toContain(
+    expect(redact("Authorization: Bearer abc.def-123")).toContain(
       "Bearer [token]",
     );
-    expect(redactPii("token eyJhbGciOiJ.eyJzdWIiOiI.SflKxwRJ0eK")).toContain(
+    expect(redact("token eyJhbGciOiJ.eyJzdWIiOiI.SflKxwRJ0eK")).toContain(
       "[jwt]",
     );
-    expect(redactPii("key sk-livedeadbeef0123456789")).toContain("[secret]");
-    expect(redactPii("ghp_0123456789abcdef0123456789abcdef")).toContain(
+    expect(redact("key sk-livedeadbeef0123456789")).toContain("[secret]");
+    expect(redact("ghp_0123456789abcdef0123456789abcdef")).toContain(
       "[secret]",
     );
     const url = redactPii("see https://x.io/d?token=supersecretvalue123");
-    expect(url).not.toContain("supersecretvalue123");
-    expect(url).toContain("[redacted]");
+    expect(url.text).not.toContain("supersecretvalue123");
+    expect(url.text).toContain("[redacted]");
+    expect(url.redacted).toEqual(["secret"]);
+  });
+
+  it("redacts a whole UUID, with no false [card] and no digits left", () => {
+    for (const uuid of [
+      "12345678-1234-1234-1234-123456789012",
+      "3f2c9a1e-7b4d-4e8f-9c0a-1d2e3f4a5b6c",
+    ]) {
+      const out = redactPii(`member ${uuid} failed`);
+      expect(out.text).toBe("member [uuid] failed");
+      expect(out.redacted).toEqual(["uuid"]);
+    }
+  });
+
+  it("redacts member and payment references whole", () => {
+    expect(redact("ref C404-M017 paid C404-M017-2027-1")).toBe(
+      "ref [ref] paid [ref]",
+    );
+  });
+
+  it("removes a JSON object whole, nested contents included", () => {
+    const out = redactPii(
+      'render failed: {"name":"Alice Hatter","meta":{"allergy":"nuts"}} at row 3',
+    );
+    expect(out.text).toBe("render failed: [structured data removed] at row 3");
+    expect(out.redacted).toEqual(["structured-data"]);
+  });
+
+  it("removes a JSON array of names", () => {
+    expect(redact('crew ["Alice Hatter","Bob Rabbit"] missing')).toBe(
+      "crew [structured data removed] missing",
+    );
+  });
+
+  it("leaves an unbalanced bracket for the other rules", () => {
+    expect(redact("{ oops jane@example.com")).toBe("{ oops [email]");
+  });
+
+  it("keeps its own placeholders, and their kinds, on a second pass", () => {
+    const once = redactPii('mail jane@example.com, Bearer abc123, {"a":1}');
+    const twice = redactPii(once.text);
+    expect(twice.text).toBe(once.text);
+    expect(twice.redacted).toEqual(once.redacted);
+  });
+
+  it("finds nothing in plain text", () => {
+    expect(redactPii("The publish button does nothing.")).toEqual({
+      text: "The publish button does nothing.",
+      redacted: [],
+    });
   });
 });
 
 describe("sanitizeReportText", () => {
   it("strips HTML tags and trims", () => {
-    expect(sanitizeReportText("  <script>alert(1)</script>hello  ", 100)).toBe(
-      "alert(1)hello",
+    expect(
+      sanitizeReportText("  <script>alert(1)</script>hello  ", 100).text,
+    ).toBe("alert(1)hello");
+  });
+
+  it("keeps an unterminated < and the text after it", () => {
+    expect(sanitizeReportText("Expected count < 10, got NaN", 100).text).toBe(
+      "Expected count < 10, got NaN",
     );
   });
 
+  it("strips a long run of < in linear time", () => {
+    const started = Date.now();
+    sanitizeReportText("<".repeat(50_000), 100);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
   it("caps length", () => {
-    expect(sanitizeReportText("a".repeat(50), 10)).toHaveLength(10);
+    expect(sanitizeReportText("word ".repeat(50), 10).text).toHaveLength(10);
+  });
+
+  it("returns nothing found for empty input", () => {
+    expect(sanitizeReportText("", 10)).toEqual({ text: "", redacted: [] });
+  });
+});
+
+describe("describeRedactions", () => {
+  it("names what was removed, and never claims the report is anonymous", () => {
+    const note = describeRedactions(["email", "phone"]);
+    expect(note).toContain("email addresses, phone numbers");
+    expect(note).toContain("can miss things");
+    expect(note.toLowerCase()).not.toContain("anonym");
+  });
+
+  it("says nothing was recognised, with the same caveat", () => {
+    const note = describeRedactions([]);
+    expect(note).toContain("No personal data was recognised");
+    expect(note).toContain("can miss things");
   });
 });
 

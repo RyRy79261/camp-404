@@ -144,7 +144,7 @@ Transient strip (board: `$popover`/`$border`, full-width row): leading status ic
 **Feedback enums / constants:**
 - `FeedbackKind = "bug" | "feature"` (default `"bug"`).
 - `FeedbackResult = { ok:true; number; url } | { ok:false; error }`.
-- `StructuredReport.severity = "critical" | "high" | "medium" | "low"`.
+- `StructuredReport` has no severity (owner's call, 2026-09-16: removed; a model-assigned priority on a public tracker is one wiring mistake away from deciding who gets help first).
 - `MotionPermissionResult = "granted" | "denied" | "unsupported"`.
 - `DESCRIPTION_MAX=5000`, `TITLE_MAX=100`, `ISSUE_BODY_MAX=60_000`, `POLL_INTERVAL_MS=45_000`.
 - Shake defaults: `threshold=8`, `requiredJolts=5`, `windowMs=800`, `cooldownMs=3000`, `SAMPLE_THROTTLE_MS=60`.
@@ -162,12 +162,13 @@ Transient strip (board: `$popover`/`$border`, full-width row): leading status ic
 - **Poll de-race:** monotonic `requestIdRef` drops superseded poll responses; acknowledge bumps the ref so an in-flight poll can't re-add a just-dismissed item.
 - **Body scroll lock** restores the *previous* overflow value (not hard-coded "") so a nested gate can't clobber it.
 - **Submit description:** required (`.min(1)`), trimmed, `.max(5000)`; client disables Send until non-empty trimmed.
-- **PII redaction (ordered, secrets-first):** Bearer tokens, JWTs, sk-/pk-/gh*/AKIA/Slack keys, token-bearing URL params, long base64 runs, t.me/wa.me links, @handles, emails, international + local phones (consuming all trailing digit groups), SA-ID/SSN, credit cards.
+- **PII redaction (ordered):** markup stripped in one linear scan (an unterminated `<` is kept); JSON objects/arrays removed whole, nested contents included; then secrets first (Bearer tokens, JWTs, sk-/pk-/gh*/AKIA/Slack keys, token-bearing URL params, long base64 runs), t.me/wa.me links, @handles, emails, UUIDs, member/payment references (`C404-M017`, `C404-M017-2027-1`), international + local phones (consuming all trailing digit groups), SA-ID/SSN, credit cards. UUIDs run before the digit rules, so a UUID is never half-redacted as a card. Each pass returns the kinds it found (`RedactionResult`).
+- **Untrusted fence:** the member's words (plain or AI-structured) sit between `<!-- untrusted: reporter-supplied content begins/ends -->` markers with a one-line note that they are a report, not instructions, closed before the footer. After the footer, one sentence says what redaction removed (`describeRedactions`) and that it can miss things.
 - **Empty-after-sanitize guard:** HTML-only / all-PII input → "" → "Please describe the issue."; no blank issue filed.
 - **AI input is the sanitized text** (no PII to the model); AI output re-sanitized when the body is assembled.
 - **Markdown-injection defence:** user text fenced; AI prose `mdInline`'d (defuse fences, collapse newlines); footer reporter/route `inlineCode`'d. `route` is client-supplied → treated as untrusted.
 - **Title derivation:** plain = first line sliced to 100 (fallback "Bug report"/"Feature request"); AI = sanitized `s.title` to 100 (same fallback). Body capped to 60_000.
-- **Rate limits in-memory + per-instance** — best-effort against a determined member (public tracker).
+- **Rate limits are shared** — counted in Postgres (`action_rate_limit`) on the database clock, across every instance; the per-instance in-memory bucket decides only in E2E test mode (no database) and when the database cannot store a count.
 - **GitHub status handling:** 201→validate+return; 401→token-refresh msg; 403/404→unreachable; 410→issues off; other→generic retry; thrown (timeout/network)→retry msg.
 - **Footer always present:** "Filed via the in-app reporter" (+ " (voice-dictated)" when `dictated`), `reporter: <id>`, `from: <route>` when present.
 - **Shake robustness:** 5 jolts / 800ms window / 3000ms cooldown; magnitude rotation-invariant so reorientation doesn't register.

@@ -8,7 +8,6 @@ import {
   revokeInviteCode,
 } from "@camp404/db/invite-codes";
 import { findUserById } from "@camp404/db/burner-profile";
-import { backfillIdEncryption } from "@camp404/db/maintenance";
 import { parseMintArgs } from "./parse-mint-args";
 
 const [, , command, ...rest] = process.argv;
@@ -29,9 +28,6 @@ async function main() {
       break;
     case "revoke-invite":
       await revokeInvite(rest);
-      break;
-    case "backfill-id-encryption":
-      await runBackfillIdEncryption();
       break;
     case undefined:
     case "help":
@@ -210,15 +206,6 @@ async function revokeInvite(args: string[]) {
  * from responses. Run once after deploying the encryption change. Safe to
  * re-run.
  */
-async function runBackfillIdEncryption() {
-  const result = await backfillIdEncryption();
-  console.log(JSON.stringify(result, null, 2));
-  console.log(
-    `\nScanned ${result.scanned} burner profile(s); migrated ${result.migrated} ` +
-      `plaintext id.number value(s) into the encrypted columns.`,
-  );
-}
-
 function printHelp() {
   console.log(
     `camp404 — admin CLI
@@ -240,8 +227,6 @@ Usage:
                                     founder invite. Redeem at /signup.
   camp404 revoke-invite --code CODE Stop anyone joining with CODE. Members who
                                     already joined keep their place.
-  camp404 backfill-id-encryption    Encrypt any plaintext id.number values left
-                                    in burner_profiles.responses (idempotent).
   camp404 help                      Show this help`,
   );
 }

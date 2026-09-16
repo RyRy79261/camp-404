@@ -1,7 +1,11 @@
-// In-memory token bucket. Per-process, no Redis — good enough for a
-// single-region deployment with one Vercel function instance per route.
-// If/when this app fans out across regions, swap for an Upstash-backed
-// limiter with the same signature.
+import { consumeRateLimit } from "@camp404/db/rate-limit";
+import { isE2ETestMode } from "./test-mode";
+
+// Rate limits. `rateLimiter` counts in Postgres (@camp404/db/rate-limit), so
+// every server instance shares one count and a cold start does not reset it.
+// The in-memory token bucket below counts per process. It is the fallback when
+// the database cannot store the count, and the limiter in E2E test mode, which
+// has no database.
 
 interface Bucket {
   tokens: number;
@@ -9,6 +13,8 @@ interface Bucket {
 }
 
 const buckets = new Map<string, Bucket>();
+
+const DEFAULT_WINDOW_MS = 60_000;
 
 // Sweep expired buckets every N calls to prevent unbounded Map growth
 // under high-cardinality IP traffic.
@@ -32,7 +38,7 @@ export interface RateLimitOptions {
 
 export interface RateLimitResult {
   ok: boolean;
-  /** Seconds until the bucket refills enough for one more request. */
+  /** Seconds until one more request is allowed. 0 when allowed. */
   retryAfterSeconds: number;
 }
 
@@ -41,7 +47,7 @@ export interface RateLimitResult {
  * allowed, otherwise `{ok: false, retryAfterSeconds}`.
  */
 export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult {
-  const windowMs = opts.windowMs ?? 60_000;
+  const windowMs = opts.windowMs ?? DEFAULT_WINDOW_MS;
   maybeSweep(windowMs);
   const refillPerMs = opts.limit / windowMs;
   const now = Date.now();
@@ -63,12 +69,8 @@ export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult 
 }
 
 /**
- * The limiter seam. Call-sites depend on this interface rather than the concrete
- * `rateLimit` function, so a multi-region deployment can drop in an Upstash
- * adapter (same shape, async) without touching any caller. `limit` is allowed to
- * return a Promise so an async backend fits — callers `await` it. (The interface
- * + a future adapter belong in a shared package once a second implementation
- * exists; until then they live with the only implementation.)
+ * The limiter seam. Call sites depend on this interface, not on a concrete
+ * limiter, and always `await` it.
  */
 export interface RateLimiter {
   limit(
@@ -77,8 +79,22 @@ export interface RateLimiter {
   ): RateLimitResult | Promise<RateLimitResult>;
 }
 
-/** The default in-process limiter — the in-memory token bucket above. */
-export const rateLimiter: RateLimiter = { limit: rateLimit };
+/**
+ * The shared limiter: a fixed window counted in Postgres. When the count
+ * cannot be stored, the in-memory bucket decides, so a database outage still
+ * limits each instance rather than letting everything through.
+ */
+export const rateLimiter: RateLimiter = {
+  async limit(key, opts) {
+    if (isE2ETestMode()) return rateLimit(key, opts);
+    const verdict = await consumeRateLimit({
+      key,
+      limit: opts.limit,
+      windowMs: opts.windowMs ?? DEFAULT_WINDOW_MS,
+    });
+    return verdict ?? rateLimit(key, opts);
+  },
+};
 
 /** Best-effort IP extraction from a Next.js request. */
 export function getClientIp(headers: Headers): string {

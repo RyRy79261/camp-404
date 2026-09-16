@@ -11,7 +11,6 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUserOrRedirect: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
-  getBurnerProfile: vi.fn(),
   getPendingRequiredActions: vi.fn(),
   hasCampAccess: vi.fn(),
   isApproved: vi.fn(),
@@ -22,7 +21,6 @@ import { redirect } from "next/navigation";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
-  getBurnerProfile,
   getPendingRequiredActions,
   hasCampAccess,
   isApproved,
@@ -46,9 +44,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(hasCampAccess).mockReturnValue(true);
   vi.mocked(getPendingRequiredActions).mockResolvedValue([]);
-  vi.mocked(getBurnerProfile).mockResolvedValue({
-    completedAt: new Date(),
-  } as never);
   vi.mocked(isApproved).mockReturnValue(true);
 });
 
@@ -102,8 +97,14 @@ describe("memberBlock", () => {
     expect(await memberBlock(campUser, null)).toBeNull();
   });
 
-  it("sends a member with no finished burner profile to onboarding", async () => {
-    vi.mocked(getBurnerProfile).mockResolvedValue(null);
+  it("sends a member whose burner profile gate is open to onboarding", async () => {
+    vi.mocked(getPendingRequiredActions).mockResolvedValue([
+      {
+        ...BLOCKING_SEND,
+        actionKey: "burner_profile",
+        activationId: null,
+      },
+    ]);
     vi.mocked(isApproved).mockReturnValue(false);
 
     expect(await memberBlock(campUser, null)).toEqual({

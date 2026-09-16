@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege by default: every job runs install scripts and build tooling,
+# and none of them writes to the repository. A job that needs more says so.
+permissions:
+  contents: read
+
 jobs:
   changes:
     runs-on: ubuntu-latest
@@ -213,9 +218,30 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 7
 
+  # Commit messages on a PR follow commitlint.config.mjs. Only the PR's own
+  # commits are checked (base..head); merge commits are ignored.
+  commitlint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check commit messages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: pnpm exec commitlint --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
+
   ci-pass:
     if: always()
-    needs: [changes, lint, typecheck, test, build, e2e, schema-migration, supply-chain]
+    needs: [changes, lint, typecheck, test, build, e2e, schema-migration, supply-chain, commitlint]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -241,12 +267,14 @@ jobs:
           echo "test: ${{ needs.test.result }}"
           echo "e2e: ${{ needs.e2e.result }}"
           echo "schema-migration: ${{ needs.schema-migration.result }}"
+          echo "commitlint: ${{ needs.commitlint.result }}"
 
           # Gated jobs: success OR skipped
           for result in \
             "${{ needs.test.result }}" \
             "${{ needs.e2e.result }}" \
-            "${{ needs.schema-migration.result }}"; do
+            "${{ needs.schema-migration.result }}" \
+            "${{ needs.commitlint.result }}"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
               echo "::error::Gated job failed (not success or skipped): $result"
               exit 1
