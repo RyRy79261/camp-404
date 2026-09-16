@@ -147,13 +147,28 @@ export async function redeemInviteForUser(
   // First time through: create the row stamped with the claimed code.
   // Pre-approved invites land `approved`; vetting-required ones land
   // `pending` (blocked after onboarding until a captain decides).
-  const created = await store.createUser({
-    authUserId: authUser.id,
-    displayName: authUser.displayName ?? authUser.primaryEmail,
-    inviteCode: claimed.code,
-    rank: claimed.assignedRank ?? "member",
-    approvalStatus: claimed.requiresApproval ? "pending" : "approved",
-  });
+  let created: CampUser;
+  try {
+    created = await store.createUser({
+      authUserId: authUser.id,
+      displayName: authUser.displayName ?? authUser.primaryEmail,
+      inviteCode: claimed.code,
+      rank: claimed.assignedRank ?? "member",
+      approvalStatus: claimed.requiresApproval ? "pending" : "approved",
+    });
+  } catch (err) {
+    // Two submits at once (two tabs, or a network retry): both saw no row,
+    // both claimed a use, and the second insert hit the unique auth_user_id.
+    // The member DID join, so say so instead of throwing them onto an error
+    // page. The second request's use of the code is spent; the claim and the
+    // insert are separate statements, and a lost use is the cheaper failure.
+    const winner = await store.findUserByAuthId(authUser.id);
+    if (!winner) throw err;
+    console.warn(
+      "redeemInviteForUser: a concurrent redeem already created this member; one extra use of the code was spent",
+    );
+    return { ok: true };
+  }
   await seedBurnerProfileAction(created.id);
   return { ok: true };
 }
