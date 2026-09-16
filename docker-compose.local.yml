@@ -1,0 +1,45 @@
+# A local database for Camp 404: Postgres plus the Neon proxy, so the app's
+# own Neon driver (HTTP and WebSocket) talks to it unchanged.
+#
+#   pnpm db:local:up        start it
+#   pnpm db:local:migrate   apply every migration
+#   pnpm db:local:down      stop it (the data volume stays)
+#
+# Then run the app with:
+#   DATABASE_URL=postgres://postgres:postgres@db.localtest.me:5432/main
+#   NEON_LOCAL_PROXY=1
+#
+# db.localtest.me is public DNS for 127.0.0.1. The host ports are unusual on
+# purpose (54322, 4444), so this stack does not collide with another project's
+# Postgres on 5432 or 5433.
+name: camp404-local
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: main
+    ports:
+      - "54322:5432"
+    volumes:
+      - camp404-local-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d main"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  neon-proxy:
+    image: ghcr.io/timowilhelm/local-neon-http-proxy:main
+    environment:
+      PG_CONNECTION_STRING: postgres://postgres:postgres@postgres:5432/main
+    ports:
+      - "4444:4444"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  camp404-local-pg:

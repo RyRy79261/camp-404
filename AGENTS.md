@@ -138,6 +138,21 @@ transactions**; `createPooledDb()` is a WebSocket pool, for cron jobs and
 the CLI, and **supports transactions**. Multi-statement atomic work must
 use the pooled driver.
 
+**Local database.** `docker-compose.local.yml` runs Postgres plus the Neon
+proxy (host ports 54322 and 4444, so it does not collide with another
+project's Postgres):
+
+1. `pnpm db:local:up`
+2. `pnpm db:local:migrate` (drizzle-kit cannot reach the proxy; this runs the
+   committed migrations through the app's own pooled driver)
+3. run the app with `NEON_LOCAL_PROXY=1` and
+   `DATABASE_URL=postgres://postgres:postgres@db.localtest.me:5432/main`
+4. `pnpm db:local:down` stops it; the data volume stays.
+
+With `NEON_LOCAL_PROXY=1`, both drivers go through the proxy for the
+`db.localtest.me` host only (`configureLocalProxy` in
+`packages/db/src/index.ts`). The unit tests do not need it: they use PGlite.
+
 ## Schema domain model
 
 Decisions baked into the schema — keep new code consistent with them:
