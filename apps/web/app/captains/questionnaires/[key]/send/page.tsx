@@ -1,14 +1,13 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { deriveViewerRank } from "@camp404/core";
+import { notFound } from "next/navigation";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import { getOpenActivationForKey } from "@camp404/db/questionnaire-lifecycle";
 import { Alert } from "@camp404/ui/components/alert";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { captainPageGate } from "@/lib/captain-gate";
+import { getLeadTeams } from "@/lib/users";
 import {
   audienceLabel,
   getTeamsConfig,
@@ -24,65 +23,52 @@ import {
   type MemberOption,
 } from "./send-form";
 
-// The scopes this screen offers, in picker order. `drivers` is broadcast-only
-// and `opt_in` has no send path yet, so neither is listed — but both are named
-// by the shared vocabulary, which is what keeps this list a CHOICE rather than
-// an accident.
+// The scopes this screen offers a captain, in picker order. `drivers` is
+// broadcast-only and `opt_in` has no send path yet, so neither is listed — but
+// both are named by the shared vocabulary, which is what keeps this list a
+// CHOICE rather than an accident. A team lead is offered `team` alone.
 const SEND_SCOPES = ["everyone", "team", "team_leads", "individual"] as const;
+const LEAD_SCOPES = ["team"] as const;
 
 export const dynamic = "force-dynamic";
 
-// The Send/Activate screen (§6.4). Captain-only: a non-captain gets the locked
-// shell BEFORE any database read (rank is derived without the isTeamLead DB
-// call — irrelevant here since this is captain-gated — so the gate is reachable
-// under E2E_TEST_MODE). Only a published questionnaire can be sent.
+// The Send/Activate screen (§6.4). Captains send to any audience; a team lead
+// sends to the teams they lead. Anyone else gets the locked shell before any
+// questionnaire read. Only a published questionnaire can be sent.
 export default async function SendPage({
   params,
 }: {
   params: Promise<{ key: string }>;
 }) {
   const { key } = await params;
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
-
+  const { cleared, rank, campUser } = await captainPageGate("team_lead");
+  const isCaptain = rank === "captain";
   const chrome = (children: ReactNode) => (
     <main className="mx-auto max-w-lg px-4 py-6">
-      <GhostBack
-        href={`/captains/questionnaires/${key}`}
-        className="-ml-2 mb-4"
-      >
-        Editor
-      </GhostBack>
+      {/* A lead edits only their own questionnaires, so the hub is the way back. */}
+      {isCaptain ? (
+        <GhostBack
+          href={`/captains/questionnaires/${key}`}
+          className="-ml-2 mb-4"
+        >
+          Editor
+        </GhostBack>
+      ) : (
+        <GhostBack href="/captains/questionnaires" className="-ml-2 mb-4">
+          Questionnaires
+        </GhostBack>
+      )}
       <h1 className="mb-4 text-2xl font-bold">Send to members</h1>
       {children}
     </main>
   );
 
-  // The lead flag is hardcoded `false`, and this PAGE is still captain-only.
-  //
-  // KNOWN GAP, not a claim that sending is captain-only: `sendAction` and
-  // `previewAudienceCount` now admit a team lead (rank gate, then
-  // `canSendToAudience` for the specific audience — see the send-gate note in
-  // ../../actions.ts). This page has not been reshaped to match, so a lead who
-  // may send through the action cannot reach the form that calls it. That is
-  // fail-SAFE — the action is the enforcement boundary and it still refuses
-  // every audience wider than a team they lead — but it is not finished.
-  //
-  // Opening it is a reshape, not a flag flip: pass
-  // `await isTeamLead(campUser.id)`, gate on `team_lead` instead of `captain`,
-  // and narrow SEND_SCOPES for a lead to `team` over the teams they actually
-  // lead — otherwise the form offers `everyone` and the action refuses it,
-  // which is a worse experience than the lock.
-  const rank = deriveViewerRank(campUser.rank, false);
-  if (rank !== "captain") {
+  // A lead sends only to a team they lead this year (owner's call, 2026-09-16).
+  // sendAction checks the same rule again (canSendToAudience).
+  const leadTeams = cleared && !isCaptain ? await getLeadTeams(campUser.id) : [];
+  if (!cleared || (!isCaptain && leadTeams.length === 0)) {
     return chrome(
-      <CaptainLock message="Only captains can send questionnaires to members." />,
+      <CaptainLock message="Only captains and team leads can send questionnaires to members." />,
     );
   }
 
@@ -109,7 +95,8 @@ export default async function SendPage({
 
   const [openActivation, roster, config] = await Promise.all([
     getOpenActivationForKey(key),
-    getCampManagementRoster(),
+    // Members are picked only for an `individual` send, which a lead can't make.
+    isCaptain ? getCampManagementRoster() : Promise.resolve([]),
     getTeamsConfig(),
   ]);
 
@@ -117,8 +104,12 @@ export default async function SendPage({
   // one audience vocabulary — teamPickerOptions drops ARCHIVED teams, and
   // memberTeamsLabel renders "Kitchen" where the raw `power_and_lighting` used
   // to print, ten lines from where the pretty string lives.
-  const teamOptions: AudienceOption[] = teamPickerOptions(config);
-  const scopeOptions: AudienceOption[] = SEND_SCOPES.map((scope) => ({
+  const teamOptions: AudienceOption[] = teamPickerOptions(config).filter(
+    (option) => isCaptain || leadTeams.includes(option.value),
+  );
+  const scopeOptions: AudienceOption[] = (
+    isCaptain ? SEND_SCOPES : LEAD_SCOPES
+  ).map((scope) => ({
     value: scope,
     label: audienceLabel(scope),
   }));
@@ -138,6 +129,7 @@ export default async function SendPage({
       scopeOptions={scopeOptions}
       teamOptions={teamOptions}
       openActivationId={openActivation?.id ?? null}
+      asLead={!isCaptain}
     />,
   );
 }

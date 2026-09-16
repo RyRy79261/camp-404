@@ -11,6 +11,7 @@ vi.mock("@/lib/users", () => ({
   getLeadTeams: vi.fn(),
   hasCampAccess: vi.fn(() => true),
   isApproved: vi.fn(() => true),
+  isTeamLead: vi.fn(),
 }));
 vi.mock("@/lib/camp-config", () => ({
   getTeamsConfig: vi.fn(async () => ({})),
@@ -32,7 +33,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { previewPublishAction, publishAction, saveDraftAction } from "./actions";
 import { NOT_YOUR_TEAM } from "./audience-copy";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser, getLeadTeams } from "@/lib/users";
+import { ensureCampUser, getLeadTeams, isTeamLead } from "@/lib/users";
 import {
   countAnnouncementAudience,
   createAnnouncementDraft,
@@ -48,6 +49,7 @@ function signIn(rank: "captain" | "member", leadTeams: string[] = []) {
   } as never);
   vi.mocked(ensureCampUser).mockResolvedValue({ id: "user-1", rank } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(leadTeams);
+  vi.mocked(isTeamLead).mockResolvedValue(leadTeams.length > 0);
 }
 
 beforeEach(() => {

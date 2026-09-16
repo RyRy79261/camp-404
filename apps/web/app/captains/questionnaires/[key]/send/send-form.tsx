@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@camp404/ui/components/select";
 import { Switch } from "@camp404/ui/components/switch";
+import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { toast } from "@camp404/ui/components/toast";
 import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
@@ -33,6 +34,7 @@ import {
   previewAudienceCount,
   sendAction,
 } from "../../actions";
+import { CLOSE_SEND_CONFIRM } from "../lifecycle-controls";
 
 export interface MemberOption {
   id: string;
@@ -101,8 +103,8 @@ export function AudienceCount({
   );
 }
 
-// The Send/Activate screen (§6.4, functional/undrawn). Captain-only — the page
-// gates clearance before rendering this. Opens an activation pinned to the
+// The Send/Activate screen (§6.4, functional/undrawn). Captains and team leads —
+// the page gates clearance and narrows the pickers before rendering this. Opens an activation pinned to the
 // published version and fans out the gates. The one-open invariant is surfaced
 // up front: if a send is already open it must be closed before a new one.
 /**
@@ -132,6 +134,7 @@ export function SendForm({
   scopeOptions,
   teamOptions,
   openActivationId,
+  asLead = false,
 }: {
   questionnaireKey: string;
   title: string;
@@ -141,11 +144,20 @@ export function SendForm({
   /** ACTIVE teams only, in the camp's configured order, with config labels. */
   teamOptions: AudienceOption[];
   openActivationId: string | null;
+  /**
+   * A team lead's view: closing a send is captain-only, so a lead is told who
+   * can, and the way back is the hub (a lead edits only their own drafts).
+   */
+  asLead?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
-  const [scope, setScope] = useState<Scope>("everyone");
+  // A lead is offered `team` alone, so start on the first scope offered.
+  const [scope, setScope] = useState<Scope>(
+    (scopeOptions[0]?.value as Scope | undefined) ?? "everyone",
+  );
   const [team, setTeam] = useState<string>("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [blocking, setBlocking] = useState(false);
@@ -220,7 +232,11 @@ export function SendForm({
         return;
       }
       toast.success("Sent to members");
-      router.push(`/captains/questionnaires/${questionnaireKey}`);
+      router.push(
+        asLead
+          ? "/captains/questionnaires"
+          : `/captains/questionnaires/${questionnaireKey}`,
+      );
     });
   }
 
@@ -238,8 +254,11 @@ export function SendForm({
     doSend();
   }
 
-  function closeCurrent() {
+  async function closeCurrent() {
     if (!openActivationId) return;
+    // Closing expires every unanswered gate, so it asks first, like the
+    // editor's Close send.
+    if (!(await confirm(CLOSE_SEND_CONFIRM))) return;
     startTransition(async () => {
       const result = await closeActivationAction(
         openActivationId,
@@ -257,26 +276,40 @@ export function SendForm({
   if (openActivationId) {
     return (
       <Card className="flex flex-col gap-4 p-4">
+        {confirmDialog}
         <Alert variant="warning">
           <TriangleAlert aria-hidden />
           <span>
-            “{title}” is already sent. Close the current send before sending it
-            again with new settings.
+            {!asLead
+              ? `“${title}” is already sent. Close the current send before sending it again with new settings.`
+              : `“${title}” is already sent. A captain can close that send so it can go out again.`}
           </span>
         </Alert>
         <div className="flex gap-2">
-          <Button type="button" onClick={closeCurrent} disabled={pending}>
-            {pending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Undo2 className="size-4" />
-            )}
-            Close current send
-          </Button>
+          {!asLead && (
+            <Button
+              type="button"
+              onClick={() => void closeCurrent()}
+              disabled={pending}
+            >
+              {pending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Undo2 className="size-4" />
+              )}
+              Close current send
+            </Button>
+          )}
           <Button asChild variant="outline">
-            <Link href={`/captains/questionnaires/${questionnaireKey}`}>
-              Back to editor
-            </Link>
+            {asLead ? (
+              <Link href="/captains/questionnaires">
+                Back to questionnaires
+              </Link>
+            ) : (
+              <Link href={`/captains/questionnaires/${questionnaireKey}`}>
+                Back to editor
+              </Link>
+            )}
           </Button>
         </div>
       </Card>

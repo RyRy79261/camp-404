@@ -3,8 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@vercel/blob", () => ({ list: vi.fn(), del: vi.fn() }));
 
 import {
+  avatarProxyUrl,
   deleteAvatarBlobs,
   deleteQuestionnaireImageBlobs,
+  ownProfilePhotoPathname,
+  pruneReplacedProfilePhotos,
 } from "@/lib/avatar-blob";
 import { del, list } from "@vercel/blob";
 
@@ -130,5 +133,81 @@ describe("deleteQuestionnaireImageBlobs", () => {
     expect(del).toHaveBeenCalledWith(["https://blob/old"], {
       token: "test-token",
     });
+  });
+});
+
+describe("ownProfilePhotoPathname", () => {
+  it("reads the member's own flat photo out of a proxy URL", () => {
+    expect(
+      ownProfilePhotoPathname("u1", avatarProxyUrl("avatars/u1/avatar-x.webp")),
+    ).toBe("avatars/u1/avatar-x.webp");
+  });
+
+  it("refuses anything it did not mint for this member", () => {
+    expect(
+      ownProfilePhotoPathname("u1", avatarProxyUrl("avatars/u2/avatar.webp")),
+    ).toBeNull();
+    expect(
+      ownProfilePhotoPathname(
+        "u1",
+        avatarProxyUrl("avatars/u1/answers/q/a.webp"),
+      ),
+    ).toBeNull();
+    expect(
+      ownProfilePhotoPathname("u1", "https://example.com/avatars/u1/a.webp"),
+    ).toBeNull();
+    expect(ownProfilePhotoPathname("u1", "/api/avatar")).toBeNull();
+  });
+});
+
+describe("pruneReplacedProfilePhotos", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.BLOB_READ_WRITE_TOKEN = "test-token";
+  });
+  afterEach(() => {
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+  });
+
+  const STORE = () =>
+    blobs(
+      ["avatars/u1/old.webp", "https://blob/old"],
+      ["avatars/u1/new.webp", "https://blob/new"],
+      ["avatars/u1/answers/q/a.webp", "https://blob/ans"],
+    );
+
+  it("keeps the photo the profile now points at, and the image answers", async () => {
+    vi.mocked(list).mockResolvedValue(STORE());
+    await pruneReplacedProfilePhotos(
+      "u1",
+      avatarProxyUrl("avatars/u1/new.webp"),
+    );
+    expect(del).toHaveBeenCalledWith(["https://blob/old"], {
+      token: "test-token",
+    });
+  });
+
+  it("keeps no photo once the member clears it, but still no image answers", async () => {
+    vi.mocked(list).mockResolvedValue(STORE());
+    await pruneReplacedProfilePhotos("u1", null);
+    expect(del).toHaveBeenCalledWith(["https://blob/old", "https://blob/new"], {
+      token: "test-token",
+    });
+  });
+
+  it("prunes nothing for a saved URL it cannot read", async () => {
+    await pruneReplacedProfilePhotos("u1", "https://example.com/me.png");
+    expect(list).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it("logs a store failure instead of failing the save that already happened", async () => {
+    vi.mocked(list).mockRejectedValue(new Error("network down"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      pruneReplacedProfilePhotos("u1", avatarProxyUrl("avatars/u1/new.webp")),
+    ).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 });

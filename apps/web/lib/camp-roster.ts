@@ -54,6 +54,8 @@ export interface RosterRow extends PublicRosterRow {
   requiredComplete: boolean;
   isDriver: boolean;
   driverProfileComplete: boolean;
+  /** Dues settled for this year in the payments ledger (received or waived). */
+  duesPaid: boolean;
 }
 
 /**
@@ -111,6 +113,7 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
     requiredComplete,
     isDriver: member.intendsToDrive,
     driverProfileComplete: member.driverProfileComplete,
+    duesPaid: member.duesPaid,
   };
 }
 
@@ -279,4 +282,77 @@ export function rosterForViewer(
   return isCaptain
     ? { isCaptain: true, rows: members.map(toRosterRow) }
     : { isCaptain: false, rows: members.map(toPublicRosterRow) };
+}
+
+// --- Sort ---------------------------------------------------------------
+
+/** What the captain roster can be sorted by. */
+export type RosterSortKey = "name" | "handle" | "country" | "role" | "status";
+
+export interface RosterSort {
+  key: RosterSortKey;
+  direction: "asc" | "desc";
+}
+
+/** The order the server sends, and the order the roster opens in. */
+export const DEFAULT_ROSTER_SORT: RosterSort = { key: "name", direction: "asc" };
+
+const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+
+// Ascending role order puts the people who run the camp first.
+const ROLE_ORDER = { captain: 0, lead: 1, member: 2 } as const;
+
+// Ascending status order is triage order: what a captain must act on first.
+const STATUS_ORDER: Record<RosterStatus, number> = {
+  awaiting_approval: 0,
+  pending: 1,
+  onboarding: 2,
+  rejected: 3,
+  ready: 4,
+};
+
+function sortValue(row: RosterDisplayRow, key: RosterSortKey): string | number | null {
+  switch (key) {
+    case "name":
+      return row.displayName;
+    case "handle":
+      return row.handle;
+    case "country":
+      return row.country;
+    case "role":
+      return ROLE_ORDER[
+        row.rank === "captain" ? "captain" : row.isLead ? "lead" : "member"
+      ];
+    case "status":
+      return row.status ? STATUS_ORDER[row.status] : null;
+  }
+}
+
+/**
+ * The rows in the order the captain asked for. A missing value (no handle, no
+ * country) sorts last in either direction, so flipping the direction never
+ * floods the top with blanks. Ties fall back to name, then id, so the order is
+ * stable between renders.
+ */
+export function sortRosterRows<T extends RosterDisplayRow>(
+  rows: readonly T[],
+  sort: RosterSort,
+): T[] {
+  const flip = sort.direction === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const va = sortValue(a, sort.key);
+    const vb = sortValue(b, sort.key);
+    if (va === null || vb === null) {
+      if (va !== vb) return va === null ? 1 : -1;
+    } else {
+      const order =
+        typeof va === "number" && typeof vb === "number"
+          ? va - vb
+          : collator.compare(String(va), String(vb));
+      if (order !== 0) return order * flip;
+    }
+    return (
+      collator.compare(a.displayName, b.displayName) || a.id.localeCompare(b.id)
+    );
+  });
 }

@@ -11,22 +11,26 @@ import {
   type TeamMembership,
 } from "@camp404/db/team-memberships";
 import { decryptField } from "@camp404/db/crypto";
+import {
+  MAX_MEMBER_NOTE_LENGTH,
+  addMemberNote,
+  listMemberNotes,
+  type MemberNote,
+} from "@camp404/db/member-notes";
 import { ID_UNREADABLE_LABEL, mergeIdNumber } from "@camp404/db/id-documents";
 import {
+  availableReviewActions,
   canDecidePromotion,
   canSendPromotion,
   deriveViewerRank,
   promotionStepState,
-  requireClearance,
+  reviewActionFor,
+  reviewRefusal,
+  type ReviewOption,
 } from "@camp404/core";
-import { Team } from "@camp404/types";
-import { getAuthenticatedUser } from "@/lib/auth";
-import {
-  decideUserApproval,
-  ensureCampUser,
-  hasCampAccess,
-  isApproved,
-} from "@/lib/users";
+import { Team, type ApprovalStatus } from "@camp404/types";
+import { captainActionGate } from "@/lib/captain-gate";
+import { decideUserApproval, findCampUserById } from "@/lib/users";
 import {
   decideCaptainPromotion,
   getOpenPromotionForTarget,
@@ -59,6 +63,13 @@ export type MemberDetailResult =
       promotionRequestIsMine: boolean;
       /** Who sent the open request (null when none is open, or unnamed). */
       promotionRequestedByName: string | null;
+      /**
+       * Every vetting decision that exists from this member's status, each
+       * with the sentence to show when it is refused (null when allowed).
+       */
+      reviewOptions: ReviewOption[];
+      /** Captains' private notes on this member, newest first. */
+      notes: MemberNote[];
       /** This member's team memberships FOR THE CAMP'S CURRENT YEAR. */
       teams: TeamMembership[];
       /** The teams a captain may assign — active only, order-sorted. Archived
@@ -128,70 +139,36 @@ const CANCEL_PROMOTION_COPY: Record<string, string> = {
 
 /**
  * Captain-gate every camp-management action at the data layer. Returns the
- * acting captain's camp user, or an error string for the caller to surface.
+ * acting captain's id, or an error string for the caller to surface. A
+ * captain+pending row is refused: the roster offers assign-captain on a member
+ * still in the vetting queue, and accepting flips rank without touching
+ * approval status.
  */
 async function requireCaptain(): Promise<
   { ok: true; captainId: string } | { ok: false; error: string }
 > {
-  const authUser = await getAuthenticatedUser();
-  if (!authUser) return { ok: false, error: "Not signed in." };
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't camp-active yet." };
-  }
-  // Mirror the page's gates: a captain still held behind vetting can't act.
-  // Server actions are reachable independently of the page render, so the
-  // approval check has to live here too — not just on the page (D3). A
-  // captain+pending row is reachable today: the roster offers assign-captain
-  // on a member still in the vetting queue, and accepting flips rank without
-  // touching approval status.
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account is still awaiting approval." };
-  }
-  // Same preview-but-locked comparator the captain pages gate on (D3).
-  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
-  // and `team_lead < captain`, so the real flag cannot change the outcome —
-  // passing it would only buy a DB round-trip on every action call. If this
-  // bar ever drops to `team_lead`, it MUST become
-  // `await isTeamLead(campUser.id)`.
-  const { cleared } = requireClearance(
-    deriveViewerRank(campUser.rank, false),
-    "captain",
-  );
-  if (!cleared) {
-    return { ok: false, error: "Captain access only." };
-  }
-  return { ok: true, captainId: campUser.id };
+  const gate = await captainActionGate("captain");
+  return gate.ok ? { ok: true, captainId: gate.campUser.id } : gate;
 }
 
 /**
- * Gate a member-facing camp-management read: authenticated, camp-active, and
- * approved — but NOT captain-gated. Backs the public member profile (decision:
- * any approved member may browse the roster + public cards). Returns the viewer's
- * id and whether they are a captain (so a captain hitting the public path is
- * still recognised).
+ * Gate a member-facing camp-management read: signed in, camp-active and
+ * approved, but NOT captain-gated. Backs the public member profile (decision:
+ * any approved member may browse the roster + public cards). Returns the
+ * viewer's id and whether they are a captain, so a captain hitting the public
+ * path is still recognised.
  */
 async function requireApprovedMember(): Promise<
   | { ok: true; userId: string; isCaptain: boolean }
   | { ok: false; error: string }
 > {
-  const authUser = await getAuthenticatedUser();
-  if (!authUser) return { ok: false, error: "Not signed in." };
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't camp-active yet." };
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't approved yet." };
-  }
-  // `false` again, and for the same reason: this comparison asks only "is this
-  // viewer a captain" (it feeds `isCaptain`, which picks the full vs. redacted
-  // roster projection). `team_lead < captain`, so the real flag cannot move it.
-  const { cleared } = requireClearance(
-    deriveViewerRank(campUser.rank, false),
-    "captain",
-  );
-  return { ok: true, userId: campUser.id, isCaptain: cleared };
+  const gate = await captainActionGate("camp_member");
+  if (!gate.ok) return gate;
+  return {
+    ok: true,
+    userId: gate.campUser.id,
+    isCaptain: gate.rank === "captain",
+  };
 }
 
 /** Load the full burner detail behind a roster row, for the modal. */
@@ -291,10 +268,12 @@ export async function getMemberDetailAction(
     // The assignment control's two inputs: what this member is on THIS YEAR,
     // and what a captain may put them on. `activeTeams` drops archived teams,
     // so an archived team is unpickable before the client ever sees the list.
-    const [teams, config] = await Promise.all([
+    const [teams, config, notes] = await Promise.all([
       getTeamMemberships(userId),
       getTeamsConfig(),
+      listMemberNotes(userId),
     ]);
+    auditNotesRead(gate.captainId, userId, notes);
 
     return {
       ok: true,
@@ -304,12 +283,18 @@ export async function getMemberDetailAction(
         safety.allowed ? safety : undefined,
       ),
       canAssignCaptain,
+      reviewOptions: availableReviewActions({
+        status: detail.approvalStatus,
+        isSelf: userId === gate.captainId,
+        isCaptain: detail.rank === "captain",
+      }),
       promotionStep,
       promotionRequestId: openRequest?.id ?? null,
       promotionRequestIsMine: openRequest?.requestedByUserId === gate.captainId,
       promotionRequestedByName: await requesterName(
         openRequest?.requestedByUserId ?? null,
       ),
+      notes,
       teams,
       assignableTeams: activeTeams(config).map((t) => ({
         key: t.key,
@@ -349,60 +334,226 @@ export async function getPublicMemberProfileAction(
   });
 }
 
-/**
- * Apply a captain's vetting decision to a pending applicant. Approving
- * unblocks the app on their next load; rejecting holds them at the blocking
- * screen with a terminal message. The write is a compare-and-set on `pending`,
- * so a captain acting on a stale roster cannot overwrite another captain's
- * standing decision — they are told about it instead.
- */
 /** The longest reason a captain may give the member, in characters. */
 const MAX_DECISION_REASON = 500;
+/** The most members one bulk decision may cover. */
+const MAX_BULK_DECISIONS = 100;
 
-export async function decideApprovalAction(
-  userId: string,
-  decision: "approved" | "rejected",
-  reason?: string | null,
-): Promise<ApprovalDecisionResult> {
+const Status = z.enum(["pending", "approved", "rejected"]);
+
+/** A reason, trimmed, or the sentence saying why it can't be used. */
+function checkReason(
+  reason: unknown,
+): { ok: true; reason: string | null } | { ok: false; error: string } {
+  if (reason != null && typeof reason !== "string") {
+    return { ok: false, error: "The reason must be text." };
+  }
+  const trimmed = reason?.trim() || null;
+  if (trimmed && trimmed.length > MAX_DECISION_REASON) {
+    return {
+      ok: false,
+      error: `Keep the reason under ${MAX_DECISION_REASON} characters.`,
+    };
+  }
+  return { ok: true, reason: trimmed };
+}
+
+const LOST_RACE = "Another captain already changed this member's decision.";
+
+/**
+ * Apply a captain's vetting decision: approve, reject, or re-open, from the
+ * status the captain was looking at (owner's call, 2026-09-16: decisions can
+ * be reversed). Approving unblocks the app on the member's next load.
+ * Rejecting holds them at the blocking screen and takes them off this year's
+ * teams (offboarding). Re-opening puts them back in the queue.
+ *
+ * The write is a compare-and-set on `from`, so a captain acting on a stale
+ * roster cannot overwrite another captain's decision; they are told instead.
+ * The same refusals the panel shows beside a disabled control are enforced
+ * here (reviewRefusal): not on yourself, and not taking a captain's access.
+ */
+export async function decideApprovalAction(input: {
+  userId: string;
+  from: ApprovalStatus;
+  to: ApprovalStatus;
+  reason?: string | null;
+}): Promise<ApprovalDecisionResult> {
   return runAction("decideApprovalAction", async () => {
     const gate = await requireCaptain();
     if (!gate.ok) return gate;
 
-    if (!UserId.safeParse(userId).success) {
+    if (!UserId.safeParse(input?.userId).success) {
       return { ok: false, error: "Invalid member." };
     }
-    if (decision !== "approved" && decision !== "rejected") {
+    const from = Status.safeParse(input.from);
+    const to = Status.safeParse(input.to);
+    const action =
+      from.success && to.success ? reviewActionFor(from.data, to.data) : null;
+    if (!from.success || !to.success || !action) {
       return { ok: false, error: "Unknown decision." };
     }
-    if (userId === gate.captainId) {
-      return { ok: false, error: "You can't decide on your own account." };
-    }
-    if (reason != null && typeof reason !== "string") {
-      return { ok: false, error: "The reason must be text." };
-    }
-    if (reason && reason.trim().length > MAX_DECISION_REASON) {
-      return {
-        ok: false,
-        error: `Keep the reason under ${MAX_DECISION_REASON} characters.`,
-      };
-    }
+    const reason = checkReason(input.reason);
+    if (!reason.ok) return reason;
+
+    const target = await findCampUserById(input.userId);
+    if (!target) return { ok: false, error: "Member not found." };
+    const refusal = reviewRefusal(
+      {
+        status: from.data,
+        isSelf: input.userId === gate.captainId,
+        isCaptain: target.rank === "captain",
+      },
+      action,
+    );
+    if (refusal) return { ok: false, error: refusal };
 
     const decided = await decideUserApproval({
-      userId,
-      status: decision,
+      userId: input.userId,
+      from: from.data,
+      to: to.data,
       decidedByUserId: gate.captainId,
-      reason: reason?.trim() || null,
+      reason: reason.reason,
     });
     // Revalidate either way: on the lost-CAS path the roster this captain is
     // looking at is stale, which is exactly why they got here.
     revalidatePath("/captains/camp-management");
-    if (!decided) {
+    if (!decided) return { ok: false, error: LOST_RACE };
+    return { ok: true };
+  });
+}
+
+export type BulkApprovalResult =
+  | {
+      ok: true;
+      /** Members this call decided. */
+      decided: string[];
+      /** Members another captain had already moved out of pending. */
+      lost: string[];
+      /** Members this captain may not decide, with the reason. */
+      refused: { userId: string; error: string }[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * Approve or reject several pending applicants at once, from the Pending
+ * filter. Each member is its own compare-and-set on `pending`, exactly as if
+ * decided one by one, so a partial result is normal: the answer says who was
+ * decided, who another captain got to first, and who was refused.
+ */
+export async function decideApprovalsAction(input: {
+  userIds: string[];
+  to: "approved" | "rejected";
+  reason?: string | null;
+}): Promise<BulkApprovalResult> {
+  return runAction("decideApprovalsAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+
+    const ids = z.array(UserId).safeParse(input?.userIds);
+    if (!ids.success || ids.data.length === 0) {
+      return { ok: false, error: "Pick at least one member." };
+    }
+    const userIds = [...new Set(ids.data)];
+    if (userIds.length > MAX_BULK_DECISIONS) {
       return {
         ok: false,
-        error: "Another captain already decided on this member.",
+        error: `Decide at most ${MAX_BULK_DECISIONS} members at a time.`,
       };
     }
-    return { ok: true };
+    if (input.to !== "approved" && input.to !== "rejected") {
+      return { ok: false, error: "Unknown decision." };
+    }
+    const reason = checkReason(input.reason);
+    if (!reason.ok) return reason;
+    const action = input.to === "approved" ? "approve" : "reject";
+
+    const decided: string[] = [];
+    const lost: string[] = [];
+    const refused: { userId: string; error: string }[] = [];
+    for (const userId of userIds) {
+      const target = await findCampUserById(userId);
+      if (!target) {
+        refused.push({ userId, error: "Member not found." });
+        continue;
+      }
+      const refusal = reviewRefusal(
+        {
+          status: "pending",
+          isSelf: userId === gate.captainId,
+          isCaptain: target.rank === "captain",
+        },
+        action,
+      );
+      if (refusal) {
+        refused.push({ userId, error: refusal });
+        continue;
+      }
+      const won = await decideUserApproval({
+        userId,
+        from: "pending",
+        to: input.to,
+        decidedByUserId: gate.captainId,
+        reason: reason.reason,
+      });
+      (won ? decided : lost).push(userId);
+    }
+    revalidatePath("/captains/camp-management");
+    return { ok: true, decided, lost, refused };
+  });
+}
+
+export type MemberNotesResult =
+  | { ok: true; notes: MemberNote[] }
+  | { ok: false; error: string };
+
+/**
+ * Every read of captains' notes that shows at least one note leaves an audit
+ * row (owner's call: notes are audited). An empty list discloses nothing.
+ */
+function auditNotesRead(
+  captainId: string,
+  userId: string,
+  notes: readonly MemberNote[],
+): void {
+  if (notes.length === 0) return;
+  auditReadAfterResponse({
+    actorId: captainId,
+    action: "member.notes.viewed",
+    target: userId,
+    metadata: { count: notes.length },
+  });
+}
+
+/**
+ * Add a captain's note to a member and hand back the refreshed list. Notes are
+ * captain-only, the member never sees them, and they stay out of every roster
+ * row and export.
+ */
+export async function addMemberNoteAction(
+  userId: string,
+  body: string,
+): Promise<MemberNotesResult> {
+  return runAction("addMemberNoteAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+    if (!UserId.safeParse(userId).success) {
+      return { ok: false, error: "Invalid member." };
+    }
+    const text = typeof body === "string" ? body.trim() : "";
+    if (!text) return { ok: false, error: "Write the note first." };
+    if (text.length > MAX_MEMBER_NOTE_LENGTH) {
+      return {
+        ok: false,
+        error: `Keep a note under ${MAX_MEMBER_NOTE_LENGTH} characters.`,
+      };
+    }
+    if (!(await findCampUserById(userId))) {
+      return { ok: false, error: "Member not found." };
+    }
+    await addMemberNote({ userId, authorId: gate.captainId, body: text });
+    const notes = await listMemberNotes(userId);
+    auditNotesRead(gate.captainId, userId, notes);
+    return { ok: true, notes };
   });
 }
 

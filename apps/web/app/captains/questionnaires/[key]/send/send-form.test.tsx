@@ -101,10 +101,61 @@ describe("SendForm", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /Close current send/i }),
     );
+    // Closing expires every unanswered gate, so it asks first.
+    await screen.findByText("Close the current send?");
+    expect(closeActivationAction).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close send" }));
     await waitFor(() =>
       expect(closeActivationAction).toHaveBeenCalledWith("act1", "feedback"),
     );
     expect(sendAction).not.toHaveBeenCalled();
+  });
+
+  it("closes nothing when the captain cancels", async () => {
+    renderForm("act1");
+    fireEvent.click(
+      screen.getByRole("button", { name: /Close current send/i }),
+    );
+    await screen.findByText("Close the current send?");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("Close the current send?")).toBeNull(),
+    );
+    expect(closeActivationAction).not.toHaveBeenCalled();
+  });
+
+  it("starts a team lead on the team scope, and gives them no close button", () => {
+    const { unmount } = render(
+      <SendForm
+        questionnaireKey="feedback"
+        title="Feedback"
+        members={[]}
+        scopeOptions={[{ value: "team", label: "A team" }]}
+        teamOptions={teamOptions.slice(0, 1)}
+        openActivationId={null}
+        asLead
+      />,
+    );
+    expect(screen.getByLabelText(/Which team/i)).toBeTruthy();
+    unmount();
+
+    render(
+      <SendForm
+        questionnaireKey="feedback"
+        title="Feedback"
+        members={[]}
+        scopeOptions={[{ value: "team", label: "A team" }]}
+        teamOptions={teamOptions.slice(0, 1)}
+        openActivationId="act1"
+        asLead
+      />,
+    );
+    expect(screen.getByText(/A captain can close that send/)).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: /Close current send/i }),
+    ).toBeNull();
   });
 });
 

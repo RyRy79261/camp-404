@@ -15,14 +15,9 @@ import {
   updateAnnouncementDraft,
   type Audience,
 } from "@/lib/notifications";
-import { getAuthenticatedUser } from "@/lib/auth";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
-import {
-  ensureCampUser,
-  getLeadTeams,
-  hasCampAccess,
-  isApproved,
-} from "@/lib/users";
+import { captainActionGate } from "@/lib/captain-gate";
+import { getLeadTeams } from "@/lib/users";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { NOT_YOUR_TEAM } from "./audience-copy";
 
@@ -38,17 +33,13 @@ type Sender =
  * this year (owner's call, 2026-09-16). Anyone else is refused.
  */
 async function requireSender(): Promise<Sender | { ok: false; error: string }> {
-  const authUser = await getAuthenticatedUser();
-  if (!authUser) return { ok: false, error: "Not signed in." };
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't camp-active yet." };
-  }
-  // Mirror the page's gates: a captain still held behind vetting can't act.
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account is still awaiting approval." };
-  }
-  if (campUser.rank === "captain") {
+  const gate = await captainActionGate(
+    "team_lead",
+    "Captains and team leads only.",
+  );
+  if (!gate.ok) return gate;
+  const { campUser } = gate;
+  if (gate.rank === "captain") {
     return { ok: true, senderId: campUser.id, isCaptain: true };
   }
   const leadTeams = (await getLeadTeams(campUser.id)).filter(

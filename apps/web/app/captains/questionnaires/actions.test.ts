@@ -556,7 +556,7 @@ describe("remindPendingAction — the gate", () => {
     asViewer("member");
     expect(await remindPendingAction(ACT)).toEqual({
       ok: false,
-      error: "Team-lead access only.",
+      error: "Only captains can publish or send.",
     });
     expect(sendReminder).not.toHaveBeenCalled();
   });

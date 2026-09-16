@@ -2,9 +2,17 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Shield, X } from "lucide-react";
+import { Check, RotateCcw, Shield, UserX, X } from "lucide-react";
+import {
+  REVIEW_TARGET,
+  availableReviewActions,
+  type ReviewAction,
+  type ReviewOption,
+} from "@camp404/core";
+import type { ApprovalStatus } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
+import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { Divider } from "@camp404/ui/components/divider";
 import { Spinner } from "@camp404/ui/components/spinner";
 import type { RosterRow } from "@/lib/camp-roster";
@@ -13,9 +21,11 @@ import {
   decideApprovalAction,
   getMemberDetailAction,
   type AssignableTeam,
+  type MemberDetailResult,
   type TeamMembership,
 } from "./actions";
 import { AssignCaptainDialog } from "./assign-captain-dialog";
+import { MemberNotes } from "./member-notes";
 import { RejectConfirmDialog } from "./reject-confirm-dialog";
 import { RoleBadge, RosterAvatar, TeamBadge } from "./roster-presentation";
 import { TeamAssignment } from "./team-assignment";
@@ -25,6 +35,13 @@ import { TeamAssignment } from "./team-assignment";
 // the detail (decrypted ID, grouped questionnaire answers, promotion state)
 // loads via the captain-gated server action. KEEPS the modal's fetch-with-cancel
 // + optimistic decide() + router.refresh() from the previous MemberModal.
+//
+// The decision panel renders every vetting decision that exists from the
+// member's status (owner's call, 2026-09-16: approve, reject, and reverse or
+// re-open either), straight from the server's `reviewOptions`. A refused
+// decision stays visible, disabled, with the server's sentence beside it. The
+// board draws only Approve / Reject on a pending applicant; the rest reuses
+// those buttons.
 
 type DetailState =
   | { state: "loading" }
@@ -40,6 +57,10 @@ type DetailState =
       teams: TeamMembership[];
       /** Active teams a captain may assign (archived excluded server-side). */
       assignableTeams: AssignableTeam[];
+      /** Every decision from this status, with its refusal or null. */
+      reviewOptions: ReviewOption[];
+      /** Captains' private notes on this member. */
+      notes: Extract<MemberDetailResult, { ok: true }>["notes"];
     }
   | { state: "error"; message: string };
 
@@ -76,11 +97,17 @@ export function MemberProfile({
   row,
   index,
   onClose,
+  onDecided,
   teamLabels = {},
 }: {
   row: RosterRow;
   index: number;
   onClose: () => void;
+  /**
+   * Told when a decision lands, so the roster keeps this member on screen
+   * even if the new status no longer matches its filter.
+   */
+  onDecided?: (userId: string) => void;
   /** key → configured label for the team chips (falls back to the humanizer). */
   teamLabels?: Record<string, string>;
 }) {
@@ -93,6 +120,7 @@ export function MemberProfile({
   const [rejectReason, setRejectReason] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   // A new selection starts on a clean error slate. Deliberately NOT folded into
   // the fetch effect below: a reload driven by a refused decision has to keep
@@ -124,6 +152,8 @@ export function MemberProfile({
                 promotionRequestedByName: res.promotionRequestedByName,
                 teams: res.teams,
                 assignableTeams: res.assignableTeams,
+                reviewOptions: res.reviewOptions,
+                notes: res.notes,
               }
             : { state: "error", message: res.error },
         );
@@ -145,10 +175,15 @@ export function MemberProfile({
     panelRef.current?.focus();
   }, [row.id]);
 
-  function decide(decision: "approved" | "rejected", reason?: string) {
+  function decide(from: ApprovalStatus, to: ApprovalStatus, reason?: string) {
     setActionError(null);
     startTransition(async () => {
-      const res = await decideApprovalAction(row.id, decision, reason);
+      const res = await decideApprovalAction({
+        userId: row.id,
+        from,
+        to,
+        reason,
+      });
       if (!res.ok) {
         setActionError(res.error);
         // The decision may have lost the compare-and-set to another captain.
@@ -161,17 +196,25 @@ export function MemberProfile({
         router.refresh();
         return;
       }
-      // Reflect the decision locally so the action buttons clear, then refresh
-      // the server data behind the roster.
+      // Reflect the decision locally so the panel offers the next decisions,
+      // then refresh the server data behind the roster. The decision landed,
+      // so this is not the captain's own account.
       setDetail((prev) =>
         prev.state === "loaded"
           ? {
               ...prev,
-              member: { ...prev.member, approvalStatus: decision },
+              member: { ...prev.member, approvalStatus: to },
+              reviewOptions: availableReviewActions({
+                status: to,
+                isSelf: false,
+                isCaptain: row.rank === "captain",
+              }),
             }
           : prev,
       );
       setRejectOpen(false);
+      setRejectReason("");
+      onDecided?.(row.id);
       router.refresh();
     });
   }
@@ -236,8 +279,34 @@ export function MemberProfile({
   const teams = detail.state === "loaded" ? detail.teams : [];
   const assignableTeams =
     detail.state === "loaded" ? detail.assignableTeams : [];
-  const isAwaiting = member?.approvalStatus === "pending";
+  const reviewOptions = detail.state === "loaded" ? detail.reviewOptions : [];
   const status = member ? STATUS_BADGE[member.approvalStatus] : null;
+  // One line per distinct refusal, so two decisions refused for the same
+  // reason say it once.
+  const refusals = [
+    ...new Set(reviewOptions.flatMap((o) => (o.refusal ? [o.refusal] : []))),
+  ];
+
+  async function choose(action: ReviewAction) {
+    if (!member) return;
+    const from = member.approvalStatus;
+    if (action === "reject") {
+      setRejectOpen(true);
+      return;
+    }
+    if (action === "reopen") {
+      const sure = await confirm({
+        title: `Move ${row.displayName} back to pending?`,
+        description:
+          from === "approved"
+            ? "They lose access to the app until a captain approves them again. Their teams stay."
+            : "Their application goes back in the queue, and the reason you gave is cleared.",
+        confirmLabel: "Move to pending",
+      });
+      if (!sure) return;
+    }
+    decide(from, REVIEW_TARGET[action]);
+  }
 
   const overviewItems: DetailItem[] = member
     ? [
@@ -249,6 +318,8 @@ export function MemberProfile({
               ? `${row.pendingRequiredActions} to complete`
               : "All complete",
         },
+        // From the payments ledger: a received or waived payment this year.
+        { label: "Dues this year", value: row.duesPaid ? "Paid" : "Not paid" },
       ]
     : [];
 
@@ -371,6 +442,18 @@ export function MemberProfile({
 
           <Divider />
 
+          <MemberNotes
+            userId={row.id}
+            notes={detail.state === "loaded" ? detail.notes : []}
+            onChange={(notes) =>
+              setDetail((prev) =>
+                prev.state === "loaded" ? { ...prev, notes } : prev,
+              )
+            }
+          />
+
+          <Divider />
+
           {/* Actions — captain decisions + assign-captain. */}
           <div className="flex flex-col gap-3">
             {actionError && (
@@ -378,30 +461,24 @@ export function MemberProfile({
                 {actionError}
               </p>
             )}
-            {isAwaiting && (
-              <div className="flex flex-col gap-2.5 sm:flex-row">
-                <Button
-                  type="button"
-                  className="flex-1"
-                  disabled={isPending}
-                  onClick={() => decide("approved")}
-                >
-                  {isPending ? (
-                    <Spinner size="sm" />
-                  ) : (
-                    <Check aria-hidden className="h-4 w-4" />
-                  )}
-                  Approve
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1"
-                  disabled={isPending}
-                  onClick={() => setRejectOpen(true)}
-                >
-                  Reject
-                </Button>
+            {reviewOptions.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2.5 sm:flex-row">
+                  {reviewOptions.map((option) => (
+                    <DecisionButton
+                      key={option.action}
+                      option={option}
+                      from={member.approvalStatus}
+                      busy={isPending}
+                      onChoose={(action) => void choose(action)}
+                    />
+                  ))}
+                </div>
+                {refusals.map((refusal) => (
+                  <p key={refusal} className="text-xs text-muted-foreground">
+                    {refusal}
+                  </p>
+                ))}
               </div>
             )}
             {canAssignCaptain && (
@@ -416,14 +493,21 @@ export function MemberProfile({
             )}
           </div>
 
+          {confirmDialog}
           <RejectConfirmDialog
-            name={row.displayName}
+            mode={
+              member.approvalStatus === "approved"
+                ? { kind: "offboard", name: row.displayName }
+                : { kind: "application", name: row.displayName }
+            }
             open={rejectOpen}
             onOpenChange={(o) => {
               setRejectOpen(o);
               if (!o) setActionError(null);
             }}
-            onConfirm={() => decide("rejected", rejectReason)}
+            onConfirm={() =>
+              decide(member.approvalStatus, "rejected", rejectReason)
+            }
             pending={isPending}
             error={actionError}
             reason={rejectReason}
@@ -447,4 +531,63 @@ export function MemberProfile({
       )}
     </section>
   );
+}
+
+/** One decision control. Refused decisions stay visible, disabled. */
+function DecisionButton({
+  option,
+  from,
+  busy,
+  onChoose,
+}: {
+  option: ReviewOption;
+  from: ApprovalStatus;
+  busy: boolean;
+  onChoose: (action: ReviewAction) => void;
+}) {
+  const disabled = busy || option.refusal !== null;
+  switch (option.action) {
+    case "approve":
+      return (
+        <Button
+          type="button"
+          className="flex-1"
+          disabled={disabled}
+          onClick={() => onChoose("approve")}
+        >
+          {busy ? (
+            <Spinner size="sm" />
+          ) : (
+            <Check aria-hidden className="h-4 w-4" />
+          )}
+          Approve
+        </Button>
+      );
+    case "reject":
+      return (
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          disabled={disabled}
+          onClick={() => onChoose("reject")}
+        >
+          {from === "approved" && <UserX aria-hidden className="h-4 w-4" />}
+          {from === "approved" ? "Remove from camp" : "Reject"}
+        </Button>
+      );
+    case "reopen":
+      return (
+        <Button
+          type="button"
+          variant="ghost"
+          className="flex-1"
+          disabled={disabled}
+          onClick={() => onChoose("reopen")}
+        >
+          <RotateCcw aria-hidden className="h-4 w-4" />
+          Move back to pending
+        </Button>
+      );
+  }
 }

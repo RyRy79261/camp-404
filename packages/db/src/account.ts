@@ -161,6 +161,12 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.workshopRsvps)
       .where(eq(schema.workshopRsvps.userId, userId));
+    // Captains' notes ABOUT the member are about the person, so they go.
+    // Notes the member wrote about others stay; their author link is kept to
+    // the tombstone row.
+    await tx
+      .delete(schema.memberNotes)
+      .where(eq(schema.memberNotes.userId, userId));
     await tx
       .delete(schema.broadcastTargets)
       .where(eq(schema.broadcastTargets.userId, userId));
@@ -184,6 +190,13 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.telegramInvites)
       .where(eq(schema.telegramInvites.userId, userId));
+
+    // The dues ledger stays for accounting, like reimbursements below, but the
+    // captain's free-text note may name the person, so it goes.
+    await tx
+      .update(schema.payments)
+      .set({ note: null })
+      .where(eq(schema.payments.userId, userId));
 
     // Scrub encrypted bank details (NOT NULL → empty string, not null) while
     // keeping the reimbursement record for accounting.

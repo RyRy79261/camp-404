@@ -116,6 +116,10 @@ describe("partial unique and queue indexes keep their predicates", () => {
         columns: ["broadcast_id", "user_id"],
         where: "broadcast_id IS NOT NULL",
       },
+      users_ref_code_uniq: {
+        columns: ["ref_code"],
+        where: "ref_code IS NOT NULL",
+      },
     };
 
   const partial = configs.flatMap((config) =>
@@ -193,6 +197,7 @@ describe("every member-data column has a reader in the field-access list", () =>
     driverProfiles: schema.driverProfiles,
     carMembers: schema.carMembers,
     teamMemberships: schema.teamMemberships,
+    payments: schema.payments,
     // Not in schema.ts (Neon Auth owns it), but it holds member email.
     neonAuthUsers,
   };

@@ -56,6 +56,11 @@ vi.mock("@/lib/camp-config", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ auditReadAfterResponse: vi.fn() }));
+vi.mock("@camp404/db/member-notes", () => ({
+  MAX_MEMBER_NOTE_LENGTH: 2000,
+  addMemberNote: vi.fn(),
+  listMemberNotes: vi.fn(async () => []),
+}));
 vi.mock("@/lib/safety-data", () => ({
   resolveSafetyDataForViewer: vi.fn(async () => ({
     allowed: true,
@@ -93,6 +98,7 @@ function detail(overrides: Record<string, unknown> = {}) {
   return {
     id: "member-1",
     rank: "member",
+    approvalStatus: "approved",
     responses: { "profile.name": "Ash" },
     // The action decrypts whatever these hold; the mocked decryptField below
     // is what decides the state, so the column values only have to be truthy

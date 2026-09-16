@@ -6,7 +6,6 @@ import {
   hasCampAccess,
   hasClearance,
   isApproved,
-  nextGate,
   rankLevel,
   requireClearance,
 } from "../access";
@@ -50,27 +49,6 @@ describe("camp-access + approval gates", () => {
     expect(isApproved({ approvalStatus: "approved" }, false)).toBe(true);
     expect(isApproved({ approvalStatus: "pending" }, false)).toBe(false);
     expect(isApproved({ approvalStatus: "rejected" }, false)).toBe(false);
-  });
-});
-
-describe("nextGate", () => {
-  const routes = { burner_profile: "/onboarding/questionnaire" };
-
-  it("returns the first blocking, mapped route (oldest first)", () => {
-    expect(
-      nextGate([{ actionKey: "burner_profile", blocking: true }], routes),
-    ).toBe("/onboarding/questionnaire");
-  });
-
-  it("skips non-blocking and unmapped actions", () => {
-    expect(
-      nextGate([{ actionKey: "burner_profile", blocking: false }], routes),
-    ).toBeNull();
-    expect(nextGate([{ actionKey: "driver_profile", blocking: true }], routes)).toBeNull();
-  });
-
-  it("returns null when nothing is pending", () => {
-    expect(nextGate([], routes)).toBeNull();
   });
 });
 

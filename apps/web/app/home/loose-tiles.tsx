@@ -19,6 +19,7 @@ export function LooseTiles({ tiles }: { tiles: CatalogueTile[] }) {
           hint={tile.hint}
           href={tile.comingSoon ? undefined : (tile.href ?? undefined)}
           disabled={tile.comingSoon}
+          disabledReason={tile.reason}
         />
       ))}
     </div>

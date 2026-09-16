@@ -11,6 +11,7 @@ import {
   setProfileImage,
 } from "@/lib/users";
 import { deleteAccount } from "@/lib/account";
+import { pruneReplacedProfilePhotos } from "@/lib/avatar-blob";
 import { runAction } from "@/lib/action-result";
 
 export type UpdateProfileResult = { ok: false; error: string };
@@ -55,7 +56,10 @@ export async function updateProfile(
     const image = typeof rawImage === "string" ? rawImage.trim() : "";
 
     await setDisplayName(campUser.id, name);
-    await setProfileImage(campUser.id, image.length > 0 ? image : null);
+    const saved = image.length > 0 ? image : null;
+    await setProfileImage(campUser.id, saved);
+    // Only now is the old photo unreferenced.
+    await pruneReplacedProfilePhotos(authUser.id, saved);
 
     redirect("/profile");
   });

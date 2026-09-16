@@ -103,3 +103,42 @@ describe("RosterTable", () => {
     }
   });
 });
+
+describe("RosterTable — sortable headers", () => {
+  it("marks the sorted column and flips direction on a second press", () => {
+    const onChange = vi.fn();
+    render(
+      <RosterTable
+        rows={[memberRow]}
+        selectedId={null}
+        onSelect={() => {}}
+        sort={{ value: { key: "name", direction: "asc" }, onChange }}
+      />,
+    );
+    const member = screen.getByRole("columnheader", { name: /Member/ });
+    expect(member.getAttribute("aria-sort")).toBe("ascending");
+    expect(
+      screen
+        .getByRole("columnheader", { name: /Country/ })
+        .getAttribute("aria-sort"),
+    ).toBe("none");
+
+    fireEvent.click(screen.getByRole("button", { name: /Member/ }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      key: "name",
+      direction: "desc",
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Country/ }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      key: "country",
+      direction: "asc",
+    });
+  });
+
+  it("renders plain headers for the member roster", () => {
+    render(
+      <RosterTable rows={[memberRow]} selectedId={null} onSelect={() => {}} />,
+    );
+    expect(screen.queryByRole("button", { name: /^Member/ })).toBeNull();
+  });
+});

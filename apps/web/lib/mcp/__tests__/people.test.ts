@@ -24,6 +24,7 @@ function row(
     membershipTier: "full",
     duesPaid: true,
     duesPaidAt: new Date("2026-08-01T00:00:00Z"),
+    refCode: "C404-M001",
     passportEncrypted: encrypt("P1234567"),
     saIdEncrypted: null,
     eftDetailsEncrypted: null,

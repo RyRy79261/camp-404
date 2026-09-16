@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
-import { deleteAvatarBlobs } from "@/lib/avatar-blob";
+import { avatarProxyUrl } from "@/lib/avatar-blob";
 import { isE2ETestMode } from "@/lib/test-mode";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 
@@ -118,14 +118,9 @@ export async function POST(req: Request) {
       contentType: file.type,
       token,
     });
-    // Prune the member's previous avatar object(s) — `addRandomSuffix` means
-    // each upload writes a new path, orphaning the old one. Best-effort: a
-    // cleanup failure must not fail an otherwise-successful upload.
-    try {
-      await deleteAvatarBlobs(user.id, blob.pathname);
-    } catch (err) {
-      console.error("avatar-cleanup error", err);
-    }
+    // No prune here. The profile still points at the old photo until the
+    // member saves, and they may never save. The profile save prunes
+    // (pruneReplacedProfilePhotos).
     // Never hand the raw private blob URL to the client — it isn't readable
     // without the store token. Persist + render through the gated proxy.
     return NextResponse.json({ url: avatarProxyUrl(blob.pathname) });
@@ -133,9 +128,4 @@ export async function POST(req: Request) {
     console.error("avatar-upload error", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 502 });
   }
-}
-
-/** Same-origin URL that streams a private avatar blob to signed-in members. */
-function avatarProxyUrl(pathname: string): string {
-  return `/api/avatar?pathname=${encodeURIComponent(pathname)}`;
 }

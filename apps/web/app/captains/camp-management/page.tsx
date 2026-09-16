@@ -1,8 +1,6 @@
-import { redirect } from "next/navigation";
-import { deriveViewerRank, requireClearance } from "@camp404/core";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { ExportCsvButton } from "@/components/export-csv-button";
+import { captainPageGate } from "@/lib/captain-gate";
 import { getCampManagementRoster } from "@/lib/roster";
 import { rosterForViewer } from "@/lib/camp-roster";
 import { activeTeams, getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
@@ -22,23 +20,9 @@ export const metadata = { title: "Camp management — Camp 404" };
 // cross the wire for a member.
 
 export default async function CampManagementPage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
-
-  // The lead flag is hardcoded `false` on purpose. This bar is `captain`
-  // and `team_lead < captain`, so the real flag cannot change the outcome —
-  // passing it would only buy a DB round-trip. If this bar ever drops to
-  // `team_lead`, it MUST become `await isTeamLead(campUser.id)`.
-  const { cleared: isCaptain } = requireClearance(
-    deriveViewerRank(campUser.rank, false),
-    "captain",
-  );
+  // Every approved member may browse; the captain bar only picks the full or
+  // the public projection.
+  const { cleared: isCaptain } = await captainPageGate("captain");
 
   // Fetch once; project to the captain (full) or member (public) row shape.
   // The public projection carries no approval/onboarding/driver facets, so the
@@ -87,6 +71,12 @@ export default async function CampManagementPage() {
             ? "The full roster. Open a member to read their profile, approve or reject pending sign-ups, and — captain to captain — assign captain rank."
             : "Browse who's at camp — names, teams, and what folks are bringing. Approval status and contact details stay captain-only."}
         </p>
+
+        {/* One export for every rank; the file holds only what this viewer
+            may read (lib/member-export.ts). */}
+        <div className="self-start">
+          <ExportCsvButton href="/captains/camp-management/export" />
+        </div>
       </header>
 
       {roster.isCaptain ? (

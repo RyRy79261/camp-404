@@ -1,8 +1,9 @@
 "use client";
 
 import { useId, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, TriangleAlert } from "lucide-react";
 import type { BuilderPage } from "@camp404/types";
+import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
 import {
   Dialog,
@@ -43,6 +44,11 @@ export function PageSettingsDialog({
     page.requiredToContinue ?? false,
   );
   const requiredId = useId();
+  // Switching type never deletes a question, but publish refuses a content
+  // page that still holds one, so say so before the captain saves.
+  const questionCount = page.blocks.filter(
+    (block) => block.kind === "question",
+  ).length;
 
   return (
     <Dialog
@@ -84,6 +90,19 @@ export function PageSettingsDialog({
             Content pages hold only text, explainers, and images — no input
             fields.
           </p>
+          {type === "content" && questionCount > 0 && (
+            <Alert variant="warning">
+              <TriangleAlert aria-hidden />
+              <span>
+                {questionCount === 1
+                  ? "This page still has 1 question."
+                  : `This page still has ${questionCount} questions.`}{" "}
+                You can&apos;t publish until you move or delete{" "}
+                {questionCount === 1 ? "it" : "them"}, or make this a question
+                page again.
+              </span>
+            </Alert>
+          )}
         </div>
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-col">

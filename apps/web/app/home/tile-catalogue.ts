@@ -21,21 +21,28 @@ import type { IconBadgeTone } from "@camp404/ui/components/icon-badge";
  * `requireClearance` and withholds the tiles of locked groups, so this is the
  * single source of truth for what a *cleared* viewer sees.
  *
- * Only four destinations exist today; the rest are `comingSoon` — rendered
+ * Only six destinations exist today; the rest are `comingSoon` — rendered
  * inert with no href so they never 404 (the old quadrant model wired dead
  * `/members` / `/meals` links). Per-tile badge counts are deferred: their
  * destinations (tasks / team_memberships reads) aren't built, so no fabricated
  * numbers ship — the count slot lights up once those reads land.
  */
-export interface CatalogueTile {
+interface TileBase {
   id: string;
   icon: LucideIcon;
   title: string;
   hint: string;
-  /** Live destination, or null for a not-yet-built tool. */
-  href: string | null;
-  comingSoon: boolean;
 }
+
+/**
+ * A live tile has a destination. A parked one has none, and must say why in
+ * words a member reads: an inert tile with no reason reads as broken.
+ */
+export type CatalogueTile = TileBase &
+  (
+    | { href: string; comingSoon: false; reason?: never }
+    | { href: null; comingSoon: true; reason: string }
+  );
 
 export interface RankGroupSpec {
   id: string;
@@ -71,14 +78,17 @@ export const TILE_CATALOGUE: RankGroupSpec[] = [
         hint: "Camp-wide work board",
         href: null,
         comingSoon: true,
+        reason: "Not built yet. Camp tasks come in a later update.",
       },
       {
         id: "finances",
         icon: Wallet,
         title: "Finances",
-        hint: "Dues & reimbursements",
-        href: null,
-        comingSoon: true,
+        // Board S08 says "Dues & reimbursements"; reimbursements are not
+        // built, so the hint names what the page holds.
+        hint: "Dues & payments",
+        href: "/captains/payments",
+        comingSoon: false,
       },
       {
         id: "camp-tools",
@@ -104,6 +114,7 @@ export const TILE_CATALOGUE: RankGroupSpec[] = [
         hint: "Your crew's statuses",
         href: null,
         comingSoon: true,
+        reason: "Not built yet. Your crew list comes in a later update.",
       },
       {
         id: "crew-tasks",
@@ -112,14 +123,17 @@ export const TILE_CATALOGUE: RankGroupSpec[] = [
         hint: "Assign & track work",
         href: null,
         comingSoon: true,
+        reason: "Not built yet. Crew tasks come with camp tasks.",
       },
       {
         id: "crew-forms",
         icon: FileText,
         title: "Crew Forms",
-        hint: "Questionnaire responses",
-        href: null,
-        comingSoon: true,
+        // Board S08 says "Questionnaire responses", but results are
+        // captain-only. What a lead can do there is build and send.
+        hint: "Build & send to your crew",
+        href: "/captains/questionnaires",
+        comingSoon: false,
       },
       {
         id: "crew-announcements",
@@ -145,6 +159,7 @@ export const TILE_CATALOGUE: RankGroupSpec[] = [
         hint: "Your crews",
         href: null,
         comingSoon: true,
+        reason: "Not built yet. Your teams page comes in a later update.",
       },
       {
         id: "my-tasks",
@@ -153,6 +168,7 @@ export const TILE_CATALOGUE: RankGroupSpec[] = [
         hint: "What's on you",
         href: null,
         comingSoon: true,
+        reason: "Not built yet. Your tasks come with camp tasks.",
       },
       {
         id: "my-profile",

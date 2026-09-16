@@ -10,8 +10,10 @@
 // Phase-3 extractions land here progressively (see architecture.md
 // §hybrid-extraction). Landed so far:
 //   - access/clearance: rankLevel, hasClearance, requireClearance,
-//     deriveViewerRank, hasCampAccess, isApproved, nextGate,
-//     canViewBuilderDefinition (./access)
+//     deriveViewerRank, hasCampAccess, isApproved, canViewBuilderDefinition
+//     (./access)
+//   - approval review: availableReviewActions, reviewRefusal,
+//     isReviewTransition — which vetting decisions exist (./approval-review)
 //   - family tree: buildTree, computeMatchIds, subtreeHasMatch,
 //     descendantCountLabel (./family-tree) — all cycle-guarded (OD9)
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
@@ -34,6 +36,10 @@
 //     erasure provers uncoveredPrivateUserColumns, patchLeaksAny (./privacy)
 //   - audience authz: canSendToAudience + AudienceScope/AudienceActor/
 //     AudienceSpec — who may send to which audience (./audience-authz)
+//   - member export: MEMBER_EXPORT_COLUMNS, memberExportColumnsFor — the
+//     roster CSV's columns by rank, from the field list (./member-export)
+//   - payment references: formatMemberRefCode, paymentReference,
+//     PAYMENT_STATUSES, formatRands, parseRandsToCents (./payment-references)
 //   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,
 //     neutraliseFormula, csvFilenamePart (./csv) — the ONE spreadsheet
 //     serialiser; the questionnaire export and WP9's roster export share it
@@ -56,6 +62,7 @@
 // (blocked on deciding McpScope's type home).
 
 export * from "./access";
+export * from "./approval-review";
 export * from "./family-tree";
 export * from "./invites";
 export * from "./text-utils";
@@ -64,6 +71,8 @@ export * from "./shake";
 export * from "./id-validation";
 export * from "./promotion";
 export * from "./privacy";
+export * from "./member-export";
+export * from "./payment-references";
 export * from "./audience-authz";
 export * from "./csv";
 export * from "./questionnaire-csv";

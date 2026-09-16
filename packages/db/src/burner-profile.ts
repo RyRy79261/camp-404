@@ -1,11 +1,13 @@
 import { and, eq, sql } from "drizzle-orm";
-import { approvalNotification } from "@camp404/core";
+import { approvalNotification, isReviewTransition } from "@camp404/core";
 import type {
+  ApprovalStatus,
   EmergencyContact,
   QuestionnaireFieldChange,
 } from "@camp404/types";
 import { satisfyRequiredAction } from "./activations";
 import { writeAuditEvent, type DbOrTx } from "./audit";
+import { currentCycleNumber } from "./cycles";
 import { recordQuestionnaireEdit } from "./questionnaire-edits";
 import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction } from "./index";
@@ -78,36 +80,49 @@ export async function setUserApprovalStatus(
 }
 
 /**
- * Record a captain's vetting decision on a pending member. Stamps who
- * decided and when for the camp-management audit trail.
+ * Record a captain's vetting decision: approve, reject, or re-open to pending,
+ * from whatever the member's status is now (owner's call, 2026-09-16: a
+ * decision can be reversed). Stamps who decided and when.
  *
- * Compare-and-set: ONLY a row still `pending` flips. Two captains working the
- * same queue from separately-rendered rosters can both still see the Approve /
- * Reject buttons, so without the precondition the second write silently
- * overwrites the first decision AND its audit stamp. Returns true when this
- * call was the decision, false when the row was already decided (or no such
- * user) — the same fail-closed shape as `decideCaptainPromotion`'s
- * `eq(status, "sent")` guard in `captain-promotion.ts`.
+ * Compare-and-set on `from`, the status the captain was looking at. Two
+ * captains working from separately-rendered rosters can both see the same
+ * controls; without the precondition the second write silently overwrites the
+ * first decision AND its audit stamp. Returns true when this call was the
+ * decision, false when the row had already moved (or no such user). A move
+ * that is not a decision at all (see isReviewTransition) throws.
  *
- * An approval also tells the member, in the same transaction: a pop-up and a
- * push saying they are in. Only the call that won the compare-and-set writes
- * it, so a second captain's click cannot send it twice. A rejection sends
- * nothing (see approvalNotification). The winning call also writes a
- * `member.approval_decided` audit row in the same transaction.
+ * In the same transaction, only for the call that won:
+ * - a `member.approval_decided` audit row;
+ * - on approval, the "you're in" pop-up and push (a rejection or a re-open
+ *   sends nothing, see approvalNotification);
+ * - on rejection, the member comes off every team for this year (offboarding,
+ *   owner's call). Past years stay on file, and approving them again does not
+ *   put them back on a team.
  */
 export async function setUserApproval(input: {
   userId: string;
-  status: "approved" | "rejected";
+  /** The status the deciding captain saw. */
+  from: ApprovalStatus;
+  to: ApprovalStatus;
   decidedByUserId: string;
   /** What the captain tells the member; null or blank means none. */
   reason?: string | null;
 }): Promise<boolean> {
-  const reason = input.reason?.trim() || null;
+  if (!isReviewTransition(input.from, input.to)) {
+    throw new Error(
+      `setUserApproval: ${input.from} -> ${input.to} is not a decision`,
+    );
+  }
+  // A re-open clears the reason: it belonged to the decision being undone.
+  const reason = input.to === "pending" ? null : input.reason?.trim() || null;
+  // Resolved BEFORE the transaction: currentCycleNumber() reads camp_settings
+  // on its own handle (see team-memberships.ts).
+  const cycle = input.to === "rejected" ? await currentCycleNumber() : null;
   return await withTransaction(async (tx) => {
     const rows = await tx
       .update(schema.users)
       .set({
-        approvalStatus: input.status,
+        approvalStatus: input.to,
         approvalDecidedByUserId: input.decidedByUserId,
         approvalDecidedAt: new Date(),
         approvalDecisionReason: reason,
@@ -116,20 +131,54 @@ export async function setUserApproval(input: {
       .where(
         and(
           eq(schema.users.id, input.userId),
-          eq(schema.users.approvalStatus, "pending"),
+          eq(schema.users.approvalStatus, input.from),
         ),
       )
       .returning({ id: schema.users.id });
     if (rows.length === 0) return false;
+
+    const removedTeams =
+      cycle === null
+        ? []
+        : await tx
+            .delete(schema.teamMemberships)
+            .where(
+              and(
+                eq(schema.teamMemberships.userId, input.userId),
+                eq(schema.teamMemberships.cycle, cycle),
+              ),
+            )
+            .returning({
+              team: schema.teamMemberships.team,
+              isLead: schema.teamMemberships.isLead,
+            });
+
     await writeAuditEvent(tx, {
       actorId: input.decidedByUserId,
       action: "member.approval_decided",
       target: input.userId,
       // Whether a reason was given, not the words: the audit row records the
       // decision, and the reason lives on the member's row.
-      metadata: { status: input.status, withReason: reason !== null },
+      metadata: {
+        from: input.from,
+        status: input.to,
+        withReason: reason !== null,
+      },
     });
-    if (input.status === "approved") {
+    for (const removed of removedTeams) {
+      await writeAuditEvent(tx, {
+        actorId: input.decidedByUserId,
+        action: "member.team_removed",
+        target: input.userId,
+        metadata: {
+          team: removed.team,
+          cycle,
+          wasLead: removed.isLead,
+          because: "rejected",
+        },
+      });
+    }
+    if (input.to === "approved") {
       await tx.insert(schema.notificationDeliveries).values(
         deliveryValues(approvalNotification(), {
           userId: input.userId,

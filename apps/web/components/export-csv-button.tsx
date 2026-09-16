@@ -1,9 +1,10 @@
 import { Download } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 
-// The Export CSV control. It is a plain link to the export route, which builds
-// the file on download (see ./csv-export.ts). No CSV logic lives here, and no
-// answers reach the browser until a captain asks for the file.
+// The Export CSV control. It is a plain link to an export route, which builds
+// the file on download. No CSV logic lives here, and no data reaches the
+// browser until someone asks for the file. Used by questionnaire responses and
+// the member roster.
 //
 // A plain <a>, not next/link: the target is a file download, not a page, so
 // there is nothing to prefetch or client-navigate to.

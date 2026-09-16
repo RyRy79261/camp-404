@@ -2,8 +2,9 @@ import type { ApprovalStatus, StoredRank, ViewerRank } from "@camp404/types";
 
 // Pure access-control & clearance logic — the gating spine, framework-agnostic.
 // No I/O, no env, no next/*. The app layer wraps these: `isGodEmail` (env) feeds
-// the `isGod` boolean, the `ACTION_ROUTES` registry feeds `nextGate`, and the
-// preview-but-locked UI wrapper builds on `hasClearance`.
+// the `isGod` boolean, and the preview-but-locked UI wrapper builds on
+// `hasClearance`. The required-action router (`nextGate`) lives in the app,
+// next to its route registry (apps/web/lib/required-actions.ts).
 
 /** The viewer clearance ladder, low → high. Index = clearance level. */
 export const RANK_ORDER: readonly ViewerRank[] = [
@@ -77,30 +78,6 @@ export function isApproved(
   isGod: boolean,
 ): boolean {
   return isGod || user.approvalStatus === "approved";
-}
-
-/** A pending required action the gate spine may route to. */
-export interface PendingAction {
-  actionKey: string;
-  blocking: boolean;
-}
-
-/**
- * The route of the first pending, BLOCKING action that maps to a built gate
- * (oldest first), or null when nothing blocks / nothing maps. `routes` is the
- * app's action-key → route registry, passed in to keep this pure — so a pending
- * action with no mapped route never strands a user behind a gate with no page.
- */
-export function nextGate(
-  actions: readonly PendingAction[],
-  routes: Record<string, string>,
-): string | null {
-  for (const action of actions) {
-    if (!action.blocking) continue;
-    const route = routes[action.actionKey];
-    if (route) return route;
-  }
-  return null;
 }
 
 /**

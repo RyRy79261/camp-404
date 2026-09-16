@@ -42,6 +42,7 @@ const row: RosterRow = {
   requiredComplete: true,
   isDriver: false,
   driverProfileComplete: false,
+  duesPaid: false,
 };
 
 function loaded(overrides: Record<string, unknown> = {}) {
@@ -63,6 +64,8 @@ function loaded(overrides: Record<string, unknown> = {}) {
     promotionRequestedByName: null,
     teams: [],
     assignableTeams: [{ key: "kitchen", label: "Kitchen" }],
+    reviewOptions: [],
+    notes: [],
     ...overrides,
   };
 }
