@@ -111,6 +111,13 @@ export const reimbursementStatusEnum = pgEnum("reimbursement_status", [
 
 export const platformEnum = pgEnum("platform", ["web", "ios", "android"]);
 
+// Mirrors PAYMENT_STATUSES in @camp404/core payment-references.ts.
+export const paymentStatusEnum = pgEnum("payment_status", [
+  "pending",
+  "reconciled",
+  "waived",
+]);
+
 export const reimbursementAccountTypeEnum = pgEnum(
   "reimbursement_account_type",
   ["sa", "international"],
@@ -267,94 +274,109 @@ export const telegramAnnouncementStatusEnum = pgEnum(
 // persist across the yearly camp reset; per-burn data in other tables is
 // cleared.
 
-export const users = pgTable("users", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  authUserId: text("auth_user_id").notNull().unique(),
-  displayName: text("display_name"),
-  // Same-origin proxy URL (`/api/avatar?pathname=…`) for the member's
-  // optional profile photo. The image itself lives in a private Vercel Blob
-  // store and is streamed only to signed-in members via the proxy route.
-  // Lives on the identity row (not buried in burner_profiles.responses) so
-  // it's cheap to read from the home header, profile page, and family tree.
-  profileImageUrl: text("profile_image_url"),
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    authUserId: text("auth_user_id").notNull().unique(),
+    displayName: text("display_name"),
+    // Same-origin proxy URL (`/api/avatar?pathname=…`) for the member's
+    // optional profile photo. The image itself lives in a private Vercel Blob
+    // store and is streamed only to signed-in members via the proxy route.
+    // Lives on the identity row (not buried in burner_profiles.responses) so
+    // it's cheap to read from the home header, profile page, and family tree.
+    profileImageUrl: text("profile_image_url"),
 
-  rank: rankEnum("rank").notNull().default("member"),
-  // The AI / voice agent (and any other non-human actor) owns a row so
-  // foreign keys resolve, but is excluded from human-facing audiences.
-  isSystem: boolean("is_system").notNull().default(false),
+    rank: rankEnum("rank").notNull().default("member"),
+    // The AI / voice agent (and any other non-human actor) owns a row so
+    // foreign keys resolve, but is excluded from human-facing audiences.
+    isSystem: boolean("is_system").notNull().default(false),
 
-  membershipTier: membershipTierEnum("membership_tier"),
-  duesPaid: boolean("dues_paid").notNull().default(false),
-  duesPaidAt: timestamp("dues_paid_at", { mode: "date" }),
+    membershipTier: membershipTierEnum("membership_tier"),
+    // Superseded by the payments ledger: the roster's paid state is now derived
+    // from this year's settled payments. Kept because the year rollover still
+    // clears it, and nothing reads it for display any more.
+    duesPaid: boolean("dues_paid").notNull().default(false),
+    duesPaidAt: timestamp("dues_paid_at", { mode: "date" }),
+    // The member's stable payment reference (`C404-M017`), quoted on an EFT to
+    // the camp. Given out in join order; unique once set.
+    refCode: text("ref_code"),
 
-  // Encrypted via pgcrypto in route handlers (never stored plaintext)
-  passportEncrypted: text("passport_encrypted"),
-  saIdEncrypted: text("sa_id_encrypted"),
-  eftDetailsEncrypted: text("eft_details_encrypted"),
+    // Encrypted via pgcrypto in route handlers (never stored plaintext)
+    passportEncrypted: text("passport_encrypted"),
+    saIdEncrypted: text("sa_id_encrypted"),
+    eftDetailsEncrypted: text("eft_details_encrypted"),
 
-  skills: jsonb("skills").$type<string[]>().default([]),
+    skills: jsonb("skills").$type<string[]>().default([]),
 
-  previousAfrikaburns: integer("previous_afrikaburns").default(0),
-  previousBurningMans: integer("previous_burning_mans").default(0),
-  firstTime: boolean("first_time").default(false),
+    previousAfrikaburns: integer("previous_afrikaburns").default(0),
+    previousBurningMans: integer("previous_burning_mans").default(0),
+    firstTime: boolean("first_time").default(false),
 
-  emergencyContacts:
-    jsonb("emergency_contacts").$type<
-      Array<{ name: string; phone: string; relationship: string }>
-    >(),
+    emergencyContacts:
+      jsonb("emergency_contacts").$type<
+        Array<{ name: string; phone: string; relationship: string }>
+      >(),
 
-  // Signup gating. Set to the invite code the user redeemed when creating
-  // their account. NULL = god account (email matched GOD_EMAILS). Used as
-  // durable evidence that the account is allowed past the questionnaire
-  // gate, independent of the short-lived signup cookie.
-  inviteCode: text("invite_code"),
+    // Signup gating. Set to the invite code the user redeemed when creating
+    // their account. NULL = god account (email matched GOD_EMAILS). Used as
+    // durable evidence that the account is allowed past the questionnaire
+    // gate, independent of the short-lived signup cookie.
+    inviteCode: text("invite_code"),
 
-  // Captain-approval gating. `approved` by default so god accounts and every
-  // account created before this gate existed keep their access. A redeemer of
-  // an invite code with `requires_approval = true` is created `pending` and
-  // blocked from the app (after onboarding) until a captain decides. The
-  // captain who decided and when are stamped for the camp-management audit.
-  approvalStatus: approvalStatusEnum("approval_status")
-    .notNull()
-    .default("approved"),
-  approvalDecidedByUserId: uuid("approval_decided_by_user_id").references(
-    (): AnyPgColumn => users.id,
-    { onDelete: "set null" },
-  ),
-  approvalDecidedAt: timestamp("approval_decided_at", { mode: "date" }),
-  // What the deciding captain told the member, shown on /pending-approval.
-  // It belongs to the decision it was written for: every write that moves
-  // approval_status also sets or clears it, so it can never outlive that state.
-  approvalDecisionReason: text("approval_decision_reason"),
+    // Captain-approval gating. `approved` by default so god accounts and every
+    // account created before this gate existed keep their access. A redeemer of
+    // an invite code with `requires_approval = true` is created `pending` and
+    // blocked from the app (after onboarding) until a captain decides. The
+    // captain who decided and when are stamped for the camp-management audit.
+    approvalStatus: approvalStatusEnum("approval_status")
+      .notNull()
+      .default("approved"),
+    approvalDecidedByUserId: uuid("approval_decided_by_user_id").references(
+      (): AnyPgColumn => users.id,
+      { onDelete: "set null" },
+    ),
+    approvalDecidedAt: timestamp("approval_decided_at", { mode: "date" }),
+    // What the deciding captain told the member, shown on /pending-approval.
+    // It belongs to the decision it was written for: every write that moves
+    // approval_status also sets or clears it, so it can never outlive that state.
+    approvalDecisionReason: text("approval_decision_reason"),
 
-  // POPIA / GDPR
-  termsVersion: text("terms_version"),
-  termsConsentedAt: timestamp("terms_consented_at", { mode: "date" }),
-  sanitised: boolean("sanitised").notNull().default(false),
-  sanitisedAt: timestamp("sanitised_at", { mode: "date" }),
-  lostCatNumber: integer("lost_cat_number"),
+    // POPIA / GDPR
+    termsVersion: text("terms_version"),
+    termsConsentedAt: timestamp("terms_consented_at", { mode: "date" }),
+    sanitised: boolean("sanitised").notNull().default(false),
+    sanitisedAt: timestamp("sanitised_at", { mode: "date" }),
+    lostCatNumber: integer("lost_cat_number"),
 
-  // Telegram identity. `telegramHandle` mirrors the value the user
-  // entered in the burner-profile questionnaire (denormalised here for
-  // cheap lookup). `telegramUserId` is the numeric user id Telegram
-  // assigns once the user has joined the camp group via a bot-issued
-  // invite link — captured from the `chat_member` webhook update.
-  telegramHandle: text("telegram_handle"),
-  telegramUserId: text("telegram_user_id").unique(),
+    // Telegram identity. `telegramHandle` mirrors the value the user
+    // entered in the burner-profile questionnaire (denormalised here for
+    // cheap lookup). `telegramUserId` is the numeric user id Telegram
+    // assigns once the user has joined the camp group via a bot-issued
+    // invite link — captured from the `chat_member` webhook update.
+    telegramHandle: text("telegram_handle"),
+    telegramUserId: text("telegram_user_id").unique(),
 
-  // AI / MCP consent. Opt-in for surfacing this user's *identification
-  // documents* — passport, SA ID, EFT details, others' reimbursement bank
-  // details — to AI / MCP sessions belonging to OTHER users (a captain
-  // viewing this user's profile via Claude.ai, say). Everything else
-  // (display name, email, phone, dietary, vehicle, …) is freely visible
-  // to the appropriate in-app tier regardless of this flag. The subject
-  // always sees their own data via MCP. See `docs/mcp-tooling-proposal.md`.
-  aiDataConsent: boolean("ai_data_consent").notNull().default(false),
-  aiDataConsentAt: timestamp("ai_data_consent_at", { mode: "date" }),
+    // AI / MCP consent. Opt-in for surfacing this user's *identification
+    // documents* — passport, SA ID, EFT details, others' reimbursement bank
+    // details — to AI / MCP sessions belonging to OTHER users (a captain
+    // viewing this user's profile via Claude.ai, say). Everything else
+    // (display name, email, phone, dietary, vehicle, …) is freely visible
+    // to the appropriate in-app tier regardless of this flag. The subject
+    // always sees their own data via MCP. See `docs/mcp-tooling-proposal.md`.
+    aiDataConsent: boolean("ai_data_consent").notNull().default(false),
+    aiDataConsentAt: timestamp("ai_data_consent_at", { mode: "date" }),
 
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
-});
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (u) => ({
+    // Partial: most rows have no reference until the member needs one.
+    refCodeUniq: uniqueIndex("users_ref_code_uniq")
+      .on(u.refCode)
+      .where(sql`${u.refCode} IS NOT NULL`),
+  }),
+);
 
 // --- Invite codes --------------------------------------------------------
 // Real invite codes with provenance. `users.invite_code` stores the code a
@@ -563,6 +585,44 @@ export const teamMemberships = pgTable(
     // at most once in either.
     pk: primaryKey({ columns: [tm.userId, tm.team, tm.cycle] }),
     teamIdx: index("team_memberships_team_idx").on(tm.team),
+  }),
+);
+
+// --- Payments ledger ------------------------------------------------------
+// Owner's call (2026-09-16): a full payments ledger with amounts and
+// references, not a "paid" toggle. The app never moves money: a member pays
+// the camp by EFT quoting their reference, and a captain records what the bank
+// statement shows. One row per payment, keyed to a burn year, so a new year
+// starts with nobody paid and last year's ledger stays readable.
+//
+// The member's dues are settled for a year once any payment that year is
+// reconciled (seen in the bank) or waived.
+
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    // `C404-M017-2027-1`: the member reference, the year, and that member's
+    // payment count that year. Unique across the ledger.
+    reference: text("reference").notNull().unique(),
+    status: paymentStatusEnum("status").notNull().default("pending"),
+    // What the captain saw, e.g. the bank statement line. Scrubbed on erasure.
+    note: text("note"),
+    recordedByUserId: uuid("recorded_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (p) => ({
+    userCycleIdx: index("payments_user_cycle_idx").on(p.userId, p.cycle),
+    cycleIdx: index("payments_cycle_idx").on(p.cycle),
   }),
 );
 

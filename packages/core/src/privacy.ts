@@ -134,6 +134,7 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "users.approvalDecidedByUserId": "captain",
   "users.approvalDecidedAt": "captain",
   "users.approvalDecisionReason": "captain",
+  "users.refCode": "captain",
   "users.termsVersion": "captain",
   "users.termsConsentedAt": "captain",
   "users.sanitisedAt": "captain",
@@ -198,6 +199,19 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "neonAuthUsers.id": "captain",
   "neonAuthUsers.email": "captain",
   "neonAuthUsers.emailVerified": "captain",
+
+  // payments — the dues ledger, captain-only
+  "payments.id": "captain",
+  "payments.userId": "captain",
+  "payments.cycle": "captain",
+  "payments.amountCents": "captain",
+  "payments.currency": "captain",
+  "payments.reference": "captain",
+  "payments.status": "captain",
+  "payments.note": "captain",
+  "payments.recordedByUserId": "captain",
+  "payments.createdAt": "captain",
+  "payments.updatedAt": "captain",
 
   // team_memberships — the roster shows teams and leads
   "teamMemberships.userId": "camp_member",

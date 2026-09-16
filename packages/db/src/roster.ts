@@ -2,6 +2,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { createHttpDb } from "./index";
 import { neonAuthUsers } from "./neon-auth";
+import { duesSettledSql } from "./payments";
 import * as schema from "./schema";
 import { currentCycleNumber } from "./cycles";
 
@@ -77,7 +78,8 @@ export async function getCampManagementRoster(
       handle: schema.users.telegramHandle,
       rank: schema.users.rank,
       approvalStatus: schema.users.approvalStatus,
-      duesPaid: schema.users.duesPaid,
+      // From the payments ledger for this year, not users.dues_paid.
+      duesPaid: duesSettledSql(schema.users.id, cycle),
       membershipTier: schema.users.membershipTier,
       onboardingCompletedAt: schema.burnerProfiles.completedAt,
       country: sql<

@@ -38,6 +38,8 @@
 //     AudienceSpec — who may send to which audience (./audience-authz)
 //   - member export: MEMBER_EXPORT_COLUMNS, memberExportColumnsFor — the
 //     roster CSV's columns by rank, from the field list (./member-export)
+//   - payment references: formatMemberRefCode, paymentReference,
+//     PAYMENT_STATUSES, formatRands, parseRandsToCents (./payment-references)
 //   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,
 //     neutraliseFormula, csvFilenamePart (./csv) — the ONE spreadsheet
 //     serialiser; the questionnaire export and WP9's roster export share it
@@ -70,6 +72,7 @@ export * from "./id-validation";
 export * from "./promotion";
 export * from "./privacy";
 export * from "./member-export";
+export * from "./payment-references";
 export * from "./audience-authz";
 export * from "./csv";
 export * from "./questionnaire-csv";

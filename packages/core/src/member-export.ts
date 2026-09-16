@@ -74,7 +74,7 @@ export const MEMBER_EXPORT_COLUMNS: readonly MemberExportColumn[] = [
   { key: "id_type", header: "ID type", sources: ID_SOURCES },
   { key: "id_number", header: "ID number", sources: ID_SOURCES },
   { key: "arrival", header: "Arrival", sources: ["driverProfiles.arrivalAt"] },
-  { key: "dues_paid", header: "Dues paid", sources: ["users.duesPaid"] },
+  { key: "dues_paid", header: "Dues paid", sources: ["payments.status"] },
   { key: "approval", header: "Approval", sources: ["users.approvalStatus"] },
   { key: "joined", header: "Joined", sources: ["users.createdAt"] },
 ];

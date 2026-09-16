@@ -46,6 +46,7 @@ describe("sanitisedUserPatch", () => {
       membershipTier: "camp accounting, not identity",
       duesPaid: "camp accounting, not identity",
       duesPaidAt: "camp accounting, not identity",
+      refCode: "camp accounting: the ledger's payment references quote it",
       approvalStatus: "a captain's recorded decision",
       approvalDecidedByUserId: "a captain's recorded decision",
       approvalDecidedAt: "a captain's recorded decision",

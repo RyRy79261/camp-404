@@ -191,6 +191,13 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .delete(schema.telegramInvites)
       .where(eq(schema.telegramInvites.userId, userId));
 
+    // The dues ledger stays for accounting, like reimbursements below, but the
+    // captain's free-text note may name the person, so it goes.
+    await tx
+      .update(schema.payments)
+      .set({ note: null })
+      .where(eq(schema.payments.userId, userId));
+
     // Scrub encrypted bank details (NOT NULL → empty string, not null) while
     // keeping the reimbursement record for accounting.
     await tx
