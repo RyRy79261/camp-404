@@ -153,6 +153,32 @@ describe("consumeRateLimit", () => {
     }
   });
 
+  it("counts on the database clock when no clock is given", async () => {
+    // Production passes no clock. The window must start at the database's
+    // now(), the one clock every server instance shares. (PGlite reads the
+    // test process's clock, so this cannot tell a drifting server apart; it
+    // proves the no-clock path counts and stores the database's time.)
+    expect(
+      await consumeRateLimit({ key: "db-clock", limit: 1, windowMs: WINDOW }),
+    ).toEqual({ ok: true, retryAfterSeconds: 0 });
+    const denied = await consumeRateLimit({
+      key: "db-clock",
+      limit: 1,
+      windowMs: WINDOW,
+    });
+    expect(denied?.ok).toBe(false);
+    expect(denied?.retryAfterSeconds).toBeGreaterThan(0);
+    expect(denied?.retryAfterSeconds).toBeLessThanOrEqual(60);
+
+    const {
+      rows: [row],
+    } = await h.client().query<{ drift_ms: number }>(
+      `SELECT abs((extract(epoch from now()) * 1000) - window_start)::float8 AS drift_ms
+         FROM action_rate_limit WHERE key = 'db-clock'`,
+    );
+    expect(row!.drift_ms).toBeLessThan(60_000);
+  });
+
   it("refuses a limit or window no caller should pass", async () => {
     await expect(
       consumeRateLimit({ key: "k", limit: 0, windowMs: WINDOW }),
