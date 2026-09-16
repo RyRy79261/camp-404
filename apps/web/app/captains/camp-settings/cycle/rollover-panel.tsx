@@ -322,6 +322,9 @@ function AdvanceYearPanel({
       const result = await advanceCycleAction({
         year: Number(year),
         confirm: Number(confirm),
+        // The year this plan was read in. If another captain moved the camp
+        // since, the server refuses rather than advancing a second time.
+        expectedFromYear: from.year,
         // The dues lever only exists when there is something to clear, so it
         // can never be sent as a stray true on a camp with no dues ledger.
         resetDues: plan.duesPaidCount > 0 ? resetDues : false,

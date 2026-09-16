@@ -311,6 +311,7 @@ describe("RolloverPanel — the confirm step", () => {
       expect(advanceCycleAction).toHaveBeenCalledWith({
         year: 2027,
         confirm: 2027,
+        expectedFromYear: 2026,
         resetDues: false,
         announcement: null,
       }),

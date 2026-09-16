@@ -10,7 +10,12 @@ import {
   makeUser,
   requiredActionsFor,
 } from "./_factories";
-import { advanceCycle, planRollover, setFoundingYear } from "../cycle-rollover";
+import {
+  advanceCycle,
+  planRollover,
+  setFoundingYear,
+  type AdvanceCycleInput,
+} from "../cycle-rollover";
 import { openActivation, completeBuilderResponse } from "../activations";
 import { isTeamLead } from "../roster";
 import { closeActivation } from "../questionnaire-lifecycle";
@@ -107,6 +112,17 @@ async function foundedAt(db: DB, year: number): Promise<void> {
       { year, startedAt: `${year}-01-01T00:00:00.000Z`, endedAt: null },
     ],
   });
+}
+
+/**
+ * advanceCycle from 2026, the year these tests found the camp in. A test that
+ * starts from another year passes `expectedFromYear` itself.
+ */
+function advance(
+  input: Omit<AdvanceCycleInput, "expectedFromYear"> &
+    Partial<Pick<AdvanceCycleInput, "expectedFromYear">>,
+) {
+  return advanceCycle({ expectedFromYear: 2026, ...input });
 }
 
 async function activationsFor(db: DB, key: string) {
@@ -356,7 +372,7 @@ describe("advanceCycle", () => {
     });
     const gatesBefore = await db.select().from(schema.requiredActions);
 
-    const res = await advanceCycle({
+    const res = await advance({
       year: 2027,
       actorUserId: camp.captain.id,
     });
@@ -490,7 +506,7 @@ describe("advanceCycle", () => {
     await openActivation(act.id);
     await foundedAt(db, 2026);
 
-    const res = await advanceCycle({ year: 2027, actorUserId: null });
+    const res = await advance({ year: 2027, actorUserId: null });
     expect(res.ok).toBe(true);
 
     const rows = await activationsFor(db, "leads_only");
@@ -514,10 +530,10 @@ describe("advanceCycle", () => {
     // once to exactly this: one runs, the other observes the year already in
     // the cycle list. (PGlite serves one connection, so the race is asserted in
     // its serialised form rather than by overlapping transactions.)
-    expect((await advanceCycle({ year: 2027, actorUserId: null })).ok).toBe(
+    expect((await advance({ year: 2027, actorUserId: null })).ok).toBe(
       true,
     );
-    expect(await advanceCycle({ year: 2027, actorUserId: null })).toEqual({
+    expect(await advance({ year: 2027, actorUserId: null })).toEqual({
       ok: false,
       reason: "already-advanced",
     });
@@ -551,7 +567,7 @@ describe("advanceCycle", () => {
       carryOver: false,
       cycle: 2026,
     });
-    expect((await advanceCycle({ year: 2027, actorUserId: null })).ok).toBe(
+    expect((await advance({ year: 2027, actorUserId: null })).ok).toBe(
       true,
     );
 
@@ -565,6 +581,26 @@ describe("advanceCycle", () => {
     expect(row!.status).toBe("draft");
   });
 
+  it("refuses a plan made for a year the camp has already left", async () => {
+    const db = h.db();
+    await seedCamp(db);
+    await foundedAt(db, 2026);
+
+    // Two captains open the page in 2026. One confirms 2027, the other 2028.
+    // Without the expected year, both would commit and the camp would jump
+    // twice. (Serialised form of the race, as in the test above.)
+    expect((await advance({ year: 2027, actorUserId: null })).ok).toBe(true);
+    expect(await advance({ year: 2028, actorUserId: null })).toEqual({
+      ok: false,
+      reason: "stale-plan",
+    });
+
+    // The loser changed nothing.
+    const config = await storedConfig(db);
+    expect(config?.cycles?.map((c) => c.year)).toEqual([2026, 2027]);
+    expect(await db.select().from(schema.auditLog)).toHaveLength(1);
+  });
+
   it("refuses an implausible year without opening a transaction", async () => {
     const db = h.db();
     await seedCamp(db);
@@ -572,7 +608,7 @@ describe("advanceCycle", () => {
     // A typo that would otherwise be stamped on every row for the rest of the
     // camp's life.
     for (const year of [202, 20267, 2026.5]) {
-      expect(await advanceCycle({ year, actorUserId: null })).toEqual({
+      expect(await advance({ year, actorUserId: null })).toEqual({
         ok: false,
         reason: "invalid-year",
       });
@@ -587,7 +623,7 @@ describe("advanceCycle", () => {
 
     // A year is a date. It only goes forwards — a camp skipping a burn types
     // 2028, it never goes back to 2025.
-    expect(await advanceCycle({ year: 2025, actorUserId: null })).toEqual({
+    expect(await advance({ year: 2025, actorUserId: null })).toEqual({
       ok: false,
       reason: "invalid-year",
     });
@@ -600,7 +636,7 @@ describe("advanceCycle", () => {
 
     // There is no "next" year without a current one; the page's first screen
     // (setFoundingYear) is where this goes instead.
-    expect(await advanceCycle({ year: 2027, actorUserId: null })).toEqual({
+    expect(await advance({ year: 2027, actorUserId: null })).toEqual({
       ok: false,
       reason: "no-founding-year",
     });
@@ -617,15 +653,16 @@ describe("advanceCycle", () => {
 
     await foundedAt(db, 2026);
 
-    const kept = await advanceCycle({ year: 2027, actorUserId: null });
+    const kept = await advance({ year: 2027, actorUserId: null });
     expect(kept.ok && kept.report.duesCleared).toEqual([]);
     expect(
       (await db.select().from(schema.users).where(eq(schema.users.id, paid.id)))[0]!
         .duesPaid,
     ).toBe(true);
 
-    const res = await advanceCycle({
+    const res = await advance({
       year: 2028,
+      expectedFromYear: 2027,
       actorUserId: null,
       resetDues: true,
     });
@@ -650,7 +687,7 @@ describe("advanceCycle", () => {
     const member = await makeUser(db);
     await foundedAt(db, 2026);
 
-    const res = await advanceCycle({
+    const res = await advance({
       year: 2027,
       actorUserId: captain.id,
       announcement: { title: "It's 2027", body: "Fresh forms are up." },
@@ -779,7 +816,7 @@ describe("setFoundingYear", () => {
     await setFoundingYear({ year: 2026, actorUserId: null });
 
     expect((await planRollover()).from).toMatchObject({ year: 2026 });
-    expect((await advanceCycle({ year: 2027, actorUserId: null })).ok).toBe(
+    expect((await advance({ year: 2027, actorUserId: null })).ok).toBe(
       true,
     );
 
@@ -836,7 +873,7 @@ describe("teams, team leads and car seats go fresh at a rollover", () => {
       seats: await db.select().from(schema.carMembers),
     };
 
-    expect((await advanceCycle({ year: 2027, actorUserId: null })).ok).toBe(
+    expect((await advance({ year: 2027, actorUserId: null })).ok).toBe(
       true,
     );
 
@@ -877,7 +914,7 @@ describe("teams, team leads and car seats go fresh at a rollover", () => {
     const db = h.db();
     const { driver } = await seedRoster(db, 2026);
     await foundedAt(db, 2026);
-    await advanceCycle({ year: 2027, actorUserId: null });
+    await advance({ year: 2027, actorUserId: null });
 
     await makeMembership(db, {
       userId: driver.id,

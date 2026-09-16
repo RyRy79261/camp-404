@@ -209,6 +209,8 @@ const AdvanceCycleForm = z
     year: CycleYear,
     /** The same number typed a second time — the type-the-name pattern. */
     confirm: CycleYear,
+    /** The year the plan on the captain's screen was read in. */
+    expectedFromYear: CycleYear,
     resetDues: z.boolean().optional(),
     announcement: z
       .object({
@@ -305,6 +307,7 @@ export async function advanceCycleAction(
 
   const result = await advanceCycle({
     year: parsed.data.year,
+    expectedFromYear: parsed.data.expectedFromYear,
     actorUserId: actorUserId || null,
     resetDues: parsed.data.resetDues ?? false,
     announcement: parsed.data.announcement ?? null,
@@ -315,9 +318,11 @@ export async function advanceCycleAction(
       error:
         result.reason === "already-advanced"
           ? "The camp has already started that year. Reload the page to see where it is now."
-          : result.reason === "no-founding-year"
-            ? "The camp hasn't said what year it is yet. Reload the page and start there."
-            : `A new year has to be later than the one you're in, and between ${MIN_CYCLE_YEAR} and ${MAX_CYCLE_YEAR}.`,
+          : result.reason === "stale-plan"
+            ? "Another captain has already moved the camp to a new year. Reload the page to see the new plan."
+            : result.reason === "no-founding-year"
+              ? "The camp hasn't said what year it is yet. Reload the page and start there."
+              : `A new year has to be later than the one you're in, and between ${MIN_CYCLE_YEAR} and ${MAX_CYCLE_YEAR}.`,
     };
   }
   revalidateRolloverSurfaces();

@@ -338,14 +338,22 @@ describe("advanceCycleAction", () => {
     vi.mocked(hasCampAccess).mockReturnValue(true);
     vi.mocked(isApproved).mockReturnValue(true);
 
-    const result = await advanceCycleAction({ year: 2027, confirm: 2027 });
+    const result = await advanceCycleAction({
+      year: 2027,
+      confirm: 2027,
+      expectedFromYear: 2026,
+    });
     expect(result).toEqual({ ok: false, error: "Captain access only." });
     expect(advanceCycle).not.toHaveBeenCalled();
   });
 
   it("refuses when the confirmation doesn't match the year", async () => {
     asCaptain();
-    const result = await advanceCycleAction({ year: 2027, confirm: 2026 });
+    const result = await advanceCycleAction({
+      year: 2027,
+      confirm: 2026,
+      expectedFromYear: 2026,
+    });
     expect(result.ok).toBe(false);
     expect(advanceCycle).not.toHaveBeenCalled();
   });
@@ -353,9 +361,15 @@ describe("advanceCycleAction", () => {
   it("refuses anything that isn't a plausible year", async () => {
     asCaptain();
     for (const year of [202, 20267, 2026.5, ""]) {
-      expect((await advanceCycleAction({ year, confirm: year })).ok).toBe(
-        false,
-      );
+      expect(
+        (
+          await advanceCycleAction({
+            year,
+            confirm: year,
+            expectedFromYear: 2026,
+          })
+        ).ok,
+      ).toBe(false);
     }
     expect(advanceCycle).not.toHaveBeenCalled();
   });
@@ -369,12 +383,14 @@ describe("advanceCycleAction", () => {
       // check compares against.
       year: "2027",
       confirm: 2027,
+      expectedFromYear: 2026,
       resetDues: true,
       announcement: { title: "New year", body: "Off we go." },
     });
 
     expect(advanceCycle).toHaveBeenCalledWith({
       year: 2027,
+      expectedFromYear: 2026,
       actorUserId: "cap-1",
       resetDues: true,
       announcement: { title: "New year", body: "Off we go." },
@@ -385,7 +401,11 @@ describe("advanceCycleAction", () => {
   it("defaults the optional levers off", async () => {
     asCaptain();
     vi.mocked(advanceCycle).mockResolvedValue({ ok: true, report } as never);
-    await advanceCycleAction({ year: 2027, confirm: 2027 });
+    await advanceCycleAction({
+      year: 2027,
+      confirm: 2027,
+      expectedFromYear: 2026,
+    });
     expect(advanceCycle).toHaveBeenCalledWith(
       expect.objectContaining({ resetDues: false, announcement: null }),
     );
@@ -397,11 +417,33 @@ describe("advanceCycleAction", () => {
       ok: false,
       reason: "already-advanced",
     } as never);
-    const result = await advanceCycleAction({ year: 2027, confirm: 2027 });
+    const result = await advanceCycleAction({
+      year: 2027,
+      confirm: 2027,
+      expectedFromYear: 2026,
+    });
     expect(result).toEqual({
       ok: false,
       error:
         "The camp has already started that year. Reload the page to see where it is now.",
+    });
+  });
+
+  it("tells a captain whose plan is out of date to reload", async () => {
+    asCaptain();
+    vi.mocked(advanceCycle).mockResolvedValue({
+      ok: false,
+      reason: "stale-plan",
+    } as never);
+    const result = await advanceCycleAction({
+      year: 2028,
+      confirm: 2028,
+      expectedFromYear: 2026,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error:
+        "Another captain has already moved the camp to a new year. Reload the page to see the new plan.",
     });
   });
 
@@ -411,7 +453,11 @@ describe("advanceCycleAction", () => {
       ok: false,
       reason: "no-founding-year",
     } as never);
-    const result = await advanceCycleAction({ year: 2027, confirm: 2027 });
+    const result = await advanceCycleAction({
+      year: 2027,
+      confirm: 2027,
+      expectedFromYear: 2026,
+    });
     expect(result).toEqual({
       ok: false,
       error:
@@ -425,7 +471,11 @@ describe("advanceCycleAction", () => {
       ok: false,
       reason: "invalid-year",
     } as never);
-    const result = await advanceCycleAction({ year: 2027, confirm: 2027 });
+    const result = await advanceCycleAction({
+      year: 2027,
+      confirm: 2027,
+      expectedFromYear: 2026,
+    });
     expect(result.ok).toBe(false);
     expect(!result.ok && result.error).toMatch(/has to be later/);
   });
@@ -435,6 +485,7 @@ describe("advanceCycleAction", () => {
     const result = await advanceCycleAction({
       year: 2027,
       confirm: 2027,
+      expectedFromYear: 2026,
       announcement: { title: "New year", body: "  " },
     });
     expect(result).toEqual({
