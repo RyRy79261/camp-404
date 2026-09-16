@@ -5,7 +5,8 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/__tests__/**/*.test.ts"],
     // `pnpm test:coverage` (CI). The floors are the coverage measured on
-    // 2026-09-16 minus 3 points, so coverage can drift down only a little
+    // 2026-09-16 (this package: 2026-09-17, after the seed tests) minus 3
+    // points, so coverage can drift down only a little
     // before CI says so.
     coverage: {
       provider: "v8",
@@ -13,10 +14,10 @@ export default defineConfig({
       exclude: ["src/**/__tests__/**", "src/**/*.stories.tsx"],
       reporter: ["text-summary", "json-summary"],
       thresholds: {
-        statements: 20,
-        branches: 35,
-        functions: 8,
-        lines: 18,
+        statements: 49,
+        branches: 53,
+        functions: 52,
+        lines: 48,
       },
     },
   },
