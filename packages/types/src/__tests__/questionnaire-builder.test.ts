@@ -11,7 +11,10 @@ import {
   regenerateBuilderIds,
   validateBuilderQuestionnaire,
   validateBuilderResponses,
+  visibleIfOpsFor,
+  visibleIfProblem,
 } from "../questionnaire-builder";
+import { Question } from "../questionnaire";
 
 // Parse raw fixtures so Zod fills the defaulted fields (maxLength, required, …).
 function build(raw: unknown): BuilderQuestionnaire {
@@ -268,6 +271,81 @@ describe("evalVisibleIf", () => {
       evalVisibleIf({ fieldId: "x", op: "includes", value: "k" }, { x: ["k", "z"] }),
     ).toBe(true);
     expect(evalVisibleIf({ fieldId: "x", op: "gte", value: 3 }, { x: 4 })).toBe(true);
+  });
+});
+
+describe("conditions fit the field they reference", () => {
+  const choice = Question.parse({
+    id: "diet",
+    kind: "single_select",
+    prompt: "Diet",
+    options: [
+      { value: "omni", label: "Omni" },
+      { value: "veg", label: "Veg" },
+    ],
+  });
+  const many = Question.parse({ ...choice, id: "tags", kind: "multi_select" });
+  const yesNo = Question.parse({ id: "lead", kind: "boolean", prompt: "Lead?" });
+  const count = Question.parse({ id: "n", kind: "number", prompt: "How many?" });
+  const text = Question.parse({ id: "t", kind: "short_text", prompt: "Name" });
+
+  it("offers the operators §2.1 allows for each kind", () => {
+    const answered = ["is_answered", "is_empty"];
+    expect(visibleIfOpsFor(choice)).toEqual(["eq", "ne", ...answered]);
+    expect(visibleIfOpsFor(yesNo)).toEqual(["eq", "ne", ...answered]);
+    expect(visibleIfOpsFor(many)).toEqual(["includes", "not_includes", ...answered]);
+    expect(visibleIfOpsFor(count)).toEqual(
+      ["eq", "ne", "gt", "gte", "lt", "lte", ...answered],
+    );
+    expect(visibleIfOpsFor(text)).toEqual(answered);
+  });
+
+  it("accepts a value the field can hold", () => {
+    expect(visibleIfProblem({ fieldId: "diet", op: "eq", value: "veg" }, choice)).toBeNull();
+    expect(visibleIfProblem({ fieldId: "tags", op: "includes", value: "omni" }, many)).toBeNull();
+    expect(visibleIfProblem({ fieldId: "lead", op: "ne", value: false }, yesNo)).toBeNull();
+    expect(visibleIfProblem({ fieldId: "n", op: "gte", value: 3 }, count)).toBeNull();
+    expect(visibleIfProblem({ fieldId: "t", op: "is_answered" }, text)).toBeNull();
+  });
+
+  it("names what is wrong with a condition that does not fit", () => {
+    expect(visibleIfProblem({ fieldId: "gone", op: "is_empty" }, undefined)).toBe("missing_field");
+    expect(visibleIfProblem({ fieldId: "t", op: "eq", value: "Jo" }, text)).toBe("wrong_operator");
+    expect(visibleIfProblem({ fieldId: "diet", op: "eq", value: "vegan" }, choice)).toBe("wrong_value");
+    expect(visibleIfProblem({ fieldId: "lead", op: "eq", value: "yes" }, yesNo)).toBe("wrong_value");
+    expect(visibleIfProblem({ fieldId: "n", op: "lt" }, count)).toBe("wrong_value");
+  });
+
+  it("blocks publishing a condition on a missing option or with the wrong operator", () => {
+    const q = build({
+      version: "1",
+      title: "T",
+      pages: [
+        {
+          ...QUESTION_PAGE,
+          blocks: [
+            ...QUESTION_PAGE.blocks,
+            {
+              kind: "question",
+              question: { id: "why", kind: "short_text", prompt: "Why veg?" },
+              visibleIf: { fieldId: "diet", op: "eq", value: "vegan" },
+            },
+            {
+              kind: "question",
+              question: { id: "nick", kind: "short_text", prompt: "Nickname" },
+              visibleIf: { fieldId: "name", op: "gt", value: 1 },
+            },
+          ],
+        },
+      ],
+    });
+    const errors = validateBuilderQuestionnaire(q);
+    expect(errors).toContain(
+      'A block on About you shows-when compares "Diet" with an answer it can\'t have.',
+    );
+    expect(errors).toContain(
+      'A block on About you shows-when uses a condition that doesn\'t fit "Name".',
+    );
   });
 });
 

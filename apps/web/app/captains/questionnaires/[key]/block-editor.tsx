@@ -4,9 +4,11 @@ import { useEffect, useId, useState } from "react";
 import { Trash2 } from "lucide-react";
 import {
   isAllowedBuilderImageUrl,
+  visibleIfProblem,
   type Block,
   type ContentBlock,
   type Question,
+  type VisibleIf,
 } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
@@ -25,6 +27,7 @@ import { Textarea } from "@camp404/ui/components/textarea";
 import { QuestionField } from "@/components/questionnaire/question";
 import { ContentBlockRenderer } from "@/components/questionnaire/content-block";
 import { OptionsEditor } from "./options-editor";
+import { VisibilityEditor } from "./visibility-editor";
 import {
   BUILDER_FIELD_KINDS,
   isChoiceKind,
@@ -32,7 +35,16 @@ import {
   type BuilderFieldKind,
 } from "./field-kinds";
 
-function blockValid(block: Block): boolean {
+function blockValid(block: Block, fields: readonly Question[]): boolean {
+  if (
+    block.visibleIf &&
+    visibleIfProblem(
+      block.visibleIf,
+      fields.find((f) => f.id === block.visibleIf!.fieldId),
+    ) !== null
+  ) {
+    return false;
+  }
   if (block.kind === "question") {
     const q = block.question;
     if (!q.prompt.trim()) return false;
@@ -58,12 +70,15 @@ function blockValid(block: Block): boolean {
 // member renderers (QuestionField / ContentBlockRenderer).
 export function BlockEditorDialog({
   block,
+  fields,
   open,
   onSave,
   onDelete,
   onClose,
 }: {
   block: Block;
+  /** The questions above this block, which a condition may reference. */
+  fields: readonly Question[];
   open: boolean;
   onSave: (block: Block) => void;
   onDelete: () => void;
@@ -90,6 +105,12 @@ export function BlockEditorDialog({
   }
   function patchContent(patch: Record<string, unknown>) {
     setDraft((d) => (d.kind !== "question" ? ({ ...d, ...patch } as Block) : d));
+  }
+  function setVisibleIf(visibleIf: VisibleIf | undefined) {
+    setDraft((d) => {
+      const { visibleIf: _drop, ...rest } = d;
+      return (visibleIf ? { ...rest, visibleIf } : rest) as Block;
+    });
   }
 
   return (
@@ -120,6 +141,13 @@ export function BlockEditorDialog({
         ) : (
           <ContentEditor block={draft} patch={patchContent} />
         )}
+
+        <VisibilityEditor
+          value={draft.visibleIf}
+          fields={fields}
+          subject="block"
+          onChange={setVisibleIf}
+        />
 
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3">
           <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -156,7 +184,7 @@ export function BlockEditorDialog({
             </Button>
             <Button
               type="button"
-              disabled={!blockValid(draft)}
+              disabled={!blockValid(draft, fields)}
               onClick={() => onSave(draft)}
             >
               Save

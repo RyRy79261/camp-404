@@ -210,6 +210,67 @@ export function evalVisibleIf(
   }
 }
 
+export type VisibleIfOp = VisibleIf["op"];
+
+const ANSWEREDNESS_OPS: readonly VisibleIfOp[] = ["is_answered", "is_empty"];
+
+/**
+ * The operators a condition may use on the field it references (spec §2.1).
+ * A choice compares against one of the field's option values; a yes/no field
+ * against true or false; a number or slider against a number. Any field can be
+ * tested for being answered or empty.
+ */
+export function visibleIfOpsFor(field: Question): readonly VisibleIfOp[] {
+  switch (field.kind) {
+    case "single_select":
+    case "combobox":
+    case "toggle":
+    case "scale":
+    case "boolean":
+      return ["eq", "ne", ...ANSWEREDNESS_OPS];
+    case "multi_select":
+      return ["includes", "not_includes", ...ANSWEREDNESS_OPS];
+    case "number":
+    case "slider":
+      return ["eq", "ne", "gt", "gte", "lt", "lte", ...ANSWEREDNESS_OPS];
+    default:
+      return ANSWEREDNESS_OPS;
+  }
+}
+
+/** The option/step values a question offers, or null for the kinds with none. */
+export function choiceValues(field: Question): string[] | null {
+  if ("options" in field) return field.options.map((o) => o.value);
+  if (field.kind === "scale") return field.steps.map((s) => s.value);
+  return null;
+}
+
+/**
+ * Why a condition does not fit the field it references, or null when it does:
+ * the field must exist, the operator must suit its kind, and the value must be
+ * one the field can hold. The builder's editor and the publish check share it.
+ */
+export function visibleIfProblem(
+  cond: VisibleIf,
+  field: Question | undefined,
+): "missing_field" | "wrong_operator" | "wrong_value" | null {
+  if (!field) return "missing_field";
+  if (!visibleIfOpsFor(field).includes(cond.op)) return "wrong_operator";
+  if (cond.op === "is_answered" || cond.op === "is_empty") return null;
+  const v = cond.value;
+  if (field.kind === "boolean") {
+    return typeof v === "boolean" ? null : "wrong_value";
+  }
+  const choices = choiceValues(field);
+  if (choices) {
+    return typeof v === "string" && choices.includes(v) ? null : "wrong_value";
+  }
+  if (field.kind === "number" || field.kind === "slider") {
+    return typeof v === "number" && Number.isFinite(v) ? null : "wrong_value";
+  }
+  return "wrong_value";
+}
+
 function isVisible(
   visibleIf: VisibleIf | undefined,
   responses: QuestionnaireResponses,
@@ -375,12 +436,6 @@ export function boundDraftResponses(
 // input. `toggle` is omitted — it isn't authorable in the builder palette.
 const OPTION_KINDS = new Set(["single_select", "multi_select", "combobox"]);
 
-/** The option/step values a question offers, or null for the kinds with none. */
-function offeredValues(field: Question): string[] | null {
-  if ("options" in field) return field.options.map((o) => o.value);
-  if (field.kind === "scale") return field.steps.map((s) => s.value);
-  return null;
-}
 
 /**
  * Ranges a respondent could never satisfy. Returns member-visible messages.
@@ -517,6 +572,31 @@ export function builderDefinitionLimitErrors(q: BuilderQuestionnaire): string[] 
   return errors;
 }
 
+/** A condition's publish blockers, worded for the author. */
+function visibleIfErrors(
+  cond: VisibleIf,
+  earlier: ReadonlyMap<string, Question>,
+  where: string,
+): string[] {
+  const field = earlier.get(cond.fieldId);
+  switch (visibleIfProblem(cond, field)) {
+    case null:
+      return [];
+    case "missing_field":
+      return [
+        `${where} shows-when references a field that doesn't come before it.`,
+      ];
+    case "wrong_operator":
+      return [
+        `${where} shows-when uses a condition that doesn't fit "${field!.prompt}".`,
+      ];
+    case "wrong_value":
+      return [
+        `${where} shows-when compares "${field!.prompt}" with an answer it can't have.`,
+      ];
+  }
+}
+
 export function validateBuilderQuestionnaire(
   q: BuilderQuestionnaire,
 ): string[] {
@@ -529,7 +609,8 @@ export function validateBuilderQuestionnaire(
   }
 
   let inputCount = 0;
-  const earlier = new Set<string>();
+  // Every input field seen so far, by id: a condition may reference only these.
+  const earlier = new Map<string, Question>();
   // Pages, content blocks and questions share ONE flat id namespace, and a
   // duplicate is a publish blocker for two reasons — the second is the one
   // that hides:
@@ -560,15 +641,13 @@ export function validateBuilderQuestionnaire(
     if (page.blocks.length === 0) {
       errors.push(`${pageLabel} has no blocks.`);
     }
-    if (page.visibleIf && !earlier.has(page.visibleIf.fieldId)) {
-      errors.push(
-        `${pageLabel} shows-when references a field that doesn't come before it.`,
-      );
+    if (page.visibleIf) {
+      errors.push(...visibleIfErrors(page.visibleIf, earlier, pageLabel));
     }
     for (const block of page.blocks) {
-      if (block.visibleIf && !earlier.has(block.visibleIf.fieldId)) {
+      if (block.visibleIf) {
         errors.push(
-          `A block on ${pageLabel} shows-when references a field that doesn't come before it.`,
+          ...visibleIfErrors(block.visibleIf, earlier, `A block on ${pageLabel}`),
         );
       }
       if (block.kind === "image_block" && block.altText.trim().length === 0) {
@@ -604,13 +683,13 @@ export function validateBuilderQuestionnaire(
       // authored option value on it would be indistinguishable from something
       // a respondent typed — so it is refused at definition time, which is
       // what lets every reader trust the encoding.
-      if (offeredValues(field)?.some((v) => v.startsWith(OTHER_PREFIX))) {
+      if (choiceValues(field)?.some((v) => v.startsWith(OTHER_PREFIX))) {
         errors.push(
           `"${field.prompt}" has an option value starting with "${OTHER_PREFIX}", which is reserved for free-text "Other" answers.`,
         );
       }
       errors.push(...rangeErrors(field));
-      earlier.add(field.id);
+      earlier.set(field.id, field);
     }
   });
 
@@ -631,11 +710,6 @@ function fieldMap(q: BuilderQuestionnaire): Map<string, Question> {
   return m;
 }
 
-function optionValues(q: Question): string[] | null {
-  if ("options" in q) return q.options.map((o) => o.value);
-  if (q.kind === "scale") return q.steps.map((s) => s.value);
-  return null;
-}
 
 /**
  * True when changing `prev` field into `next` (same id, same kind) can
@@ -643,8 +717,8 @@ function optionValues(q: Question): string[] | null {
  */
 function breakingParamChange(prev: Question, next: Question): boolean {
   // Removing or renaming an option value is breaking; adding one is not.
-  const prevOpts = optionValues(prev);
-  const nextOpts = optionValues(next);
+  const prevOpts = choiceValues(prev);
+  const nextOpts = choiceValues(next);
   if (prevOpts && nextOpts) {
     const nextSet = new Set(nextOpts);
     if (prevOpts.some((v) => !nextSet.has(v))) return true;

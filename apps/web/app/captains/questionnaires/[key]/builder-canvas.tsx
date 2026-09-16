@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  GitBranch,
   GripVertical,
   Heading,
   Image as ImageIcon,
@@ -65,6 +66,7 @@ import { BlockEditorDialog } from "./block-editor";
 import { PageSettingsDialog } from "./page-settings-dialog";
 import { BlockCatalogDialog } from "./block-catalog-dialog";
 import { BUILDER_FIELD_KINDS } from "./field-kinds";
+import { describeVisibleIf, fieldsBefore } from "./visibility";
 import {
   EditPublishedBanner,
   LifecycleBar,
@@ -127,10 +129,13 @@ function describeBlock(block: Block): {
 
 function BlockRow({
   block,
+  condition,
   onEdit,
   onDelete,
 }: {
   block: Block;
+  /** The block's show-when rule as a sentence, when it has one. */
+  condition: { text: string; broken: boolean } | null;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -167,6 +172,17 @@ function BlockRow({
               Required
             </Badge>
           )}
+          {condition && (
+            <Badge
+              variant={condition.broken ? "destructive" : "outline"}
+              className="gap-1 px-1.5 py-0 text-[10px]"
+              title={condition.text}
+            >
+              <GitBranch aria-hidden className="size-3" />
+              {condition.broken ? "Fix condition" : "Conditional"}
+              <span className="sr-only">: {condition.text}</span>
+            </Badge>
+          )}
         </span>
       </div>
       <Button
@@ -188,6 +204,20 @@ function BlockRow({
         <Trash2 className="text-destructive" />
       </Button>
     </li>
+  );
+}
+
+function PageCondition({ text, broken }: { text: string; broken: boolean }) {
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-1 text-xs",
+        broken ? "text-destructive" : "text-muted-foreground",
+      )}
+    >
+      <GitBranch aria-hidden className="size-3 shrink-0" />
+      {text}
+    </span>
   );
 }
 
@@ -325,9 +355,19 @@ export function BuilderCanvas({
         {working.pages.map((page, pageIndex) => (
           <Card key={page.id} className="flex flex-col gap-3 p-4">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                Page {pageIndex + 1} · {page.type === "content" ? "Content" : "Questions"}
-              </span>
+              <div className="flex min-w-0 flex-col">
+                <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Page {pageIndex + 1} · {page.type === "content" ? "Content" : "Questions"}
+                </span>
+                {page.visibleIf && (
+                  <PageCondition
+                    {...describeVisibleIf(
+                      page.visibleIf,
+                      fieldsBefore(working, page.id, null),
+                    )}
+                  />
+                )}
+              </div>
               <div className="flex items-center gap-0.5">
                 <Button
                   type="button"
@@ -386,6 +426,14 @@ export function BuilderCanvas({
                       <BlockRow
                         key={blockId(block)}
                         block={block}
+                        condition={
+                          block.visibleIf
+                            ? describeVisibleIf(
+                                block.visibleIf,
+                                fieldsBefore(working, page.id, blockId(block)),
+                              )
+                            : null
+                        }
                         onEdit={() => {
                           setEditing({
                             pageId: page.id,
@@ -476,6 +524,7 @@ export function BuilderCanvas({
         <BlockEditorDialog
           key={editing.blockId}
           block={editingBlock}
+          fields={fieldsBefore(working, editing.pageId, editing.blockId)}
           open={editorOpen}
           onSave={(next) => {
             persist(replaceBlock(working, editing.pageId, editing.blockId, next));
@@ -498,6 +547,7 @@ export function BuilderCanvas({
         <PageSettingsDialog
           key={settingsPageId}
           page={settingsPage}
+          fields={fieldsBefore(working, settingsPageId, null)}
           canDelete={working.pages.length > 1}
           onSave={(patch) => {
             persist(patchPage(working, settingsPageId, patch));

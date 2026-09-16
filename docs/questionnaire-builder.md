@@ -111,6 +111,14 @@ rejects forward references). Operators by referenced kind:
 referenced field makes the condition evaluate **false (hide)**, except
 `is_empty`/`is_answered`. Runtime + authoring semantics: §5.1.
 
+**Enforced (B5a).** `visibleIfOpsFor` (`@camp404/types`) is this table in code
+(`toggle`/`scale` compare like choices; `date`, text, email, phone and image get
+only `is_answered`/`is_empty`), and `visibleIfProblem` checks the field exists,
+the operator fits and the value is one the field can hold. Publish refuses a
+condition that fails it. The builder's editor ("Show only when…" in the block
+editor and in page settings) offers only fitting operators and answers, and the
+canvas marks each conditional block and flags a broken one.
+
 ### 2.2 Author-content render & size policy
 
 - Content-block and field text renders as **plain text** (no markdown/HTML) in
@@ -499,6 +507,8 @@ complete/next-up/locked/expired); push reminders (§7.4).
 validator; progress recompute over visible pages; back-nav re-show retains
 answers; publish satisfiability check (≥1 visible page under empty responses);
 functional logic editor ("show this when [earlier field] [op] [value]", undrawn).
+_Built in B5a: `visibility-editor.tsx` + `visibility.ts` in the builder, from
+existing form parts (no board draws it)._
 
 ---
 
