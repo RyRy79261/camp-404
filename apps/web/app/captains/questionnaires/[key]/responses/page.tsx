@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
-import { buildQuestionnaireCsvExport, CAMP_TIME_ZONE } from "@camp404/core";
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import {
   Table,
@@ -24,6 +24,7 @@ import {
   ResultsUnpublished,
 } from "../metrics/results-shell";
 import { answerColumns, formatAnswer } from "./answer-values";
+import { responsesCsvHref } from "./csv-export";
 import { ExportCsvButton } from "./export-csv";
 
 export const dynamic = "force-dynamic";
@@ -41,10 +42,10 @@ const COMPLETED = new Intl.DateTimeFormat("en-GB", {
 // individual half of the same data /metrics aggregates; captain-only, because
 // this is the surface where the answers have names on them.
 //
-// The CSV is built HERE, on the server, by the shared builder in @camp404/core
-// — the same one that owns the spreadsheet mechanics and the label path this
-// table renders through. The button downstream only hands the bytes to the
-// browser, so there is no second escaper to drift.
+// The CSV is built by the export route (./export/route.ts) when a captain
+// presses Export, through the shared builder in @camp404/core, the same one
+// that owns the label path this table renders through. So there is no second
+// escaper to drift, and no file is built on a render nobody downloads.
 export default async function ResponsesPage({
   params,
   searchParams,
@@ -69,22 +70,6 @@ export default async function ResponsesPage({
   const summary = summarise(view);
   const empty = emptyStateFor(view, respondents.length);
   const columns = answerColumns(view.questions, respondents);
-  const csv = buildQuestionnaireCsvExport({
-    questionnaireKey: view.key,
-    cycle: view.cycle,
-    questions: view.questions,
-    respondents: respondents.map((r) => ({
-      name: r.name,
-      // Every row states its own year. These rows are already scoped to one
-      // cycle by the read, but a file that has left the app has to say which
-      // year it is on its own.
-      cycle: view.cycle,
-      definitionVersion: r.definitionVersion ?? "",
-      submittedAt: r.completedAt,
-      responses: r.responses,
-    })),
-  });
-
   const outstanding = outstandingFor(view);
 
   return (
@@ -96,9 +81,7 @@ export default async function ResponsesPage({
           {summary.inProgress > 0 && ` · ${summary.inProgress} unfinished`}
         </p>
         <ExportCsvButton
-          filename={csv.filename}
-          content={csv.content}
-          mimeType={csv.mimeType}
+          href={responsesCsvHref(view.key, view.cycle)}
           disabled={respondents.length === 0}
         />
       </div>
