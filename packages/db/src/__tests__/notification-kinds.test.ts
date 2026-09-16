@@ -128,18 +128,21 @@ describe("notification kinds", () => {
 
     await setUserApproval({
       userId: approved.id,
-      status: "approved",
+      from: "pending",
+      to: "approved",
       decidedByUserId: captainA.id,
     });
     // A second captain's late click loses the compare-and-set and says nothing.
     await setUserApproval({
       userId: approved.id,
-      status: "approved",
+      from: "pending",
+      to: "approved",
       decidedByUserId: captainB.id,
     });
     await setUserApproval({
       userId: rejected.id,
-      status: "rejected",
+      from: "pending",
+      to: "rejected",
       decidedByUserId: captainA.id,
     });
 

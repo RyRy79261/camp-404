@@ -12,6 +12,8 @@
 //   - access/clearance: rankLevel, hasClearance, requireClearance,
 //     deriveViewerRank, hasCampAccess, isApproved, canViewBuilderDefinition
 //     (./access)
+//   - approval review: availableReviewActions, reviewRefusal,
+//     isReviewTransition — which vetting decisions exist (./approval-review)
 //   - family tree: buildTree, computeMatchIds, subtreeHasMatch,
 //     descendantCountLabel (./family-tree) — all cycle-guarded (OD9)
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
@@ -56,6 +58,7 @@
 // (blocked on deciding McpScope's type home).
 
 export * from "./access";
+export * from "./approval-review";
 export * from "./family-tree";
 export * from "./invites";
 export * from "./text-utils";
