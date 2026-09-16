@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Divider } from "@camp404/ui/components/divider";
 import { TopChrome } from "@camp404/ui/components/top-chrome";
@@ -78,6 +79,7 @@ export default async function HomePage() {
   return (
     <>
       <TopChrome
+        linkAs={Link}
         avatarInitials={initials}
         avatarImageUrl={campUser.profileImageUrl}
         unreadCount={unreadNotifications}

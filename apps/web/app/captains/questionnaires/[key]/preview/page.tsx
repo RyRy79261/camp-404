@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { canViewBuilderDefinition } from "@camp404/core";
@@ -9,6 +10,8 @@ import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { BuilderPreview } from "@/components/questionnaire/builder-preview";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = { title: "Questionnaire preview — Camp 404" };
 
 // Author preview — the real runner driven from empty answers, no persistence,
 // no side-effects (BuilderPreview). Team-lead+ only: a lower rank gets the
@@ -23,6 +26,7 @@ export default async function BuilderPreviewPage({
   const chrome = (children: ReactNode) => (
     <main className="mx-auto max-w-2xl px-4 py-6">
       <GhostBack
+        linkAs={Link}
         href={`/captains/questionnaires/${key}`}
         className="-ml-2 mb-4"
       >

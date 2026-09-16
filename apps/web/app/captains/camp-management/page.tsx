@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { captainPageGate } from "@/lib/captain-gate";
@@ -27,20 +28,22 @@ export default async function CampManagementPage() {
   // Fetch once; project to the captain (full) or member (public) row shape.
   // The public projection carries no approval/onboarding/driver facets, so the
   // member branch literally has no private data to leak.
-  const members = await getCampManagementRoster({ includeEmail: isCaptain });
-  const roster = rosterForViewer(members, isCaptain);
-
   // The team data comes from the editable camp config (not a hardcoded const).
   // `teams` is the active-only, order-sorted list for the filter dropdown;
   // `teamLabels` is the full key→label map (incl. archived) for the profile
   // chips, so a captain's relabel shows on the chips too — not just the filter.
-  const config = await getTeamsConfig();
+  // The two reads are independent, so they run together.
+  const [members, config] = await Promise.all([
+    getCampManagementRoster({ includeEmail: isCaptain }),
+    getTeamsConfig(),
+  ]);
+  const roster = rosterForViewer(members, isCaptain);
   const teams = activeTeams(config);
   const teamLabels = teamLabelMap(config);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
-      <GhostBack href="/captains/tools" className="-ml-2 mb-3">
+      <GhostBack linkAs={Link} href="/captains/tools" className="-ml-2 mb-3">
         Camp tools
       </GhostBack>
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { requireMemberPage } from "@/lib/member-gate";
 import { getReferralRoster } from "@/lib/relations";
@@ -14,7 +15,7 @@ export default async function FamilyTreePage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-5 py-4">
-      <GhostBack href="/tools" className="-ml-2">
+      <GhostBack linkAs={Link} href="/tools" className="-ml-2">
         Tools
       </GhostBack>
 

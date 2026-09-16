@@ -84,7 +84,7 @@ export default async function AuditLogPage({
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6">
-      <GhostBack href="/captains/tools" className="-ml-2 mb-4">
+      <GhostBack linkAs={Link} href="/captains/tools" className="-ml-2 mb-4">
         Camp tools
       </GhostBack>
       <header className="mb-6">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GridTile } from "@camp404/ui/components/grid-tile";
@@ -61,7 +62,7 @@ export function RankGroupCard({
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {tiles.map((tile) => (
-            <GridTile
+            <GridTile linkAs={Link}
               key={tile.id}
               icon={tile.icon}
               iconTone={chipTone}

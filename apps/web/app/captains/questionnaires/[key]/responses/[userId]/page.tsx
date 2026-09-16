@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
@@ -13,6 +14,8 @@ import { ResultsLocked, ResultsUnpublished } from "../../metrics/results-shell";
 import { answerColumns, formatAnswer } from "../answer-values";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = { title: "A member's answers — Camp 404" };
 
 const COMPLETED = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -53,7 +56,7 @@ export default async function RespondentPage({
 
   const chrome = (children: ReactNode) => (
     <main className="mx-auto max-w-lg px-4 py-6">
-      <GhostBack href={backHref} className="-ml-2 mb-4">
+      <GhostBack linkAs={Link} href={backHref} className="-ml-2 mb-4">
         All answers
       </GhostBack>
       {children}

@@ -1,9 +1,10 @@
+import Link from "next/link";
 import {
-  ChevronLeft,
   ClipboardList,
   GitBranch,
   Mail,
 } from "lucide-react";
+import { BackButton } from "@camp404/ui/components/back-button";
 import { DetailHeader } from "@camp404/ui/components/detail-header";
 import { NavCard } from "@camp404/ui/components/nav-card";
 import { requireMemberPage } from "@/lib/member-gate";
@@ -50,20 +51,14 @@ export default async function ToolsPage() {
 
   return (
     <main className="mx-auto w-full max-w-lg">
-      {/* Back-nav bar labelled by its destination (matches /notifications), so
-          the page's single h1 is the "Tools" hero below — no duplicate heading. */}
+      {/* Board S13: the bar reads "Tools", as does the hero below. The bar stays
+          an h2, so the page keeps one h1. */}
       <DetailHeader
         as="h2"
-        title="Home"
+        title="Tools"
         className="px-3 py-3.5"
         leading={
-          <a
-            href="/"
-            aria-label="Back to home"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ChevronLeft className="h-5 w-5" aria-hidden />
-          </a>
+          <BackButton linkAs={Link} href="/" label="Back to home" />
         }
       />
 
@@ -78,7 +73,7 @@ export default async function ToolsPage() {
 
         <div className="flex flex-col gap-3">
           {TOOLS.map((tool) => (
-            <NavCard
+            <NavCard linkAs={Link}
               key={tool.href}
               href={tool.href}
               icon={tool.icon}

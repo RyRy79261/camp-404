@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listInviteCodes } from "@camp404/db/invite-codes";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { requireMemberPage } from "@/lib/member-gate";
@@ -19,7 +20,7 @@ export default async function InviteToolPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-col gap-4 px-4 py-4">
-      <GhostBack href="/tools" className="-ml-2 self-start">
+      <GhostBack linkAs={Link} href="/tools" className="-ml-2 self-start">
         Tools
       </GhostBack>
       <InviteForm isCaptain={isCaptain} />

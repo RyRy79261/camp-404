@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
-import { CheckCircle2, ChevronLeft } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
+import { BackButton } from "@camp404/ui/components/back-button";
 import { DetailHeader } from "@camp404/ui/components/detail-header";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { getAnnouncementForMember, markRead } from "@/lib/notifications";
@@ -50,13 +52,11 @@ export default async function AnnouncementPage({
         title="Notifications"
         className="px-3 py-3.5"
         leading={
-          <a
+          <BackButton
+            linkAs={Link}
             href="/notifications"
-            aria-label="Back to notifications"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ChevronLeft className="h-5 w-5" aria-hidden />
-          </a>
+            label="Back to notifications"
+          />
         }
       />
 

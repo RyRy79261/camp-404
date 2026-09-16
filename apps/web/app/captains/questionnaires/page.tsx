@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
@@ -52,11 +53,11 @@ export default async function QuestionnairesPage() {
   return (
     <main className="mx-auto max-w-lg px-4 py-6">
       {rank !== "camp_member" ? (
-        <GhostBack href="/captains/tools" className="-ml-2 mb-4">
+        <GhostBack linkAs={Link} href="/captains/tools" className="-ml-2 mb-4">
           Camp tools
         </GhostBack>
       ) : (
-        <GhostBack href="/" className="-ml-2 mb-4">
+        <GhostBack linkAs={Link} href="/" className="-ml-2 mb-4">
           Home
         </GhostBack>
       )}

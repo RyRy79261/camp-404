@@ -32,6 +32,8 @@ const LEAD_SCOPES = ["team"] as const;
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Send questionnaire — Camp 404" };
+
 // The Send/Activate screen (§6.4). Captains send to any audience; a team lead
 // sends to the teams they lead. Anyone else gets the locked shell before any
 // questionnaire read. Only a published questionnaire can be sent.
@@ -47,14 +49,14 @@ export default async function SendPage({
     <main className="mx-auto max-w-lg px-4 py-6">
       {/* A lead edits only their own questionnaires, so the hub is the way back. */}
       {isCaptain ? (
-        <GhostBack
+        <GhostBack linkAs={Link}
           href={`/captains/questionnaires/${key}`}
           className="-ml-2 mb-4"
         >
           Editor
         </GhostBack>
       ) : (
-        <GhostBack href="/captains/questionnaires" className="-ml-2 mb-4">
+        <GhostBack linkAs={Link} href="/captains/questionnaires" className="-ml-2 mb-4">
           Questionnaires
         </GhostBack>
       )}

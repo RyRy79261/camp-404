@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BellOff, ChevronLeft } from "lucide-react";
+import { BellOff } from "lucide-react";
+import { BackButton } from "@camp404/ui/components/back-button";
 import { DetailHeader } from "@camp404/ui/components/detail-header";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { listInbox, markRead } from "@/lib/notifications";
@@ -60,15 +62,7 @@ export default async function NotificationsPage() {
         as="h2"
         title="Home"
         className="px-3 py-3.5"
-        leading={
-          <a
-            href="/"
-            aria-label="Back to home"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ChevronLeft className="h-5 w-5" aria-hidden />
-          </a>
-        }
+        leading={<BackButton linkAs={Link} href="/" label="Back to home" />}
       />
 
       <div className="flex flex-col gap-1.5 px-4 pb-2 pt-3">

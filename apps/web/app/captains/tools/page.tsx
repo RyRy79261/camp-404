@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   CalendarClock,
   ClipboardList,
@@ -104,7 +105,7 @@ export default async function CaptainToolsPage() {
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-4">
-      <GhostBack href="/" className="-ml-2">
+      <GhostBack linkAs={Link} href="/" className="-ml-2">
         {rank === "captain" ? "Captains" : "Home"}
       </GhostBack>
 
@@ -120,6 +121,7 @@ export default async function CaptainToolsPage() {
           <div className="flex flex-col gap-3">
             {tools.map((tool) => (
               <NavCard
+                linkAs={Link}
                 key={tool.href}
                 href={tool.href}
                 icon={tool.icon}

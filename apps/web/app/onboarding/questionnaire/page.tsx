@@ -19,6 +19,8 @@ import type { QuestionnaireResponses } from "@camp404/types";
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Your burner profile — Camp 404" };
+
 // The burner profile is a blocking required action, so this route is the S23/S24
 // blocking flow: a gate interstitial first, then — on "Start" (?start=1) — the
 // wizard in its runner variant (sticky Required top bar + persistent notice).

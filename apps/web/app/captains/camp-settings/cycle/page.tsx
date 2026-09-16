@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { planRollover } from "@camp404/db/cycle-rollover";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
@@ -34,7 +35,11 @@ export default async function CycleRolloverPage() {
 
   return (
     <main className="mx-auto max-w-lg px-4 py-6">
-      <GhostBack href="/captains/camp-settings" className="-ml-2 mb-4">
+      <GhostBack
+        linkAs={Link}
+        href="/captains/camp-settings"
+        className="-ml-2 mb-4"
+      >
         Camp settings
       </GhostBack>
       <header className="mb-6">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
@@ -9,6 +10,8 @@ import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { BuilderCanvas } from "./builder-canvas";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = { title: "Edit questionnaire — Camp 404" };
 
 // The build canvas (boards 50/54). Authoring is team-lead+ (preview-but-locked
 // below); a team-lead may edit only their own drafts, a captain any. The
@@ -29,7 +32,7 @@ export default async function BuilderCanvasPage({
 
   const chrome = (children: ReactNode) => (
     <main className="mx-auto max-w-lg px-4 py-6">
-      <GhostBack href="/captains/questionnaires" className="-ml-2 mb-4">
+      <GhostBack linkAs={Link} href="/captains/questionnaires" className="-ml-2 mb-4">
         Questionnaires
       </GhostBack>
       <h1 className="sr-only">Edit questionnaire</h1>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
@@ -9,6 +10,8 @@ import { FormCard } from "./form-card";
 
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
+
+export const metadata = { title: "My forms — Camp 404" };
 
 const dateFmt = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
@@ -32,7 +35,7 @@ export default async function FormsListPage() {
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-4">
-      <GhostBack href="/tools" className="-ml-2">
+      <GhostBack linkAs={Link} href="/tools" className="-ml-2">
         Tools
       </GhostBack>
 
