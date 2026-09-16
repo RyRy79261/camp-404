@@ -72,6 +72,7 @@ export * from "./family-tree";
 export * from "./invites";
 export * from "./text-utils";
 export * from "./text-redaction";
+export * from "./report-screen";
 export * from "./github-labels";
 export * from "./shake";
 export * from "./id-validation";

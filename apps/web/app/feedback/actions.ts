@@ -1,12 +1,17 @@
 "use server";
 
 import { z } from "zod";
-import { sanitizeReportText } from "@camp404/core";
+import { sanitizeReportText, screenReport } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
 import { rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
-import { buildFeedbackIssue, DESCRIPTION_MAX } from "@/lib/github-feedback";
+import {
+  buildFeedbackIssue,
+  DESCRIPTION_MAX,
+  DIAGNOSTICS_LIMITS as DL,
+  type ReportDiagnostics,
+} from "@/lib/github-feedback";
 import { structureWithAi } from "@/lib/feedback-ai";
 
 export type FeedbackResult =
@@ -24,7 +29,39 @@ const InputSchema = z.object({
   route: z.string().max(300).optional(),
   // "Improve with AI" toggle — restructure the report before filing.
   useAi: z.boolean().optional(),
+  // Device details and recent errors, only when the member ticked the box.
+  // Capped here so a crafted request cannot post a wall of text.
+  diagnostics: z
+    .object({
+      environment: z
+        .array(
+          z.object({
+            label: z.string().max(DL.label),
+            value: z.string().max(DL.value),
+          }),
+        )
+        .max(DL.environmentFields),
+      errors: z
+        .array(
+          z.object({
+            at: z.string().max(40),
+            source: z.string().max(DL.source),
+            message: z.string().max(DL.message),
+            route: z.string().max(DL.route).optional(),
+          }),
+        )
+        .max(DL.errors),
+    })
+    .optional(),
 });
+
+/** Every piece of text in the diagnostics, for the redaction screen. */
+function diagnosticsText(d: ReportDiagnostics): string[] {
+  return [
+    ...d.environment.flatMap((f) => [f.label, f.value]),
+    ...d.errors.flatMap((e) => [e.source, e.message, e.route ?? ""]),
+  ];
+}
 
 const DEFAULT_REPO = "RyRy79261/camp-404";
 
@@ -108,12 +145,13 @@ export async function submitFeedbackAction(
       error: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
   }
-  const { kind, description, dictated, route, useAi } = parsed.data;
+  const { kind, description, dictated, route, useAi, diagnostics } = parsed.data;
 
   // Sanitize once: reject input that's empty after PII/HTML stripping (e.g.
   // HTML-only) so we never file a blank issue, and use the clean text as the
   // AI input so no PII is sent to the model.
-  const sanitized = sanitizeReportText(description, DESCRIPTION_MAX).text;
+  const cleaned = sanitizeReportText(description, DESCRIPTION_MAX);
+  const sanitized = cleaned.text;
   if (!sanitized) {
     return { ok: false, error: "Please describe the issue." };
   }
@@ -129,8 +167,24 @@ export async function submitFeedbackAction(
     return { ok: true, number: 0, url: `https://github.com/${DEFAULT_REPO}/issues` };
   }
 
+  // Screen before anything reads the report. A flagged report is held for a
+  // person: it never reaches the AI pass, and it carries `needs-human`.
+  // Diagnostics are withheld when the report or the diagnostics themselves
+  // look like they hold someone else's details.
+  const screen = screenReport(description, cleaned.redacted);
+  const diagnosticsKinds = diagnostics
+    ? diagnosticsText(diagnostics).flatMap(
+        (text) => sanitizeReportText(text, DESCRIPTION_MAX).redacted,
+      )
+    : [];
+  const withhold =
+    diagnostics !== undefined &&
+    (screen.withholdDiagnostics ||
+      screenReport("", diagnosticsKinds).withholdDiagnostics);
+
   // Optional "Improve with AI" restructuring; null on any failure → plain body.
-  const structured = useAi ? await structureWithAi(kind, sanitized) : null;
+  const structured =
+    useAi && !screen.needsHuman ? await structureWithAi(kind, sanitized) : null;
 
   // The raw description: the builder sanitizes it again and records what
   // redaction removed, for the note on the issue.
@@ -141,6 +195,9 @@ export async function submitFeedbackAction(
     reporterRef,
     route,
     structured,
+    flags: screen.flags,
+    diagnostics: withhold ? null : diagnostics,
+    diagnosticsWithheld: withhold,
   });
 
   if (!tracker?.ok) {

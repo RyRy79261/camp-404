@@ -11,10 +11,12 @@
 // instructions, and the footer says what redaction removed.
 
 import {
+  describeFlags,
   describeRedactions,
   reportLabels,
   sanitizeReportText,
   type RedactionKind,
+  type ReportFlag,
 } from "@camp404/core";
 
 export type FeedbackKind = "bug" | "feature";
@@ -29,6 +31,27 @@ export interface StructuredReport {
 }
 
 export const DESCRIPTION_MAX = 5000;
+
+/**
+ * What the member's device attaches when they tick "Attach device details and
+ * recent errors" (owner's call, 2026-09-16: yes, with a panel they check before
+ * sending). Everything is redacted again before it is published.
+ */
+export interface ReportDiagnostics {
+  environment: { label: string; value: string }[];
+  errors: { at: string; source: string; message: string; route?: string }[];
+}
+
+/** The server refuses diagnostics bigger than this. */
+export const DIAGNOSTICS_LIMITS = {
+  environmentFields: 12,
+  label: 40,
+  value: 300,
+  errors: 10,
+  source: 40,
+  message: 400,
+  route: 200,
+} as const;
 const TITLE_MAX = 100;
 const ISSUE_BODY_MAX = 60_000; // GitHub's hard limit is 65536.
 
@@ -42,9 +65,14 @@ export const UNTRUSTED_END =
   "<!-- untrusted: reporter-supplied content ends -->";
 
 /** Labels applied to a new issue, from the taxonomy in @camp404/core
- *  (github-labels.ts): its type, `needs-triage` and `source: in-app`. */
-export function labelsFor(kind: FeedbackKind): string[] {
-  return reportLabels(kind);
+ *  (github-labels.ts): its type, `needs-triage` and `source: in-app`, plus
+ *  `needs-human` when the screen held it for a person. */
+export function labelsFor(
+  kind: FeedbackKind,
+  flags: readonly ReportFlag[] = [],
+): string[] {
+  const labels = reportLabels(kind);
+  return flags.length > 0 ? [...labels, "needs-human"] : labels;
 }
 
 /** Defuse backtick fences so user content can't break out of a code block. */
@@ -91,6 +119,12 @@ export interface BuildIssueInput {
   route?: string | null;
   /** Optional AI-restructured report; when present it shapes the body. */
   structured?: StructuredReport | null;
+  /** What screenReport flagged; a flagged report is held for a person. */
+  flags?: readonly ReportFlag[];
+  /** Device details and recent errors the member chose to attach. */
+  diagnostics?: ReportDiagnostics | null;
+  /** The member attached diagnostics, but the screen withheld them. */
+  diagnosticsWithheld?: boolean;
 }
 
 export interface BuiltIssue {
@@ -152,6 +186,22 @@ function structuredParts(
   return { title, sections };
 }
 
+/** The attached device details and errors, redacted, in a collapsed block. */
+function diagnosticsSection(d: ReportDiagnostics, scrub: Scrub): string {
+  const L = DIAGNOSTICS_LIMITS;
+  const lines = [
+    ...d.environment.map(
+      (f) => `${scrub(f.label, L.label)}: ${scrub(f.value, L.value)}`,
+    ),
+    ...(d.errors.length > 0 ? ["", "Recent errors, oldest first:"] : []),
+    ...d.errors.map((e) => {
+      const where = e.route ? ` (at ${scrub(e.route, L.route)})` : "";
+      return `[${scrub(e.at, 40)}] ${scrub(e.source, L.source)}: ${scrub(e.message, L.message)}${where}`;
+    }),
+  ];
+  return `<details>\n<summary>Device details and recent errors, attached by the member</summary>\n\n${fenced(lines.join("\n"))}\n</details>`;
+}
+
 /**
  * Assemble the issue title/body/labels. Without `structured`, the body is the
  * fenced description with a first-line title; with it, a restructured
@@ -181,17 +231,29 @@ export function buildFeedbackIssue(input: BuildIssueInput): BuiltIssue {
     ? structuredParts(input.structured, input.kind, scrub)
     : plain;
 
+  const diagnostics = input.diagnostics
+    ? diagnosticsSection(input.diagnostics, scrub)
+    : null;
   const redactions = describeRedactions([...found]);
+  const flags = input.flags ?? [];
   const body = [
+    // Ours, and first: whoever opens the issue sees "a person must read this"
+    // before a word the member wrote.
+    describeFlags(flags) || null,
     UNTRUSTED_BEGIN,
     ...sections,
+    diagnostics,
     UNTRUSTED_END,
     "---",
     footer,
     `_${redactions}_`,
+    input.diagnosticsWithheld
+      ? "_Device details and recent errors were attached but not published: this report looks like it holds someone else's details._"
+      : null,
   ]
+    .filter((part): part is string => part !== null)
     .join("\n\n")
     .slice(0, ISSUE_BODY_MAX);
 
-  return { title, body, labels: labelsFor(input.kind) };
+  return { title, body, labels: labelsFor(input.kind, flags) };
 }

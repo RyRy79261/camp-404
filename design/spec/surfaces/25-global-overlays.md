@@ -111,7 +111,10 @@ Transient strip (board: `$popover`/`$border`, full-width row): leading status ic
 ## User actions — each action → result
 
 - **Acknowledge an announcement** — scroll to the end, press Acknowledge → POST `/api/notifications/acknowledge {deliveryId}`; on ok, drops the item, reveals the next, `router.refresh()`. On non-ok, silently no-ops (item stays).
-- **Shake the device** — opens ReportBugDialog (only trigger; only while signed in and dialog not already open).
+- **Shake the device** — opens ReportBugDialog (only while signed in and dialog not already open).
+- **"Report a problem" on /profile, and "Report" on the route error page** — open the same dialog through `openReportProblem` (owner's call, 2026-09-16: no floating button). The error page prefills the trace code and shows Report only when signed in.
+- **Attach device details and recent errors** — an unticked checkbox in the dialog (owner's call: yes, with a panel the member checks before sending). Ticking it captures the browser, language, screen, page path and the last 10 errors from this tab (`lib/client-errors.ts`, path only, no query), lists every line, and sends exactly those. They are redacted again and published in a collapsed block inside the untrusted section.
+- **Screening** — `screenReport` (`@camp404/core`) flags text aimed at the reader, requests to send data out, and third-party identifiers. A flagged report skips the AI pass, gets `needs-human` and a "Held for a person" line first. Diagnostics are withheld when the report or the diagnostics look like they hold someone else's details.
 - **Grant motion permission** — (iOS 13+) first `pointerdown` after sign-in silently triggers the OS motion prompt, once.
 - **Toggle report kind** — tap Bug / Feature → swaps title/label/placeholder/labels.
 - **Type description** — into the textarea (≤ 5000).

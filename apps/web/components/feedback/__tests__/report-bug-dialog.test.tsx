@@ -59,4 +59,56 @@ describe("ReportBugDialog", () => {
       screen.getByRole("link", { name: /view issue #7/i }).getAttribute("href"),
     ).toBe("https://github.com/RyRy79261/camp-404/issues/7");
   });
+
+  it("starts the description with the text it was opened with", () => {
+    render(
+      <ReportBugDialog
+        open
+        onOpenChange={() => {}}
+        defaultDescription="Trace: abc123"
+      />,
+    );
+    expect(
+      (screen.getByLabelText(/what went wrong/i) as HTMLTextAreaElement).value,
+    ).toBe("Trace: abc123");
+  });
+
+  it("sends no diagnostics unless the member ticks the box", async () => {
+    vi.mocked(submitFeedbackAction).mockResolvedValue({
+      ok: false,
+      error: "stop",
+    });
+    render(<ReportBugDialog open onOpenChange={() => {}} />);
+    expect(screen.queryByText(/No recent errors in this tab/)).toBeNull();
+    fillAndSend();
+    await waitFor(() => expect(submitFeedbackAction).toHaveBeenCalled());
+    expect(
+      vi.mocked(submitFeedbackAction).mock.calls.at(-1)![0],
+    ).not.toHaveProperty("diagnostics");
+  });
+
+  it("shows every attached line once ticked, and sends exactly those", async () => {
+    vi.mocked(submitFeedbackAction).mockResolvedValue({
+      ok: false,
+      error: "stop",
+    });
+    render(<ReportBugDialog open onOpenChange={() => {}} />);
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /Attach device details and recent errors/,
+      }),
+    );
+    expect(screen.getByText("Browser")).toBeTruthy();
+    expect(screen.getByText("No recent errors in this tab.")).toBeTruthy();
+
+    fillAndSend();
+    await waitFor(() => expect(submitFeedbackAction).toHaveBeenCalled());
+    const sent = vi.mocked(submitFeedbackAction).mock.calls.at(-1)![0] as {
+      diagnostics: { environment: { label: string }[]; errors: unknown[] };
+    };
+    expect(sent.diagnostics.environment.map((f) => f.label)).toContain(
+      "Browser",
+    );
+    expect(sent.diagnostics.errors).toEqual([]);
+  });
 });

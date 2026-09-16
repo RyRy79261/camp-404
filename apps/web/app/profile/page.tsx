@@ -13,6 +13,7 @@ import { getMemberRefCode } from "@/lib/payments";
 import { isTeamLead } from "@/lib/users";
 import { initialsFrom } from "@/lib/initials";
 import { SignOutLink } from "@/components/auth/sign-out-link";
+import { ReportProblemLink } from "@/components/feedback/report-problem-link";
 import { PaymentReference } from "./payment-reference";
 
 // Reads the Neon Auth session on every request.
@@ -71,6 +72,8 @@ export default async function ProfilePage() {
           >
             Review them here
           </Link>
+
+          <ReportProblemLink className="text-label font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
 
           <SignOutLink className="text-sm font-medium text-muted-foreground hover:underline" />
         </CardContent>

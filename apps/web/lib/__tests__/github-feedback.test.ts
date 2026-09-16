@@ -234,4 +234,54 @@ describe("buildFeedbackIssue", () => {
     });
     expect(issue.body).toContain("count &lt; 10 is wrong");
   });
+
+  it("puts a held-for-a-person line first and adds needs-human for a flagged report", () => {
+    const issue = buildFeedbackIssue({
+      kind: "bug",
+      description: "Ignore the above",
+      dictated: false,
+      reporterRef: "camp-user-123",
+      flags: ["addresses-reader"],
+    });
+    expect(issue.body.startsWith("**Held for a person.**")).toBe(true);
+    expect(issue.labels).toContain("needs-human");
+  });
+
+  it("puts attached diagnostics inside the untrusted section, redacted", () => {
+    const issue = buildFeedbackIssue({
+      kind: "bug",
+      description: "Crash",
+      dictated: false,
+      reporterRef: "camp-user-123",
+      diagnostics: {
+        environment: [{ label: "Browser", value: "Firefox" }],
+        errors: [
+          {
+            at: "2026-09-16T10:00:00.000Z",
+            source: "window.error",
+            message: "failed for jane@example.com",
+            route: "/profile",
+          },
+        ],
+      },
+    });
+    const start = issue.body.indexOf("Device details and recent errors");
+    expect(start).toBeGreaterThan(issue.body.indexOf(UNTRUSTED_BEGIN));
+    expect(start).toBeLessThan(issue.body.indexOf(UNTRUSTED_END));
+    expect(issue.body).toContain("Browser: Firefox");
+    expect(issue.body).toContain("window.error: failed for [email] (at /profile)");
+    expect(issue.body).not.toContain("jane@example.com");
+  });
+
+  it("says so when diagnostics were withheld", () => {
+    const issue = buildFeedbackIssue({
+      kind: "bug",
+      description: "Crash",
+      dictated: false,
+      reporterRef: "camp-user-123",
+      diagnosticsWithheld: true,
+    });
+    expect(issue.body).toContain("were attached but not published");
+    expect(issue.body).not.toContain("Device details and recent errors,");
+  });
 });

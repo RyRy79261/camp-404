@@ -82,14 +82,15 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > session; `app/feedback/actions.ts` files the report through
   > `lib/github-feedback.ts` (with `lib/feedback-ai.ts` behind
   > `ANTHROPIC_API_KEY`). The open decisions above were answered by shipping:
-  > storage target is a GitHub issue. Two clauses still hold — shake is the
-  > **only** trigger (no manual affordance), and issue #143 D-D reopens whether
-  > the `severity` hint should be rendered into a public issue body.
+  > storage target is a GitHub issue. **[CORRECTION 2026-09-16]** Both later
+  > clauses are closed: shake is no longer the only trigger ("Report a problem"
+  > on /profile and "Report" on the error page, C1a), and the `severity` hint was
+  > removed (B4c, #176).
 
 - **Telegram outbound triggers — intentionally NOT activated (maintainer decision).** `issueGroupInviteForUser` (on captain approval) and `queueAnnouncement` (on announcement publish) are built + unit-tested in `@camp404/telegram`, and the inbound webhook + dispatch cron exist, but the triggers are deliberately **left uncalled** — Telegram outbound must not run yet. Keep all the code; wire the triggers (guarded for no bot config, with an announcement→Telegram toggle, surfacing the invite link via `notification_deliveries`) only when Telegram is explicitly turned on. **[audit #10]**
 - **Invite-code case handling** — generated/DB codes are canonically lowercase (validity pattern `/^[a-z0-9]+.../`), but the redeem path matches **verbatim** while `/api/tools/invite/check` lowercases — so a DB code typed in the wrong case can pass the availability check yet fail on redeem. Fixing this needs a *coordinated* change (normalise at redeem + env + seed + storage **and** update the e2e fixtures + the CI `INVITE_CODES`, which currently use uppercase verbatim). An earlier attempt that only lowercased the redeem path broke the e2e and was reverted; do it as a deliberate, test-data-aware change. **[audit #11]**
 - **MCP OAuth DB-flow tests** — the pure crypto is now tested; the DB-backed flows (authorization-code consume, refresh-token rotation, rotation-race, Postgres round-trip) need an integration/DB test harness the repo doesn't have yet. **[audit #9]**
-- **Gate fallback removal** — `memberBlock` in `apps/web/lib/member-gate.ts` keeps a belt-and-braces `completedAt` check beside the `required_actions` gate. The MCP completion hooks have landed, and migration `0029_backfill_burner_profile_actions` gives every older member their gate row on deploy. The check stays only because the E2E test store models no required actions (`seedBurnerProfileAction` is a no-op there). Remove it once the test store seeds and satisfies the `burner_profile` action. **[E]**
+- ~~**Gate fallback removal**~~ — done in #179: the E2E test store mirrors required actions, and the `completedAt` check is gone.
 - **`opt_in` activation scope** — pull-model audience (members self-select); currently error-gated in `openActivation`. **[E]**
 - **Captain activation compose UI** and **captain-initiated account erasure**. **[E, F]**
 - **Native push** — `@capacitor-firebase/messaging` client POSTing to the existing `/api/push/tokens` (no server change). Needs the mobile build (broken/deferred, Phase 7), the deployed API base URL, and an APNs key. **[D]**
