@@ -239,6 +239,13 @@
       "when": 1789582533631,
       "tag": "0033_action_rate_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789591121775,
+      "tag": "0034_team_budget_and_adoptee_years",
+      "breakpoints": true
     }
   ]
 }

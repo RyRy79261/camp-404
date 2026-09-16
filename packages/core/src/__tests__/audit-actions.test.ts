@@ -61,6 +61,20 @@ describe("auditDetail", () => {
     ).toBe("C404-M017-2027-1, promised to received");
   });
 
+  it("words a reimbursement move and a budget change", () => {
+    expect(
+      auditDetail("reimbursement.status_changed", {
+        from: "submitted",
+        to: "approved",
+        amount: "120.50",
+        currency: "ZAR",
+      }),
+    ).toBe("ZAR 120.50, submitted to approved");
+    expect(auditDetail("team_budget.set", { team: "kitchen" }, teams)).toBe(
+      "Kitchen",
+    );
+  });
+
   it("shows nothing for a shape it does not know", () => {
     expect(auditDetail("member.rank_changed", { to: 42 })).toBeNull();
     expect(auditDetail("member.approval_decided", null)).toBeNull();

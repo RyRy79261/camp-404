@@ -58,7 +58,12 @@ export function auditTarget(
 ): string | null {
   if (!row.target) return null;
   if (row.targetName) return row.targetName;
-  if (row.action.startsWith("camp.teams.")) return teamLabel(row.target);
+  if (
+    row.action.startsWith("camp.teams.") ||
+    row.action === "team_budget.set"
+  ) {
+    return teamLabel(row.target);
+  }
   if (row.action.startsWith("camp.cycle.")) return `Year ${row.target}`;
   if (row.action === "invite.revoked") return `Code ${row.target}`;
   // A member id with no member row: the account is gone.

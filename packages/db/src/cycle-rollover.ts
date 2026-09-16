@@ -163,6 +163,9 @@ export interface FoundingReport {
   teamMembershipsStamped: number;
   driverProfilesStamped: number;
   carSeatsStamped: number;
+  /** Team budgets and adoption slots, year-scoped since migration 0034. */
+  teamBudgetsStamped: number;
+  adopteesStamped: number;
   auditLogId: string;
 }
 
@@ -594,6 +597,16 @@ export async function setFoundingYear(input: {
       .set({ cycle: input.year })
       .where(eq(schema.teamMemberships.cycle, UNSET_CYCLE))
       .returning({ userId: schema.teamMemberships.userId });
+    const budgets = await tx
+      .update(schema.teamBudgets)
+      .set({ cycle: input.year })
+      .where(eq(schema.teamBudgets.cycle, UNSET_CYCLE))
+      .returning({ team: schema.teamBudgets.team });
+    const adoptees = await tx
+      .update(schema.adoptees)
+      .set({ cycle: input.year })
+      .where(eq(schema.adoptees.cycle, UNSET_CYCLE))
+      .returning({ id: schema.adoptees.id });
 
     const [audit] = await tx
       .insert(schema.auditLog)
@@ -608,6 +621,8 @@ export async function setFoundingYear(input: {
           teamMembershipsStamped: teams.length,
           driverProfilesStamped: drivers.length,
           carSeatsStamped: seats?.count ?? 0,
+          teamBudgetsStamped: budgets.length,
+          adopteesStamped: adoptees.length,
         },
       })
       .returning({ id: schema.auditLog.id });
@@ -621,6 +636,8 @@ export async function setFoundingYear(input: {
         teamMembershipsStamped: teams.length,
         driverProfilesStamped: drivers.length,
         carSeatsStamped: seats?.count ?? 0,
+        teamBudgetsStamped: budgets.length,
+        adopteesStamped: adoptees.length,
         auditLogId: audit!.id,
       },
     };

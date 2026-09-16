@@ -24,7 +24,9 @@ export const AUDIT_ACTION_LABELS = {
   "member.team_removed": "Took a member off a team",
   "payment.recorded": "Recorded a payment",
   "payment.status_changed": "Changed a payment",
+  "reimbursement.status_changed": "Moved a reimbursement",
   "safety.emergency_contacts.view": "Read emergency contacts",
+  "team_budget.set": "Set a team budget",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
@@ -59,6 +61,14 @@ const PAYMENT_WORDS: Record<string, string> = {
   pending: "promised",
   reconciled: "received",
   waived: "waived",
+};
+
+const REIMBURSEMENT_WORDS: Record<string, string> = {
+  submitted: "submitted",
+  approved: "approved",
+  paid: "paid",
+  reconciled: "reconciled",
+  rejected: "rejected",
 };
 
 // The database stores two ranks. A team lead is a member who leads a team.
@@ -118,6 +128,26 @@ export function auditDetail(
       if (!reference || !from || !to) return reference;
       if (!PAYMENT_WORDS[from] || !PAYMENT_WORDS[to]) return reference;
       return `${reference}, ${PAYMENT_WORDS[from]} to ${PAYMENT_WORDS[to]}`;
+    }
+    case "reimbursement.status_changed": {
+      const from = text(metadata, "from");
+      const to = text(metadata, "to");
+      const amount = text(metadata, "amount");
+      const currency = text(metadata, "currency");
+      if (
+        !from ||
+        !to ||
+        !REIMBURSEMENT_WORDS[from] ||
+        !REIMBURSEMENT_WORDS[to]
+      ) {
+        return null;
+      }
+      const moved = `${REIMBURSEMENT_WORDS[from]} to ${REIMBURSEMENT_WORDS[to]}`;
+      return amount && currency ? `${currency} ${amount}, ${moved}` : moved;
+    }
+    case "team_budget.set": {
+      const team = text(metadata, "team");
+      return team ? teamLabel(team) : null;
     }
     case "camp.cycle.renamed": {
       const to = text(metadata, "to");
