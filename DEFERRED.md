@@ -100,6 +100,7 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
 
 - **Email (Resend):** create a Resend account, verify the sending domain, then set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` (e.g. `Camp 404 <notices@camp-404.com>`) in Vercel. Until then `/api/cron/notifications/email` answers 503 and the queue waits; nothing is marked sent. Only must-read notices queue email (`shouldEmailNotification`).
 - **Firebase / push:** set `FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY` (service account) + `NEXT_PUBLIC_FIREBASE_*` + the VAPID key in Vercel to activate web push. Until then the pipeline is inert (no tokens registered, drain no-ops).
-- **PII backfill:** run `camp404 backfill-id-encryption` once after the encryption deploy to scrub any pre-existing plaintext ID numbers.
-- **Invite bootstrap codes:** replace the env `INVITE_CODES` values with high-entropy random strings (redemption is now throttled, but the defaults are guessable).
+- ~~**PII backfill**~~ — automatic: the daily `/api/cron/maintenance` job encrypts any leftover plaintext ID number.
+- ~~**Erased members' photos**~~ — automatic: the same job deletes avatar folders whose owner has no camp account (production only).
+- ~~**Invite bootstrap codes**~~ — no longer needed for safety: an `INVITE_CODES` value shorter than 20 characters now lands its redeemer as pending, for a captain to approve. A long random value still lets members straight in.
 - **Account erasure:** the app sanitises the camp row to "Lost Cat #N" and severs the auth link; deleting the upstream **Neon Auth** identity is a separate operator action.

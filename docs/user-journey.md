@@ -93,6 +93,7 @@ Key behaviours worth knowing:
   the last remaining use of a DB code, `claimInviteCode` lets exactly one
   win (a single atomic `use_count` increment). Env `INVITE_CODES` are
   unlimited bootstrap codes — a pure validity check that never stamps a rank.
+  One shorter than 20 characters lands its redeemer as pending approval.
 - **Captain-tier invites** can stamp an `assignedRank` and a
   `requiresApproval` flag on the code, both applied at claim time; the latter
   routes the redeemer through the captain-approval gate (gate 4 in §1).

@@ -3,11 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@vercel/blob", () => ({ list: vi.fn(), del: vi.fn() }));
 
 import {
+  ORPHAN_MIN_AGE_MS,
   avatarProxyUrl,
   deleteAvatarBlobs,
   deleteQuestionnaireImageBlobs,
+  orphanAvatarBlobs,
   ownProfilePhotoPathname,
   pruneReplacedProfilePhotos,
+  sweepOrphanAvatarBlobs,
 } from "@/lib/avatar-blob";
 import { del, list } from "@vercel/blob";
 
@@ -209,5 +212,112 @@ describe("pruneReplacedProfilePhotos", () => {
     ).resolves.toBeUndefined();
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+  });
+});
+
+describe("orphanAvatarBlobs", () => {
+  const now = new Date("2026-09-16T12:00:00Z");
+  const old = new Date(now.getTime() - ORPHAN_MIN_AGE_MS - 1);
+  const blob = (pathname: string, uploadedAt = old) => ({
+    pathname,
+    url: `https://blob/${pathname}`,
+    uploadedAt,
+  });
+
+  it("picks blobs in folders of accounts that no longer exist, nested answers too", () => {
+    const result = orphanAvatarBlobs(
+      [
+        blob("avatars/live/photo.webp"),
+        blob("avatars/gone/photo.webp"),
+        blob("avatars/gone/answers/kitchen-photo/a.webp"),
+      ],
+      new Set(["live"]),
+      now,
+    );
+    expect(result).toEqual({
+      folders: ["gone"],
+      urls: [
+        "https://blob/avatars/gone/photo.webp",
+        "https://blob/avatars/gone/answers/kitchen-photo/a.webp",
+      ],
+    });
+  });
+
+  it("leaves a blob younger than a day, and anything outside a member folder", () => {
+    const result = orphanAvatarBlobs(
+      [
+        blob("avatars/gone/new.webp", new Date(now.getTime() - 60_000)),
+        blob("avatars/loose.webp"),
+      ],
+      new Set(["live"]),
+      now,
+    );
+    expect(result).toEqual({ folders: [], urls: [] });
+  });
+});
+
+describe("sweepOrphanAvatarBlobs", () => {
+  const now = new Date("2026-09-16T12:00:00Z");
+  const old = new Date(now.getTime() - ORPHAN_MIN_AGE_MS - 1);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.BLOB_READ_WRITE_TOKEN = "test-token";
+  });
+  afterEach(() => {
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+  });
+
+  it("pages through every avatar and deletes the orphans", async () => {
+    vi.mocked(list)
+      .mockResolvedValueOnce({
+        blobs: [
+          {
+            pathname: "avatars/gone/a.webp",
+            url: "https://blob/a",
+            uploadedAt: old,
+          },
+        ],
+        hasMore: true,
+        cursor: "next",
+      } as never)
+      .mockResolvedValueOnce({
+        blobs: [
+          {
+            pathname: "avatars/live/b.webp",
+            url: "https://blob/b",
+            uploadedAt: old,
+          },
+        ],
+        hasMore: false,
+      } as never);
+
+    expect(await sweepOrphanAvatarBlobs(new Set(["live"]), now)).toEqual({
+      status: "swept",
+      folders: 1,
+      deleted: 1,
+    });
+    expect(list).toHaveBeenLastCalledWith({
+      prefix: "avatars/",
+      token: "test-token",
+      cursor: "next",
+    });
+    expect(del).toHaveBeenCalledWith(["https://blob/a"], {
+      token: "test-token",
+    });
+  });
+
+  it("refuses when no live accounts are given, and deletes nothing", async () => {
+    const result = await sweepOrphanAvatarBlobs(new Set(), now);
+    expect(result.status).toBe("refused");
+    expect(list).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it("checks nothing without the store token", async () => {
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    const result = await sweepOrphanAvatarBlobs(new Set(["live"]), now);
+    expect(result.status).toBe("not_configured");
+    expect(list).not.toHaveBeenCalled();
   });
 });

@@ -267,10 +267,14 @@ version instead.
 ## Cron jobs
 
 All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
-`apps/web/vercel.json` schedules six, daily (UTC): `recipes/analyse` 08:00,
-`manuals/generate` 08:30, `notifications/reminders` 09:00,
-`notifications/dispatch` 09:15, `notifications/push` 09:25,
-`notifications/email` 09:35.
+`apps/web/vercel.json` schedules seven, daily (UTC): `maintenance` 07:30,
+`recipes/analyse` 08:00, `manuals/generate` 08:30,
+`notifications/reminders` 09:00, `notifications/dispatch` 09:15,
+`notifications/push` 09:25, `notifications/email` 09:35.
+
+- `maintenance` is where data upkeep lives instead of an operator script:
+  it encrypts any leftover plaintext ID number, and (on the production
+  deployment only) deletes avatar folders whose owner has no camp account.
 
 - A job must be honest on the cron dashboard. A run with failures answers
   non-2xx; a job that is not built answers `{status: "stub"}` from

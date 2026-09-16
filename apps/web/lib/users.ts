@@ -227,12 +227,19 @@ export async function findCampUserById(
  * {@link isApproved} for the full "can use the app" check.
  */
 /**
- * required_actions gating helpers. Real-DB only: under E2E_TEST_MODE these are
- * no-ops, and the legacy `completedAt` fallback still present in the home gate
- * preserves test behaviour until a test-store implementation lands.
+ * required_actions gating helpers. Under E2E_TEST_MODE they write the test
+ * store's twin rows, so the member ladder gates E2E users the same way.
  */
 export async function seedBurnerProfileAction(userId: string): Promise<void> {
-  if (isE2ETestMode()) return;
+  if (isE2ETestMode()) {
+    testStore.ensureRequiredAction({
+      userId,
+      actionKey: "burner_profile",
+      title: "Complete your burner profile",
+      version: QUESTIONNAIRE_VERSION,
+    });
+    return;
+  }
   await ensureRequiredAction({
     userId,
     type: "questionnaire",
@@ -246,7 +253,10 @@ export async function seedBurnerProfileAction(userId: string): Promise<void> {
 export async function satisfyBurnerProfileAction(
   userId: string,
 ): Promise<void> {
-  if (isE2ETestMode()) return;
+  if (isE2ETestMode()) {
+    testStore.satisfyRequiredAction(userId, "burner_profile");
+    return;
+  }
   await dbSatisfyRequiredAction(
     userId,
     "burner_profile",
@@ -277,11 +287,11 @@ export async function getPendingQuestionnaires(
   return dbListPendingQuestionnaires(userId);
 }
 
-/** The user's pending blocking required actions (empty under E2E test mode). */
+/** The user's pending blocking required actions, oldest first. */
 export async function getPendingRequiredActions(
   userId: string,
 ): Promise<PendingRequiredAction[]> {
-  if (isE2ETestMode()) return [];
+  if (isE2ETestMode()) return testStore.getPendingRequiredActions(userId);
   return dbGetPendingRequiredActions(userId);
 }
 
@@ -682,6 +692,8 @@ const testBackend: UserBackend = {
     });
     if (input.id) testStore.setIdDocuments(input.userId, input.id);
     testStore.setEmergencyContacts(input.userId, input.emergencyContacts);
+    // A re-submit also re-satisfies the gate, as in the real backend.
+    testStore.satisfyRequiredAction(input.userId, "burner_profile");
     if (input.edit && input.edit.changes.length > 0) {
       testStore.recordQuestionnaireEdit({
         userId: input.userId,

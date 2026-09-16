@@ -11,9 +11,22 @@ import { testStore } from "./test-store";
 export interface ClaimedInvite {
   code: string;
   assignedRank: AssignedRank | null;
-  /** Redeemer must be vetted by a captain before access. Env codes: false. */
+  /**
+   * Redeemer must be vetted by a captain before access. Env codes: only when
+   * shorter than MIN_PREAPPROVED_ENV_CODE_LENGTH.
+   */
   requiresApproval: boolean;
 }
+
+/**
+ * An `INVITE_CODES` value shorter than this lands its redeemer as pending, for
+ * a captain to approve. Env codes never run out, and sign-up is open to anyone,
+ * so a short, guessable one must not let people straight into the camp: the
+ * same rule the owner chose for the public founder code (2026-09-16). A long
+ * random value keeps the old pre-approved behaviour, and nobody has to rotate
+ * the setting for the camp to be safe.
+ */
+export const MIN_PREAPPROVED_ENV_CODE_LENGTH = 20;
 
 function csv(env: string | undefined): string[] {
   return (env ?? "")
@@ -46,8 +59,16 @@ export async function claimInviteCode(
 ): Promise<ClaimedInvite | null> {
   const normalized = normalizeInviteCode(code);
   if (!normalized) return null;
-  if (isEnvCode(normalized))
-    return { code: normalized, assignedRank: null, requiresApproval: false };
+  if (isEnvCode(normalized)) {
+    const requiresApproval =
+      normalized.length < MIN_PREAPPROVED_ENV_CODE_LENGTH;
+    if (requiresApproval) {
+      console.warn(
+        `[invite] an INVITE_CODES value shorter than ${MIN_PREAPPROVED_ENV_CODE_LENGTH} characters was redeemed; the member needs a captain's approval.`,
+      );
+    }
+    return { code: normalized, assignedRank: null, requiresApproval };
+  }
   const consumed = await consumeDbCode(normalized);
   if (!consumed) return null;
   return {

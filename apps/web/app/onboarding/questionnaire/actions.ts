@@ -159,8 +159,7 @@ export async function saveBurnerProfile(
 
     if (final) {
       // Completing the profile satisfies the burner-profile required action
-      // that gates the app (no-op under E2E test mode — the fallback gate
-      // covers it).
+      // that gates the app.
       await satisfyBurnerProfileAction(campUser.id);
     }
   } catch (err) {

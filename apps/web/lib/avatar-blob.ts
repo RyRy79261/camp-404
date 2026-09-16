@@ -157,3 +157,98 @@ export async function deleteQuestionnaireImageBlobs(
     flatOnly: false,
   });
 }
+
+// --- Orphan sweep ------------------------------------------------------------
+// Before commit 1f1f16d, account erasure swept `avatars/<camp id>/`, but uploads
+// live under `avatars/<auth id>/`, so every member erased then left their photos
+// behind. The daily maintenance cron removes any avatar folder whose owner has
+// no camp account, so those photos go without anyone running a script, and any
+// future leak is cleaned the same way.
+
+/** A blob as the store lists it. */
+export interface StoredBlob {
+  pathname: string;
+  url: string;
+  uploadedAt: Date;
+}
+
+/**
+ * A blob younger than this is never swept, even in an orphan folder: the
+ * upload route creates the camp row before it stores the file, but a day of
+ * margin costs nothing and rules out any race with a sign-up.
+ */
+export const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** The id a blob is filed under: `avatars/<id>/…` → `<id>`. */
+function avatarOwner(pathname: string): string | null {
+  const match = /^avatars\/([^/]+)\//.exec(pathname);
+  return match ? match[1]! : null;
+}
+
+/**
+ * The blobs to delete: under a folder whose id is no live account's auth id,
+ * and at least ORPHAN_MIN_AGE_MS old.
+ */
+export function orphanAvatarBlobs(
+  blobs: readonly StoredBlob[],
+  liveAuthIds: ReadonlySet<string>,
+  now: Date,
+): { folders: string[]; urls: string[] } {
+  const folders = new Set<string>();
+  const urls: string[] = [];
+  for (const blob of blobs) {
+    const owner = avatarOwner(blob.pathname);
+    if (!owner || liveAuthIds.has(owner)) continue;
+    if (now.getTime() - blob.uploadedAt.getTime() < ORPHAN_MIN_AGE_MS) continue;
+    folders.add(owner);
+    urls.push(blob.url);
+  }
+  return { folders: [...folders], urls };
+}
+
+export type OrphanSweepResult =
+  | { status: "swept"; folders: number; deleted: number }
+  | { status: "not_configured"; message: string }
+  | { status: "refused"; message: string };
+
+const DELETE_BATCH = 500;
+
+/**
+ * Delete every orphaned avatar blob. `liveAuthIds` must come from the database
+ * that holds every member: pointed at a copy that misses recent members (a
+ * preview branch), this would delete their photos. The caller runs it only on
+ * the production deployment. With no live accounts at all it refuses, because
+ * that means the wrong database, not an empty camp.
+ */
+export async function sweepOrphanAvatarBlobs(
+  liveAuthIds: ReadonlySet<string>,
+  now: Date = new Date(),
+): Promise<OrphanSweepResult> {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) {
+    return {
+      status: "not_configured",
+      message: "BLOB_READ_WRITE_TOKEN is not set, so no photos were checked.",
+    };
+  }
+  if (liveAuthIds.size === 0) {
+    return {
+      status: "refused",
+      message: "No live accounts were found, so no photos were deleted.",
+    };
+  }
+
+  const blobs: StoredBlob[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await list({ prefix: "avatars/", token, cursor });
+    blobs.push(...page.blobs);
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+
+  const { folders, urls } = orphanAvatarBlobs(blobs, liveAuthIds, now);
+  for (let i = 0; i < urls.length; i += DELETE_BATCH) {
+    await del(urls.slice(i, i + DELETE_BATCH), { token });
+  }
+  return { status: "swept", folders: folders.length, deleted: urls.length };
+}

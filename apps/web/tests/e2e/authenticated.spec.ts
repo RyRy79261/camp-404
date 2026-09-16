@@ -47,7 +47,7 @@ test.describe("authenticated flow (test-mode)", () => {
     await expect(page).toHaveURL(/\/signup\/required/);
 
     // Entering a valid code claims it onto their row and forwards onward.
-    await redeemInviteAtGate(page, "TEST-INVITE");
+    await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
   });
 

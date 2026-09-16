@@ -77,7 +77,7 @@ export default defineConfig({
           // Same seam the e2e suite uses: enables /api/test/* + the in-memory
           // user store and seeds a known invite + god email.
           E2E_TEST_MODE: "1",
-          INVITE_CODES: "TEST-INVITE",
+          INVITE_CODES: "test-invite-e2e-only-code",
           GOD_EMAILS: "god@example.com",
           // Force the non-deterministic integrations off so captures never hit
           // a real API or vary run-to-run. Avatar upload, push registration and

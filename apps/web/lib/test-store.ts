@@ -150,6 +150,25 @@ interface TestTeamMembership {
   cycle: number;
 }
 
+/**
+ * The store's twin of a `required_actions` row: what blocks a member. Only the
+ * burner profile gate is written here today (seeded when a member is created,
+ * satisfied when the profile is finished), the same as production, so the
+ * member ladder gates E2E users exactly as it gates real ones.
+ */
+interface TestRequiredAction {
+  userId: string;
+  actionKey: string;
+  type: "questionnaire";
+  title: string;
+  version: string | null;
+  activationId: null;
+  blocking: boolean;
+  dueAt: null;
+  status: "pending" | "completed";
+  createdAt: Date;
+}
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -161,6 +180,7 @@ interface TestStoreState {
   deliveries: TestDelivery[];
   promotionRequests: TestPromotionRequest[];
   teamMemberships: TestTeamMembership[];
+  requiredActions: TestRequiredAction[];
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -196,6 +216,7 @@ function globalState(): TestStoreState {
       deliveries: [] as TestDelivery[],
       promotionRequests: [] as TestPromotionRequest[],
       teamMemberships: [] as TestTeamMembership[],
+      requiredActions: [] as TestRequiredAction[],
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -241,6 +262,7 @@ function pushDelivery(
 }
 const promotionRequests = S.promotionRequests;
 const teamMemberships = S.teamMemberships;
+const requiredActions = S.requiredActions;
 
 /**
  * The camp's current year, resolved the way `currentCycleNumber()` resolves it
@@ -443,6 +465,53 @@ export const testStore = {
       updatedAt: now,
     });
   },
+  // --- Required actions (the gate spine) --------------------------------
+
+  /** Twin of ensureRequiredAction: adds the row once, never twice. */
+  ensureRequiredAction(input: {
+    userId: string;
+    actionKey: string;
+    title: string;
+    version: string | null;
+  }): void {
+    const exists = requiredActions.some(
+      (a) => a.userId === input.userId && a.actionKey === input.actionKey,
+    );
+    if (exists) return;
+    requiredActions.push({
+      ...input,
+      type: "questionnaire",
+      activationId: null,
+      blocking: true,
+      dueAt: null,
+      status: "pending",
+      createdAt: new Date(),
+    });
+  },
+  /**
+   * Twin of satisfyRequiredAction. KNOWN BOUNDARY: it does not compare
+   * versions, because E2E never bumps a questionnaire version mid-spec.
+   */
+  satisfyRequiredAction(userId: string, actionKey: string): boolean {
+    const action = requiredActions.find(
+      (a) =>
+        a.userId === userId &&
+        a.actionKey === actionKey &&
+        a.status === "pending",
+    );
+    if (!action) return false;
+    action.status = "completed";
+    return true;
+  },
+  /** Twin of getPendingRequiredActions: pending and blocking, oldest first. */
+  getPendingRequiredActions(userId: string): TestRequiredAction[] {
+    return requiredActions
+      .filter(
+        (a) => a.userId === userId && a.status === "pending" && a.blocking,
+      )
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  },
+
   // --- ID documents (raw in test mode — no crypto) ----------------------
 
   setIdDocuments(
@@ -1202,6 +1271,7 @@ export const testStore = {
     deliveries.length = 0;
     promotionRequests.length = 0;
     teamMemberships.length = 0;
+    requiredActions.length = 0;
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },
@@ -1214,4 +1284,5 @@ export type {
   TestQuestionnaireEdit,
   TestPromotionRequest,
   TestTeamMembership,
+  TestRequiredAction,
 };

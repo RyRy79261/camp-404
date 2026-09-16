@@ -56,8 +56,10 @@ export default defineConfig({
           // drive authenticated flows without a real Neon Auth session.
           E2E_TEST_MODE: "1",
           // Lowercase, the one spelling codes have. The specs type it in
-          // capitals on purpose, to prove redemption ignores case.
-          INVITE_CODES: "test-invite",
+          // capitals on purpose, to prove redemption ignores case. At least
+          // 20 characters, so it lets a member in without approval
+          // (MIN_PREAPPROVED_ENV_CODE_LENGTH in lib/access-control.ts).
+          INVITE_CODES: "test-invite-e2e-only-code",
           GOD_EMAILS: "god@example.com",
         },
       },

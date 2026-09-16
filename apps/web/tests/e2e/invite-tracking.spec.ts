@@ -18,13 +18,13 @@ test.describe("invite-code redemption", () => {
     request,
   }) => {
     await login(page, { id: "fresh-auth", email: "fresh@example.com" });
-    await redeemInviteAtGate(page, "TEST-INVITE");
+    await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
     const lookup = await request.get("/api/test/inspect?authUserId=fresh-auth");
     const body = (await lookup.json()) as { user: { inviteCode: string } };
     // Typed in capitals, stored in the one spelling codes have: lowercase.
-    expect(body.user.inviteCode).toBe("test-invite");
+    expect(body.user.inviteCode).toBe("test-invite-e2e-only-code");
   });
 
   test("DB code: alice's invite is tracked back to alice after bob redeems it", async ({
