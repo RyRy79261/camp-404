@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { RecorderPanel } from "../voice/recorder-panel";
+import { useVoiceSupported } from "../voice/use-voice-recorder";
 import {
   submitFeedbackAction,
   type FeedbackResult,
@@ -52,6 +53,7 @@ export function ReportBugDialog({
   const [kind, setKind] = React.useState<FeedbackKind>(defaultKind);
   const [description, setDescription] = React.useState("");
   const [dictating, setDictating] = React.useState(false);
+  const voiceSupported = useVoiceSupported();
   const [dictated, setDictated] = React.useState(false);
   const [useAi, setUseAi] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -209,8 +211,9 @@ export function ReportBugDialog({
                 />
               </div>
 
-              {/* Voice dictation — appends to the description */}
-              {dictating ? (
+              {/* Voice dictation — appends to the description. Hidden in a
+                  browser that cannot record. */}
+              {!voiceSupported ? null : dictating ? (
                 // No promptKey: the transcribe route has no bug-report prompt,
                 // and free-form feedback doesn't benefit from one. Dictation
                 // runs with the generic (unbiased) transcription.

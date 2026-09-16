@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { deleteAvatarBlobs } from "@/lib/avatar-blob";
 import { isE2ETestMode } from "@/lib/test-mode";
+import { ensureCampUser, hasCampAccess } from "@/lib/users";
 
 // 5 MB hard cap. The client already centre-crops + downscales to ~512px
 // WebP (see lib/image.ts), so a legitimate upload is well under this; the
@@ -35,6 +36,13 @@ export async function POST(req: Request) {
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Uploads are for people in the camp. Sign-up is open, so a Neon Auth
+  // account alone could otherwise store files that nothing ever sweeps (there
+  // is no camp row to erase). Every page that uploads is past the invite gate.
+  const campUser = await ensureCampUser(user);
+  if (!hasCampAccess(campUser, user.primaryEmail)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const limit = await rateLimiter.limit(`avatar-upload:${user.id}`, {

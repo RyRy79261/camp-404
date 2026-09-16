@@ -40,6 +40,8 @@
 //     with KIND_SHAPE and the Choice/Numeric/Count aggregate shapes — the
 //     per-question read-back engine and the activation completion figure
 //     (./questionnaire-results)
+//   - notification links: notificationLink, NOTIFICATION_FALLBACK_LINK — where
+//     tapping an inbox row or a push opens (./notification-links)
 //   - time zone: CAMP_TIME_ZONE, the zone every human-read date is formatted
 //     in (./time-zone)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
@@ -61,4 +63,8 @@ export * from "./audience-authz";
 export * from "./csv";
 export * from "./questionnaire-csv";
 export * from "./questionnaire-results";
+export * from "./notification-links";
+export * from "./notifications";
+export * from "./notification-days";
+export * from "./notification-email";
 export * from "./time-zone";

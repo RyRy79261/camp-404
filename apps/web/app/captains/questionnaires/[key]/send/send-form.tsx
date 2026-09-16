@@ -27,6 +27,7 @@ import {
 } from "@camp404/ui/components/select";
 import { Switch } from "@camp404/ui/components/switch";
 import { toast } from "@camp404/ui/components/toast";
+import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
   closeActivationAction,
   previewAudienceCount,
@@ -104,6 +105,26 @@ export function AudienceCount({
 // gates clearance before rendering this. Opens an activation pinned to the
 // published version and fans out the gates. The one-open invariant is surfaced
 // up front: if a send is already open it must be closed before a new one.
+/**
+ * Why a send cannot go yet, as the sentence the captain reads, or null when it
+ * can. The Send button stays enabled and says this on press. A greyed-out
+ * button gives no reason, and the missing choice (a team, a member) can be
+ * out of view.
+ */
+export function sendRefusal(input: {
+  scope: string;
+  team: string;
+  selectedCount: number;
+}): string | null {
+  if (input.scope === "team" && input.team === "") {
+    return "Pick a team to send this to.";
+  }
+  if (input.scope === "individual" && input.selectedCount === 0) {
+    return "Pick at least one member to send this to.";
+  }
+  return null;
+}
+
 export function SendForm({
   questionnaireKey,
   title,
@@ -204,6 +225,11 @@ export function SendForm({
   }
 
   function attemptSend() {
+    const refusal = sendRefusal({ scope, team, selectedCount: selected.size });
+    if (refusal) {
+      toast.error(refusal);
+      return;
+    }
     // Everyone + blocking takes over every member's screen — confirm it.
     if (scope === "everyone" && blocking) {
       setConfirmOpen(true);
@@ -227,11 +253,6 @@ export function SendForm({
       router.refresh();
     });
   }
-
-  const canSubmit =
-    !pending &&
-    (scope !== "team" || team !== "") &&
-    (scope !== "individual" || selected.size > 0);
 
   if (openActivationId) {
     return (
@@ -347,7 +368,10 @@ export function SendForm({
 
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-col">
-          <Label htmlFor="send-blocking">Blocking</Label>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="send-blocking">Blocking</Label>
+            <BlockingBadge blocking={blocking} />
+          </div>
           <span className="text-xs text-muted-foreground">
             Members must answer before they can use the rest of the app.
           </span>
@@ -370,7 +394,7 @@ export function SendForm({
       </div>
 
       <div className="flex gap-2">
-        <Button type="button" onClick={attemptSend} disabled={!canSubmit}>
+        <Button type="button" onClick={attemptSend} disabled={pending}>
           {pending ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (

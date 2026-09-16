@@ -76,7 +76,11 @@ export function SetupWizard({
           startTransition(async () => {
             setError(null);
             try {
-              await completeSetupAction();
+              const result = await completeSetupAction();
+              if (!result.ok) {
+                setError(result.error);
+                return;
+              }
               router.push("/");
             } catch {
               setError(

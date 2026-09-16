@@ -24,13 +24,31 @@ The founding captain then hands out the root code to bring everyone else in.
 ## The root invite code
 
 The root code is fixed: **`meowzit`** (`apps/web/lib/bootstrap.ts:FOUNDER_CODE`,
-matching the `admin-cli bootstrap-founder` slug). It's minted unlimited
-(`maxUses = null`), pre-approved (`requiresApproval = false`), and attributed to
-no creator (`createdByUserId = null`) so the founder is a clean family-tree
-root while members who later redeem it attach beneath the root.
+matching the `admin-cli bootstrap-founder` slug). The repo is public, so anyone
+can read the word. It is therefore minted so that it cannot wave anyone in:
 
-To require captain vetting for new members instead, flip `requiresApproval` to
-`true` where the code is minted in `packages/db/src/bootstrap.ts`.
+- **Every redeemer waits for a captain** (`requiresApproval = true`). They land
+  on the approval queue in camp management, not in the camp.
+- **The uses are capped** at `FOUNDER_CODE_MAX_USES` (100,
+  `packages/db/src/bootstrap.ts`). After that, members invite members from
+  `/tools/invite`.
+- **It has no creator** (`createdByUserId = null`), so the founder is a clean
+  family-tree root and members who redeem it attach beneath the root.
+
+This is the owner's call (2026-09-16): keep the word, add approval and a cap.
+Migration `0022_founder_code_policy` applies the same policy to a root code
+minted before the change.
+
+To close the code early, for example if it leaks beyond the camp, revoke it. A
+captain can do it in the app: **Tools → Invite**, under "All invite codes". Or
+from the admin CLI:
+
+```bash
+DATABASE_URL=... pnpm --filter @camp404/admin-cli dev revoke-invite --code meowzit
+```
+
+Members who already joined keep their place. The revoke writes an
+`invite.revoked` audit row.
 
 ## The once-only guarantee
 
@@ -83,7 +101,10 @@ Then sign in → `/setup` runs again.
 
 ## Notes / follow-ups
 
-- **God-emails** (`GOD_EMAILS`) still work, but setup is now the universal
-  bootstrap path. Full god-email deprecation is a deferred follow-up.
+- **God-emails** (`GOD_EMAILS`) stay as a recovery path, but setup is the
+  universal bootstrap path. A god address only counts once Neon Auth has
+  verified it (owner's call, 2026-09-16): an unverified session that claims
+  one keeps its account but not the email (`apps/web/lib/session-user.ts`),
+  so sign-up with the owner's address cannot walk past the gates.
 - **Configurable teams** is a planned follow-up; today the eight teams are the
   hardcoded `teamEnum` (`packages/db/src/schema.ts`).

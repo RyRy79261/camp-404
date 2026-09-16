@@ -1,14 +1,16 @@
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 
-import { createHttpDb } from "./index";
+import { captainPromotionNotification } from "@camp404/core";
+import { writeAuditEvent } from "./audit";
+import { deliveryValues } from "./deliveries";
+import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import type { IncomingPromotionRequest } from "@camp404/types";
 
 // Data-access for the two-sided captain-promotion handshake
-// (captain_promotion_requests). This module is side-effect-free with respect to
-// other tables: it never changes a user's rank. Rank flips to `captain` only
-// when the target accepts — the app accept action calls `setUserRank` after a
-// successful `decideCaptainPromotion({ requestId, status: "accepted" })`.
+// (captain_promotion_requests). Sending a request also tells the target. Rank
+// flips to `captain` in exactly one place, acceptCaptainPromotion, in the same
+// transaction as the accepted status and its audit row.
 
 const { captainPromotionRequests, users } = schema;
 
@@ -81,6 +83,10 @@ export async function getPromotionRequestById(
  * for the target it is returned unchanged (the partial unique index
  * `captain_promotion_open_per_target_idx` is the concurrency backstop). Does
  * NOT change the target's rank.
+ *
+ * A new request tells the target, in the same transaction: a pop-up and a push
+ * naming who asked. A repeat send returns the open request and sends nothing,
+ * so a double click cannot nag.
  */
 export async function sendCaptainPromotion(input: {
   targetUserId: string;
@@ -89,17 +95,36 @@ export async function sendCaptainPromotion(input: {
   const existing = await getOpenPromotionForTarget(input.targetUserId);
   if (existing) return existing;
 
-  const db = createHttpDb();
   try {
-    const [row] = await db
-      .insert(captainPromotionRequests)
-      .values({
-        targetUserId: input.targetUserId,
-        requestedByUserId: input.requestedByUserId,
-      })
-      .returning();
-    if (!row) throw new Error("Failed to insert captain promotion request");
-    return row;
+    return await withTransaction(async (tx) => {
+      const [row] = await tx
+        .insert(captainPromotionRequests)
+        .values({
+          targetUserId: input.targetUserId,
+          requestedByUserId: input.requestedByUserId,
+        })
+        .returning();
+      if (!row) throw new Error("Failed to insert captain promotion request");
+      const [requester] = await tx
+        .select({ displayName: users.displayName })
+        .from(users)
+        .where(eq(users.id, input.requestedByUserId));
+      await tx.insert(schema.notificationDeliveries).values(
+        deliveryValues(
+          captainPromotionNotification({
+            requestId: row.id,
+            requesterName: requester?.displayName ?? null,
+          }),
+          {
+            userId: input.targetUserId,
+            broadcastId: null,
+            channel: "both",
+            presentation: "popup",
+          },
+        ),
+      );
+      return row;
+    });
   } catch (err) {
     // Lost the read-before-insert race: a concurrent send created the open
     // request first and tripped the partial unique index. Return that existing
@@ -110,6 +135,60 @@ export async function sendCaptainPromotion(input: {
     }
     throw err;
   }
+}
+
+/**
+ * The target accepts: the request flips from `sent` to `accepted`, the target's
+ * rank becomes `captain`, and an audit row records it, all in one transaction.
+ * Before this, the flip and the rank write were two separate writes, and a
+ * failure between them left an accepted request on a member who was not a
+ * captain.
+ *
+ * Only the target can accept, and only an open request with both participants
+ * still present. Returns null when that is not true; nothing is written.
+ */
+export async function acceptCaptainPromotion(input: {
+  requestId: string;
+  actorUserId: string;
+}): Promise<CaptainPromotionRequestRow | null> {
+  return await withTransaction(async (tx) => {
+    const [row] = await tx
+      .update(captainPromotionRequests)
+      .set({ status: "accepted", decidedAt: new Date() })
+      .where(
+        and(
+          eq(captainPromotionRequests.id, input.requestId),
+          eq(captainPromotionRequests.status, "sent"),
+          eq(captainPromotionRequests.targetUserId, input.actorUserId),
+          isNotNull(captainPromotionRequests.requestedByUserId),
+        ),
+      )
+      .returning();
+    if (!row) return null;
+
+    const [before] = await tx
+      .select({ rank: users.rank })
+      .from(users)
+      .where(eq(users.id, input.actorUserId))
+      .for("update");
+    await tx
+      .update(users)
+      .set({ rank: "captain", updatedAt: new Date() })
+      .where(eq(users.id, input.actorUserId));
+    await writeAuditEvent(tx, {
+      actorId: input.actorUserId,
+      action: "member.rank_changed",
+      target: input.actorUserId,
+      metadata: {
+        from: before?.rank ?? null,
+        to: "captain",
+        via: "captain_promotion",
+        requestId: row.id,
+        requestedByUserId: row.requestedByUserId,
+      },
+    });
+    return row;
+  });
 }
 
 /**

@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction, type PooledDatabase } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
@@ -125,6 +125,20 @@ export async function openActivationTx(
     .set({ status: "open", openedAt: new Date(), updatedAt: new Date() })
     .where(eq(schema.questionnaireActivations.id, act.id));
 
+  return await upsertGatesTx(tx, act, recipientIds);
+}
+
+/**
+ * The gate half of {@link openActivationTx}: apply the carry-over filter, then
+ * upsert one pending `required_actions` row per recipient, pointed at this
+ * activation. Shared with {@link reconcileOpenActivations}, which gates ONE
+ * member for a send that is already open and must not re-stamp `openedAt`.
+ */
+async function upsertGatesTx(
+  tx: PooledTx,
+  act: ActivationFanOut,
+  recipientIds: string[],
+): Promise<number> {
   if (recipientIds.length === 0) return 0;
 
   // Between the audience and the insert — see subtractCarriedOver.
@@ -194,6 +208,7 @@ export async function openActivation(
         id: schema.users.id,
         isSystem: schema.users.isSystem,
         sanitised: schema.users.sanitised,
+        approvalStatus: schema.users.approvalStatus,
       })
       .from(schema.users),
     // Team membership is year-scoped, so "who is on the kitchen team" has to be
@@ -258,6 +273,134 @@ export async function openActivation(
       created: await openActivationTx(tx, act, recipientIds),
     };
   });
+}
+
+/**
+ * Give ONE member the gates they would hold had they been in the audience when
+ * each open send opened (year design §10). `openActivation` fans out only at
+ * open time, so without this a member who joins the camp, joins a team, or is
+ * picked for a send after it opened holds no gate: the runner shows "not
+ * invited", nothing reminds them, and the results never count them.
+ *
+ * Called before the gate spine is read, so it runs on page loads. The steady
+ * state is therefore four reads and no writes:
+ *   - A gate that already points at this send is left alone, whatever its
+ *     status. The member was gated at open time, or here earlier, and may
+ *     have answered since.
+ *   - Under carry-over, a member whose completed gate satisfies the version is
+ *     skipped here in memory, by the same rule as subtractCarriedOver.
+ * Only a real miss opens a transaction. That transaction re-checks the send is
+ * still open under FOR SHARE, so a concurrent close (which expires pending
+ * gates in its own transaction) cannot leave a pending gate on a closed send.
+ *
+ * Returns the number of gates written.
+ */
+export async function reconcileOpenActivations(
+  userId: string,
+): Promise<number> {
+  const db = createHttpDb();
+  const open = (
+    await db
+      .select()
+      .from(schema.questionnaireActivations)
+      .where(eq(schema.questionnaireActivations.status, "open"))
+  ).filter((act) => PUSH_SCOPES.has(act.scope));
+  if (open.length === 0) return 0;
+
+  const [me] = await db
+    .select({
+      id: schema.users.id,
+      isSystem: schema.users.isSystem,
+      sanitised: schema.users.sanitised,
+      approvalStatus: schema.users.approvalStatus,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  if (!me) return 0;
+
+  const [memberships, targets, gates] = await Promise.all([
+    db
+      .select({
+        userId: schema.teamMemberships.userId,
+        team: schema.teamMemberships.team,
+        isLead: schema.teamMemberships.isLead,
+        cycle: schema.teamMemberships.cycle,
+      })
+      .from(schema.teamMemberships)
+      .where(eq(schema.teamMemberships.userId, userId)),
+    db
+      .select({
+        activationId: schema.questionnaireActivationTargets.activationId,
+      })
+      .from(schema.questionnaireActivationTargets)
+      .where(
+        and(
+          eq(schema.questionnaireActivationTargets.userId, userId),
+          inArray(
+            schema.questionnaireActivationTargets.activationId,
+            open.map((act) => act.id),
+          ),
+        ),
+      ),
+    db
+      .select({
+        actionKey: schema.requiredActions.actionKey,
+        activationId: schema.requiredActions.activationId,
+        status: schema.requiredActions.status,
+        version: schema.requiredActions.version,
+      })
+      .from(schema.requiredActions)
+      .where(
+        and(
+          eq(schema.requiredActions.userId, userId),
+          inArray(
+            schema.requiredActions.actionKey,
+            open.map((act) => act.questionnaireKey),
+          ),
+        ),
+      ),
+  ]);
+
+  let written = 0;
+  for (const act of open) {
+    const audience = computeAudience(
+      { scope: act.scope as BroadcastScope, team: act.team },
+      {
+        members: [me],
+        // The send's own year decides the team, as in openActivation.
+        memberships: memberships.filter((m) => m.cycle === act.cycle),
+        driverUserIds: [],
+        targetUserIds: targets.some((t) => t.activationId === act.id)
+          ? [userId]
+          : [],
+      },
+      null,
+    );
+    if (audience.length === 0) continue;
+
+    const gate = gates.find((g) => g.actionKey === act.questionnaireKey);
+    if (gate?.activationId === act.id) continue;
+    if (
+      act.carryOver &&
+      gate?.status === "completed" &&
+      gate.version &&
+      meetsRequiredVersion(act.version, gate.version)
+    ) {
+      continue;
+    }
+
+    written += await withTransaction(async (tx) => {
+      const [still] = await tx
+        .select({ status: schema.questionnaireActivations.status })
+        .from(schema.questionnaireActivations)
+        .where(eq(schema.questionnaireActivations.id, act.id))
+        .for("share");
+      if (still?.status !== "open") return 0;
+      return await upsertGatesTx(tx, act, [userId]);
+    });
+  }
+  return written;
 }
 
 /**
@@ -356,6 +499,62 @@ export async function getPendingRequiredActions(
     .orderBy(asc(schema.requiredActions.createdAt));
 }
 
+/** One questionnaire a member still has to answer, from a send that is open. */
+export interface PendingQuestionnaire {
+  activationId: string;
+  title: string;
+  /** Blocking holds the whole app; optional ones only wait in the inbox. */
+  blocking: boolean;
+  dueAt: Date | null;
+  createdAt: Date;
+}
+
+/**
+ * Every questionnaire this member still has to answer, blocking or not.
+ * getPendingRequiredActions above is the gate spine and only sees BLOCKING
+ * rows, so an optional send reached nobody: nothing listed it anywhere. This
+ * is the reader for the "Needs your answer" section of the inbox, which stays
+ * until the member finishes (owner's call, 2026-09-16: "shout until it's
+ * done").
+ *
+ * Only gates on an OPEN send count. A closed send expires its pending gates,
+ * but a pending gate whose activation was closed some other way must not
+ * point the member at a form that refuses them. Blocking first, then the
+ * nearest deadline, then the oldest.
+ */
+export async function listPendingQuestionnaires(
+  userId: string,
+): Promise<PendingQuestionnaire[]> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      activationId: schema.questionnaireActivations.id,
+      title: schema.requiredActions.title,
+      blocking: schema.requiredActions.blocking,
+      dueAt: schema.requiredActions.dueAt,
+      createdAt: schema.requiredActions.createdAt,
+    })
+    .from(schema.requiredActions)
+    .innerJoin(
+      schema.questionnaireActivations,
+      eq(schema.requiredActions.activationId, schema.questionnaireActivations.id),
+    )
+    .where(
+      and(
+        eq(schema.requiredActions.userId, userId),
+        eq(schema.requiredActions.status, "pending"),
+        eq(schema.requiredActions.type, "questionnaire"),
+        eq(schema.questionnaireActivations.status, "open"),
+      ),
+    )
+    .orderBy(
+      desc(schema.requiredActions.blocking),
+      sql`${schema.requiredActions.dueAt} asc nulls last`,
+      asc(schema.requiredActions.createdAt),
+    );
+  return rows;
+}
+
 export interface ActivationRow {
   id: string;
   questionnaireKey: string;
@@ -399,6 +598,8 @@ export interface RequiredActionState {
   status: (typeof schema.requiredActionStatusEnum.enumValues)[number];
   version: string | null;
   activationId: string | null;
+  /** When the member finished it, or null. */
+  completedAt: Date | null;
 }
 
 /**
@@ -416,6 +617,7 @@ export async function getRequiredAction(
       status: schema.requiredActions.status,
       version: schema.requiredActions.version,
       activationId: schema.requiredActions.activationId,
+      completedAt: schema.requiredActions.completedAt,
     })
     .from(schema.requiredActions)
     .where(

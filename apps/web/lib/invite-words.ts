@@ -4,5 +4,6 @@
 export {
   generateInviteCode,
   isSyntacticallyValidCode,
+  normalizeInviteCode,
   CODE_RULES_HINT,
 } from "@camp404/core";

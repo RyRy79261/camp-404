@@ -5,6 +5,7 @@
 import {
   createInviteCode,
   findUsableInviteCode,
+  revokeInviteCode,
 } from "@camp404/db/invite-codes";
 import { findUserById } from "@camp404/db/burner-profile";
 import { backfillIdEncryption } from "@camp404/db/maintenance";
@@ -25,6 +26,9 @@ async function main() {
       break;
     case "bootstrap-founder":
       await bootstrapFounder(rest);
+      break;
+    case "revoke-invite":
+      await revokeInvite(rest);
       break;
     case "backfill-id-encryption":
       await runBackfillIdEncryption();
@@ -178,6 +182,29 @@ async function bootstrapFounder(args: string[]) {
 }
 
 /**
+ * Revoke an invite code so nobody can join with it again. Members who already
+ * joined keep their place. The in-app control for this comes with the invite
+ * management screen; until then this is the way to close a leaked code,
+ * including the root code the /setup wizard minted.
+ */
+async function revokeInvite(args: string[]) {
+  const i = args.indexOf("--code");
+  const code = i === -1 ? undefined : args[i + 1];
+  if (!code || code.startsWith("--")) {
+    console.error("Usage: camp404 revoke-invite --code CODE");
+    return process.exit(1);
+  }
+  const revoked = await revokeInviteCode({ code, actorUserId: null });
+  if (!revoked) {
+    console.error(
+      `No live invite code '${code}'. It does not exist, or it is already revoked.`,
+    );
+    return process.exit(1);
+  }
+  console.log(`Revoked '${code}'. Nobody can join with it now.`);
+}
+
+/**
  * Idempotent one-off: encrypt any plaintext government ID numbers left in
  * burner_profiles.responses into the users encrypted columns and strip them
  * from responses. Run once after deploying the encryption change. Safe to
@@ -211,6 +238,8 @@ Usage:
   camp404 bootstrap-founder --email YOU@EXAMPLE.COM
                                     Mint the single-use '${FOUNDER_CODE}'
                                     founder invite. Redeem at /signup.
+  camp404 revoke-invite --code CODE Stop anyone joining with CODE. Members who
+                                    already joined keep their place.
   camp404 backfill-id-encryption    Encrypt any plaintext id.number values left
                                     in burner_profiles.responses (idempotent).
   camp404 help                      Show this help`,

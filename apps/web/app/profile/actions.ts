@@ -90,7 +90,10 @@ export async function deleteOwnAccount(
       captainCount: await countActiveCaptains(),
     });
     if (!guard.ok) return { ok: false, error: SOLE_CAPTAIN_ERROR };
-    const erased = await deleteAccount(campUser.id);
+    const erased = await deleteAccount({
+      userId: campUser.id,
+      authUserId: authUser.id,
+    });
     if (!erased.ok) return { ok: false, error: SOLE_CAPTAIN_ERROR };
     redirect("/auth/sign-out");
   });

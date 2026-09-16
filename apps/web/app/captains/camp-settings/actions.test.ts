@@ -18,6 +18,7 @@ vi.mock("@/lib/users", () => ({
 vi.mock("@/lib/camp-config", () => ({ mutateTeamsConfig: vi.fn() }));
 vi.mock("@camp404/db/cycle-rollover", () => ({
   advanceCycle: vi.fn(),
+  setCycleName: vi.fn(),
   setFoundingYear: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -25,12 +26,17 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { deriveViewerRank, hasClearance } from "@camp404/core";
 import {
   advanceCycleAction,
+  setCycleNameAction,
   moveTeamAction,
   renameTeamAction,
   setFoundingYearAction,
   setTeamArchivedAction,
 } from "./actions";
-import { advanceCycle, setFoundingYear } from "@camp404/db/cycle-rollover";
+import {
+  advanceCycle,
+  setCycleName,
+  setFoundingYear,
+} from "@camp404/db/cycle-rollover";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { mutateTeamsConfig } from "@/lib/camp-config";
@@ -338,14 +344,22 @@ describe("advanceCycleAction", () => {
     vi.mocked(hasCampAccess).mockReturnValue(true);
     vi.mocked(isApproved).mockReturnValue(true);
 
-    const result = await advanceCycleAction({ year: 2027, confirm: 2027 });
+    const result = await advanceCycleAction({
+      year: 2027,
+      confirm: 2027,
+      expectedFromYear: 2026,
+    });
     expect(result).toEqual({ ok: false, error: "Captain access only." });
     expect(advanceCycle).not.toHaveBeenCalled();
   });
 
   it("refuses when the confirmation doesn't match the year", async () => {
     asCaptain();
-    const result = await advanceCycleAction({ year: 2027, confirm: 2026 });
+    const result = await advanceCycleAction({
+      year: 2027,
+      confirm: 2026,
+      expectedFromYear: 2026,
+    });
     expect(result.ok).toBe(false);
     expect(advanceCycle).not.toHaveBeenCalled();
   });
@@ -353,9 +367,15 @@ describe("advanceCycleAction", () => {
   it("refuses anything that isn't a plausible year", async () => {
     asCaptain();
     for (const year of [202, 20267, 2026.5, ""]) {
-      expect((await advanceCycleAction({ year, confirm: year })).ok).toBe(
-        false,
-      );
+      expect(
+        (
+          await advanceCycleAction({
+            year,
+            confirm: year,
+            expectedFromYear: 2026,
+          })
+        ).ok,
+      ).toBe(false);
     }
     expect(advanceCycle).not.toHaveBeenCalled();
   });
@@ -369,12 +389,14 @@ describe("advanceCycleAction", () => {
       // check compares against.
       year: "2027",
       confirm: 2027,
+      expectedFromYear: 2026,
       resetDues: true,
       announcement: { title: "New year", body: "Off we go." },
     });
 
     expect(advanceCycle).toHaveBeenCalledWith({
       year: 2027,
+      expectedFromYear: 2026,
       actorUserId: "cap-1",
       resetDues: true,
       announcement: { title: "New year", body: "Off we go." },
@@ -385,7 +407,11 @@ describe("advanceCycleAction", () => {
   it("defaults the optional levers off", async () => {
     asCaptain();
     vi.mocked(advanceCycle).mockResolvedValue({ ok: true, report } as never);
-    await advanceCycleAction({ year: 2027, confirm: 2027 });
+    await advanceCycleAction({
+      year: 2027,
+      confirm: 2027,
+      expectedFromYear: 2026,
+    });
     expect(advanceCycle).toHaveBeenCalledWith(
       expect.objectContaining({ resetDues: false, announcement: null }),
     );
@@ -397,11 +423,33 @@ describe("advanceCycleAction", () => {
       ok: false,
       reason: "already-advanced",
     } as never);
-    const result = await advanceCycleAction({ year: 2027, confirm: 2027 });
+    const result = await advanceCycleAction({
+      year: 2027,
+      confirm: 2027,
+      expectedFromYear: 2026,
+    });
     expect(result).toEqual({
       ok: false,
       error:
         "The camp has already started that year. Reload the page to see where it is now.",
+    });
+  });
+
+  it("tells a captain whose plan is out of date to reload", async () => {
+    asCaptain();
+    vi.mocked(advanceCycle).mockResolvedValue({
+      ok: false,
+      reason: "stale-plan",
+    } as never);
+    const result = await advanceCycleAction({
+      year: 2028,
+      confirm: 2028,
+      expectedFromYear: 2026,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error:
+        "Another captain has already moved the camp to a new year. Reload the page to see the new plan.",
     });
   });
 
@@ -411,7 +459,11 @@ describe("advanceCycleAction", () => {
       ok: false,
       reason: "no-founding-year",
     } as never);
-    const result = await advanceCycleAction({ year: 2027, confirm: 2027 });
+    const result = await advanceCycleAction({
+      year: 2027,
+      confirm: 2027,
+      expectedFromYear: 2026,
+    });
     expect(result).toEqual({
       ok: false,
       error:
@@ -425,7 +477,11 @@ describe("advanceCycleAction", () => {
       ok: false,
       reason: "invalid-year",
     } as never);
-    const result = await advanceCycleAction({ year: 2027, confirm: 2027 });
+    const result = await advanceCycleAction({
+      year: 2027,
+      confirm: 2027,
+      expectedFromYear: 2026,
+    });
     expect(result.ok).toBe(false);
     expect(!result.ok && result.error).toMatch(/has to be later/);
   });
@@ -435,6 +491,7 @@ describe("advanceCycleAction", () => {
     const result = await advanceCycleAction({
       year: 2027,
       confirm: 2027,
+      expectedFromYear: 2026,
       announcement: { title: "New year", body: "  " },
     });
     expect(result).toEqual({
@@ -442,5 +499,83 @@ describe("advanceCycleAction", () => {
       error: "Write something for the announcement.",
     });
     expect(advanceCycle).not.toHaveBeenCalled();
+  });
+});
+
+describe("setCycleNameAction", () => {
+  it("rejects a non-captain without writing", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-m",
+      primaryEmail: "m@example.com",
+      displayName: "M",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ rank: "member" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(isApproved).mockReturnValue(true);
+
+    const result = await setCycleNameAction({ year: 2026, name: "Tides" });
+    expect(result).toEqual({ ok: false, error: "Captain access only." });
+    expect(setCycleName).not.toHaveBeenCalled();
+  });
+
+  it("refuses a name over the limit before it reaches the database", async () => {
+    asCaptain();
+    const result = await setCycleNameAction({
+      year: 2026,
+      name: "x".repeat(61),
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "Keep the name to 60 characters or fewer.",
+    });
+    expect(setCycleName).not.toHaveBeenCalled();
+  });
+
+  it("trims the name and passes the year and the actor through", async () => {
+    asCaptain();
+    vi.mocked(setCycleName).mockResolvedValue({
+      ok: true,
+      cycle: {
+        year: 2026,
+        startedAt: "2026-01-01T00:00:00Z",
+        endedAt: null,
+        name: "Temple of Tides",
+      },
+    });
+
+    const result = await setCycleNameAction({
+      year: "2026",
+      name: "  Temple of Tides ",
+    });
+    expect(setCycleName).toHaveBeenCalledWith({
+      year: 2026,
+      name: "Temple of Tides",
+      actorUserId: "cap-1",
+    });
+    expect(result).toEqual({ ok: true, name: "Temple of Tides" });
+  });
+
+  it("reports a blank name as removed", async () => {
+    asCaptain();
+    vi.mocked(setCycleName).mockResolvedValue({
+      ok: true,
+      cycle: { year: 2026, startedAt: "2026-01-01T00:00:00Z", endedAt: null },
+    });
+    expect(await setCycleNameAction({ year: 2026, name: "  " })).toEqual({
+      ok: true,
+      name: null,
+    });
+  });
+
+  it("explains a year the camp never had", async () => {
+    asCaptain();
+    vi.mocked(setCycleName).mockResolvedValue({
+      ok: false,
+      reason: "unknown-year",
+    });
+    expect(await setCycleNameAction({ year: 2030, name: "Nope" })).toEqual({
+      ok: false,
+      error: "The camp has never had that year. Reload the page.",
+    });
   });
 });

@@ -2,13 +2,15 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import type { BuilderQuestionnaire } from "@camp404/types";
 import { useTestDb } from "./_harness";
-import { makeUser, requiredActionsFor } from "./_factories";
+import { makeActivation, makeUser, requiredActionsFor } from "./_factories";
 import { insertDefinitionDraft } from "../questionnaire-definitions";
 import {
   closeActivation,
   getOpenActivationForKey,
+  listOpenSendBlocking,
   publishDefinition,
   sendActivation,
+  sendReminder,
   unpublishDefinition,
 } from "../questionnaire-lifecycle";
 import { completeBuilderResponse, getActivationById } from "../activations";
@@ -73,6 +75,25 @@ async function versionRows(
     .from(schema.questionnaireVersions)
     .where(eq(schema.questionnaireVersions.definitionKey, key));
 }
+
+describe("listOpenSendBlocking", () => {
+  const h = useTestDb();
+
+  it("maps each open send to its blocking flag, skipping drafts and closed sends", async () => {
+    const db = h.db();
+    const send = (questionnaireKey: string, status: "open" | "closed" | "draft", blocking: boolean) =>
+      makeActivation(db, { questionnaireKey, status, blocking });
+    await send("safety", "open", true);
+    await send("skills", "open", false);
+    await send("old", "closed", true);
+    await send("draft", "draft", false);
+
+    expect(Object.fromEntries(await listOpenSendBlocking())).toEqual({
+      safety: true,
+      skills: false,
+    });
+  });
+});
 
 describe("publishDefinition", () => {
   const h = useTestDb();
@@ -325,6 +346,54 @@ describe("sendActivation — one-open invariant", () => {
     expect(act!.version).toBe("feedback-v1");
     expect((await requiredActionsFor(db, a.id))[0]!.version).toBe("feedback-v1");
     expect((await requiredActionsFor(db, b.id))[0]!.actionKey).toBe("feedback");
+  });
+
+  it("tells every member it gated, without spending their first reminder", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await publishDefinition("feedback", null);
+
+    const res = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: false,
+      activatedByUserId: captain.id,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    const notices = await db
+      .select({
+        userId: schema.notificationDeliveries.userId,
+        body: schema.notificationDeliveries.body,
+        refType: schema.notificationDeliveries.refType,
+        refId: schema.notificationDeliveries.refId,
+        kind: schema.broadcasts.kind,
+      })
+      .from(schema.notificationDeliveries)
+      .innerJoin(
+        schema.broadcasts,
+        eq(schema.broadcasts.id, schema.notificationDeliveries.broadcastId),
+      );
+    expect(notices.map((n) => n.userId).sort()).toEqual(
+      [captain.id, member.id].sort(),
+    );
+    expect(notices[0]).toMatchObject({
+      body: "New questionnaire: Camp feedback. Tap to answer.",
+      refType: "questionnaire_activation",
+      refId: res.activationId,
+      kind: "system",
+    });
+
+    // The reminder's 24-hour window counts reminders only, so a captain can
+    // still nudge straight after sending.
+    const nudge = await sendReminder({
+      activationId: res.activationId,
+      senderId: captain.id,
+    });
+    expect(nudge).toMatchObject({ ok: true, outcome: "sent", sent: 2 });
   });
 
   it("refuses to send an unpublished questionnaire", async () => {

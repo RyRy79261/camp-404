@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  BUILDER_LIMITS,
   BuilderQuestionnaire,
+  builderDefinitionLimitErrors,
+  isAllowedBuilderImageUrl,
   boundDraftResponses,
   classifyChange,
   evalVisibleIf,
@@ -738,5 +741,112 @@ describe("classifyChange", () => {
     });
     expect(classifyChange(base, formatted)).toBe("breaking");
     expect(classifyChange(formatted, base)).toBe("cosmetic");
+  });
+});
+
+describe("the server's limits on a saved definition", () => {
+  function withBlocks(blocks: unknown[], extra: Record<string, unknown> = {}) {
+    return BuilderQuestionnaire.parse({
+      version: "1",
+      title: "Camp feedback",
+      pages: [{ id: "p1", type: "question", title: "P", blocks }],
+      ...extra,
+    });
+  }
+  const field = (id: string, prompt = "Q") => ({
+    kind: "question",
+    question: { id, kind: "short_text", prompt },
+  });
+
+  it("accepts an ordinary questionnaire", () => {
+    expect(builderDefinitionLimitErrors(withBlocks([field("a")]))).toEqual([]);
+  });
+
+  it("refuses too many pages, blocks or options, and over-long text", () => {
+    const many = Array.from({ length: BUILDER_LIMITS.blocksPerPage + 1 }, (_, i) =>
+      field(`f${i}`),
+    );
+    expect(builderDefinitionLimitErrors(withBlocks(many))[0]).toMatch(
+      /more than 100 blocks/,
+    );
+
+    const options = Array.from(
+      { length: BUILDER_LIMITS.optionsPerQuestion + 1 },
+      (_, i) => ({ value: `o${i}`, label: `Option ${i}` }),
+    );
+    const select = {
+      kind: "question",
+      question: { id: "s", kind: "single_select", prompt: "Pick", options },
+    };
+    expect(builderDefinitionLimitErrors(withBlocks([select]))[0]).toMatch(
+      /more than 100 options/,
+    );
+
+    const long = field("l", "x".repeat(BUILDER_LIMITS.textLength + 1));
+    expect(builderDefinitionLimitErrors(withBlocks([long]))[0]).toMatch(
+      /longer than 5000 characters/,
+    );
+
+    const pages = Array.from({ length: BUILDER_LIMITS.pages + 1 }, (_, i) => ({
+      id: `p${i}`,
+      type: "question",
+      title: "",
+      blocks: [field(`q${i}`)],
+    }));
+    const tooManyPages = BuilderQuestionnaire.parse({
+      version: "1",
+      title: "T",
+      pages,
+    });
+    expect(builderDefinitionLimitErrors(tooManyPages)[0]).toMatch(
+      /at most 50 pages/,
+    );
+  });
+
+  it("saves an image block with no picture yet, but not one from another site", () => {
+    const image = (imageUrl: string) => ({
+      id: "img",
+      kind: "image_block",
+      imageUrl,
+      altText: "Playa",
+      sizeFit: "fit",
+    });
+    expect(builderDefinitionLimitErrors(withBlocks([image("")]))).toEqual([]);
+    expect(
+      builderDefinitionLimitErrors(withBlocks([image("https://tracker.example/p.gif")]))[0],
+    ).toMatch(/links to another website/);
+
+    // Publish still wants a picture.
+    const errors = validateBuilderQuestionnaire(
+      withBlocks([field("a"), image("")]),
+    );
+    expect(errors.some((e) => /has no picture yet/.test(e))).toBe(true);
+  });
+});
+
+describe("isAllowedBuilderImageUrl", () => {
+  it("allows the app's Blob store and its own paths", () => {
+    expect(
+      isAllowedBuilderImageUrl(
+        "https://camp404store.public.blob.vercel-storage.com/q/playa.jpg",
+      ),
+    ).toBe(true);
+    expect(isAllowedBuilderImageUrl("/api/avatar/avatars/u1/a.webp")).toBe(true);
+  });
+
+  it("refuses other sites, however the link is dressed up", () => {
+    for (const url of [
+      "https://tracker.example/pixel.gif",
+      "http://camp404store.public.blob.vercel-storage.com/a.jpg",
+      "https://camp404store.public.blob.vercel-storage.com.evil.example/a.jpg",
+      "https://user@camp404store.public.blob.vercel-storage.com/a.jpg",
+      "//evil.example/a.jpg",
+      "/\\evil.example/a.jpg",
+      "/\tevil.example",
+      "javascript:alert(1)",
+      "data:image/svg+xml,<svg/>",
+    ]) {
+      expect(isAllowedBuilderImageUrl(url)).toBe(false);
+    }
   });
 });

@@ -60,6 +60,7 @@ import {
   removePage,
   replaceBlock,
 } from "./builder-ops";
+import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { BlockEditorDialog } from "./block-editor";
 import { PageSettingsDialog } from "./page-settings-dialog";
 import { BlockCatalogDialog } from "./block-catalog-dialog";
@@ -197,6 +198,7 @@ export function BuilderCanvas({
   status,
   publishedVersion,
   openActivationId,
+  openActivationBlocking = null,
 }: {
   questionnaireKey: string;
   definition: BuilderQuestionnaire;
@@ -204,9 +206,12 @@ export function BuilderCanvas({
   status: Status;
   publishedVersion: string | null;
   openActivationId: string | null;
+  /** The open send's blocking flag, shown beside "Currently sent". */
+  openActivationBlocking?: boolean | null;
 }) {
   const [working, setWorking] = useState<BuilderQuestionnaire>(definition);
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
   const [editing, setEditing] = useState<{
     pageId: string;
     blockId: string;
@@ -259,6 +264,7 @@ export function BuilderCanvas({
 
   return (
     <div className="flex flex-col gap-5 pb-24">
+      {confirmDialog}
       <InputField
         label="Questionnaire name"
         value={working.title}
@@ -277,6 +283,7 @@ export function BuilderCanvas({
           status={status}
           version={publishedVersion}
           openActivationId={openActivationId}
+          openActivationBlocking={openActivationBlocking}
         />
       )}
 
@@ -323,13 +330,18 @@ export function BuilderCanvas({
                   size="icon"
                   aria-label="Delete page"
                   disabled={working.pages.length <= 1}
-                  onClick={() => {
-                    if (
-                      !window.confirm(
-                        `Delete page ${pageIndex + 1} and its ${page.blocks.length} block(s)? This can't be undone.`,
-                      )
-                    )
-                      return;
+                  onClick={async () => {
+                    const blocks = page.blocks.length;
+                    const sure = await confirm({
+                      title: `Delete page ${pageIndex + 1}?`,
+                      description:
+                        blocks === 0
+                          ? "It has no blocks. This can't be undone."
+                          : `Its ${blocks === 1 ? "1 block goes" : `${blocks} blocks go`} with it. This can't be undone.`,
+                      confirmLabel: "Delete page",
+                      destructive: true,
+                    });
+                    if (!sure) return;
                     persist(removePage(working, page.id));
                   }}
                 >

@@ -16,6 +16,7 @@ import { QuestionField } from "./question";
 import { BlockingNotice, BlockingTopBar } from "./blocking-chrome";
 import { validateIdNumber } from "@/lib/id-validation";
 import type { SaveResult } from "@camp404/types";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 
 // Reserved error-map keys for a page-level (non-field) failure. `_form` is set
 // by this component when a save action throws; `_root` is what server actions
@@ -271,7 +272,7 @@ export function QuestionnaireWizard({
           // someone who signed in with the wrong account. (The runner variant
           // puts Sign out in its sticky top bar instead.)
           <Button type="button" variant="ghost" asChild>
-            <a href="/auth/sign-out">Sign out</a>
+            <SignOutLink />
           </Button>
         ) : (
           <Button

@@ -45,8 +45,8 @@ The four gates, in order, are enforced on **every** protected page
 
 1. **Authenticated?** — Neon Auth (Better Auth) session cookie. No session
    → landing hero / sign-in.
-2. **Has camp access?** — `hasCampAccess()`: either a `GOD_EMAILS` address
-   or an invite code redeemed onto the user's row. No access →
+2. **Has camp access?** — `hasCampAccess()`: either a verified `GOD_EMAILS`
+   address or an invite code redeemed onto the user's row. No access →
    `/signup/required`, where the code is entered (see §2).
 3. **Profile complete?** — a `burner_profiles` row with `completedAt` set.
    Incomplete → `/onboarding/questionnaire`.
@@ -96,7 +96,8 @@ Key behaviours worth knowing:
 - **Captain-tier invites** can stamp an `assignedRank` and a
   `requiresApproval` flag on the code, both applied at claim time; the latter
   routes the redeemer through the captain-approval gate (gate 4 in §1).
-- **God accounts** (`GOD_EMAILS`) bypass the invite *and* approval gates.
+- **God accounts** (`GOD_EMAILS`) bypass the invite *and* approval gates,
+  but only with an email Neon Auth has verified.
 
 ### Sequence: redeeming an invite end-to-end
 

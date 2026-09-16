@@ -10,7 +10,7 @@ import { getAuthenticatedUser, type AuthenticatedUser } from "@/lib/auth";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
-import { ensureCampUser } from "@/lib/users";
+import { ensureCampUser, hasCampAccess } from "@/lib/users";
 import {
   deleteQuestionnaireImageBlobs,
   questionKeySegment,
@@ -46,10 +46,20 @@ export const runtime = "nodejs";
  * Auth, dual rate limiting, validation and the E2E short-circuit mirror the
  * avatar route.
  */
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function POST(req: Request) {
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Uploads are for people in the camp. Sign-up is open, so a Neon Auth
+  // account alone could otherwise store files that nothing ever sweeps (there
+  // is no camp row to erase). Every page that uploads is past the invite gate.
+  const campUser = await ensureCampUser(user);
+  if (!hasCampAccess(campUser, user.primaryEmail)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const params = new URL(req.url).searchParams;
@@ -215,6 +225,10 @@ async function resolveImageQuestion(
       flattenQuestions(questionnaire).find((q) => q.id === questionId),
     );
   }
+
+  // The id goes straight into a uuid column. Anything else would be a
+  // Postgres error and a 500, not a refusal.
+  if (!UUID.test(activationId)) return FORBIDDEN;
 
   // Mirror the runner's access predicate (the page and saveBuilderResponses):
   // an open activation the viewer holds a PENDING obligation for. A member who

@@ -5,7 +5,10 @@ import {
   type Question,
   type QuestionnaireResponses,
 } from "@camp404/types";
-import { UNSET_CYCLE } from "@camp404/db/camp-config";
+import {
+  currentCycle as currentOf,
+  UNSET_CYCLE,
+} from "@camp404/db/camp-config";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import {
   listActivationResponses,
@@ -16,7 +19,7 @@ import {
 } from "@camp404/db/questionnaire-results";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { getCurrentCycle } from "@/lib/camp-config";
+import { getCycles } from "@/lib/camp-config";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 
 // The shared loader behind BOTH results routes. /metrics and /responses answer
@@ -37,6 +40,8 @@ export interface ResultsView {
   cycleOptions: number[];
   /** The year the camp is in, or null before a captain has named one. */
   currentCycle: number | null;
+  /** The optional name of each named year, keyed by the year number. */
+  cycleNames: Readonly<Record<number, string>>;
   rows: ActivationResponseRow[];
   /** Every send in `cycle`, newest first. */
   activations: ResultsActivationRow[];
@@ -95,11 +100,14 @@ export async function loadResults(
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  const [cycles, current] = await Promise.all([
+  const [cycles, years] = await Promise.all([
     listResultCycles(key),
-    getCurrentCycle(),
+    getCycles(),
   ]);
-  const currentCycle = current?.year ?? null;
+  const currentCycle = currentOf(years)?.year ?? null;
+  const cycleNames = Object.fromEntries(
+    years.flatMap((y) => (y.name ? [[y.year, y.name] as const] : [])),
+  );
   const cycleOptions = [
     ...new Set([...(currentCycle === null ? [] : [currentCycle]), ...cycles]),
   ].sort((a, b) => b - a);
@@ -127,6 +135,7 @@ export async function loadResults(
       cycle,
       cycleOptions,
       currentCycle,
+      cycleNames,
       rows,
       activations,
       activeActivation:
@@ -239,10 +248,19 @@ export function summarise(view: ResultsView): ResultsSummary {
   };
 }
 
-/** The label for a year, distinguishing the sentinel from a real burn year. */
-export function cycleLabel(cycle: number, currentCycle: number | null): string {
+/**
+ * The label for a year, distinguishing the sentinel from a real burn year. A
+ * named year reads "2027 (Temple of Tides)": the number stays first, because
+ * the number is what every row is filed under.
+ */
+export function cycleLabel(
+  cycle: number,
+  currentCycle: number | null,
+  names: Readonly<Record<number, string>> = {},
+): string {
   if (cycle === UNSET_CYCLE && currentCycle === null) return "This year";
-  return String(cycle);
+  const name = names[cycle];
+  return name ? `${cycle} (${name})` : String(cycle);
 }
 
 export interface ResultsEmpty {
@@ -265,7 +283,7 @@ export function emptyStateFor(
   respondents: number,
 ): ResultsEmpty | null {
   if (respondents > 0) return null;
-  const year = cycleLabel(view.cycle, view.currentCycle);
+  const year = cycleLabel(view.cycle, view.currentCycle, view.cycleNames);
   if (view.activations.length === 0) {
     return {
       title: `Not sent in ${year}`,

@@ -1,7 +1,11 @@
-import { and, desc, eq, lte } from "drizzle-orm";
-import type { QuestionnaireResponses } from "@camp404/types";
+import { and, desc, eq, isNotNull, lte } from "drizzle-orm";
+import {
+  BuilderQuestionnaire,
+  isBuilderDefinition,
+  type QuestionnaireResponses,
+} from "@camp404/types";
 import { createHttpDb } from "./index";
-import { questionnaireResponses } from "./schema";
+import { questionnaireResponses, questionnaireVersions } from "./schema";
 
 // Generic response store for BUILDER questionnaires (code questionnaires keep
 // their bespoke domain tables). One latest-answer row per (user, definition,
@@ -126,4 +130,83 @@ export async function loadQuestionnaireResponse(
     completedAt: seededFromCycle === null ? row.completedAt : null,
     seededFromCycle,
   };
+}
+
+export interface CompletedQuestionnaireAnswers {
+  definitionKey: string;
+  cycle: number;
+  completedAt: Date;
+  updatedAt: Date;
+  responses: QuestionnaireResponses;
+  /**
+   * The questionnaire exactly as the member answered it: the published version
+   * their row is pinned to, not today's edit. Questions added or reworded since
+   * do not change what they see they said.
+   */
+  questionnaire: BuilderQuestionnaire;
+}
+
+/**
+ * A member's completed builder questionnaires, newest first, each with the
+ * version they answered, for rereading on My forms. One per (questionnaire,
+ * year). A row whose pinned version is missing or not a builder definition is
+ * left out rather than shown against the wrong questions.
+ */
+export async function listCompletedQuestionnaireAnswers(
+  userId: string,
+  filter: { definitionKey?: string; cycle?: number } = {},
+): Promise<CompletedQuestionnaireAnswers[]> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      definitionKey: questionnaireResponses.definitionKey,
+      cycle: questionnaireResponses.cycle,
+      completedAt: questionnaireResponses.completedAt,
+      updatedAt: questionnaireResponses.updatedAt,
+      responses: questionnaireResponses.responses,
+      definition: questionnaireVersions.definition,
+    })
+    .from(questionnaireResponses)
+    .innerJoin(
+      questionnaireVersions,
+      and(
+        eq(
+          questionnaireVersions.definitionKey,
+          questionnaireResponses.definitionKey,
+        ),
+        eq(
+          questionnaireVersions.version,
+          questionnaireResponses.definitionVersion,
+        ),
+      ),
+    )
+    .where(
+      and(
+        eq(questionnaireResponses.userId, userId),
+        isNotNull(questionnaireResponses.completedAt),
+        filter.definitionKey !== undefined
+          ? eq(questionnaireResponses.definitionKey, filter.definitionKey)
+          : undefined,
+        filter.cycle !== undefined
+          ? eq(questionnaireResponses.cycle, filter.cycle)
+          : undefined,
+      ),
+    )
+    .orderBy(desc(questionnaireResponses.completedAt));
+
+  const out: CompletedQuestionnaireAnswers[] = [];
+  for (const row of rows) {
+    if (!row.completedAt || !isBuilderDefinition(row.definition)) continue;
+    const parsed = BuilderQuestionnaire.safeParse(row.definition);
+    if (!parsed.success) continue;
+    out.push({
+      definitionKey: row.definitionKey,
+      cycle: row.cycle,
+      completedAt: row.completedAt,
+      updatedAt: row.updatedAt,
+      responses: row.responses,
+      questionnaire: parsed.data,
+    });
+  }
+  return out;
 }

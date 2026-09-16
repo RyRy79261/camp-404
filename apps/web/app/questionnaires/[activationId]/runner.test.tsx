@@ -40,6 +40,7 @@ describe("BuilderRunner carry-over notice", () => {
         initialResponses={{ name: "Ada" }}
         seededFromPriorCycle
         title="Kitchen shift"
+        blocking
       />,
     );
 
@@ -59,6 +60,7 @@ describe("BuilderRunner carry-over notice", () => {
         definition={def}
         initialResponses={{ name: "Ada" }}
         title="Kitchen shift"
+        blocking
       />,
     );
 
@@ -72,9 +74,47 @@ describe("BuilderRunner carry-over notice", () => {
         definition={def}
         initialResponses={{}}
         title="Kitchen shift"
+        blocking
       />,
     );
 
     expect(screen.queryByText(/from last year/i)).toBeNull();
+  });
+});
+
+describe("BuilderRunner — required or optional", () => {
+  it("holds the app for a blocking send: Required, the notice, Sign out", () => {
+    render(
+      <BuilderRunner
+        activationId="act-1"
+        definition={def}
+        initialResponses={{}}
+        title="Kitchen shift"
+        blocking
+      />,
+    );
+    expect(screen.getByText("Required")).toBeTruthy();
+    expect(
+      screen.getByText(/can't use the rest of the app until this is finished/i),
+    ).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sign out" })).toBeTruthy();
+  });
+
+  it("does not claim an optional send locks the app", () => {
+    render(
+      <BuilderRunner
+        activationId="act-1"
+        definition={def}
+        initialResponses={{}}
+        title="Kitchen shift"
+        blocking={false}
+      />,
+    );
+    expect(screen.getByText("Optional")).toBeTruthy();
+    expect(screen.queryByText(/can't use the rest of the app/i)).toBeNull();
+    // The escape goes back to the inbox, where the questionnaire stays listed.
+    expect(
+      screen.getByRole("link", { name: "Later" }).getAttribute("href"),
+    ).toBe("/notifications");
   });
 });

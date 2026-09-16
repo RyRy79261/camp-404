@@ -16,6 +16,7 @@ import {
   isApproved,
 } from "@/lib/users";
 import { initialsFrom } from "@/lib/initials";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
@@ -79,12 +80,7 @@ export default async function ProfilePage() {
             Review them here
           </Link>
 
-          <a
-            href="/auth/sign-out"
-            className="text-sm font-medium text-muted-foreground hover:underline"
-          >
-            Sign out
-          </a>
+          <SignOutLink className="text-sm font-medium text-muted-foreground hover:underline" />
         </CardContent>
       </Card>
     </main>

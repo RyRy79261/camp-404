@@ -55,7 +55,9 @@ export default defineConfig({
           // enables /api/test/login + the in-memory user store so we can
           // drive authenticated flows without a real Neon Auth session.
           E2E_TEST_MODE: "1",
-          INVITE_CODES: "TEST-INVITE",
+          // Lowercase, the one spelling codes have. The specs type it in
+          // capitals on purpose, to prove redemption ignores case.
+          INVITE_CODES: "test-invite",
           GOD_EMAILS: "god@example.com",
         },
       },

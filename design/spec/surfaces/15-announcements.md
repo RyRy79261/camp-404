@@ -9,7 +9,7 @@
 
 A captain-only surface to author camp-wide announcements and broadcast them to the whole camp. A captain composes a message (title, body, and a **presentation / delivery mode** that decides how hard the message interrupts each recipient), saves it as a draft, then edits / deletes / publishes it. Publishing fans the announcement out to **every real camp member except the author**, writing one notification-delivery row per recipient (title/body/channel/presentation copied so each recipient's inbox + acknowledge gate is self-contained). The same screen lists the captain's drafts (editable) and the published announcements with delivery roll-ups (recipient count, acknowledged count for the acknowledge mode, "by you" marker, timestamp).
 
-This is the **compose + lifecycle** half of the broadcasts engine. The recipient-side rendering (full-screen acknowledge takeover, pop-up, inbox bell) and the scheduled cron fan-out live in the notifications/push surfaces (S12 / "unit 27") — this surface stops at the inline fan-out into `notification_deliveries`. This surface always creates `kind='announcement'`, `scope='everyone'` broadcasts; scoped (team / drivers / individual) and scheduled sends belong to other compose UIs.
+This is the **compose + lifecycle** half of the broadcasts engine. The recipient-side rendering (full-screen acknowledge takeover, pop-up, inbox bell) and the scheduled cron fan-out live in the notifications/push surfaces (S12 / "unit 27") — this surface stops at the inline fan-out into `notification_deliveries`. This surface creates `kind='announcement'` broadcasts to the whole camp (`scope='everyone'`) or to one team (`scope='team'`, 2026-09-16). Captains may pick either; a team lead may pick only a team they lead, and sees only their own announcements. Team-leads, drivers, individual and scheduled sends belong to other compose UIs.
 
 Lead/intro copy (board): heading **"Announcements & notifications"**; lead **"Compose a message, save it as a draft, then publish it to the whole camp. Everyone but you receives it. A full-screen announcement takes over each member's screen until they acknowledge it."**
 
@@ -126,7 +126,7 @@ The live code **hard-redirects** non-captains to `/` and the actions return "Cap
 - **Type a message body** — ≤5000 chars (client `maxLength` + server Zod `max(5000)`); supports newlines (`whitespace-pre-wrap` on display).
 - **Dictate the message body** (Decision 5) — tap `DictatePill` → RecorderPanel records → transcribes → "Use this text" inserts the transcript into the body field (editable after). "Re-record" re-runs; ERROR state offers "Try again".
 - **Pick a delivery mode** — Select among `acknowledge` / `popup` / `feed`; hint line updates live.
-- **Save draft** — primary submit (new mode). → creates an unpublished `broadcasts` row (`kind='announcement'`, `scope='everyone'`); notice "Draft saved."; form resets; `router.refresh()`.
+- **Save draft** — primary submit (new mode). → creates an unpublished `broadcasts` row (`kind='announcement'`, `scope` and `team` from "Who it's for"); notice "Draft saved."; form resets; `router.refresh()`.
 - **Update draft** — primary submit (editing mode). → updates title/body/presentation of the owned draft; notice "Draft updated."; reset; refresh.
 - **Cancel edit** — discards edits, returns composer to new-announcement mode (clears form + error).
 - **Edit a draft** — loads the draft's id/title/body/presentation into the composer; clears error + notice; switches card title to "Edit draft".
@@ -137,16 +137,16 @@ The live code **hard-redirects** non-captains to `/` and the actions return "Cap
 ## Data & enums (mapped to schema.ts)
 
 **Tables read/written:**
-- **`broadcasts`** (`schema.ts:763-807`) — the draft/announcement row. Written: `senderId` (=acting captain), `kind='announcement'` (hard-coded), `scope='everyone'` (hard-coded), `title` (notNull), `body` (notNull), `presentation` (notNull; composer always supplies — see default note), `channel` (notNull DEFAULT `'both'`; composer never sets it), `publishedAt` (NULL=draft; stamped on publish), `dispatchedAt` (stamped on publish), `createdAt` (defaultNow). Read for lists: `title`, `body`, `presentation`, `senderId`, `publishedAt`, `createdAt` + joined `senderName`. Indexes: `broadcasts_sender_idx`, `broadcasts_created_at_idx`.
+- **`broadcasts`** (`schema.ts:763-807`) — the draft/announcement row. Written: `senderId` (=acting captain), `kind='announcement'` (hard-coded), `scope` (`everyone` or `team`) and `team` (set for a team audience), `title` (notNull), `body` (notNull), `presentation` (notNull; composer always supplies — see default note), `channel` (notNull DEFAULT `'both'`; composer never sets it), `publishedAt` (NULL=draft; stamped on publish), `dispatchedAt` (stamped on publish), `createdAt` (defaultNow). Read for lists: `title`, `body`, `presentation`, `senderId`, `publishedAt`, `createdAt` + joined `senderName`. Indexes: `broadcasts_sender_idx`, `broadcasts_created_at_idx`.
 - **`notification_deliveries`** (`schema.ts:830-887`) — written by publish: one row per recipient copying `title`/`body`/`channel`/`presentation` + `refType='announcement'`, `refId=broadcastId`; `pushStatus` DEFAULT `'queued'`. Read (correlated counts) for `recipientCount` and `acknowledgedCount`. Partial UNIQUE `(broadcastId, userId) WHERE broadcastId IS NOT NULL` powers `ON CONFLICT DO NOTHING` dedupe. `readAt`/`acknowledgedAt`/`deliveredAt` are recipient-side (unit 27); only `acknowledgedAt` is read here (the roll-up count).
-- **`broadcast_targets`** (`schema.ts:810-823`) — NOT touched (everyone-scope only).
+- **`broadcast_targets`** (`schema.ts:810-823`) — NOT touched (no individual audience here).
 - **`users`** (read-only) — `id`, `displayName` (sender name via left join), `isSystem` + `sanitised` (audience exclusion), `rank` (the captain gate).
-- **`team_memberships`** / **`driver_profiles`** — read only by `resolveAudience` for non-everyone scopes; **not exercised** by this everyone-scope surface.
+- **`team_memberships`** — read by `resolveAudience` for a team audience (this year's members), and for the lead's own teams (`getLeadTeams`). **`driver_profiles`** is not exercised here.
 
 **Enums:**
 - **`broadcast_presentation`** (`schema.ts:166-170`) ↔ Zod `AnnouncementPresentation` (`announcement.ts:8-12`): `acknowledge` | `popup` | `feed`. The 3 delivery modes.
 - **`broadcast_kind`** (`schema.ts:128-134`): `announcement` | team_message | lead_directive | reminder | system — hard-coded `announcement`.
-- **`broadcast_scope`** (`schema.ts:136-142`): `everyone` | team | team_leads | drivers | individual — hard-coded `everyone`.
+- **`broadcast_scope`** (`schema.ts:136-142`): `everyone` | team | team_leads | drivers | individual — this surface writes `everyone` or `team`.
 - **`notification_channel`** (`schema.ts:144-148`): push | in_app | `both` — composer never sets; drafts inherit DEFAULT `both`; copied to deliveries on publish.
 - **`push_delivery_status`** (`schema.ts:150-155`): `queued` | sent | failed | skipped — delivery default `queued`; recipient/dispatch territory (unit 27).
 
@@ -163,9 +163,9 @@ The live code **hard-redirects** non-captains to `/` and the actions return "Cap
 ## Validation & edge cases
 
 - **Client submit guard** — Save/Update disabled unless both trimmed title and body are non-empty (Zod min(1) is the server backstop).
-- **Author-private drafts** — every draft mutation (update/delete/publish) is locked by `isOwnedAnnouncementDraft` = `id` + `senderId` + `kind='announcement'` + `scope='everyone'` + `publishedAt IS NULL`. A draft owned by another captain, of another kind, or already published is not mutable → returns `false`/error ("Draft not found or already published." / "Draft not found, already published, or not yours."). The list may show all announcements, but edit/delete/publish only succeed on rows the caller owns.
+- **Author-private drafts** — every draft mutation (update/delete/publish) is locked by `isOwnedAnnouncementDraft` = `id` + `senderId` + `kind='announcement'` + `publishedAt IS NULL`. A lead's publish also requires `scope='team'` and a team they lead now, in the same claim. A draft owned by another captain, of another kind, or already published is not mutable → returns `false`/error ("Draft not found or already published." / "Draft not found, already published, or not yours."). The list may show all announcements, but edit/delete/publish only succeed on rows the caller owns.
 - **Defence-in-depth gate** — `requireCaptain` re-checks auth/access/approval/rank on every action; the data layer trusts the `senderId` it is handed, so the action gate is the real authority.
-- **Publish transaction** (`broadcasts.ts:228-290`): (1) claim+stamp the owned unpublished draft (`publishedAt=now`, `dispatchedAt=now`) RETURNING title/body/channel/presentation — no row → `{ ok:false }`; (2) resolve audience (everyone, minus system/sanitised, minus sender); (3) zero recipients → `{ ok:true, recipientCount:0 }` (publish still succeeds, reaches nobody); (4) bulk insert one delivery per recipient `ON CONFLICT DO NOTHING`.
+- **Publish transaction** (`broadcasts.ts:228-290`): (1) claim+stamp the owned unpublished draft (`publishedAt=now`, `dispatchedAt=now`) RETURNING title/body/channel/presentation — no row → `{ ok:false }`; (2) resolve the draft's own audience (approved members of the camp or of the team this year, minus system/sanitised, minus sender); (3) zero recipients → `{ ok:true, recipientCount:0 }` (publish still succeeds, reaches nobody); (4) bulk insert one delivery per recipient `ON CONFLICT DO NOTHING`.
 - **Idempotent / double-submit safe** — the claim only flips an unpublished owned row; a second publish finds nothing to claim and is rejected; the `(broadcastId, userId)` unique index + `ON CONFLICT DO NOTHING` prevents double fan-out on retry.
 - **Sender excluded** — author never receives their own announcement (`id !== senderId`). UI copy: "Everyone but you receives it."
 - **Non-real recipients excluded** — system actors (`isSystem`) and sanitised accounts dropped from the audience.
@@ -173,7 +173,7 @@ The live code **hard-redirects** non-captains to `/` and the actions return "Cap
 - **Acknowledged roll-up** shown only for `presentation='acknowledge'`; popup/feed never stamp `acknowledgedAt`.
 - **No edit/recall after publish** — published rows have no controls; the owned-draft predicate's `publishedAt IS NULL` also blocks server-side mutation. No unpublish/republish exists.
 - **Deleted sender** — `senderId` is `set null` on user delete; `senderName` then null; "by you" check uses `senderId === currentUserId` so a null sender is never "by you".
-- **Long content** — body display wraps (`whitespace-pre-wrap`); title/body capped by maxLength.
+- **Long content** — body display wraps (`whitespace-pre-wrap`); title/body capped by maxLength. A draft or published card shows the first three lines of the body, with "Show all" when there is more (2026-09-16). The member's inbox row clips at three lines when the row opens the full announcement.
 - **Dictation edge cases** (per S21) — mic permission denied / unreachable → ERROR state with "Try again"; transcript is editable before "Use this text"; cancelling the recorder leaves the body unchanged.
 
 ## Flows

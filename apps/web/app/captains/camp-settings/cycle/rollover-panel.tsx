@@ -20,7 +20,11 @@ import { Label } from "@camp404/ui/components/label";
 import { SectionHeader } from "@camp404/ui/components/section-header";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
-import { advanceCycleAction, setFoundingYearAction } from "../actions";
+import {
+  advanceCycleAction,
+  setCycleNameAction,
+  setFoundingYearAction,
+} from "../actions";
 
 // The year surface: name the year → plan → confirm → receipt (spec §8.2/§8.4).
 // The server page hands in planRollover()'s output; this island owns the two
@@ -50,6 +54,8 @@ export type CycleView = {
   year: number;
   startedAt: string;
   endedAt: string | null;
+  /** The optional name beside the year. The number stays the key. */
+  name?: string;
 };
 
 export type RolloverEntryView = {
@@ -104,6 +110,8 @@ export type RolloverReportView = {
 // advanceCycleAction re-check every value against the same bounds.
 const MIN_YEAR = 2000;
 const MAX_YEAR = 2100;
+// Restated for the same reason: MAX_CYCLE_NAME_LENGTH in @camp404/db.
+const MAX_NAME_LENGTH = 60;
 
 /** Keep a year input to four digits, so it can only ever hold a year. */
 function digits(value: string): string {
@@ -284,6 +292,61 @@ function FoundingYearForm({
   );
 }
 
+/**
+ * The optional name beside the year the camp is in. A label only: saving it
+ * files nothing under a different year, so it saves straight away.
+ */
+function YearNameEditor({ year, name }: { year: number; name: string | null }) {
+  const router = useRouter();
+  const [value, setValue] = useState(name ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const trimmed = value.trim();
+  const changed = trimmed !== (name ?? "");
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await setCycleNameAction({ year, name: trimmed });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      toast.success(
+        result.name
+          ? `${year} is now called ${result.name}`
+          : `${year} has no name now`,
+      );
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-2 pt-3">
+      <InputField
+        label={`Name for ${year} (optional)`}
+        helper="For example the burn's theme. It shows beside the year. The year itself does not change."
+        value={value}
+        maxLength={MAX_NAME_LENGTH}
+        autoComplete="off"
+        error={error ?? undefined}
+        onChange={(event) => setValue(event.target.value)}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="self-start"
+        onClick={save}
+        disabled={pending || !changed}
+      >
+        {pending && <Loader2 aria-hidden className="size-4 animate-spin" />}
+        {trimmed === "" && name ? "Remove the name" : "Save the name"}
+      </Button>
+    </div>
+  );
+}
+
 /** The plan, the confirm form, and the receipt — for a camp that has a year. */
 function AdvanceYearPanel({
   plan,
@@ -322,6 +385,9 @@ function AdvanceYearPanel({
       const result = await advanceCycleAction({
         year: Number(year),
         confirm: Number(confirm),
+        // The year this plan was read in. If another captain moved the camp
+        // since, the server refuses rather than advancing a second time.
+        expectedFromYear: from.year,
         // The dues lever only exists when there is something to clear, so it
         // can never be sent as a stray true on a camp with no dues ledger.
         resetDues: plan.duesPaidCount > 0 ? resetDues : false,
@@ -442,13 +508,17 @@ function AdvanceYearPanel({
       <Card className="flex flex-col gap-1 p-4">
         <div className="flex items-center gap-2">
           <CalendarClock aria-hidden className="size-4 text-primary" />
-          <h2 className="text-lg font-semibold">You&apos;re in {from.year}</h2>
+          <h2 className="text-lg font-semibold">
+            You&apos;re in {from.year}
+            {from.name ? ` (${from.name})` : ""}
+          </h2>
         </div>
         <p className="text-sm text-muted-foreground">
           Everything sent and answered right now is filed under {from.year}.
           Starting a new year files it under the next one instead. Everything
           below is what would happen — nothing has changed yet.
         </p>
+        <YearNameEditor year={from.year} name={from.name ?? null} />
       </Card>
 
       <PlanSection

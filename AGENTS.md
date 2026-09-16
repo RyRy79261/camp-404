@@ -244,29 +244,35 @@ once there is a queue to drain (see the route's own comment).
 - Lint via `@camp404/eslint-config`; format via Prettier (`.prettierrc.json`).
 - Prefer editing existing files; do not add files or abstractions a task
   doesn't need.
-- Add or update tests with behavioural changes. Vitest covers units;
-  Playwright e2e exists in `apps/web/tests/e2e` but is disabled pending a
-  preview deployment.
-
-  > **[UNRESOLVED 2026-09-09]** This claim and the CI config disagree, and the
-  > owner has not ruled — do not act on either half without checking.
-  > **Doc:** the line above says the Playwright suite is disabled.
-  > **Code:** `.github/workflows/ci.yml` defines an `e2e` job that runs
-  > `pnpm --filter @camp404/web test:e2e` on every `src` PR (it self-hosts
-  > `next dev` with `E2E_TEST_MODE=1`, so it needs no preview deployment) and
-  > lists `e2e` in the `ci-pass` aggregate's `needs`, so a failure blocks
-  > merge. Tracked as decision **D-A** on issue #143; five harvest units
-  > down-weighted their e2e recommendations on this line. Leave both facts
-  > here until the owner decides which document is wrong.
+- Add or update tests with behavioural changes. Vitest covers units, and
+  PGlite (`packages/db/src/__tests__/_harness.ts`) covers real queries.
+  Playwright e2e in `apps/web/tests/e2e` is live: the `e2e` job in
+  `.github/workflows/ci.yml` runs it on every source PR against `next dev`
+  with `E2E_TEST_MODE=1`, and `ci-pass` needs it, so a failure blocks merge.
+  (Owner's call on decision D-A, 2026-09-16.)
+- A privileged write to another member's data, or to camp config, writes an
+  `audit_log` row through `writeAuditEvent` (`packages/db/src/audit.ts`) in the
+  SAME transaction as the change. An audit row that can commit without its
+  change, or miss it, is worse than none.
+- A decision write is a compare-and-set: its `WHERE` names the status it
+  expects to change (for example `approval_status = 'pending'`), and
+  `.returning()` tells the caller whether it won. A lost race returns a
+  sentence the user can act on, never a silent overwrite. See
+  `setUserApproval` and `decideCaptainPromotion`.
 
 ## Security / POPIA
 
 - Passport numbers, SA ID numbers, and bank/account details are
-  column-level encrypted with `pgcrypto`. Encrypt in route handlers —
-  never store these plaintext.
+  column-level encrypted with AES-256-GCM (`packages/db/src/crypto.ts`, keyed
+  by `PGCRYPTO_KEY`; the column comments still say pgcrypto, the original
+  plan). Encrypt at the write boundary — never store these plaintext.
 - Never store passport images, credit card numbers, or CVVs.
 - Account deletion sanitises to a `Lost Cat #N` stub to preserve
   relational integrity. See `docs/brief.md`.
+- No `PGCRYPTO_KEY` rotation is planned (owner's call, 2026-09-16). A stored
+  value has no key id, so after a key change the old ciphertext cannot be
+  read: the app shows it as unreadable and cannot recover it. Do not change
+  the key in any environment that holds real data.
 
 ## Git & pull requests
 

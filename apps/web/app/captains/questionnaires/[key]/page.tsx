@@ -83,6 +83,7 @@ export default async function BuilderCanvasPage({
       status={meta.status}
       publishedVersion={meta.version}
       openActivationId={openActivation?.id ?? null}
+      openActivationBlocking={openActivation?.blocking ?? null}
     />,
   );
 }

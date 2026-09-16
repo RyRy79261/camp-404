@@ -55,6 +55,8 @@ export type MemberDetailResult =
       /** Whether the open request was sent by THIS captain — only the requester
        * may cancel it, so this gates the dialog's cancel affordance. */
       promotionRequestIsMine: boolean;
+      /** Who sent the open request (null when none is open, or unnamed). */
+      promotionRequestedByName: string | null;
       /** This member's team memberships FOR THE CAMP'S CURRENT YEAR. */
       teams: TeamMembership[];
       /** The teams a captain may assign — active only, order-sorted. Archived
@@ -93,7 +95,15 @@ export type ApprovalDecisionResult =
 export type PromotionActionResult = { ok: true } | { ok: false; error: string };
 
 export type SendPromotionResult =
-  | { ok: true; requestId: string }
+  | {
+      ok: true;
+      requestId: string;
+      /** False when another captain's open request was already there: send is
+       * idempotent and hands back THAT request, which only they may cancel. */
+      requestIsMine: boolean;
+      /** Who sent the open request, for "Requested by …". */
+      requestedByName: string | null;
+    }
   | { ok: false; error: string };
 
 // Opaque-id boundary schema: a non-empty string. Deliberately NOT .uuid() — the
@@ -270,6 +280,9 @@ export async function getMemberDetailAction(
       promotionStep,
       promotionRequestId: openRequest?.id ?? null,
       promotionRequestIsMine: openRequest?.requestedByUserId === gate.captainId,
+      promotionRequestedByName: await requesterName(
+        openRequest?.requestedByUserId ?? null,
+      ),
       teams,
       assignableTeams: activeTeams(config).map((t) => ({
         key: t.key,
@@ -352,6 +365,15 @@ export async function decideApprovalAction(
   });
 }
 
+/** A promotion requester's display name, for the roster dialog. */
+async function requesterName(userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const requester = await getCampMemberDetail(userId, {
+    includeIdDocuments: false,
+  });
+  return requester?.displayName ?? null;
+}
+
 /**
  * Send a "make captain" request to a roster member (captain → target side of
  * the double-opt-in). Captain-gated; the pure `canSendPromotion` guard rejects
@@ -394,12 +416,17 @@ export async function sendCaptainPromotionAction(
       };
     }
 
-    const created = await sendCaptainPromotion({
+    const request = await sendCaptainPromotion({
       targetUserId,
       requestedByUserId: gate.captainId,
     });
     revalidatePath("/captains/camp-management");
-    return { ok: true, requestId: created.id };
+    return {
+      ok: true,
+      requestId: request.id,
+      requestIsMine: request.requestedByUserId === gate.captainId,
+      requestedByName: await requesterName(request.requestedByUserId),
+    };
   });
 }
 

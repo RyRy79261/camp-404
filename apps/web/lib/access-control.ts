@@ -4,6 +4,7 @@ import {
   consumeInviteCode as dbConsumeInviteCode,
   type AssignedRank,
 } from "@camp404/db/invite-codes";
+import { normalizeInviteCode } from "@camp404/core";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -43,21 +44,21 @@ export function isGodEmail(email: string | null | undefined): boolean {
 export async function claimInviteCode(
   code: string,
 ): Promise<ClaimedInvite | null> {
-  const trimmed = code.trim();
-  if (!trimmed) return null;
-  if (isEnvCode(trimmed))
-    return { code: trimmed, assignedRank: null, requiresApproval: false };
-  const consumed = await consumeDbCode(trimmed);
+  const normalized = normalizeInviteCode(code);
+  if (!normalized) return null;
+  if (isEnvCode(normalized))
+    return { code: normalized, assignedRank: null, requiresApproval: false };
+  const consumed = await consumeDbCode(normalized);
   if (!consumed) return null;
   return {
-    code: trimmed,
+    code: normalized,
     assignedRank: consumed.assignedRank,
     requiresApproval: consumed.requiresApproval,
   };
 }
 
 function isEnvCode(code: string): boolean {
-  return csv(process.env.INVITE_CODES).includes(code);
+  return csv(process.env.INVITE_CODES).map(normalizeInviteCode).includes(code);
 }
 
 async function consumeDbCode(code: string) {

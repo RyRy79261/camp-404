@@ -11,7 +11,7 @@ describe("parseMintArgs", () => {
 
   it("parses the bare minimum (code only) with null defaults for optionals", () => {
     expect(parseMintArgs(["--code", "BERLIN24"])).toEqual({
-      code: "BERLIN24",
+      code: "berlin24",
       createdByUserId: null,
       note: null,
       maxUses: null,
@@ -19,6 +19,12 @@ describe("parseMintArgs", () => {
       assignedRank: null,
       requiresApproval: false,
     });
+  });
+
+  it("stores the code in lowercase, the only spelling redeem matches", () => {
+    // A code minted as BERLIN24 used to be unredeemable: redemption lowercases
+    // what the member types, and the lookup is exact.
+    expect(parseMintArgs(["--code", " Berlin24 "]).code).toBe("berlin24");
   });
 
   it("treats --requires-approval as a value-less boolean flag", () => {
@@ -63,7 +69,7 @@ describe("parseMintArgs", () => {
       "--expires-at",
       "2026-06-01",
     ]);
-    expect(parsed.code).toBe("BERLIN24");
+    expect(parsed.code).toBe("berlin24");
     expect(parsed.createdByUserId).toBe("00000000-0000-0000-0000-000000000001");
     expect(parsed.note).toBe("Berlin crew");
     expect(parsed.maxUses).toBe(5);

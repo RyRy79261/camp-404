@@ -20,6 +20,7 @@ import { Textarea } from "@camp404/ui/components/textarea";
 import { CircleAlert } from "lucide-react";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { RecorderPanel } from "../voice/recorder-panel";
+import { useVoiceSupported } from "../voice/use-voice-recorder";
 import { AvatarUpload } from "@camp404/ui/components/avatar-upload";
 import { cropResizeToSquare } from "@/lib/image";
 
@@ -434,6 +435,7 @@ function LongTextField({
   fullScreen?: boolean;
 }) {
   const [dictating, setDictating] = React.useState(false);
+  const voiceSupported = useVoiceSupported();
 
   function appendTranscript(text: string) {
     const cleaned = text.trim();
@@ -454,6 +456,7 @@ function LongTextField({
         className={fullScreen ? "min-h-[40dvh] flex-1 resize-none" : undefined}
       />
       {question.enableDictation &&
+        voiceSupported &&
         (dictating ? (
           <RecorderPanel
             onTranscript={appendTranscript}

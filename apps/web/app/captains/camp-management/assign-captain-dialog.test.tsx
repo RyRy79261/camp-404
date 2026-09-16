@@ -25,6 +25,7 @@ function renderDialog(props: Record<string, unknown> = {}) {
       step={{ sent: false, accepted: false }}
       requestId={null}
       requestIsMine={false}
+      requestedByName={null}
       onSent={onSent}
       onCancelled={onCancelled}
       {...props}
@@ -38,10 +39,37 @@ describe("AssignCaptainDialog", () => {
     vi.mocked(sendCaptainPromotionAction).mockResolvedValue({
       ok: true,
       requestId: "req-1",
+      requestIsMine: true,
+      requestedByName: "Captain Jo",
     });
     const { onSent } = renderDialog();
     fireEvent.click(screen.getByRole("button", { name: "Send request" }));
-    await waitFor(() => expect(onSent).toHaveBeenCalledWith("req-1"));
+    await waitFor(() =>
+      expect(onSent).toHaveBeenCalledWith({
+        requestId: "req-1",
+        requestIsMine: true,
+        requestedByName: "Captain Jo",
+      }),
+    );
+  });
+
+  it("passes on that the open request was another captain's", async () => {
+    // Send is idempotent: a second captain gets the first captain's request.
+    vi.mocked(sendCaptainPromotionAction).mockResolvedValue({
+      ok: true,
+      requestId: "req-1",
+      requestIsMine: false,
+      requestedByName: "Captain Ada",
+    });
+    const { onSent } = renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Send request" }));
+    await waitFor(() =>
+      expect(onSent).toHaveBeenCalledWith({
+        requestId: "req-1",
+        requestIsMine: false,
+        requestedByName: "Captain Ada",
+      }),
+    );
   });
 
   it("surfaces a send error inline", async () => {
@@ -72,14 +100,18 @@ describe("AssignCaptainDialog", () => {
     expect(cancelCaptainPromotionAction).toHaveBeenCalledWith("req-1");
   });
 
-  it("hides Cancel request when the request belongs to another captain", () => {
+  it("names the captain who sent it, and hides Cancel request, when it is not yours", () => {
     renderDialog({
       step: { sent: true, accepted: false },
       requestId: "req-1",
       requestIsMine: false,
+      requestedByName: "Captain Ada",
     });
     expect(screen.queryByRole("button", { name: "Cancel request" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Send request" })).toBeNull();
+    expect(
+      screen.getByText(/Requested by Captain Ada\. Only they can cancel it\./),
+    ).toBeDefined();
   });
 
   it("hides Cancel request once the request has been accepted", () => {

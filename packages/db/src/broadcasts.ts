@@ -9,6 +9,14 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { DbOrTx } from "./audit";
+import {
+  announcementNotification,
+  notificationLink,
+  scheduledBroadcastNotification,
+  type NotificationKind,
+} from "@camp404/core";
+import { deliveryValues } from "./deliveries";
 import { createHttpDb, createPooledDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
@@ -39,9 +47,99 @@ function isOwnedAnnouncementDraft(id: string, senderId: string) {
     eq(schema.broadcasts.id, id),
     eq(schema.broadcasts.senderId, senderId),
     eq(schema.broadcasts.kind, "announcement"),
-    eq(schema.broadcasts.scope, "everyone"),
     isNull(schema.broadcasts.publishedAt),
   );
+}
+
+type Team = (typeof schema.teamEnum.enumValues)[number];
+
+/** Who an announcement goes to. Mirrors AnnouncementAudience in @camp404/types. */
+export type Audience = { scope: "everyone" } | { scope: "team"; team: Team };
+
+function audienceColumns(audience: Audience) {
+  return audience.scope === "team"
+    ? { scope: "team" as const, team: audience.team }
+    : { scope: "everyone" as const, team: null };
+}
+
+/** Read an announcement row's audience back. Anything else reads as everyone. */
+function audienceOf(row: { scope: string; team: Team | null }): Audience {
+  return row.scope === "team" && row.team
+    ? { scope: "team", team: row.team }
+    : { scope: "everyone" };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const DRAFT_MISSING = "This draft no longer exists. Reload the page.";
+export const DRAFT_NOT_YOURS =
+  "Only the captain who wrote this draft can change or publish it.";
+export const DRAFT_PUBLISHED =
+  "This announcement is already published, so it can't be changed. Publish a correction instead.";
+export const DRAFT_TEAM_NOT_LED =
+  "You can only send to a team you lead. Pick one of your teams, or ask a captain to send it.";
+
+/**
+ * Why an edit, delete or publish of a draft wrote nothing, as the sentence the
+ * captain reads. The writes claim a row with one predicate (owned, still a
+ * draft), so a refusal alone cannot say which part failed. This reads the row
+ * once to tell the three real causes apart, instead of one message that
+ * blames all three.
+ */
+export async function explainDraftRefusal(
+  id: string,
+  senderId: string,
+  allowedTeams?: readonly string[],
+): Promise<string> {
+  if (!UUID.test(id)) return DRAFT_MISSING;
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      senderId: schema.broadcasts.senderId,
+      kind: schema.broadcasts.kind,
+      publishedAt: schema.broadcasts.publishedAt,
+      scope: schema.broadcasts.scope,
+      team: schema.broadcasts.team,
+    })
+    .from(schema.broadcasts)
+    .where(eq(schema.broadcasts.id, id))
+    .limit(1);
+  if (!row || row.kind !== "announcement") return DRAFT_MISSING;
+  if (row.senderId !== senderId) return DRAFT_NOT_YOURS;
+  if (row.publishedAt) return DRAFT_PUBLISHED;
+  if (allowedTeams && !isAllowedAudience(audienceOf(row), allowedTeams)) {
+    return DRAFT_TEAM_NOT_LED;
+  }
+  return DRAFT_MISSING;
+}
+
+/**
+ * Whether a sender limited to `allowedTeams` (a team lead) may send to an
+ * audience: only a team on their list, never the whole camp. A captain passes
+ * no list and may send to anyone.
+ */
+export function isAllowedAudience(
+  audience: Audience,
+  allowedTeams?: readonly string[],
+): boolean {
+  if (!allowedTeams) return true;
+  return audience.scope === "team" && allowedTeams.includes(audience.team);
+}
+
+/**
+ * How many members a camp-wide announcement from this captain would reach
+ * right now: the same audience publishAnnouncement fans out to. The publish
+ * confirmation names it.
+ */
+export async function countAnnouncementAudience(
+  senderId: string,
+  audience: Audience = { scope: "everyone" },
+): Promise<number> {
+  const ids = await resolveAudience(
+    { id: "", ...audienceColumns(audience) },
+    senderId,
+  );
+  return ids.length;
 }
 
 /**
@@ -58,15 +156,16 @@ function isOwnedAnnouncementDraft(id: string, senderId: string) {
 export async function resolveAudience(
   broadcast: { id: string; scope: BroadcastScope; team: string | null },
   senderId: string | null,
+  db: DbOrTx = createHttpDb(),
 ): Promise<string[]> {
-  const db = createHttpDb();
-  const cycle = await currentCycleNumber();
+  const cycle = await currentCycleNumber(db);
   const [members, memberships, drivers, targets] = await Promise.all([
     db
       .select({
         id: schema.users.id,
         isSystem: schema.users.isSystem,
         sanitised: schema.users.sanitised,
+        approvalStatus: schema.users.approvalStatus,
       })
       .from(schema.users),
     db
@@ -111,6 +210,7 @@ export interface AnnouncementSummary {
   title: string;
   body: string;
   presentation: AnnouncementPresentation;
+  audience: Audience;
   senderId: string | null;
   senderName: string | null;
   /** NULL while a draft; the publish timestamp once sent. */
@@ -127,7 +227,9 @@ export interface AnnouncementSummary {
  * and delivery roll-ups for the captain's management view. Captain-only data
  * — gate the caller.
  */
-export async function listAnnouncements(): Promise<AnnouncementSummary[]> {
+export async function listAnnouncements(
+  options: { senderId?: string } = {},
+): Promise<AnnouncementSummary[]> {
   const db = createHttpDb();
   const rows = await db
     .select({
@@ -135,6 +237,8 @@ export async function listAnnouncements(): Promise<AnnouncementSummary[]> {
       title: schema.broadcasts.title,
       body: schema.broadcasts.body,
       presentation: schema.broadcasts.presentation,
+      scope: schema.broadcasts.scope,
+      team: schema.broadcasts.team,
       senderId: schema.broadcasts.senderId,
       senderName: schema.users.displayName,
       publishedAt: schema.broadcasts.publishedAt,
@@ -151,11 +255,19 @@ export async function listAnnouncements(): Promise<AnnouncementSummary[]> {
     })
     .from(schema.broadcasts)
     .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
-    .where(eq(schema.broadcasts.kind, "announcement"))
+    .where(
+      and(
+        eq(schema.broadcasts.kind, "announcement"),
+        options.senderId
+          ? eq(schema.broadcasts.senderId, options.senderId)
+          : undefined,
+      ),
+    )
     .orderBy(desc(schema.broadcasts.createdAt));
 
-  return rows.map((r) => ({
+  return rows.map(({ scope, team, ...r }) => ({
     ...r,
+    audience: audienceOf({ scope, team }),
     recipientCount: r.recipientCount ?? 0,
     acknowledgedCount: r.acknowledgedCount ?? 0,
   }));
@@ -166,6 +278,7 @@ export interface DraftInput {
   title: string;
   body: string;
   presentation: AnnouncementPresentation;
+  audience?: Audience;
 }
 
 /** Create a new announcement draft (unpublished). Returns its id. */
@@ -178,7 +291,7 @@ export async function createAnnouncementDraft(
     .values({
       senderId: input.senderId,
       kind: "announcement",
-      scope: "everyone",
+      ...audienceColumns(input.audience ?? { scope: "everyone" }),
       title: input.title,
       body: input.body,
       presentation: input.presentation,
@@ -197,6 +310,7 @@ export async function updateAnnouncementDraft(input: {
   title: string;
   body: string;
   presentation: AnnouncementPresentation;
+  audience?: Audience;
 }): Promise<boolean> {
   const db = createHttpDb();
   const rows = await db
@@ -205,6 +319,7 @@ export async function updateAnnouncementDraft(input: {
       title: input.title,
       body: input.body,
       presentation: input.presentation,
+      ...audienceColumns(input.audience ?? { scope: "everyone" }),
     })
     .where(isOwnedAnnouncementDraft(input.id, input.senderId))
     .returning({ id: schema.broadcasts.id });
@@ -241,60 +356,93 @@ export type PublishResult =
 export async function publishAnnouncement(input: {
   id: string;
   senderId: string;
+  /**
+   * A team lead's teams, read at publish time. When given, only a draft
+   * addressed to one of these teams can be claimed, so a lead who has since
+   * lost a team cannot send to it from an old draft. A captain passes none.
+   */
+  allowedTeams?: readonly Team[];
 }): Promise<PublishResult> {
-  return await withTransaction(async (tx) => {
-    // Claim the draft: only an unpublished row owned by this sender flips.
+  const published = await withTransaction(async (tx) => {
+    // Claim the draft: only an unpublished row owned by this sender flips,
+    // and for a lead only one addressed to a team they lead.
     const claimed = await tx
       .update(schema.broadcasts)
       .set({ publishedAt: new Date(), dispatchedAt: new Date() })
-      .where(isOwnedAnnouncementDraft(input.id, input.senderId))
+      .where(
+        and(
+          isOwnedAnnouncementDraft(input.id, input.senderId),
+          input.allowedTeams
+            ? and(
+                eq(schema.broadcasts.scope, "team"),
+                input.allowedTeams.length > 0
+                  ? inArray(schema.broadcasts.team, [...input.allowedTeams])
+                  : sql`false`,
+              )
+            : undefined,
+        ),
+      )
       .returning({
         id: schema.broadcasts.id,
         title: schema.broadcasts.title,
         body: schema.broadcasts.body,
         channel: schema.broadcasts.channel,
         presentation: schema.broadcasts.presentation,
+        scope: schema.broadcasts.scope,
+        team: schema.broadcasts.team,
       });
 
     const broadcast = claimed[0];
-    if (!broadcast) {
-      return {
-        ok: false as const,
-        error: "Draft not found, already published, or not yours.",
-      };
-    }
+    if (!broadcast) return null;
 
-    // Resolve the audience via the shared resolver (scope = 'everyone' for a
-    // camp-wide announcement — same recipient set as before). ON CONFLICT DO
-    // NOTHING pairs with the new (broadcast_id, user_id) dedupe index so a
-    // retry can never double-deliver.
+    // Resolve the draft's own audience via the shared resolver. ON CONFLICT DO
+    // NOTHING pairs with the (broadcast_id, user_id) dedupe index so a retry
+    // can never double-deliver. Read inside the transaction: the audience is
+    // the camp as it stands when the claim commits, on the same connection
+    // that holds the claim.
     const recipientIds = await resolveAudience(
-      { id: broadcast.id, scope: "everyone", team: null },
+      { id: broadcast.id, scope: broadcast.scope, team: broadcast.team },
       input.senderId,
+      tx,
     );
 
     if (recipientIds.length === 0) {
       return { ok: true as const, recipientCount: 0 };
     }
 
+    const payload = announcementNotification({
+      broadcastId: broadcast.id,
+      title: broadcast.title,
+      body: broadcast.body,
+    });
     await tx
       .insert(schema.notificationDeliveries)
       .values(
-        recipientIds.map((userId) => ({
-          broadcastId: broadcast.id,
-          userId,
-          title: broadcast.title,
-          body: broadcast.body,
-          channel: broadcast.channel,
-          presentation: broadcast.presentation,
-          refType: "announcement",
-          refId: broadcast.id,
-        })),
+        recipientIds.map((userId) =>
+          deliveryValues(payload, {
+            userId,
+            broadcastId: broadcast.id,
+            channel: broadcast.channel,
+            presentation: broadcast.presentation,
+          }),
+        ),
       )
       .onConflictDoNothing();
 
     return { ok: true as const, recipientCount: recipientIds.length };
   });
+  // Explained after the transaction ends: the claim wrote nothing, and the
+  // explanation is a separate read.
+  return (
+    published ?? {
+      ok: false,
+      error: await explainDraftRefusal(
+        input.id,
+        input.senderId,
+        input.allowedTeams,
+      ),
+    }
+  );
 }
 
 export interface DispatchResult {
@@ -318,6 +466,7 @@ export async function dispatchDueBroadcasts(
   const due = await httpDb
     .select({
       id: schema.broadcasts.id,
+      kind: schema.broadcasts.kind,
       senderId: schema.broadcasts.senderId,
       scope: schema.broadcasts.scope,
       team: schema.broadcasts.team,
@@ -364,19 +513,18 @@ export async function dispatchDueBroadcasts(
           .returning({ id: schema.broadcasts.id });
         if (!claimed[0]) return false; // another run already dispatched it
         if (recipientIds.length > 0) {
+          const payload = scheduledBroadcastNotification(b);
           await tx
             .insert(schema.notificationDeliveries)
             .values(
-              recipientIds.map((userId) => ({
-                broadcastId: b.id,
-                userId,
-                title: b.title,
-                body: b.body,
-                channel: b.channel,
-                presentation: b.presentation,
-                refType: b.refType ?? null,
-                refId: b.refId ?? b.id,
-              })),
+              recipientIds.map((userId) =>
+                deliveryValues(payload, {
+                  userId,
+                  broadcastId: b.id,
+                  channel: b.channel,
+                  presentation: b.presentation,
+                }),
+              ),
             )
             .onConflictDoNothing();
         }
@@ -437,6 +585,79 @@ export async function getPendingAcknowledgements(
   return rows;
 }
 
+/** The most pop-ups one claim shows, so a backlog cannot bury the screen. */
+export const POPUP_CLAIM_LIMIT = 3;
+
+/** A pop-up delivery, claimed for showing as a toast. */
+export interface ClaimedPopup {
+  deliveryId: string;
+  title: string;
+  body: string;
+  refType: string | null;
+  refId: string | null;
+  createdAt: Date;
+}
+
+/** Unread pop-up deliveries. The gate's poll reads it to know whether to claim. */
+export async function countUnseenPopups(userId: string): Promise<number> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.notificationDeliveries)
+    .where(
+      and(
+        eq(schema.notificationDeliveries.userId, userId),
+        eq(schema.notificationDeliveries.presentation, "popup"),
+        isNull(schema.notificationDeliveries.readAt),
+      ),
+    );
+  return row?.count ?? 0;
+}
+
+/**
+ * Claim a member's unread pop-up deliveries for showing, oldest first, and
+ * mark them read in the same statement.
+ *
+ * A pop-up shows once (owner's call, 2026-09-16), so the claim IS the showing:
+ * read_at is the "shown" mark. Two open tabs cannot both show one pop-up,
+ * because the second UPDATE re-checks read_at IS NULL on a row the first has
+ * already stamped. The message stays in the inbox, read.
+ */
+export async function claimPopups(userId: string): Promise<ClaimedPopup[]> {
+  const db = createHttpDb();
+  const oldest = db
+    .select({ id: schema.notificationDeliveries.id })
+    .from(schema.notificationDeliveries)
+    .where(
+      and(
+        eq(schema.notificationDeliveries.userId, userId),
+        eq(schema.notificationDeliveries.presentation, "popup"),
+        isNull(schema.notificationDeliveries.readAt),
+      ),
+    )
+    .orderBy(schema.notificationDeliveries.createdAt)
+    .limit(POPUP_CLAIM_LIMIT);
+  const rows = await db
+    .update(schema.notificationDeliveries)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        inArray(schema.notificationDeliveries.id, oldest),
+        eq(schema.notificationDeliveries.userId, userId),
+        isNull(schema.notificationDeliveries.readAt),
+      ),
+    )
+    .returning({
+      deliveryId: schema.notificationDeliveries.id,
+      title: schema.notificationDeliveries.title,
+      body: schema.notificationDeliveries.body,
+      refType: schema.notificationDeliveries.refType,
+      refId: schema.notificationDeliveries.refId,
+      createdAt: schema.notificationDeliveries.createdAt,
+    });
+  return rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
 /**
  * Acknowledge (and implicitly read) one delivery on the user's behalf.
  * Scoped to the owner so a user can only dismiss their own. Returns whether a
@@ -474,12 +695,51 @@ export interface InboxItem {
   readAt: Date | null;
   acknowledgedAt: Date | null;
   createdAt: Date;
+  /** What the notification is about. */
+  kind: NotificationKind;
+  /** Where tapping it goes (notificationLink; the inbox when it points nowhere). */
+  link: string;
 }
 
-/** A user's notification inbox (everything delivered to them), newest first. */
-export async function listInbox(userId: string): Promise<InboxItem[]> {
+/** How many notifications the inbox shows at a time. */
+export const INBOX_PAGE_SIZE = 30;
+
+export interface InboxPage {
+  items: InboxItem[];
+  /** Pass back as `before` for the next (older) page; null on the last page. */
+  nextCursor: string | null;
+}
+
+// A cursor is the last row's created_at, to the microsecond, and its id. The
+// microseconds matter: a JavaScript Date keeps only milliseconds, and rows
+// written in the same millisecond would otherwise be skipped between pages.
+const INBOX_CURSOR =
+  /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6})~([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+/** True when a string from a client is a cursor listInbox made. */
+export function isInboxCursor(value: string): boolean {
+  return INBOX_CURSOR.test(value);
+}
+
+/**
+ * One page of a member's inbox, newest first. Pass the previous page's
+ * `nextCursor` as `before` to read further back. An unrecognised cursor reads
+ * nothing, rather than restarting from the top.
+ */
+export async function listInbox(
+  userId: string,
+  options: { before?: string | null; limit?: number } = {},
+): Promise<InboxPage> {
+  const limit = options.limit ?? INBOX_PAGE_SIZE;
+  let olderThan = undefined as ReturnType<typeof sql> | undefined;
+  if (options.before != null) {
+    const match = INBOX_CURSOR.exec(options.before);
+    if (!match) return { items: [], nextCursor: null };
+    olderThan = sql`(${schema.notificationDeliveries.createdAt}, ${schema.notificationDeliveries.id}) < (${match[1]}::timestamp, ${match[2]}::uuid)`;
+  }
+
   const db = createHttpDb();
-  return db
+  const rows = await db
     .select({
       id: schema.notificationDeliveries.id,
       title: schema.notificationDeliveries.title,
@@ -489,6 +749,10 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       readAt: schema.notificationDeliveries.readAt,
       acknowledgedAt: schema.notificationDeliveries.acknowledgedAt,
       createdAt: schema.notificationDeliveries.createdAt,
+      kind: schema.notificationDeliveries.kind,
+      refType: schema.notificationDeliveries.refType,
+      refId: schema.notificationDeliveries.refId,
+      cursorAt: sql<string>`to_char(${schema.notificationDeliveries.createdAt}, 'YYYY-MM-DD"T"HH24:MI:SS.US')`,
     })
     .from(schema.notificationDeliveries)
     .leftJoin(
@@ -496,8 +760,95 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       eq(schema.broadcasts.id, schema.notificationDeliveries.broadcastId),
     )
     .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
-    .where(eq(schema.notificationDeliveries.userId, userId))
-    .orderBy(desc(schema.notificationDeliveries.createdAt));
+    .where(and(eq(schema.notificationDeliveries.userId, userId), olderThan))
+    .orderBy(
+      desc(schema.notificationDeliveries.createdAt),
+      desc(schema.notificationDeliveries.id),
+    )
+    // One extra row says whether there is another page.
+    .limit(limit + 1);
+
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
+  return {
+    items: page.map(({ refType, refId, cursorAt: _cursorAt, ...row }) => ({
+      ...row,
+      link: notificationLink(refType, refId),
+    })),
+    nextCursor:
+      rows.length > limit && last ? `${last.cursorAt}~${last.id}` : null,
+  };
+}
+
+export interface AnnouncementReading {
+  deliveryId: string;
+  title: string;
+  body: string;
+  presentation: AnnouncementPresentation;
+  senderName: string | null;
+  publishedAt: Date;
+  acknowledgedAt: Date | null;
+}
+
+/**
+ * One announcement, as the member it was delivered to reads it.
+ *
+ * The delivery row is the permission. Publishing wrote a delivery for exactly
+ * the members the announcement was for, so a member with no delivery gets
+ * null, and the broadcast row is not read at all: the answer for "not for you"
+ * and "does not exist" is the same. There is no second audience rule here to
+ * drift from resolveAudience.
+ *
+ * The member reads the copy delivered to them, not the broadcast's current
+ * text. A draft has no deliveries, so it can never be read here.
+ */
+export async function getAnnouncementForMember(
+  userId: string,
+  broadcastId: string,
+): Promise<AnnouncementReading | null> {
+  if (!UUID.test(broadcastId)) return null;
+  const db = createHttpDb();
+  const [delivery] = await db
+    .select({
+      id: schema.notificationDeliveries.id,
+      title: schema.notificationDeliveries.title,
+      body: schema.notificationDeliveries.body,
+      presentation: schema.notificationDeliveries.presentation,
+      acknowledgedAt: schema.notificationDeliveries.acknowledgedAt,
+    })
+    .from(schema.notificationDeliveries)
+    .where(
+      and(
+        eq(schema.notificationDeliveries.userId, userId),
+        eq(schema.notificationDeliveries.broadcastId, broadcastId),
+      ),
+    )
+    .limit(1);
+  if (!delivery) return null;
+
+  const [broadcast] = await db
+    .select({
+      kind: schema.broadcasts.kind,
+      publishedAt: schema.broadcasts.publishedAt,
+      senderName: schema.users.displayName,
+    })
+    .from(schema.broadcasts)
+    .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
+    .where(eq(schema.broadcasts.id, broadcastId))
+    .limit(1);
+  if (!broadcast?.publishedAt || broadcast.kind !== "announcement") {
+    return null;
+  }
+
+  return {
+    deliveryId: delivery.id,
+    title: delivery.title,
+    body: delivery.body,
+    presentation: delivery.presentation,
+    senderName: broadcast.senderName ?? null,
+    publishedAt: broadcast.publishedAt,
+    acknowledgedAt: delivery.acknowledgedAt,
+  };
 }
 
 /** Count of a user's unread deliveries — drives the header bell badge. */

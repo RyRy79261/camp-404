@@ -1,8 +1,9 @@
-import { Lock, TriangleAlert } from "lucide-react";
+import { Circle, Lock, TriangleAlert } from "lucide-react";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { ProgressBar } from "@camp404/ui/components/progress-bar";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 
 // Chrome for the blocking-questionnaire RUNNER (surface 24): the sticky top bar,
 // the "Required" chip, and the persistent notice. Presentational; rendered by the
@@ -10,19 +11,35 @@ import { ProgressBar } from "@camp404/ui/components/progress-bar";
 // action, so — unlike the welcoming onboarding chrome — it reads as a hold: a
 // Required chip, a question-paced progress bar, and a banner that doesn't dismiss.
 
-/** A small "Required" pill with a lock — marks a blocking required action. */
-export function RequiredChip() {
-  return (
+/**
+ * Whether a questionnaire holds the app ("Required", with a lock) or only waits
+ * in the inbox ("Optional"). One badge for both, so a member, and the captain
+ * sending it, can always tell which kind a questionnaire is.
+ */
+export function BlockingBadge({ blocking }: { blocking: boolean }) {
+  return blocking ? (
     <Badge variant="destructive">
       <Lock aria-hidden className="size-3" />
       Required
     </Badge>
+  ) : (
+    <Badge variant="outline">
+      <Circle aria-hidden className="size-3" />
+      Optional
+    </Badge>
   );
 }
 
+/** A small "Required" pill with a lock — marks a blocking required action. */
+export function RequiredChip() {
+  return <BlockingBadge blocking />;
+}
+
 /**
- * The sticky runner header: title + Required chip, a Sign-out escape (the runner
- * has no first-page "Back"), and a progress bar over the scrolling wizard body.
+ * The sticky runner header: title + Required/Optional badge, an escape, and a
+ * progress bar over the scrolling wizard body. A blocking questionnaire holds
+ * the whole app, so its only escape is Sign out. An optional one can wait, so
+ * its escape is "Later", back to the inbox where it stays listed.
  */
 export function BlockingTopBar({
   title,
@@ -30,12 +47,14 @@ export function BlockingTopBar({
   total,
   signOutHref = "/auth/sign-out",
   showProgress = true,
+  blocking = true,
 }: {
   title: string;
   current: number;
   total: number;
   signOutHref?: string;
   showProgress?: boolean;
+  blocking?: boolean;
 }) {
   return (
     <div className="sticky top-0 z-20 -mx-4 flex flex-col gap-2 border-b bg-card px-4 py-3">
@@ -44,9 +63,13 @@ export function BlockingTopBar({
         <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">
           {title}
         </h1>
-        <RequiredChip />
+        <BlockingBadge blocking={blocking} />
         <Button type="button" variant="ghost" size="sm" asChild>
-          <a href={signOutHref}>Sign out</a>
+          {blocking ? (
+            <SignOutLink href={signOutHref} />
+          ) : (
+            <a href="/notifications">Later</a>
+          )}
         </Button>
       </div>
       {showProgress && (

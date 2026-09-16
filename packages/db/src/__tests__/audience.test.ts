@@ -15,9 +15,9 @@ import { broadcastScopeEnum } from "../schema";
 
 const data: AudienceData = {
   members: [
-    { id: "u1", isSystem: false, sanitised: false },
-    { id: "u2", isSystem: false, sanitised: false },
-    { id: "u3", isSystem: false, sanitised: false },
+    { id: "u1", isSystem: false, sanitised: false, approvalStatus: "approved" },
+    { id: "u2", isSystem: false, sanitised: false, approvalStatus: "approved" },
+    { id: "u3", isSystem: false, sanitised: false, approvalStatus: "approved" },
   ],
   memberships: [
     { userId: "u1", team: "kitchen", isLead: true },
@@ -50,5 +50,58 @@ describe("computeAudience — scope exhaustiveness", () => {
         null,
       ),
     ).toThrow(/Unhandled broadcast scope: captains_only/);
+  });
+});
+
+describe("computeAudience — applicants are not members yet", () => {
+  // Owner's call (2026-09-16): group audiences are approved members only. A
+  // pending or rejected applicant must not get the full-screen announcement
+  // takeover or a camp-wide questionnaire gate.
+  const camp: AudienceData = {
+    members: [
+      {
+        id: "member",
+        isSystem: false,
+        sanitised: false,
+        approvalStatus: "approved",
+      },
+      {
+        id: "pending",
+        isSystem: false,
+        sanitised: false,
+        approvalStatus: "pending",
+      },
+      {
+        id: "rejected",
+        isSystem: false,
+        sanitised: false,
+        approvalStatus: "rejected",
+      },
+    ],
+    memberships: [
+      { userId: "member", team: "kitchen", isLead: true },
+      { userId: "pending", team: "kitchen", isLead: true },
+    ],
+    driverUserIds: ["member", "rejected"],
+    targetUserIds: ["pending"],
+  };
+
+  it("leaves pending and rejected applicants out of every group audience", () => {
+    for (const scope of [
+      "everyone",
+      "team",
+      "team_leads",
+      "drivers",
+    ] as const) {
+      expect(computeAudience({ scope, team: "kitchen" }, camp, null)).toEqual([
+        "member",
+      ]);
+    }
+  });
+
+  it("still reaches a person a captain picked by name", () => {
+    expect(
+      computeAudience({ scope: "individual", team: null }, camp, null),
+    ).toEqual(["pending"]);
   });
 });

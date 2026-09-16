@@ -2,7 +2,12 @@
 
 import { useEffect, useId, useState } from "react";
 import { Trash2 } from "lucide-react";
-import type { Block, ContentBlock, Question } from "@camp404/types";
+import {
+  isAllowedBuilderImageUrl,
+  type Block,
+  type ContentBlock,
+  type Question,
+} from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
   Dialog,
@@ -37,7 +42,11 @@ function blockValid(block: Block): boolean {
     return true;
   }
   if (block.kind === "image_block") {
-    return block.altText.trim().length > 0 && block.imageUrl.trim().length > 0;
+    return (
+      block.altText.trim().length > 0 &&
+      block.imageUrl.trim().length > 0 &&
+      isAllowedBuilderImageUrl(block.imageUrl)
+    );
   }
   if (block.kind === "header_break") return block.headingText.trim().length > 0;
   if (block.kind === "explainer") return block.bodyText.trim().length > 0;
@@ -377,7 +386,13 @@ function ContentEditor({
             label="Image URL"
             value={block.imageUrl}
             onChange={(e) => patch({ imageUrl: e.currentTarget.value })}
-            placeholder="https://…"
+            placeholder="https://….public.blob.vercel-storage.com/…"
+            helper="Only images stored by Camp 404 can be shown. Links to other websites are refused."
+            error={
+              block.imageUrl.trim() && !isAllowedBuilderImageUrl(block.imageUrl)
+                ? "This links to another website."
+                : undefined
+            }
           />
           <InputField
             label="Caption (optional)"

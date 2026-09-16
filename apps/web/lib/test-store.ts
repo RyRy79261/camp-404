@@ -1,5 +1,22 @@
 import "server-only";
 
+import {
+  announcementNotification,
+  approvalNotification,
+  captainPromotionNotification,
+  normalizeInviteCode,
+  notificationLink,
+  type NotificationKind,
+  type NotificationPayload,
+} from "@camp404/core";
+import {
+  DRAFT_MISSING,
+  DRAFT_NOT_YOURS,
+  DRAFT_PUBLISHED,
+  DRAFT_TEAM_NOT_LED,
+  isAllowedAudience,
+  type Audience,
+} from "@camp404/db/broadcasts";
 import type { CampManagementMember } from "@camp404/db/roster";
 import {
   currentCycle,
@@ -86,6 +103,7 @@ interface TestBroadcast {
   title: string;
   body: string;
   presentation: TestPresentation;
+  audience: Audience;
   publishedAt: Date | null;
   createdAt: Date;
 }
@@ -94,8 +112,11 @@ interface TestDelivery {
   id: string;
   broadcastId: string | null;
   userId: string;
+  kind: NotificationKind;
   title: string;
   body: string;
+  refType: string | null;
+  refId: string | null;
   presentation: TestPresentation;
   readAt: Date | null;
   acknowledgedAt: Date | null;
@@ -187,6 +208,31 @@ const inviteCodes = S.inviteCodes;
 const questionnaireEdits = S.questionnaireEdits;
 const broadcasts = S.broadcasts;
 const deliveries = S.deliveries;
+
+/** The store's twin of deliveryValues: every delivery comes from a builder. */
+function pushDelivery(
+  payload: NotificationPayload,
+  input: {
+    userId: string;
+    broadcastId: string | null;
+    presentation: TestPresentation;
+  },
+): void {
+  deliveries.push({
+    id: crypto.randomUUID(),
+    broadcastId: input.broadcastId,
+    userId: input.userId,
+    kind: payload.kind,
+    title: payload.title,
+    body: payload.body,
+    refType: payload.refType,
+    refId: payload.refId,
+    presentation: input.presentation,
+    readAt: null,
+    acknowledgedAt: null,
+    createdAt: new Date(),
+  });
+}
 const promotionRequests = S.promotionRequests;
 const teamMemberships = S.teamMemberships;
 
@@ -302,6 +348,14 @@ export const testStore = {
         user.approvalDecidedByUserId = input.decidedByUserId;
         user.approvalDecidedAt = new Date();
         user.updatedAt = new Date();
+        // As in production: an approval tells the member, a rejection does not.
+        if (input.status === "approved") {
+          pushDelivery(approvalNotification(), {
+            userId: user.id,
+            broadcastId: null,
+            presentation: "popup",
+          });
+        }
         return true;
       }
     }
@@ -410,8 +464,9 @@ export const testStore = {
     invitedEmail?: string | null;
     requiresApproval?: boolean;
   }): TestInviteCode {
+    // One spelling, like the database: lowercase (normalizeInviteCode).
     const row: TestInviteCode = {
-      code: input.code,
+      code: normalizeInviteCode(input.code),
       createdByUserId: input.createdByUserId ?? null,
       note: input.note ?? null,
       maxUses: input.maxUses ?? null,
@@ -423,11 +478,11 @@ export const testStore = {
       requiresApproval: input.requiresApproval ?? false,
       createdAt: new Date(),
     };
-    inviteCodes.set(input.code, row);
+    inviteCodes.set(row.code, row);
     return row;
   },
   findUsableInviteCode(code: string): TestInviteCode | null {
-    const row = inviteCodes.get(code);
+    const row = inviteCodes.get(normalizeInviteCode(code));
     if (!row) return null;
     if (row.revokedAt) return null;
     if (row.expiresAt && row.expiresAt <= new Date()) return null;
@@ -448,6 +503,7 @@ export const testStore = {
     title: string;
     body: string;
     presentation: TestPresentation;
+    audience?: Audience;
   }): { id: string } {
     const row: TestBroadcast = {
       id: crypto.randomUUID(),
@@ -455,6 +511,7 @@ export const testStore = {
       title: input.title,
       body: input.body,
       presentation: input.presentation,
+      audience: input.audience ?? { scope: "everyone" },
       publishedAt: null,
       createdAt: new Date(),
     };
@@ -467,6 +524,7 @@ export const testStore = {
     title: string;
     body: string;
     presentation: TestPresentation;
+    audience?: Audience;
   }): boolean {
     const row = broadcasts.find(
       (b) =>
@@ -478,6 +536,7 @@ export const testStore = {
     row.title = input.title;
     row.body = input.body;
     row.presentation = input.presentation;
+    row.audience = input.audience ?? { scope: "everyone" };
     return true;
   },
   deleteBroadcastDraft(input: { id: string; senderId: string }): boolean {
@@ -494,43 +553,81 @@ export const testStore = {
   publishBroadcast(input: {
     id: string;
     senderId: string;
+    allowedTeams?: readonly string[];
   }): { ok: true; recipientCount: number } | { ok: false; error: string } {
     const row = broadcasts.find(
       (b) =>
         b.id === input.id &&
         b.senderId === input.senderId &&
-        b.publishedAt === null,
+        b.publishedAt === null &&
+        isAllowedAudience(b.audience, input.allowedTeams),
     );
     if (!row) {
-      return {
-        ok: false,
-        error: "Draft not found, already published, or not yours.",
-      };
+      return { ok: false, error: testStore.explainDraftRefusal(input) };
     }
     row.publishedAt = new Date();
-    const recipients = [...usersByAuthId.values()].filter(
-      (u) => u.id !== input.senderId,
+    const recipients = testStore.announcementRecipients(
+      input.senderId,
+      row.audience,
     );
+    const payload = announcementNotification({
+      broadcastId: row.id,
+      title: row.title,
+      body: row.body,
+    });
     for (const u of recipients) {
-      deliveries.push({
-        id: crypto.randomUUID(),
-        broadcastId: row.id,
+      pushDelivery(payload, {
         userId: u.id,
-        title: row.title,
-        body: row.body,
+        broadcastId: row.id,
         presentation: row.presentation,
-        readAt: null,
-        acknowledgedAt: null,
-        createdAt: new Date(),
       });
     }
     return { ok: true, recipientCount: recipients.length };
   },
-  listBroadcasts(): Array<{
+  explainDraftRefusal(input: {
+    id: string;
+    senderId: string;
+    allowedTeams?: readonly string[];
+  }): string {
+    const row = broadcasts.find((b) => b.id === input.id);
+    if (!row) return DRAFT_MISSING;
+    if (row.senderId !== input.senderId) return DRAFT_NOT_YOURS;
+    if (row.publishedAt) return DRAFT_PUBLISHED;
+    if (!isAllowedAudience(row.audience, input.allowedTeams)) {
+      return DRAFT_TEAM_NOT_LED;
+    }
+    return DRAFT_MISSING;
+  },
+  /**
+   * Who an announcement reaches: everyone but the sender, or this year's
+   * members of one team but the sender. (The store has no approval filter for
+   * "everyone"; production reaches approved members only.)
+   */
+  announcementRecipients(senderId: string, audience: Audience): TestUser[] {
+    const everyone = [...usersByAuthId.values()].filter(
+      (u) => u.id !== senderId,
+    );
+    if (audience.scope === "everyone") return everyone;
+    const cycle = currentCycleNumber();
+    const onTeam = new Set(
+      teamMemberships
+        .filter((m) => m.team === audience.team && m.cycle === cycle)
+        .map((m) => m.userId),
+    );
+    return everyone.filter((u) => onTeam.has(u.id));
+  },
+  countAnnouncementAudience(
+    senderId: string,
+    audience: Audience = { scope: "everyone" },
+  ): number {
+    return testStore.announcementRecipients(senderId, audience).length;
+  },
+  listBroadcasts(options: { senderId?: string } = {}): Array<{
     id: string;
     title: string;
     body: string;
     presentation: TestPresentation;
+    audience: Audience;
     senderId: string | null;
     senderName: string | null;
     publishedAt: Date | null;
@@ -539,6 +636,7 @@ export const testStore = {
     acknowledgedCount: number;
   }> {
     return [...broadcasts]
+      .filter((b) => !options.senderId || b.senderId === options.senderId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .map((b) => {
         const own = deliveries.filter((d) => d.broadcastId === b.id);
@@ -547,6 +645,7 @@ export const testStore = {
           title: b.title,
           body: b.body,
           presentation: b.presentation,
+          audience: b.audience,
           senderId: b.senderId,
           senderName: b.senderId
             ? (findUserById(b.senderId)?.displayName ?? null)
@@ -587,6 +686,42 @@ export const testStore = {
         };
       });
   },
+  countUnseenPopups(userId: string): number {
+    return deliveries.filter(
+      (d) =>
+        d.userId === userId && d.presentation === "popup" && d.readAt === null,
+    ).length;
+  },
+  claimPopups(userId: string): Array<{
+    deliveryId: string;
+    title: string;
+    body: string;
+    refType: string | null;
+    refId: string | null;
+    createdAt: Date;
+  }> {
+    const now = new Date();
+    return deliveries
+      .filter(
+        (d) =>
+          d.userId === userId &&
+          d.presentation === "popup" &&
+          d.readAt === null,
+      )
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .slice(0, 3)
+      .map((d) => {
+        d.readAt = now;
+        return {
+          deliveryId: d.id,
+          title: d.title,
+          body: d.body,
+          refType: d.refType,
+          refId: d.refId,
+          createdAt: d.createdAt,
+        };
+      });
+  },
   acknowledgeDelivery(input: { deliveryId: string; userId: string }): boolean {
     const d = deliveries.find(
       (x) =>
@@ -601,20 +736,46 @@ export const testStore = {
     d.readAt = now;
     return true;
   },
-  listInbox(userId: string): Array<{
-    id: string;
-    title: string;
-    body: string;
-    presentation: TestPresentation;
-    senderName: string | null;
-    readAt: Date | null;
-    acknowledgedAt: Date | null;
-    createdAt: Date;
-  }> {
-    return deliveries
+  listInbox(
+    userId: string,
+    options: { before?: string | null; limit?: number } = {},
+  ): {
+    items: Array<{
+      id: string;
+      title: string;
+      body: string;
+      presentation: TestPresentation;
+      senderName: string | null;
+      readAt: Date | null;
+      acknowledgedAt: Date | null;
+      createdAt: Date;
+      kind: NotificationKind;
+      link: string;
+    }>;
+    nextCursor: string | null;
+  } {
+    // Production's cursor shape (microsecond timestamp ~ id), so the same
+    // validation accepts it. The store's clock has milliseconds only.
+    const cursorOf = (d: TestDelivery) =>
+      `${d.createdAt.toISOString().slice(0, 23)}000~${d.id}`;
+    const limit = options.limit ?? 30;
+    const sorted = deliveries
       .filter((d) => d.userId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map((d) => {
+      .sort(
+        (a, b) =>
+          b.createdAt.getTime() - a.createdAt.getTime() ||
+          (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
+      );
+    let start = 0;
+    if (options.before != null) {
+      const at = sorted.findIndex((d) => cursorOf(d) === options.before);
+      if (at === -1) return { items: [], nextCursor: null };
+      start = at + 1;
+    }
+    const page = sorted.slice(start, start + limit);
+    const hasMore = sorted.length > start + limit;
+    return {
+      items: page.map((d) => {
         const b = broadcasts.find((x) => x.id === d.broadcastId);
         return {
           id: d.id,
@@ -627,12 +788,50 @@ export const testStore = {
           readAt: d.readAt,
           acknowledgedAt: d.acknowledgedAt,
           createdAt: d.createdAt,
+          kind: d.kind,
+          link: notificationLink(d.refType, d.refId),
         };
-      });
+      }),
+      nextCursor: hasMore && page.length ? cursorOf(page.at(-1)!) : null,
+    };
   },
   countUnread(userId: string): number {
     return deliveries.filter((d) => d.userId === userId && d.readAt === null)
       .length;
+  },
+  getAnnouncementForMember(
+    userId: string,
+    broadcastId: string,
+  ): {
+    deliveryId: string;
+    title: string;
+    body: string;
+    presentation: TestPresentation;
+    senderName: string | null;
+    publishedAt: Date;
+    acknowledgedAt: Date | null;
+  } | null {
+    // The delivery row is the permission, as in production.
+    const d = deliveries.find(
+      (x) =>
+        x.userId === userId &&
+        x.broadcastId === broadcastId &&
+        x.kind === "announcement",
+    );
+    if (!d) return null;
+    const b = broadcasts.find((x) => x.id === broadcastId);
+    if (!b?.publishedAt) return null;
+    return {
+      deliveryId: d.id,
+      title: d.title,
+      body: d.body,
+      presentation: d.presentation,
+      senderName: b.senderId
+        ? (findUserById(b.senderId)?.displayName ?? null)
+        : null,
+      publishedAt: b.publishedAt,
+      acknowledgedAt: d.acknowledgedAt,
+    };
   },
   markRead(userId: string, ids: string[]): void {
     if (ids.length === 0) return;
@@ -870,6 +1069,29 @@ export const testStore = {
       decidedAt: null,
     };
     promotionRequests.push(row);
+    // As in production: a new request tells the target who asked.
+    pushDelivery(
+      captainPromotionNotification({
+        requestId: row.id,
+        requesterName: findUserById(input.requestedByUserId)?.displayName ?? null,
+      }),
+      { userId: input.targetUserId, broadcastId: null, presentation: "popup" },
+    );
+    return row;
+  },
+  acceptCaptainPromotion(input: {
+    requestId: string;
+    actorUserId: string;
+  }): TestPromotionRequest | null {
+    // Production does the flip and the rank write in one transaction; the store
+    // does both or neither.
+    const row = testStore.decideCaptainPromotion({
+      requestId: input.requestId,
+      status: "accepted",
+      actorUserId: input.actorUserId,
+    });
+    if (!row) return null;
+    testStore.setUserRank(input.actorUserId, "captain");
     return row;
   },
   decideCaptainPromotion(input: {

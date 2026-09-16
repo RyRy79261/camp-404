@@ -11,6 +11,11 @@ interface NotificationRowProps {
   isNew: boolean;
   acknowledgedAt: InboxItem["acknowledgedAt"];
   createdAt: InboxItem["createdAt"];
+  /**
+   * Where a tap opens (notificationLink). Omitted when the notification is
+   * about nothing but itself: a link back to this inbox would do nothing.
+   */
+  href?: string;
 }
 
 // One inbox row (board S12): a muted icon circle, the title + optional "New"
@@ -24,6 +29,7 @@ export function NotificationRow({
   isNew,
   acknowledgedAt,
   createdAt,
+  href,
 }: NotificationRowProps) {
   const Icon = presentationIcon(presentation);
 
@@ -37,22 +43,21 @@ export function NotificationRow({
         : `From ${senderName}`
     : null;
 
-  return (
-    <li
-      className={cn(
-        "flex gap-3 rounded-xl border p-3.5",
-        isNew ? "border-primary bg-primary/10" : "border-border bg-card",
-      )}
-    >
+  const frame = cn(
+    "flex gap-3 rounded-xl border p-3.5",
+    isNew ? "border-primary bg-primary/10" : "border-border bg-card",
+  );
+  const content = (
+    <>
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
         <Icon className="h-5 w-5" aria-hidden="true" />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold leading-tight text-foreground">
+            <h3 className="text-sm font-semibold leading-tight text-foreground">
               {title}
-            </h2>
+            </h3>
             {isNew ? (
               <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-micro-xs font-bold text-primary-foreground">
                 New
@@ -63,13 +68,37 @@ export function NotificationRow({
             {formatRelativeTime(createdAt)}
           </time>
         </div>
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+        {/* Clipped only when the row opens the whole message. */}
+        <p
+          className={cn(
+            "whitespace-pre-wrap text-sm text-muted-foreground",
+            href && "line-clamp-3",
+          )}
+        >
           {body}
         </p>
         {attribution ? (
           <p className="text-xs text-muted-foreground">{attribution}</p>
         ) : null}
       </div>
+    </>
+  );
+
+  return (
+    <li>
+      {href ? (
+        <a
+          href={href}
+          className={cn(
+            frame,
+            "transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          )}
+        >
+          {content}
+        </a>
+      ) : (
+        <div className={frame}>{content}</div>
+      )}
     </li>
   );
 }

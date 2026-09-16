@@ -10,6 +10,7 @@ import { Divider } from "@camp404/ui/components/divider";
 import { InputField } from "@camp404/ui/components/input-field";
 import { OAuthButton } from "@camp404/ui/components/google-button";
 import { authClient } from "@/lib/auth-client";
+import { safeInternalPath } from "@/lib/safe-redirect";
 
 /**
  * Email/password + Google sign-in form, mirroring the intake-tracker
@@ -17,17 +18,16 @@ import { authClient } from "@/lib/auth-client";
  * after auth at the /signup/required gate.
  */
 
-function safeCallbackUrl(raw: string | null | undefined): string {
-  if (!raw) return "/";
-  if (!raw.startsWith("/")) return "/";
-  if (raw.startsWith("//")) return "/";
-  return raw;
-}
-
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackURL = safeCallbackUrl(searchParams.get("callbackURL"));
+  // `next` is what the auth middleware carries over when it sends a signed-out
+  // visitor here from a protected page (it copies that page's query string).
+  // /mcp/connect uses it for the Claude authorize URL, so without it a member
+  // who connected Claude while signed out landed on home and lost the request.
+  const callbackURL = safeInternalPath(
+    searchParams.get("callbackURL") ?? searchParams.get("next"),
+  );
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -71,6 +71,12 @@ export function SignInForm() {
         setLoading(false);
         return;
       }
+      if (callbackURL.startsWith("/api/")) {
+        // An API route (the Claude authorize step) is not a page the App
+        // Router can navigate to, so leave with a full navigation.
+        window.location.assign(callbackURL);
+        return;
+      }
       router.replace(callbackURL);
       router.refresh();
     } catch (err) {
@@ -85,10 +91,13 @@ export function SignInForm() {
     try {
       // Always route the social return-trip through /auth so Neon Auth's
       // verifier exchange (proxy middleware on /auth/*) fires before we
-      // read the session. /auth/page.tsx forwards us home from there.
+      // read the session. /auth/page.tsx then forwards to `next`, or home.
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/auth",
+        callbackURL:
+          callbackURL === "/"
+            ? "/auth"
+            : `/auth?next=${encodeURIComponent(callbackURL)}`,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign in failed");

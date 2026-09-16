@@ -3,6 +3,7 @@ import { ClipboardList, Lock } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { IconBadge } from "@camp404/ui/components/icon-badge";
 import { QuestionnaireSummaryCard } from "@camp404/ui/components/questionnaire-summary-card";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 
 // Surface 23 — the gate interstitial shown before a required questionnaire. A
 // read-only, server-rendered "Before you go any further" hold: what's ahead, a
@@ -55,12 +56,7 @@ export function QuestionnaireGate({
         You can&apos;t skip this — it&apos;s required to continue.
       </p>
 
-      <a
-        href="/auth/sign-out"
-        className="text-label text-muted-foreground underline-offset-4 hover:underline"
-      >
-        Sign out
-      </a>
+      <SignOutLink className="text-label text-muted-foreground underline-offset-4 hover:underline" />
     </div>
   );
 }

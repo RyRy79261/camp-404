@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { diffResponses, validateResponses } from "@camp404/types";
 import { ID_NUMBER_KEY } from "@camp404/db/id-documents";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getReplayableForm, recordFormEdit } from "@/lib/forms";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 
@@ -30,6 +30,16 @@ export async function saveFormReplay(
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
     redirect("/signup/required");
+  }
+  // The page sends a pending applicant to /pending-approval, but this action is
+  // reachable by a direct POST. Owner's call (2026-09-16): a pending applicant
+  // cannot save form edits. Onboarding completion is checked below, where the
+  // form's own completion is read.
+  if (!isApproved(campUser, authUser.primaryEmail)) {
+    return {
+      ok: false,
+      errors: { _root: "Your account is still awaiting approval." },
+    };
   }
 
   const form = await getReplayableForm(key);

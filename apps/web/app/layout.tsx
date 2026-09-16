@@ -5,6 +5,7 @@ import { Providers } from "./providers";
 import { AcknowledgementGate } from "./acknowledgement-gate";
 import { FeedbackGate } from "./feedback-gate";
 import "@camp404/ui/styles.css";
+import { SITE_URL } from "@/lib/site";
 
 // Brand faces, exposed as CSS vars consumed by --font-sans / --font-mono in
 // @camp404/ui globals.css. Inter = UI; JetBrains Mono = the data-console motif.
@@ -19,7 +20,6 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-const SITE_URL = "https://camp-404.com";
 const SITE_DESCRIPTION = "A calm command centre for a chaotic desert.";
 
 export const metadata: Metadata = {

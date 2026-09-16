@@ -283,6 +283,9 @@ describe("getMemberDetailAction — open request id", () => {
     if (!res.ok) return;
     expect(res.promotionRequestId).toBe("req-9");
     expect(res.promotionRequestIsMine).toBe(true);
+    expect(getCampMemberDetail).toHaveBeenCalledWith(CAPTAIN, {
+      includeIdDocuments: false,
+    });
     expect(res.promotionStep).toEqual({ sent: true, accepted: false });
   });
 

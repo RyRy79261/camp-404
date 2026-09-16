@@ -10,6 +10,10 @@ import {
   recordQuestionnaireEdit as recordEditDb,
 } from "@camp404/db/questionnaire-edits";
 import { splitIdNumber, mergeIdNumber } from "@camp404/db/id-documents";
+import {
+  listCompletedQuestionnaireAnswers as listCompletedAnswersDb,
+  type CompletedQuestionnaireAnswers,
+} from "@camp404/db/questionnaire-responses";
 import { QUESTIONNAIRE_VERSION } from "./questionnaire";
 import { getQuestionnaireForPicker } from "./questionnaire-config";
 import {
@@ -131,6 +135,36 @@ export async function listCompletedForms(
     });
   }
   return out;
+}
+
+// --- Finished builder questionnaires ------------------------------------
+// Read-only: a builder questionnaire's answers are fixed once submitted (its
+// send closes and refuses writes), so My forms lets a member reread them, not
+// edit them. Shown against the version they answered.
+
+export type { CompletedQuestionnaireAnswers };
+
+/** Every builder questionnaire this member has finished, newest first. */
+export async function listAnsweredQuestionnaires(
+  userId: string,
+): Promise<CompletedQuestionnaireAnswers[]> {
+  // The E2E store models no builder responses.
+  if (isE2ETestMode()) return [];
+  return listCompletedAnswersDb(userId);
+}
+
+/** One finished questionnaire in one year, or null. */
+export async function getAnsweredQuestionnaire(
+  userId: string,
+  definitionKey: string,
+  cycle: number,
+): Promise<CompletedQuestionnaireAnswers | null> {
+  if (isE2ETestMode()) return null;
+  const [answers] = await listCompletedAnswersDb(userId, {
+    definitionKey,
+    cycle,
+  });
+  return answers ?? null;
 }
 
 // --- Edit change log ----------------------------------------------------

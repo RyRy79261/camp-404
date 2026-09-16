@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Megaphone } from "lucide-react";
+import { Megaphone, TriangleAlert } from "lucide-react";
+import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
 import { IconBadge } from "@camp404/ui/components/icon-badge";
 import { Spinner } from "@camp404/ui/components/spinner";
+import { toast } from "@camp404/ui/components/toast";
 
 // App-wide gate for the full-screen "acknowledge" notification variant. It
 // polls for the signed-in member's unacknowledged acknowledge-deliveries and,
@@ -13,6 +15,13 @@ import { Spinner } from "@camp404/ui/components/spinner";
 // oldest one. The Acknowledge button lives at the very bottom of the scroll
 // (not a fixed footer) — the member scrolls the whole message, then presses
 // it to dismiss; the gate advances to the next until the queue is empty.
+//
+// The same poll shows "pop-up" notifications: each one once, as a toast, when
+// the tab is visible and no takeover is on screen (owner's call, 2026-09-16).
+//
+// While the takeover is up, everything else on the page is inert: focus starts
+// on the message title and cannot leave the takeover, and nothing behind it can
+// be clicked or read by a screen reader.
 //
 // Mounted once in the root layout. Unauthenticated visitors get an empty
 // queue from the API, so it renders nothing on public pages.
@@ -25,16 +34,77 @@ interface PendingItem {
   createdAt: string;
 }
 
+interface Popup {
+  deliveryId: string;
+  title: string;
+  body: string;
+  link: string;
+}
+
 const POLL_INTERVAL_MS = 45_000;
+const POPUP_DURATION_MS = 10_000;
+
+export const ACK_FAILED =
+  "Your acknowledgement did not save. Check your connection, then press Acknowledge again.";
+
+/**
+ * Make everything outside `el` inert: its siblings, and its ancestors'
+ * siblings, up to <body>. Returns the undo. Elements that were already inert
+ * are left alone, so the undo cannot wake something another component put to
+ * sleep.
+ */
+export function inertOutside(el: HTMLElement): () => void {
+  const changed: Element[] = [];
+  let node: HTMLElement = el;
+  while (node.parentElement && node !== document.body) {
+    for (const sibling of Array.from(node.parentElement.children)) {
+      if (sibling === node || sibling.hasAttribute("inert")) continue;
+      if (sibling.tagName === "SCRIPT" || sibling.tagName === "STYLE") continue;
+      sibling.setAttribute("inert", "");
+      changed.push(sibling);
+    }
+    node = node.parentElement;
+  }
+  return () => {
+    for (const sibling of changed) sibling.removeAttribute("inert");
+  };
+}
 
 export function AcknowledgementGate() {
   const router = useRouter();
   const [queue, setQueue] = useState<PendingItem[]>([]);
   const [acking, setAcking] = useState(false);
+  const [ackError, setAckError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const claimingRef = useRef(false);
   // Monotonic token so overlapping polls (interval vs. focus) can't let a
   // slower, older response clobber a newer one — only the latest request wins.
   const requestIdRef = useRef(0);
+
+  // Claim the waiting pop-ups and show each as a toast whose action opens
+  // what it is about (the inbox, when it is about nothing else).
+  const showPopups = useCallback(async () => {
+    if (claimingRef.current) return; // a claim from an earlier poll is running
+    claimingRef.current = true;
+    try {
+      const res = await fetch("/api/notifications/popups", { method: "POST" });
+      if (!res.ok) return;
+      const { popups } = (await res.json()) as { popups: Popup[] };
+      for (const popup of popups ?? []) {
+        toast.info(popup.title, {
+          description: popup.body,
+          duration: POPUP_DURATION_MS,
+          action: { label: "Open", onClick: () => router.push(popup.link) },
+        });
+      }
+      // The claim marked them read: refresh the bell count.
+      if (popups?.length) router.refresh();
+    } finally {
+      claimingRef.current = false;
+    }
+  }, [router]);
 
   const load = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -43,13 +113,26 @@ export function AcknowledgementGate() {
         cache: "no-store",
       });
       if (!res.ok) return;
-      const data = (await res.json()) as { pending: PendingItem[] };
+      const data = (await res.json()) as {
+        pending: PendingItem[];
+        popups?: number;
+      };
       if (requestId !== requestIdRef.current) return; // superseded — drop it
-      setQueue(data.pending ?? []);
+      const pending = data.pending ?? [];
+      setQueue(pending);
+      // A pop-up that nobody sees is lost, since claiming marks it read. So
+      // claim only on a visible tab with no takeover in front of the toast.
+      if (
+        pending.length === 0 &&
+        (data.popups ?? 0) > 0 &&
+        document.visibilityState === "visible"
+      ) {
+        await showPopups();
+      }
     } catch {
       // Network hiccup — the next poll (or focus) retries.
     }
-  }, []);
+  }, [showPopups]);
 
   // Initial load, interval poll, and a refetch whenever the tab regains
   // focus so an announcement appears promptly after it's published.
@@ -69,50 +152,97 @@ export function AcknowledgementGate() {
   }, [load]);
 
   const current = queue[0];
+  const open = current !== undefined;
+  const currentId = current?.deliveryId;
 
-  // Lock background scroll and reset the scroll position whenever a new
-  // notification surfaces.
+  // While the takeover is up: lock background scroll and put the rest of the
+  // page to sleep.
   useEffect(() => {
-    if (!current) return;
+    if (!open || !dialogRef.current) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    scrollRef.current?.scrollTo({ top: 0 });
+    const wake = inertOutside(dialogRef.current);
     return () => {
       document.body.style.overflow = previous;
+      wake();
     };
-  }, [current]);
+  }, [open]);
+
+  // Each new message starts at the top, with focus on its title, and without
+  // the last message's error.
+  useEffect(() => {
+    if (!currentId) return;
+    setAckError(null);
+    scrollRef.current?.scrollTo({ top: 0 });
+    titleRef.current?.focus();
+  }, [currentId]);
 
   if (!current) return null;
 
   const acknowledge = async () => {
     setAcking(true);
+    setAckError(null);
     try {
       const res = await fetch("/api/notifications/acknowledge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deliveryId: current.deliveryId }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setAckError(ACK_FAILED);
+        return;
+      }
+      // { ok: false } means there was nothing left to acknowledge (another
+      // tab did it), so it leaves the queue either way.
       // Supersede any in-flight poll so it can't re-add what we just dismissed.
       requestIdRef.current++;
       // Drop the acknowledged item; reveal the next in the queue (if any).
       setQueue((q) => q.filter((i) => i.deliveryId !== current.deliveryId));
       // Refresh server components so an updated unread badge / inbox reflect it.
       router.refresh();
+    } catch {
+      setAckError(ACK_FAILED);
     } finally {
       setAcking(false);
     }
   };
 
+  // Tab never leaves the takeover. The page behind is inert, so the only
+  // stops are in here; this wraps from the last one back to the first, and
+  // the other way with Shift, instead of escaping to the browser chrome.
+  const trapTab = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab" || !dialogRef.current) return;
+    const stops = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    const first = titleRef.current;
+    const last = stops.at(-1) ?? first;
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="ack-title"
+      onKeyDown={trapTab}
       className="fixed inset-0 z-[100] overflow-hidden bg-background"
     >
       {/* Faint scan-line wash (board S22 #00dcff08) behind the content. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 z-0 bg-accent/5" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 bg-accent/5"
+      />
       <div
         ref={scrollRef}
         className="relative z-10 mx-auto flex h-full max-w-2xl flex-col overflow-y-auto px-6 py-10"
@@ -125,7 +255,12 @@ export function AcknowledgementGate() {
           Camp announcement
         </span>
 
-        <h1 id="ack-title" className="mt-2 text-title font-bold">
+        <h1
+          id="ack-title"
+          ref={titleRef}
+          tabIndex={-1}
+          className="mt-2 text-title font-bold focus:outline-none"
+        >
           {current.title}
         </h1>
         <p className="mt-1 text-caption text-muted-foreground">
@@ -140,6 +275,12 @@ export function AcknowledgementGate() {
         {/* Acknowledge sits at the end of the scroll — not pinned. The member
             scrolls through the message to reach it. */}
         <div className="mt-10 border-t pt-6">
+          {ackError && (
+            <Alert variant="error" className="mb-3">
+              <TriangleAlert aria-hidden />
+              <span>{ackError}</span>
+            </Alert>
+          )}
           {queue.length > 1 && (
             <p className="mb-3 text-caption text-muted-foreground">
               {queue.length - 1} more after this.

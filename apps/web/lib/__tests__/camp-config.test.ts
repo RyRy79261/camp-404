@@ -12,6 +12,7 @@ import {
   AUDIENCE_SCOPE_LABELS,
   DEFAULT_TEAMS,
   DEFAULT_CAMP_CONFIG,
+  MAX_CYCLE_NAME_LENGTH,
   MAX_CYCLE_YEAR,
   MIN_CYCLE_YEAR,
   TeamNameConflictError,
@@ -26,6 +27,7 @@ import {
   currentCycle,
   foundingCycles,
   moveTeam,
+  renameCycle,
   renameTeam,
   resolveCodeCarryOver,
   resolveCycles,
@@ -311,6 +313,49 @@ describe("resolveCycles", () => {
         cycles: [cycle(2028), cycle(2026, "2027-01-01T00:00:00.000Z")],
       }).map((c) => c.year),
     ).toEqual([2026, 2028]);
+  });
+});
+
+describe("year names", () => {
+  const years: CycleEntry[] = [
+    {
+      year: 2026,
+      startedAt: "2026-01-01T00:00:00Z",
+      endedAt: "2027-01-01T00:00:00Z",
+    },
+    { year: 2027, startedAt: "2027-01-01T00:00:00Z", endedAt: null },
+  ];
+
+  it("names one year and leaves the number and every other year alone", () => {
+    const named = renameCycle(years, 2027, "  Temple of Tides ");
+    expect(named[1]).toEqual({ ...years[1], name: "Temple of Tides" });
+    expect(named[0]).toBe(years[0]);
+    expect(years[1]).not.toHaveProperty("name");
+  });
+
+  it("removes the name when it is blank", () => {
+    const named = renameCycle(years, 2027, "Temple of Tides");
+    expect(renameCycle(named, 2027, "   ")[1]).not.toHaveProperty("name");
+    expect(renameCycle(named, 2027, null)[1]).not.toHaveProperty("name");
+  });
+
+  it("refuses a year the camp never had, and a name over the limit", () => {
+    expect(() => renameCycle(years, 2030, "x")).toThrow();
+    expect(() =>
+      renameCycle(years, 2027, "x".repeat(MAX_CYCLE_NAME_LENGTH + 1)),
+    ).toThrow();
+  });
+
+  it("drops a bad stored name without losing the year", () => {
+    // resolveCycles falls back wholesale on a bad entry, so a bad NAME must
+    // not count as one: the camp would suddenly have no year at all.
+    for (const name of [42, "", "   ", "x".repeat(MAX_CYCLE_NAME_LENGTH + 1)]) {
+      const resolved = resolveCycles({ cycles: [{ ...years[1], name }] });
+      expect(resolved).toEqual([years[1]]);
+    }
+    expect(
+      resolveCycles({ cycles: [{ ...years[1], name: " Kinetic " }] }),
+    ).toEqual([{ ...years[1], name: "Kinetic" }]);
   });
 });
 

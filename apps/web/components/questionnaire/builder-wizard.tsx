@@ -63,9 +63,14 @@ interface BuilderWizardProps {
   persistProgress?: boolean;
   onComplete?: () => void;
   submitLabel?: string;
-  // "runner" shows the blocking chrome (used for a blocking required action);
-  // "onboarding" shows a plain page-progress bar (used by the author preview).
+  // "runner" shows the runner chrome (a sent questionnaire); "onboarding" shows
+  // a plain page-progress bar (used by the author preview).
   variant?: "onboarding" | "runner";
+  // Runner only. A blocking send holds the app, so it gets the Required badge
+  // and the "can't use the rest of the app" notice. An optional send gets the
+  // Optional badge and no notice: telling a member they are locked out when
+  // they are not would be false.
+  blocking?: boolean;
   title?: string;
   // One line of context above the form — today, the carry-over prefill line the
   // runner shows when the answers came from an earlier cycle (year-namespace
@@ -81,6 +86,7 @@ export function BuilderWizard({
   onComplete,
   submitLabel = "Finish",
   variant = "runner",
+  blocking = true,
   title,
   notice,
 }: BuilderWizardProps) {
@@ -198,8 +204,9 @@ export function BuilderWizard({
             current={progressCurrent}
             total={total}
             showProgress={total > 1}
+            blocking={blocking}
           />
-          <BlockingNotice />
+          {blocking && <BlockingNotice />}
         </>
       ) : (
         total > 1 && <BuilderProgress current={progressCurrent} total={total} />

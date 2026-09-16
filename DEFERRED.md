@@ -103,6 +103,7 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
 
 ## Operator actions (config, not code)
 
+- **Email (Resend):** create a Resend account, verify the sending domain, then set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` (e.g. `Camp 404 <notices@camp-404.com>`) in Vercel. Until then `/api/cron/notifications/email` answers 503 and the queue waits; nothing is marked sent. Only must-read notices queue email (`shouldEmailNotification`).
 - **Firebase / push:** set `FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY` (service account) + `NEXT_PUBLIC_FIREBASE_*` + the VAPID key in Vercel to activate web push. Until then the pipeline is inert (no tokens registered, drain no-ops).
 - **PII backfill:** run `camp404 backfill-id-encryption` once after the encryption deploy to scrub any pre-existing plaintext ID numbers.
 - **Invite bootstrap codes:** replace the env `INVITE_CODES` values with high-entropy random strings (redemption is now throttled, but the defaults are guessable).

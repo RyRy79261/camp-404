@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
+import { reminderBody } from "@camp404/core";
 import { useTestDb } from "./_harness";
 import { makeActivation, makeUser } from "./_factories";
 import {
   REMINDER_REF_TYPE,
   REMINDER_WINDOW_MS,
-  reminderBody,
+  remindDueSoon,
   sendReminder,
 } from "../questionnaire-lifecycle";
 import * as schema from "../schema";
@@ -357,31 +358,59 @@ describe("sendReminder — what it writes", () => {
   });
 });
 
-describe("reminderBody", () => {
-  it("names the questionnaire and its deadline", () => {
-    const body = reminderBody(TITLE, new Date("2026-03-10T12:00:00Z"));
-    expect(body).toContain(TITLE);
-    expect(body).toMatch(/due 10 Mar/);
-    expect(body).toMatch(/Tap to complete\.$/);
+describe("remindDueSoon — the daily deadline nudge", () => {
+  const h = useTestDb();
+  const NOW = new Date("2026-03-01T09:00:00Z");
+  const inHours = (hours: number) =>
+    new Date(NOW.getTime() + hours * 60 * 60 * 1000);
+
+  it("nudges pending members of sends due within 48 hours, and no others", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const soon = await makeActivation(db, { status: "open", dueAt: inHours(30) });
+    const later = await makeActivation(db, {
+      questionnaireKey: "later",
+      status: "open",
+      dueAt: inHours(72),
+    });
+    const overdue = await makeActivation(db, {
+      questionnaireKey: "overdue",
+      status: "open",
+      dueAt: inHours(-2),
+    });
+    const closed = await makeActivation(db, {
+      questionnaireKey: "closed",
+      status: "closed",
+      dueAt: inHours(10),
+    });
+    await gate(db, { userId: member.id, activationId: soon.id });
+
+    expect(await remindDueSoon({ now: NOW })).toEqual({
+      activations: 1,
+      reminded: 1,
+    });
+    expect(await remindedUserIds(db, soon.id)).toEqual([member.id]);
+    for (const act of [later, overdue, closed]) {
+      expect(await remindedUserIds(db, act.id)).toEqual([]);
+    }
   });
 
-  // The deadline is read in camp time (SAST, UTC+2), never the host's zone:
-  // Vercel runs in UTC, and a captain in Cape Town who picks 00:30 on 11 Mar
-  // stores 22:30Z on the 10th. Two instants, one either side of each midnight,
-  // so a host east of SAST fails the second case as surely as UTC fails the first.
-  it("dates the deadline in camp time, not the server's time zone", () => {
-    expect(reminderBody(TITLE, new Date("2026-03-10T22:30:00Z"))).toMatch(
-      /due 11 Mar/,
-    );
-    expect(reminderBody(TITLE, new Date("2026-03-11T21:59:00Z"))).toMatch(
-      /due 11 Mar/,
-    );
-  });
+  it("does not nudge a member a captain already reminded today", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    const act = await makeActivation(db, { status: "open", dueAt: inHours(20) });
+    await gate(db, { userId: member.id, activationId: act.id });
 
-  it("says something true when the send has no deadline", () => {
-    const body = reminderBody(TITLE, null);
-    expect(body).toContain(TITLE);
-    expect(body).not.toMatch(/due/);
-    expect(body).not.toMatch(/undefined|null|Invalid/);
+    await sendReminder({
+      activationId: act.id,
+      senderId: captain.id,
+      now: inHours(-3),
+    });
+    expect(await remindDueSoon({ now: NOW })).toEqual({
+      activations: 1,
+      reminded: 0,
+    });
+    expect(await remindedUserIds(db, act.id)).toEqual([member.id]);
   });
 });

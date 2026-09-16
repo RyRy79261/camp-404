@@ -3,6 +3,7 @@ import "server-only";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/neon-auth";
+import { toAuthenticatedUser, type SessionUser } from "./session-user";
 import { isE2ETestMode, TEST_USER_COOKIE } from "./test-mode";
 
 /**
@@ -22,9 +23,6 @@ export interface AuthenticatedUser {
 // is a session to read.
 const NEON_AUTH_COOKIE_PREFIX = "__Secure-neon-auth";
 const NEON_AUTH_SESSION_TOKEN_COOKIE = `${NEON_AUTH_COOKIE_PREFIX}.session_token`;
-
-/** Loosely-typed slice of the Neon Auth session user we map onto AuthenticatedUser. */
-type SessionUser = { id: string; email?: string | null; name?: string | null };
 
 /**
  * Reads the current authenticated user. In E2E test mode, the
@@ -55,17 +53,6 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
     if (!isCookieWriteError(error)) throw error;
     return readSessionWithoutCookieWrite();
   }
-}
-
-function toAuthenticatedUser(
-  user: SessionUser | null | undefined,
-): AuthenticatedUser | null {
-  if (!user?.id) return null;
-  return {
-    id: user.id,
-    primaryEmail: user.email ?? null,
-    displayName: user.name ?? null,
-  };
 }
 
 /** Next.js throws this exact message when cookies are set during render. */

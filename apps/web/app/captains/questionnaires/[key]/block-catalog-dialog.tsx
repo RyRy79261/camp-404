@@ -55,7 +55,10 @@ function makeContent(
       return {
         id: newId(),
         kind,
-        imageUrl: "https://placehold.co/800x450",
+        // Empty until the author adds a picture: only images stored by Camp 404
+        // may be shown (isAllowedBuilderImageUrl), and publish refuses an
+        // image block with none.
+        imageUrl: "",
         // Empty so the editor's Save stays disabled until the author writes real
         // alt text (blockValid rejects empty altText) — a fake default would ship.
         altText: "",

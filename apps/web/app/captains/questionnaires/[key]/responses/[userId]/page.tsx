@@ -49,7 +49,7 @@ export default async function RespondentPage({
   const view = access.view;
   const respondent = respondentsOf(view).find((r) => r.userId === userId);
   const backHref = `/captains/questionnaires/${key}/responses?cycle=${view.cycle}`;
-  const year = cycleLabel(view.cycle, view.currentCycle);
+  const year = cycleLabel(view.cycle, view.currentCycle, view.cycleNames);
 
   const chrome = (children: ReactNode) => (
     <main className="mx-auto max-w-lg px-4 py-6">

@@ -22,6 +22,9 @@ import {
   ensureRequiredAction,
   satisfyRequiredAction as dbSatisfyRequiredAction,
   getPendingRequiredActions as dbGetPendingRequiredActions,
+  listPendingQuestionnaires as dbListPendingQuestionnaires,
+  reconcileOpenActivations,
+  type PendingQuestionnaire,
   type PendingRequiredAction,
 } from "@camp404/db/activations";
 import { claimInviteCode, isGodEmail } from "./access-control";
@@ -146,13 +149,28 @@ export async function redeemInviteForUser(
   // First time through: create the row stamped with the claimed code.
   // Pre-approved invites land `approved`; vetting-required ones land
   // `pending` (blocked after onboarding until a captain decides).
-  const created = await store.createUser({
-    authUserId: authUser.id,
-    displayName: authUser.displayName ?? authUser.primaryEmail,
-    inviteCode: claimed.code,
-    rank: claimed.assignedRank ?? "member",
-    approvalStatus: claimed.requiresApproval ? "pending" : "approved",
-  });
+  let created: CampUser;
+  try {
+    created = await store.createUser({
+      authUserId: authUser.id,
+      displayName: authUser.displayName ?? authUser.primaryEmail,
+      inviteCode: claimed.code,
+      rank: claimed.assignedRank ?? "member",
+      approvalStatus: claimed.requiresApproval ? "pending" : "approved",
+    });
+  } catch (err) {
+    // Two submits at once (two tabs, or a network retry): both saw no row,
+    // both claimed a use, and the second insert hit the unique auth_user_id.
+    // The member DID join, so say so instead of throwing them onto an error
+    // page. The second request's use of the code is spent; the claim and the
+    // insert are separate statements, and a lost use is the cheaper failure.
+    const winner = await store.findUserByAuthId(authUser.id);
+    if (!winner) throw err;
+    console.warn(
+      "redeemInviteForUser: a concurrent redeem already created this member; one extra use of the code was spent",
+    );
+    return { ok: true };
+  }
   await seedBurnerProfileAction(created.id);
   return { ok: true };
 }
@@ -215,6 +233,29 @@ export async function satisfyBurnerProfileAction(
     "burner_profile",
     QUESTIONNAIRE_VERSION,
   );
+}
+
+/**
+ * Give this member the gates of every open send they belong to but joined
+ * after it opened: a new member, a new team member, or a newly picked one.
+ * Call it before reading the gate spine. No-op under E2E test mode, where
+ * there are no required actions at all.
+ */
+export async function syncOpenGates(userId: string): Promise<void> {
+  if (isE2ETestMode()) return;
+  await reconcileOpenActivations(userId);
+}
+
+/**
+ * Every questionnaire the member still has to answer from an open send,
+ * blocking or optional (empty under E2E test mode, like the gate spine). The
+ * inbox's "Needs your answer" section and the bell count read this.
+ */
+export async function getPendingQuestionnaires(
+  userId: string,
+): Promise<PendingQuestionnaire[]> {
+  if (isE2ETestMode()) return [];
+  return dbListPendingQuestionnaires(userId);
 }
 
 /** The user's pending blocking required actions (empty under E2E test mode). */

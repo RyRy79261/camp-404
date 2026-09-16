@@ -18,6 +18,8 @@ import { Card } from "@camp404/ui/components/card";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { InputField } from "@camp404/ui/components/input-field";
 import { toast } from "@camp404/ui/components/toast";
+import { useConfirm } from "@camp404/ui/components/confirm-dialog";
+import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
   createDraftAction,
   deleteDraftAction,
@@ -31,6 +33,8 @@ export interface HubItem {
   questionCount: number;
   editedLabel: string;
   canDelete: boolean;
+  /** Its open send's blocking flag, or null when nothing is sent right now. */
+  openSendBlocking: boolean | null;
 }
 
 const STATUS: Record<
@@ -51,6 +55,7 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
   const [pending, startTransition] = useTransition();
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
   const [name, setName] = useState("");
 
   function create() {
@@ -83,8 +88,15 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
     });
   }
 
-  function remove(key: string, title: string) {
-    if (!window.confirm(`Delete "${title}"? This can't be undone.`)) return;
+  async function remove(key: string, title: string) {
+    const sure = await confirm({
+      title: `Delete "${title}"?`,
+      description:
+        "It is a draft, so nobody has answered it. This can't be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!sure) return;
     setBusyKey(key);
     startTransition(async () => {
       try {
@@ -103,6 +115,7 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {confirmDialog}
       {creating ? (
         <Card className="flex flex-col gap-3 p-4">
           <InputField
@@ -158,6 +171,9 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{item.title}</span>
                         <Badge variant={status.variant}>{status.label}</Badge>
+                        {item.openSendBlocking !== null && (
+                          <BlockingBadge blocking={item.openSendBlocking} />
+                        )}
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {item.questionCount} question
@@ -204,7 +220,7 @@ export function QuestionnaireHub({ items }: { items: HubItem[] }) {
                         variant="ghost"
                         size="icon"
                         aria-label={`Delete ${item.title}`}
-                        onClick={() => remove(item.key, item.title)}
+                        onClick={() => void remove(item.key, item.title)}
                         disabled={busyKey !== null}
                       >
                         {busyKey === item.key ? (

@@ -7,6 +7,7 @@ import { Alert } from "@camp404/ui/components/alert";
 import { Card } from "@camp404/ui/components/card";
 import { OAuthButton } from "@camp404/ui/components/google-button";
 import { authClient } from "@/lib/auth-client";
+import { safeInternalPath } from "@/lib/safe-redirect";
 
 /**
  * Sign-in bridge for the MCP OAuth authorize flow (board S20 — Bridge Card).
@@ -28,7 +29,7 @@ export default function MCPConnectPage() {
 
 function MCPConnectInner() {
   const params = useSearchParams();
-  const next = safeNext(params.get("next"));
+  const next = safeInternalPath(params.get("next"));
   const { data: session, isPending } = authClient.useSession();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -101,11 +102,4 @@ function Shell({ children }: { children: React.ReactNode }) {
       {children}
     </main>
   );
-}
-
-function safeNext(raw: string | null | undefined): string {
-  if (!raw) return "/";
-  if (!raw.startsWith("/")) return "/";
-  if (raw.startsWith("//")) return "/"; // protocol-relative attack
-  return raw;
 }

@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { createHttpDb, createPooledDb, type Database } from "./index";
+import { announcementNotification } from "@camp404/core";
+import { createHttpDb, withTransaction, type Database } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 import {
@@ -9,12 +10,16 @@ import {
   type PooledTx,
 } from "./activations";
 import { closeActivationTx } from "./questionnaire-lifecycle";
+import { writeAuditEvent } from "./audit";
+import { deliveryValues } from "./deliveries";
 import {
   advanceCycles,
   currentCycle,
   foundingCycles,
   isCycleYear,
+  MAX_CYCLE_NAME_LENGTH,
   MAX_CYCLE_YEAR,
+  renameCycle,
   resolveCodeCarryOver,
   resolveCycles,
   UNSET_CYCLE,
@@ -195,6 +200,13 @@ export interface RolloverReport {
 export interface AdvanceCycleInput {
   /** The year being started. Also the number the captain types to confirm. */
   year: number;
+  /**
+   * The year the captain's plan was read in. The year number is the root of
+   * every stamped row, so a rollover must not run against a plan for a year the
+   * camp has already left: two captains who confirm DIFFERENT new years from
+   * the same page would otherwise both succeed, one after the other.
+   */
+  expectedFromYear: number;
   actorUserId: string | null;
   /** Clear `users.dues_paid` (the §8.2 checkbox). Ids are recorded in the audit row. */
   resetDues?: boolean;
@@ -202,11 +214,19 @@ export interface AdvanceCycleInput {
   announcement?: { title: string; body: string } | null;
 }
 
+export type SetCycleNameResult =
+  | { ok: true; cycle: CycleEntry }
+  | { ok: false; reason: "unknown-year" | "invalid-name" };
+
 export type AdvanceCycleResult =
   | { ok: true; report: RolloverReport }
   | {
       ok: false;
-      reason: "already-advanced" | "invalid-year" | "no-founding-year";
+      reason:
+        | "already-advanced"
+        | "stale-plan"
+        | "invalid-year"
+        | "no-founding-year";
     };
 
 // The planner's reads are plain SELECTs, so they run identically on the
@@ -313,6 +333,7 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
         id: schema.users.id,
         isSystem: schema.users.isSystem,
         sanitised: schema.users.sanitised,
+        approvalStatus: schema.users.approvalStatus,
       })
       .from(schema.users),
     openCycles.length > 0
@@ -513,104 +534,99 @@ export async function setFoundingYear(input: {
   }
 
   const now = new Date();
-  const { db, pool } = createPooledDb();
-  try {
-    return await db.transaction(async (tx) => {
-      await tx
-        .insert(schema.campSettings)
-        .values({ id: true })
-        .onConflictDoNothing({ target: schema.campSettings.id });
-      const [locked] = await tx
-        .select({ config: schema.campSettings.config })
-        .from(schema.campSettings)
-        .where(eq(schema.campSettings.id, true))
-        .for("update");
+  return await withTransaction(async (tx) => {
+    await tx
+      .insert(schema.campSettings)
+      .values({ id: true })
+      .onConflictDoNothing({ target: schema.campSettings.id });
+    const [locked] = await tx
+      .select({ config: schema.campSettings.config })
+      .from(schema.campSettings)
+      .where(eq(schema.campSettings.id, true))
+      .for("update");
 
-      const stored =
-        locked?.config && typeof locked.config === "object"
-          ? (locked.config as CampConfig)
-          : ({} as CampConfig);
-      if (resolveCycles(stored).length > 0) {
-        return { ok: false as const, reason: "already-founded" as const };
-      }
+    const stored =
+      locked?.config && typeof locked.config === "object"
+        ? (locked.config as CampConfig)
+        : ({} as CampConfig);
+    if (resolveCycles(stored).length > 0) {
+      return { ok: false as const, reason: "already-founded" as const };
+    }
 
-      // SPREAD the stored object: `cycles` is one key in a shared JSONB column
-      // and rebuilding it would silently discard the team config beside it.
-      await tx
-        .update(schema.campSettings)
-        .set({
-          config: { ...stored, cycles: foundingCycles(input.year, now) },
-          updatedAt: now,
-        })
-        .where(eq(schema.campSettings.id, true));
+    // SPREAD the stored object: `cycles` is one key in a shared JSONB column
+    // and rebuilding it would silently discard the team config beside it.
+    await tx
+      .update(schema.campSettings)
+      .set({
+        config: { ...stored, cycles: foundingCycles(input.year, now) },
+        updatedAt: now,
+      })
+      .where(eq(schema.campSettings.id, true));
 
-      // Adopt everything sent or answered before the camp had a year. RETURNING
-      // counts in the same statement that writes, so the receipt can never
-      // drift from what actually moved.
-      const activations = await tx
-        .update(schema.questionnaireActivations)
-        .set({ cycle: input.year })
-        .where(eq(schema.questionnaireActivations.cycle, UNSET_CYCLE))
-        .returning({ id: schema.questionnaireActivations.id });
-      const responses = await tx
-        .update(schema.questionnaireResponses)
-        .set({ cycle: input.year })
-        .where(eq(schema.questionnaireResponses.cycle, UNSET_CYCLE))
-        .returning({ id: schema.questionnaireResponses.id });
+    // Adopt everything sent or answered before the camp had a year. RETURNING
+    // counts in the same statement that writes, so the receipt can never
+    // drift from what actually moved.
+    const activations = await tx
+      .update(schema.questionnaireActivations)
+      .set({ cycle: input.year })
+      .where(eq(schema.questionnaireActivations.cycle, UNSET_CYCLE))
+      .returning({ id: schema.questionnaireActivations.id });
+    const responses = await tx
+      .update(schema.questionnaireResponses)
+      .set({ cycle: input.year })
+      .where(eq(schema.questionnaireResponses.cycle, UNSET_CYCLE))
+      .returning({ id: schema.questionnaireResponses.id });
 
-      // The same adoption for the three year-scoped roster tables. `driver_
-      // profiles` FIRST and the seats ride its ON UPDATE CASCADE: car_members'
-      // composite FK points at (user_id, cycle), so a car and its seats cannot
-      // move apart. Which is also why the seats are COUNTED before the update
-      // rather than returned by one.
-      const [seats] = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.carMembers)
-        .where(eq(schema.carMembers.cycle, UNSET_CYCLE));
-      const drivers = await tx
-        .update(schema.driverProfiles)
-        .set({ cycle: input.year })
-        .where(eq(schema.driverProfiles.cycle, UNSET_CYCLE))
-        .returning({ userId: schema.driverProfiles.userId });
-      const teams = await tx
-        .update(schema.teamMemberships)
-        .set({ cycle: input.year })
-        .where(eq(schema.teamMemberships.cycle, UNSET_CYCLE))
-        .returning({ userId: schema.teamMemberships.userId });
+    // The same adoption for the three year-scoped roster tables. `driver_
+    // profiles` FIRST and the seats ride its ON UPDATE CASCADE: car_members'
+    // composite FK points at (user_id, cycle), so a car and its seats cannot
+    // move apart. Which is also why the seats are COUNTED before the update
+    // rather than returned by one.
+    const [seats] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.carMembers)
+      .where(eq(schema.carMembers.cycle, UNSET_CYCLE));
+    const drivers = await tx
+      .update(schema.driverProfiles)
+      .set({ cycle: input.year })
+      .where(eq(schema.driverProfiles.cycle, UNSET_CYCLE))
+      .returning({ userId: schema.driverProfiles.userId });
+    const teams = await tx
+      .update(schema.teamMemberships)
+      .set({ cycle: input.year })
+      .where(eq(schema.teamMemberships.cycle, UNSET_CYCLE))
+      .returning({ userId: schema.teamMemberships.userId });
 
-      const [audit] = await tx
-        .insert(schema.auditLog)
-        .values({
-          actorId: input.actorUserId,
-          action: "camp.cycle.founded",
-          target: String(input.year),
-          metadata: {
-            year: input.year,
-            activationsStamped: activations.length,
-            responsesStamped: responses.length,
-            teamMembershipsStamped: teams.length,
-            driverProfilesStamped: drivers.length,
-            carSeatsStamped: seats?.count ?? 0,
-          },
-        })
-        .returning({ id: schema.auditLog.id });
-
-      return {
-        ok: true as const,
-        report: {
+    const [audit] = await tx
+      .insert(schema.auditLog)
+      .values({
+        actorId: input.actorUserId,
+        action: "camp.cycle.founded",
+        target: String(input.year),
+        metadata: {
           year: input.year,
           activationsStamped: activations.length,
           responsesStamped: responses.length,
           teamMembershipsStamped: teams.length,
           driverProfilesStamped: drivers.length,
           carSeatsStamped: seats?.count ?? 0,
-          auditLogId: audit!.id,
         },
-      };
-    });
-  } finally {
-    await pool.end();
-  }
+      })
+      .returning({ id: schema.auditLog.id });
+
+    return {
+      ok: true as const,
+      report: {
+        year: input.year,
+        activationsStamped: activations.length,
+        responsesStamped: responses.length,
+        teamMembershipsStamped: teams.length,
+        driverProfilesStamped: drivers.length,
+        carSeatsStamped: seats?.count ?? 0,
+        auditLogId: audit!.id,
+      },
+    };
+  });
 }
 
 /**
@@ -637,241 +653,303 @@ export async function advanceCycle(
   if (!isCycleYear(input.year)) return { ok: false, reason: "invalid-year" };
 
   const now = new Date();
-  const { db, pool } = createPooledDb();
-  try {
-    return await db.transaction(async (tx) => {
-      // 1. Ensure the singleton exists, then lock it for the whole rollover.
-      await tx
-        .insert(schema.campSettings)
-        .values({ id: true })
-        .onConflictDoNothing({ target: schema.campSettings.id });
-      const [locked] = await tx
-        .select({ config: schema.campSettings.config })
-        .from(schema.campSettings)
-        .where(eq(schema.campSettings.id, true))
-        .for("update");
+  return await withTransaction(async (tx) => {
+    // 1. Ensure the singleton exists, then lock it for the whole rollover.
+    await tx
+      .insert(schema.campSettings)
+      .values({ id: true })
+      .onConflictDoNothing({ target: schema.campSettings.id });
+    const [locked] = await tx
+      .select({ config: schema.campSettings.config })
+      .from(schema.campSettings)
+      .where(eq(schema.campSettings.id, true))
+      .for("update");
 
-      const stored =
-        locked?.config && typeof locked.config === "object"
-          ? (locked.config as CampConfig)
-          : ({} as CampConfig);
-      const cycles = resolveCycles(stored);
-      const from = currentCycle(cycles);
-      if (!from) {
-        // The camp never said what year it is, so there is no "next" one. The
-        // page's first screen (setFoundingYear) is where this goes.
-        return { ok: false as const, reason: "no-founding-year" as const };
+    const stored =
+      locked?.config && typeof locked.config === "object"
+        ? (locked.config as CampConfig)
+        : ({} as CampConfig);
+    const cycles = resolveCycles(stored);
+    const from = currentCycle(cycles);
+    if (!from) {
+      // The camp never said what year it is, so there is no "next" one. The
+      // page's first screen (setFoundingYear) is where this goes.
+      return { ok: false as const, reason: "no-founding-year" as const };
+    }
+    if (cycles.some((c) => c.year === input.year)) {
+      return { ok: false as const, reason: "already-advanced" as const };
+    }
+    // Checked under the lock, after "already-advanced": a second captain who
+    // typed the SAME year gets that answer, and one who typed a different year
+    // learns that the plan on their screen is out of date.
+    if (from.year !== input.expectedFromYear) {
+      return { ok: false as const, reason: "stale-plan" as const };
+    }
+    if (input.year <= from.year) {
+      return { ok: false as const, reason: "invalid-year" as const };
+    }
+
+    // 2. Re-read the plan INSIDE the lock, so a send that raced in just
+    //    before this commit is caught — the pattern unpublishDefinition
+    //    already uses.
+    const { plan, open } = await buildPlan(tx);
+
+    // 3. Advance the cycle list. SPREAD the stored object: `cycles` is one
+    //    key in a shared JSONB column and rebuilding it from scratch would
+    //    silently discard the team config beside it.
+    const nextCycles = advanceCycles(cycles, input.year, now);
+    // Non-null by construction: advanceCycles appends exactly one open entry.
+    const to = currentCycle(nextCycles)!;
+    await tx
+      .update(schema.campSettings)
+      .set({ config: { ...stored, cycles: nextCycles }, updatedAt: now })
+      .where(eq(schema.campSettings.id, true));
+
+    // 4. Re-gate every `fresh` questionnaire with an open send. Note what is
+    //    absent: nothing here reads or writes team_memberships, car_members
+    //    or driver_profiles. The new year starts with no rows in them by
+    //    construction, which is what makes teams, team leads and car seats
+    //    fresh without a single delete.
+    const reGated: ReGateResult[] = [];
+    for (const entry of plan.reGate) {
+      const old = open.get(entry.key);
+      if (!old) continue;
+
+      // Close first: status → closed, still-pending gates → expired (a
+      // terminal, non-gating state — NOT deleted). This also clears the
+      // one-open partial unique index for the replacement below.
+      const closed = await closeActivationTx(tx, old.id);
+      if (!closed.ok) {
+        // Unreachable — we read the row in this same transaction — but a
+        // half-applied rollover is worse than a rolled-back one.
+        throw new Error(
+          `Couldn't close the open send for "${entry.key}": ${closed.error}`,
+        );
       }
-      if (cycles.some((c) => c.year === input.year)) {
-        return { ok: false as const, reason: "already-advanced" as const };
-      }
-      if (input.year <= from.year) {
-        return { ok: false as const, reason: "invalid-year" as const };
-      }
 
-      // 2. Re-read the plan INSIDE the lock, so a send that raced in just
-      //    before this commit is caught — the pattern unpublishDefinition
-      //    already uses.
-      const { plan, open } = await buildPlan(tx);
-
-      // 3. Advance the cycle list. SPREAD the stored object: `cycles` is one
-      //    key in a shared JSONB column and rebuilding it from scratch would
-      //    silently discard the team config beside it.
-      const nextCycles = advanceCycles(cycles, input.year, now);
-      // Non-null by construction: advanceCycles appends exactly one open entry.
-      const to = currentCycle(nextCycles)!;
-      await tx
-        .update(schema.campSettings)
-        .set({ config: { ...stored, cycles: nextCycles }, updatedAt: now })
-        .where(eq(schema.campSettings.id, true));
-
-      // 4. Re-gate every `fresh` questionnaire with an open send. Note what is
-      //    absent: nothing here reads or writes team_memberships, car_members
-      //    or driver_profiles. The new year starts with no rows in them by
-      //    construction, which is what makes teams, team leads and car seats
-      //    fresh without a single delete.
-      const reGated: ReGateResult[] = [];
-      for (const entry of plan.reGate) {
-        const old = open.get(entry.key);
-        if (!old) continue;
-
-        // Close first: status → closed, still-pending gates → expired (a
-        // terminal, non-gating state — NOT deleted). This also clears the
-        // one-open partial unique index for the replacement below.
-        const closed = await closeActivationTx(tx, old.id);
-        if (!closed.ok) {
-          // Unreachable — we read the row in this same transaction — but a
-          // half-applied rollover is worse than a rolled-back one.
-          throw new Error(
-            `Couldn't close the open send for "${entry.key}": ${closed.error}`,
-          );
-        }
-
-        const [created] = await tx
-          .insert(schema.questionnaireActivations)
-          .values({
-            questionnaireKey: old.questionnaireKey,
-            version: old.version,
-            title: old.title,
-            description: old.description,
-            scope: old.scope,
-            team: old.team,
-            blocking: old.blocking,
-            // dueAt is deliberately NOT carried: last year's deadline would
-            // flag every re-gated questionnaire as overdue the moment it opens.
-            dueAt: null,
-            activatedByUserId: input.actorUserId,
-            status: "draft",
-            cycle: to.year,
-            // `fresh` is the only reason this row exists, so its frozen copy
-            // must say so — a `carryOver: true` replacement would subtract the
-            // members who answered last year, which is exactly what fresh
-            // refuses to do.
-            carryOver: false,
-          })
-          .returning({ id: schema.questionnaireActivations.id });
-        const newId = created!.id;
-
-        // Individual sends carry their recipients in a side table; copy them
-        // so the replacement's audience is byte-for-byte the planned one.
-        if (old.scope === "individual" && old.recipientIds.length > 0) {
-          await tx.insert(schema.questionnaireActivationTargets).values(
-            old.recipientIds.map((userId) => ({
-              activationId: newId,
-              userId,
-            })),
-          );
-        }
-
-        const fanOut: ActivationFanOut = {
-          id: newId,
+      const [created] = await tx
+        .insert(schema.questionnaireActivations)
+        .values({
           questionnaireKey: old.questionnaireKey,
           version: old.version,
           title: old.title,
+          description: old.description,
+          scope: old.scope,
+          team: old.team,
           blocking: old.blocking,
+          // dueAt is deliberately NOT carried: last year's deadline would
+          // flag every re-gated questionnaire as overdue the moment it opens.
           dueAt: null,
+          activatedByUserId: input.actorUserId,
+          status: "draft",
+          cycle: to.year,
+          // `fresh` is the only reason this row exists, so its frozen copy
+          // must say so — a `carryOver: true` replacement would subtract the
+          // members who answered last year, which is exactly what fresh
+          // refuses to do.
           carryOver: false,
-        };
-        reGated.push({
-          key: entry.key,
-          title: entry.title,
-          closedActivationId: old.id,
-          newActivationId: newId,
-          gatesWritten: await openActivationTx(tx, fanOut, old.recipientIds),
-        });
-      }
+        })
+        .returning({ id: schema.questionnaireActivations.id });
+      const newId = created!.id;
 
-      // 5. Optionally clear the dues ticks. RETURNING captures the ids in the
-      //    same statement that clears them, so the audit list can never drift
-      //    from what was actually cleared.
-      let duesCleared: string[] = [];
-      if (input.resetDues) {
-        const cleared = await tx
-          .update(schema.users)
-          .set({ duesPaid: false, duesPaidAt: null })
-          .where(
-            and(
-              eq(schema.users.isSystem, false),
-              eq(schema.users.duesPaid, true),
-            ),
-          )
-          .returning({ id: schema.users.id });
-        duesCleared = cleared.map((u) => u.id);
-      }
-
-      // 6. Optional camp-wide announcement, as the existing full-screen
-      //    acknowledge takeover. Published + dispatched inline (like
-      //    publishAnnouncement) rather than left for the dispatch cron, so the
-      //    rollover is one atomic act.
-      let announcementBroadcastId: string | null = null;
-      if (input.announcement) {
-        const [broadcast] = await tx
-          .insert(schema.broadcasts)
-          .values({
-            senderId: input.actorUserId,
-            kind: "announcement",
-            scope: "everyone",
-            title: input.announcement.title,
-            body: input.announcement.body,
-            presentation: "acknowledge",
-            publishedAt: now,
-            dispatchedAt: now,
-          })
-          .returning({
-            id: schema.broadcasts.id,
-            channel: schema.broadcasts.channel,
-          });
-        announcementBroadcastId = broadcast!.id;
-        const recipients = await tx
-          .select({
-            id: schema.users.id,
-            isSystem: schema.users.isSystem,
-            sanitised: schema.users.sanitised,
-          })
-          .from(schema.users);
-        const audience = computeAudience(
-          { scope: "everyone", team: null },
-          {
-            members: recipients,
-            memberships: [],
-            driverUserIds: [],
-            targetUserIds: [],
-          },
-          input.actorUserId,
+      // Individual sends carry their recipients in a side table; copy them
+      // so the replacement's audience is byte-for-byte the planned one.
+      if (old.scope === "individual" && old.recipientIds.length > 0) {
+        await tx.insert(schema.questionnaireActivationTargets).values(
+          old.recipientIds.map((userId) => ({
+            activationId: newId,
+            userId,
+          })),
         );
-        if (audience.length > 0) {
-          await tx.insert(schema.notificationDeliveries).values(
-            audience.map((userId) => ({
-              broadcastId: broadcast!.id,
-              userId,
-              title: input.announcement!.title,
-              body: input.announcement!.body,
-              channel: broadcast!.channel,
-              presentation: "acknowledge" as const,
-              refType: "announcement",
-              refId: broadcast!.id,
-            })),
-          );
-        }
       }
 
-      // 7. The receipt. `audit_log` has no other writer in the repo — this is
-      //    a cold path — and the metadata is deliberately the WHOLE plan plus
-      //    what was executed, because §8.5's guarantee is not reversibility but
-      //    that every change is enumerated and nothing was destroyed.
-      const metadata: Record<string, unknown> = {
-        from: plan.from,
+      const fanOut: ActivationFanOut = {
+        id: newId,
+        questionnaireKey: old.questionnaireKey,
+        version: old.version,
+        title: old.title,
+        blocking: old.blocking,
+        dueAt: null,
+        carryOver: false,
+      };
+      reGated.push({
+        key: entry.key,
+        title: entry.title,
+        closedActivationId: old.id,
+        newActivationId: newId,
+        gatesWritten: await openActivationTx(tx, fanOut, old.recipientIds),
+      });
+    }
+
+    // 5. Optionally clear the dues ticks. RETURNING captures the ids in the
+    //    same statement that clears them, so the audit list can never drift
+    //    from what was actually cleared.
+    let duesCleared: string[] = [];
+    if (input.resetDues) {
+      const cleared = await tx
+        .update(schema.users)
+        .set({ duesPaid: false, duesPaidAt: null })
+        .where(
+          and(
+            eq(schema.users.isSystem, false),
+            eq(schema.users.duesPaid, true),
+          ),
+        )
+        .returning({ id: schema.users.id });
+      duesCleared = cleared.map((u) => u.id);
+    }
+
+    // 6. Optional camp-wide announcement, as the existing full-screen
+    //    acknowledge takeover. Published + dispatched inline (like
+    //    publishAnnouncement) rather than left for the dispatch cron, so the
+    //    rollover is one atomic act.
+    let announcementBroadcastId: string | null = null;
+    if (input.announcement) {
+      const [broadcast] = await tx
+        .insert(schema.broadcasts)
+        .values({
+          senderId: input.actorUserId,
+          kind: "announcement",
+          scope: "everyone",
+          title: input.announcement.title,
+          body: input.announcement.body,
+          presentation: "acknowledge",
+          publishedAt: now,
+          dispatchedAt: now,
+        })
+        .returning({
+          id: schema.broadcasts.id,
+          channel: schema.broadcasts.channel,
+        });
+      announcementBroadcastId = broadcast!.id;
+      const recipients = await tx
+        .select({
+          id: schema.users.id,
+          isSystem: schema.users.isSystem,
+          sanitised: schema.users.sanitised,
+          approvalStatus: schema.users.approvalStatus,
+        })
+        .from(schema.users);
+      const audience = computeAudience(
+        { scope: "everyone", team: null },
+        {
+          members: recipients,
+          memberships: [],
+          driverUserIds: [],
+          targetUserIds: [],
+        },
+        input.actorUserId,
+      );
+      if (audience.length > 0) {
+        const payload = announcementNotification({
+          broadcastId: broadcast!.id,
+          title: input.announcement.title,
+          body: input.announcement.body,
+        });
+        await tx.insert(schema.notificationDeliveries).values(
+          audience.map((userId) =>
+            deliveryValues(payload, {
+              userId,
+              broadcastId: broadcast!.id,
+              channel: broadcast!.channel,
+              presentation: "acknowledge",
+            }),
+          ),
+        );
+      }
+    }
+
+    // 7. The receipt. `audit_log` has no other writer in the repo — this is
+    //    a cold path — and the metadata is deliberately the WHOLE plan plus
+    //    what was executed, because §8.5's guarantee is not reversibility but
+    //    that every change is enumerated and nothing was destroyed.
+    const metadata: Record<string, unknown> = {
+      from: plan.from,
+      to,
+      reGate: plan.reGate,
+      carriesOver: plan.carriesOver,
+      notSent: plan.notSent,
+      reGated,
+      duesCleared,
+      announcementBroadcastId,
+    };
+    const [audit] = await tx
+      .insert(schema.auditLog)
+      .values({
+        actorId: input.actorUserId,
+        action: "camp.cycle.advanced",
+        target: String(to.year),
+        metadata,
+      })
+      .returning({ id: schema.auditLog.id });
+
+    return {
+      ok: true as const,
+      report: {
+        plan,
         to,
-        reGate: plan.reGate,
-        carriesOver: plan.carriesOver,
-        notSent: plan.notSent,
         reGated,
         duesCleared,
         announcementBroadcastId,
-      };
-      const [audit] = await tx
-        .insert(schema.auditLog)
-        .values({
-          actorId: input.actorUserId,
-          action: "camp.cycle.advanced",
-          target: String(to.year),
-          metadata,
-        })
-        .returning({ id: schema.auditLog.id });
+        auditLogId: audit!.id,
+      },
+    };
+  });
+}
 
-      return {
-        ok: true as const,
-        report: {
-          plan,
-          to,
-          reGated,
-          duesCleared,
-          announcementBroadcastId,
-          auditLogId: audit!.id,
-        },
-      };
-    });
-  } finally {
-    await pool.end();
+/**
+ * Set, change or remove a year's optional name. The number stays the
+ * namespace, so this moves nothing: it touches one entry in the cycle list and
+ * writes one audit row.
+ *
+ * It takes the same FOR UPDATE lock as every other config write, and SPREADS
+ * the stored object, so the team config and every other year are kept.
+ */
+export async function setCycleName(input: {
+  year: number;
+  /** Null or blank removes the name. */
+  name: string | null;
+  actorUserId: string | null;
+}): Promise<SetCycleNameResult> {
+  const name = (input.name ?? "").trim();
+  if (name.length > MAX_CYCLE_NAME_LENGTH) {
+    return { ok: false, reason: "invalid-name" };
   }
+
+  return await withTransaction(async (tx) => {
+    await tx
+      .insert(schema.campSettings)
+      .values({ id: true })
+      .onConflictDoNothing({ target: schema.campSettings.id });
+    const [locked] = await tx
+      .select({ config: schema.campSettings.config })
+      .from(schema.campSettings)
+      .where(eq(schema.campSettings.id, true))
+      .for("update");
+
+    const stored =
+      locked?.config && typeof locked.config === "object"
+        ? (locked.config as CampConfig)
+        : ({} as CampConfig);
+    const cycles = resolveCycles(stored);
+    const before = cycles.find((c) => c.year === input.year);
+    if (!before) return { ok: false as const, reason: "unknown-year" as const };
+
+    const next = renameCycle(cycles, input.year, name);
+    await tx
+      .update(schema.campSettings)
+      .set({ config: { ...stored, cycles: next }, updatedAt: new Date() })
+      .where(eq(schema.campSettings.id, true));
+    await writeAuditEvent(tx, {
+      actorId: input.actorUserId,
+      action: "camp.cycle.renamed",
+      target: String(input.year),
+      metadata: { from: before.name ?? null, to: name || null },
+    });
+
+    return {
+      ok: true as const,
+      cycle: next.find((c) => c.year === input.year)!,
+    };
+  });
 }

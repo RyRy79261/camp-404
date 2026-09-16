@@ -48,6 +48,12 @@ describe("toast store", () => {
     });
   });
 
+  it("carries one follow-up action", () => {
+    const onClick = () => {}
+    toast.info("Water run", { action: { label: "Open", onClick } })
+    expect(getToasts()[0]?.action).toEqual({ label: "Open", onClick })
+  })
+
   it("defaults the duration when unspecified", () => {
     toast("x");
     expect(getToasts()[0]?.duration).toBe(5000);

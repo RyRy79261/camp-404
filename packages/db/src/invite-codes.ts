@@ -1,5 +1,8 @@
-import { and, eq, isNull, or, sql, gt } from "drizzle-orm";
-import { createHttpDb } from "./index";
+import { alias } from "drizzle-orm/pg-core";
+import { and, desc, eq, isNull, or, sql, gt } from "drizzle-orm";
+import { normalizeInviteCode } from "@camp404/core";
+import { writeAuditEvent } from "./audit";
+import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 
 export type AssignedRank = "captain" | "member";
@@ -33,7 +36,7 @@ export async function findUsableInviteCode(
     .from(schema.inviteCodes)
     .where(
       and(
-        eq(schema.inviteCodes.code, code),
+        eq(schema.inviteCodes.code, normalizeInviteCode(code)),
         isNull(schema.inviteCodes.revokedAt),
         or(
           isNull(schema.inviteCodes.expiresAt),
@@ -64,7 +67,7 @@ export async function consumeInviteCode(
     .set({ useCount: sql`${schema.inviteCodes.useCount} + 1` })
     .where(
       and(
-        eq(schema.inviteCodes.code, code),
+        eq(schema.inviteCodes.code, normalizeInviteCode(code)),
         isNull(schema.inviteCodes.revokedAt),
         or(
           isNull(schema.inviteCodes.expiresAt),
@@ -94,7 +97,7 @@ export async function createInviteCode(input: {
   const [row] = await db
     .insert(schema.inviteCodes)
     .values({
-      code: input.code,
+      code: normalizeInviteCode(input.code),
       createdByUserId: input.createdByUserId,
       note: input.note ?? null,
       maxUses: input.maxUses ?? null,
@@ -123,7 +126,85 @@ export async function findInviteCodeByCode(
   const rows = await db
     .select()
     .from(schema.inviteCodes)
-    .where(eq(schema.inviteCodes.code, code))
+    .where(eq(schema.inviteCodes.code, normalizeInviteCode(code)))
     .limit(1);
   return rows[0] ?? null;
+}
+
+export interface ListedInviteCode extends InviteCodeRow {
+  /** Who made it; null for the root code and CLI-minted codes. */
+  createdByName: string | null;
+}
+
+/**
+ * Invite codes, newest first: every code for a captain, or only the ones a
+ * member made (pass `createdByUserId`, served by invite_codes_created_by_idx).
+ */
+export async function listInviteCodes(
+  options: { createdByUserId?: string } = {},
+): Promise<ListedInviteCode[]> {
+  const db = createHttpDb();
+  const creator = alias(schema.users, "creator");
+  return db
+    .select({
+      code: schema.inviteCodes.code,
+      createdByUserId: schema.inviteCodes.createdByUserId,
+      createdByName: creator.displayName,
+      note: schema.inviteCodes.note,
+      maxUses: schema.inviteCodes.maxUses,
+      useCount: schema.inviteCodes.useCount,
+      expiresAt: schema.inviteCodes.expiresAt,
+      revokedAt: schema.inviteCodes.revokedAt,
+      assignedRank: schema.inviteCodes.assignedRank,
+      invitedEmail: schema.inviteCodes.invitedEmail,
+      requiresApproval: schema.inviteCodes.requiresApproval,
+      createdAt: schema.inviteCodes.createdAt,
+    })
+    .from(schema.inviteCodes)
+    .leftJoin(creator, eq(creator.id, schema.inviteCodes.createdByUserId))
+    .where(
+      options.createdByUserId
+        ? eq(schema.inviteCodes.createdByUserId, options.createdByUserId)
+        : undefined,
+    )
+    .orderBy(desc(schema.inviteCodes.createdAt));
+}
+
+/**
+ * Revoke an invite code, so nobody can redeem it again. Members who already
+ * joined with it keep their place. Writes an `invite.revoked` audit row in the
+ * same transaction. Returns false when there is no such code, it was already
+ * revoked, or `createdByUserId` is given and the code is someone else's.
+ *
+ * A member may revoke only codes they made (pass their id); a captain, or the
+ * admin CLI, may revoke any code (leave it out).
+ */
+export async function revokeInviteCode(input: {
+  code: string;
+  actorUserId: string | null;
+  createdByUserId?: string;
+}): Promise<boolean> {
+  return await withTransaction(async (tx) => {
+    const rows = await tx
+      .update(schema.inviteCodes)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(schema.inviteCodes.code, normalizeInviteCode(input.code)),
+          isNull(schema.inviteCodes.revokedAt),
+          input.createdByUserId
+            ? eq(schema.inviteCodes.createdByUserId, input.createdByUserId)
+            : undefined,
+        ),
+      )
+      .returning({ useCount: schema.inviteCodes.useCount });
+    if (rows.length === 0) return false;
+    await writeAuditEvent(tx, {
+      actorId: input.actorUserId,
+      action: "invite.revoked",
+      target: input.code,
+      metadata: { useCount: rows[0]!.useCount },
+    });
+    return true;
+  });
 }

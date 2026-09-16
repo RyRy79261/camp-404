@@ -22,12 +22,15 @@ export function BuilderRunner({
   initialResponses,
   seededFromPriorCycle = false,
   title,
+  blocking,
 }: {
   activationId: string;
   definition: BuilderQuestionnaire;
   initialResponses: QuestionnaireResponses;
   seededFromPriorCycle?: boolean;
   title: string;
+  /** The send's own flag: Required holds the app, Optional does not. */
+  blocking: boolean;
 }) {
   return (
     <BuilderWizard
@@ -36,6 +39,7 @@ export function BuilderRunner({
       action={saveBuilderResponses.bind(null, activationId)}
       persistProgress
       variant="runner"
+      blocking={blocking}
       notice={seededFromPriorCycle ? CARRIED_OVER : undefined}
       title={title}
       submitLabel="Finish"

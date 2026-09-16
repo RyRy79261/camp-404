@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useLayoutEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import {
@@ -14,14 +14,16 @@ import {
   Send,
   Trash2,
   TriangleAlert,
+  Users,
   X,
 } from "lucide-react";
 import type { AnnouncementPresentation } from "@camp404/types";
-import type { AnnouncementSummary } from "@camp404/db/broadcasts";
+import type { AnnouncementSummary, Audience } from "@camp404/db/broadcasts";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { Card } from "@camp404/ui/components/card";
+import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { InputField } from "@camp404/ui/components/input-field";
@@ -38,8 +40,10 @@ import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
 import { RecorderPanel } from "@/components/voice/recorder-panel";
+import { useVoiceSupported } from "@/components/voice/use-voice-recorder";
 import {
   deleteDraftAction,
+  previewPublishAction,
   publishAction,
   saveDraftAction,
   updateDraftAction,
@@ -75,7 +79,7 @@ const PRESENTATION_META: Record<
   popup: {
     label: "Pop-up — dismissable",
     short: "Pop-up",
-    hint: "A transient pop-up. No acknowledgement required.",
+    hint: "Shows once as a pop-up on each member's screen, then stays in their inbox.",
     icon: MessageSquare,
     badge: "secondary",
   },
@@ -103,33 +107,73 @@ interface FormState {
   title: string;
   body: string;
   presentation: AnnouncementPresentation;
+  /** The picked audience, as an option value ("everyone" or "team:<key>"). */
+  audience: string;
 }
 
-const EMPTY_FORM: FormState = {
-  editingId: null,
-  title: "",
-  body: "",
-  presentation: "acknowledge",
-};
+/** One choice in "Who it's for". The page offers only what the sender may pick. */
+export interface AudienceOption {
+  value: string;
+  label: string;
+}
+
+export function audienceValue(audience: Audience): string {
+  return audience.scope === "team" ? `team:${audience.team}` : "everyone";
+}
+
+function audienceFromValue(value: string): Audience {
+  return value.startsWith("team:")
+    ? ({ scope: "team", team: value.slice(5) } as Audience)
+    : { scope: "everyone" };
+}
 
 export function AnnouncementsManager({
   announcements,
   currentUserId,
+  audienceOptions,
+  teamLabels,
 }: {
   announcements: AnnouncementSummary[];
   currentUserId: string;
+  /** A captain gets the camp and every active team; a lead their own teams. */
+  audienceOptions: AudienceOption[];
+  /** Team key to display name, for naming a draft's audience. */
+  teamLabels: Record<string, string>;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const emptyForm: FormState = {
+    editingId: null,
+    title: "",
+    body: "",
+    presentation: "acknowledge",
+    audience: audienceOptions[0]?.value ?? "everyone",
+  };
+  const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [dictating, setDictating] = useState(false);
+  const voiceSupported = useVoiceSupported();
   const [pending, startTransition] = useTransition();
+  // The draft waiting on the publish confirmation, with the audience it would
+  // reach. Publishing cannot be taken back, so the captain sees who and how
+  // before it goes out.
+  const [confirming, setConfirming] = useState<{
+    announcement: AnnouncementSummary;
+    recipientCount: number;
+    error: string | null;
+  } | null>(null);
+  const [publishing, startPublish] = useTransition();
 
   const drafts = announcements.filter((a) => a.publishedAt === null);
   const published = announcements.filter((a) => a.publishedAt !== null);
 
+  // "the camp" / "Kitchen", for the cards and the publish confirmation.
+  const audienceName = (audience: Audience) =>
+    audience.scope === "team"
+      ? (teamLabels[audience.team] ?? audience.team)
+      : "the camp";
+
   const reset = () => {
-    setForm(EMPTY_FORM);
+    setForm(emptyForm);
     setError(null);
     setDictating(false);
   };
@@ -147,6 +191,7 @@ export function AnnouncementsManager({
       title: form.title,
       body: form.body,
       presentation: form.presentation,
+      audience: audienceFromValue(form.audience),
     };
     startTransition(async () => {
       const result = editing
@@ -169,6 +214,7 @@ export function AnnouncementsManager({
       title: a.title,
       body: a.body,
       presentation: a.presentation,
+      audience: audienceValue(a.audience),
     });
   };
 
@@ -186,17 +232,34 @@ export function AnnouncementsManager({
     });
   };
 
-  const handlePublish = (id: string) => {
+  const handlePublish = (announcement: AnnouncementSummary) => {
     setError(null);
     startTransition(async () => {
-      const result = await publishAction(id);
-      if (!result.ok) {
-        setError(result.error);
+      const preview = await previewPublishAction(announcement.audience);
+      if (!preview.ok) {
+        setError(preview.error);
         return;
       }
+      setConfirming({
+        announcement,
+        recipientCount: preview.data.recipientCount,
+        error: null,
+      });
+    });
+  };
+
+  const confirmPublish = () => {
+    if (!confirming) return;
+    const { id } = confirming.announcement;
+    startPublish(async () => {
+      const result = await publishAction(id);
+      if (!result.ok) {
+        setConfirming((c) => c && { ...c, error: result.error });
+        return;
+      }
+      setConfirming(null);
       if (form.editingId === id) reset();
-      const n = result.data.recipientCount;
-      toast.success(`Published to ${n} member${n === 1 ? "" : "s"}`);
+      toast.success(`Published to ${members(result.data.recipientCount)}`);
       router.refresh();
     });
   };
@@ -248,7 +311,7 @@ export function AnnouncementsManager({
           />
           {/* Voice dictation — same pattern as the questionnaire long-text
               fields: tap to swap in the recorder, each transcript appends. */}
-          {dictating ? (
+          {!voiceSupported ? null : dictating ? (
             <RecorderPanel
               onTranscript={appendToBody}
               onDismiss={() => setDictating(false)}
@@ -260,6 +323,29 @@ export function AnnouncementsManager({
               className="self-end"
             />
           )}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="announcement-audience">Who it&apos;s for</Label>
+          <Select
+            value={form.audience}
+            onValueChange={(v) => setForm((f) => ({ ...f, audience: v }))}
+            disabled={pending || audienceOptions.length < 2}
+          >
+            <SelectTrigger id="announcement-audience">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {audienceOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  <span className="flex items-center gap-2">
+                    <Users className="h-4 w-4" aria-hidden />
+                    {option.label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -328,6 +414,7 @@ export function AnnouncementsManager({
               <DraftCard
                 key={a.id}
                 announcement={a}
+                audienceName={audienceName(a.audience)}
                 pending={pending}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
@@ -356,13 +443,79 @@ export function AnnouncementsManager({
               <PublishedCard
                 key={a.id}
                 announcement={a}
+                audienceName={audienceName(a.audience)}
                 currentUserId={currentUserId}
               />
             ))}
           </ul>
         )}
       </section>
+
+      {confirming && (
+        <PublishConfirm
+          announcement={confirming.announcement}
+          audienceName={audienceName(confirming.announcement.audience)}
+          recipientCount={confirming.recipientCount}
+          error={confirming.error}
+          pending={publishing}
+          onCancel={() => setConfirming(null)}
+          onConfirm={confirmPublish}
+        />
+      )}
     </div>
+  );
+}
+
+function members(n: number): string {
+  return `${n} member${n === 1 ? "" : "s"}`;
+}
+
+function PublishConfirm({
+  announcement: a,
+  audienceName,
+  recipientCount,
+  error,
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  announcement: AnnouncementSummary;
+  audienceName: string;
+  recipientCount: number;
+  error: string | null;
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const meta = PRESENTATION_META[a.presentation];
+  const Icon = meta.icon;
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+      title={`Publish "${a.title}"?`}
+      description={
+        recipientCount === 0
+          ? a.audience.scope === "team"
+            ? `No members would get it. Nobody else is on ${audienceName} this year.`
+            : "No members would get it. Nobody else is in the camp yet."
+          : `It goes to ${members(recipientCount)}${a.audience.scope === "team" ? ` of ${audienceName}` : ""} now. You can't edit or recall it after. To fix a mistake, publish a correction.`
+      }
+      confirmLabel={`Publish to ${members(recipientCount)}`}
+      pending={pending}
+      error={error}
+      onConfirm={onConfirm}
+    >
+      <div className="flex items-start gap-3 rounded-md border border-border p-3 text-sm">
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+        <div className="space-y-0.5">
+          <p className="font-medium">{meta.label}</p>
+          <p className="text-muted-foreground">{meta.hint}</p>
+        </div>
+      </div>
+    </ConfirmDialog>
   );
 }
 
@@ -388,26 +541,68 @@ function AnnouncementHeader({
   );
 }
 
+/**
+ * A card body clipped to three lines, with "Show all" when the text runs past
+ * them. A captain can always read the whole of what they wrote: the read page
+ * is for recipients, and the author is not one.
+ */
+function ClampedBody({ body }: { body: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return;
+    setOverflows(el.scrollHeight > el.clientHeight + 1);
+  }, [body, expanded]);
+
+  return (
+    <div className="space-y-1">
+      <p
+        ref={ref}
+        className={cn(
+          "whitespace-pre-wrap text-sm text-muted-foreground [overflow-wrap:anywhere]",
+          !expanded && "line-clamp-3",
+        )}
+      >
+        {body}
+      </p>
+      {(overflows || expanded) && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+          className="rounded-sm text-xs font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {expanded ? "Show less" : "Show all"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function DraftCard({
   announcement: a,
+  audienceName,
   pending,
   onEdit,
   onDelete,
   onPublish,
 }: {
   announcement: AnnouncementSummary;
+  audienceName: string;
   pending: boolean;
   onEdit: (a: AnnouncementSummary) => void;
   onDelete: (id: string) => void;
-  onPublish: (id: string) => void;
+  onPublish: (a: AnnouncementSummary) => void;
 }) {
   return (
     <li>
       <Card className="space-y-3 p-4">
         <AnnouncementHeader announcement={a} />
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-          {a.body}
-        </p>
+        <p className="text-xs text-muted-foreground">For {audienceName}</p>
+        <ClampedBody body={a.body} />
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
@@ -433,10 +628,13 @@ function DraftCard({
             type="button"
             size="sm"
             className="gap-1.5"
-            onClick={() => onPublish(a.id)}
+            onClick={() => onPublish(a)}
             disabled={pending}
           >
-            <Send className="h-4 w-4" /> Publish to camp
+            <Send className="h-4 w-4" />{" "}
+            {a.audience.scope === "team"
+              ? `Publish to ${audienceName}`
+              : "Publish to camp"}
           </Button>
         </div>
       </Card>
@@ -446,22 +644,23 @@ function DraftCard({
 
 function PublishedCard({
   announcement: a,
+  audienceName,
   currentUserId,
 }: {
   announcement: AnnouncementSummary;
+  audienceName: string;
   currentUserId: string;
 }) {
   return (
     <li>
       <Card className="space-y-3 p-4">
         <AnnouncementHeader announcement={a} />
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-          {a.body}
-        </p>
+        <ClampedBody body={a.body} />
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
           <span className="text-muted-foreground">
             Sent to {a.recipientCount} member
             {a.recipientCount === 1 ? "" : "s"}
+            {a.audience.scope === "team" ? ` of ${audienceName}` : ""}
             {a.senderId === currentUserId ? " · by you" : ""}
           </span>
           {a.presentation === "acknowledge" && (

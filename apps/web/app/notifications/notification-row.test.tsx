@@ -13,7 +13,7 @@ const base = {
   createdAt: new Date(),
 };
 
-function renderRow(props: Partial<typeof base> = {}) {
+function renderRow(props: Partial<typeof base> & { href?: string } = {}) {
   return render(
     <ul>
       <NotificationRow {...base} {...props} />
@@ -46,5 +46,29 @@ describe("NotificationRow", () => {
   it("suppresses attribution when there is no sender", () => {
     renderRow({ senderName: null });
     expect(screen.queryByText(/From/)).toBeNull();
+  });
+
+  it("links to the page a notification is about", () => {
+    renderRow({ href: "/questionnaires/3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44" });
+    const link = screen.getByRole("link");
+    expect(link.getAttribute("href")).toBe(
+      "/questionnaires/3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44",
+    );
+    expect(link.textContent).toContain("Schedule posted");
+  });
+
+  it("is not a link when it has nowhere to go", () => {
+    renderRow();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("clips the body only when the row opens the whole message", () => {
+    const { unmount } = renderRow({
+      href: "/announcements/3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44",
+    });
+    expect(screen.getByText(base.body).className).toContain("line-clamp-3");
+    unmount();
+    renderRow();
+    expect(screen.getByText(base.body).className).not.toContain("line-clamp");
   });
 });

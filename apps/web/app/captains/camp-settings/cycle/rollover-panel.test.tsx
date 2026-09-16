@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("../actions", () => ({
   advanceCycleAction: vi.fn(),
+  setCycleNameAction: vi.fn(),
   setFoundingYearAction: vi.fn(),
 }));
 
@@ -16,7 +17,11 @@ vi.mock("@camp404/ui/components/toast", () => ({
 }));
 
 import { RolloverPanel, type RolloverPlanView } from "./rollover-panel";
-import { advanceCycleAction, setFoundingYearAction } from "../actions";
+import {
+  advanceCycleAction,
+  setCycleNameAction,
+  setFoundingYearAction,
+} from "../actions";
 
 // Two screens behind one component, and the tests are about what makes each
 // one safe. The first asks what year it is and refuses anything that isn't a
@@ -311,6 +316,7 @@ describe("RolloverPanel — the confirm step", () => {
       expect(advanceCycleAction).toHaveBeenCalledWith({
         year: 2027,
         confirm: 2027,
+        expectedFromYear: 2026,
         resetDues: false,
         announcement: null,
       }),
@@ -334,6 +340,52 @@ describe("RolloverPanel — the confirm step", () => {
       ).toBeTruthy(),
     );
     expect(screen.queryByText("What just happened")).toBeNull();
+  });
+});
+
+describe("RolloverPanel — the year's name", () => {
+  it("shows the name beside the year, and saves a change", async () => {
+    vi.mocked(setCycleNameAction).mockResolvedValue({
+      ok: true,
+      name: "Kinetic",
+    });
+    render(
+      <RolloverPanel
+        plan={{ ...plan, from: { ...plan.from!, name: "Temple of Tides" } }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "You're in 2026 (Temple of Tides)" }),
+    ).toBeTruthy();
+    const save = screen.getByRole("button", { name: "Save the name" });
+    // Nothing to save until the name changes.
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Name for 2026 (optional)"), {
+      target: { value: " Kinetic " },
+    });
+    fireEvent.click(save);
+
+    await waitFor(() =>
+      expect(setCycleNameAction).toHaveBeenCalledWith({
+        year: 2026,
+        name: "Kinetic",
+      }),
+    );
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it("offers to remove a name when the box is cleared", () => {
+    render(
+      <RolloverPanel
+        plan={{ ...plan, from: { ...plan.from!, name: "Temple of Tides" } }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Name for 2026 (optional)"), {
+      target: { value: "" },
+    });
+    expect(screen.getByRole("button", { name: "Remove the name" })).toBeTruthy();
   });
 });
 

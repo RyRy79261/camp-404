@@ -11,6 +11,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
+  getBurnerProfile: vi.fn(),
   hasCampAccess: vi.fn(),
   upsertBurnerProfile: vi.fn(),
   setIdDocuments: vi.fn(),
@@ -28,6 +29,7 @@ import { saveBurnerProfile } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
+  getBurnerProfile,
   hasCampAccess,
   setIdDocuments,
   setProfileImage,
@@ -65,6 +67,7 @@ describe("saveBurnerProfile persistence error handling", () => {
       approvalStatus: "approved",
     });
     vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(getBurnerProfile).mockResolvedValue(null);
     vi.mocked(upsertBurnerProfile).mockResolvedValue(undefined);
     vi.mocked(getQuestionnaireForResponses).mockResolvedValue(catalogue);
     // Silence the intentional console.error in the catch.
@@ -86,6 +89,32 @@ describe("saveBurnerProfile persistence error handling", () => {
     if (!result.ok) {
       expect(result.errors._form).toMatch(/couldn't save/i);
     }
+  });
+
+  it("refuses any save once the profile is complete, and writes nothing", async () => {
+    vi.mocked(getBurnerProfile).mockResolvedValue({
+      completedAt: new Date("2026-09-01"),
+    } as never);
+
+    for (const final of [false, true]) {
+      const result = await saveBurnerProfile({}, final);
+      expect(result).toEqual({
+        ok: false,
+        errors: { _form: expect.stringMatching(/already complete/) },
+      });
+    }
+    expect(upsertBurnerProfile).not.toHaveBeenCalled();
+    expect(setIdDocuments).not.toHaveBeenCalled();
+    expect(setProfileImage).not.toHaveBeenCalled();
+  });
+
+  it("does not mark the profile complete when the ID write fails", async () => {
+    // The ID write now comes first, so a failure leaves nothing complete and
+    // the member can submit again.
+    vi.mocked(setIdDocuments).mockRejectedValue(new Error("encrypt failed"));
+    const result = await saveBurnerProfile(responsesWithId, false);
+    expect(result.ok).toBe(false);
+    expect(upsertBurnerProfile).not.toHaveBeenCalled();
   });
 
   it("returns ok on a successful non-final save", async () => {
@@ -144,6 +173,7 @@ describe("saveBurnerProfile response bounds", () => {
       approvalStatus: "approved",
     } as never);
     vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(getBurnerProfile).mockResolvedValue(null);
     vi.mocked(upsertBurnerProfile).mockResolvedValue(undefined);
     vi.mocked(setIdDocuments).mockResolvedValue(undefined);
     vi.mocked(setProfileImage).mockResolvedValue(undefined);

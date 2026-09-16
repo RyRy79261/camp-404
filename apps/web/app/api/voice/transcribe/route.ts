@@ -17,8 +17,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Explicit windows: 30 clips a minute per member, 60 per address.
   const limit = await rateLimiter.limit(`voice-transcribe:${user.id}`, {
     limit: 30,
+    windowMs: 60_000,
   });
   if (!limit.ok) {
     return NextResponse.json(
@@ -31,7 +33,7 @@ export async function POST(req: Request) {
   // mint via repeated signups.
   const ipLimit = await rateLimiter.limit(
     `voice-transcribe-ip:${getClientIp(req.headers)}`,
-    { limit: 60 },
+    { limit: 60, windowMs: 60_000 },
   );
   if (!ipLimit.ok) {
     return NextResponse.json(
@@ -71,8 +73,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ text });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Transcription failed";
-    // Don't leak Groq error internals to the client.
-    console.error("voice-transcribe error", err);
+    // Don't leak Groq error internals to the client, or to the log: the SDK
+    // error carries Groq's response body and headers. Name and status only.
+    console.error(
+      "voice-transcribe error",
+      err instanceof Error ? err.name : typeof err,
+      (err as { status?: unknown } | null)?.status ?? "",
+    );
     return NextResponse.json(
       { error: message.includes("GROQ_API_KEY") ? "Voice not configured" : "Transcription failed" },
       { status: 502 },

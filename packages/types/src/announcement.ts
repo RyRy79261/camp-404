@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Team } from "./roles";
 
 // Presentation variants for a notification — how hard it interrupts the
 // recipient in-app. Mirrors `broadcast_presentation` in the DB schema.
@@ -12,17 +13,24 @@ export const AnnouncementPresentation = z.enum([
 ]);
 export type AnnouncementPresentation = z.infer<typeof AnnouncementPresentation>;
 
-// What a captain composes. Title and body are required; presentation defaults
-// to the full-screen acknowledge variant, which is the primary use case
-// (camp-wide announcements everyone must see and dismiss).
-//
-// This intentionally covers only the camp-wide subset: scope is fixed to
-// 'everyone' with no send_at/channel here. The scoped (team / drivers /
-// individual) and scheduled compose inputs land with the gating + push UIs
-// that drive `resolveAudience` / `dispatchDueBroadcasts` (@camp404/db/audience).
+// Who an announcement is for: the whole camp, or one team this year. A team
+// lead may only pick a team they lead (owner's call, 2026-09-16); the server
+// checks that, this only shapes the input. Other broadcast scopes (team leads,
+// drivers, individuals) are not composed here.
+export const AnnouncementAudience = z.discriminatedUnion("scope", [
+  z.object({ scope: z.literal("everyone") }),
+  z.object({ scope: z.literal("team"), team: Team }),
+]);
+export type AnnouncementAudience = z.infer<typeof AnnouncementAudience>;
+
+// What a captain or team lead composes. Title and body are required;
+// presentation defaults to the full-screen acknowledge variant, which is the
+// primary use case (camp-wide announcements everyone must see and dismiss).
+// No send_at or channel here: publishing sends now, on the default channel.
 export const ComposeAnnouncementInput = z.object({
   title: z.string().trim().min(1, "Give it a title.").max(120),
   body: z.string().trim().min(1, "Write the announcement.").max(5000),
   presentation: AnnouncementPresentation.default("acknowledge"),
+  audience: AnnouncementAudience.default({ scope: "everyone" }),
 });
 export type ComposeAnnouncementInput = z.infer<typeof ComposeAnnouncementInput>;

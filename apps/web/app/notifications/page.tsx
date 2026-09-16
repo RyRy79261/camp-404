@@ -4,8 +4,17 @@ import { DetailHeader } from "@camp404/ui/components/detail-header";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { listInbox, markRead } from "@/lib/notifications";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
-import { NotificationRow } from "./notification-row";
+import {
+  ensureCampUser,
+  getPendingQuestionnaires,
+  hasCampAccess,
+  isApproved,
+  syncOpenGates,
+} from "@/lib/users";
+import { getIncomingPromotionsForUser } from "@/lib/promotion";
+import { QueueCard } from "@/components/questionnaire/queue-card";
+import { InboxFeed } from "./inbox-feed";
+import { PromotionRequestCard } from "./promotion-request-card";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +25,7 @@ export const metadata = { title: "Notifications — Camp 404" };
 // ones that were still unread on arrival. Opening the inbox clears the unread
 // badge (marks everything read) — acknowledgements are handled separately by
 // the full-screen gate, so reading here never counts as acknowledging.
+
 export default async function NotificationsPage() {
   const authUser = await getAuthenticatedUserOrRedirect();
   const campUser = await ensureCampUser(authUser);
@@ -23,9 +33,22 @@ export default async function NotificationsPage() {
     redirect("/signup/required");
   }
 
-  // Snapshot the inbox (with pre-read state), then clear the badge for exactly
-  // those rows — a delivery that arrives after the snapshot stays unread.
-  const items = await listInbox(campUser.id);
+  // The questionnaires still waiting on this member. Reading the inbox never
+  // clears these: only finishing the form does (owner's call, 2026-09-16:
+  // "a notification section that would shout until it's done"). Sync first, so
+  // a member who joined after a send opened sees it here too.
+  await syncOpenGates(campUser.id);
+  const pending = await getPendingQuestionnaires(campUser.id);
+  // A captain request waits here too. Only an approved member can accept one
+  // (the action refuses anyone else), so nobody else is shown it.
+  const promotions = isApproved(campUser, authUser.primaryEmail)
+    ? await getIncomingPromotionsForUser(campUser.id)
+    : [];
+
+  // Snapshot the first page (with pre-read state), then clear the badge for
+  // exactly those rows — a delivery that arrives after the snapshot stays
+  // unread, and so do older ones until they are scrolled into view.
+  const { items, nextCursor } = await listInbox(campUser.id);
   await markRead(
     campUser.id,
     items.map((i) => i.id),
@@ -55,29 +78,69 @@ export default async function NotificationsPage() {
         </p>
       </div>
 
-      {items.length === 0 ? (
-        <div className="px-4 py-6">
-          <EmptyState
-            icon={<BellOff className="h-5 w-5" aria-hidden />}
-            title="No notifications yet."
-            description="Everything sent your way will appear here."
-          />
-        </div>
-      ) : (
-        <ul className="flex flex-col gap-3 px-4 pb-5 pt-2">
-          {items.map((item) => (
-            <NotificationRow
-              key={item.id}
-              presentation={item.presentation}
-              title={item.title}
-              body={item.body}
-              senderName={item.senderName}
-              isNew={item.readAt === null}
-              acknowledgedAt={item.acknowledgedAt}
-              createdAt={item.createdAt}
+      {promotions.length > 0 && (
+        <section
+          aria-label="Captain request"
+          className="flex flex-col gap-3 px-4 pb-1 pt-3"
+        >
+          {promotions.map((p) => (
+            <PromotionRequestCard
+              key={p.id}
+              requestId={p.id}
+              requesterName={p.requestedByName}
             />
           ))}
-        </ul>
+        </section>
+      )}
+
+      {pending.length > 0 && (
+        <section
+          aria-labelledby="needs-your-answer"
+          className="flex flex-col gap-3 px-4 pb-4 pt-3"
+        >
+          <div className="flex flex-col gap-1">
+            <h2 id="needs-your-answer" className="text-lg font-bold">
+              Needs your answer
+            </h2>
+            <p className="text-label text-muted-foreground">
+              {pending.length === 1
+                ? "A captain is waiting on this questionnaire. It stays here until you finish it."
+                : `A captain is waiting on these ${pending.length} questionnaires. They stay here until you finish them.`}
+            </p>
+          </div>
+          <ul className="flex flex-col gap-3">
+            {pending.map((q) => (
+              <li key={q.activationId}>
+                <QueueCard
+                  title={q.title}
+                  status="next-up"
+                  blocking={q.blocking}
+                  dueAt={q.dueAt}
+                  href={`/questionnaires/${q.activationId}`}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {items.length === 0 ? (
+        pending.length === 0 &&
+        promotions.length === 0 && (
+          <div className="px-4 py-6">
+            <EmptyState
+              icon={<BellOff className="h-5 w-5" aria-hidden />}
+              title="No notifications yet."
+              description="Everything sent your way will appear here."
+            />
+          </div>
+        )
+      ) : (
+        <InboxFeed
+          initialItems={items}
+          initialCursor={nextCursor}
+          now={new Date()}
+        />
       )}
     </main>
   );

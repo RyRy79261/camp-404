@@ -13,13 +13,23 @@ import { isE2ETestMode } from "./test-mode";
  * authoritative step and must not be undone by a blob-store hiccup. A refused
  * erasure (the camp's last captain) wrote nothing, so it takes no blobs with
  * it either.
+ *
+ * The blobs are filed under the member's NEON AUTH id (the upload routes use
+ * the session user's id), not the camp `users.id`. Sweeping the camp id found
+ * an empty folder, so erasure left every photo and image answer behind. And
+ * after erasure nothing links the folder to the member, because
+ * `authUserId` is rewritten to `deleted:<id>`. So the caller passes the auth
+ * id it holds from the session.
  */
-export async function deleteAccount(userId: string): Promise<SanitiseResult> {
+export async function deleteAccount(input: {
+  userId: string;
+  authUserId: string;
+}): Promise<SanitiseResult> {
   if (isE2ETestMode()) return { ok: true, lostCatNumber: 0 };
-  const result = await sanitiseAccount(userId);
+  const result = await sanitiseAccount(input.userId);
   if (!result.ok) return result;
   try {
-    await deleteAvatarBlobs(userId);
+    await deleteAvatarBlobs(input.authUserId);
   } catch (err) {
     console.error("avatar-cleanup error (account erasure)", err);
   }

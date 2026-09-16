@@ -104,6 +104,23 @@ describe("submitFeedbackAction", () => {
     if (!res.ok) expect(res.error).toMatch(/set up/i);
   });
 
+  it("refuses an unconfigured tracker before spending a rate limit or an AI call", async () => {
+    delete process.env.GITHUB_FEEDBACK_TOKEN;
+    const res = await submitFeedbackAction({ ...VALID, useAi: true });
+    expect(res).toMatchObject({ ok: false });
+    expect(rateLimiter.limit).not.toHaveBeenCalled();
+    expect(structureWithAi).not.toHaveBeenCalled();
+  });
+
+  it("logs GitHub's status but never its response body", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockFetch({ status: 422, text: async () => "echoed report text" });
+    await submitFeedbackAction(VALID);
+    const logged = error.mock.calls.flat().join(" ");
+    expect(logged).toContain("422");
+    expect(logged).not.toContain("echoed report text");
+  });
+
   it("fails gracefully when the repo slug is misconfigured", async () => {
     process.env.GITHUB_FEEDBACK_REPO = "bogus-no-slash";
     const res = await submitFeedbackAction(VALID);

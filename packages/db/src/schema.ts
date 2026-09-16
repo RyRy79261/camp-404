@@ -16,11 +16,12 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type {
-  BuilderQuestionnaire,
-  Questionnaire,
-  QuestionnaireFieldChange,
-  QuestionnaireResponses,
+import {
+  NOTIFICATION_KINDS,
+  type BuilderQuestionnaire,
+  type Questionnaire,
+  type QuestionnaireFieldChange,
+  type QuestionnaireResponses,
 } from "@camp404/types";
 // Type-only (erased at runtime — no import cycle with camp-config.ts, which
 // imports this schema): types the camp_settings.config JSONB column. The
@@ -164,6 +165,13 @@ export const broadcastKindEnum = pgEnum("broadcast_kind", [
   "system",
 ]);
 
+// What a delivery is about, for the member (NOTIFICATION_KINDS in
+// @camp404/types is the one list; the TypeScript union comes from it too).
+export const notificationKindEnum = pgEnum(
+  "notification_kind",
+  NOTIFICATION_KINDS,
+);
+
 export const broadcastScopeEnum = pgEnum("broadcast_scope", [
   "everyone",
   "team",
@@ -179,6 +187,17 @@ export const notificationChannelEnum = pgEnum("notification_channel", [
 ]);
 
 export const pushDeliveryStatusEnum = pgEnum("push_delivery_status", [
+  "queued",
+  "sent",
+  "failed",
+  "skipped",
+]);
+
+// Whether a delivery also goes out by email, and how that went. Set from
+// shouldEmailNotification (@camp404/core) when the delivery is written; rows
+// from before email existed are `skipped`, so turning email on never mails
+// old notices.
+export const emailDeliveryStatusEnum = pgEnum("email_delivery_status", [
   "queued",
   "sent",
   "failed",
@@ -977,6 +996,10 @@ export const notificationDeliveries = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
 
+    // Set from the payload builder in @camp404/core. The default only covers
+    // rows written before the column existed (migration 0024 backfills the
+    // questionnaire ones); every writer passes it.
+    kind: notificationKindEnum("kind").notNull().default("announcement"),
     title: text("title").notNull(),
     body: text("body").notNull(),
     channel: notificationChannelEnum("channel").notNull(),
@@ -988,6 +1011,9 @@ export const notificationDeliveries = pgTable(
     pushStatus: pushDeliveryStatusEnum("push_status")
       .notNull()
       .default("queued"),
+    emailStatus: emailDeliveryStatusEnum("email_status")
+      .notNull()
+      .default("skipped"),
 
     refType: text("ref_type"),
     refId: uuid("ref_id"),
@@ -1010,6 +1036,16 @@ export const notificationDeliveries = pgTable(
     userAckIdx: index("notification_deliveries_user_ack_idx").on(
       n.userId,
       n.acknowledgedAt,
+    ),
+    // The email drain reads only queued rows.
+    emailQueueIdx: index("notification_deliveries_email_queue_idx")
+      .on(n.createdAt)
+      .where(sql`${n.emailStatus} = 'queued'`),
+    // The inbox pages newest first: (created_at, id) is its cursor.
+    userCreatedIdx: index("notification_deliveries_user_created_idx").on(
+      n.userId,
+      n.createdAt.desc(),
+      n.id.desc(),
     ),
     broadcastIdx: index("notification_deliveries_broadcast_idx").on(
       n.broadcastId,
@@ -1258,6 +1294,12 @@ export const auditLog = pgTable(
   (a) => ({
     actorIdx: index("audit_log_actor_idx").on(a.actorId),
     actionIdx: index("audit_log_action_idx").on(a.action),
+    // Wave 0 promised these "with the first writer", and writers now exist
+    // (team assignment, the year rollover, year names). The two questions an
+    // audit trail is asked: what happened to THIS member or year, and what
+    // happened lately.
+    targetIdx: index("audit_log_target_idx").on(a.target),
+    createdAtIdx: index("audit_log_created_at_idx").on(a.createdAt.desc()),
   }),
 );
 

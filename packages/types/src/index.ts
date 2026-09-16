@@ -1,6 +1,7 @@
 export * from "./roles";
 export * from "./announcement";
 export * from "./member";
+export * from "./notification";
 export * from "./questionnaire";
 export * from "./questionnaire-builder";
 export * from "./questionnaire-queue";

@@ -148,6 +148,55 @@
       "when": 1788859966843,
       "tag": "0020_organic_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789556904920,
+      "tag": "0021_audit_log_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789557445131,
+      "tag": "0022_founder_code_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789557669873,
+      "tag": "0023_lowercase_invite_codes",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789562117782,
+      "tag": "0024_notification_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789562440889,
+      "tag": "0025_inbox_paging_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789563131164,
+      "tag": "0026_captain_promotion_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1789564714373,
+      "tag": "0027_email_status",
+      "breakpoints": true
     }
   ]
 }

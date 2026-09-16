@@ -39,7 +39,9 @@ export function parseMintArgs(args: string[]): MintInviteArgs {
     );
   }
   return {
-    code: opts.code,
+    // Codes are lowercase everywhere (normalizeInviteCode); a code minted as
+    // "Berlin" would otherwise never match what redeemers type.
+    code: opts.code.trim().toLowerCase(),
     createdByUserId: opts["created-by"] ?? null,
     note: opts.note ?? null,
     maxUses: opts["max-uses"] ? Number(opts["max-uses"]) : null,

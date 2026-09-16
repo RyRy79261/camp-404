@@ -6,10 +6,12 @@ import { isCampBootstrapped } from "@/lib/bootstrap";
 import {
   ensureCampUser,
   getBurnerProfile,
+  getPendingQuestionnaires,
   getPendingRequiredActions,
   hasCampAccess,
   isApproved,
   isTeamLead,
+  syncOpenGates,
 } from "@/lib/users";
 import { nextGate } from "@/lib/required-actions";
 import { deriveViewerRank, requireClearance } from "@camp404/core";
@@ -52,6 +54,9 @@ export default async function HomePage() {
   // Generic required_actions gate — the canonical "what blocks this user"
   // mechanism. Routes to the first pending blocking action's bespoke page
   // (today: the burner profile; future questionnaires slot in via the registry).
+  // A send only gates the people in its audience when it opens, so first hand
+  // this member the gates of any open send they have joined since.
+  await syncOpenGates(campUser.id);
   const gate = nextGate(await getPendingRequiredActions(campUser.id));
   if (gate) redirect(gate);
 
@@ -72,8 +77,13 @@ export default async function HomePage() {
 
   const initials = initialsFrom(campUser.displayName ?? user.primaryEmail);
   // Kick off the unread count alongside the team-lead probe below rather than
-  // serially before it.
-  const unreadPromise = countUnread(campUser.id);
+  // serially before it. The bell also counts every questionnaire still waiting
+  // on this member: reading the inbox clears the unread count, but not these,
+  // which stay until the form is finished.
+  const unreadPromise = Promise.all([
+    countUnread(campUser.id),
+    getPendingQuestionnaires(campUser.id),
+  ]).then(([unread, pending]) => unread + pending.length);
 
   // Map the stored rank (+ derived team-lead) onto the viewer clearance ladder.
   // Captains clear every group; a lead of any team clears their own + member

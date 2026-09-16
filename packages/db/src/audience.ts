@@ -13,7 +13,13 @@ export type BroadcastScope = (typeof broadcastScopeEnum.enumValues)[number];
 
 export interface AudienceData {
   /** Every camp user, with the flags needed to exclude non-real recipients. */
-  members: Array<{ id: string; isSystem: boolean; sanitised: boolean }>;
+  members: Array<{
+    id: string;
+    isSystem: boolean;
+    sanitised: boolean;
+    /** Only `approved` members are in a group audience (see computeAudience). */
+    approvalStatus: "pending" | "approved" | "rejected";
+  }>;
   /** team_memberships rows. */
   memberships: Array<{ userId: string; team: string; isLead: boolean }>;
   /** User ids with driver_profiles.intends_to_drive = true (the derived driver). */
@@ -26,6 +32,12 @@ export interface AudienceData {
  * Recipient user ids for a broadcast. Always excludes system actors, sanitised
  * accounts, and the sender, and de-duplicates. A team-scoped broadcast with no
  * `team` set resolves to nobody (the caller must set the team).
+ *
+ * A group audience (everyone, a team, the team leads, the drivers) is approved
+ * members only (owner's call, 2026-09-16). A pending or rejected applicant is
+ * not in the camp yet: they must not get the full-screen announcement takeover,
+ * nor be gated by a camp-wide questionnaire. `individual` is the exception: a
+ * captain picked that person by name.
  */
 export function computeAudience(
   broadcast: { scope: BroadcastScope; team: string | null },
@@ -35,11 +47,16 @@ export function computeAudience(
   const real = new Set(
     data.members.filter((m) => !m.isSystem && !m.sanitised).map((m) => m.id),
   );
+  const approved = new Set(
+    data.members
+      .filter((m) => real.has(m.id) && m.approvalStatus === "approved")
+      .map((m) => m.id),
+  );
 
   let ids: string[];
   switch (broadcast.scope) {
     case "everyone":
-      ids = [...real];
+      ids = [...approved];
       break;
     case "team":
       ids = broadcast.team
@@ -67,5 +84,6 @@ export function computeAudience(
     }
   }
 
-  return [...new Set(ids)].filter((id) => real.has(id) && id !== senderId);
+  const eligible = broadcast.scope === "individual" ? real : approved;
+  return [...new Set(ids)].filter((id) => eligible.has(id) && id !== senderId);
 }

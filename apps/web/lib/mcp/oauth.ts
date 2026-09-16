@@ -1,4 +1,5 @@
 import { createHttpDb, withTransaction } from "@camp404/db";
+import { isActiveMcpUser } from "@camp404/db/mcp";
 import * as schema from "@camp404/db/schema";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { generateOpaqueToken, sha256, verifyPkce } from "./tokens";
@@ -260,6 +261,10 @@ export async function rotateRefreshToken(input: {
       });
     const old = revoked[0];
     if (!old) return null; // unknown / expired / already rotated
+
+    // A member who is no longer approved gets no new tokens. Returning here
+    // still commits the revoke above, so the old refresh token is spent too.
+    if (!(await isActiveMcpUser(tx, old.userId))) return null;
 
     const access = generateOpaqueToken(32);
     const refresh = generateOpaqueToken(32);

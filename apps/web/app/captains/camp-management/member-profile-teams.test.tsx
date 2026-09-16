@@ -59,6 +59,7 @@ function loaded(overrides: Record<string, unknown> = {}) {
     promotionStep: { sent: false, accepted: false },
     promotionRequestId: null,
     promotionRequestIsMine: false,
+    promotionRequestedByName: null,
     teams: [],
     assignableTeams: [{ key: "kitchen", label: "Kitchen" }],
     ...overrides,
