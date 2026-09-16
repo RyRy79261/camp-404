@@ -2,6 +2,8 @@ import "server-only";
 
 import {
   acknowledgeDelivery as dbAcknowledgeDelivery,
+  claimPopups as dbClaimPopups,
+  countUnseenPopups as dbCountUnseenPopups,
   countAnnouncementAudience as dbCountAnnouncementAudience,
   countUnread as dbCountUnread,
   explainDraftRefusal as dbExplainDraftRefusal,
@@ -17,6 +19,7 @@ import {
   type AnnouncementPresentation,
   type AnnouncementReading,
   type AnnouncementSummary,
+  type ClaimedPopup,
   type InboxItem,
   type PendingAcknowledgement,
   type PublishResult,
@@ -35,6 +38,7 @@ export type {
   AnnouncementPresentation,
   AnnouncementReading,
   AnnouncementSummary,
+  ClaimedPopup,
   InboxItem,
   PendingAcknowledgement,
   PublishResult,
@@ -49,6 +53,8 @@ interface NotificationsBackend {
     broadcastId: string,
   ): Promise<AnnouncementReading | null>;
   getPendingAcknowledgements(userId: string): Promise<PendingAcknowledgement[]>;
+  countUnseenPopups(userId: string): Promise<number>;
+  claimPopups(userId: string): Promise<ClaimedPopup[]>;
   acknowledgeDelivery(input: {
     deliveryId: string;
     userId: string;
@@ -85,6 +91,8 @@ const realBackend: NotificationsBackend = {
   markRead: dbMarkRead,
   getAnnouncementForMember: dbGetAnnouncementForMember,
   getPendingAcknowledgements: dbGetPending,
+  countUnseenPopups: dbCountUnseenPopups,
+  claimPopups: dbClaimPopups,
   acknowledgeDelivery: dbAcknowledgeDelivery,
   listAnnouncements: dbListAnnouncements,
   createAnnouncementDraft: dbCreateDraft,
@@ -107,6 +115,12 @@ const testBackend: NotificationsBackend = {
   },
   async getAnnouncementForMember(userId, broadcastId) {
     return testStore.getAnnouncementForMember(userId, broadcastId);
+  },
+  async countUnseenPopups(userId) {
+    return testStore.countUnseenPopups(userId);
+  },
+  async claimPopups(userId) {
+    return testStore.claimPopups(userId);
   },
   async getPendingAcknowledgements(userId) {
     return testStore.getPendingAcknowledgements(userId);
@@ -219,4 +233,12 @@ export function getAnnouncementForMember(
   broadcastId: string,
 ): Promise<AnnouncementReading | null> {
   return backend().getAnnouncementForMember(userId, broadcastId);
+}
+
+export function countUnseenPopups(userId: string): Promise<number> {
+  return backend().countUnseenPopups(userId);
+}
+
+export function claimPopups(userId: string): Promise<ClaimedPopup[]> {
+  return backend().claimPopups(userId);
 }

@@ -496,6 +496,79 @@ export async function getPendingAcknowledgements(
   return rows;
 }
 
+/** The most pop-ups one claim shows, so a backlog cannot bury the screen. */
+export const POPUP_CLAIM_LIMIT = 3;
+
+/** A pop-up delivery, claimed for showing as a toast. */
+export interface ClaimedPopup {
+  deliveryId: string;
+  title: string;
+  body: string;
+  refType: string | null;
+  refId: string | null;
+  createdAt: Date;
+}
+
+/** Unread pop-up deliveries. The gate's poll reads it to know whether to claim. */
+export async function countUnseenPopups(userId: string): Promise<number> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.notificationDeliveries)
+    .where(
+      and(
+        eq(schema.notificationDeliveries.userId, userId),
+        eq(schema.notificationDeliveries.presentation, "popup"),
+        isNull(schema.notificationDeliveries.readAt),
+      ),
+    );
+  return row?.count ?? 0;
+}
+
+/**
+ * Claim a member's unread pop-up deliveries for showing, oldest first, and
+ * mark them read in the same statement.
+ *
+ * A pop-up shows once (owner's call, 2026-09-16), so the claim IS the showing:
+ * read_at is the "shown" mark. Two open tabs cannot both show one pop-up,
+ * because the second UPDATE re-checks read_at IS NULL on a row the first has
+ * already stamped. The message stays in the inbox, read.
+ */
+export async function claimPopups(userId: string): Promise<ClaimedPopup[]> {
+  const db = createHttpDb();
+  const oldest = db
+    .select({ id: schema.notificationDeliveries.id })
+    .from(schema.notificationDeliveries)
+    .where(
+      and(
+        eq(schema.notificationDeliveries.userId, userId),
+        eq(schema.notificationDeliveries.presentation, "popup"),
+        isNull(schema.notificationDeliveries.readAt),
+      ),
+    )
+    .orderBy(schema.notificationDeliveries.createdAt)
+    .limit(POPUP_CLAIM_LIMIT);
+  const rows = await db
+    .update(schema.notificationDeliveries)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        inArray(schema.notificationDeliveries.id, oldest),
+        eq(schema.notificationDeliveries.userId, userId),
+        isNull(schema.notificationDeliveries.readAt),
+      ),
+    )
+    .returning({
+      deliveryId: schema.notificationDeliveries.id,
+      title: schema.notificationDeliveries.title,
+      body: schema.notificationDeliveries.body,
+      refType: schema.notificationDeliveries.refType,
+      refId: schema.notificationDeliveries.refId,
+      createdAt: schema.notificationDeliveries.createdAt,
+    });
+  return rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
 /**
  * Acknowledge (and implicitly read) one delivery on the user's behalf.
  * Scoped to the owner so a user can only dismiss their own. Returns whether a

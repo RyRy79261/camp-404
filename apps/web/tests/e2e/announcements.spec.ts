@@ -119,4 +119,58 @@ test.describe("captain announcements (test-mode)", () => {
     const denied = await page.goto(readPage);
     expect(denied?.status()).toBe(404);
   });
+
+  test("a pop-up announcement shows once as a toast that opens it", async ({
+    page,
+    request,
+  }) => {
+    await login(page, { id: "member-auth", email: "member@example.com" });
+    await redeemInviteAtGate(page, "TEST-INVITE");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+
+    await login(page, {
+      id: "captain-auth",
+      email: "god@example.com",
+      displayName: "Captain Jo",
+    });
+    await page.goto("/");
+    await setRank(request, "captain-auth", "captain");
+    await page.goto("/captains/announcements");
+    await page.getByLabel("Title").fill("Water run");
+    await page.getByLabel("Message").fill("Truck leaves at 9.");
+    await page.getByLabel("How it lands").click();
+    await page.getByRole("option", { name: /Pop-up/ }).click();
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await page.getByRole("button", { name: "Publish to camp" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Publish to 1 member" })
+      .click();
+    await expect(page.getByText(/Published to 1 member/)).toBeVisible();
+
+    // The member gets a toast, not a takeover. (Not on the inbox page: opening
+    // the inbox reads everything in it, pop-ups included.)
+    await login(page, { id: "member-auth", email: "member@example.com" });
+    await page.goto("/");
+    const popup = page.getByRole("status").filter({ hasText: "Water run" });
+    await expect(popup).toBeVisible();
+    await expect(popup.getByText("Truck leaves at 9.")).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // It showed once: the next load polls again and shows no toast.
+    const polled = page.waitForResponse("**/api/notifications/pending");
+    await page.reload();
+    await polled;
+    await expect(
+      page.getByRole("status").filter({ hasText: "Water run" }),
+    ).toHaveCount(0);
+
+    // The inbox still lists it, and the row opens the announcement.
+    await page.goto("/notifications");
+    await page.getByRole("link", { name: /Water run/ }).click();
+    await expect(page).toHaveURL(/\/announcements\/[0-9a-f-]{36}$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Water run" }),
+    ).toBeVisible();
+  });
 });

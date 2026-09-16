@@ -18,10 +18,21 @@ import { cn } from "../lib/utils"
 
 export type ToastVariant = "info" | "success" | "warning" | "error"
 
+export interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
 export interface ToastOptions {
   description?: string
   /** ms before auto-dismiss; `Infinity` to persist until dismissed. */
   duration?: number
+  /**
+   * One follow-up the toast offers ("Open", "Undo"). Pressing it runs onClick
+   * and dismisses the toast. With an action, a long description is clipped to
+   * three lines, since the action leads to the whole of it.
+   */
+  action?: ToastAction
 }
 
 export interface ToastRecord {
@@ -30,6 +41,7 @@ export interface ToastRecord {
   title: string
   description?: string
   duration: number
+  action?: ToastAction
 }
 
 // Module store. CLIENT-ONLY: toast()/dismiss are imperative client APIs and the
@@ -90,6 +102,7 @@ function push(variant: ToastVariant, title: string, opts?: ToastOptions): number
       title,
       description: opts?.description,
       duration: normalizeDuration(opts?.duration),
+      action: opts?.action,
     },
   ]
   emit()
@@ -144,7 +157,26 @@ function ToastItem({ toast: t }: { toast: ToastRecord }) {
       <div className="min-w-0 flex-1">
         <p className="font-medium text-foreground">{t.title}</p>
         {t.description && (
-          <p className="mt-0.5 text-muted-foreground">{t.description}</p>
+          <p
+            className={cn(
+              "mt-0.5 whitespace-pre-line text-muted-foreground",
+              t.action && "line-clamp-3",
+            )}
+          >
+            {t.description}
+          </p>
+        )}
+        {t.action && (
+          <button
+            type="button"
+            onClick={() => {
+              t.action?.onClick()
+              dismiss(t.id)
+            }}
+            className="mt-1.5 rounded-sm text-[13px] font-semibold text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t.action.label}
+          </button>
         )}
       </div>
       <button

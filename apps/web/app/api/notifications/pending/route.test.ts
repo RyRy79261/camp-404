@@ -11,13 +11,17 @@ vi.mock("@/lib/users", () => ({
   isApproved: vi.fn(),
 }));
 vi.mock("@/lib/notifications", () => ({
+  countUnseenPopups: vi.fn(),
   getPendingAcknowledgements: vi.fn(),
 }));
 
 import { GET } from "./route";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { getPendingAcknowledgements } from "@/lib/notifications";
+import {
+  countUnseenPopups,
+  getPendingAcknowledgements,
+} from "@/lib/notifications";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -32,30 +36,32 @@ beforeEach(() => {
   vi.mocked(getPendingAcknowledgements).mockResolvedValue([
     { deliveryId: "d1" },
   ] as never);
+  vi.mocked(countUnseenPopups).mockResolvedValue(2);
 });
 
 describe("GET /api/notifications/pending", () => {
   it("returns an empty list to a signed-out visitor", async () => {
     vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
-    expect(await (await GET()).json()).toEqual({ pending: [] });
+    expect(await (await GET()).json()).toEqual({ pending: [], popups: 0 });
     expect(getPendingAcknowledgements).not.toHaveBeenCalled();
   });
 
   it("returns an empty list without camp access", async () => {
     vi.mocked(hasCampAccess).mockReturnValue(false);
-    expect(await (await GET()).json()).toEqual({ pending: [] });
+    expect(await (await GET()).json()).toEqual({ pending: [], popups: 0 });
     expect(getPendingAcknowledgements).not.toHaveBeenCalled();
   });
 
   it("takes over no applicant's screen", async () => {
     vi.mocked(isApproved).mockReturnValue(false);
-    expect(await (await GET()).json()).toEqual({ pending: [] });
+    expect(await (await GET()).json()).toEqual({ pending: [], popups: 0 });
     expect(getPendingAcknowledgements).not.toHaveBeenCalled();
   });
 
   it("returns an approved member's pending takeovers", async () => {
     expect(await (await GET()).json()).toEqual({
       pending: [{ deliveryId: "d1" }],
+      popups: 2,
     });
     expect(getPendingAcknowledgements).toHaveBeenCalledWith("user-1");
   });

@@ -601,6 +601,43 @@ export const testStore = {
         };
       });
   },
+  countUnseenPopups(userId: string): number {
+    return deliveries.filter(
+      (d) =>
+        d.userId === userId && d.presentation === "popup" && d.readAt === null,
+    ).length;
+  },
+  claimPopups(userId: string): Array<{
+    deliveryId: string;
+    title: string;
+    body: string;
+    refType: string | null;
+    refId: string | null;
+    createdAt: Date;
+  }> {
+    const now = new Date();
+    return deliveries
+      .filter(
+        (d) =>
+          d.userId === userId &&
+          d.presentation === "popup" &&
+          d.readAt === null,
+      )
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .slice(0, 3)
+      .map((d) => {
+        d.readAt = now;
+        return {
+          deliveryId: d.id,
+          title: d.title,
+          body: d.body,
+          // Test-store deliveries are announcements.
+          refType: "announcement",
+          refId: d.broadcastId,
+          createdAt: d.createdAt,
+        };
+      });
+  },
   acknowledgeDelivery(input: { deliveryId: string; userId: string }): boolean {
     const d = deliveries.find(
       (x) =>
