@@ -1,4 +1,4 @@
-import { humanizeKey } from "@camp404/core";
+import { MEDICAL_AUDIENCE_NOTE, humanizeKey } from "@camp404/core";
 import {
   BuilderQuestionnaire,
   Questionnaire,
@@ -23,7 +23,10 @@ const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({
 // `responses` at every write boundary and stored encrypted on `users`
 // (`passport_encrypted` / `sa_id_encrypted`, keyed off `id.type`); it is
 // decrypted back only for the owner and for captains. `id.type` is not
-// sensitive and stays in `responses`. Date of birth (`birthday`) intentionally
+// sensitive and stays in `responses`. The emergency contact answers are split
+// out the same way (by question role) and stored on users.emergency_contacts,
+// so every read of them by someone else goes through one audited path.
+// Date of birth (`birthday`) intentionally
 // stays in `responses` as ordinary profile data — it is not in the
 // encrypted-PII class (passport / SA-ID / bank details). See
 // docs/specs/2026-05-30-pii-at-rest-encryption-design.md.
@@ -64,7 +67,7 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 // archiving a team is interpretation, not shape (the response keys are the
 // stable enum), so it must NOT bump this. (Adding a brand-new team key is a
 // shape change — that's Phase 4, with an enum migration + a version bump.)
-export const QUESTIONNAIRE_VERSION = "2026.06.04-v9";
+export const QUESTIONNAIRE_VERSION = "2026.09.16-v10";
 
 // The two team-bound anchors in the burner questionnaire — the only parts that
 // depend on the live camp config. `resolveTeamBindings` injects the configured
@@ -101,6 +104,43 @@ function teamLeadOptions(
 }
 
 /**
+ * One emergency contact's three questions. The roles, not the ids, are what
+ * the save paths read (splitEmergencyContacts in @camp404/types): the Nth
+ * name, phone and relationship questions make contact N.
+ */
+function emergencyContactQuestions(slot: 1 | 2, required: boolean): Question[] {
+  const which = slot === 1 ? "" : "Second contact: ";
+  return [
+    {
+      id: `emergency.${slot}.name`,
+      kind: "short_text",
+      role: "emergency_contact_name",
+      prompt: `${which}Name`,
+      ...(slot === 1 ? {} : { helper: "Optional." }),
+      maxLength: 80,
+      required,
+    },
+    {
+      id: `emergency.${slot}.phone`,
+      kind: "phone",
+      role: "emergency_contact_phone",
+      prompt: `${which}Phone number`,
+      helper: "Include the country code, e.g. +27 82 555 1234.",
+      required,
+    },
+    {
+      id: `emergency.${slot}.relationship`,
+      kind: "short_text",
+      role: "emergency_contact_relationship",
+      prompt: `${which}How do you know them?`,
+      placeholder: "e.g. partner, parent, friend",
+      maxLength: 40,
+      required,
+    },
+  ];
+}
+
+/**
  * Build the burner-profile questionnaire. `teams` populates the team-interest
  * sliders + the team-lead multi-select; the caller decides which teams to pass:
  * active teams for a fresh picker, or all teams (incl. archived) when validating
@@ -124,6 +164,7 @@ export function buildQuestionnaire(
           {
             id: "profile.image",
             kind: "image",
+            role: "profile_photo",
             prompt: "Profile photo",
             helper: "A clear photo of your face works best.",
             required: false,
@@ -193,6 +234,7 @@ export function buildQuestionnaire(
           {
             id: "bio.statement",
             kind: "long_text",
+            role: "bio",
             enableDictation: true,
             prompt: "Tell us about yourself",
             helper:
@@ -375,11 +417,20 @@ export function buildQuestionnaire(
         ],
       },
       {
+        id: "emergency_contacts",
+        kind: "questions",
+        title: "Emergency contacts",
+        subtitle: `Who we call if something happens to you at the burn. Add at least one person. ${MEDICAL_AUDIENCE_NOTE}`,
+        questions: [
+          ...emergencyContactQuestions(1, true),
+          ...emergencyContactQuestions(2, false),
+        ],
+      },
+      {
         id: "dietary",
         kind: "questions",
         title: "Dietary requirements",
-        subtitle:
-          "Splitting dislikes from allergies so the kitchen knows what's preference and what's life-or-death.",
+        subtitle: `Splitting dislikes from allergies so the kitchen knows what's preference and what's life-or-death. ${MEDICAL_AUDIENCE_NOTE}`,
         questions: [
           {
             id: "dietary.dislikes",

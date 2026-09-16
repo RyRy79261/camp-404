@@ -45,11 +45,11 @@ export function MemberRoster({
     () =>
       rows.filter(
         (r) =>
-          matchesRosterQuery(r, query) &&
+          matchesRosterQuery(r, query, teamLabels) &&
           (chip === "all" || r.rank === "captain") &&
           (team === null || matchesTeam(r, team)),
       ),
-    [rows, query, chip, team],
+    [rows, query, chip, team, teamLabels],
   );
 
   // Resolve the open profile from the FILTERED rows, so narrowing the list to

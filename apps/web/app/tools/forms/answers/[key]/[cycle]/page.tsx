@@ -1,15 +1,9 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { displayResponseValue, getQuestionBlocks } from "@camp404/types";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { getAnsweredQuestionnaire } from "@/lib/forms";
-import {
-  ensureCampUser,
-  getBurnerProfile,
-  hasCampAccess,
-  isApproved,
-} from "@/lib/users";
+import { requireMemberPage } from "@/lib/member-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -32,18 +26,7 @@ export default async function AnsweredQuestionnairePage({
 }) {
   const { key, cycle: rawCycle } = await params;
 
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  const onboarding = await getBurnerProfile(campUser.id);
-  if (!onboarding?.completedAt) {
-    redirect("/onboarding/questionnaire");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
+  const { campUser } = await requireMemberPage();
 
   const cycle = Number(rawCycle);
   if (!Number.isInteger(cycle) || cycle < 1) notFound();

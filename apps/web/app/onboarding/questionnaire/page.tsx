@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
-import { flattenQuestions } from "@camp404/types";
+import { flattenQuestions, mergeEmergencyContacts } from "@camp404/types";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
   getBurnerProfile,
+  getEmergencyContacts,
   getIdDocuments,
   hasCampAccess,
   satisfyBurnerProfileAction,
@@ -54,14 +55,19 @@ export default async function QuestionnairePage({
     idType: null,
     idNumber: null,
   };
-  const initialResponses: QuestionnaireResponses = mergeIdNumber(
-    (profile?.responses as Record<string, unknown> | undefined) ?? {},
-    id,
-  ) as QuestionnaireResponses;
-
   // Team sliders + the team-lead multi-select come from the live camp config
   // (active teams only) — a fresh sign-up never sees an archived team.
   const questionnaire = await getQuestionnaireForPicker();
+
+  // The emergency contacts live on `users` too; put them back the same way.
+  const initialResponses: QuestionnaireResponses = mergeEmergencyContacts(
+    questionnaire,
+    mergeIdNumber(
+      (profile?.responses as Record<string, unknown> | undefined) ?? {},
+      id,
+    ),
+    await getEmergencyContacts(campUser.id),
+  ) as QuestionnaireResponses;
 
   const { start } = await searchParams;
   const questionCount = flattenQuestions(questionnaire).length;

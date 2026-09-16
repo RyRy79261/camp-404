@@ -47,12 +47,17 @@ const TeamLabel = z
   .max(40, "Keep team names under 40 characters.");
 const Direction = z.enum(["up", "down"]);
 
+type CaptainGate =
+  | { ok: true; captainId: string }
+  | { ok: false; error: string };
+
 /**
- * Captain-gate a team-settings action. Returns ok, or a captain-facing error
- * string for the caller to surface — same preview-but-locked comparator (D3)
- * the captain pages gate on.
+ * Captain-gate a team-settings action. Returns the captain's id (every change
+ * here writes an audit row naming them), or a captain-facing error string for
+ * the caller to surface — same preview-but-locked comparator (D3) the captain
+ * pages gate on.
  */
-async function requireCaptain(): Promise<TeamSettingsResult> {
+async function requireCaptain(): Promise<CaptainGate> {
   const authUser = await getAuthenticatedUser();
   if (!authUser) return { ok: false, error: "Not signed in." };
   const campUser = await ensureCampUser(authUser);
@@ -74,7 +79,7 @@ async function requireCaptain(): Promise<TeamSettingsResult> {
     "captain",
   );
   if (!cleared) return { ok: false, error: "Captain access only." };
-  return { ok: true };
+  return { ok: true, captainId: campUser.id };
 }
 
 // Relabelling, reordering, or archiving a team changes every surface that reads
@@ -108,8 +113,14 @@ export async function renameTeamAction(
   // two teams to the same thing at once cannot both win, and the loser's
   // transaction rolls back rather than leaving the roster filter ambiguous.
   try {
-    await mutateTeamsConfig((config) =>
-      renameTeam(config, parsedKey.data, parsedLabel.data),
+    await mutateTeamsConfig(
+      (config) => renameTeam(config, parsedKey.data, parsedLabel.data),
+      {
+        actorId: gate.captainId,
+        action: "camp.teams.renamed",
+        target: parsedKey.data,
+        metadata: { label: parsedLabel.data },
+      },
     );
   } catch (error) {
     if (error instanceof TeamNameConflictError) {
@@ -135,8 +146,14 @@ export async function moveTeamAction(
   if (!parsedKey.success || !parsedDirection.success) {
     return { ok: false, error: "Invalid move." };
   }
-  await mutateTeamsConfig((config) =>
-    moveTeam(config, parsedKey.data, parsedDirection.data),
+  await mutateTeamsConfig(
+    (config) => moveTeam(config, parsedKey.data, parsedDirection.data),
+    {
+      actorId: gate.captainId,
+      action: "camp.teams.moved",
+      target: parsedKey.data,
+      metadata: { direction: parsedDirection.data },
+    },
   );
   revalidateTeamSurfaces();
   return { ok: true };
@@ -159,14 +176,27 @@ export async function setTeamArchivedAction(
   // both slip through (the one that would breach throws and rolls back).
   // Recoverable by unarchiving regardless.
   try {
-    await mutateTeamsConfig((config) => {
-      const next = setTeamArchived(config, parsedKey.data, parsedArchived.data);
-      const active = next.teams.filter((team) => !team.archived).length;
-      if (active < MIN_ACTIVE_TEAMS) {
-        throw new TooFewActiveTeamsError();
-      }
-      return next;
-    });
+    await mutateTeamsConfig(
+      (config) => {
+        const next = setTeamArchived(
+          config,
+          parsedKey.data,
+          parsedArchived.data,
+        );
+        const active = next.teams.filter((team) => !team.archived).length;
+        if (active < MIN_ACTIVE_TEAMS) {
+          throw new TooFewActiveTeamsError();
+        }
+        return next;
+      },
+      {
+        actorId: gate.captainId,
+        action: parsedArchived.data
+          ? "camp.teams.archived"
+          : "camp.teams.unarchived",
+        target: parsedKey.data,
+      },
+    );
   } catch (error) {
     if (error instanceof TooFewActiveTeamsError) {
       return { ok: false, error: "At least two teams must stay active." };
@@ -275,12 +305,9 @@ export async function setFoundingYearAction(
     };
   }
 
-  const authUser = await getAuthenticatedUser();
-  const actorUserId = authUser ? (await ensureCampUser(authUser)).id : null;
-
   const result = await setFoundingYear({
     year: parsed.data.year,
-    actorUserId: actorUserId || null,
+    actorUserId: gate.captainId,
   });
   if (!result.ok) {
     return {
@@ -313,17 +340,10 @@ export async function advanceCycleAction(
     };
   }
 
-  // requireCaptain answers only "may they?", and the audit row wants "who?".
-  // Re-deriving costs one extra read on an action a camp runs once a year;
-  // widening the shared gate's return type to carry the user would touch every
-  // other caller.
-  const authUser = await getAuthenticatedUser();
-  const actorUserId = authUser ? (await ensureCampUser(authUser)).id : null;
-
   const result = await advanceCycle({
     year: parsed.data.year,
     expectedFromYear: parsed.data.expectedFromYear,
-    actorUserId: actorUserId || null,
+    actorUserId: gate.captainId,
     resetDues: parsed.data.resetDues ?? false,
     announcement: parsed.data.announcement ?? null,
   });
@@ -362,13 +382,10 @@ export async function setCycleNameAction(
     };
   }
 
-  const authUser = await getAuthenticatedUser();
-  const actorUserId = authUser ? (await ensureCampUser(authUser)).id : null;
-
   const result = await setCycleName({
     year: parsed.data.year,
     name: parsed.data.name,
-    actorUserId: actorUserId || null,
+    actorUserId: gate.captainId,
   });
   if (!result.ok) {
     return {

@@ -39,6 +39,8 @@ export interface PublicRosterRow {
  * is captain-only and must never be mapped for a non-captain viewer.
  */
 export interface RosterRow extends PublicRosterRow {
+  /** Sign-in email (captains assign DDT tickets by it); null when unknown. */
+  email: string | null;
   /** Overall signup standing, for the status pill. */
   status: RosterStatus;
   statusLabel: string;
@@ -99,6 +101,7 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
 
   return {
     ...toPublicRosterRow(member),
+    email: member.email ?? null,
     status,
     statusLabel: STATUS_LABEL[status],
     approvalStatus: member.approvalStatus,
@@ -190,12 +193,16 @@ export function matchesTeam(row: PublicRosterRow, team: string): boolean {
 }
 
 /**
- * Free-text roster search over name, handle, country, and team values. Pure +
- * two-arg (plan 05 line 239). Email search is intentionally absent until the PII
- * decision lands (spec OQ#1) — there's no email on the row yet. Empty/whitespace
- * query matches everything.
+ * Free-text roster search over name, handle, rank, country, team (its key and
+ * its configured label, so "Cuisine" finds a relabelled kitchen) and, on a
+ * captain's row, email. A member's row carries no email, so a member can never
+ * search by one. Empty/whitespace query matches everything.
  */
-export function matchesRosterQuery(row: PublicRosterRow, query: string): boolean {
+export function matchesRosterQuery(
+  row: PublicRosterRow & { email?: string | null },
+  query: string,
+  teamLabels: Record<string, string> = {},
+): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   return (
@@ -203,7 +210,12 @@ export function matchesRosterQuery(row: PublicRosterRow, query: string): boolean
     (row.handle?.toLowerCase().includes(q) ?? false) ||
     row.rankLabel.toLowerCase().includes(q) ||
     (row.country?.toLowerCase().includes(q) ?? false) ||
-    row.teams.some((t) => t.toLowerCase().includes(q))
+    row.teams.some(
+      (t) =>
+        t.toLowerCase().includes(q) ||
+        (teamLabels[t]?.toLowerCase().includes(q) ?? false),
+    ) ||
+    (row.email?.toLowerCase().includes(q) ?? false)
   );
 }
 

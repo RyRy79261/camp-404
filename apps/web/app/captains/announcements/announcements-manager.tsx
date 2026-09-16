@@ -415,6 +415,7 @@ export function AnnouncementsManager({
                 key={a.id}
                 announcement={a}
                 audienceName={audienceName(a.audience)}
+                currentUserId={currentUserId}
                 pending={pending}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
@@ -585,6 +586,7 @@ function ClampedBody({ body }: { body: string }) {
 function DraftCard({
   announcement: a,
   audienceName,
+  currentUserId,
   pending,
   onEdit,
   onDelete,
@@ -592,51 +594,61 @@ function DraftCard({
 }: {
   announcement: AnnouncementSummary;
   audienceName: string;
+  currentUserId: string;
   pending: boolean;
   onEdit: (a: AnnouncementSummary) => void;
   onDelete: (id: string) => void;
   onPublish: (a: AnnouncementSummary) => void;
 }) {
+  // Drafts belong to their author: the server refuses anyone else's edit,
+  // delete or publish, so another captain's draft shows who wrote it instead of
+  // buttons that can only fail.
+  const mine = a.senderId === currentUserId;
   return (
     <li>
       <Card className="space-y-3 p-4">
         <AnnouncementHeader announcement={a} />
-        <p className="text-xs text-muted-foreground">For {audienceName}</p>
+        <p className="text-xs text-muted-foreground">
+          For {audienceName}
+          {mine ? "" : ` · by ${a.senderName ?? "another captain"}`}
+        </p>
         <ClampedBody body={a.body} />
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => onEdit(a)}
-            disabled={pending}
-          >
-            <Pencil className="h-4 w-4" /> Edit
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-1.5 border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => onDelete(a.id)}
-            disabled={pending}
-          >
-            <Trash2 className="h-4 w-4" /> Delete
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => onPublish(a)}
-            disabled={pending}
-          >
-            <Send className="h-4 w-4" />{" "}
-            {a.audience.scope === "team"
-              ? `Publish to ${audienceName}`
-              : "Publish to camp"}
-          </Button>
-        </div>
+        {mine && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => onEdit(a)}
+              disabled={pending}
+            >
+              <Pencil className="h-4 w-4" /> Edit
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => onDelete(a.id)}
+              disabled={pending}
+            >
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => onPublish(a)}
+              disabled={pending}
+            >
+              <Send className="h-4 w-4" />{" "}
+              {a.audience.scope === "team"
+                ? `Publish to ${audienceName}`
+                : "Publish to camp"}
+            </Button>
+          </div>
+        )}
       </Card>
     </li>
   );

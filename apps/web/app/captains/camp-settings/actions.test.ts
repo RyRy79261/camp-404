@@ -179,6 +179,13 @@ describe("renameTeamAction", () => {
     const transform = vi.mocked(mutateTeamsConfig).mock.calls[0]![0];
     const next = transform(twoActive);
     expect(next.teams.find((t) => t.key === "kitchen")?.label).toBe("Cuisine");
+    // The audit row names the captain, the team and the new name.
+    expect(vi.mocked(mutateTeamsConfig).mock.calls[0]![1]).toEqual({
+      actorId: "cap-1",
+      action: "camp.teams.renamed",
+      target: "kitchen",
+      metadata: { label: "Cuisine" },
+    });
   });
 
   // The refusal a captain actually sees. renameTeam throws from inside the
@@ -228,6 +235,12 @@ describe("moveTeamAction", () => {
       "structures",
       "kitchen",
     ]);
+    expect(vi.mocked(mutateTeamsConfig).mock.calls[0]![1]).toEqual({
+      actorId: "cap-1",
+      action: "camp.teams.moved",
+      target: "structures",
+      metadata: { direction: "up" },
+    });
   });
 });
 
@@ -248,12 +261,20 @@ describe("setTeamArchivedAction — minimum-active-teams guard", () => {
     const result = await setTeamArchivedAction("kitchen", true);
     expect(result).toEqual({ ok: true });
     expect(mutateTeamsConfig).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(mutateTeamsConfig).mock.calls[0]![1]).toEqual({
+      actorId: "cap-1",
+      action: "camp.teams.archived",
+      target: "kitchen",
+    });
   });
 
   it("always allows unarchiving (can't reduce the active count)", async () => {
     writerOver(oneActive);
     const result = await setTeamArchivedAction("structures", false);
     expect(result).toEqual({ ok: true });
+    expect(vi.mocked(mutateTeamsConfig).mock.calls[0]![1]).toMatchObject({
+      action: "camp.teams.unarchived",
+    });
   });
 });
 

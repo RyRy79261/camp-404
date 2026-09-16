@@ -1,4 +1,9 @@
-import type { Database, PooledDatabase, Tx } from "./index";
+import {
+  createHttpDb,
+  type Database,
+  type PooledDatabase,
+  type Tx,
+} from "./index";
 import * as schema from "./schema";
 
 // The single writer for `audit_log`. Every privileged action that changes
@@ -44,4 +49,13 @@ export async function writeAuditEvent(
     target: event.target ?? null,
     metadata: event.metadata ?? null,
   });
+}
+
+/**
+ * Append one audit row on its own connection. Only for an event with no
+ * change to share a transaction with: a privileged READ, such as a captain
+ * opening someone's ID number. A write must use writeAuditEvent with its tx.
+ */
+export async function appendAuditEvent(event: AuditEvent): Promise<void> {
+  await writeAuditEvent(createHttpDb(), event);
 }

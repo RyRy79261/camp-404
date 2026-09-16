@@ -1,5 +1,12 @@
 import { and, eq, sql } from "drizzle-orm";
 import { approvalNotification } from "@camp404/core";
+import type {
+  EmergencyContact,
+  QuestionnaireFieldChange,
+} from "@camp404/types";
+import { satisfyRequiredAction } from "./activations";
+import { writeAuditEvent, type DbOrTx } from "./audit";
+import { recordQuestionnaireEdit } from "./questionnaire-edits";
 import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
@@ -60,7 +67,13 @@ export async function setUserApprovalStatus(
   const db = createHttpDb();
   await db
     .update(schema.users)
-    .set({ approvalStatus: status, updatedAt: new Date() })
+    // A reason belongs to the decision it was written for, so it goes when
+    // the status moves.
+    .set({
+      approvalStatus: status,
+      approvalDecisionReason: null,
+      updatedAt: new Date(),
+    })
     .where(eq(schema.users.id, userId));
 }
 
@@ -79,13 +92,17 @@ export async function setUserApprovalStatus(
  * An approval also tells the member, in the same transaction: a pop-up and a
  * push saying they are in. Only the call that won the compare-and-set writes
  * it, so a second captain's click cannot send it twice. A rejection sends
- * nothing (see approvalNotification).
+ * nothing (see approvalNotification). The winning call also writes a
+ * `member.approval_decided` audit row in the same transaction.
  */
 export async function setUserApproval(input: {
   userId: string;
   status: "approved" | "rejected";
   decidedByUserId: string;
+  /** What the captain tells the member; null or blank means none. */
+  reason?: string | null;
 }): Promise<boolean> {
+  const reason = input.reason?.trim() || null;
   return await withTransaction(async (tx) => {
     const rows = await tx
       .update(schema.users)
@@ -93,6 +110,7 @@ export async function setUserApproval(input: {
         approvalStatus: input.status,
         approvalDecidedByUserId: input.decidedByUserId,
         approvalDecidedAt: new Date(),
+        approvalDecisionReason: reason,
         updatedAt: new Date(),
       })
       .where(
@@ -103,6 +121,14 @@ export async function setUserApproval(input: {
       )
       .returning({ id: schema.users.id });
     if (rows.length === 0) return false;
+    await writeAuditEvent(tx, {
+      actorId: input.decidedByUserId,
+      action: "member.approval_decided",
+      target: input.userId,
+      // Whether a reason was given, not the words: the audit row records the
+      // decision, and the reason lives on the member's row.
+      metadata: { status: input.status, withReason: reason !== null },
+    });
     if (input.status === "approved") {
       await tx.insert(schema.notificationDeliveries).values(
         deliveryValues(approvalNotification(), {
@@ -165,13 +191,15 @@ export async function getBurnerProfileByUserId(userId: string) {
   return rows[0] ?? null;
 }
 
-export async function upsertBurnerProfile(input: {
-  userId: string;
-  version: string;
-  responses: Record<string, unknown>;
-  markComplete: boolean;
-}) {
-  const db = createHttpDb();
+export async function upsertBurnerProfile(
+  input: {
+    userId: string;
+    version: string;
+    responses: Record<string, unknown>;
+    markComplete: boolean;
+  },
+  db: DbOrTx = createHttpDb(),
+) {
   const now = new Date();
   await db
     .insert(schema.burnerProfiles)
@@ -211,14 +239,113 @@ export async function getIdDocumentColumns(userId: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * The member's emergency contacts, or null when none are on file (or there is
+ * no such member). Safety data: a caller reading someone else's goes through
+ * resolveSafetyDataForViewer, which authorises and audits.
+ */
+export async function getEmergencyContactsColumn(
+  userId: string,
+): Promise<EmergencyContact[] | null> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({ contacts: schema.users.emergencyContacts })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  const contacts = rows[0]?.contacts;
+  return contacts && contacts.length > 0 ? contacts : null;
+}
+
+/** Replace the member's emergency contacts; an empty list clears them. */
+export async function setEmergencyContactsColumn(
+  userId: string,
+  contacts: readonly EmergencyContact[],
+  db: DbOrTx = createHttpDb(),
+) {
+  await db
+    .update(schema.users)
+    .set({
+      emergencyContacts: contacts.length > 0 ? [...contacts] : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.users.id, userId));
+}
+
 /** Raw text write of the two ID-number ciphertext columns. */
 export async function setIdDocumentColumns(
   userId: string,
   cols: { passportEncrypted: string | null; saIdEncrypted: string | null },
+  db: DbOrTx = createHttpDb(),
 ) {
-  const db = createHttpDb();
   await db
     .update(schema.users)
     .set({ ...cols, updatedAt: new Date() })
     .where(eq(schema.users.id, userId));
+}
+
+export interface BurnerProfileReplay {
+  userId: string;
+  version: string;
+  /** The answers with the ID number and emergency contacts already split out. */
+  responses: Record<string, unknown>;
+  /** The ID ciphertext columns to write, or null to leave the ID alone. */
+  idColumns: {
+    passportEncrypted: string | null;
+    saIdEncrypted: string | null;
+  } | null;
+  /** The whole list; an empty list clears the column. */
+  emergencyContacts: readonly EmergencyContact[];
+  /** The change-log row, or null when the replay changed nothing. */
+  edit: {
+    questionnaireKey: string;
+    editedByUserId: string | null;
+    changes: QuestionnaireFieldChange[];
+  } | null;
+}
+
+/**
+ * Save a My forms replay of the burner profile in ONE transaction: the
+ * answers, the ID number, the emergency contacts, the gate, and the
+ * change-log row. Before this each was its own write, so a failure after the
+ * answers saved left them changed with no change-log row saying so.
+ */
+export async function saveBurnerProfileReplay(
+  input: BurnerProfileReplay,
+): Promise<void> {
+  await withTransaction(async (tx) => {
+    await upsertBurnerProfile(
+      {
+        userId: input.userId,
+        version: input.version,
+        responses: input.responses,
+        // A replay only happens on a completed form, so it stays complete.
+        markComplete: true,
+      },
+      tx,
+    );
+    if (input.idColumns) {
+      await setIdDocumentColumns(input.userId, input.idColumns, tx);
+    }
+    await setEmergencyContactsColumn(input.userId, input.emergencyContacts, tx);
+    // A re-submit also re-satisfies the gate (e.g. after a new version).
+    await satisfyRequiredAction(
+      input.userId,
+      "burner_profile",
+      input.version,
+      tx,
+    );
+    if (input.edit && input.edit.changes.length > 0) {
+      await recordQuestionnaireEdit(
+        {
+          userId: input.userId,
+          questionnaireKey: input.edit.questionnaireKey,
+          version: input.version,
+          editedByUserId: input.edit.editedByUserId,
+          changes: input.edit.changes,
+        },
+        tx,
+      );
+    }
+  });
 }

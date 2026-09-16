@@ -273,3 +273,58 @@ describe("presentMemberDetail — unreadable ID document", () => {
     expect(valueOf(items, "Document number")).toBeUndefined();
   });
 });
+
+describe("presentMemberDetail — emergency contacts", () => {
+  const contacts = [
+    { name: "Ada Byron", phone: "+27 82 555 0199", relationship: "sister" },
+  ];
+
+  it("lists them as Listed and in their own section when the caller read them", () => {
+    const m = presentWithCatalogue(detail(), DEFAULT_QUESTIONNAIRE, {
+      emergencyContacts: contacts,
+    });
+    expect(valueOf(m.overview, "Emergency contact")).toBe("Listed ✓");
+    const section = m.profileSections.find(
+      (s) => s.title === "Emergency contacts",
+    );
+    expect(section?.items).toEqual([
+      { label: "Ada Byron (sister)", value: "+27 82 555 0199" },
+    ]);
+  });
+
+  it("says not provided yet when the member has none on file", () => {
+    const m = presentWithCatalogue(detail(), DEFAULT_QUESTIONNAIRE, {
+      emergencyContacts: null,
+    });
+    expect(valueOf(m.overview, "Emergency contact")).toBe(
+      "Not provided yet — we’ll show it here once Dusty Boot adds it.",
+    );
+    expect(
+      m.profileSections.some((s) => s.title === "Emergency contacts"),
+    ).toBe(false);
+  });
+
+  it("shows no emergency row at all without the safety read", () => {
+    const m = presentMemberDetail(detail());
+    expect(valueOf(m.overview, "Emergency contact")).toBeUndefined();
+  });
+});
+
+describe("presentMemberDetail — captain-only facts", () => {
+  it("shows email and this year's arrival when the captain query read them", () => {
+    const m = presentMemberDetail(
+      detail({
+        email: "nova.reyes@gmail.com",
+        arrivalAt: new Date("2026-08-12T10:00:00Z"),
+      }),
+    );
+    expect(valueOf(m.overview, "Email")).toBe("nova.reyes@gmail.com");
+    expect(valueOf(m.overview, "Arrival date")).toBe("12 Aug 2026");
+  });
+
+  it("shows neither row when the detail carries neither", () => {
+    const m = presentMemberDetail(detail());
+    expect(valueOf(m.overview, "Email")).toBeUndefined();
+    expect(valueOf(m.overview, "Arrival date")).toBeUndefined();
+  });
+});

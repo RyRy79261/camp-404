@@ -47,11 +47,11 @@ export function CampManagementRoster({
     () =>
       rows.filter(
         (r) =>
-          matchesRosterQuery(r, query) &&
+          matchesRosterQuery(r, query, teamLabels) &&
           matchesChip(r, chip) &&
           (team === null || matchesTeam(r, team)),
       ),
-    [rows, query, chip, team],
+    [rows, query, chip, team, teamLabels],
   );
 
   // Resolve the open profile from the FILTERED rows, so narrowing the list to

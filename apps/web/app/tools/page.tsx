@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import {
   ChevronLeft,
   ClipboardList,
@@ -7,8 +6,7 @@ import {
 } from "lucide-react";
 import { DetailHeader } from "@camp404/ui/components/detail-header";
 import { NavCard } from "@camp404/ui/components/nav-card";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { requireMemberPage } from "@/lib/member-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -48,14 +46,7 @@ const TOOLS: ToolEntry[] = [
 ];
 
 export default async function ToolsPage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
+  await requireMemberPage();
 
   return (
     <main className="mx-auto w-full max-w-lg">

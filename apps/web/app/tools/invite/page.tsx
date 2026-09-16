@@ -1,8 +1,6 @@
-import { redirect } from "next/navigation";
 import { listInviteCodes } from "@camp404/db/invite-codes";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { requireMemberPage } from "@/lib/member-gate";
 import { InviteForm } from "./invite-form";
 import { InviteList } from "./invite-list";
 
@@ -11,14 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Invite — Camp 404" };
 
 export default async function InviteToolPage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
+  const { campUser } = await requireMemberPage();
 
   // A captain sees every code, the root code included; a member sees theirs.
   const isCaptain = campUser.rank === "captain";

@@ -2,11 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { diffResponses, validateResponses } from "@camp404/types";
+import {
+  diffResponses,
+  incompleteContactErrors,
+  validateResponses,
+} from "@camp404/types";
 import { ID_NUMBER_KEY } from "@camp404/db/id-documents";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { getReplayableForm, recordFormEdit } from "@/lib/forms";
+import { getReplayableForm } from "@/lib/forms";
+import { identityAnswerErrors } from "@/lib/id-validation";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 
 export type SaveResult =
@@ -56,6 +61,24 @@ export async function saveFormReplay(
   const catalogue = await getQuestionnaireForResponses();
   const result = validateResponses(catalogue, rawResponses);
   if (!result.ok) return { ok: false, errors: result.errors };
+  // The wizard checks these before it submits; a direct POST skips it.
+  const identity = identityAnswerErrors(result.responses, new Date());
+  if (Object.keys(identity).length > 0) {
+    return {
+      ok: false,
+      errors: { ...identity, _root: "Check your ID number and date of birth." },
+    };
+  }
+  const contactErrors = incompleteContactErrors(catalogue, result.responses);
+  if (Object.keys(contactErrors).length > 0) {
+    return {
+      ok: false,
+      errors: {
+        ...contactErrors,
+        _root: "Finish or clear your second emergency contact.",
+      },
+    };
+  }
 
   const state = await form.load(campUser.id);
   if (!state?.completedAt) {
@@ -74,17 +97,13 @@ export async function saveFormReplay(
     result.responses,
   ).filter((c) => c.fieldId !== ID_NUMBER_KEY);
 
-  await form.save(campUser.id, result.responses);
-
-  if (changes.length > 0) {
-    await recordFormEdit({
-      userId: campUser.id,
-      questionnaireKey: form.key,
-      version: catalogue.version,
-      editedByUserId: campUser.id,
-      changes,
-    });
-  }
+  // The answers and their change-log row are one write: a failure leaves
+  // neither, never changed answers with no record.
+  await form.save(
+    campUser.id,
+    result.responses,
+    changes.length > 0 ? { editedByUserId: campUser.id, changes } : null,
+  );
 
   revalidatePath(`/tools/forms/${key}`);
   revalidatePath("/tools/forms");

@@ -1,8 +1,6 @@
-import { redirect } from "next/navigation";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { getReferralRoster } from "@camp404/db/relations";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { requireMemberPage } from "@/lib/member-gate";
 import { FamilyTree } from "./family-tree";
 
 export const dynamic = "force-dynamic";
@@ -10,14 +8,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Family tree — Camp 404" };
 
 export default async function FamilyTreePage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
+  const { campUser } = await requireMemberPage();
 
   const roster = await getReferralRoster();
 

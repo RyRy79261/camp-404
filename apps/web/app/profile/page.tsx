@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Pencil } from "lucide-react";
 import {
   Avatar,
@@ -8,13 +7,9 @@ import {
 } from "@camp404/ui/components/avatar";
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import {
-  ensureCampUser,
-  getBurnerProfile,
-  hasCampAccess,
-  isApproved,
-} from "@/lib/users";
+import { rankLabel } from "@/lib/camp-roster";
+import { requireMemberPage } from "@/lib/member-gate";
+import { isTeamLead } from "@/lib/users";
 import { initialsFrom } from "@/lib/initials";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 
@@ -22,23 +17,12 @@ import { SignOutLink } from "@/components/auth/sign-out-link";
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  const profile = await getBurnerProfile(campUser.id);
-  // Until the burner profile is finished, the questionnaire owns the flow.
-  if (!profile?.completedAt) {
-    redirect("/onboarding/questionnaire");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
+  const { authUser, campUser } = await requireMemberPage();
 
   const name = campUser.displayName ?? authUser.primaryEmail ?? "Burner";
   const initials = initialsFrom(campUser.displayName ?? authUser.primaryEmail);
-  const rankLabel = campUser.rank === "captain" ? "Captain" : "Member";
+  // The same pill the roster shows: a team lead reads "Team Lead", not "Member".
+  const rank = rankLabel(campUser.rank, await isTeamLead(campUser.id));
 
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-sm flex-col justify-center px-5 py-8">
@@ -54,7 +38,7 @@ export default async function ProfilePage() {
           <h1 className="text-2xl font-bold">{name}</h1>
 
           <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">
-            {rankLabel}
+            {rank}
           </span>
 
           {authUser.primaryEmail && (

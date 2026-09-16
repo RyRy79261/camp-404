@@ -24,6 +24,9 @@ const validResponses: Record<string, unknown> = {
   "history.afrikaburn_count": "1_2",
   "intent.this_year": "want",
   "bio.statement": "Long-time burner, first-time member.",
+  "emergency.1.name": "Ada Byron",
+  "emergency.1.phone": "+27 82 555 0199",
+  "emergency.1.relationship": "sister",
 };
 
 describe("burner-profile questionnaire", () => {

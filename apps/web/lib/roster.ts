@@ -3,6 +3,7 @@ import "server-only";
 import {
   getCampManagementRoster as dbGetCampManagementRoster,
   type CampManagementMember,
+  type CampManagementRosterOptions,
 } from "@camp404/db/roster";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
@@ -17,7 +18,9 @@ import { testStore } from "./test-store";
 export type { CampManagementMember };
 
 interface RosterBackend {
-  getCampManagementRoster(): Promise<CampManagementMember[]>;
+  getCampManagementRoster(
+    options?: CampManagementRosterOptions,
+  ): Promise<CampManagementMember[]>;
 }
 
 const realBackend: RosterBackend = {
@@ -25,8 +28,8 @@ const realBackend: RosterBackend = {
 };
 
 const testBackend: RosterBackend = {
-  async getCampManagementRoster() {
-    return testStore.getCampManagementRoster();
+  async getCampManagementRoster(options) {
+    return testStore.getCampManagementRoster(options);
   },
 };
 
@@ -34,6 +37,9 @@ function backend(): RosterBackend {
   return isE2ETestMode() ? testBackend : realBackend;
 }
 
-export function getCampManagementRoster(): Promise<CampManagementMember[]> {
-  return backend().getCampManagementRoster();
+/** Pass `includeEmail` only for a captain viewer. */
+export function getCampManagementRoster(
+  options?: CampManagementRosterOptions,
+): Promise<CampManagementMember[]> {
+  return backend().getCampManagementRoster(options);
 }

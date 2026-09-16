@@ -22,6 +22,7 @@ export const EmergencyContact = z.object({
   phone: z.string().min(3),
   relationship: z.string().min(1),
 });
+export type EmergencyContact = z.infer<typeof EmergencyContact>;
 
 export const MembershipTier = z.enum(["full", "build_week_only"]);
 export type MembershipTier = z.infer<typeof MembershipTier>;

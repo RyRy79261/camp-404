@@ -17,19 +17,21 @@ vi.mock("@/lib/users", () => ({
 }));
 vi.mock("@/lib/forms", () => ({
   getReplayableForm: vi.fn(),
-  recordFormEdit: vi.fn(),
 }));
 vi.mock("@/lib/questionnaire-config", () => ({
   getQuestionnaireForResponses: vi.fn(),
 }));
-vi.mock("@camp404/db/id-documents", () => ({ ID_NUMBER_KEY: "id.number" }));
+vi.mock("@camp404/db/id-documents", () => ({
+  ID_NUMBER_KEY: "id.number",
+  ID_TYPE_KEY: "id.type",
+}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
 import { saveFormReplay } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { getReplayableForm, recordFormEdit } from "@/lib/forms";
+import { getReplayableForm } from "@/lib/forms";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 
 // Every required answer, so validateResponses passes and we can observe how the
@@ -39,7 +41,7 @@ const required: Record<string, unknown> = {
   phone: "+27 82 555 1234",
   country: "ZA",
   "id.type": "sa_id",
-  "id.number": "1234567890123",
+  "id.number": "8001015009087",
   "competency.cooking": "teach",
   "logistics.driving": "yes",
   "logistics.onsite_before": "yes_full",
@@ -47,6 +49,9 @@ const required: Record<string, unknown> = {
   "history.afrikaburn_count": "1_2",
   "intent.this_year": "want",
   "bio.statement": "Long-time burner.",
+  "emergency.1.name": "Ada Byron",
+  "emergency.1.phone": "+27 82 555 0199",
+  "emergency.1.relationship": "sister",
 };
 
 const ARCHIVED_KEY = "ministry_of_memes";
@@ -62,7 +67,11 @@ const fullCatalogue = buildQuestionnaire(
 
 describe("saveFormReplay — archive invariant", () => {
   const save = vi.fn(
-    async (_userId: string, _responses: Record<string, unknown>) => {},
+    async (
+      _userId: string,
+      _responses: Record<string, unknown>,
+      _edit: unknown,
+    ) => {},
   );
 
   beforeEach(() => {
@@ -86,6 +95,30 @@ describe("saveFormReplay — archive invariant", () => {
       errors: { _root: "Your account is still awaiting approval." },
     });
     expect(getReplayableForm).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("refuses an SA ID number with a wrong check digit, saving nothing", async () => {
+    vi.mocked(getReplayableForm).mockResolvedValue({
+      key: "burner_profile",
+      questionnaire: activePicker,
+      load: vi.fn(),
+      save,
+    } as never);
+
+    const result = await saveFormReplay(
+      "burner_profile",
+      { ...required, "id.number": "8001015009088" },
+      true,
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      errors: {
+        "id.number": "Check digit doesn't match — double-check the number.",
+        _root: "Check your ID number and date of birth.",
+      },
+    });
     expect(save).not.toHaveBeenCalled();
   });
 
@@ -116,6 +149,40 @@ describe("saveFormReplay — archive invariant", () => {
     const saved = save.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(saved["team_lead.interests"]).toEqual(["kitchen", ARCHIVED_KEY]);
     // Unchanged answers → no spurious change-log entry (no false "removal").
-    expect(recordFormEdit).not.toHaveBeenCalled();
+    expect(save.mock.calls[0]?.[2] ?? null).toBeNull();
+  });
+
+  it("hands the change-log row to the same save as the answers", async () => {
+    vi.mocked(getReplayableForm).mockResolvedValue({
+      key: "burner_profile",
+      title: "Burner profile",
+      description: "",
+      questionnaire: activePicker,
+      load: vi.fn(async () => ({
+        responses: required,
+        completedAt: new Date("2026-01-01"),
+        updatedAt: null,
+      })),
+      save,
+    } as never);
+
+    const result = await saveFormReplay(
+      "burner_profile",
+      { ...required, "bio.statement": "Changed my mind." },
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    // One call carries both, so the form can write them in one transaction.
+    expect(save).toHaveBeenCalledOnce();
+    expect(save.mock.calls[0]?.[2]).toEqual({
+      editedByUserId: "camp-1",
+      changes: [
+        expect.objectContaining({
+          fieldId: "bio.statement",
+          to: "Changed my mind.",
+        }),
+      ],
+    });
   });
 });

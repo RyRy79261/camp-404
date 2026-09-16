@@ -7,6 +7,7 @@ import {
   revokeInviteCode,
 } from "@camp404/db/invite-codes";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { memberBlock, type MemberBlock } from "@/lib/member-gate";
 import { rateLimiter } from "@/lib/rate-limit";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import {
@@ -27,6 +28,13 @@ export type CreateInviteResult =
       ok: false;
       error: string;
     };
+
+const MINT_REFUSAL: Record<MemberBlock["reason"], string> = {
+  invite: "Your account isn't camp-active yet.",
+  questionnaire: "Finish the questionnaire you've been asked to answer first.",
+  onboarding: "Finish your burner profile first.",
+  approval: "Your account is still awaiting approval.",
+};
 
 // A captain can mint a code for many redeemers; cap it so a typo can't
 // create an effectively unlimited code by accident.
@@ -60,15 +68,12 @@ export async function createInviteAction(
   if (!authUser) return { ok: false, error: "Not signed in." };
 
   const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't camp-active yet." };
-  }
-  // Mirror the page's gate (spec 11-invite-tool: "signed-in, camp-active,
-  // approved"). The action is a directly-reachable POST, and a pending captain
-  // would otherwise be able to mint pre-approved multi-use codes here.
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account is still awaiting approval." };
-  }
+  // Mirror the page's gate (the shared member ladder). The action is a
+  // directly-reachable POST: without this a pending captain could mint
+  // pre-approved multi-use codes, and a member could skip a blocking
+  // questionnaire to hand out ways into the camp.
+  const block = await memberBlock(campUser, authUser.primaryEmail);
+  if (block) return { ok: false, error: MINT_REFUSAL[block.reason] };
   // Each code is a way into the camp, so minting is throttled per member like
   // the availability check beside it. Ten in ten minutes is far more than a
   // person inviting friends needs.

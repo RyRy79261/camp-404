@@ -15,31 +15,9 @@ import type { McpScope } from "./scope";
  * this gate entirely.
  */
 export function canSeeIdDocuments(
-  scope: McpScope,
+  scope: Pick<McpScope, "campUserId" | "isCaptain">,
   subject: { id: string; aiDataConsent: boolean },
 ): boolean {
   if (scope.campUserId === subject.id) return true;
   return scope.isCaptain && subject.aiDataConsent;
-}
-
-/**
- * Removes the ID-document fields from a user row when the caller is
- * not allowed to see them. Returns a new object — callers can pass the
- * raw row through this and the encrypted columns disappear.
- *
- * The caller's responsibility is to never decrypt these fields before
- * the consent gate; this redaction is the second line of defence.
- */
-export function redactIdDocuments<
-  R extends {
-    id: string;
-    aiDataConsent: boolean;
-    passportEncrypted?: string | null;
-    saIdEncrypted?: string | null;
-    eftDetailsEncrypted?: string | null;
-  },
->(scope: McpScope, row: R): R {
-  if (canSeeIdDocuments(scope, row)) return row;
-  const { passportEncrypted: _p, saIdEncrypted: _s, eftDetailsEncrypted: _e, ...rest } = row;
-  return { ...(rest as R) };
 }

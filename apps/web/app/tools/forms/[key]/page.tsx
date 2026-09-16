@@ -2,13 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import type { QuestionnaireResponses } from "@camp404/types";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import {
-  ensureCampUser,
-  getBurnerProfile,
-  hasCampAccess,
-  isApproved,
-} from "@/lib/users";
+import { requireMemberPage } from "@/lib/member-gate";
 import { getReplayableForm, listFormEdits } from "@/lib/forms";
 import { FormReplay } from "./form-replay";
 import { ChangeLog } from "./change-log";
@@ -29,19 +23,7 @@ export default async function FormReplayPage({
 }) {
   const { key } = await params;
 
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    redirect("/signup/required");
-  }
-  // Gate parity with the rest of the app — onboarding must be done first.
-  const onboarding = await getBurnerProfile(campUser.id);
-  if (!onboarding?.completedAt) {
-    redirect("/onboarding/questionnaire");
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    redirect("/pending-approval");
-  }
+  const { campUser } = await requireMemberPage();
 
   const form = await getReplayableForm(key);
   if (!form) notFound();

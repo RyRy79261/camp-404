@@ -50,11 +50,10 @@ export default async function QuestionnairesPage() {
 
   const rank = deriveViewerRank(campUser.rank, await isTeamLead(campUser.id));
   const canAuthor = requireClearance(rank, "team_lead").cleared;
-  const canSeeAll = rank === "captain";
 
   const [definitions, openSends] = canAuthor
     ? await Promise.all([
-        listDefinitionsForViewer({ userId: campUser.id, canSeeAll }),
+        listDefinitionsForViewer({ userId: campUser.id, rank }),
         listOpenSendBlocking(),
       ])
     : [[], new Map<string, boolean>()];

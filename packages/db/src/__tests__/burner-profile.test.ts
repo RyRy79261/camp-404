@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
-import { setUserApproval } from "../burner-profile";
+import { setUserApproval, setUserApprovalStatus } from "../burner-profile";
 import * as schema from "../schema";
 
 // setUserApproval is a compare-and-set on `pending`. Two captains working the
@@ -25,6 +25,16 @@ async function readUser(
   return row!;
 }
 
+async function auditFor(
+  db: ReturnType<ReturnType<typeof useTestDb>["db"]>,
+  target: string,
+) {
+  return db
+    .select()
+    .from(schema.auditLog)
+    .where(eq(schema.auditLog.target, target));
+}
+
 describe("setUserApproval", () => {
   const h = useTestDb();
 
@@ -44,6 +54,13 @@ describe("setUserApproval", () => {
     expect(row.approvalStatus).toBe("approved");
     expect(row.approvalDecidedByUserId).toBe(captain.id);
     expect(row.approvalDecidedAt).not.toBeNull();
+    expect(await auditFor(db, applicant.id)).toEqual([
+      expect.objectContaining({
+        actorId: captain.id,
+        action: "member.approval_decided",
+        metadata: { status: "approved", withReason: false },
+      }),
+    ]);
   });
 
   it("refuses a second decision and leaves the first captain's stamp intact", async () => {
@@ -75,6 +92,10 @@ describe("setUserApproval", () => {
     expect(afterB.approvalDecidedByUserId).toBe(captainA.id);
     expect(afterB.approvalDecidedAt).toEqual(afterA.approvalDecidedAt);
     expect(afterB.updatedAt).toEqual(afterA.updatedAt);
+    // Only the decision that happened is on the audit trail.
+    expect((await auditFor(db, applicant.id)).map((r) => r.actorId)).toEqual([
+      captainA.id,
+    ]);
   });
 
   it("refuses to re-decide a rejected member", async () => {
@@ -108,5 +129,50 @@ describe("setUserApproval", () => {
 
     expect(decided).toBe(false);
     expect((await readUser(db, bystander.id)).approvalStatus).toBe("pending");
+  });
+});
+
+describe("the approval decision reason", () => {
+  const h = useTestDb();
+
+  it("is stored with the decision and cleared when the status moves again", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const applicant = await makeUser(db, { approvalStatus: "pending" });
+
+    await setUserApproval({
+      userId: applicant.id,
+      status: "rejected",
+      decidedByUserId: captain.id,
+      reason: "  We are full this year.  ",
+    });
+    expect((await readUser(db, applicant.id)).approvalDecisionReason).toBe(
+      "We are full this year.",
+    );
+    const [audit] = await auditFor(db, applicant.id);
+    // The audit row says a reason was given, not what it said.
+    expect(audit?.metadata).toEqual({ status: "rejected", withReason: true });
+
+    await setUserApprovalStatus(applicant.id, "pending");
+    expect(
+      (await readUser(db, applicant.id)).approvalDecisionReason,
+    ).toBeNull();
+  });
+
+  it("stores a blank reason as none", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const applicant = await makeUser(db, { approvalStatus: "pending" });
+
+    await setUserApproval({
+      userId: applicant.id,
+      status: "approved",
+      decidedByUserId: captain.id,
+      reason: "   ",
+    });
+
+    expect(
+      (await readUser(db, applicant.id)).approvalDecisionReason,
+    ).toBeNull();
   });
 });

@@ -179,11 +179,12 @@ describe("QuestionField — slider (segmented)", () => {
   });
 });
 
-const imageQuestion = (id: string): Question => ({
+const imageQuestion = (id: string, role?: "profile_photo"): Question => ({
   id,
   kind: "image",
   prompt: "Add a photo",
   required: false,
+  ...(role ? { role } : {}),
 });
 
 const uploadUrl = () => screen.getByTestId("upload").getAttribute("data-url");
@@ -224,13 +225,14 @@ describe("QuestionField — image upload endpoint", () => {
   });
 
   it("keeps the burner profile photo on the avatar route, activation or not", () => {
-    // `profile.image` IS the member's profile photo (onboarding mirrors it onto
-    // users.profile_image_url), so it must never take the answers path — that
-    // was the defect 1cb5d30 fixed.
+    // The profile photo question IS the member's profile photo (onboarding
+    // mirrors it onto users.profile_image_url), so it must never take the
+    // answers path — that was the defect 1cb5d30 fixed. It is found by role,
+    // so the id does not matter.
     route.params = { activationId: "act-1" };
     render(
       <QuestionField
-        question={imageQuestion("profile.image")}
+        question={imageQuestion("any.photo.id", "profile_photo")}
         value={undefined}
         onChange={() => {}}
       />,

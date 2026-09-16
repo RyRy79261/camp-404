@@ -134,12 +134,18 @@ test.describe("authenticated flow (test-mode)", () => {
     // A captain rejects them (simulated via the test seam — the real
     // approve/reject UI reads the live DB and isn't drivable in test mode).
     await request.post("/api/test/set-approval", {
-      data: { authUserId: "rejected-auth", status: "rejected" },
+      data: {
+        authUserId: "rejected-auth",
+        status: "rejected",
+        reason: "We are full this year.",
+      },
     });
 
     await page.goto("/");
     await expect(page).toHaveURL(/\/pending-approval/);
     await expect(page.getByText("Application not approved")).toBeVisible();
+    // The captain's reason is shown to the member.
+    await expect(page.getByText("We are full this year.")).toBeVisible();
   });
 
   test("/api/voice/transcribe accepts an authed request and rejects bad input", async ({

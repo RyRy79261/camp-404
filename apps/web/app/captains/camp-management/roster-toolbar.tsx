@@ -63,7 +63,11 @@ export function RosterToolbar({
           type="search"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Search by name, handle or country"
+          placeholder={
+            publicOnly
+              ? "Search by name, handle or team"
+              : "Search by name, handle or email"
+          }
           aria-label="Search the roster"
           className="min-w-0 flex-1 bg-transparent font-mono text-mono text-foreground placeholder:text-muted-foreground focus:outline-none"
         />

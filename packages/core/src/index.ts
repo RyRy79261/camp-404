@@ -10,7 +10,8 @@
 // Phase-3 extractions land here progressively (see architecture.md
 // §hybrid-extraction). Landed so far:
 //   - access/clearance: rankLevel, hasClearance, requireClearance,
-//     deriveViewerRank, hasCampAccess, isApproved, nextGate (./access)
+//     deriveViewerRank, hasCampAccess, isApproved, nextGate,
+//     canViewBuilderDefinition (./access)
 //   - family tree: buildTree, computeMatchIds, subtreeHasMatch,
 //     descendantCountLabel (./family-tree) — all cycle-guarded (OD9)
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
@@ -20,13 +21,17 @@
 //     SECRET_ENV_KEYS (./text-redaction)
 //   - shake detector: createShakeDetector + ShakeSample/ShakeDetectorConfig
 //     (./shake); the React hook + DOM permission helpers stay in apps/web
-//   - id validation: validateIdNumber, IdValidationResult (./id-validation)
+//   - id validation: validateIdNumber, validateBirthDate, IdValidationResult
+//     (./id-validation)
 //   - promotion: canSendPromotion, canDecidePromotion, nextPromotionStatus,
 //     promotionStepState, canLeaveCamp — the captain-handshake guards +
 //     state machine, and the sole-captain erasure guard
 //     (./promotion)
 //   - field privacy: ALWAYS_PRIVATE, SAFETY_VISIBLE, isFieldLocked,
-//     isSafetyVisible (./privacy)
+//     isSafetyVisible; who reads each member field (MEMBER_FIELD_READERS,
+//     PROFILE_ANSWER_READERS, canReadMemberField, canReadProfileAnswer); and
+//     the safety read rule safetyReadBasis + MEDICAL_AUDIENCE_NOTE; and the
+//     erasure provers uncoveredPrivateUserColumns, patchLeaksAny (./privacy)
 //   - audience authz: canSendToAudience + AudienceScope/AudienceActor/
 //     AudienceSpec — who may send to which audience (./audience-authz)
 //   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,

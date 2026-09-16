@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import {
+  incompleteContactErrors,
   validateOne,
   type Questionnaire,
   type QuestionnairePage,
@@ -14,7 +15,7 @@ import { ProgressBar } from "@camp404/ui/components/progress-bar";
 import { CloudOff, TriangleAlert } from "lucide-react";
 import { QuestionField } from "./question";
 import { BlockingNotice, BlockingTopBar } from "./blocking-chrome";
-import { validateIdNumber } from "@/lib/id-validation";
+import { identityAnswerErrors } from "@/lib/id-validation";
 import type { SaveResult } from "@camp404/types";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 
@@ -103,15 +104,13 @@ export function QuestionnaireWizard({
         next[q.id] = result.error;
         continue;
       }
-      // Cross-field: validate id.number against the chosen id.type.
-      if (q.id === "id.number" && typeof v === "string" && v.length > 0) {
-        const type = responses["id.type"];
-        const result = validateIdNumber(
-          typeof type === "string" ? type : null,
-          v,
-        );
-        if (!result.ok) next[q.id] = result.error;
-      }
+      // Cross-field identity checks (the ID number against its type, a
+      // possible date of birth): the same ones the server runs on submit.
+      const identity = identityAnswerErrors(responses, new Date())[q.id];
+      if (identity) next[q.id] = identity;
+      // An emergency contact is all or nothing, like the server requires.
+      const contact = incompleteContactErrors(questionnaire, responses)[q.id];
+      if (contact) next[q.id] = contact;
     }
     setErrors(next);
     return Object.keys(next).length === 0;

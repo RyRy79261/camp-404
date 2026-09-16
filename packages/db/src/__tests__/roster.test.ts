@@ -215,3 +215,66 @@ describe("getCampManagementRoster is asked of the camp's current year", () => {
     expect(await db.select().from(schema.driverProfiles)).toHaveLength(1);
   });
 });
+
+describe("captain-only columns are selected only when asked for", () => {
+  const h = useTestDb();
+
+  async function withNeonAuthEmail(authUserId: string, email: string) {
+    await h.client().exec(
+      `create schema if not exists neon_auth;
+       create table if not exists neon_auth."user" (id text primary key, email text, "emailVerified" boolean);`,
+    );
+    await h
+      .client()
+      .query(
+        `insert into neon_auth."user" (id, email, "emailVerified") values ($1, $2, true)`,
+        [authUserId, email],
+      );
+  }
+
+  it("reads the member's email from Neon Auth for a captain, and not otherwise", async () => {
+    const db = h.db();
+    const member = await makeUser(db, { displayName: "Nova" });
+    await withNeonAuthEmail(member.authUserId, "nova@example.com");
+
+    const plain = await getCampMemberDetail(member.id);
+    expect(Object.keys(plain!)).not.toContain("email");
+    expect(JSON.stringify(plain)).not.toContain("nova@example.com");
+
+    const forCaptain = await getCampMemberDetail(member.id, {
+      includeEmail: true,
+    });
+    expect(forCaptain?.email).toBe("nova@example.com");
+
+    const roster = await getCampManagementRoster({ includeEmail: true });
+    expect(roster.find((m) => m.id === member.id)?.email).toBe(
+      "nova@example.com",
+    );
+    const memberRoster = await getCampManagementRoster();
+    expect(JSON.stringify(memberRoster)).not.toContain("nova@example.com");
+  });
+
+  it("reads this year's arrival date, and not last year's", async () => {
+    const db = h.db();
+    const driver = await makeUser(db);
+    await makeDriverProfile(db, { userId: driver.id, cycle: 2025 });
+    await makeDriverProfile(db, { userId: driver.id, cycle: 2026 });
+    await db
+      .update(schema.driverProfiles)
+      .set({ arrivalAt: new Date("2025-04-20T08:00:00Z") })
+      .where(eq(schema.driverProfiles.cycle, 2025));
+    await db
+      .update(schema.driverProfiles)
+      .set({ arrivalAt: new Date("2026-04-26T08:00:00Z") })
+      .where(eq(schema.driverProfiles.cycle, 2026));
+    await foundedAt(db, 2026);
+
+    expect(Object.keys((await getCampMemberDetail(driver.id))!)).not.toContain(
+      "arrivalAt",
+    );
+    expect(
+      (await getCampMemberDetail(driver.id, { includeArrival: true }))
+        ?.arrivalAt,
+    ).toEqual(new Date("2026-04-26T08:00:00Z"));
+  });
+});

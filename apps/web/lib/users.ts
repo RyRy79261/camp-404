@@ -13,7 +13,14 @@ import {
   upsertBurnerProfile as upsertBurnerProfileDb,
   getIdDocumentColumns,
   setIdDocumentColumns,
+  getEmergencyContactsColumn,
+  setEmergencyContactsColumn,
+  saveBurnerProfileReplay as dbSaveBurnerProfileReplay,
 } from "@camp404/db/burner-profile";
+import type {
+  EmergencyContact,
+  QuestionnaireFieldChange,
+} from "@camp404/types";
 import { encrypt, decryptOrNull } from "@camp404/db/crypto";
 import { idColumnsFor } from "@camp404/db/id-documents";
 import { isTeamLead as dbIsTeamLead } from "@camp404/db/roster";
@@ -52,6 +59,8 @@ export interface CampUser {
   inviteCode: string | null;
   rank: Rank;
   approvalStatus: ApprovalStatus;
+  /** What the deciding captain told the member, if anything. */
+  approvalDecisionReason: string | null;
 }
 
 /**
@@ -99,6 +108,7 @@ export async function ensureCampUser(
     inviteCode: null,
     rank: "member",
     approvalStatus: "approved",
+    approvalDecisionReason: null,
   };
 }
 
@@ -327,6 +337,8 @@ export async function decideUserApproval(input: {
   userId: string;
   status: "approved" | "rejected";
   decidedByUserId: string;
+  /** Shown to the member on /pending-approval; blank means none. */
+  reason?: string | null;
 }): Promise<boolean> {
   const store = isE2ETestMode() ? testBackend : realBackend;
   return store.setUserApproval(input);
@@ -364,6 +376,7 @@ interface UserBackend {
     userId: string;
     status: "approved" | "rejected";
     decidedByUserId: string;
+    reason?: string | null;
   }): Promise<boolean>;
   setUserProfileImage(userId: string, url: string | null): Promise<void>;
   setUserDisplayName(userId: string, name: string | null): Promise<void>;
@@ -383,6 +396,40 @@ interface UserBackend {
   getIdDocuments(
     userId: string,
   ): Promise<{ idType: string | null; idNumber: string | null } | null>;
+  setEmergencyContacts(
+    userId: string,
+    contacts: readonly EmergencyContact[],
+  ): Promise<void>;
+  getEmergencyContacts(userId: string): Promise<EmergencyContact[] | null>;
+  saveBurnerProfileReplay(input: BurnerProfileReplayInput): Promise<void>;
+}
+
+export interface BurnerProfileReplayInput {
+  userId: string;
+  version: string;
+  /** Answers with the ID number and emergency contacts split out. */
+  responses: Record<string, unknown>;
+  /** The ID number to store, or null to leave it alone. */
+  id: { idType: string | null; idNumber: string } | null;
+  emergencyContacts: readonly EmergencyContact[];
+  /** The change-log row, or null when nothing changed. */
+  edit: {
+    questionnaireKey: string;
+    editedByUserId: string | null;
+    changes: QuestionnaireFieldChange[];
+  } | null;
+}
+
+/**
+ * Save a My forms replay of the burner profile: answers, ID number, emergency
+ * contacts, gate and change-log row, all or nothing (one transaction in the
+ * real backend).
+ */
+export async function saveBurnerProfileReplay(
+  input: BurnerProfileReplayInput,
+): Promise<void> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  await store.saveBurnerProfileReplay(input);
 }
 
 export async function upsertBurnerProfile(input: {
@@ -424,6 +471,29 @@ export async function setIdDocuments(
 ): Promise<void> {
   const store = isE2ETestMode() ? testBackend : realBackend;
   await store.setIdDocuments(userId, id);
+}
+
+/**
+ * Store the member's emergency contacts (split out of their burner profile
+ * answers by question role). An empty list clears them.
+ */
+export async function setEmergencyContacts(
+  userId: string,
+  contacts: readonly EmergencyContact[],
+): Promise<void> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  await store.setEmergencyContacts(userId, contacts);
+}
+
+/**
+ * Read a member's emergency contacts, or null when none are on file. The
+ * caller authorises: the member's own form, or resolveSafetyDataForViewer.
+ */
+export async function getEmergencyContacts(
+  userId: string,
+): Promise<EmergencyContact[] | null> {
+  const store = isE2ETestMode() ? testBackend : realBackend;
+  return store.getEmergencyContacts(userId);
 }
 
 /** Read + decrypt the member's government ID number (owner/captain gated by
@@ -490,6 +560,26 @@ const realBackend: UserBackend = {
       idColumnsFor(id.idType, id.idNumber ? encrypt(id.idNumber) : null),
     );
   },
+  async setEmergencyContacts(userId, contacts) {
+    await setEmergencyContactsColumn(userId, contacts);
+  },
+  async getEmergencyContacts(userId) {
+    return getEmergencyContactsColumn(userId);
+  },
+  async saveBurnerProfileReplay(input) {
+    await dbSaveBurnerProfileReplay({
+      userId: input.userId,
+      version: input.version,
+      responses: input.responses,
+      // Encrypt before the transaction opens, so a key problem fails the save
+      // before anything is written.
+      idColumns: input.id
+        ? idColumnsFor(input.id.idType, encrypt(input.id.idNumber))
+        : null,
+      emergencyContacts: input.emergencyContacts,
+      edit: input.edit,
+    });
+  },
   async getIdDocuments(userId) {
     const cols = await getIdDocumentColumns(userId);
     if (!cols) return null;
@@ -555,6 +645,31 @@ const testBackend: UserBackend = {
   async getIdDocuments(userId) {
     return testStore.getIdDocuments(userId);
   },
+  async setEmergencyContacts(userId, contacts) {
+    testStore.setEmergencyContacts(userId, contacts);
+  },
+  async getEmergencyContacts(userId) {
+    return testStore.getEmergencyContacts(userId);
+  },
+  async saveBurnerProfileReplay(input) {
+    // The in-memory store cannot fail part-way, so plain writes stand in for
+    // the transaction.
+    testStore.upsertProfile({
+      userId: input.userId,
+      version: input.version,
+      responses: input.responses,
+      markComplete: true,
+    });
+    if (input.id) testStore.setIdDocuments(input.userId, input.id);
+    testStore.setEmergencyContacts(input.userId, input.emergencyContacts);
+    if (input.edit && input.edit.changes.length > 0) {
+      testStore.recordQuestionnaireEdit({
+        userId: input.userId,
+        version: input.version,
+        ...input.edit,
+      });
+    }
+  },
 };
 
 function toCampUser(row: {
@@ -565,6 +680,7 @@ function toCampUser(row: {
   inviteCode: string | null;
   rank: Rank;
   approvalStatus?: ApprovalStatus | null;
+  approvalDecisionReason?: string | null;
 }): CampUser {
   return {
     id: row.id,
@@ -574,5 +690,6 @@ function toCampUser(row: {
     inviteCode: row.inviteCode,
     rank: row.rank,
     approvalStatus: row.approvalStatus ?? "approved",
+    approvalDecisionReason: row.approvalDecisionReason ?? null,
   };
 }

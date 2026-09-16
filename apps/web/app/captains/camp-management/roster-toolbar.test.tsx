@@ -37,6 +37,10 @@ describe("RosterToolbar — captain view", () => {
     expect(screen.getByRole("button", { name: /Outstanding 7/ })).toBeTruthy();
     expect(screen.getByLabelText("Filter by team")).toBeTruthy();
     expect(screen.getByLabelText("Search the roster")).toBeTruthy();
+    // Board S17's copy: a captain can search by email.
+    expect(
+      screen.getByPlaceholderText("Search by name, handle or email"),
+    ).toBeTruthy();
   });
 
   it("reports chip, team and query changes", () => {
@@ -55,6 +59,13 @@ describe("RosterToolbar — captain view", () => {
 });
 
 describe("RosterToolbar — member view (publicOnly)", () => {
+  it("never offers an email search to a member", () => {
+    setup({ publicOnly: true, stats: { members: 42, captains: 4 } });
+    expect(
+      screen.getByPlaceholderText("Search by name, handle or team"),
+    ).toBeTruthy();
+  });
+
   it("withholds the approval-derived chips but keeps search + team + captains", () => {
     setup({ publicOnly: true, stats: { members: 42, captains: 4 } });
     expect(screen.getByRole("button", { name: /All 42/ })).toBeTruthy();

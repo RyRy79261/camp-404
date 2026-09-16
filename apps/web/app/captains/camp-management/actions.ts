@@ -41,6 +41,8 @@ import {
   type PublicMemberProfile,
 } from "@/lib/public-member";
 import { runAction, type ActionFailure } from "@/lib/action-result";
+import { auditReadAfterResponse } from "@/lib/audit";
+import { resolveSafetyDataForViewer } from "@/lib/safety-data";
 
 export type MemberDetailResult =
   | {
@@ -211,6 +213,8 @@ export async function getMemberDetailAction(
     // the ID ciphertext out of the database.
     const detail = await getCampMemberDetail(userId, {
       includeIdDocuments: true,
+      includeEmail: true,
+      includeArrival: true,
     });
     if (!detail) return { ok: false, error: "Member not found." };
 
@@ -243,6 +247,18 @@ export async function getMemberDetailAction(
         : { idType: null, idNumber: null };
     const responses = mergeIdNumber(detail.responses, id);
 
+    // A captain reading someone else's ID number leaves a trail. Only a value
+    // actually shown counts: an empty or unreadable column discloses nothing,
+    // and a captain reading their own is not a disclosure.
+    if (readable && userId !== gate.captainId) {
+      auditReadAfterResponse({
+        actorId: gate.captainId,
+        action: "member.id_document.viewed",
+        target: userId,
+        metadata: { basis: "captain", idType: id.idType },
+      });
+    }
+
     // Assign-captain affordance for the modal: reuse the pure send-guard for
     // visibility (captain viewer, target not already a captain, not self) and the
     // pure step-state over the member's open request (if any).
@@ -265,6 +281,13 @@ export async function getMemberDetailAction(
     // a since-archived team still shows its label, not the raw key.
     const questionnaire = await getQuestionnaireForResponses();
 
+    // Emergency contacts come only through the safety read path, which
+    // authorises and audits the read.
+    const safety = await resolveSafetyDataForViewer(
+      { userId: gate.captainId, rank: "captain" },
+      userId,
+    );
+
     // The assignment control's two inputs: what this member is on THIS YEAR,
     // and what a captain may put them on. `activeTeams` drops archived teams,
     // so an archived team is unpickable before the client ever sees the list.
@@ -275,7 +298,11 @@ export async function getMemberDetailAction(
 
     return {
       ok: true,
-      member: presentMemberDetail({ ...detail, responses }, questionnaire),
+      member: presentMemberDetail(
+        { ...detail, responses },
+        questionnaire,
+        safety.allowed ? safety : undefined,
+      ),
       canAssignCaptain,
       promotionStep,
       promotionRequestId: openRequest?.id ?? null,
@@ -329,9 +356,13 @@ export async function getPublicMemberProfileAction(
  * so a captain acting on a stale roster cannot overwrite another captain's
  * standing decision — they are told about it instead.
  */
+/** The longest reason a captain may give the member, in characters. */
+const MAX_DECISION_REASON = 500;
+
 export async function decideApprovalAction(
   userId: string,
   decision: "approved" | "rejected",
+  reason?: string | null,
 ): Promise<ApprovalDecisionResult> {
   return runAction("decideApprovalAction", async () => {
     const gate = await requireCaptain();
@@ -346,11 +377,21 @@ export async function decideApprovalAction(
     if (userId === gate.captainId) {
       return { ok: false, error: "You can't decide on your own account." };
     }
+    if (reason != null && typeof reason !== "string") {
+      return { ok: false, error: "The reason must be text." };
+    }
+    if (reason && reason.trim().length > MAX_DECISION_REASON) {
+      return {
+        ok: false,
+        error: `Keep the reason under ${MAX_DECISION_REASON} characters.`,
+      };
+    }
 
     const decided = await decideUserApproval({
       userId,
       status: decision,
       decidedByUserId: gate.captainId,
+      reason: reason?.trim() || null,
     });
     // Revalidate either way: on the lost-CAS path the roster this captain is
     // looking at is stale, which is exactly why they got here.

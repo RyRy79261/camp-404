@@ -110,7 +110,12 @@ export async function bootstrapFirstCaptain(input: {
     // passes while keeping them a clean family-tree root.
     const promoted = await tx
       .update(users)
-      .set({ rank: "captain", approvalStatus: "approved", inviteCode: founderCode })
+      .set({
+        rank: "captain",
+        approvalStatus: "approved",
+        approvalDecisionReason: null,
+        inviteCode: founderCode,
+      })
       .where(eq(users.authUserId, authUserId))
       .returning({ id: users.id });
     let userId = promoted[0]?.id;

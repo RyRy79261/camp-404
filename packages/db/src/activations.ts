@@ -4,6 +4,7 @@ import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 import { currentCycle, resolveCycles, UNSET_CYCLE } from "./camp-config";
 import { meetsRequiredVersion } from "./versions";
+import type { DbOrTx } from "./audit";
 import type { QuestionnaireResponses } from "@camp404/types";
 
 // The required_actions gating producer + satisfaction. A questionnaire
@@ -441,8 +442,8 @@ export async function satisfyRequiredAction(
   userId: string,
   actionKey: string,
   completedVersion?: string | null,
+  db: DbOrTx = createHttpDb(),
 ): Promise<boolean> {
-  const db = createHttpDb();
   const [row] = await db
     .select({
       id: schema.requiredActions.id,

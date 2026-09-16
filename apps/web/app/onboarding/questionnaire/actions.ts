@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import {
   boundDraftResponses,
   flattenQuestions,
+  incompleteContactErrors,
+  questionIdForRole,
+  questionsWithRole,
+  splitEmergencyContacts,
   validateResponses,
   type SaveResult,
 } from "@camp404/types";
@@ -13,13 +17,18 @@ import {
   getBurnerProfile,
   hasCampAccess,
   satisfyBurnerProfileAction,
+  setEmergencyContacts,
   setIdDocuments,
   setProfileImage,
   upsertBurnerProfile,
 } from "@/lib/users";
 import { splitIdNumber } from "@camp404/db/id-documents";
+import { identityAnswerErrors } from "@/lib/id-validation";
 import { QUESTIONNAIRE_VERSION } from "@/lib/questionnaire";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
+
+const IDENTITY_REFUSED = "Check your ID number and date of birth.";
+const CONTACT_REFUSED = "Finish or clear your second emergency contact.";
 
 /**
  * Persist questionnaire responses. If `final` is true the burner profile is
@@ -65,6 +74,15 @@ export async function saveBurnerProfile(
   if (final) {
     const result = validateResponses(questionnaire, rawResponses);
     if (!result.ok) return { ok: false, errors: result.errors };
+    // The wizard checks these before it submits; a direct POST skips it.
+    const identity = identityAnswerErrors(result.responses, new Date());
+    if (Object.keys(identity).length > 0) {
+      return { ok: false, errors: { ...identity, _form: IDENTITY_REFUSED } };
+    }
+    const contacts = incompleteContactErrors(questionnaire, result.responses);
+    if (Object.keys(contacts).length > 0) {
+      return { ok: false, errors: { ...contacts, _form: CONTACT_REFUSED } };
+    }
     responses = result.responses;
   } else {
     const draft = boundDraftResponses(
@@ -86,8 +104,15 @@ export async function saveBurnerProfile(
   try {
     // Split the sensitive government ID number out of the generic responses
     // JSONB so it is never persisted plaintext; it goes to the encrypted users
-    // column instead (decryptable only by the owner and captains).
-    const { cleaned, idType, idNumber } = splitIdNumber(responses);
+    // column instead (decryptable only by the owner and captains). The
+    // emergency contacts come out the same way, by question role, onto
+    // users.emergency_contacts, so reading them is one audited path.
+    const split = splitIdNumber(responses);
+    const { idType, idNumber } = split;
+    const { cleaned, contacts } = splitEmergencyContacts(
+      questionnaire,
+      split.cleaned,
+    );
 
     // The side writes come BEFORE the write that can mark the profile
     // complete. If one of them fails, nothing is complete yet, so the member
@@ -100,11 +125,23 @@ export async function saveBurnerProfile(
     // silently failing to advance. The boot-time env check (instrumentation.ts)
     // is what makes this misconfiguration loud at deploy.
     if (idNumber) await setIdDocuments(campUser.id, { idType, idNumber });
+    // Only a save that carries the contact page's answers touches the column,
+    // so a progress save from an earlier page never clears contacts already on
+    // file. A half-filled contact is not stored.
+    const nameQuestions = questionsWithRole(
+      questionnaire,
+      "emergency_contact_name",
+    );
+    if (nameQuestions.some((q) => q.id in responses)) {
+      await setEmergencyContacts(campUser.id, contacts);
+    }
 
     // Mirror the optional profile photo onto the canonical users column so it
     // can be read cheaply everywhere (header, profile page) without parsing
-    // the questionnaire JSON. Runs on progress + final saves alike.
-    const image = cleaned["profile.image"];
+    // the questionnaire JSON. Runs on progress + final saves alike. Found by
+    // role, not by question id.
+    const photoId = questionIdForRole(questionnaire, "profile_photo");
+    const image = photoId ? cleaned[photoId] : undefined;
     if (typeof image === "string") {
       await setProfileImage(campUser.id, image.length > 0 ? image : null);
     }

@@ -33,6 +33,7 @@ import type {
   TeamMembership,
 } from "@camp404/db/team-memberships";
 import type {
+  EmergencyContact,
   IncomingPromotionRequest,
   QuestionnaireFieldChange,
   Team,
@@ -55,6 +56,7 @@ interface TestUser {
   approvalStatus: TestApprovalStatus;
   approvalDecidedByUserId: string | null;
   approvalDecidedAt: Date | null;
+  approvalDecisionReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -151,6 +153,7 @@ interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
   idDocsByUserId: Map<string, { idType: string | null; idNumber: string | null }>;
+  emergencyContactsByUserId: Map<string, EmergencyContact[]>;
   inviteCodes: Map<string, TestInviteCode>;
   questionnaireEdits: TestQuestionnaireEdit[];
   broadcasts: TestBroadcast[];
@@ -185,6 +188,7 @@ function globalState(): TestStoreState {
         string,
         { idType: string | null; idNumber: string | null }
       >(),
+      emergencyContactsByUserId: new Map<string, EmergencyContact[]>(),
       inviteCodes: new Map<string, TestInviteCode>(),
       questionnaireEdits: [] as TestQuestionnaireEdit[],
       broadcasts: [] as TestBroadcast[],
@@ -204,6 +208,7 @@ const S = globalState();
 const usersByAuthId = S.usersByAuthId;
 const profilesByUserId = S.profilesByUserId;
 const idDocsByUserId = S.idDocsByUserId;
+const emergencyContactsByUserId = S.emergencyContactsByUserId;
 const inviteCodes = S.inviteCodes;
 const questionnaireEdits = S.questionnaireEdits;
 const broadcasts = S.broadcasts;
@@ -300,6 +305,7 @@ export const testStore = {
       approvalStatus: input.approvalStatus ?? "approved",
       approvalDecidedByUserId: null,
       approvalDecidedAt: null,
+      approvalDecisionReason: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -324,10 +330,17 @@ export const testStore = {
       }
     }
   },
-  setUserApprovalStatus(userId: string, status: TestApprovalStatus): void {
+  setUserApprovalStatus(
+    userId: string,
+    status: TestApprovalStatus,
+    // Only the /api/test/set-approval seam passes one, to stand in for a
+    // captain's decision; the production writer always clears it.
+    reason: string | null = null,
+  ): void {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
         user.approvalStatus = status;
+        user.approvalDecisionReason = reason;
         user.updatedAt = new Date();
         return;
       }
@@ -337,6 +350,7 @@ export const testStore = {
     userId: string;
     status: "approved" | "rejected";
     decidedByUserId: string;
+    reason?: string | null;
   }): boolean {
     // Mirrors the db's compare-and-set: only a `pending` row flips, so a second
     // captain deciding the same applicant is a no-op (false) rather than a
@@ -347,6 +361,7 @@ export const testStore = {
         user.approvalStatus = input.status;
         user.approvalDecidedByUserId = input.decidedByUserId;
         user.approvalDecidedAt = new Date();
+        user.approvalDecisionReason = input.reason?.trim() || null;
         user.updatedAt = new Date();
         // As in production: an approval tells the member, a rejection does not.
         if (input.status === "approved") {
@@ -418,6 +433,16 @@ export const testStore = {
     userId: string,
   ): { idType: string | null; idNumber: string | null } | null {
     return idDocsByUserId.get(userId) ?? null;
+  },
+  setEmergencyContacts(
+    userId: string,
+    contacts: readonly EmergencyContact[],
+  ): void {
+    if (contacts.length === 0) emergencyContactsByUserId.delete(userId);
+    else emergencyContactsByUserId.set(userId, [...contacts]);
+  },
+  getEmergencyContacts(userId: string): EmergencyContact[] | null {
+    return emergencyContactsByUserId.get(userId) ?? null;
   },
 
   // --- Questionnaire edit log -------------------------------------------
@@ -1005,7 +1030,9 @@ export const testStore = {
   // 0) — enough for the captain roster to render in E2E without touching Neon.
   // `isLead` and `teams` come from the membership rows and are year-scoped, the
   // same two facts the real query aggregates out of `team_memberships`.
-  getCampManagementRoster(): CampManagementMember[] {
+  getCampManagementRoster(
+    options: { includeEmail?: boolean } = {},
+  ): CampManagementMember[] {
     const cycle = currentCycleNumber();
     const thisYear = teamMemberships.filter((m) => m.cycle === cycle);
     return Array.from(usersByAuthId.values())
@@ -1031,6 +1058,8 @@ export const testStore = {
           intendsToDrive: false,
           driverProfileComplete: false,
           country,
+          // The test store keeps no sign-in email for a member.
+          ...(options.includeEmail ? { email: null } : {}),
           createdAt: u.createdAt,
         };
       })
@@ -1144,6 +1173,7 @@ export const testStore = {
     usersByAuthId.clear();
     profilesByUserId.clear();
     idDocsByUserId.clear();
+    emergencyContactsByUserId.clear();
     inviteCodes.clear();
     questionnaireEdits.length = 0;
     broadcasts.length = 0;

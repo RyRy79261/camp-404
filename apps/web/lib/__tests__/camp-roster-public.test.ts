@@ -9,6 +9,7 @@ import {
 } from "@/lib/camp-roster";
 
 const PRIVATE_KEYS = [
+  "email",
   "status",
   "statusLabel",
   "approvalStatus",

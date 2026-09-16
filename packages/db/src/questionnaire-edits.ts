@@ -1,5 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { QuestionnaireFieldChange } from "@camp404/types";
+import type { DbOrTx } from "./audit";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
 
@@ -17,14 +18,16 @@ export interface QuestionnaireEditRow {
  * insert entirely when `changes` is empty — a replay that altered nothing is
  * not worth a row.
  */
-export async function recordQuestionnaireEdit(input: {
-  userId: string;
-  questionnaireKey: string;
-  version: string;
-  editedByUserId: string | null;
-  changes: QuestionnaireFieldChange[];
-}): Promise<void> {
-  const db = createHttpDb();
+export async function recordQuestionnaireEdit(
+  input: {
+    userId: string;
+    questionnaireKey: string;
+    version: string;
+    editedByUserId: string | null;
+    changes: QuestionnaireFieldChange[];
+  },
+  db: DbOrTx = createHttpDb(),
+): Promise<void> {
   await db.insert(schema.questionnaireEdits).values({
     userId: input.userId,
     questionnaireKey: input.questionnaireKey,

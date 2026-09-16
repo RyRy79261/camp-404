@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MEDICAL_AUDIENCE_NOTE } from "@camp404/core";
 import { validateResponses } from "@camp404/types";
 import {
   QUESTIONNAIRE_VERSION,
@@ -37,6 +38,9 @@ const requiredAnswers: Record<string, unknown> = {
   "history.afrikaburn_count": "1_2",
   "intent.this_year": "want",
   "bio.statement": "Long-time burner.",
+  "emergency.1.name": "Ada Byron",
+  "emergency.1.phone": "+27 82 555 0199",
+  "emergency.1.relationship": "sister",
 };
 
 describe("buildQuestionnaire", () => {
@@ -77,11 +81,17 @@ describe("buildQuestionnaire", () => {
     );
   });
 
-  it("holds the version literal (changing it re-opens the gate for every member)", () => {
-    // A bump forces a mass re-submit of the burner profile. Relabel/reorder/
-    // archive must NOT change it — so pin the literal: a deliberate bump must
-    // update this assertion (and own the gate-reopening migration) on purpose.
-    expect(QUESTIONNAIRE_VERSION).toBe("2026.06.04-v9");
+  it("holds the version literal (a bump marks a shape change)", () => {
+    // Bump only for a shape change (a question added or removed, a required
+    // flag flipped). Relabel/reorder/archive must NOT change it, so pin the
+    // literal: a deliberate bump updates this assertion on purpose.
+    //
+    // A bump does not by itself re-ask members who already finished: nothing
+    // compares a completed burner_profile gate to the current version. Asking
+    // everyone again would take its own deliberate migration. v10 added the
+    // emergency contacts page (2026-09-16); members who finished before it
+    // are asked the next time they save My forms.
+    expect(QUESTIONNAIRE_VERSION).toBe("2026.09.16-v10");
   });
 });
 
@@ -107,5 +117,34 @@ describe("the archive validation invariant", () => {
     if (!result.ok) return;
     // The validator filters values not in the options → the pick is lost.
     expect(result.responses["team_lead.interests"]).toEqual([]);
+  });
+});
+
+describe("the safety pages tell the member who can see their answers", () => {
+  it("puts MEDICAL_AUDIENCE_NOTE on the emergency contacts and dietary pages", () => {
+    const q = buildQuestionnaire(ACTIVE);
+    for (const id of ["emergency_contacts", "dietary"]) {
+      const page = q.pages.find((p) => p.id === id);
+      expect(page && "subtitle" in page ? page.subtitle : "").toContain(
+        MEDICAL_AUDIENCE_NOTE,
+      );
+    }
+  });
+
+  it("asks for one required contact and one optional, each marked by role", () => {
+    const page = buildQuestionnaire(ACTIVE).pages.find(
+      (p) => p.id === "emergency_contacts",
+    );
+    const questions = page?.kind === "questions" ? page.questions : [];
+    expect(
+      questions.map((q) => [q.id, "role" in q ? q.role : null, q.required]),
+    ).toEqual([
+      ["emergency.1.name", "emergency_contact_name", true],
+      ["emergency.1.phone", "emergency_contact_phone", true],
+      ["emergency.1.relationship", "emergency_contact_relationship", true],
+      ["emergency.2.name", "emergency_contact_name", false],
+      ["emergency.2.phone", "emergency_contact_phone", false],
+      ["emergency.2.relationship", "emergency_contact_relationship", false],
+    ]);
   });
 });

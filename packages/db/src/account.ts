@@ -1,4 +1,5 @@
 import { eq, or, sql } from "drizzle-orm";
+import { writeAuditEvent } from "./audit";
 import { isRealCaptain } from "./bootstrap";
 import { withTransaction } from "./index";
 import * as schema from "./schema";
@@ -18,7 +19,9 @@ export function lostCatName(n: number): string {
  * unit-tested. `authUserId` is severed to `deleted:<id>` so the Neon Auth login
  * no longer maps to this row — a re-login becomes a fresh, access-less user.
  * Keeps `id` and `inviteCode` (who invited them — lineage); drops rank to
- * `member`.
+ * `member`. Every other `users` column is either cleared here or kept on
+ * purpose; the list of kept columns is pinned in __tests__/account.test.ts, so
+ * a new column fails that test until someone decides which it is.
  */
 export function sanitisedUserPatch(
   userId: string,
@@ -38,6 +41,16 @@ export function sanitisedUserPatch(
     saIdEncrypted: null,
     eftDetailsEncrypted: null,
     emergencyContacts: null,
+    // A captain's words about this person.
+    approvalDecisionReason: null,
+    // What they told the camp about themselves.
+    skills: [],
+    previousAfrikaburns: null,
+    previousBurningMans: null,
+    firstTime: null,
+    // Consent belongs to a person; a tombstone gives none.
+    aiDataConsent: false,
+    aiDataConsentAt: null,
     telegramHandle: null,
     telegramUserId: null,
     termsVersion: null,
@@ -178,6 +191,16 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .update(schema.reimbursements)
       .set({ accountDetailsEncrypted: "" })
       .where(eq(schema.reimbursements.submitterId, userId));
+
+    // The proof row. Without it a finished erasure and a data-loss incident
+    // look the same afterwards. It names only the tombstone number: the row
+    // exists to say "this was erased on purpose", not who the person was.
+    await writeAuditEvent(tx, {
+      actorId: userId,
+      action: "account.sanitized",
+      target: userId,
+      metadata: { lostCatNumber },
+    });
 
     return { ok: true as const, lostCatNumber };
   });

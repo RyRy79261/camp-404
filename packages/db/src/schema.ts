@@ -322,6 +322,10 @@ export const users = pgTable("users", {
     { onDelete: "set null" },
   ),
   approvalDecidedAt: timestamp("approval_decided_at", { mode: "date" }),
+  // What the deciding captain told the member, shown on /pending-approval.
+  // It belongs to the decision it was written for: every write that moves
+  // approval_status also sets or clears it, so it can never outlive that state.
+  approvalDecisionReason: text("approval_decision_reason"),
 
   // POPIA / GDPR
   termsVersion: text("terms_version"),
