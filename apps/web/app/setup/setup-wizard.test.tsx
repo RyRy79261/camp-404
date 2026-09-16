@@ -37,12 +37,29 @@ describe("SetupWizard", () => {
   });
 
   it("invokes the setup action then navigates home on success", async () => {
+    actionSpy.mockResolvedValueOnce({ ok: true });
     render(<SetupWizard displayName="Ada" founderCode="meowzit" />);
     fireEvent.click(
       screen.getByRole("button", { name: /set up camp & become captain/i }),
     );
     await waitFor(() => expect(actionSpy).toHaveBeenCalledOnce());
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/"));
+  });
+
+  it("says so when the camp was already set up, and stays put", async () => {
+    // Two people had /setup open, and the other one finished first.
+    actionSpy.mockResolvedValueOnce({
+      ok: false,
+      error: "Camp 404 is already set up.",
+    });
+    render(<SetupWizard displayName="Ada" founderCode="meowzit" />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /set up camp & become captain/i }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(/already set up/),
+    );
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it("surfaces an inline error when the action throws", async () => {
