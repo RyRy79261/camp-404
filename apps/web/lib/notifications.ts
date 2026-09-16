@@ -19,6 +19,7 @@ import {
   type AnnouncementPresentation,
   type AnnouncementReading,
   type AnnouncementSummary,
+  type Audience,
   type ClaimedPopup,
   type InboxItem,
   type InboxPage,
@@ -36,6 +37,7 @@ import { testStore } from "./test-store";
 // here, never from `@camp404/db/broadcasts` directly.
 
 export type {
+  Audience,
   AnnouncementPresentation,
   AnnouncementReading,
   AnnouncementSummary,
@@ -64,30 +66,36 @@ interface NotificationsBackend {
     deliveryId: string;
     userId: string;
   }): Promise<boolean>;
-  listAnnouncements(): Promise<AnnouncementSummary[]>;
-  createAnnouncementDraft(input: {
-    senderId: string;
-    title: string;
-    body: string;
-    presentation: AnnouncementPresentation;
-  }): Promise<{ id: string }>;
-  updateAnnouncementDraft(input: {
-    id: string;
-    senderId: string;
-    title: string;
-    body: string;
-    presentation: AnnouncementPresentation;
-  }): Promise<boolean>;
+  listAnnouncements(options?: {
+    senderId?: string;
+  }): Promise<AnnouncementSummary[]>;
+  createAnnouncementDraft(input: DraftFields): Promise<{ id: string }>;
+  updateAnnouncementDraft(input: DraftFields & { id: string }): Promise<boolean>;
   deleteAnnouncementDraft(input: {
     id: string;
     senderId: string;
   }): Promise<boolean>;
-  publishAnnouncement(input: {
-    id: string;
-    senderId: string;
-  }): Promise<PublishResult>;
+  publishAnnouncement(input: PublishInput): Promise<PublishResult>;
   explainDraftRefusal(id: string, senderId: string): Promise<string>;
-  countAnnouncementAudience(senderId: string): Promise<number>;
+  countAnnouncementAudience(
+    senderId: string,
+    audience: Audience,
+  ): Promise<number>;
+}
+
+interface DraftFields {
+  senderId: string;
+  title: string;
+  body: string;
+  presentation: AnnouncementPresentation;
+  audience: Audience;
+}
+
+interface PublishInput {
+  id: string;
+  senderId: string;
+  /** A team lead's teams; a captain passes none. */
+  allowedTeams?: readonly Extract<Audience, { scope: "team" }>["team"][];
 }
 
 const realBackend: NotificationsBackend = {
@@ -133,8 +141,8 @@ const testBackend: NotificationsBackend = {
   async acknowledgeDelivery(input) {
     return testStore.acknowledgeDelivery(input);
   },
-  async listAnnouncements() {
-    return testStore.listBroadcasts();
+  async listAnnouncements(options) {
+    return testStore.listBroadcasts(options);
   },
   async createAnnouncementDraft(input) {
     return testStore.createBroadcastDraft(input);
@@ -151,8 +159,8 @@ const testBackend: NotificationsBackend = {
   async explainDraftRefusal(id, senderId) {
     return testStore.explainDraftRefusal({ id, senderId });
   },
-  async countAnnouncementAudience(senderId) {
-    return testStore.countAnnouncementAudience(senderId);
+  async countAnnouncementAudience(senderId, audience) {
+    return testStore.countAnnouncementAudience(senderId, audience);
   },
 };
 
@@ -188,26 +196,22 @@ export function acknowledgeDelivery(input: {
   return backend().acknowledgeDelivery(input);
 }
 
-export function listAnnouncements(): Promise<AnnouncementSummary[]> {
-  return backend().listAnnouncements();
+/** Announcements, newest first: all of them, or one sender's. */
+export function listAnnouncements(
+  options: { senderId?: string } = {},
+): Promise<AnnouncementSummary[]> {
+  return backend().listAnnouncements(options);
 }
 
-export function createAnnouncementDraft(input: {
-  senderId: string;
-  title: string;
-  body: string;
-  presentation: AnnouncementPresentation;
-}): Promise<{ id: string }> {
+export function createAnnouncementDraft(
+  input: DraftFields,
+): Promise<{ id: string }> {
   return backend().createAnnouncementDraft(input);
 }
 
-export function updateAnnouncementDraft(input: {
-  id: string;
-  senderId: string;
-  title: string;
-  body: string;
-  presentation: AnnouncementPresentation;
-}): Promise<boolean> {
+export function updateAnnouncementDraft(
+  input: DraftFields & { id: string },
+): Promise<boolean> {
   return backend().updateAnnouncementDraft(input);
 }
 
@@ -218,10 +222,9 @@ export function deleteAnnouncementDraft(input: {
   return backend().deleteAnnouncementDraft(input);
 }
 
-export function publishAnnouncement(input: {
-  id: string;
-  senderId: string;
-}): Promise<PublishResult> {
+export function publishAnnouncement(
+  input: PublishInput,
+): Promise<PublishResult> {
   return backend().publishAnnouncement(input);
 }
 
@@ -232,8 +235,11 @@ export function explainDraftRefusal(
   return backend().explainDraftRefusal(id, senderId);
 }
 
-export function countAnnouncementAudience(senderId: string): Promise<number> {
-  return backend().countAnnouncementAudience(senderId);
+export function countAnnouncementAudience(
+  senderId: string,
+  audience: Audience,
+): Promise<number> {
+  return backend().countAnnouncementAudience(senderId, audience);
 }
 
 export function getAnnouncementForMember(

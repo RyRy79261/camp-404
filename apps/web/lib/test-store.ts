@@ -13,6 +13,9 @@ import {
   DRAFT_MISSING,
   DRAFT_NOT_YOURS,
   DRAFT_PUBLISHED,
+  DRAFT_TEAM_NOT_LED,
+  isAllowedAudience,
+  type Audience,
 } from "@camp404/db/broadcasts";
 import type { CampManagementMember } from "@camp404/db/roster";
 import {
@@ -100,6 +103,7 @@ interface TestBroadcast {
   title: string;
   body: string;
   presentation: TestPresentation;
+  audience: Audience;
   publishedAt: Date | null;
   createdAt: Date;
 }
@@ -499,6 +503,7 @@ export const testStore = {
     title: string;
     body: string;
     presentation: TestPresentation;
+    audience?: Audience;
   }): { id: string } {
     const row: TestBroadcast = {
       id: crypto.randomUUID(),
@@ -506,6 +511,7 @@ export const testStore = {
       title: input.title,
       body: input.body,
       presentation: input.presentation,
+      audience: input.audience ?? { scope: "everyone" },
       publishedAt: null,
       createdAt: new Date(),
     };
@@ -518,6 +524,7 @@ export const testStore = {
     title: string;
     body: string;
     presentation: TestPresentation;
+    audience?: Audience;
   }): boolean {
     const row = broadcasts.find(
       (b) =>
@@ -529,6 +536,7 @@ export const testStore = {
     row.title = input.title;
     row.body = input.body;
     row.presentation = input.presentation;
+    row.audience = input.audience ?? { scope: "everyone" };
     return true;
   },
   deleteBroadcastDraft(input: { id: string; senderId: string }): boolean {
@@ -545,19 +553,22 @@ export const testStore = {
   publishBroadcast(input: {
     id: string;
     senderId: string;
+    allowedTeams?: readonly string[];
   }): { ok: true; recipientCount: number } | { ok: false; error: string } {
     const row = broadcasts.find(
       (b) =>
         b.id === input.id &&
         b.senderId === input.senderId &&
-        b.publishedAt === null,
+        b.publishedAt === null &&
+        isAllowedAudience(b.audience, input.allowedTeams),
     );
     if (!row) {
       return { ok: false, error: testStore.explainDraftRefusal(input) };
     }
     row.publishedAt = new Date();
-    const recipients = [...usersByAuthId.values()].filter(
-      (u) => u.id !== input.senderId,
+    const recipients = testStore.announcementRecipients(
+      input.senderId,
+      row.audience,
     );
     const payload = announcementNotification({
       broadcastId: row.id,
@@ -573,21 +584,50 @@ export const testStore = {
     }
     return { ok: true, recipientCount: recipients.length };
   },
-  explainDraftRefusal(input: { id: string; senderId: string }): string {
+  explainDraftRefusal(input: {
+    id: string;
+    senderId: string;
+    allowedTeams?: readonly string[];
+  }): string {
     const row = broadcasts.find((b) => b.id === input.id);
     if (!row) return DRAFT_MISSING;
     if (row.senderId !== input.senderId) return DRAFT_NOT_YOURS;
     if (row.publishedAt) return DRAFT_PUBLISHED;
+    if (!isAllowedAudience(row.audience, input.allowedTeams)) {
+      return DRAFT_TEAM_NOT_LED;
+    }
     return DRAFT_MISSING;
   },
-  countAnnouncementAudience(senderId: string): number {
-    return [...usersByAuthId.values()].filter((u) => u.id !== senderId).length;
+  /**
+   * Who an announcement reaches: everyone but the sender, or this year's
+   * members of one team but the sender. (The store has no approval filter for
+   * "everyone"; production reaches approved members only.)
+   */
+  announcementRecipients(senderId: string, audience: Audience): TestUser[] {
+    const everyone = [...usersByAuthId.values()].filter(
+      (u) => u.id !== senderId,
+    );
+    if (audience.scope === "everyone") return everyone;
+    const cycle = currentCycleNumber();
+    const onTeam = new Set(
+      teamMemberships
+        .filter((m) => m.team === audience.team && m.cycle === cycle)
+        .map((m) => m.userId),
+    );
+    return everyone.filter((u) => onTeam.has(u.id));
   },
-  listBroadcasts(): Array<{
+  countAnnouncementAudience(
+    senderId: string,
+    audience: Audience = { scope: "everyone" },
+  ): number {
+    return testStore.announcementRecipients(senderId, audience).length;
+  },
+  listBroadcasts(options: { senderId?: string } = {}): Array<{
     id: string;
     title: string;
     body: string;
     presentation: TestPresentation;
+    audience: Audience;
     senderId: string | null;
     senderName: string | null;
     publishedAt: Date | null;
@@ -596,6 +636,7 @@ export const testStore = {
     acknowledgedCount: number;
   }> {
     return [...broadcasts]
+      .filter((b) => !options.senderId || b.senderId === options.senderId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .map((b) => {
         const own = deliveries.filter((d) => d.broadcastId === b.id);
@@ -604,6 +645,7 @@ export const testStore = {
           title: b.title,
           body: b.body,
           presentation: b.presentation,
+          audience: b.audience,
           senderId: b.senderId,
           senderName: b.senderId
             ? (findUserById(b.senderId)?.displayName ?? null)

@@ -47,9 +47,26 @@ function isOwnedAnnouncementDraft(id: string, senderId: string) {
     eq(schema.broadcasts.id, id),
     eq(schema.broadcasts.senderId, senderId),
     eq(schema.broadcasts.kind, "announcement"),
-    eq(schema.broadcasts.scope, "everyone"),
     isNull(schema.broadcasts.publishedAt),
   );
+}
+
+type Team = (typeof schema.teamEnum.enumValues)[number];
+
+/** Who an announcement goes to. Mirrors AnnouncementAudience in @camp404/types. */
+export type Audience = { scope: "everyone" } | { scope: "team"; team: Team };
+
+function audienceColumns(audience: Audience) {
+  return audience.scope === "team"
+    ? { scope: "team" as const, team: audience.team }
+    : { scope: "everyone" as const, team: null };
+}
+
+/** Read an announcement row's audience back. Anything else reads as everyone. */
+function audienceOf(row: { scope: string; team: Team | null }): Audience {
+  return row.scope === "team" && row.team
+    ? { scope: "team", team: row.team }
+    : { scope: "everyone" };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -59,6 +76,8 @@ export const DRAFT_NOT_YOURS =
   "Only the captain who wrote this draft can change or publish it.";
 export const DRAFT_PUBLISHED =
   "This announcement is already published, so it can't be changed. Publish a correction instead.";
+export const DRAFT_TEAM_NOT_LED =
+  "You can only send to a team you lead. Pick one of your teams, or ask a captain to send it.";
 
 /**
  * Why an edit, delete or publish of a draft wrote nothing, as the sentence the
@@ -70,6 +89,7 @@ export const DRAFT_PUBLISHED =
 export async function explainDraftRefusal(
   id: string,
   senderId: string,
+  allowedTeams?: readonly string[],
 ): Promise<string> {
   if (!UUID.test(id)) return DRAFT_MISSING;
   const db = createHttpDb();
@@ -78,6 +98,8 @@ export async function explainDraftRefusal(
       senderId: schema.broadcasts.senderId,
       kind: schema.broadcasts.kind,
       publishedAt: schema.broadcasts.publishedAt,
+      scope: schema.broadcasts.scope,
+      team: schema.broadcasts.team,
     })
     .from(schema.broadcasts)
     .where(eq(schema.broadcasts.id, id))
@@ -85,7 +107,23 @@ export async function explainDraftRefusal(
   if (!row || row.kind !== "announcement") return DRAFT_MISSING;
   if (row.senderId !== senderId) return DRAFT_NOT_YOURS;
   if (row.publishedAt) return DRAFT_PUBLISHED;
+  if (allowedTeams && !isAllowedAudience(audienceOf(row), allowedTeams)) {
+    return DRAFT_TEAM_NOT_LED;
+  }
   return DRAFT_MISSING;
+}
+
+/**
+ * Whether a sender limited to `allowedTeams` (a team lead) may send to an
+ * audience: only a team on their list, never the whole camp. A captain passes
+ * no list and may send to anyone.
+ */
+export function isAllowedAudience(
+  audience: Audience,
+  allowedTeams?: readonly string[],
+): boolean {
+  if (!allowedTeams) return true;
+  return audience.scope === "team" && allowedTeams.includes(audience.team);
 }
 
 /**
@@ -95,9 +133,10 @@ export async function explainDraftRefusal(
  */
 export async function countAnnouncementAudience(
   senderId: string,
+  audience: Audience = { scope: "everyone" },
 ): Promise<number> {
   const ids = await resolveAudience(
-    { id: "", scope: "everyone", team: null },
+    { id: "", ...audienceColumns(audience) },
     senderId,
   );
   return ids.length;
@@ -171,6 +210,7 @@ export interface AnnouncementSummary {
   title: string;
   body: string;
   presentation: AnnouncementPresentation;
+  audience: Audience;
   senderId: string | null;
   senderName: string | null;
   /** NULL while a draft; the publish timestamp once sent. */
@@ -187,7 +227,9 @@ export interface AnnouncementSummary {
  * and delivery roll-ups for the captain's management view. Captain-only data
  * — gate the caller.
  */
-export async function listAnnouncements(): Promise<AnnouncementSummary[]> {
+export async function listAnnouncements(
+  options: { senderId?: string } = {},
+): Promise<AnnouncementSummary[]> {
   const db = createHttpDb();
   const rows = await db
     .select({
@@ -195,6 +237,8 @@ export async function listAnnouncements(): Promise<AnnouncementSummary[]> {
       title: schema.broadcasts.title,
       body: schema.broadcasts.body,
       presentation: schema.broadcasts.presentation,
+      scope: schema.broadcasts.scope,
+      team: schema.broadcasts.team,
       senderId: schema.broadcasts.senderId,
       senderName: schema.users.displayName,
       publishedAt: schema.broadcasts.publishedAt,
@@ -211,11 +255,19 @@ export async function listAnnouncements(): Promise<AnnouncementSummary[]> {
     })
     .from(schema.broadcasts)
     .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
-    .where(eq(schema.broadcasts.kind, "announcement"))
+    .where(
+      and(
+        eq(schema.broadcasts.kind, "announcement"),
+        options.senderId
+          ? eq(schema.broadcasts.senderId, options.senderId)
+          : undefined,
+      ),
+    )
     .orderBy(desc(schema.broadcasts.createdAt));
 
-  return rows.map((r) => ({
+  return rows.map(({ scope, team, ...r }) => ({
     ...r,
+    audience: audienceOf({ scope, team }),
     recipientCount: r.recipientCount ?? 0,
     acknowledgedCount: r.acknowledgedCount ?? 0,
   }));
@@ -226,6 +278,7 @@ export interface DraftInput {
   title: string;
   body: string;
   presentation: AnnouncementPresentation;
+  audience?: Audience;
 }
 
 /** Create a new announcement draft (unpublished). Returns its id. */
@@ -238,7 +291,7 @@ export async function createAnnouncementDraft(
     .values({
       senderId: input.senderId,
       kind: "announcement",
-      scope: "everyone",
+      ...audienceColumns(input.audience ?? { scope: "everyone" }),
       title: input.title,
       body: input.body,
       presentation: input.presentation,
@@ -257,6 +310,7 @@ export async function updateAnnouncementDraft(input: {
   title: string;
   body: string;
   presentation: AnnouncementPresentation;
+  audience?: Audience;
 }): Promise<boolean> {
   const db = createHttpDb();
   const rows = await db
@@ -265,6 +319,7 @@ export async function updateAnnouncementDraft(input: {
       title: input.title,
       body: input.body,
       presentation: input.presentation,
+      ...audienceColumns(input.audience ?? { scope: "everyone" }),
     })
     .where(isOwnedAnnouncementDraft(input.id, input.senderId))
     .returning({ id: schema.broadcasts.id });
@@ -301,32 +356,52 @@ export type PublishResult =
 export async function publishAnnouncement(input: {
   id: string;
   senderId: string;
+  /**
+   * A team lead's teams, read at publish time. When given, only a draft
+   * addressed to one of these teams can be claimed, so a lead who has since
+   * lost a team cannot send to it from an old draft. A captain passes none.
+   */
+  allowedTeams?: readonly Team[];
 }): Promise<PublishResult> {
   const published = await withTransaction(async (tx) => {
-    // Claim the draft: only an unpublished row owned by this sender flips.
+    // Claim the draft: only an unpublished row owned by this sender flips,
+    // and for a lead only one addressed to a team they lead.
     const claimed = await tx
       .update(schema.broadcasts)
       .set({ publishedAt: new Date(), dispatchedAt: new Date() })
-      .where(isOwnedAnnouncementDraft(input.id, input.senderId))
+      .where(
+        and(
+          isOwnedAnnouncementDraft(input.id, input.senderId),
+          input.allowedTeams
+            ? and(
+                eq(schema.broadcasts.scope, "team"),
+                input.allowedTeams.length > 0
+                  ? inArray(schema.broadcasts.team, [...input.allowedTeams])
+                  : sql`false`,
+              )
+            : undefined,
+        ),
+      )
       .returning({
         id: schema.broadcasts.id,
         title: schema.broadcasts.title,
         body: schema.broadcasts.body,
         channel: schema.broadcasts.channel,
         presentation: schema.broadcasts.presentation,
+        scope: schema.broadcasts.scope,
+        team: schema.broadcasts.team,
       });
 
     const broadcast = claimed[0];
     if (!broadcast) return null;
 
-    // Resolve the audience via the shared resolver (scope = 'everyone' for a
-    // camp-wide announcement — same recipient set as before). ON CONFLICT DO
-    // NOTHING pairs with the new (broadcast_id, user_id) dedupe index so a
-    // retry can never double-deliver.
-    // Read inside the transaction: the audience is the camp as it stands when
-    // the claim commits, on the same connection that holds the claim.
+    // Resolve the draft's own audience via the shared resolver. ON CONFLICT DO
+    // NOTHING pairs with the (broadcast_id, user_id) dedupe index so a retry
+    // can never double-deliver. Read inside the transaction: the audience is
+    // the camp as it stands when the claim commits, on the same connection
+    // that holds the claim.
     const recipientIds = await resolveAudience(
-      { id: broadcast.id, scope: "everyone", team: null },
+      { id: broadcast.id, scope: broadcast.scope, team: broadcast.team },
       input.senderId,
       tx,
     );
@@ -361,7 +436,11 @@ export async function publishAnnouncement(input: {
   return (
     published ?? {
       ok: false,
-      error: await explainDraftRefusal(input.id, input.senderId),
+      error: await explainDraftRefusal(
+        input.id,
+        input.senderId,
+        input.allowedTeams,
+      ),
     }
   );
 }

@@ -14,10 +14,11 @@ import {
   Send,
   Trash2,
   TriangleAlert,
+  Users,
   X,
 } from "lucide-react";
 import type { AnnouncementPresentation } from "@camp404/types";
-import type { AnnouncementSummary } from "@camp404/db/broadcasts";
+import type { AnnouncementSummary, Audience } from "@camp404/db/broadcasts";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -106,24 +107,48 @@ interface FormState {
   title: string;
   body: string;
   presentation: AnnouncementPresentation;
+  /** The picked audience, as an option value ("everyone" or "team:<key>"). */
+  audience: string;
 }
 
-const EMPTY_FORM: FormState = {
-  editingId: null,
-  title: "",
-  body: "",
-  presentation: "acknowledge",
-};
+/** One choice in "Who it's for". The page offers only what the sender may pick. */
+export interface AudienceOption {
+  value: string;
+  label: string;
+}
+
+export function audienceValue(audience: Audience): string {
+  return audience.scope === "team" ? `team:${audience.team}` : "everyone";
+}
+
+function audienceFromValue(value: string): Audience {
+  return value.startsWith("team:")
+    ? ({ scope: "team", team: value.slice(5) } as Audience)
+    : { scope: "everyone" };
+}
 
 export function AnnouncementsManager({
   announcements,
   currentUserId,
+  audienceOptions,
+  teamLabels,
 }: {
   announcements: AnnouncementSummary[];
   currentUserId: string;
+  /** A captain gets the camp and every active team; a lead their own teams. */
+  audienceOptions: AudienceOption[];
+  /** Team key to display name, for naming a draft's audience. */
+  teamLabels: Record<string, string>;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const emptyForm: FormState = {
+    editingId: null,
+    title: "",
+    body: "",
+    presentation: "acknowledge",
+    audience: audienceOptions[0]?.value ?? "everyone",
+  };
+  const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [dictating, setDictating] = useState(false);
   const voiceSupported = useVoiceSupported();
@@ -141,8 +166,14 @@ export function AnnouncementsManager({
   const drafts = announcements.filter((a) => a.publishedAt === null);
   const published = announcements.filter((a) => a.publishedAt !== null);
 
+  // "the camp" / "Kitchen", for the cards and the publish confirmation.
+  const audienceName = (audience: Audience) =>
+    audience.scope === "team"
+      ? (teamLabels[audience.team] ?? audience.team)
+      : "the camp";
+
   const reset = () => {
-    setForm(EMPTY_FORM);
+    setForm(emptyForm);
     setError(null);
     setDictating(false);
   };
@@ -160,6 +191,7 @@ export function AnnouncementsManager({
       title: form.title,
       body: form.body,
       presentation: form.presentation,
+      audience: audienceFromValue(form.audience),
     };
     startTransition(async () => {
       const result = editing
@@ -182,6 +214,7 @@ export function AnnouncementsManager({
       title: a.title,
       body: a.body,
       presentation: a.presentation,
+      audience: audienceValue(a.audience),
     });
   };
 
@@ -202,7 +235,7 @@ export function AnnouncementsManager({
   const handlePublish = (announcement: AnnouncementSummary) => {
     setError(null);
     startTransition(async () => {
-      const preview = await previewPublishAction();
+      const preview = await previewPublishAction(announcement.audience);
       if (!preview.ok) {
         setError(preview.error);
         return;
@@ -293,6 +326,29 @@ export function AnnouncementsManager({
         </div>
 
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="announcement-audience">Who it&apos;s for</Label>
+          <Select
+            value={form.audience}
+            onValueChange={(v) => setForm((f) => ({ ...f, audience: v }))}
+            disabled={pending || audienceOptions.length < 2}
+          >
+            <SelectTrigger id="announcement-audience">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {audienceOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  <span className="flex items-center gap-2">
+                    <Users className="h-4 w-4" aria-hidden />
+                    {option.label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="announcement-presentation">How it lands</Label>
           <Select
             value={form.presentation}
@@ -358,6 +414,7 @@ export function AnnouncementsManager({
               <DraftCard
                 key={a.id}
                 announcement={a}
+                audienceName={audienceName(a.audience)}
                 pending={pending}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
@@ -386,6 +443,7 @@ export function AnnouncementsManager({
               <PublishedCard
                 key={a.id}
                 announcement={a}
+                audienceName={audienceName(a.audience)}
                 currentUserId={currentUserId}
               />
             ))}
@@ -396,6 +454,7 @@ export function AnnouncementsManager({
       {confirming && (
         <PublishConfirm
           announcement={confirming.announcement}
+          audienceName={audienceName(confirming.announcement.audience)}
           recipientCount={confirming.recipientCount}
           error={confirming.error}
           pending={publishing}
@@ -413,6 +472,7 @@ function members(n: number): string {
 
 function PublishConfirm({
   announcement: a,
+  audienceName,
   recipientCount,
   error,
   pending,
@@ -420,6 +480,7 @@ function PublishConfirm({
   onConfirm,
 }: {
   announcement: AnnouncementSummary;
+  audienceName: string;
   recipientCount: number;
   error: string | null;
   pending: boolean;
@@ -437,8 +498,10 @@ function PublishConfirm({
       title={`Publish "${a.title}"?`}
       description={
         recipientCount === 0
-          ? "No members would get it. Nobody else is in the camp yet."
-          : `It goes to ${members(recipientCount)} now. You can't edit or recall it after. To fix a mistake, publish a correction.`
+          ? a.audience.scope === "team"
+            ? `No members would get it. Nobody else is on ${audienceName} this year.`
+            : "No members would get it. Nobody else is in the camp yet."
+          : `It goes to ${members(recipientCount)}${a.audience.scope === "team" ? ` of ${audienceName}` : ""} now. You can't edit or recall it after. To fix a mistake, publish a correction.`
       }
       confirmLabel={`Publish to ${members(recipientCount)}`}
       pending={pending}
@@ -521,12 +584,14 @@ function ClampedBody({ body }: { body: string }) {
 
 function DraftCard({
   announcement: a,
+  audienceName,
   pending,
   onEdit,
   onDelete,
   onPublish,
 }: {
   announcement: AnnouncementSummary;
+  audienceName: string;
   pending: boolean;
   onEdit: (a: AnnouncementSummary) => void;
   onDelete: (id: string) => void;
@@ -536,6 +601,7 @@ function DraftCard({
     <li>
       <Card className="space-y-3 p-4">
         <AnnouncementHeader announcement={a} />
+        <p className="text-xs text-muted-foreground">For {audienceName}</p>
         <ClampedBody body={a.body} />
         <div className="flex flex-wrap gap-2">
           <Button
@@ -565,7 +631,10 @@ function DraftCard({
             onClick={() => onPublish(a)}
             disabled={pending}
           >
-            <Send className="h-4 w-4" /> Publish to camp
+            <Send className="h-4 w-4" />{" "}
+            {a.audience.scope === "team"
+              ? `Publish to ${audienceName}`
+              : "Publish to camp"}
           </Button>
         </div>
       </Card>
@@ -575,9 +644,11 @@ function DraftCard({
 
 function PublishedCard({
   announcement: a,
+  audienceName,
   currentUserId,
 }: {
   announcement: AnnouncementSummary;
+  audienceName: string;
   currentUserId: string;
 }) {
   return (
@@ -589,6 +660,7 @@ function PublishedCard({
           <span className="text-muted-foreground">
             Sent to {a.recipientCount} member
             {a.recipientCount === 1 ? "" : "s"}
+            {a.audience.scope === "team" ? ` of ${audienceName}` : ""}
             {a.senderId === currentUserId ? " · by you" : ""}
           </span>
           {a.presentation === "acknowledge" && (
