@@ -1,8 +1,18 @@
-import { eq } from "drizzle-orm";
+import { readFileSync } from "node:fs";
+import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
-import { bootstrapFirstCaptain, getBootstrapState } from "../bootstrap";
+import {
+  bootstrapFirstCaptain,
+  FOUNDER_CODE_MAX_USES,
+  getBootstrapState,
+} from "../bootstrap";
+import {
+  consumeInviteCode,
+  findUsableInviteCode,
+  revokeInviteCode,
+} from "../invite-codes";
 import { sanitiseAccount } from "../account";
 import * as schema from "../schema";
 
@@ -148,5 +158,120 @@ describe("bootstrapFirstCaptain — the ghost-captain latch", () => {
       .from(schema.users)
       .where(eq(schema.users.authUserId, "auth-opportunist"));
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("the root invite code", () => {
+  const h = useTestDb();
+
+  it("is minted capped, and every redeemer waits for a captain", async () => {
+    // The word is public (the repo is), so it must never wave anyone in.
+    const db = h.db();
+    const res = await bootstrapFirstCaptain({
+      authUserId: "auth-founder",
+      displayName: "Ada",
+      founderCode: FOUNDER_CODE,
+    });
+    expect(res.ok).toBe(true);
+
+    const [code] = await db
+      .select()
+      .from(schema.inviteCodes)
+      .where(eq(schema.inviteCodes.code, FOUNDER_CODE));
+    expect(code).toMatchObject({
+      requiresApproval: true,
+      maxUses: FOUNDER_CODE_MAX_USES,
+      createdByUserId: null,
+    });
+  });
+
+  it("migration 0022 puts the policy on a root code minted before it", async () => {
+    // The harness applies every migration to an empty database, so the live
+    // case is rebuilt by hand: an old unlimited, pre-approved root code, a
+    // captain's own code, and a root code already used past the cap.
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    await db.insert(schema.inviteCodes).values([
+      {
+        code: FOUNDER_CODE,
+        createdByUserId: null,
+        note: "Camp root invite (first-time setup)",
+        maxUses: null,
+        useCount: 12,
+        requiresApproval: false,
+      },
+      {
+        code: "berlin-crew",
+        createdByUserId: captain.id,
+        note: "Camp root invite (first-time setup)",
+        maxUses: null,
+        requiresApproval: false,
+      },
+      {
+        code: "busy-root",
+        createdByUserId: null,
+        note: "Camp root invite (first-time setup)",
+        maxUses: null,
+        useCount: 140,
+        requiresApproval: false,
+      },
+    ]);
+
+    const migration = readFileSync(
+      new URL("../../migrations/0022_founder_code_policy.sql", import.meta.url),
+      "utf8",
+    );
+    await db.execute(sql.raw(migration));
+
+    const rows = await db.select().from(schema.inviteCodes);
+    const byCode = Object.fromEntries(rows.map((r) => [r.code, r]));
+    expect(byCode[FOUNDER_CODE]).toMatchObject({
+      requiresApproval: true,
+      maxUses: 100,
+      useCount: 12,
+    });
+    expect(byCode["busy-root"]).toMatchObject({
+      requiresApproval: true,
+      maxUses: 140,
+    });
+    // A captain's own code keeps the policy the captain chose.
+    expect(byCode["berlin-crew"]).toMatchObject({
+      requiresApproval: false,
+      maxUses: null,
+    });
+  });
+
+  it("can be revoked, which stops redemption and leaves an audit row", async () => {
+    const db = h.db();
+    await bootstrapFirstCaptain({
+      authUserId: "auth-founder",
+      displayName: "Ada",
+      founderCode: FOUNDER_CODE,
+    });
+    expect(await consumeInviteCode(FOUNDER_CODE)).not.toBeNull();
+
+    expect(
+      await revokeInviteCode({ code: FOUNDER_CODE, actorUserId: null }),
+    ).toBe(true);
+    expect(await findUsableInviteCode(FOUNDER_CODE)).toBeNull();
+    expect(await consumeInviteCode(FOUNDER_CODE)).toBeNull();
+
+    // A second revoke, or an unknown code, changes nothing.
+    expect(
+      await revokeInviteCode({ code: FOUNDER_CODE, actorUserId: null }),
+    ).toBe(false);
+    expect(
+      await revokeInviteCode({ code: "no-such-code", actorUserId: null }),
+    ).toBe(false);
+
+    const audit = await db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "invite.revoked"));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      target: FOUNDER_CODE,
+      metadata: { useCount: 1 },
+    });
   });
 });

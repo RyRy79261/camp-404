@@ -54,6 +54,17 @@ export type BootstrapResult =
   | { ok: false; reason: "already-bootstrapped" };
 
 /**
+ * How many people can join with the root invite code. The camp is 30 to 80
+ * people, and the founder hands this code to the first crew, so 100 leaves
+ * room without leaving the code open for good. After that, members invite
+ * members from /tools/invite.
+ */
+export const FOUNDER_CODE_MAX_USES = 100;
+
+/** The note on the root invite code. Migration 0022 matches on it. */
+export const FOUNDER_CODE_NOTE = "Camp root invite (first-time setup)";
+
+/**
  * Elect the given authenticated user as the first captain, mint the root invite
  * code, and stamp the latch — atomically, only while no captain exists.
  *
@@ -123,14 +134,19 @@ export async function bootstrapFirstCaptain(input: {
     // Mint the root invite code (idempotent — leave an existing one as-is).
     // createdByUserId = NULL keeps the founder a clean family-tree root while
     // members who later redeem it attach beneath the root.
+    //
+    // The code is a fixed word in a public repo, so it must not wave anyone
+    // in. Owner's call (2026-09-16): keep the word, but every redeemer waits
+    // for a captain's approval, and the uses are capped. Migration 0022 puts
+    // the same policy on a root code minted before this change.
     await tx
       .insert(inviteCodes)
       .values({
         code: founderCode,
         createdByUserId: null,
-        note: "Camp root invite (first-time setup)",
-        maxUses: null,
-        requiresApproval: false,
+        note: FOUNDER_CODE_NOTE,
+        maxUses: FOUNDER_CODE_MAX_USES,
+        requiresApproval: true,
       })
       .onConflictDoNothing({ target: inviteCodes.code });
 

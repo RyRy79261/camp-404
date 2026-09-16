@@ -1,5 +1,6 @@
 import { and, eq, isNull, or, sql, gt } from "drizzle-orm";
-import { createHttpDb } from "./index";
+import { writeAuditEvent } from "./audit";
+import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 
 export type AssignedRank = "captain" | "member";
@@ -126,4 +127,36 @@ export async function findInviteCodeByCode(
     .where(eq(schema.inviteCodes.code, code))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * Revoke an invite code, so nobody can redeem it again. Members who already
+ * joined with it keep their place. Writes an `invite.revoked` audit row in the
+ * same transaction. Returns false when there is no such code, or it was
+ * already revoked.
+ */
+export async function revokeInviteCode(input: {
+  code: string;
+  actorUserId: string | null;
+}): Promise<boolean> {
+  return await withTransaction(async (tx) => {
+    const rows = await tx
+      .update(schema.inviteCodes)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(schema.inviteCodes.code, input.code),
+          isNull(schema.inviteCodes.revokedAt),
+        ),
+      )
+      .returning({ useCount: schema.inviteCodes.useCount });
+    if (rows.length === 0) return false;
+    await writeAuditEvent(tx, {
+      actorId: input.actorUserId,
+      action: "invite.revoked",
+      target: input.code,
+      metadata: { useCount: rows[0]!.useCount },
+    });
+    return true;
+  });
 }
