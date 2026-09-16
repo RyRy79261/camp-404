@@ -1258,6 +1258,12 @@ export const auditLog = pgTable(
   (a) => ({
     actorIdx: index("audit_log_actor_idx").on(a.actorId),
     actionIdx: index("audit_log_action_idx").on(a.action),
+    // Wave 0 promised these "with the first writer", and writers now exist
+    // (team assignment, the year rollover, year names). The two questions an
+    // audit trail is asked: what happened to THIS member or year, and what
+    // happened lately.
+    targetIdx: index("audit_log_target_idx").on(a.target),
+    createdAtIdx: index("audit_log_created_at_idx").on(a.createdAt.desc()),
   }),
 );
 

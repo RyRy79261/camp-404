@@ -148,6 +148,13 @@
       "when": 1788859966843,
       "tag": "0020_organic_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789556904920,
+      "tag": "0021_audit_log_indexes",
+      "breakpoints": true
     }
   ]
 }
