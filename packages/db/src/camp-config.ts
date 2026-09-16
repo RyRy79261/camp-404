@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { humanizeKey, slugify, type AudienceScope } from "@camp404/core";
+import { writeAuditEvent, type AuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
 import { campSettings } from "./schema";
 
@@ -694,9 +695,14 @@ export function assertStableTeamKeys(
  * lock — a `SELECT … FOR UPDATE` read-modify-write so concurrent captain edits
  * serialise (no lost updates), mirroring bootstrap.ts. Uses the pooled driver
  * (the HTTP driver has no transactions). Returns the persisted config.
+ *
+ * `audit`, when given, is written in the same transaction, so the change and
+ * its audit row commit or roll back together (a refused transform writes
+ * neither).
  */
 export async function mutateTeamsConfig(
   transform: (current: TeamsConfig) => TeamsConfig,
+  audit?: AuditEvent,
 ): Promise<TeamsConfig> {
   return await withTransaction(async (tx) => {
     // Ensure the singleton exists, then lock it for the read-modify-write.
@@ -716,6 +722,7 @@ export async function mutateTeamsConfig(
       .update(campSettings)
       .set({ config: next, updatedAt: new Date() })
       .where(eq(campSettings.id, true));
+    if (audit) await writeAuditEvent(tx, audit);
     return next;
   });
 }

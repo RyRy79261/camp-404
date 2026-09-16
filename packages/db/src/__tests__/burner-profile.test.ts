@@ -25,6 +25,16 @@ async function readUser(
   return row!;
 }
 
+async function auditFor(
+  db: ReturnType<ReturnType<typeof useTestDb>["db"]>,
+  target: string,
+) {
+  return db
+    .select()
+    .from(schema.auditLog)
+    .where(eq(schema.auditLog.target, target));
+}
+
 describe("setUserApproval", () => {
   const h = useTestDb();
 
@@ -44,6 +54,13 @@ describe("setUserApproval", () => {
     expect(row.approvalStatus).toBe("approved");
     expect(row.approvalDecidedByUserId).toBe(captain.id);
     expect(row.approvalDecidedAt).not.toBeNull();
+    expect(await auditFor(db, applicant.id)).toEqual([
+      expect.objectContaining({
+        actorId: captain.id,
+        action: "member.approval_decided",
+        metadata: { status: "approved" },
+      }),
+    ]);
   });
 
   it("refuses a second decision and leaves the first captain's stamp intact", async () => {
@@ -75,6 +92,10 @@ describe("setUserApproval", () => {
     expect(afterB.approvalDecidedByUserId).toBe(captainA.id);
     expect(afterB.approvalDecidedAt).toEqual(afterA.approvalDecidedAt);
     expect(afterB.updatedAt).toEqual(afterA.updatedAt);
+    // Only the decision that happened is on the audit trail.
+    expect((await auditFor(db, applicant.id)).map((r) => r.actorId)).toEqual([
+      captainA.id,
+    ]);
   });
 
   it("refuses to re-decide a rejected member", async () => {

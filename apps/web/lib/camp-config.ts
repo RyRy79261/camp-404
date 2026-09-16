@@ -17,6 +17,7 @@ import {
   type TeamsConfig,
   type TeamConfigEntry,
 } from "@camp404/db/camp-config";
+import type { AuditEvent } from "@camp404/db/audit";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -55,13 +56,14 @@ export function getTeamsConfig(): Promise<TeamsConfig> {
  */
 export function mutateTeamsConfig(
   transform: (current: TeamsConfig) => TeamsConfig,
+  audit?: AuditEvent,
 ): Promise<TeamsConfig> {
   if (isE2ETestMode()) {
     const next = transform(testStore.getTeamsConfig());
     testStore.setTeamsConfig(next);
     return Promise.resolve(next);
   }
-  return dbMutateTeamsConfig(transform);
+  return dbMutateTeamsConfig(transform, audit);
 }
 
 /**

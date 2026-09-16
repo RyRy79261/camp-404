@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { approvalNotification } from "@camp404/core";
+import { writeAuditEvent } from "./audit";
 import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
@@ -79,7 +80,8 @@ export async function setUserApprovalStatus(
  * An approval also tells the member, in the same transaction: a pop-up and a
  * push saying they are in. Only the call that won the compare-and-set writes
  * it, so a second captain's click cannot send it twice. A rejection sends
- * nothing (see approvalNotification).
+ * nothing (see approvalNotification). The winning call also writes a
+ * `member.approval_decided` audit row in the same transaction.
  */
 export async function setUserApproval(input: {
   userId: string;
@@ -103,6 +105,12 @@ export async function setUserApproval(input: {
       )
       .returning({ id: schema.users.id });
     if (rows.length === 0) return false;
+    await writeAuditEvent(tx, {
+      actorId: input.decidedByUserId,
+      action: "member.approval_decided",
+      target: input.userId,
+      metadata: { status: input.status },
+    });
     if (input.status === "approved") {
       await tx.insert(schema.notificationDeliveries).values(
         deliveryValues(approvalNotification(), {
