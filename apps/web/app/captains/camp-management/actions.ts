@@ -26,6 +26,7 @@ import {
   sendCaptainPromotion,
 } from "@/lib/promotion";
 import { presentMemberDetail, type PresentedMember } from "@/lib/member-detail";
+import { runAction } from "@/lib/action-result";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 import {
   presentPublicMember,
@@ -144,76 +145,78 @@ async function requireApprovedMember(): Promise<
 export async function getMemberDetailAction(
   userId: string,
 ): Promise<MemberDetailResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("getMemberDetailAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  // The only action in this file that was missing the opaque-id boundary check
-  // every sibling has — and the only one that passes includeIdDocuments, i.e.
-  // the government-ID decrypt path. Validate before the privileged read.
-  if (!UserId.safeParse(userId).success) {
-    return { ok: false, error: "Member not found." };
-  }
+    // The only action in this file that was missing the opaque-id boundary check
+    // every sibling has — and the only one that passes includeIdDocuments, i.e.
+    // the government-ID decrypt path. Validate before the privileged read.
+    if (!UserId.safeParse(userId).success) {
+      return { ok: false, error: "Member not found." };
+    }
 
-  // Captain-gated above, and we decrypt below — the only caller that may pull
-  // the ID ciphertext out of the database.
-  const detail = await getCampMemberDetail(userId, {
-    includeIdDocuments: true,
+    // Captain-gated above, and we decrypt below — the only caller that may pull
+    // the ID ciphertext out of the database.
+    const detail = await getCampMemberDetail(userId, {
+      includeIdDocuments: true,
+    });
+    if (!detail) return { ok: false, error: "Member not found." };
+
+    // Captain-gated above — decrypt this member's government ID number and merge
+    // it back into the answers so the profile modal can show it. Captains and
+    // the owner are the only readers of this field.
+    //
+    // An UNREADABLE column (key rotation / corrupt ciphertext) must not render as
+    // an absent one: mergeIdNumber is a no-op on a null number, so the row would
+    // silently disappear and the captain would read it as "this member never gave
+    // us an ID". Merge an explicit marker instead. This is a read-only
+    // projection — presentMemberDetail never writes back.
+    const passport = decryptField(detail.passportEncrypted);
+    const saId = decryptField(detail.saIdEncrypted);
+    const readable =
+      passport.state === "ok" ? passport : saId.state === "ok" ? saId : null;
+    const unreadableType =
+      passport.state === "unreadable"
+        ? "passport"
+        : saId.state === "unreadable"
+          ? "sa_id"
+          : null;
+    const id = readable
+      ? {
+          idType: passport.state === "ok" ? "passport" : "sa_id",
+          idNumber: readable.value,
+        }
+      : unreadableType
+        ? { idType: unreadableType, idNumber: ID_UNREADABLE_LABEL }
+        : { idType: null, idNumber: null };
+    const responses = mergeIdNumber(detail.responses, id);
+
+    // Assign-captain affordance for the modal: reuse the pure send-guard for
+    // visibility (captain viewer, target not already a captain, not self) and the
+    // pure step-state over the member's open request (if any).
+    const canAssignCaptain = canSendPromotion({
+      viewerRank: "captain",
+      viewerId: gate.captainId,
+      targetRank: deriveViewerRank(detail.rank, false),
+      targetId: userId,
+    }).ok;
+    const openRequest = await getOpenPromotionForTarget(userId);
+    const promotionStep = promotionStepState(openRequest);
+
+    // Resolve team picks against ALL teams (incl. archived) so a member who chose
+    // a since-archived team still shows its label, not the raw key.
+    const questionnaire = await getQuestionnaireForResponses();
+
+    return {
+      ok: true,
+      member: presentMemberDetail({ ...detail, responses }, questionnaire),
+      canAssignCaptain,
+      promotionStep,
+      promotionRequestId: openRequest?.id ?? null,
+      promotionRequestIsMine: openRequest?.requestedByUserId === gate.captainId,
+    };
   });
-  if (!detail) return { ok: false, error: "Member not found." };
-
-  // Captain-gated above — decrypt this member's government ID number and merge
-  // it back into the answers so the profile modal can show it. Captains and
-  // the owner are the only readers of this field.
-  //
-  // An UNREADABLE column (key rotation / corrupt ciphertext) must not render as
-  // an absent one: mergeIdNumber is a no-op on a null number, so the row would
-  // silently disappear and the captain would read it as "this member never gave
-  // us an ID". Merge an explicit marker instead. This is a read-only
-  // projection — presentMemberDetail never writes back.
-  const passport = decryptField(detail.passportEncrypted);
-  const saId = decryptField(detail.saIdEncrypted);
-  const readable =
-    passport.state === "ok" ? passport : saId.state === "ok" ? saId : null;
-  const unreadableType =
-    passport.state === "unreadable"
-      ? "passport"
-      : saId.state === "unreadable"
-        ? "sa_id"
-        : null;
-  const id = readable
-    ? {
-        idType: passport.state === "ok" ? "passport" : "sa_id",
-        idNumber: readable.value,
-      }
-    : unreadableType
-      ? { idType: unreadableType, idNumber: ID_UNREADABLE_LABEL }
-      : { idType: null, idNumber: null };
-  const responses = mergeIdNumber(detail.responses, id);
-
-  // Assign-captain affordance for the modal: reuse the pure send-guard for
-  // visibility (captain viewer, target not already a captain, not self) and the
-  // pure step-state over the member's open request (if any).
-  const canAssignCaptain = canSendPromotion({
-    viewerRank: "captain",
-    viewerId: gate.captainId,
-    targetRank: deriveViewerRank(detail.rank, false),
-    targetId: userId,
-  }).ok;
-  const openRequest = await getOpenPromotionForTarget(userId);
-  const promotionStep = promotionStepState(openRequest);
-
-  // Resolve team picks against ALL teams (incl. archived) so a member who chose
-  // a since-archived team still shows its label, not the raw key.
-  const questionnaire = await getQuestionnaireForResponses();
-
-  return {
-    ok: true,
-    member: presentMemberDetail({ ...detail, responses }, questionnaire),
-    canAssignCaptain,
-    promotionStep,
-    promotionRequestId: openRequest?.id ?? null,
-    promotionRequestIsMine: openRequest?.requestedByUserId === gate.captainId,
-  };
 }
 
 /**
@@ -226,22 +229,24 @@ export async function getMemberDetailAction(
 export async function getPublicMemberProfileAction(
   userId: string,
 ): Promise<PublicMemberProfileResult> {
-  const gate = await requireApprovedMember();
-  if (!gate.ok) return gate;
+  return runAction("getPublicMemberProfileAction", async () => {
+    const gate = await requireApprovedMember();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(userId).success) {
-    return { ok: false, error: "Invalid member." };
-  }
+    if (!UserId.safeParse(userId).success) {
+      return { ok: false, error: "Invalid member." };
+    }
 
-  // Member-facing (NOT captain-gated): never SELECT the ID ciphertext, so it
-  // cannot reach this request's scope at all — not merely be projected away.
-  const detail = await getCampMemberDetail(userId, {
-    includeIdDocuments: false,
+    // Member-facing (NOT captain-gated): never SELECT the ID ciphertext, so it
+    // cannot reach this request's scope at all — not merely be projected away.
+    const detail = await getCampMemberDetail(userId, {
+      includeIdDocuments: false,
+    });
+    if (!detail) return { ok: false, error: "Member not found." };
+
+    // Allowlist projection (no decrypt, no status, no email, no provenance).
+    return { ok: true, ...presentPublicMember(detail) };
   });
-  if (!detail) return { ok: false, error: "Member not found." };
-
-  // Allowlist projection (no decrypt, no status, no email, no provenance).
-  return { ok: true, ...presentPublicMember(detail) };
 }
 
 /**
@@ -255,34 +260,36 @@ export async function decideApprovalAction(
   userId: string,
   decision: "approved" | "rejected",
 ): Promise<ApprovalDecisionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("decideApprovalAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(userId).success) {
-    return { ok: false, error: "Invalid member." };
-  }
-  if (decision !== "approved" && decision !== "rejected") {
-    return { ok: false, error: "Unknown decision." };
-  }
-  if (userId === gate.captainId) {
-    return { ok: false, error: "You can't decide on your own account." };
-  }
+    if (!UserId.safeParse(userId).success) {
+      return { ok: false, error: "Invalid member." };
+    }
+    if (decision !== "approved" && decision !== "rejected") {
+      return { ok: false, error: "Unknown decision." };
+    }
+    if (userId === gate.captainId) {
+      return { ok: false, error: "You can't decide on your own account." };
+    }
 
-  const decided = await decideUserApproval({
-    userId,
-    status: decision,
-    decidedByUserId: gate.captainId,
+    const decided = await decideUserApproval({
+      userId,
+      status: decision,
+      decidedByUserId: gate.captainId,
+    });
+    // Revalidate either way: on the lost-CAS path the roster this captain is
+    // looking at is stale, which is exactly why they got here.
+    revalidatePath("/captains/camp-management");
+    if (!decided) {
+      return {
+        ok: false,
+        error: "Another captain already decided on this member.",
+      };
+    }
+    return { ok: true };
   });
-  // Revalidate either way: on the lost-CAS path the roster this captain is
-  // looking at is stale, which is exactly why they got here.
-  revalidatePath("/captains/camp-management");
-  if (!decided) {
-    return {
-      ok: false,
-      error: "Another captain already decided on this member.",
-    };
-  }
-  return { ok: true };
 }
 
 /**
@@ -295,37 +302,39 @@ export async function decideApprovalAction(
 export async function sendCaptainPromotionAction(
   targetUserId: string,
 ): Promise<SendPromotionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("sendCaptainPromotionAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(targetUserId).success) {
-    return { ok: false, error: "Invalid member." };
-  }
+    if (!UserId.safeParse(targetUserId).success) {
+      return { ok: false, error: "Invalid member." };
+    }
 
-  const target = await getCampMemberDetail(targetUserId);
-  if (!target) return { ok: false, error: "Member not found." };
+    const target = await getCampMemberDetail(targetUserId);
+    if (!target) return { ok: false, error: "Member not found." };
 
-  // The viewer is a captain by construction (requireCaptain). team-lead is
-  // irrelevant to this guard (it only checks `=== "captain"`), so isLead=false.
-  const guard = canSendPromotion({
-    viewerRank: "captain",
-    viewerId: gate.captainId,
-    targetRank: deriveViewerRank(target.rank, false),
-    targetId: targetUserId,
+    // The viewer is a captain by construction (requireCaptain). team-lead is
+    // irrelevant to this guard (it only checks `=== "captain"`), so isLead=false.
+    const guard = canSendPromotion({
+      viewerRank: "captain",
+      viewerId: gate.captainId,
+      targetRank: deriveViewerRank(target.rank, false),
+      targetId: targetUserId,
+    });
+    if (!guard.ok) {
+      return {
+        ok: false,
+        error: SEND_PROMOTION_COPY[guard.reason] ?? "Couldn't send the request.",
+      };
+    }
+
+    const created = await sendCaptainPromotion({
+      targetUserId,
+      requestedByUserId: gate.captainId,
+    });
+    revalidatePath("/captains/camp-management");
+    return { ok: true, requestId: created.id };
   });
-  if (!guard.ok) {
-    return {
-      ok: false,
-      error: SEND_PROMOTION_COPY[guard.reason] ?? "Couldn't send the request.",
-    };
-  }
-
-  const created = await sendCaptainPromotion({
-    targetUserId,
-    requestedByUserId: gate.captainId,
-  });
-  revalidatePath("/captains/camp-management");
-  return { ok: true, requestId: created.id };
 }
 
 /**
@@ -336,46 +345,48 @@ export async function sendCaptainPromotionAction(
 export async function cancelCaptainPromotionAction(
   requestId: string,
 ): Promise<PromotionActionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
+  return runAction("cancelCaptainPromotionAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
 
-  if (!UserId.safeParse(requestId).success) {
-    return { ok: false, error: "Invalid request." };
-  }
+    if (!UserId.safeParse(requestId).success) {
+      return { ok: false, error: "Invalid request." };
+    }
 
-  const request = await getPromotionRequestById(requestId);
-  if (
-    !request ||
-    request.targetUserId === null ||
-    request.requestedByUserId === null
-  ) {
-    return { ok: false, error: "Request not found." };
-  }
+    const request = await getPromotionRequestById(requestId);
+    if (
+      !request ||
+      request.targetUserId === null ||
+      request.requestedByUserId === null
+    ) {
+      return { ok: false, error: "Request not found." };
+    }
 
-  const guard = canDecidePromotion({
-    actorId: gate.captainId,
-    request: {
-      status: request.status,
-      targetUserId: request.targetUserId,
-      requestedByUserId: request.requestedByUserId,
-    },
-    action: "cancel",
+    const guard = canDecidePromotion({
+      actorId: gate.captainId,
+      request: {
+        status: request.status,
+        targetUserId: request.targetUserId,
+        requestedByUserId: request.requestedByUserId,
+      },
+      action: "cancel",
+    });
+    if (!guard.ok) {
+      return {
+        ok: false,
+        error:
+          CANCEL_PROMOTION_COPY[guard.reason] ?? "Couldn't cancel the request.",
+      };
+    }
+
+    // Bind the actor in the write predicate too (defense in depth): the cancel
+    // only flips a row this captain actually requested.
+    await decideCaptainPromotion({
+      requestId,
+      status: "cancelled",
+      actorUserId: gate.captainId,
+    });
+    revalidatePath("/captains/camp-management");
+    return { ok: true };
   });
-  if (!guard.ok) {
-    return {
-      ok: false,
-      error:
-        CANCEL_PROMOTION_COPY[guard.reason] ?? "Couldn't cancel the request.",
-    };
-  }
-
-  // Bind the actor in the write predicate too (defense in depth): the cancel
-  // only flips a row this captain actually requested.
-  await decideCaptainPromotion({
-    requestId,
-    status: "cancelled",
-    actorUserId: gate.captainId,
-  });
-  revalidatePath("/captains/camp-management");
-  return { ok: true };
 }

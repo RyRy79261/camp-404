@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { createHttpDb, createPooledDb, type PooledDatabase } from "./index";
+import { createHttpDb, withTransaction, type PooledDatabase } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 import { meetsRequiredVersion } from "./versions";
@@ -223,15 +223,10 @@ export async function openActivation(
     null,
   );
 
-  const { db, pool } = createPooledDb();
-  try {
-    return await db.transaction(async (tx) => ({
-      ok: true as const,
-      created: await openActivationTx(tx, act, recipientIds),
-    }));
-  } finally {
-    await pool.end();
-  }
+  return await withTransaction(async (tx) => ({
+    ok: true as const,
+    created: await openActivationTx(tx, act, recipientIds),
+  }));
 }
 
 /**
@@ -418,65 +413,60 @@ export async function completeBuilderResponse(input: {
   responses: QuestionnaireResponses;
   activationId: string;
 }): Promise<void> {
-  const { db, pool } = createPooledDb();
   const now = new Date();
-  try {
-    await db.transaction(async (tx) => {
-      await tx
-        .insert(schema.questionnaireResponses)
-        .values({
-          userId: input.userId,
-          definitionKey: input.definitionKey,
+  await withTransaction(async (tx) => {
+    await tx
+      .insert(schema.questionnaireResponses)
+      .values({
+        userId: input.userId,
+        definitionKey: input.definitionKey,
+        definitionVersion: input.definitionVersion,
+        cycle: input.cycle,
+        responses: input.responses,
+        activationId: input.activationId,
+        completedAt: now,
+      })
+      .onConflictDoUpdate({
+        // Reads may fall back to an earlier cycle; writes never do — a carry
+        // member who reaffirms an answer in year N gets a year-N row, and
+        // year N-1's row is left intact.
+        target: [
+          schema.questionnaireResponses.userId,
+          schema.questionnaireResponses.definitionKey,
+          schema.questionnaireResponses.cycle,
+        ],
+        set: {
           definitionVersion: input.definitionVersion,
-          cycle: input.cycle,
           responses: input.responses,
           activationId: input.activationId,
           completedAt: now,
-        })
-        .onConflictDoUpdate({
-          // Reads may fall back to an earlier cycle; writes never do — a carry
-          // member who reaffirms an answer in year N gets a year-N row, and
-          // year N-1's row is left intact.
-          target: [
-            schema.questionnaireResponses.userId,
-            schema.questionnaireResponses.definitionKey,
-            schema.questionnaireResponses.cycle,
-          ],
-          set: {
-            definitionVersion: input.definitionVersion,
-            responses: input.responses,
-            activationId: input.activationId,
-            completedAt: now,
-            updatedAt: now,
-          },
-        });
-      const [ra] = await tx
-        .select({
-          id: schema.requiredActions.id,
-          version: schema.requiredActions.version,
-          status: schema.requiredActions.status,
-        })
-        .from(schema.requiredActions)
-        .where(
-          and(
-            eq(schema.requiredActions.userId, input.userId),
-            eq(schema.requiredActions.actionKey, input.definitionKey),
-          ),
-        )
-        .limit(1);
-      if (
-        ra &&
-        ra.status === "pending" &&
-        (!ra.version ||
-          meetsRequiredVersion(ra.version, input.definitionVersion))
-      ) {
-        await tx
-          .update(schema.requiredActions)
-          .set({ status: "completed", completedAt: now })
-          .where(eq(schema.requiredActions.id, ra.id));
-      }
-    });
-  } finally {
-    await pool.end();
-  }
+          updatedAt: now,
+        },
+      });
+    const [ra] = await tx
+      .select({
+        id: schema.requiredActions.id,
+        version: schema.requiredActions.version,
+        status: schema.requiredActions.status,
+      })
+      .from(schema.requiredActions)
+      .where(
+        and(
+          eq(schema.requiredActions.userId, input.userId),
+          eq(schema.requiredActions.actionKey, input.definitionKey),
+        ),
+      )
+      .limit(1);
+    if (
+      ra &&
+      ra.status === "pending" &&
+      (!ra.version ||
+        meetsRequiredVersion(ra.version, input.definitionVersion))
+    ) {
+      await tx
+        .update(schema.requiredActions)
+        .set({ status: "completed", completedAt: now })
+        .where(eq(schema.requiredActions.id, ra.id));
+    }
+  });
 }

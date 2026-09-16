@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { createHttpDb, createPooledDb } from "./index";
+import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 
 // First-time-setup data access. A fresh system has no captain; the /setup
@@ -71,84 +71,79 @@ export async function bootstrapFirstCaptain(input: {
   founderCode: string;
 }): Promise<BootstrapResult> {
   const { authUserId, displayName, founderCode } = input;
-  const { db, pool } = createPooledDb();
-  try {
-    return await db.transaction(async (tx) => {
-      // Serialize every bootstrap attempt on the singleton row: ensure it
-      // exists, then lock it for the duration of the transaction.
-      await tx
-        .insert(campSettings)
-        .values({ id: true })
-        .onConflictDoNothing({ target: campSettings.id });
-      const [locked] = await tx
-        .select({ bootstrappedAt: campSettings.bootstrappedAt })
-        .from(campSettings)
-        .where(eq(campSettings.id, true))
-        .for("update");
+  return await withTransaction(async (tx) => {
+    // Serialize every bootstrap attempt on the singleton row: ensure it
+    // exists, then lock it for the duration of the transaction.
+    await tx
+      .insert(campSettings)
+      .values({ id: true })
+      .onConflictDoNothing({ target: campSettings.id });
+    const [locked] = await tx
+      .select({ bootstrappedAt: campSettings.bootstrappedAt })
+      .from(campSettings)
+      .where(eq(campSettings.id, true))
+      .for("update");
 
-      // Already set up — by the latch, or by an existing captain.
-      const [captains] = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(users)
-        .where(isRealCaptain);
-      if (locked?.bootstrappedAt || (captains?.count ?? 0) > 0) {
-        return { ok: false as const, reason: "already-bootstrapped" as const };
-      }
+    // Already set up — by the latch, or by an existing captain.
+    const [captains] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(users)
+      .where(isRealCaptain);
+    if (locked?.bootstrappedAt || (captains?.count ?? 0) > 0) {
+      return { ok: false as const, reason: "already-bootstrapped" as const };
+    }
 
-      // Elect this user the founding captain: promote an existing row, or
-      // create one (a non-god first user has no row until now). Approved so they
-      // skip the vetting queue; inviteCode = the root code so the invite gate
-      // passes while keeping them a clean family-tree root.
-      const promoted = await tx
-        .update(users)
-        .set({ rank: "captain", approvalStatus: "approved", inviteCode: founderCode })
-        .where(eq(users.authUserId, authUserId))
-        .returning({ id: users.id });
-      let userId = promoted[0]?.id;
-      if (!userId) {
-        const [created] = await tx
-          .insert(users)
-          .values({
-            authUserId,
-            displayName,
-            rank: "captain",
-            approvalStatus: "approved",
-            inviteCode: founderCode,
-          })
-          .returning({ id: users.id });
-        userId = created?.id;
-      }
-      if (!userId) {
-        throw new Error("Bootstrap failed to create the founding captain");
-      }
-
-      // Mint the root invite code (idempotent — leave an existing one as-is).
-      // createdByUserId = NULL keeps the founder a clean family-tree root while
-      // members who later redeem it attach beneath the root.
-      await tx
-        .insert(inviteCodes)
+    // Elect this user the founding captain: promote an existing row, or
+    // create one (a non-god first user has no row until now). Approved so they
+    // skip the vetting queue; inviteCode = the root code so the invite gate
+    // passes while keeping them a clean family-tree root.
+    const promoted = await tx
+      .update(users)
+      .set({ rank: "captain", approvalStatus: "approved", inviteCode: founderCode })
+      .where(eq(users.authUserId, authUserId))
+      .returning({ id: users.id });
+    let userId = promoted[0]?.id;
+    if (!userId) {
+      const [created] = await tx
+        .insert(users)
         .values({
-          code: founderCode,
-          createdByUserId: null,
-          note: "Camp root invite (first-time setup)",
-          maxUses: null,
-          requiresApproval: false,
+          authUserId,
+          displayName,
+          rank: "captain",
+          approvalStatus: "approved",
+          inviteCode: founderCode,
         })
-        .onConflictDoNothing({ target: inviteCodes.code });
+        .returning({ id: users.id });
+      userId = created?.id;
+    }
+    if (!userId) {
+      throw new Error("Bootstrap failed to create the founding captain");
+    }
 
-      // Stamp the once-only latch.
-      await tx
-        .update(campSettings)
-        .set({
-          bootstrappedAt: new Date(),
-          bootstrappedByUserId: userId,
-          updatedAt: new Date(),
-        })
-        .where(eq(campSettings.id, true));
+    // Mint the root invite code (idempotent — leave an existing one as-is).
+    // createdByUserId = NULL keeps the founder a clean family-tree root while
+    // members who later redeem it attach beneath the root.
+    await tx
+      .insert(inviteCodes)
+      .values({
+        code: founderCode,
+        createdByUserId: null,
+        note: "Camp root invite (first-time setup)",
+        maxUses: null,
+        requiresApproval: false,
+      })
+      .onConflictDoNothing({ target: inviteCodes.code });
 
-      return { ok: true as const, userId };
-    });
-  } finally {
-    await pool.end();
-  }
+    // Stamp the once-only latch.
+    await tx
+      .update(campSettings)
+      .set({
+        bootstrappedAt: new Date(),
+        bootstrappedByUserId: userId,
+        updatedAt: new Date(),
+      })
+      .where(eq(campSettings.id, true));
+
+    return { ok: true as const, userId };
+  });
 }

@@ -4,7 +4,7 @@ import {
   classifyChange,
   validateBuilderQuestionnaire,
 } from "@camp404/types";
-import { createHttpDb, createPooledDb } from "./index";
+import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { nextBuilderVersion } from "./versions";
 import {
@@ -127,33 +127,28 @@ export async function publishDefinition(
 
   const snapshot = parsed.data;
   const now = new Date();
-  const { db: tdb, pool } = createPooledDb();
-  try {
-    await tdb.transaction(async (tx) => {
-      await tx
-        .insert(schema.questionnaireVersions)
-        .values({
-          definitionKey: key,
-          version,
-          definition: snapshot,
-          publishedAt: now,
-          publishedByUserId,
-        })
-        .onConflictDoUpdate({
-          target: [
-            schema.questionnaireVersions.definitionKey,
-            schema.questionnaireVersions.version,
-          ],
-          set: { definition: snapshot, publishedAt: now, publishedByUserId },
-        });
-      await tx
-        .update(schema.questionnaireDefinitions)
-        .set({ status: "published", version, updatedAt: now })
-        .where(eq(schema.questionnaireDefinitions.key, key));
-    });
-  } finally {
-    await pool.end();
-  }
+  await withTransaction(async (tx) => {
+    await tx
+      .insert(schema.questionnaireVersions)
+      .values({
+        definitionKey: key,
+        version,
+        definition: snapshot,
+        publishedAt: now,
+        publishedByUserId,
+      })
+      .onConflictDoUpdate({
+        target: [
+          schema.questionnaireVersions.definitionKey,
+          schema.questionnaireVersions.version,
+        ],
+        set: { definition: snapshot, publishedAt: now, publishedByUserId },
+      });
+    await tx
+      .update(schema.questionnaireDefinitions)
+      .set({ status: "published", version, updatedAt: now })
+      .where(eq(schema.questionnaireDefinitions.key, key));
+  });
   return { ok: true, version, change };
 }
 
@@ -179,47 +174,42 @@ export async function unpublishDefinition(
   if (!meta) return { ok: false, error: "Questionnaire not found." };
 
   const now = new Date();
-  const { db: tdb, pool } = createPooledDb();
   let closedActivations = 0;
-  try {
-    await tdb.transaction(async (tx) => {
+  await withTransaction(async (tx) => {
+    await tx
+      .update(schema.questionnaireDefinitions)
+      .set({ status: "unpublished", updatedAt: now })
+      .where(eq(schema.questionnaireDefinitions.key, key));
+    // Re-select the open activations INSIDE the transaction so a send that
+    // races in just before this commit is still caught and closed (a read
+    // outside the tx would miss it and leave a gate open under an unpublished
+    // definition). The one-open invariant bounds this to ≤1 row in practice.
+    const openActs = await tx
+      .select({ id: schema.questionnaireActivations.id })
+      .from(schema.questionnaireActivations)
+      .where(
+        and(
+          eq(schema.questionnaireActivations.questionnaireKey, key),
+          eq(schema.questionnaireActivations.status, "open"),
+        ),
+      );
+    closedActivations = openActs.length;
+    for (const act of openActs) {
       await tx
-        .update(schema.questionnaireDefinitions)
-        .set({ status: "unpublished", updatedAt: now })
-        .where(eq(schema.questionnaireDefinitions.key, key));
-      // Re-select the open activations INSIDE the transaction so a send that
-      // races in just before this commit is still caught and closed (a read
-      // outside the tx would miss it and leave a gate open under an unpublished
-      // definition). The one-open invariant bounds this to ≤1 row in practice.
-      const openActs = await tx
-        .select({ id: schema.questionnaireActivations.id })
-        .from(schema.questionnaireActivations)
+        .update(schema.questionnaireActivations)
+        .set({ status: "closed", closedAt: now, updatedAt: now })
+        .where(eq(schema.questionnaireActivations.id, act.id));
+      await tx
+        .update(schema.requiredActions)
+        .set({ status: "expired" })
         .where(
           and(
-            eq(schema.questionnaireActivations.questionnaireKey, key),
-            eq(schema.questionnaireActivations.status, "open"),
+            eq(schema.requiredActions.activationId, act.id),
+            eq(schema.requiredActions.status, "pending"),
           ),
         );
-      closedActivations = openActs.length;
-      for (const act of openActs) {
-        await tx
-          .update(schema.questionnaireActivations)
-          .set({ status: "closed", closedAt: now, updatedAt: now })
-          .where(eq(schema.questionnaireActivations.id, act.id));
-        await tx
-          .update(schema.requiredActions)
-          .set({ status: "expired" })
-          .where(
-            and(
-              eq(schema.requiredActions.activationId, act.id),
-              eq(schema.requiredActions.status, "pending"),
-            ),
-          );
-      }
-    });
-  } finally {
-    await pool.end();
-  }
+    }
+  });
   return { ok: true, closedActivations };
 }
 
@@ -266,12 +256,7 @@ export async function closeActivationTx(
 export async function closeActivation(
   activationId: string,
 ): Promise<CloseResult> {
-  const { db, pool } = createPooledDb();
-  try {
-    return await db.transaction((tx) => closeActivationTx(tx, activationId));
-  } finally {
-    await pool.end();
-  }
+  return await withTransaction((tx) => closeActivationTx(tx, activationId));
 }
 
 /** The currently-open activation for a key, or null (the one-open invariant). */
@@ -355,45 +340,39 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
     carryOverFor(input.questionnaireKey),
   ]);
 
-  const { db: tdb, pool } = createPooledDb();
-  let activationId: string;
-  try {
-    activationId = await tdb.transaction(async (tx) => {
-      const [act] = await tx
-        .insert(schema.questionnaireActivations)
-        .values({
-          questionnaireKey: input.questionnaireKey,
-          version: def.version!,
-          title: def.title,
-          scope: input.scope,
-          team: input.team ?? null,
-          blocking: input.blocking,
-          dueAt: input.dueAt ?? null,
-          activatedByUserId: input.activatedByUserId,
-          status: "draft",
-          cycle,
-          carryOver: carryOver === "carry",
-        })
-        .returning({ id: schema.questionnaireActivations.id });
-      if (
-        input.scope === "individual" &&
-        input.targetUserIds &&
-        input.targetUserIds.length > 0
-      ) {
-        await tx
-          .insert(schema.questionnaireActivationTargets)
-          .values(
-            input.targetUserIds.map((userId) => ({
-              activationId: act!.id,
-              userId,
-            })),
-          );
-      }
-      return act!.id;
-    });
-  } finally {
-    await pool.end();
-  }
+  const activationId = await withTransaction(async (tx) => {
+    const [act] = await tx
+      .insert(schema.questionnaireActivations)
+      .values({
+        questionnaireKey: input.questionnaireKey,
+        version: def.version!,
+        title: def.title,
+        scope: input.scope,
+        team: input.team ?? null,
+        blocking: input.blocking,
+        dueAt: input.dueAt ?? null,
+        activatedByUserId: input.activatedByUserId,
+        status: "draft",
+        cycle,
+        carryOver: carryOver === "carry",
+      })
+      .returning({ id: schema.questionnaireActivations.id });
+    if (
+      input.scope === "individual" &&
+      input.targetUserIds &&
+      input.targetUserIds.length > 0
+    ) {
+      await tx
+        .insert(schema.questionnaireActivationTargets)
+        .values(
+          input.targetUserIds.map((userId) => ({
+            activationId: act!.id,
+            userId,
+          })),
+        );
+    }
+    return act!.id;
+  });
 
   // Fan out the gates and flip the activation open. The partial unique index is
   // the backstop for a concurrent second send slipping past the pre-check above:

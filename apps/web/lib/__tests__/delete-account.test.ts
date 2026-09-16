@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // app-layer orchestration of account erasure: DB scrub + best-effort avatar-blob
 // cleanup. The pure DB patch is covered in account.test.ts; here we assert the
 // orchestration (E2E short-circuit, cleanup called, cleanup failure swallowed).
-vi.mock("server-only", () => ({}));
 vi.mock("@camp404/db/account", () => ({ sanitiseAccount: vi.fn() }));
 vi.mock("@/lib/avatar-blob", () => ({ deleteAvatarBlobs: vi.fn() }));
 vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));

@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // during an RSC render). Collaborators are mocked; the fallback's upstream
 // call is exercised via a stubbed global fetch.
 
-vi.mock("server-only", () => ({}));
 vi.mock("@/lib/neon-auth", () => ({ auth: { getSession: vi.fn() } }));
 vi.mock("next/headers", () => ({ cookies: vi.fn(), headers: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
