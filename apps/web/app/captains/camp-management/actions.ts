@@ -43,6 +43,7 @@ import {
 import { presentMemberDetail, type PresentedMember } from "@/lib/member-detail";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
+import { resolveTeamKey } from "@/lib/team-keys";
 import {
   presentPublicMember,
   type PublicMemberProfile,
@@ -687,36 +688,8 @@ export async function cancelCaptainPromotionAction(
 // The captain-facing write path for `team_memberships` (WP6). Every one of these
 // is captain-gated by the same `requireCaptain()` the decisions above use, and
 // every one resolves the burn year inside @camp404/db — the cycle is never a
-// parameter a caller can get wrong.
-
-/**
- * Resolve a submitted team key against the camp config.
- *
- * `requireActive` is the archived-team rule: a captain may not ASSIGN to (or
- * appoint a lead of) an archived team, but may still REMOVE a member from one —
- * archiving a team must not strand its roster. Validated server-side against the
- * config rather than trusting the list the client was handed.
- *
- * The `Team` enum check is the second half: the config's keys are `teamEnum`
- * keys by contract, and this makes a config that has drifted from the database
- * enum a refused action rather than a Postgres error.
- */
-async function resolveTeamKey(
-  team: string,
-  requireActive: boolean,
-): Promise<{ ok: true; team: Team } | ActionFailure> {
-  const parsed = Team.safeParse(team);
-  if (!parsed.success) return { ok: false, error: "Unknown team." };
-  const config = await getTeamsConfig();
-  const pool = requireActive ? activeTeams(config) : config.teams;
-  if (!pool.some((t) => t.key === parsed.data)) {
-    return {
-      ok: false,
-      error: requireActive ? "That team isn't active." : "Unknown team.",
-    };
-  }
-  return { ok: true, team: parsed.data };
-}
+// parameter a caller can get wrong. The team key is checked by resolveTeamKey
+// (lib/team-keys.ts), which the MCP captain tools share.
 
 /** Captain-gate + validate the (member, team) pair every team write shares. */
 async function gateTeamWrite(

@@ -326,6 +326,12 @@ Order: **smoke-test first, then camp member, then captains.**
 8. **Logistics + admin.** Inventory member tools, drivers/lifts,
    invite-code admin, audit log read, search.
 
+Status (2026-09-16): phases 1-6 are built. From phases 7-8, `apps/web/lib/mcp/tools/admin.ts`
+adds `assign_team_membership`, `remove_team_membership`, `set_team_lead` (captain),
+`list_invite_codes` / `revoke_invite_code` (captain: every code; anyone else: their own, as in
+the app) and `list_audit_log` (captain). `set_user_rank` is not built: a rank change is a
+two-sided request the member accepts in the app.
+
 Out of scope:
 - **Camp-wide broadcasts as a write surface.** Every notification that
   reaches phones is composed and sent from the captain's web UI.
