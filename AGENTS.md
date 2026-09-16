@@ -322,6 +322,11 @@ All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
   `.returning()` tells the caller whether it won. A lost race returns a
   sentence the user can act on, never a silent overwrite. See
   `setUserApproval` and `decideCaptainPromotion`.
+- A failed change is reported one way on every captain screen. A problem with
+  what someone typed, in a form or a dialog, shows inline beside it. A one-tap
+  change on a list row (move, archive, delete, tick) reports its failure as a
+  toast, and only the control that was used spins. See
+  `announcements-manager.tsx` and `team-settings-manager.tsx`.
 - When a doc and the code disagree, fix the doc in the same PR, or mark the
   line `[CORRECTION <date>]`. When only the owner can settle it, mark it
   `[UNRESOLVED <date>]` and say what the choice is.
