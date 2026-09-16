@@ -34,6 +34,7 @@ import {
   rankIdentity,
   resolveTiles,
 } from "./tile-lookup";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 const NEW_GROUP_KEY = "__new__";
 
@@ -85,6 +86,7 @@ export function CustomizeMode({
   // which dnd-kit's own announcer doesn't cover.
   const [status, setStatus] = useState("");
 
+  const reducedMotion = useReducedMotion();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -267,7 +269,7 @@ export function CustomizeMode({
           ))}
         </div>
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={reducedMotion ? null : undefined}>
           {activeTile &&
             (() => {
               const ActiveIcon = activeTile.icon;

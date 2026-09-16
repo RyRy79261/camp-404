@@ -227,4 +227,16 @@ const glitchStyles = `
     0%, 49%   { opacity: 1; }
     50%, 100% { opacity: 0.35; }
   }
+
+  /* Reduced motion: a still glitch. The global rule would stop each loop on
+     its last frame; these pick the frame worth keeping instead: the beam and
+     the tears hidden, the colour fringes held a little apart. */
+  @media (prefers-reduced-motion: reduce) {
+    .camp404-scanbeam,
+    .camp404-glitch-tear { display: none; }
+    .camp404-glitch-shake,
+    .camp404-cursor { animation: none; }
+    .camp404-glitch-rgb-magenta { animation: none; transform: translate(-3px, 0); }
+    .camp404-glitch-rgb-cyan { animation: none; transform: translate(3px, 0); }
+  }
 `;

@@ -173,6 +173,9 @@ export function AvatarUpload({
         type="file"
         accept="image/*"
         className="sr-only"
+        // The visible button opens this; it is not a second tab stop.
+        tabIndex={-1}
+        aria-hidden
         onChange={(e) => handleFile(e.currentTarget.files?.[0] ?? undefined)}
       />
     </div>

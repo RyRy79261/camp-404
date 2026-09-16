@@ -98,8 +98,14 @@ export function ReportBugDialog({
     });
   }
 
+  // The form's height when it was sent. The short "Report filed" panel keeps
+  // it, so the dialog does not jump smaller under the pointer.
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const [sentHeight, setSentHeight] = React.useState<number | null>(null);
+
   function handleSubmit() {
     setError(null);
+    setSentHeight(contentRef.current?.offsetHeight ?? null);
     startTransition(async () => {
       try {
         const res = await submitFeedbackAction({
@@ -135,9 +141,13 @@ export function ReportBugDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent
+        ref={contentRef}
+        className="max-h-[90vh] max-w-lg overflow-y-auto"
+        style={result && sentHeight ? { minHeight: sentHeight } : undefined}
+      >
         {result ? (
-          <>
+          <div className="flex flex-col gap-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-[color:var(--color-primary)]" />
@@ -158,10 +168,10 @@ export function ReportBugDialog({
               <ExternalLink className="h-4 w-4" />
               {result.number > 0 ? `View issue #${result.number}` : "Open the tracker"}
             </a>
-            <DialogFooter>
+            <DialogFooter className="mt-auto">
               <Button onClick={() => onOpenChange(false)}>Done</Button>
             </DialogFooter>
-          </>
+          </div>
         ) : (
           <>
             <DialogHeader>

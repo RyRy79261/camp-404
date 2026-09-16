@@ -59,7 +59,7 @@ function GridTile({
   const base =
     "flex flex-col gap-3.5 rounded-xl border border-border bg-card p-4 text-left"
   const interactive =
-    "transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
+    "transition-[color,background-color,border-color,transform] duration-150 ease-out hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
 
   const body = (
     <>
