@@ -6,6 +6,7 @@ import {
   timestamp,
   boolean,
   integer,
+  bigint,
   jsonb,
   numeric,
   primaryKey,
@@ -1392,6 +1393,28 @@ export const auditLog = pgTable(
     // happened lately.
     targetIdx: index("audit_log_target_idx").on(a.target),
     createdAtIdx: index("audit_log_created_at_idx").on(a.createdAt.desc()),
+  }),
+);
+
+// --- Rate limits -----------------------------------------------------------
+// One counter per limiter key (`feedback:<user id>`, `voice-transcribe-ip:<ip>`),
+// shared by every server instance. The old in-memory bucket reset on each cold
+// start and counted per instance, so a limit of 3 was really 3 per instance.
+// `window_start` is epoch milliseconds: with `mode: "number"` drizzle compares
+// numbers, not strings. Rows are swept by the limiter itself (rate-limit.ts).
+// A key can hold a user id or an IP address, so rows live at most a week.
+
+export const actionRateLimit = pgTable(
+  "action_rate_limit",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").notNull(),
+    windowStart: bigint("window_start", { mode: "number" }).notNull(),
+  },
+  (r) => ({
+    windowStartIdx: index("action_rate_limit_window_start_idx").on(
+      r.windowStart,
+    ),
   }),
 );
 

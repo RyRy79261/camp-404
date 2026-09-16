@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { rateLimit, rateLimiter, type RateLimiter } from "@/lib/rate-limit";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@camp404/db/rate-limit", () => ({ consumeRateLimit: vi.fn() }));
+vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));
+
+import { consumeRateLimit } from "@camp404/db/rate-limit";
+import { isE2ETestMode } from "@/lib/test-mode";
+import { rateLimit, rateLimiter } from "@/lib/rate-limit";
 
 describe("rateLimit", () => {
   it("allows up to N requests within the window", () => {
@@ -27,30 +33,57 @@ describe("rateLimit", () => {
   });
 });
 
-describe("rateLimiter (default adapter)", () => {
-  it("is awaitable and returns the RateLimitResult shape", async () => {
-    const key = `rl1-${Math.random()}`;
-    // The default adapter is synchronous, but callers await it (so an async
-    // Upstash adapter is a drop-in) — awaiting a sync value resolves fine.
-    expect(await rateLimiter.limit(key, { limit: 1 })).toEqual({
-      ok: true,
-      retryAfterSeconds: 0,
+describe("rateLimiter", () => {
+  beforeEach(() => {
+    vi.mocked(consumeRateLimit).mockReset();
+    vi.mocked(isE2ETestMode).mockReturnValue(false);
+  });
+
+  it("returns the database's verdict, with a one-minute default window", async () => {
+    vi.mocked(consumeRateLimit).mockResolvedValue({
+      ok: false,
+      retryAfterSeconds: 12,
+    });
+
+    expect(await rateLimiter.limit("feedback:u1", { limit: 3 })).toEqual({
+      ok: false,
+      retryAfterSeconds: 12,
+    });
+    expect(consumeRateLimit).toHaveBeenCalledWith({
+      key: "feedback:u1",
+      limit: 3,
+      windowMs: 60_000,
     });
   });
 
-  it("delegates to the same in-memory bucket as rateLimit", async () => {
-    const key = `rl2-${Math.random()}`;
-    expect(rateLimit(key, { limit: 1 }).ok).toBe(true);
-    // The interface reads the same bucket — already exhausted by rateLimit.
+  it("passes the caller's window through", async () => {
+    vi.mocked(consumeRateLimit).mockResolvedValue({
+      ok: true,
+      retryAfterSeconds: 0,
+    });
+    await rateLimiter.limit("feedback-day:u1", {
+      limit: 20,
+      windowMs: 86_400_000,
+    });
+    expect(consumeRateLimit).toHaveBeenCalledWith({
+      key: "feedback-day:u1",
+      limit: 20,
+      windowMs: 86_400_000,
+    });
+  });
+
+  it("falls back to the in-memory bucket when the count cannot be stored", async () => {
+    vi.mocked(consumeRateLimit).mockResolvedValue(null);
+    const key = `outage-${Math.random()}`;
+    expect((await rateLimiter.limit(key, { limit: 1 })).ok).toBe(true);
     expect((await rateLimiter.limit(key, { limit: 1 })).ok).toBe(false);
   });
 
-  it("accepts a drop-in async adapter conforming to RateLimiter (Upstash path)", async () => {
-    // A different impl (e.g. Upstash) satisfies the same seam — async + shape.
-    const custom: RateLimiter = {
-      limit: async () => ({ ok: true, retryAfterSeconds: 0 }),
-    };
-    const result = await custom.limit("k", { limit: 1 });
-    expect(result).toEqual({ ok: true, retryAfterSeconds: 0 });
+  it("uses only the in-memory bucket in E2E test mode", async () => {
+    vi.mocked(isE2ETestMode).mockReturnValue(true);
+    const key = `e2e-${Math.random()}`;
+    expect((await rateLimiter.limit(key, { limit: 1 })).ok).toBe(true);
+    expect((await rateLimiter.limit(key, { limit: 1 })).ok).toBe(false);
+    expect(consumeRateLimit).not.toHaveBeenCalled();
   });
 });
