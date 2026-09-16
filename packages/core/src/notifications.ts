@@ -21,6 +21,8 @@ export type { NotificationKind, NotificationPayload } from "@camp404/types";
 export const QUESTIONNAIRE_REF_TYPE = "questionnaire_activation";
 /** The reference an announcement carries: its own broadcast. */
 export const ANNOUNCEMENT_REF_TYPE = "announcement";
+/** The reference a captain request carries: the promotion request. */
+export const CAPTAIN_PROMOTION_REF_TYPE = "captain_promotion";
 
 const DUE_ON = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -116,6 +118,25 @@ export function approvalNotification(): NotificationPayload {
     body: "A captain approved your place in Camp 404. Welcome to camp.",
     refType: null,
     refId: null,
+  };
+}
+
+/**
+ * A captain asked the member to become a captain. The member answers on their
+ * notifications page, where the request waits with Accept and Decline. The
+ * requester's display name is the only fact it carries.
+ */
+export function captainPromotionNotification(input: {
+  requestId: string;
+  requesterName: string | null;
+}): NotificationPayload {
+  const who = input.requesterName?.trim() || "A captain";
+  return {
+    kind: "captain_promotion",
+    title: "Captain request",
+    body: `${who} asked you to become a captain. Open your notifications to accept or decline.`,
+    refType: CAPTAIN_PROMOTION_REF_TYPE,
+    refId: input.requestId,
   };
 }
 

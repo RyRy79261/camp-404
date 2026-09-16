@@ -183,6 +183,13 @@
       "when": 1789562440889,
       "tag": "0025_inbox_paging_index",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789563131164,
+      "tag": "0026_captain_promotion_kind",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { NOTIFICATION_KINDS } from "@camp404/types";
 import {
   announcementNotification,
   approvalNotification,
+  captainPromotionNotification,
   kindForBroadcast,
   notificationMentionsAny,
   payloadLink,
@@ -94,6 +95,23 @@ describe("payload builders", () => {
     const approval = approvalNotification();
     expect(approval.kind).toBe("approval_decision");
     expect(payloadLink(approval)).toBe("/notifications");
+
+    // The request is answered on the notifications page itself.
+    const promotion = captainPromotionNotification({
+      requestId: BROADCAST,
+      requesterName: "Captain Jo",
+    });
+    expect(promotion).toMatchObject({
+      kind: "captain_promotion",
+      refType: "captain_promotion",
+      refId: BROADCAST,
+    });
+    expect(promotion.body).toContain("Captain Jo asked you");
+    expect(payloadLink(promotion)).toBe("/notifications");
+    expect(
+      captainPromotionNotification({ requestId: BROADCAST, requesterName: " " })
+        .body,
+    ).toMatch(/^A captain asked you/);
   });
 
   it("only ever produce kinds the database accepts", () => {
@@ -115,6 +133,10 @@ describe("payload builders", () => {
         dueAt: null,
       }),
       approvalNotification(),
+      captainPromotionNotification({
+        requestId: BROADCAST,
+        requesterName: "Jo",
+      }),
     ].map((p) => p.kind);
     for (const kind of kinds) expect(NOTIFICATION_KINDS).toContain(kind);
   });
@@ -188,6 +210,10 @@ describe("notificationMentionsAny", () => {
         dueAt: new Date("2026-03-10T22:30:00Z"),
       }),
       approvalNotification(),
+      captainPromotionNotification({
+        requestId: BROADCAST,
+        requesterName: "Captain Jo",
+      }),
     ];
     for (const payload of payloads) {
       expect(notificationMentionsAny(payload, SECRETS)).toBe(false);

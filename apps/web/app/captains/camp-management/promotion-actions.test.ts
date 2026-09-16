@@ -74,7 +74,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(hasCampAccess).mockReturnValue(true);
   vi.mocked(isApproved).mockReturnValue(true);
-  vi.mocked(sendCaptainPromotion).mockResolvedValue({ id: "req-1" } as never);
+  vi.mocked(sendCaptainPromotion).mockResolvedValue({
+    id: "req-1",
+    requestedByUserId: CAPTAIN,
+  } as never);
 });
 
 describe("sendCaptainPromotionAction", () => {
@@ -84,7 +87,12 @@ describe("sendCaptainPromotionAction", () => {
 
     const res = await sendCaptainPromotionAction("member-1");
 
-    expect(res).toEqual({ ok: true, requestId: "req-1" });
+    expect(res).toEqual({
+      ok: true,
+      requestId: "req-1",
+      requestIsMine: true,
+      requestedByName: null,
+    });
     expect(sendCaptainPromotion).toHaveBeenCalledExactlyOnceWith({
       targetUserId: "member-1",
       requestedByUserId: CAPTAIN,
@@ -92,10 +100,37 @@ describe("sendCaptainPromotionAction", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/captains/camp-management");
     // Only `target.rank` is read here, so this path must not opt into the ID
     // ciphertext — the data layer's default (exclude) has to stay in force.
-    expect(getCampMemberDetail).toHaveBeenCalledExactlyOnceWith("member-1");
-    expect(
-      vi.mocked(getCampMemberDetail).mock.calls[0]![1]?.includeIdDocuments,
-    ).not.toBe(true);
+    // The second read is the requester's name, which never needs it either.
+    expect(vi.mocked(getCampMemberDetail).mock.calls.map((c) => c[0])).toEqual([
+      "member-1",
+      CAPTAIN,
+    ]);
+    for (const call of vi.mocked(getCampMemberDetail).mock.calls) {
+      expect(call[1]?.includeIdDocuments).not.toBe(true);
+    }
+  });
+
+  it("hands back another captain's open request as not mine, naming them", async () => {
+    signInAsCaptain();
+    targetRank("member");
+    vi.mocked(sendCaptainPromotion).mockResolvedValue({
+      id: "req-7",
+      requestedByUserId: "other-captain",
+    } as never);
+    vi.mocked(getCampMemberDetail).mockImplementation(async (id) =>
+      id === "other-captain"
+        ? ({ displayName: "Captain Ada" } as never)
+        : ({ rank: "member" } as never),
+    );
+
+    const res = await sendCaptainPromotionAction("member-1");
+
+    expect(res).toEqual({
+      ok: true,
+      requestId: "req-7",
+      requestIsMine: false,
+      requestedByName: "Captain Ada",
+    });
   });
 
   it("refuses a viewer who isn't camp-active yet", async () => {
@@ -122,7 +157,7 @@ describe("sendCaptainPromotionAction", () => {
 
     const res = await sendCaptainPromotionAction("lead-1");
 
-    expect(res).toEqual({ ok: true, requestId: "req-1" });
+    expect(res).toMatchObject({ ok: true, requestId: "req-1" });
     // Both derivations of the same stored rank answer the guard identically.
     expect(deriveViewerRank("member", true)).not.toBe("captain");
     expect(deriveViewerRank("member", false)).not.toBe("captain");

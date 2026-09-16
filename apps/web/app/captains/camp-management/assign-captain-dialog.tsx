@@ -70,6 +70,7 @@ export function AssignCaptainDialog({
   step,
   requestId,
   requestIsMine,
+  requestedByName,
   onSent,
   onCancelled,
 }: {
@@ -83,7 +84,13 @@ export function AssignCaptainDialog({
   /** Only the captain who sent the request may cancel it — the server enforces
    * this; gating the affordance keeps the button from being a dead-end. */
   requestIsMine: boolean;
-  onSent: (requestId: string) => void;
+  /** Who sent the open request, named when it was another captain. */
+  requestedByName: string | null;
+  onSent: (sent: {
+    requestId: string;
+    requestIsMine: boolean;
+    requestedByName: string | null;
+  }) => void;
   onCancelled: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -97,8 +104,13 @@ export function AssignCaptainDialog({
         setError(res.error);
         return;
       }
-      // The parent records the new request id and flips step 1 to "Done".
-      onSent(res.requestId);
+      // The parent records the request and flips step 1 to "Done". It may be
+      // another captain's request that was already open.
+      onSent({
+        requestId: res.requestId,
+        requestIsMine: res.requestIsMine,
+        requestedByName: res.requestedByName,
+      });
     });
   }
 
@@ -153,6 +165,13 @@ export function AssignCaptainDialog({
         </p>
 
         <OptInStepTracker sent={step.sent} accepted={step.accepted} />
+
+        {step.sent && !step.accepted && !requestIsMine && (
+          <p className="text-sm text-muted-foreground">
+            Requested by {requestedByName ?? "another captain"}. Only they can
+            cancel it.
+          </p>
+        )}
 
         {error && (
           <p role="alert" className="text-sm text-destructive">

@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  acceptCaptainPromotion as dbAccept,
   decideCaptainPromotion as dbDecide,
   getIncomingPromotionsForUser as dbGetIncoming,
   getOpenPromotionForTarget as dbGetOpen,
@@ -39,6 +40,10 @@ interface PromotionBackend {
     status: "accepted" | "declined" | "cancelled";
     actorUserId?: string;
   }): Promise<CaptainPromotionRequestRow | null>;
+  acceptCaptainPromotion(input: {
+    requestId: string;
+    actorUserId: string;
+  }): Promise<CaptainPromotionRequestRow | null>;
   getOpenPromotionForTarget(
     targetUserId: string,
   ): Promise<CaptainPromotionRequestRow | null>;
@@ -53,6 +58,7 @@ interface PromotionBackend {
 const realBackend: PromotionBackend = {
   sendCaptainPromotion: dbSend,
   decideCaptainPromotion: dbDecide,
+  acceptCaptainPromotion: dbAccept,
   getOpenPromotionForTarget: dbGetOpen,
   getPromotionRequestById: dbGetById,
   getIncomingPromotionsForUser: dbGetIncoming,
@@ -64,6 +70,9 @@ const testBackend: PromotionBackend = {
   },
   async decideCaptainPromotion(input) {
     return testStore.decideCaptainPromotion(input);
+  },
+  async acceptCaptainPromotion(input) {
+    return testStore.acceptCaptainPromotion(input);
   },
   async getOpenPromotionForTarget(targetUserId) {
     return testStore.getOpenPromotionForTarget(targetUserId);
@@ -93,6 +102,17 @@ export function decideCaptainPromotion(input: {
   actorUserId?: string;
 }): Promise<CaptainPromotionRequestRow | null> {
   return backend().decideCaptainPromotion(input);
+}
+
+/**
+ * The target accepts: status, rank and audit row in one transaction. Null when
+ * the request is not open or the actor is not its target.
+ */
+export function acceptCaptainPromotion(input: {
+  requestId: string;
+  actorUserId: string;
+}): Promise<CaptainPromotionRequestRow | null> {
+  return backend().acceptCaptainPromotion(input);
 }
 
 export function getOpenPromotionForTarget(

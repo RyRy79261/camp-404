@@ -8,10 +8,13 @@ import {
   ensureCampUser,
   getPendingQuestionnaires,
   hasCampAccess,
+  isApproved,
   syncOpenGates,
 } from "@/lib/users";
+import { getIncomingPromotionsForUser } from "@/lib/promotion";
 import { QueueCard } from "@/components/questionnaire/queue-card";
 import { InboxFeed } from "./inbox-feed";
+import { PromotionRequestCard } from "./promotion-request-card";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +39,11 @@ export default async function NotificationsPage() {
   // a member who joined after a send opened sees it here too.
   await syncOpenGates(campUser.id);
   const pending = await getPendingQuestionnaires(campUser.id);
+  // A captain request waits here too. Only an approved member can accept one
+  // (the action refuses anyone else), so nobody else is shown it.
+  const promotions = isApproved(campUser, authUser.primaryEmail)
+    ? await getIncomingPromotionsForUser(campUser.id)
+    : [];
 
   // Snapshot the first page (with pre-read state), then clear the badge for
   // exactly those rows — a delivery that arrives after the snapshot stays
@@ -70,6 +78,21 @@ export default async function NotificationsPage() {
         </p>
       </div>
 
+      {promotions.length > 0 && (
+        <section
+          aria-label="Captain request"
+          className="flex flex-col gap-3 px-4 pb-1 pt-3"
+        >
+          {promotions.map((p) => (
+            <PromotionRequestCard
+              key={p.id}
+              requestId={p.id}
+              requesterName={p.requestedByName}
+            />
+          ))}
+        </section>
+      )}
+
       {pending.length > 0 && (
         <section
           aria-labelledby="needs-your-answer"
@@ -102,7 +125,8 @@ export default async function NotificationsPage() {
       )}
 
       {items.length === 0 ? (
-        pending.length === 0 && (
+        pending.length === 0 &&
+        promotions.length === 0 && (
           <div className="px-4 py-6">
             <EmptyState
               icon={<BellOff className="h-5 w-5" aria-hidden />}

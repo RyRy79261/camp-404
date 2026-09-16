@@ -3,6 +3,7 @@ import "server-only";
 import {
   announcementNotification,
   approvalNotification,
+  captainPromotionNotification,
   normalizeInviteCode,
   notificationLink,
   type NotificationKind,
@@ -1026,6 +1027,29 @@ export const testStore = {
       decidedAt: null,
     };
     promotionRequests.push(row);
+    // As in production: a new request tells the target who asked.
+    pushDelivery(
+      captainPromotionNotification({
+        requestId: row.id,
+        requesterName: findUserById(input.requestedByUserId)?.displayName ?? null,
+      }),
+      { userId: input.targetUserId, broadcastId: null, presentation: "popup" },
+    );
+    return row;
+  },
+  acceptCaptainPromotion(input: {
+    requestId: string;
+    actorUserId: string;
+  }): TestPromotionRequest | null {
+    // Production does the flip and the rank write in one transaction; the store
+    // does both or neither.
+    const row = testStore.decideCaptainPromotion({
+      requestId: input.requestId,
+      status: "accepted",
+      actorUserId: input.actorUserId,
+    });
+    if (!row) return null;
+    testStore.setUserRank(input.actorUserId, "captain");
     return row;
   },
   decideCaptainPromotion(input: {

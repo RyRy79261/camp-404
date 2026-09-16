@@ -35,6 +35,7 @@ type DetailState =
       promotionStep: { sent: boolean; accepted: boolean };
       promotionRequestId: string | null;
       promotionRequestIsMine: boolean;
+      promotionRequestedByName: string | null;
       /** This member's teams for the camp's current year. */
       teams: TeamMembership[];
       /** Active teams a captain may assign (archived excluded server-side). */
@@ -119,6 +120,7 @@ export function MemberProfile({
                 promotionStep: res.promotionStep,
                 promotionRequestId: res.promotionRequestId,
                 promotionRequestIsMine: res.promotionRequestIsMine,
+                promotionRequestedByName: res.promotionRequestedByName,
                 teams: res.teams,
                 assignableTeams: res.assignableTeams,
               }
@@ -181,15 +183,21 @@ export function MemberProfile({
     router.refresh();
   }
 
-  function markPromotionSent(requestId: string) {
+  function markPromotionSent(sent: {
+    requestId: string;
+    requestIsMine: boolean;
+    requestedByName: string | null;
+  }) {
     setDetail((prev) =>
       prev.state === "loaded"
         ? {
             ...prev,
             promotionStep: { ...prev.promotionStep, sent: true },
-            promotionRequestId: requestId,
-            // This captain just sent it, so it's theirs to cancel.
-            promotionRequestIsMine: true,
+            promotionRequestId: sent.requestId,
+            // Send hands back an existing open request when another captain
+            // got there first, and only its sender may cancel it.
+            promotionRequestIsMine: sent.requestIsMine,
+            promotionRequestedByName: sent.requestedByName,
           }
         : prev,
     );
@@ -204,6 +212,7 @@ export function MemberProfile({
             promotionStep: { sent: false, accepted: false },
             promotionRequestId: null,
             promotionRequestIsMine: false,
+            promotionRequestedByName: null,
           }
         : prev,
     );
@@ -221,6 +230,8 @@ export function MemberProfile({
     detail.state === "loaded" ? detail.promotionRequestId : null;
   const promotionRequestIsMine =
     detail.state === "loaded" ? detail.promotionRequestIsMine : false;
+  const promotionRequestedByName =
+    detail.state === "loaded" ? detail.promotionRequestedByName : null;
   const teams = detail.state === "loaded" ? detail.teams : [];
   const assignableTeams =
     detail.state === "loaded" ? detail.assignableTeams : [];
@@ -424,6 +435,7 @@ export function MemberProfile({
               step={promotionStep}
               requestId={promotionRequestId}
               requestIsMine={promotionRequestIsMine}
+              requestedByName={promotionRequestedByName}
               onSent={markPromotionSent}
               onCancelled={markPromotionCancelled}
             />

@@ -16,6 +16,8 @@ export const NOTIFICATION_KINDS = [
   "questionnaire_reminder",
   // A captain approved the member's place in the camp.
   "approval_decision",
+  // A captain asked the member to become a captain.
+  "captain_promotion",
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
