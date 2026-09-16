@@ -3,13 +3,9 @@ import { ClipboardList } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@camp404/ui/components/table";
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "@camp404/ui/components/responsive-data-table";
 import {
   emptyStateFor,
   loadResults,
@@ -71,6 +67,40 @@ export default async function ResponsesPage({
   const empty = emptyStateFor(view, respondents.length);
   const columns = answerColumns(view.questions, respondents);
   const outstanding = outstandingFor(view);
+  const tableColumns: ResponsiveColumn<(typeof respondents)[number]>[] = [
+    {
+      id: "member",
+      header: "Member",
+      role: "title",
+      cellClassName: "font-medium",
+      cell: (r) => (
+        <Link
+          href={`/captains/questionnaires/${view.key}/responses/${r.userId}?cycle=${view.cycle}`}
+          className="underline-offset-4 hover:underline"
+        >
+          {r.name}
+        </Link>
+      ),
+    },
+    {
+      id: "completed",
+      header: "Completed",
+      cell: (r) => (
+        <span className="text-muted-foreground">
+          {COMPLETED.format(r.completedAt)}
+        </span>
+      ),
+    },
+    ...columns.map(
+      (column): ResponsiveColumn<(typeof respondents)[number]> => ({
+        id: `answer:${column.id}`,
+        header: column.label,
+        headClassName: "max-w-56 truncate",
+        cellClassName: "max-w-56 truncate",
+        cell: (r) => formatAnswer(column, r.responses) || "—",
+      }),
+    ),
+  ];
 
   return (
     <ResultsShell view={view} viewName="responses" wide>
@@ -93,46 +123,17 @@ export default async function ResponsesPage({
           description={empty.description}
         />
       ) : (
-        <div className="rounded-xl border bg-card/40">
-          {/* Table brings its own horizontal scroll container — a column per
-              question outgrows a phone by design, and scrolling it sideways
-              beats truncating somebody's answer. */}
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead>Completed</TableHead>
-                {columns.map((column) => (
-                  <TableHead key={column.id} className="max-w-56 truncate">
-                    {column.label}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {respondents.map((r) => (
-                <TableRow key={r.userId}>
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/captains/questionnaires/${view.key}/responses/${r.userId}?cycle=${view.cycle}`}
-                      className="underline-offset-4 hover:underline"
-                    >
-                      {r.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {COMPLETED.format(r.completedAt)}
-                  </TableCell>
-                  {columns.map((column) => (
-                    <TableCell key={column.id} className="max-w-56 truncate">
-                      {formatAnswer(column, r.responses) || "—"}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        // From md up, a table that scrolls sideways (a column per question).
+        // On a phone, one card per member with each answer under its
+        // question, so nobody's answer is cut off.
+        <ResponsiveDataTable
+          columns={tableColumns}
+          data={respondents}
+          getRowKey={(r) => r.userId}
+          label="Answers"
+          pairLayout="stacked"
+          className="md:rounded-xl md:border md:bg-card/40"
+        />
       )}
 
       {outstanding.length > 0 && (
