@@ -6,6 +6,8 @@ import { TriangleAlert } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { CodeDisplay } from "@camp404/ui/components/code-display";
 import { IconBadge } from "@camp404/ui/components/icon-badge";
+import { openReportProblem } from "@/components/feedback/report-problem";
+import { authClient } from "@/lib/auth-client";
 
 // Route-level error boundary: catches uncaught errors thrown while rendering a
 // page or running a server action within the app tree. Keeps the user inside
@@ -19,6 +21,9 @@ export default function Error({
   reset: () => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // The reporter only opens for someone signed in (the S22 error board draws
+  // a Report button beside Reload).
+  const { data: session } = authClient.useSession();
   useEffect(() => {
     // Surface it for diagnostics; the digest correlates with the server log.
     console.error(error);
@@ -56,6 +61,20 @@ export default function Error({
         )}
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3">
+        {session && (
+          <Button
+            variant="outline"
+            onClick={() =>
+              openReportProblem({
+                description: error.digest
+                  ? `The page showed an error. Trace: ${error.digest}\n\nWhat I was doing: `
+                  : "The page showed an error.\n\nWhat I was doing: ",
+              })
+            }
+          >
+            Report
+          </Button>
+        )}
         <Button onClick={reset}>Try again</Button>
         <Button variant="outline" asChild>
           <Link href="/">Back to camp</Link>

@@ -216,4 +216,46 @@ describe("saveBuilderResponses cycle stamping", () => {
     // reads may fall back to an earlier cycle, writes never do.
     expect(upsertQuestionnaireResponse).not.toHaveBeenCalled();
   });
+
+  it("passes no role answers for a questionnaire without role questions", async () => {
+    await saveBuilderResponses("act-1", { name: "Ada" }, true);
+    expect(vi.mocked(completeBuilderResponse).mock.calls[0]![0].mirror).toEqual({
+      dietary: null,
+      driver: null,
+    });
+  });
+
+  it("passes the answers marked for the app's tables with the final submit", async () => {
+    vi.mocked(getBuilderDefinition).mockResolvedValue(
+      BuilderQuestionnaire.parse({
+        version: "v2",
+        title: "Transport",
+        pages: [
+          {
+            id: "p1",
+            type: "question",
+            title: "Travel",
+            blocks: [
+              {
+                kind: "question",
+                question: {
+                  id: "drives",
+                  kind: "boolean",
+                  prompt: "Driving?",
+                  role: "driving_this_year",
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    await saveBuilderResponses("act-1", { drives: true }, true);
+
+    expect(vi.mocked(completeBuilderResponse).mock.calls[0]![0].mirror).toEqual({
+      dietary: null,
+      driver: { intendsToDrive: true },
+    });
+  });
 });

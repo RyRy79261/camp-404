@@ -8,8 +8,8 @@
 
 const ACTION_ROUTES: Record<string, string> = {
   burner_profile: "/onboarding/questionnaire",
-  // dietary_requirements / driver_profile slot in here once their bespoke
-  // pages exist; until then their activations stay pending but don't gate.
+  // Dietary requirements and the driver profile are builder questionnaires
+  // (OD3): they route through their send's activation like any other.
 };
 
 export interface PendingAction {

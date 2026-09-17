@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@camp404/ui/components/dialog";
 import { Button } from "@camp404/ui/components/button";
-import { Checkbox } from "@camp404/ui/components/checkbox";
+import { AckRow } from "@camp404/ui/components/checkbox";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { Label } from "@camp404/ui/components/label";
 import {
@@ -27,7 +27,12 @@ import {
   submitFeedbackAction,
   type FeedbackResult,
 } from "@/app/feedback/actions";
-import { DESCRIPTION_MAX, type FeedbackKind } from "@/lib/github-feedback";
+import {
+  DESCRIPTION_MAX,
+  type FeedbackKind,
+  type ReportDiagnostics,
+} from "@/lib/github-feedback";
+import { collectDiagnostics } from "@/lib/client-errors";
 
 interface ReportBugDialogProps {
   open: boolean;
@@ -35,6 +40,8 @@ interface ReportBugDialogProps {
   defaultKind?: FeedbackKind;
   /** Whether the server has an ANTHROPIC_API_KEY — gates the AI toggle. */
   aiAvailable?: boolean;
+  /** Text the description starts with (the error page passes its trace). */
+  defaultDescription?: string;
 }
 
 /**
@@ -49,6 +56,7 @@ export function ReportBugDialog({
   onOpenChange,
   defaultKind = "bug",
   aiAvailable = false,
+  defaultDescription = "",
 }: ReportBugDialogProps) {
   const [kind, setKind] = React.useState<FeedbackKind>(defaultKind);
   const [description, setDescription] = React.useState("");
@@ -56,6 +64,11 @@ export function ReportBugDialog({
   const voiceSupported = useVoiceSupported();
   const [dictated, setDictated] = React.useState(false);
   const [useAi, setUseAi] = React.useState(true);
+  // What "Attach device details and recent errors" would send, captured when
+  // the box is ticked. The panel shows exactly this, and exactly this is sent.
+  const [attached, setAttached] = React.useState<ReportDiagnostics | null>(
+    null,
+  );
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<
     Extract<FeedbackResult, { ok: true }> | null
@@ -66,13 +79,14 @@ export function ReportBugDialog({
   React.useEffect(() => {
     if (!open) return;
     setKind(defaultKind);
-    setDescription("");
+    setDescription(defaultDescription);
+    setAttached(null);
     setDictating(false);
     setDictated(false);
     setUseAi(true);
     setError(null);
     setResult(null);
-  }, [open, defaultKind]);
+  }, [open, defaultKind, defaultDescription]);
 
   function appendTranscript(text: string) {
     const cleaned = text.trim();
@@ -93,6 +107,7 @@ export function ReportBugDialog({
           description,
           dictated,
           useAi: aiAvailable && useAi,
+          ...(attached ? { diagnostics: attached } : {}),
           route:
             typeof window !== "undefined" ? window.location.pathname : undefined,
         });
@@ -230,24 +245,42 @@ export function ReportBugDialog({
 
               {/* Improve with AI — only when the server has a Claude key. */}
               {aiAvailable && (
-                <div className="flex items-start gap-3 rounded-md border border-[color:var(--color-border)] p-3">
-                  <Checkbox
-                    id="feedback-use-ai"
-                    checked={useAi}
-                    onCheckedChange={(c) => setUseAi(c === true)}
-                  />
-                  <Label
-                    htmlFor="feedback-use-ai"
-                    className="flex flex-col gap-0.5 font-normal"
-                  >
-                    <span className="text-sm font-medium">Improve with AI</span>
-                    <span className="text-xs text-[color:var(--color-muted-foreground)]">
-                      Restructures your report into a clear title and steps
-                      before filing.
-                    </span>
-                  </Label>
-                </div>
+                <AckRow
+                  id="feedback-use-ai"
+                  checked={useAi}
+                  onCheckedChange={(c) => setUseAi(c === true)}
+                  rowClassName="rounded-md border border-[color:var(--color-border)] px-3"
+                >
+                  <span className="block font-medium">Improve with AI</span>
+                  <span className="block text-xs text-[color:var(--color-muted-foreground)]">
+                    Restructures your report into a clear title and steps
+                    before filing.
+                  </span>
+                </AckRow>
               )}
+
+              {/* Diagnostics: off until the member ticks it, and then they see
+                  every line that will be sent. No board draws this panel; it
+                  reuses the AI toggle's row and a plain list. */}
+              <div className="flex flex-col gap-3 rounded-md border border-[color:var(--color-border)] p-3">
+                <AckRow
+                  id="feedback-attach-diagnostics"
+                  checked={attached !== null}
+                  onCheckedChange={(c) =>
+                    setAttached(c === true ? collectDiagnostics() : null)
+                  }
+                  rowClassName="py-0"
+                >
+                  <span className="block font-medium">
+                    Attach device details and recent errors
+                  </span>
+                  <span className="block text-xs text-[color:var(--color-muted-foreground)]">
+                    Helps find the fault. You see everything that is sent
+                    below.
+                  </span>
+                </AckRow>
+                {attached && <DiagnosticsList diagnostics={attached} />}
+              </div>
 
               {error && (
                 <p
@@ -276,5 +309,41 @@ export function ReportBugDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Every line a report attaches, before it is sent. */
+function DiagnosticsList({ diagnostics }: { diagnostics: ReportDiagnostics }) {
+  return (
+    <div className="flex flex-col gap-2 text-xs">
+      <p className="text-[color:var(--color-muted-foreground)]">
+        This goes on a public GitHub issue. Your name, email and account are
+        never attached. Personal details found in these lines are removed
+        first, but that can miss things.
+      </p>
+      <dl className="flex flex-col gap-1 rounded-md bg-[color:var(--color-muted)] p-2">
+        {diagnostics.environment.map((field) => (
+          <div key={field.label} className="flex gap-2">
+            <dt className="w-20 shrink-0 font-semibold">{field.label}</dt>
+            <dd className="min-w-0 flex-1 break-all font-mono">{field.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {diagnostics.errors.length === 0 ? (
+        <p>No recent errors in this tab.</p>
+      ) : (
+        <ul
+          aria-label="Recent errors"
+          className="flex flex-col gap-1 rounded-md bg-[color:var(--color-muted)] p-2 font-mono"
+        >
+          {diagnostics.errors.map((e, i) => (
+            <li key={`${e.at}-${i}`} className="break-all">
+              {e.source}: {e.message}
+              {e.route ? ` (at ${e.route})` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

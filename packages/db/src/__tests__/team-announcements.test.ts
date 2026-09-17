@@ -66,6 +66,15 @@ describe("team announcements", () => {
 
     const [listed] = await listAnnouncements();
     expect(listed?.audience).toEqual(audience);
+    expect(listed?.readCount).toBe(0);
+
+    // Seen once the member's inbox row is marked read.
+    await db
+      .update(schema.notificationDeliveries)
+      .set({ readAt: new Date() })
+      .where(eq(schema.notificationDeliveries.userId, cook.id));
+    const [seen] = await listAnnouncements();
+    expect(seen).toMatchObject({ recipientCount: 1, readCount: 1 });
   });
 
   it("let a lead send to a team they lead, and nowhere else", async () => {

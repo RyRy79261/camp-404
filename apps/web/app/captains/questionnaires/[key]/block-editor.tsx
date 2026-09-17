@@ -3,10 +3,15 @@
 import { useEffect, useId, useState } from "react";
 import { Trash2 } from "lucide-react";
 import {
+  BUILDER_ROLES,
+  builderRolesFor,
   isAllowedBuilderImageUrl,
+  isBuilderRole,
+  visibleIfProblem,
   type Block,
   type ContentBlock,
   type Question,
+  type VisibleIf,
 } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
@@ -25,14 +30,27 @@ import { Textarea } from "@camp404/ui/components/textarea";
 import { QuestionField } from "@/components/questionnaire/question";
 import { ContentBlockRenderer } from "@/components/questionnaire/content-block";
 import { OptionsEditor } from "./options-editor";
+import { VisibilityEditor } from "./visibility-editor";
+import { ImageUploadButton } from "./image-upload-button";
 import {
   BUILDER_FIELD_KINDS,
+  TEXT_FORMATS,
   isChoiceKind,
   morphQuestion,
+  supportsAllowOther,
   type BuilderFieldKind,
 } from "./field-kinds";
 
-function blockValid(block: Block): boolean {
+function blockValid(block: Block, fields: readonly Question[]): boolean {
+  if (
+    block.visibleIf &&
+    visibleIfProblem(
+      block.visibleIf,
+      fields.find((f) => f.id === block.visibleIf!.fieldId),
+    ) !== null
+  ) {
+    return false;
+  }
   if (block.kind === "question") {
     const q = block.question;
     if (!q.prompt.trim()) return false;
@@ -58,12 +76,18 @@ function blockValid(block: Block): boolean {
 // member renderers (QuestionField / ContentBlockRenderer).
 export function BlockEditorDialog({
   block,
+  questionnaireKey,
+  fields,
   open,
   onSave,
   onDelete,
   onClose,
 }: {
   block: Block;
+  /** The questionnaire being edited, for picture uploads. */
+  questionnaireKey: string;
+  /** The questions above this block, which a condition may reference. */
+  fields: readonly Question[];
   open: boolean;
   onSave: (block: Block) => void;
   onDelete: () => void;
@@ -90,6 +114,12 @@ export function BlockEditorDialog({
   }
   function patchContent(patch: Record<string, unknown>) {
     setDraft((d) => (d.kind !== "question" ? ({ ...d, ...patch } as Block) : d));
+  }
+  function setVisibleIf(visibleIf: VisibleIf | undefined) {
+    setDraft((d) => {
+      const { visibleIf: _drop, ...rest } = d;
+      return (visibleIf ? { ...rest, visibleIf } : rest) as Block;
+    });
   }
 
   return (
@@ -118,8 +148,19 @@ export function BlockEditorDialog({
             setQuestion={setQuestion}
           />
         ) : (
-          <ContentEditor block={draft} patch={patchContent} />
+          <ContentEditor
+            block={draft}
+            patch={patchContent}
+            questionnaireKey={questionnaireKey}
+          />
         )}
+
+        <VisibilityEditor
+          value={draft.visibleIf}
+          fields={fields}
+          subject="block"
+          onChange={setVisibleIf}
+        />
 
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3">
           <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -156,7 +197,7 @@ export function BlockEditorDialog({
             </Button>
             <Button
               type="button"
-              disabled={!blockValid(draft)}
+              disabled={!blockValid(draft, fields)}
               onClick={() => onSave(draft)}
             >
               Save
@@ -183,6 +224,11 @@ function QuestionEditor({
   const kindId = useId();
   const requiredId = useId();
   const dictationId = useId();
+  const roleId = useId();
+  const formatId = useId();
+  const otherId = useId();
+  const roles = builderRolesFor(question.kind);
+  const role = "role" in question ? question.role : undefined;
   const num = (raw: string, fallback: number) => {
     if (raw.trim() === "") return fallback; // clearing the box keeps the prior value (not 0)
     const n = Number(raw);
@@ -229,6 +275,28 @@ function QuestionEditor({
         />
       </div>
 
+      {roles.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={roleId}>The app uses this answer as</Label>
+          <select
+            id={roleId}
+            className={SELECT_CLASS}
+            value={isBuilderRole(role) ? role : ""}
+            onChange={(e) => patch({ role: e.currentTarget.value || undefined })}
+          >
+            <option value="">Nothing else</option>
+            {roles.map((r) => (
+              <option key={r} value={r}>
+                {BUILDER_ROLES[r].label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            On submit, the answer is also saved where the roster, the member
+            export and messages to drivers read it.
+          </p>
+        </div>
+      )}
       {(question.kind === "short_text" || question.kind === "long_text") && (
         <InputField
           label="Max length"
@@ -238,6 +306,30 @@ function QuestionEditor({
             patch({ maxLength: Math.max(1, num(e.currentTarget.value, question.maxLength)) })
           }
         />
+      )}
+      {question.kind === "short_text" && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={formatId}>Format</Label>
+          <select
+            id={formatId}
+            className={SELECT_CLASS}
+            value={question.format ?? "text"}
+            onChange={(e) =>
+              patch({
+                format:
+                  e.currentTarget.value === "text"
+                    ? undefined
+                    : e.currentTarget.value,
+              })
+            }
+          >
+            {TEXT_FORMATS.map((f) => (
+              <option key={f.format} value={f.format}>
+                {f.label} — {f.desc}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
       {(question.kind === "short_text" ||
         question.kind === "email" ||
@@ -298,6 +390,21 @@ function QuestionEditor({
           />
         </div>
       )}
+      {supportsAllowOther(question) && (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col">
+            <Label htmlFor={otherId}>Offer “Other…”</Label>
+            <p className="text-xs text-muted-foreground">
+              Members can type their own answer.
+            </p>
+          </div>
+          <Switch
+            id={otherId}
+            checked={question.allowOther === true}
+            onCheckedChange={(c) => patch({ allowOther: c || undefined })}
+          />
+        </div>
+      )}
       {isChoiceKind(question) && (
         <div className="flex flex-col gap-1.5">
           <Label>Options</Label>
@@ -314,9 +421,11 @@ function QuestionEditor({
 function ContentEditor({
   block,
   patch,
+  questionnaireKey,
 }: {
   block: ContentBlock;
   patch: (patch: Record<string, unknown>) => void;
+  questionnaireKey: string;
 }) {
   switch (block.kind) {
     case "header_break":
@@ -382,6 +491,10 @@ function ContentEditor({
     case "image_block":
       return (
         <div className="flex flex-col gap-4">
+          <ImageUploadButton
+            questionnaireKey={questionnaireKey}
+            onUploaded={(url) => patch({ imageUrl: url })}
+          />
           <InputField
             label="Image URL"
             value={block.imageUrl}

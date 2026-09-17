@@ -210,6 +210,84 @@ export function evalVisibleIf(
   }
 }
 
+export type VisibleIfOp = VisibleIf["op"];
+
+const ANSWEREDNESS_OPS: readonly VisibleIfOp[] = ["is_answered", "is_empty"];
+
+/**
+ * The operators a condition may use on the field it references (spec §2.1).
+ * A choice compares against one of the field's option values; a yes/no field
+ * against true or false; a number or slider against a number. Any field can be
+ * tested for being answered or empty.
+ */
+export function visibleIfOpsFor(field: Question): readonly VisibleIfOp[] {
+  switch (field.kind) {
+    case "single_select":
+    case "combobox":
+    case "toggle":
+    case "scale":
+    case "boolean":
+      return ["eq", "ne", ...ANSWEREDNESS_OPS];
+    case "multi_select":
+      return ["includes", "not_includes", ...ANSWEREDNESS_OPS];
+    case "number":
+    case "slider":
+      return ["eq", "ne", "gt", "gte", "lt", "lte", ...ANSWEREDNESS_OPS];
+    default:
+      return ANSWEREDNESS_OPS;
+  }
+}
+
+/** The option/step values a question offers, or null for the kinds with none. */
+export function choiceValues(field: Question): string[] | null {
+  if ("options" in field) return field.options.map((o) => o.value);
+  if (field.kind === "scale") return field.steps.map((s) => s.value);
+  return null;
+}
+
+/**
+ * Whether a number is an answer a number or slider question can give: inside
+ * its range, a whole number for a number row, and on a step for a slider. A
+ * condition on any other number can never match, so the page or block it hides
+ * would never show.
+ */
+export function numberFits(
+  field: Extract<Question, { kind: "number" | "slider" }>,
+  n: number,
+): boolean {
+  if (!Number.isFinite(n) || n < field.min || n > field.max) return false;
+  if (field.kind === "number") return Number.isInteger(n);
+  // Steps count from min. The tolerance absorbs float error such as 0.1 * 3.
+  const steps = (n - field.min) / field.step;
+  return Math.abs(steps - Math.round(steps)) < 1e-9;
+}
+
+/**
+ * Why a condition does not fit the field it references, or null when it does:
+ * the field must exist, the operator must suit its kind, and the value must be
+ * one the field can hold. The builder's editor and the publish check share it.
+ */
+export function visibleIfProblem(
+  cond: VisibleIf,
+  field: Question | undefined,
+): "missing_field" | "wrong_operator" | "wrong_value" | null {
+  if (!field) return "missing_field";
+  if (!visibleIfOpsFor(field).includes(cond.op)) return "wrong_operator";
+  if (cond.op === "is_answered" || cond.op === "is_empty") return null;
+  const v = cond.value;
+  if (field.kind === "boolean") {
+    return typeof v === "boolean" ? null : "wrong_value";
+  }
+  const choices = choiceValues(field);
+  if (choices) {
+    return typeof v === "string" && choices.includes(v) ? null : "wrong_value";
+  }
+  if (field.kind === "number" || field.kind === "slider") {
+    return typeof v === "number" && numberFits(field, v) ? null : "wrong_value";
+  }
+  return "wrong_value";
+}
+
 function isVisible(
   visibleIf: VisibleIf | undefined,
   responses: QuestionnaireResponses,
@@ -375,12 +453,6 @@ export function boundDraftResponses(
 // input. `toggle` is omitted — it isn't authorable in the builder palette.
 const OPTION_KINDS = new Set(["single_select", "multi_select", "combobox"]);
 
-/** The option/step values a question offers, or null for the kinds with none. */
-function offeredValues(field: Question): string[] | null {
-  if ("options" in field) return field.options.map((o) => o.value);
-  if (field.kind === "scale") return field.steps.map((s) => s.value);
-  return null;
-}
 
 /**
  * Ranges a respondent could never satisfy. Returns member-visible messages.
@@ -406,14 +478,6 @@ function rangeErrors(field: Question): string[] {
   return out;
 }
 
-/**
- * Hard publish blockers (member-visible messages). An empty array means the
- * questionnaire is publishable. Enforces structural validity beyond what the
- * Zod schema guarantees: at least one input, no inputs on content pages,
- * unique ids, earlier-only `visibleIf` references, satisfiable numeric ranges,
- * no option value on the reserved `other:` prefix, alt text on images, and that
- * the form is completable (at least one page visible under empty responses).
- */
 // --- Size limits and image hosts --------------------------------------------
 // A definition is stored whole and rendered to every member, and team leads can
 // author one too. So the server bounds its size, and only renders images the
@@ -517,19 +581,117 @@ export function builderDefinitionLimitErrors(q: BuilderQuestionnaire): string[] 
   return errors;
 }
 
+/** A condition's publish blockers, worded for the author. */
+function visibleIfErrors(
+  cond: VisibleIf,
+  earlier: ReadonlyMap<string, Question>,
+  where: string,
+): Array<{ code: DefinitionIssueCode; message: string }> {
+  const field = earlier.get(cond.fieldId);
+  switch (visibleIfProblem(cond, field)) {
+    case null:
+      return [];
+    case "missing_field":
+      return [
+        {
+          code: "dangling_visible_if",
+          message: `${where} shows-when references a field that doesn't come before it.`,
+        },
+      ];
+    case "wrong_operator":
+      return [
+        {
+          code: "visible_if_wrong_operator",
+          message: `${where} shows-when uses a condition that doesn't fit "${field!.prompt}".`,
+        },
+      ];
+    case "wrong_value":
+      return [
+        {
+          code: "visible_if_wrong_value",
+          message: `${where} shows-when compares "${field!.prompt}" with an answer it can't have.`,
+        },
+      ];
+  }
+}
+
+/** What is wrong, as a stable code the canvas can act on. */
+export type DefinitionIssueCode =
+  | "missing_title"
+  | "no_pages"
+  | "empty_page"
+  | "dangling_visible_if"
+  | "visible_if_wrong_operator"
+  | "visible_if_wrong_value"
+  | "image_alt_missing"
+  | "image_missing"
+  | "image_host"
+  | "input_on_content_page"
+  | "duplicate_id"
+  | "too_few_options"
+  | "duplicate_option_value"
+  | "reserved_option_value"
+  | "invalid_range"
+  | "duplicate_role"
+  | "no_inputs"
+  | "no_visible_page";
+
+/**
+ * One publish blocker, with where it is: the page, and the block (a question
+ * block's id is its question's id). Neither is set for a questionnaire-wide
+ * problem (no title, no inputs, nothing visible).
+ */
+export interface DefinitionIssue {
+  code: DefinitionIssueCode;
+  message: string;
+  pageId?: string;
+  blockId?: string;
+}
+
+/**
+ * Hard publish blockers (member-visible messages), as a flat list of
+ * sentences. See builderQuestionnaireIssues for the same list with codes and
+ * locations.
+ */
 export function validateBuilderQuestionnaire(
   q: BuilderQuestionnaire,
 ): string[] {
-  const errors: string[] = [];
+  return builderQuestionnaireIssues(q).map((issue) => issue.message);
+}
+
+/**
+ * Hard publish blockers, each with a code and the page and block it belongs
+ * to, so the builder can show a problem on the block that has it. An empty
+ * list means the questionnaire is publishable. Beyond what the Zod schema
+ * guarantees: at least one input, no inputs on content pages, unique ids,
+ * conditions that fit an earlier field, satisfiable numeric ranges, distinct
+ * option values and none on the reserved `other:` prefix, alt text and an
+ * allowed picture on images, one question per role, and a form that shows at
+ * least one page under empty responses.
+ */
+export function builderQuestionnaireIssues(
+  q: BuilderQuestionnaire,
+): DefinitionIssue[] {
+  const errors: DefinitionIssue[] = [];
+  const add = (
+    code: DefinitionIssueCode,
+    message: string,
+    at: { pageId?: string; blockId?: string } = {},
+  ) => errors.push({ code, message, ...at });
   if (q.title.trim().length === 0) {
-    errors.push("Give the questionnaire a title before publishing.");
+    add("missing_title", "Give the questionnaire a title before publishing.");
   }
   if (q.pages.length === 0) {
-    errors.push("A questionnaire needs at least one page.");
+    add("no_pages", "A questionnaire needs at least one page.");
   }
 
   let inputCount = 0;
-  const earlier = new Set<string>();
+  // Every input field seen so far, by id: a condition may reference only these.
+  const earlier = new Map<string, Question>();
+  // A role the app copies somewhere (allergies, arrival day…) may sit on one
+  // question only, or two answers would race for one column. Emergency
+  // contact roles repeat by design: the Nth of each makes contact N.
+  const roleOwners = new Map<string, string>();
   // Pages, content blocks and questions share ONE flat id namespace, and a
   // duplicate is a publish blocker for two reasons — the second is the one
   // that hides:
@@ -543,11 +705,17 @@ export function validateBuilderQuestionnaire(
   // keys its visibleIf map by them: a collision there can read a branching
   // edit as cosmetic and skip the re-submit gate.
   const seen = new Map<string, string>();
-  const claimId = (id: string, where: string) => {
+  const claimId = (
+    id: string,
+    where: string,
+    at: { pageId: string; blockId?: string },
+  ) => {
     const first = seen.get(id);
     if (first !== undefined) {
-      errors.push(
+      add(
+        "duplicate_id",
         `The id "${id}" is used twice (${first} and ${where}) — ids must be unique so answers stay attached to the right question.`,
+        at,
       );
       return;
     }
@@ -556,69 +724,115 @@ export function validateBuilderQuestionnaire(
 
   q.pages.forEach((page, pi) => {
     const pageLabel = page.title.trim() || `Page ${pi + 1}`;
-    claimId(page.id, pageLabel);
+    const onPage = { pageId: page.id };
+    claimId(page.id, pageLabel, onPage);
     if (page.blocks.length === 0) {
-      errors.push(`${pageLabel} has no blocks.`);
+      add("empty_page", `${pageLabel} has no blocks.`, onPage);
     }
-    if (page.visibleIf && !earlier.has(page.visibleIf.fieldId)) {
-      errors.push(
-        `${pageLabel} shows-when references a field that doesn't come before it.`,
-      );
+    if (page.visibleIf) {
+      for (const issue of visibleIfErrors(page.visibleIf, earlier, pageLabel)) {
+        add(issue.code, issue.message, onPage);
+      }
     }
     for (const block of page.blocks) {
-      if (block.visibleIf && !earlier.has(block.visibleIf.fieldId)) {
-        errors.push(
-          `A block on ${pageLabel} shows-when references a field that doesn't come before it.`,
-        );
+      const at = {
+        pageId: page.id,
+        blockId: block.kind === "question" ? block.question.id : block.id,
+      };
+      if (block.visibleIf) {
+        for (const issue of visibleIfErrors(
+          block.visibleIf,
+          earlier,
+          `A block on ${pageLabel}`,
+        )) {
+          add(issue.code, issue.message, at);
+        }
       }
       if (block.kind === "image_block" && block.altText.trim().length === 0) {
-        errors.push(`An image on ${pageLabel} is missing alt text.`);
+        add(
+          "image_alt_missing",
+          `An image on ${pageLabel} is missing alt text.`,
+          at,
+        );
       }
       if (block.kind === "image_block") {
         if (block.imageUrl.trim().length === 0) {
-          errors.push(`An image on ${pageLabel} has no picture yet.`);
+          add("image_missing", `An image on ${pageLabel} has no picture yet.`, at);
         } else if (!isAllowedBuilderImageUrl(block.imageUrl)) {
-          errors.push(IMAGE_HOST_ERROR(pageLabel));
+          add("image_host", IMAGE_HOST_ERROR(pageLabel), at);
         }
       }
       if (block.kind !== "question") {
-        claimId(block.id, `a ${block.kind} block on ${pageLabel}`);
+        claimId(block.id, `a ${block.kind} block on ${pageLabel}`, at);
         continue;
       }
       inputCount += 1;
       if (page.type === "content") {
-        errors.push(
+        add(
+          "input_on_content_page",
           `${pageLabel} is a content page and can't contain input fields.`,
+          at,
         );
       }
       const field = block.question;
-      claimId(field.id, `"${field.prompt}" on ${pageLabel}`);
+      claimId(field.id, `"${field.prompt}" on ${pageLabel}`, at);
       if (
         OPTION_KINDS.has(field.kind) &&
         "options" in field &&
         field.options.length < 2
       ) {
-        errors.push(`"${field.prompt}" needs at least 2 options.`);
+        add("too_few_options", `"${field.prompt}" needs at least 2 options.`, at);
+      }
+      // Two options with one value store the same answer, so a member's pick
+      // cannot be told apart, and results count them as one.
+      const values = choiceValues(field) ?? [];
+      const repeated = values.find((v, i) => values.indexOf(v) !== i);
+      if (repeated !== undefined) {
+        add(
+          "duplicate_option_value",
+          `"${field.prompt}" has two options with the value "${repeated}". Each option needs its own value.`,
+          at,
+        );
       }
       // The `other:` prefix is reserved for in-band free-text answers. An
       // authored option value on it would be indistinguishable from something
       // a respondent typed — so it is refused at definition time, which is
       // what lets every reader trust the encoding.
-      if (offeredValues(field)?.some((v) => v.startsWith(OTHER_PREFIX))) {
-        errors.push(
+      if (choiceValues(field)?.some((v) => v.startsWith(OTHER_PREFIX))) {
+        add(
+          "reserved_option_value",
           `"${field.prompt}" has an option value starting with "${OTHER_PREFIX}", which is reserved for free-text "Other" answers.`,
+          at,
         );
       }
-      errors.push(...rangeErrors(field));
-      earlier.add(field.id);
+      for (const message of rangeErrors(field)) {
+        add("invalid_range", message, at);
+      }
+      earlier.set(field.id, field);
+      const role = "role" in field ? field.role : undefined;
+      if (role && !role.startsWith("emergency_contact_")) {
+        const owner = roleOwners.get(role);
+        if (owner !== undefined) {
+          add(
+            "duplicate_role",
+            `"${owner}" and "${field.prompt}" are both marked for the same use. Mark only one.`,
+            at,
+          );
+        } else {
+          roleOwners.set(role, field.prompt);
+        }
+      }
     }
   });
 
   if (inputCount === 0) {
-    errors.push("Add at least one input field.");
+    add("no_inputs", "Add at least one input field.");
   }
   if (q.pages.length > 0 && visiblePages(q, {}).length === 0) {
-    errors.push("This questionnaire shows no pages until something is answered.");
+    add(
+      "no_visible_page",
+      "This questionnaire shows no pages until something is answered.",
+    );
   }
   return errors;
 }
@@ -631,11 +845,6 @@ function fieldMap(q: BuilderQuestionnaire): Map<string, Question> {
   return m;
 }
 
-function optionValues(q: Question): string[] | null {
-  if ("options" in q) return q.options.map((o) => o.value);
-  if (q.kind === "scale") return q.steps.map((s) => s.value);
-  return null;
-}
 
 /**
  * True when changing `prev` field into `next` (same id, same kind) can
@@ -643,8 +852,8 @@ function optionValues(q: Question): string[] | null {
  */
 function breakingParamChange(prev: Question, next: Question): boolean {
   // Removing or renaming an option value is breaking; adding one is not.
-  const prevOpts = optionValues(prev);
-  const nextOpts = optionValues(next);
+  const prevOpts = choiceValues(prev);
+  const nextOpts = choiceValues(next);
   if (prevOpts && nextOpts) {
     const nextSet = new Set(nextOpts);
     if (prevOpts.some((v) => !nextSet.has(v))) return true;

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCampMemberDetail } from "@camp404/db/roster";
+import { listMemberQuestionnaireGates } from "@camp404/db/activations";
 import {
   assignTeam,
   getTeamMemberships,
@@ -23,9 +24,11 @@ import {
   canDecidePromotion,
   canSendPromotion,
   deriveViewerRank,
+  memberQuestionnaireStatuses,
   promotionStepState,
   reviewActionFor,
   reviewRefusal,
+  type MemberQuestionnaire,
   type ReviewOption,
 } from "@camp404/core";
 import { Team, type ApprovalStatus } from "@camp404/types";
@@ -70,6 +73,8 @@ export type MemberDetailResult =
       reviewOptions: ReviewOption[];
       /** Captains' private notes on this member, newest first. */
       notes: MemberNote[];
+      /** Where each of this member's questionnaires stands, oldest first. */
+      questionnaires: MemberQuestionnaire[];
       /** This member's team memberships FOR THE CAMP'S CURRENT YEAR. */
       teams: TeamMembership[];
       /** The teams a captain may assign — active only, order-sorted. Archived
@@ -268,10 +273,11 @@ export async function getMemberDetailAction(
     // The assignment control's two inputs: what this member is on THIS YEAR,
     // and what a captain may put them on. `activeTeams` drops archived teams,
     // so an archived team is unpickable before the client ever sees the list.
-    const [teams, config, notes] = await Promise.all([
+    const [teams, config, notes, gates] = await Promise.all([
       getTeamMemberships(userId),
       getTeamsConfig(),
       listMemberNotes(userId),
+      listMemberQuestionnaireGates(userId),
     ]);
     auditNotesRead(gate.captainId, userId, notes);
 
@@ -295,6 +301,7 @@ export async function getMemberDetailAction(
         openRequest?.requestedByUserId ?? null,
       ),
       notes,
+      questionnaires: memberQuestionnaireStatuses(gates),
       teams,
       assignableTeams: activeTeams(config).map((t) => ({
         key: t.key,

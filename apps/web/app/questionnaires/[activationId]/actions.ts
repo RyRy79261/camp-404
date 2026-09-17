@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import {
   QuestionnaireResponses,
   boundDraftResponses,
+  builderRoleMirror,
   flattenBuilderQuestions,
   validateBuilderResponses,
   type SaveResult,
@@ -114,6 +115,9 @@ export async function saveBuilderResponses(
         cycle: activation.cycle,
         responses: toStore,
         activationId: activation.id,
+        // Answers marked for the app's own tables (allergies, driving this
+        // year, arrival day…) land there in the same transaction.
+        mirror: builderRoleMirror(definition, toStore),
       });
     } else {
       await upsertQuestionnaireResponse({

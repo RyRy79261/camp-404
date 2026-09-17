@@ -9,6 +9,7 @@ import {
   type ReviewAction,
   type ReviewOption,
 } from "@camp404/core";
+import type { MemberQuestionnaire } from "@camp404/core";
 import type { ApprovalStatus } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -27,6 +28,7 @@ import {
 import { AssignCaptainDialog } from "./assign-captain-dialog";
 import { MemberNotes } from "./member-notes";
 import { RejectConfirmDialog } from "./reject-confirm-dialog";
+import { MemberQuestionnaires } from "./member-questionnaires";
 import { RoleBadge, RosterAvatar, TeamBadge } from "./roster-presentation";
 import { TeamAssignment } from "./team-assignment";
 
@@ -61,6 +63,8 @@ type DetailState =
       reviewOptions: ReviewOption[];
       /** Captains' private notes on this member. */
       notes: Extract<MemberDetailResult, { ok: true }>["notes"];
+      /** Where each of this member's questionnaires stands. */
+      questionnaires: MemberQuestionnaire[];
     }
   | { state: "error"; message: string };
 
@@ -154,6 +158,7 @@ export function MemberProfile({
                 assignableTeams: res.assignableTeams,
                 reviewOptions: res.reviewOptions,
                 notes: res.notes,
+                questionnaires: res.questionnaires,
               }
             : { state: "error", message: res.error },
         );
@@ -412,6 +417,10 @@ export function MemberProfile({
           </p>
 
           <FieldGrid items={overviewItems} />
+
+          {detail.state === "loaded" && (
+            <MemberQuestionnaires questionnaires={detail.questionnaires} />
+          )}
 
           {member.profileSections.length === 0 ? (
             <p className="text-sm text-muted-foreground">

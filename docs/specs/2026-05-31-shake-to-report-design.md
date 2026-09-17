@@ -21,7 +21,7 @@ the modal shows the created issue link.
   **Default: five jolts** within the window are required to open the dialog (a deliberate
   shake, not a bump).
 - **`apps/web/app/feedback-gate.tsx`** — mounted once in the root layout (sibling of
-  `AcknowledgementGate`), gated on `signedIn`. **Shake is the only trigger** (matching the
+  `AcknowledgementGate`), gated on `signedIn`. **[CORRECTION 2026-09-16]** Shake is no longer the only trigger: "Report a problem" on /profile and "Report" on the error page open the same dialog, and diagnostics can be attached with the member's review (see design/spec/surfaces/25-global-overlays.md). **Shake is the only trigger** (matching the
   reference's `ShakeToReport` — no button); it requests iOS motion permission on first pointer
   interaction and pauses while the dialog is open.
 - **`apps/web/components/feedback/report-bug-dialog.tsx`** — the modal. Reuses our `Dialog`

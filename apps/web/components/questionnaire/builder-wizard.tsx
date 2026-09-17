@@ -76,6 +76,11 @@ interface BuilderWizardProps {
   // runner shows when the answers came from an earlier cycle (year-namespace
   // spec §9). Plain text, not a banner: it explains, it doesn't warn.
   notice?: string;
+  /**
+   * The author preview. Image fields cannot upload (nothing is saved and there
+   * is no send), so they show a note and do not block Continue.
+   */
+  preview?: boolean;
 }
 
 export function BuilderWizard({
@@ -89,6 +94,7 @@ export function BuilderWizard({
   blocking = true,
   title,
   notice,
+  preview = false,
 }: BuilderWizardProps) {
   const [responses, setResponses] =
     React.useState<QuestionnaireResponses>(initialResponses);
@@ -131,6 +137,7 @@ export function BuilderWizard({
     for (const block of p.blocks) {
       if (block.kind !== "question") continue;
       if (block.visibleIf && !evalVisibleIf(block.visibleIf, responses)) continue;
+      if (preview && block.question.kind === "image") continue;
       const result = validateOne(block.question, responses[block.question.id]);
       if (!result.ok) next[block.question.id] = result.error;
     }
@@ -255,6 +262,7 @@ export function BuilderWizard({
                 value={responses[q.id]}
                 onChange={(v) => setResponse(q.id, v)}
                 error={errors[q.id]}
+                uploadsOff={preview}
               />
             );
           }

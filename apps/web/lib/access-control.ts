@@ -5,6 +5,7 @@ import {
   type AssignedRank,
 } from "@camp404/db/invite-codes";
 import { normalizeInviteCode } from "@camp404/core";
+import { envList, MIN_PREAPPROVED_ENV_CODE_LENGTH } from "./integration-config";
 import { isE2ETestMode } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -18,22 +19,7 @@ export interface ClaimedInvite {
   requiresApproval: boolean;
 }
 
-/**
- * An `INVITE_CODES` value shorter than this lands its redeemer as pending, for
- * a captain to approve. Env codes never run out, and sign-up is open to anyone,
- * so a short, guessable one must not let people straight into the camp: the
- * same rule the owner chose for the public founder code (2026-09-16). A long
- * random value keeps the old pre-approved behaviour, and nobody has to rotate
- * the setting for the camp to be safe.
- */
-export const MIN_PREAPPROVED_ENV_CODE_LENGTH = 20;
-
-function csv(env: string | undefined): string[] {
-  return (env ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+export { MIN_PREAPPROVED_ENV_CODE_LENGTH };
 
 /**
  * Returns true if the given email address is in GOD_EMAILS (case-insensitive).
@@ -41,7 +27,7 @@ function csv(env: string | undefined): string[] {
  */
 export function isGodEmail(email: string | null | undefined): boolean {
   if (!email) return false;
-  const list = csv(process.env.GOD_EMAILS).map((e) => e.toLowerCase());
+  const list = envList(process.env.GOD_EMAILS).map((e) => e.toLowerCase());
   return list.includes(email.toLowerCase());
 }
 
@@ -79,7 +65,9 @@ export async function claimInviteCode(
 }
 
 function isEnvCode(code: string): boolean {
-  return csv(process.env.INVITE_CODES).map(normalizeInviteCode).includes(code);
+  return envList(process.env.INVITE_CODES)
+    .map(normalizeInviteCode)
+    .includes(code);
 }
 
 async function consumeDbCode(code: string) {

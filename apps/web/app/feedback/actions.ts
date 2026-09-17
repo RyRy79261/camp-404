@@ -1,12 +1,22 @@
 "use server";
 
 import { z } from "zod";
-import { sanitizeReportText } from "@camp404/core";
+import { sanitizeReportText, screenReport } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
 import { rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
-import { buildFeedbackIssue, DESCRIPTION_MAX } from "@/lib/github-feedback";
+import {
+  DEFAULT_FEEDBACK_REPO,
+  feedbackTracker,
+  type FeedbackTracker,
+} from "@/lib/integration-config";
+import {
+  buildFeedbackIssue,
+  DESCRIPTION_MAX,
+  DIAGNOSTICS_LIMITS as DL,
+  type ReportDiagnostics,
+} from "@/lib/github-feedback";
 import { structureWithAi } from "@/lib/feedback-ai";
 
 export type FeedbackResult =
@@ -24,9 +34,39 @@ const InputSchema = z.object({
   route: z.string().max(300).optional(),
   // "Improve with AI" toggle — restructure the report before filing.
   useAi: z.boolean().optional(),
+  // Device details and recent errors, only when the member ticked the box.
+  // Capped here so a crafted request cannot post a wall of text.
+  diagnostics: z
+    .object({
+      environment: z
+        .array(
+          z.object({
+            label: z.string().max(DL.label),
+            value: z.string().max(DL.value),
+          }),
+        )
+        .max(DL.environmentFields),
+      errors: z
+        .array(
+          z.object({
+            at: z.string().max(40),
+            source: z.string().max(DL.source),
+            message: z.string().max(DL.message),
+            route: z.string().max(DL.route).optional(),
+          }),
+        )
+        .max(DL.errors),
+    })
+    .optional(),
 });
 
-const DEFAULT_REPO = "RyRy79261/camp-404";
+/** Every piece of text in the diagnostics, for the redaction screen. */
+function diagnosticsText(d: ReportDiagnostics): string[] {
+  return [
+    ...d.environment.flatMap((f) => [f.label, f.value]),
+    ...d.errors.flatMap((e) => [e.source, e.message, e.route ?? ""]),
+  ];
+}
 
 // GitHub's create-issue 201 payload — validated rather than blindly cast so a
 // caller never receives a malformed number/url.
@@ -35,30 +75,24 @@ const GithubIssueSchema = z.object({
   html_url: z.string().url(),
 });
 
-type FeedbackTracker =
-  | { ok: true; token: string; owner: string; name: string }
-  | { ok: false; error: string };
-
-/** The GitHub token and repo the reports go to, or why they are not usable. */
-function feedbackTracker(): FeedbackTracker {
-  const token = process.env.GITHUB_FEEDBACK_TOKEN;
-  if (!token) {
+/** The GitHub token and repo the reports go to, or the error to show. */
+function resolveTracker():
+  | Extract<FeedbackTracker, { ok: true }>
+  | { ok: false; error: string } {
+  const tracker = feedbackTracker(process.env);
+  if (tracker.ok) return tracker;
+  if (tracker.reason === "no_token") {
     console.error("submitFeedbackAction: GITHUB_FEEDBACK_TOKEN is not set");
     return {
       ok: false,
       error: "Feedback isn't set up yet. Let a camp captain know.",
     };
   }
-  const repo = (process.env.GITHUB_FEEDBACK_REPO || DEFAULT_REPO).trim();
-  const segments = repo.split("/").map((s) => s.trim()).filter(Boolean);
-  if (segments.length !== 2) {
-    console.error("submitFeedbackAction: GITHUB_FEEDBACK_REPO is misconfigured");
-    return {
-      ok: false,
-      error: "Feedback isn't configured correctly. Let a camp captain know.",
-    };
-  }
-  return { ok: true, token, owner: segments[0]!, name: segments[1]! };
+  console.error("submitFeedbackAction: GITHUB_FEEDBACK_REPO is misconfigured");
+  return {
+    ok: false,
+    error: "Feedback isn't configured correctly. Let a camp captain know.",
+  };
 }
 
 /**
@@ -77,7 +111,7 @@ export async function submitFeedbackAction(
   // spends the member's rate limit or a paid AI call on a report it cannot
   // file. E2E mode never calls GitHub, so it skips this and short-circuits
   // further down.
-  const tracker = isE2ETestMode() ? null : feedbackTracker();
+  const tracker = isE2ETestMode() ? null : resolveTracker();
   if (tracker && !tracker.ok) return tracker;
 
   // Burst + daily caps. In-memory + per-instance (the app-wide limiter), so
@@ -108,12 +142,13 @@ export async function submitFeedbackAction(
       error: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
   }
-  const { kind, description, dictated, route, useAi } = parsed.data;
+  const { kind, description, dictated, route, useAi, diagnostics } = parsed.data;
 
   // Sanitize once: reject input that's empty after PII/HTML stripping (e.g.
   // HTML-only) so we never file a blank issue, and use the clean text as the
   // AI input so no PII is sent to the model.
-  const sanitized = sanitizeReportText(description, DESCRIPTION_MAX).text;
+  const cleaned = sanitizeReportText(description, DESCRIPTION_MAX);
+  const sanitized = cleaned.text;
   if (!sanitized) {
     return { ok: false, error: "Please describe the issue." };
   }
@@ -126,11 +161,27 @@ export async function submitFeedbackAction(
 
   // E2E mode exercises auth + validation but never calls the AI or GitHub.
   if (isE2ETestMode()) {
-    return { ok: true, number: 0, url: `https://github.com/${DEFAULT_REPO}/issues` };
+    return { ok: true, number: 0, url: `https://github.com/${DEFAULT_FEEDBACK_REPO}/issues` };
   }
 
+  // Screen before anything reads the report. A flagged report is held for a
+  // person: it never reaches the AI pass, and it carries `needs-human`.
+  // Diagnostics are withheld when the report or the diagnostics themselves
+  // look like they hold someone else's details.
+  const screen = screenReport(description, cleaned.redacted);
+  const diagnosticsKinds = diagnostics
+    ? diagnosticsText(diagnostics).flatMap(
+        (text) => sanitizeReportText(text, DESCRIPTION_MAX).redacted,
+      )
+    : [];
+  const withhold =
+    diagnostics !== undefined &&
+    (screen.withholdDiagnostics ||
+      screenReport("", diagnosticsKinds).withholdDiagnostics);
+
   // Optional "Improve with AI" restructuring; null on any failure → plain body.
-  const structured = useAi ? await structureWithAi(kind, sanitized) : null;
+  const structured =
+    useAi && !screen.needsHuman ? await structureWithAi(kind, sanitized) : null;
 
   // The raw description: the builder sanitizes it again and records what
   // redaction removed, for the note on the issue.
@@ -141,6 +192,9 @@ export async function submitFeedbackAction(
     reporterRef,
     route,
     structured,
+    flags: screen.flags,
+    diagnostics: withhold ? null : diagnostics,
+    diagnosticsWithheld: withhold,
   });
 
   if (!tracker?.ok) {

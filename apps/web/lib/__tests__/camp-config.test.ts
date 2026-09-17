@@ -438,11 +438,9 @@ describe("advanceCycles", () => {
 describe("resolveCodeCarryOver", () => {
   // The owner's ruling, seeded as the per-key default so an untouched camp
   // already behaves the way they asked.
-  it("defaults the bio and the diet to carry, the driver profile to fresh", () => {
+  it("defaults the burner profile to carry", () => {
     for (const raw of [null, undefined, {}, { questionnaireCarryOver: {} }]) {
       expect(resolveCodeCarryOver(raw, "burner_profile")).toBe("carry");
-      expect(resolveCodeCarryOver(raw, "dietary_requirements")).toBe("carry");
-      expect(resolveCodeCarryOver(raw, "driver_profile")).toBe("fresh");
     }
   });
 
@@ -460,14 +458,13 @@ describe("resolveCodeCarryOver", () => {
   it("falls back PER KEY, so one bad entry keeps the rest", () => {
     const raw = {
       questionnaireCarryOver: {
-        burner_profile: "fresh",
-        dietary_requirements: 42, // nonsense
+        burner_profile: 42, // nonsense
+        driver_profile: "fresh",
       },
     };
-    expect(resolveCodeCarryOver(raw, "burner_profile")).toBe("fresh");
     // The nonsense entry falls back to the owner's default for that key, and
-    // does NOT discard the captain's choice above it.
-    expect(resolveCodeCarryOver(raw, "dietary_requirements")).toBe("carry");
+    // does NOT discard the valid choice beside it.
+    expect(resolveCodeCarryOver(raw, "burner_profile")).toBe("carry");
     expect(resolveCodeCarryOver(raw, "driver_profile")).toBe("fresh");
   });
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { get } from "@vercel/blob";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { findCampUserByAuthId, isApproved } from "@/lib/users";
+import { findCampUserByAuthId, hasCampAccess, isApproved } from "@/lib/users";
 import { isE2ETestMode } from "@/lib/test-mode";
 
 export const runtime = "nodejs";
@@ -13,39 +13,50 @@ export const runtime = "nodejs";
 const SERVABLE_TYPES = new Set(["image/webp", "image/png", "image/jpeg"]);
 
 /**
- * Stream a member's private avatar blob.
+ * Stream a private blob: a member's photo or image answer, or a picture in a
+ * builder questionnaire.
  *
- * Profile photos live in a *private* Vercel Blob store, so their raw URLs
- * aren't readable without the store token. We never expose that URL; instead
- * the uploader persists a `/api/avatar?pathname=…` link and this route fetches
- * the blob server-side (with the token) and streams it back — but only to an
- * approved member. A logged-out or not-yet-approved request gets a 401, so the
- * `<img>` simply fails to load: photos are visible to vetted members only.
+ * The Blob store is private, so raw blob URLs aren't readable without the
+ * store token. We never expose them; uploads persist a `/api/avatar?pathname=…`
+ * link and this route fetches the blob server-side and streams it back, to the
+ * viewers each prefix allows:
  *
- * Any approved member may view any member's avatar (they're shown across the
- * home header, profile pages, the family tree, and the captain roster), so the
- * gate is `isApproved` — matching the rest of the protected pages — not
- * ownership.
+ * - `avatars/` — any approved member. Photos show across the home header,
+ *   profiles, the family tree and the captain roster, so the gate is
+ *   `isApproved`, not ownership.
+ * - `builder-images/` — anyone camp-active. A questionnaire can be sent to an
+ *   applicant who is not approved yet, and its pictures are camp content, not
+ *   anyone's personal data.
+ *
+ * Any other prefix is not found. A request that does not clear its prefix's
+ * gate gets a 401, so the `<img>` simply fails to load.
  */
 export async function GET(req: Request) {
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-  // Match the app-wide "can use the app" gate: a signed-in but pending /
-  // rejected account must not be able to pull member photos.
-  const campUser = await findCampUserByAuthId(user.id);
-  if (!campUser || !isApproved(campUser, user.primaryEmail)) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
   const pathname = new URL(req.url).searchParams.get("pathname");
   if (!pathname) {
     return new NextResponse("Missing pathname", { status: 400 });
   }
-  // Scope to the avatars prefix so this can't be used to read other blobs.
-  if (!pathname.startsWith("avatars/")) {
+  const audience = pathname.startsWith("avatars/")
+    ? "approved"
+    : pathname.startsWith("builder-images/")
+      ? "camp"
+      : null;
+  if (!audience) {
     return new NextResponse("Not found", { status: 404 });
+  }
+
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+  const campUser = await findCampUserByAuthId(user.id);
+  const allowed =
+    campUser !== null &&
+    (audience === "approved"
+      ? isApproved(campUser, user.primaryEmail)
+      : hasCampAccess(campUser, user.primaryEmail));
+  if (!allowed) {
+    return new NextResponse("Unauthorized", { status: 401 });
   }
 
   const token = process.env.BLOB_READ_WRITE_TOKEN;

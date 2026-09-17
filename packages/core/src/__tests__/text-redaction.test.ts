@@ -199,9 +199,28 @@ describe("redactSecrets", () => {
     expect(redactSecrets(once, env)).toBe(once);
   });
 
-  it("covers Camp 404's fourteen secret-bearing env names", () => {
-    expect(SECRET_ENV_KEYS).toHaveLength(14);
-    expect(new Set(SECRET_ENV_KEYS).size).toBe(14);
+  it("removes the credentials from a URL this process does not hold", () => {
+    const out = redactSecrets(
+      "connect failed: postgres://neondb_owner:rotated-pw@ep-x-pooler.neon.tech/db?sslmode=require",
+      env,
+    );
+    expect(out).not.toContain("rotated-pw");
+    expect(out).not.toContain("neondb_owner");
+    expect(out).toBe(
+      "connect failed: postgres://[redacted]@ep-x-pooler.neon.tech/db?sslmode=require",
+    );
+    expect(redactSecrets(out, env)).toBe(out);
+  });
+
+  it("leaves a URL with no credentials alone", () => {
+    expect(redactSecrets("see https://camp-404.com/setup", env)).toBe(
+      "see https://camp-404.com/setup",
+    );
+  });
+
+  it("covers Camp 404's fifteen secret-bearing env names", () => {
+    expect(SECRET_ENV_KEYS).toHaveLength(15);
+    expect(new Set(SECRET_ENV_KEYS).size).toBe(15);
   });
 
   it("returns empty for empty input", () => {

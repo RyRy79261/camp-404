@@ -104,12 +104,23 @@ rejects forward references). Operators by referenced kind:
 | single_select, combobox | `eq`, `ne` | option value (string) |
 | boolean | `eq`, `ne` | `true`/`false` |
 | multi_select | `includes`, `not_includes` | option value (string) |
-| number, slider | `eq`, `ne`, `gt`, `gte`, `lt`, `lte` | number |
+| number, slider | `eq`, `ne`, `gt`, `gte`, `lt`, `lte` | number the field can give (see below) |
 | any kind | `is_answered`, `is_empty` | omitted |
 
 `value` must match the referenced field's response type. An **unanswered**
 referenced field makes the condition evaluate **false (hide)**, except
 `is_empty`/`is_answered`. Runtime + authoring semantics: §5.1.
+
+**Enforced (B5a).** `visibleIfOpsFor` (`@camp404/types`) is this table in code
+(`toggle`/`scale` compare like choices; `date`, text, email, phone and image get
+only `is_answered`/`is_empty`), and `visibleIfProblem` checks the field exists,
+the operator fits and the value is one the field can hold. For a number or
+slider that means `numberFits`: inside `min`–`max`, a whole number for
+`number`, and on a `step` from `min` for `slider`. A condition on any other
+number can never match, so what it hides would never show. Publish refuses a
+condition that fails it. The builder's editor ("Show only when…" in the block
+editor and in page settings) offers only fitting operators and answers, and the
+canvas marks each conditional block and flags a broken one.
 
 ### 2.2 Author-content render & size policy
 
@@ -424,8 +435,10 @@ with no push token; no custom-message UI in v1.
 ## 8. Non-goals (v1)
 
 Native/Capacitor (builder is **web-only**); **opt-in / pull-model** audience
-(captains dictate audience); editing the bespoke code questionnaires
-(burner/dietary/driver) in the builder — **burner profile stays fully separate**;
+(captains dictate audience); editing the burner profile in the builder —
+**burner profile stays fully separate** (dietary requirements and the driver
+profile moved onto the builder in B5c, OD3: their facts arrive through builder
+roles);
 government-ID-grade encrypted fields and the **mirror-to-profile-column PII** half
 (mockup frame 11); arbitrary image aspect on the respondent `image` **input**
 field (square-crop only — `image_block` is exempt and supports landscape/full-
@@ -499,6 +512,8 @@ complete/next-up/locked/expired); push reminders (§7.4).
 validator; progress recompute over visible pages; back-nav re-show retains
 answers; publish satisfiability check (≥1 visible page under empty responses);
 functional logic editor ("show this when [earlier field] [op] [value]", undrawn).
+_Built in B5a: `visibility-editor.tsx` + `visibility.ts` in the builder, from
+existing form parts (no board draws it)._
 
 ---
 

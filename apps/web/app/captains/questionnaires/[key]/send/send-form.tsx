@@ -373,7 +373,7 @@ export function SendForm({
             ) : (
               filtered.map((m) => (
                 <li key={m.id}>
-                  <label className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted">
+                  <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted">
                     <Checkbox
                       checked={selected.has(m.id)}
                       onCheckedChange={() => toggle(m.id)}

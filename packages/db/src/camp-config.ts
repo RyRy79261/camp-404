@@ -152,7 +152,7 @@ export interface CampConfig extends TeamsConfig {
    */
   cycles?: CycleEntry[];
   /**
-   * Policy for the RESERVED code keys (burner_profile, dietary, driver), which
+   * Policy for the RESERVED code key (burner_profile), which
    * can never have a questionnaire_definitions row and so have nowhere else to
    * carry a `carry_over` column. Unset entries fall back per key — see
    * CODE_CARRY_OVER_DEFAULTS.
@@ -161,25 +161,19 @@ export interface CampConfig extends TeamsConfig {
 }
 
 /**
- * The camp owner's ruling on the three RESERVED code keys, seeded as the
- * per-key default so an untouched camp already behaves the way they asked:
+ * The camp owner's ruling on the RESERVED code key, seeded as the default so
+ * an untouched camp already behaves the way they asked:
  *
- *   burner_profile        carry — "people's data carries over and they can just
- *                                 have to go through saving it again or
- *                                 updating it".
- *   dietary_requirements  carry — NOT ruled on; inferred. A stable personal
- *                                 attribute like the bio — allergies rarely
- *                                 change, and a member can update it whenever.
- *   driver_profile        fresh — "who's driving in whose car ... have to be
- *                                 fresh".
+ *   burner_profile  carry — "people's data carries over and they can just have
+ *                           to go through saving it again or updating it".
  *
- * Anything else falls back to `carry`, matching the definitions column default:
- * the rollover does nothing at all until a captain opts a questionnaire in.
+ * Dietary requirements and the driver profile are builder questionnaires now
+ * (OD3); their policy is the definition's own carry-over setting. Anything
+ * else falls back to `carry`, matching the definitions column default: the
+ * rollover does nothing at all until a captain opts a questionnaire in.
  */
 const CODE_CARRY_OVER_DEFAULTS: Readonly<Record<string, CarryOverPolicy>> = {
   burner_profile: "carry",
-  dietary_requirements: "carry",
-  driver_profile: "fresh",
 };
 
 function isCycleEntry(value: unknown): value is CycleEntry {

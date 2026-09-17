@@ -14,7 +14,7 @@ import {
 import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
 import { Card } from "@camp404/ui/components/card";
-import { Checkbox } from "@camp404/ui/components/checkbox";
+import { AckRow } from "@camp404/ui/components/checkbox";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
 import { SectionHeader } from "@camp404/ui/components/section-header";
@@ -606,39 +606,31 @@ function AdvanceYearPanel({
           />
 
           {plan.duesPaidCount > 0 && (
-            <div className="flex items-start gap-3">
-              <Checkbox
-                id="reset-dues"
-                className="mt-0.5"
-                checked={resetDues}
-                onCheckedChange={(checked) => setResetDues(checked === true)}
-              />
-              <Label htmlFor="reset-dues" className="font-normal">
-                Clear the dues tick for{" "}
-                {plural(plan.duesPaidCount, "member", "members")}
-                <span className="block text-caption text-muted-foreground">
-                  They&apos;ll show as unpaid for the new year. Who was cleared
-                  is written into the receipt.
-                </span>
-              </Label>
-            </div>
+            <AckRow
+              id="reset-dues"
+              checked={resetDues}
+              onCheckedChange={(checked) => setResetDues(checked === true)}
+            >
+              Clear the dues tick for{" "}
+              {plural(plan.duesPaidCount, "member", "members")}
+              <span className="block text-caption text-muted-foreground">
+                They&apos;ll show as unpaid for the new year. Who was cleared is
+                written into the receipt.
+              </span>
+            </AckRow>
           )}
 
           <div className="flex flex-col gap-3">
-            <div className="flex items-start gap-3">
-              <Checkbox
-                id="announce"
-                className="mt-0.5"
-                checked={announce}
-                onCheckedChange={(checked) => setAnnounce(checked === true)}
-              />
-              <Label htmlFor="announce" className="font-normal">
-                Also post an announcement to everyone
-                <span className="block text-caption text-muted-foreground">
-                  It lands full-screen, and each person taps to acknowledge it.
-                </span>
-              </Label>
-            </div>
+            <AckRow
+              id="announce"
+              checked={announce}
+              onCheckedChange={(checked) => setAnnounce(checked === true)}
+            >
+              Also post an announcement to everyone
+              <span className="block text-caption text-muted-foreground">
+                It lands full-screen, and each person taps to acknowledge it.
+              </span>
+            </AckRow>
 
             {announce && (
               <div className="flex flex-col gap-3 pl-7">

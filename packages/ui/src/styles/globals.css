@@ -108,6 +108,12 @@
     @apply bg-[color:var(--color-background)] text-[color:var(--color-foreground)];
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  /* Tailwind v4 no longer gives buttons a pointer cursor. Anything you can
+     press shows one; a disabled control does not. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
   /* Force the browser's native date / time picker indicator to a
      visible tint against the dark theme. */
   input[type="date"]::-webkit-calendar-picker-indicator,

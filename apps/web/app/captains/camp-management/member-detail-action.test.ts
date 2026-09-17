@@ -51,6 +51,9 @@ vi.mock("@/lib/camp-config", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ auditReadAfterResponse: vi.fn() }));
+vi.mock("@camp404/db/activations", () => ({
+  listMemberQuestionnaireGates: vi.fn(async () => []),
+}));
 vi.mock("@camp404/db/member-notes", () => ({
   MAX_MEMBER_NOTE_LENGTH: 2000,
   addMemberNote: vi.fn(),
@@ -66,6 +69,7 @@ vi.mock("@/lib/safety-data", () => ({
 
 import { addMemberNoteAction, getMemberDetailAction } from "./actions";
 import { addMemberNote, listMemberNotes } from "@camp404/db/member-notes";
+import { listMemberQuestionnaireGates } from "@camp404/db/activations";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { deriveViewerRank, hasClearance } from "@camp404/core";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
@@ -440,6 +444,44 @@ describe("getMemberDetailAction — emergency contacts", () => {
     expect(vi.mocked(presentMemberDetail).mock.calls[0]![2]).toMatchObject({
       emergencyContacts: contacts,
     });
+  });
+});
+
+describe("the member's questionnaires", () => {
+  it("hands the panel where each questionnaire stands", async () => {
+    signInAsCaptain();
+    vi.mocked(getCampMemberDetail).mockResolvedValue(detail() as never);
+    const day = (d: number) => new Date(Date.UTC(2026, 8, d));
+    vi.mocked(listMemberQuestionnaireGates).mockResolvedValue([
+      {
+        actionKey: "burner_profile",
+        title: "Burner profile",
+        status: "completed",
+        blocking: true,
+        dueAt: null,
+        completedAt: day(2),
+        createdAt: day(1),
+      },
+      {
+        actionKey: "safety",
+        title: "Safety",
+        status: "pending",
+        blocking: true,
+        dueAt: day(20),
+        completedAt: null,
+        createdAt: day(3),
+      },
+    ]);
+
+    const res = await getMemberDetailAction("member-1");
+
+    expect(listMemberQuestionnaireGates).toHaveBeenCalledWith("member-1");
+    expect(
+      res.ok && res.questionnaires.map((q) => [q.key, q.status]),
+    ).toEqual([
+      ["burner_profile", "complete"],
+      ["safety", "next-up"],
+    ]);
   });
 });
 

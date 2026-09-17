@@ -2,7 +2,12 @@
 
 import { useId, useState } from "react";
 import { Trash2, TriangleAlert } from "lucide-react";
-import type { BuilderPage } from "@camp404/types";
+import {
+  visibleIfProblem,
+  type BuilderPage,
+  type Question,
+  type VisibleIf,
+} from "@camp404/types";
 import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
 import {
@@ -18,20 +23,24 @@ import { Label } from "@camp404/ui/components/label";
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { Switch } from "@camp404/ui/components/switch";
 import { Textarea } from "@camp404/ui/components/textarea";
+import { VisibilityEditor } from "./visibility-editor";
 
 export type PagePatch = Pick<
   BuilderPage,
-  "title" | "intro" | "type" | "requiredToContinue"
+  "title" | "intro" | "type" | "requiredToContinue" | "visibleIf"
 >;
 
 export function PageSettingsDialog({
   page,
+  fields = [],
   canDelete,
   onSave,
   onDelete,
   onClose,
 }: {
   page: BuilderPage;
+  /** The questions on earlier pages, which a condition may reference. */
+  fields?: readonly Question[];
   canDelete: boolean;
   onSave: (patch: PagePatch) => void;
   onDelete: () => void;
@@ -43,6 +52,15 @@ export function PageSettingsDialog({
   const [requiredToContinue, setRequired] = useState(
     page.requiredToContinue ?? false,
   );
+  const [visibleIf, setVisibleIf] = useState<VisibleIf | undefined>(
+    page.visibleIf,
+  );
+  const conditionOk =
+    !visibleIf ||
+    visibleIfProblem(
+      visibleIf,
+      fields.find((f) => f.id === visibleIf.fieldId),
+    ) === null;
   const requiredId = useId();
   // Switching type never deletes a question, but publish refuses a content
   // page that still holds one, so say so before the captain saves.
@@ -57,7 +75,7 @@ export function PageSettingsDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="flex flex-col gap-4">
+      <DialogContent className="flex max-h-[90dvh] flex-col gap-4 overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Page settings</DialogTitle>
           <DialogDescription>
@@ -117,6 +135,12 @@ export function PageSettingsDialog({
             onCheckedChange={setRequired}
           />
         </div>
+        <VisibilityEditor
+          value={visibleIf}
+          fields={fields}
+          subject="page"
+          onChange={setVisibleIf}
+        />
 
         <DialogFooter className="flex-row items-center justify-between gap-2">
           <Button
@@ -133,12 +157,14 @@ export function PageSettingsDialog({
             </Button>
             <Button
               type="button"
+              disabled={!conditionOk}
               onClick={() =>
                 onSave({
                   title,
                   intro: intro.trim() || undefined,
                   type,
                   requiredToContinue,
+                  visibleIf,
                 })
               }
             >

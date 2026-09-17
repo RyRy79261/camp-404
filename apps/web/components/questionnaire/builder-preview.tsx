@@ -24,6 +24,7 @@ export function BuilderPreview({
       initialResponses={initialResponses}
       action={async () => ({ ok: true as const })}
       persistProgress={false}
+      preview
       variant="onboarding"
       title={questionnaire.title}
       submitLabel="Finish preview"

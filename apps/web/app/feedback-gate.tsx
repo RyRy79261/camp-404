@@ -7,12 +7,19 @@ import {
   useShakeGesture,
 } from "@/components/feedback/use-shake-gesture";
 import { ReportBugDialog } from "@/components/feedback/report-bug-dialog";
+import {
+  REPORT_PROBLEM_EVENT,
+  type ReportProblemRequest,
+} from "@/components/feedback/report-problem";
 import { authClient } from "@/lib/auth-client";
+import { installClientErrorCapture } from "@/lib/client-errors";
 
 /**
  * Mounted once in the root layout (sibling of AcknowledgementGate). Shaking the
  * device opens the bug/feature dialog; shake detection pauses while it's open.
- * Shake is the only trigger (matching RyRy79261/intake-tracker's ShakeToReport).
+ * The "Report a problem" item on /profile and the error page's Report button
+ * open it too, through openReportProblem (owner's call, 2026-09-16: shake is
+ * not the only way, but there is no floating button).
  *
  * Gated on the LIVE client session: the shake listener is only attached while a
  * user is actually signed in (and detaches immediately on sign-out), so the
@@ -23,8 +30,30 @@ export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
   const { data: session, isPending } = authClient.useSession();
   const signedIn = !isPending && !!session;
   const [open, setOpen] = React.useState(false);
+  const [prefill, setPrefill] = React.useState("");
 
-  useShakeGesture({ enabled: signedIn && !open, onShake: () => setOpen(true) });
+  // Recent errors are kept from the first render, so a report made after
+  // something broke can attach what happened before it.
+  React.useEffect(() => installClientErrorCapture(), []);
+
+  useShakeGesture({
+    enabled: signedIn && !open,
+    onShake: () => {
+      setPrefill("");
+      setOpen(true);
+    },
+  });
+
+  React.useEffect(() => {
+    if (!signedIn) return;
+    const onRequest = (event: Event) => {
+      const detail = (event as CustomEvent<ReportProblemRequest>).detail;
+      setPrefill(detail?.description ?? "");
+      setOpen(true);
+    };
+    window.addEventListener(REPORT_PROBLEM_EVENT, onRequest);
+    return () => window.removeEventListener(REPORT_PROBLEM_EVENT, onRequest);
+  }, [signedIn]);
 
   // iOS 13+ gates devicemotion behind a permission prompt that must be
   // initiated by a user gesture — request it once on the first interaction,
@@ -45,6 +74,7 @@ export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
       open={open}
       onOpenChange={setOpen}
       aiAvailable={aiAvailable}
+      defaultDescription={prefill}
     />
   );
 }

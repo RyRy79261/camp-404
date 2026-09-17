@@ -6,6 +6,7 @@ import {
   findInviteCodeByCode,
   revokeInviteCode,
 } from "@camp404/db/invite-codes";
+import { humanDuration } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { memberBlock, type MemberBlock } from "@/lib/member-gate";
 import { rateLimiter } from "@/lib/rate-limit";
@@ -84,7 +85,7 @@ export async function createInviteAction(
   if (!limited.ok) {
     return {
       ok: false,
-      error: `You've made a lot of invites just now. Try again in ${Math.ceil(limited.retryAfterSeconds / 60)} min.`,
+      error: `You've made a lot of invites just now. Try again in ${humanDuration(limited.retryAfterSeconds)}.`,
     };
   }
   const isCaptain = campUser.rank === "captain";

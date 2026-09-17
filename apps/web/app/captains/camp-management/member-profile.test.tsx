@@ -92,6 +92,7 @@ function detail(
     assignableTeams: [],
     reviewOptions,
     notes: [],
+    questionnaires: [],
   };
 }
 

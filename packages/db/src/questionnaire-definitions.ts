@@ -8,11 +8,14 @@ type DefinitionStatus = "draft" | "published" | "unpublished";
 // Code-questionnaire keys a captain-authored questionnaire may never claim —
 // they map to bespoke pages/tables. The builder hub excludes them and the
 // writer refuses to mint them.
+//
+// Only the burner profile is left. Dietary requirements and the driver profile
+// never had a page; the owner's call (OD3) moved them onto the builder, where a
+// captain marks the questions that feed dietary_requirements and
+// driver_profiles (builder roles, @camp404/types builder-roles.ts) and the
+// rollover can re-ask them like any other builder questionnaire.
 export const RESERVED_DEFINITION_KEYS: ReadonlySet<string> = new Set([
   "burner_profile",
-  "dietary_requirements",
-  "driver_profile",
-  "driver_profiles",
 ]);
 
 // Stored questionnaire-definition reads. A questionnaire's catalogue is the

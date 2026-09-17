@@ -37,6 +37,7 @@ function draft(
     createdAt: new Date("2026-09-01T10:00:00Z"),
     recipientCount: 0,
     acknowledgedCount: 0,
+    readCount: 0,
     ...overrides,
   };
 }

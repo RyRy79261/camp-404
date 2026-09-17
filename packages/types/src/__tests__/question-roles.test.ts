@@ -105,7 +105,7 @@ describe("the role schema", () => {
 
   it("drops a role from a kind that has no roles", () => {
     const parsed = Questionnaire.parse(
-      withQuestion({ id: "x", kind: "date", prompt: "When", role: "bio" }),
+      withQuestion({ id: "x", kind: "email", prompt: "Email", role: "bio" }),
     );
     expect(questionIdForRole(parsed, "bio")).toBeNull();
   });

@@ -341,6 +341,7 @@ export const SECRET_ENV_KEYS = [
   "INVITE_CODES",
   "NEON_AUTH_COOKIE_SECRET",
   "PGCRYPTO_KEY",
+  "RESEND_API_KEY",
   "TELEGRAM_BOT_TOKEN",
   "TELEGRAM_WEBHOOK_SECRET",
 ] as const;
@@ -366,9 +367,19 @@ const NAME_PASS = SECRET_ENV_KEYS.map(
 );
 
 /**
- * Two-pass scrubber for text about to be logged or handed back to a caller
+ * The user and password part of any `scheme://user:password@host` URL. A
+ * driver error quotes the connection string it failed on, and it may be a
+ * different URL from the one this process holds (the pooler host, another
+ * branch), so the value pass alone cannot catch it. The host stays: it names
+ * the database and is not a credential.
+ */
+const URL_CREDENTIALS = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/?#@"'`]+@/gi;
+
+/**
+ * Three-pass scrubber for text about to be logged or handed back to a caller
  * (an error message, a stack trace, a cron response body).
  *
+ * Pass 0 — URL: remove the credentials from every `scheme://user:pass@` URL.
  * Pass 1 — value: replace every literal occurrence of a known secret's value.
  * Longest value first, so a secret that contains a shorter one still wins.
  * Pass 2 — name: replace whatever follows `KEY=` / `KEY:`, which catches a
@@ -398,6 +409,10 @@ export function redactSecrets(
     // (a DATABASE_URL is full of them) and must match literally.
     out = out.split(value).join(`[redacted:${name}]`);
   }
+
+  // After the value pass, so a DATABASE_URL this process holds still reads as
+  // its name; this pass catches the URLs it does not hold.
+  out = out.replace(URL_CREDENTIALS, "$1[redacted]@");
 
   for (const [name, pattern] of NAME_PASS) {
     out = out.replace(pattern, `$1[redacted:${name}]`);

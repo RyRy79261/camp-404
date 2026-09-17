@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   ChevronDown,
   ChevronUp,
   Eye,
+  GitBranch,
   GripVertical,
   Heading,
   Image as ImageIcon,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
@@ -36,10 +38,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type {
-  Block,
-  BuilderQuestionnaire,
-  Question,
+import {
+  builderQuestionnaireIssues,
+  type Block,
+  type BuilderQuestionnaire,
+  type DefinitionIssue,
+  type Question,
 } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -59,12 +63,14 @@ import {
   removeBlock,
   removePage,
   replaceBlock,
+  splitPage,
 } from "./builder-ops";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { BlockEditorDialog } from "./block-editor";
 import { PageSettingsDialog } from "./page-settings-dialog";
 import { BlockCatalogDialog } from "./block-catalog-dialog";
 import { BUILDER_FIELD_KINDS } from "./field-kinds";
+import { describeVisibleIf, fieldsBefore } from "./visibility";
 import {
   EditPublishedBanner,
   LifecycleBar,
@@ -125,12 +131,25 @@ function describeBlock(block: Block): {
   }
 }
 
+/** Condition problems are shown by the condition's own badge and line. */
+const CONDITION_CODES: ReadonlySet<DefinitionIssue["code"]> = new Set([
+  "dangling_visible_if",
+  "visible_if_wrong_operator",
+  "visible_if_wrong_value",
+]);
+
 function BlockRow({
   block,
+  condition,
+  problems,
   onEdit,
   onDelete,
 }: {
   block: Block;
+  /** The block's show-when rule as a sentence, when it has one. */
+  condition: { text: string; broken: boolean } | null;
+  /** What publish would refuse about this block, as sentences. */
+  problems: string[];
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -167,6 +186,27 @@ function BlockRow({
               Required
             </Badge>
           )}
+          {problems.length > 0 && (
+            <Badge
+              variant="warning"
+              className="px-1.5 py-0 text-[10px]"
+              title={problems.join(" ")}
+            >
+              Fix before publishing
+              <span className="sr-only">: {problems.join(" ")}</span>
+            </Badge>
+          )}
+          {condition && (
+            <Badge
+              variant={condition.broken ? "destructive" : "outline"}
+              className="gap-1 px-1.5 py-0 text-[10px]"
+              title={condition.text}
+            >
+              <GitBranch aria-hidden className="size-3" />
+              {condition.broken ? "Fix condition" : "Conditional"}
+              <span className="sr-only">: {condition.text}</span>
+            </Badge>
+          )}
         </span>
       </div>
       <Button
@@ -191,6 +231,20 @@ function BlockRow({
   );
 }
 
+function PageCondition({ text, broken }: { text: string; broken: boolean }) {
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-1 text-xs",
+        broken ? "text-destructive" : "text-muted-foreground",
+      )}
+    >
+      <GitBranch aria-hidden className="size-3 shrink-0" />
+      {text}
+    </span>
+  );
+}
+
 export function BuilderCanvas({
   questionnaireKey,
   definition,
@@ -210,7 +264,13 @@ export function BuilderCanvas({
   openActivationBlocking?: boolean | null;
 }) {
   const [working, setWorking] = useState<BuilderQuestionnaire>(definition);
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  // What the footer says about autosave. Nothing until the first edit, so a
+  // fresh page does not claim a save it never made.
+  const [save, setSave] = useState<
+    | { kind: "idle" | "saving" | "saved" }
+    | { kind: "error"; attempted: BuilderQuestionnaire }
+  >({ kind: "idle" });
   const [confirm, confirmDialog] = useConfirm();
   const [editing, setEditing] = useState<{
     pageId: string;
@@ -220,6 +280,21 @@ export function BuilderCanvas({
   // dialog stays mounted through close and its exit animation can run.
   const [editorOpen, setEditorOpen] = useState(false);
   const [settingsPageId, setSettingsPageId] = useState<string | null>(null);
+  // What publish would refuse, shown on the page or block that has it, so a
+  // captain sees a problem where it is instead of only in the publish dialog.
+  const issues = useMemo(() => builderQuestionnaireIssues(working), [working]);
+  const problemsAt = (pageId: string, blockId?: string) =>
+    issues
+      .filter(
+        (i) =>
+          i.pageId === pageId &&
+          i.blockId === blockId &&
+          !CONDITION_CODES.has(i.code),
+      )
+      .map((i) => i.message);
+  // The block being dragged, shown in a floating copy under the pointer (the
+  // home Customize pattern), so the row stays readable while it moves.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [addingToPageId, setAddingToPageId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -264,16 +339,27 @@ export function BuilderCanvas({
   function persist(next: BuilderQuestionnaire) {
     const previous = working; // last-good snapshot for rollback
     setWorking(next); // optimistic
+    setSave({ kind: "saving" });
     startTransition(async () => {
-      const result = await updateDefinitionAction(questionnaireKey, next);
-      if (!result.ok) {
-        toast.error(result.error);
-        setWorking(previous); // a rejected save must not leave the bad state on screen
+      let error: string | null = null;
+      try {
+        const result = await updateDefinitionAction(questionnaireKey, next);
+        if (!result.ok) error = result.error;
+      } catch {
+        error = "We couldn't reach the server. Your last change was not saved.";
       }
+      if (error === null) {
+        setSave({ kind: "saved" });
+        return;
+      }
+      toast.error(error);
+      setWorking(previous); // a rejected save must not leave the bad state on screen
+      setSave({ kind: "error", attempted: next });
     });
   }
 
   function onBlockDragEnd(pageId: string, event: DragEndEvent) {
+    setDraggingId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const page = working.pages.find((p) => p.id === pageId);
@@ -325,9 +411,24 @@ export function BuilderCanvas({
         {working.pages.map((page, pageIndex) => (
           <Card key={page.id} className="flex flex-col gap-3 p-4">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                Page {pageIndex + 1} · {page.type === "content" ? "Content" : "Questions"}
-              </span>
+              <div className="flex min-w-0 flex-col">
+                <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Page {pageIndex + 1} · {page.type === "content" ? "Content" : "Questions"}
+                </span>
+                {problemsAt(page.id).map((message) => (
+                  <span key={message} className="text-xs text-warning">
+                    {message}
+                  </span>
+                ))}
+                {page.visibleIf && (
+                  <PageCondition
+                    {...describeVisibleIf(
+                      page.visibleIf,
+                      fieldsBefore(working, page.id, null),
+                    )}
+                  />
+                )}
+              </div>
               <div className="flex items-center gap-0.5">
                 <Button
                   type="button"
@@ -375,6 +476,8 @@ export function BuilderCanvas({
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
+                onDragStart={(e) => setDraggingId(String(e.active.id))}
+                onDragCancel={() => setDraggingId(null)}
                 onDragEnd={(e) => onBlockDragEnd(page.id, e)}
               >
                 <SortableContext
@@ -386,6 +489,15 @@ export function BuilderCanvas({
                       <BlockRow
                         key={blockId(block)}
                         block={block}
+                        problems={problemsAt(page.id, blockId(block))}
+                        condition={
+                          block.visibleIf
+                            ? describeVisibleIf(
+                                block.visibleIf,
+                                fieldsBefore(working, page.id, blockId(block)),
+                              )
+                            : null
+                        }
                         onEdit={() => {
                           setEditing({
                             pageId: page.id,
@@ -400,6 +512,27 @@ export function BuilderCanvas({
                     ))}
                   </ul>
                 </SortableContext>
+                <DragOverlay>
+                  {(() => {
+                    const dragged = page.blocks.find(
+                      (b) => blockId(b) === draggingId,
+                    );
+                    if (!dragged) return null;
+                    const { label, icon: DragIcon } = describeBlock(dragged);
+                    return (
+                      <div className="flex items-center gap-2.5 rounded-lg border border-accent bg-card px-3 py-2.5 shadow-lg">
+                        <GripVertical
+                          aria-hidden
+                          className="size-4 text-accent"
+                        />
+                        <DragIcon aria-hidden className="size-4 text-accent" />
+                        <span className="truncate text-sm font-medium">
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </DragOverlay>
               </DndContext>
             ) : (
               <p className="rounded-lg border border-dashed border-border py-4 text-center text-xs text-muted-foreground">
@@ -438,13 +571,33 @@ export function BuilderCanvas({
 
       <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-lg items-center gap-3">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {pending ? (
+          <span
+            role="status"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          >
+            {save.kind === "saving" && (
               <>
-                <Loader2 className="size-3.5 animate-spin" /> Saving…
+                <Loader2
+                  aria-hidden
+                  className="size-3.5 motion-safe:animate-spin"
+                />{" "}
+                Saving…
               </>
-            ) : (
-              "Saved"
+            )}
+            {save.kind === "saved" && "All changes saved"}
+            {save.kind === "error" && (
+              <>
+                <span className="text-destructive">Couldn&apos;t save.</span>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => persist(save.attempted)}
+                >
+                  Retry
+                </Button>
+              </>
             )}
           </span>
           <div className="ml-auto flex items-center gap-2">
@@ -476,6 +629,8 @@ export function BuilderCanvas({
         <BlockEditorDialog
           key={editing.blockId}
           block={editingBlock}
+          questionnaireKey={questionnaireKey}
+          fields={fieldsBefore(working, editing.pageId, editing.blockId)}
           open={editorOpen}
           onSave={(next) => {
             persist(replaceBlock(working, editing.pageId, editing.blockId, next));
@@ -498,6 +653,7 @@ export function BuilderCanvas({
         <PageSettingsDialog
           key={settingsPageId}
           page={settingsPage}
+          fields={fieldsBefore(working, settingsPageId, null)}
           canDelete={working.pages.length > 1}
           onSave={(patch) => {
             persist(patchPage(working, settingsPageId, patch));
@@ -515,6 +671,17 @@ export function BuilderCanvas({
       {addingToPageId && addingPage && (
         <BlockCatalogDialog
           pageType={addingPage.type}
+          onPageBreak={() => {
+            persist(
+              splitPage(
+                working,
+                addingToPageId,
+                addingPage.blocks.length,
+                newId(),
+              ),
+            );
+            setAddingToPageId(null);
+          }}
           onSelect={(block) => {
             persist(addBlock(working, addingToPageId, block));
             setAddingToPageId(null);

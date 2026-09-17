@@ -2,9 +2,10 @@
 
 import { useLayoutEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CAMP_TIME_ZONE } from "@camp404/core";
+import { CAMP_TIME_ZONE, readRate } from "@camp404/core";
 import {
   CheckCircle2,
+  Eye,
   Inbox,
   Loader2,
   type LucideIcon,
@@ -675,11 +676,23 @@ function PublishedCard({
             {a.audience.scope === "team" ? ` of ${audienceName}` : ""}
             {a.senderId === currentUserId ? " · by you" : ""}
           </span>
-          {a.presentation === "acknowledge" && (
+          {a.presentation === "acknowledge" ? (
             <span className="inline-flex items-center gap-1 font-medium text-accent">
               <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
               {a.acknowledgedCount}/{a.recipientCount} acknowledged
             </span>
+          ) : (
+            // The board's count, for the kinds nobody acknowledges: how many
+            // have seen it in their inbox.
+            (() => {
+              const rate = readRate(a.readCount, a.recipientCount);
+              return (
+                <span className="inline-flex items-center gap-1 font-medium text-accent">
+                  <Eye className="h-3.5 w-3.5" aria-hidden />
+                  {rate.read}/{rate.of} seen
+                </span>
+              );
+            })()
           )}
         </div>
         {a.publishedAt && (

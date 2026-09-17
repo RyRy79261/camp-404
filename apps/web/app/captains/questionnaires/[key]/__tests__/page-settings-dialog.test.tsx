@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { BuilderPage } from "@camp404/types";
+import { Question, type BuilderPage } from "@camp404/types";
 import { PageSettingsDialog } from "../page-settings-dialog";
 
 // Switching a page to "content" keeps its questions, but publish refuses a
@@ -61,5 +61,55 @@ describe("PageSettingsDialog — page type", () => {
 
     fireEvent.click(screen.getByRole("radio", { name: "Question page" }));
     expect(screen.queryByText(/still has/)).toBeNull();
+  });
+});
+
+describe("PageSettingsDialog — show only when", () => {
+  const drives = Question.parse({
+    id: "drives",
+    kind: "boolean",
+    prompt: "Driving?",
+  });
+
+  it("saves the page's condition with the rest of its settings", () => {
+    const onSave = vi.fn();
+    render(
+      <PageSettingsDialog
+        page={pageWith(1)}
+        fields={[drives]}
+        canDelete
+        onSave={onSave}
+        onDelete={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("switch", { name: /Show only when/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visibleIf: { fieldId: "drives", op: "eq", value: true },
+      }),
+    );
+  });
+
+  it("will not save a condition whose question is no longer before the page", () => {
+    render(
+      <PageSettingsDialog
+        page={{
+          ...pageWith(1),
+          visibleIf: { fieldId: "gone", op: "is_answered" },
+        }}
+        fields={[drives]}
+        canDelete
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(
+      (screen.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
   });
 });

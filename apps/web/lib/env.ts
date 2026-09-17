@@ -11,6 +11,12 @@
  * deliberately runs without these secrets.
  */
 
+/**
+ * The shortest PGCRYPTO_KEY the app boots with. Below this the key is too weak
+ * to encrypt member ID numbers.
+ */
+export const PGCRYPTO_KEY_MIN_LENGTH = 16;
+
 interface RequiredVar {
   name: string;
   minLength?: number;
@@ -20,7 +26,7 @@ interface RequiredVar {
 const REQUIRED: RequiredVar[] = [
   {
     name: "PGCRYPTO_KEY",
-    minLength: 16,
+    minLength: PGCRYPTO_KEY_MIN_LENGTH,
     hint: "16+ required, 32+ recommended (e.g. `openssl rand -base64 32`). Encrypts member ID-document PII at rest.",
   },
 ];
