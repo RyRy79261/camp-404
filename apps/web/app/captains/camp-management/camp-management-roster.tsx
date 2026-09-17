@@ -306,7 +306,12 @@ export function CampManagementRoster({
           title={emptyTitle}
         />
       ) : (
-        <>
+        // Keyed by the chip and team, so a new filter fades the list in
+        // (motion-safe). Typing a search does not: it would flicker per key.
+        <div
+          key={`${chip}|${team ?? ""}`}
+          className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150"
+        >
           <RosterTable
             className="hidden sm:block"
             rows={filtered}
@@ -322,9 +327,12 @@ export function CampManagementRoster({
             onSelect={setSelectedId}
             selection={selection}
           />
-        </>
+        </div>
       )}
 
+      {/* Keyed by member on purpose: a fresh panel per member means no state
+          (notes draft, reject reason, loaded detail) from the last one can show
+          under the new name. The panel animates in each time instead. */}
       {selectedRow && (
         <MemberProfile
           key={selectedRow.id}

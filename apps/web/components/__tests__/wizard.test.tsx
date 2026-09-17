@@ -318,3 +318,45 @@ describe("QuestionnaireWizard", () => {
     expect(screen.getByText("Page One")).toBeDefined();
   });
 });
+
+describe("QuestionnaireWizard — moving between pages", () => {
+  it("focuses the next page's heading and drops a save failure on Back", async () => {
+    let fail = false;
+    const action = vi.fn(async () => {
+      if (fail) throw new Error("boom");
+      return { ok: true } as const;
+    });
+    render(
+      <QuestionnaireWizard
+        questionnaire={Q}
+        initialResponses={{ name: "Ada" }}
+        action={action}
+      />,
+    );
+    expect(document.activeElement).toBe(document.body);
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("heading", { name: "Page Two" }),
+      ),
+    );
+
+    fail = true;
+    fireEvent.click(screen.getByRole("button", { name: "Finish" }));
+    await waitFor(() =>
+      expect(screen.getByText(/couldn't save your answers/i)).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Back" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.queryByText(/couldn't save your answers/i)).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "Page One" }),
+    );
+  });
+});

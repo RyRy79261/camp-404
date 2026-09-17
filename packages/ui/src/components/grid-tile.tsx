@@ -39,6 +39,11 @@ export interface GridTileProps {
   dragHandle?: React.ReactNode
   /** Press handler for button-mode tiles (no `href`). */
   onPress?: () => void
+  /**
+   * The link component to render, e.g. Next's `Link`, so navigation stays in
+   * the app instead of reloading the page. A plain `<a>` when left out.
+   */
+  linkAs?: React.ElementType
   className?: string
 }
 
@@ -53,13 +58,14 @@ function GridTile({
   disabledReason,
   dragHandle,
   onPress,
+  linkAs: Link = "a",
   className,
 }: GridTileProps) {
   const hasBadge = Boolean(badge)
   const base =
     "flex flex-col gap-3.5 rounded-xl border border-border bg-card p-4 text-left"
   const interactive =
-    "transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
+    "transition-[color,background-color,border-color,transform] duration-150 ease-out hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
 
   const body = (
     <>
@@ -108,9 +114,9 @@ function GridTile({
 
   if (href) {
     return (
-      <a href={href} className={cn(base, interactive, className)}>
+      <Link href={href} className={cn(base, interactive, className)}>
         {body}
-      </a>
+      </Link>
     )
   }
 

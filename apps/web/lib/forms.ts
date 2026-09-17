@@ -26,7 +26,7 @@ import {
   getIdDocuments,
   saveBurnerProfileReplay,
 } from "./users";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
 // Registry of questionnaires a user can "replay" — revisit and update after
@@ -175,7 +175,7 @@ export async function listAnsweredQuestionnaires(
   userId: string,
 ): Promise<CompletedQuestionnaireAnswers[]> {
   // The E2E store models no builder responses.
-  if (isE2ETestMode()) return [];
+  if (usesTestStore()) return [];
   return listCompletedAnswersDb(userId);
 }
 
@@ -185,7 +185,7 @@ export async function getAnsweredQuestionnaire(
   definitionKey: string,
   cycle: number,
 ): Promise<CompletedQuestionnaireAnswers | null> {
-  if (isE2ETestMode()) return null;
+  if (usesTestStore()) return null;
   const [answers] = await listCompletedAnswersDb(userId, {
     definitionKey,
     cycle,
@@ -210,7 +210,7 @@ export async function listFormEdits(
   questionnaireKey: string,
   limit = 20,
 ): Promise<FormEdit[]> {
-  if (isE2ETestMode()) {
+  if (usesTestStore()) {
     return testStore
       .listQuestionnaireEdits(userId, questionnaireKey, limit)
       .map((e) => ({

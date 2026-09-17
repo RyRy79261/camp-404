@@ -6,6 +6,8 @@ import { safeInternalPath } from "@/lib/safe-redirect";
 // exchange; cannot be statically prerendered.
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Signing in — Camp 404" };
+
 /**
  * Bare /auth landing — the path Neon Auth's social callback returns to
  * after Google OAuth (with `?neon_auth_session_verifier=…`). The proxy

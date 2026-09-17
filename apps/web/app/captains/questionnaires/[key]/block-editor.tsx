@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { Trash2 } from "lucide-react";
 import {
   BUILDER_ROLES,
+  SHORT_LABEL_MAX_LENGTH,
   builderRolesFor,
   isAllowedBuilderImageUrl,
   isBuilderRole,
@@ -260,6 +261,21 @@ function QuestionEditor({
         label="Question"
         value={question.prompt}
         onChange={(e) => patch({ prompt: e.currentTarget.value })}
+      />
+      {/* Not drawn on the builder board: built from InputField, like the
+          helper text below. */}
+      <InputField
+        label="Short label (optional)"
+        helper="A few words that name this question in the My forms change log, e.g. Driving."
+        maxLength={SHORT_LABEL_MAX_LENGTH}
+        value={question.shortLabel ?? ""}
+        onChange={(e) =>
+          patch({
+            shortLabel: e.currentTarget.value.trim()
+              ? e.currentTarget.value
+              : undefined,
+          })
+        }
       />
       <InputField
         label="Helper text"

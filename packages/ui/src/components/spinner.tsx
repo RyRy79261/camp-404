@@ -6,7 +6,7 @@ import { cn } from "../lib/utils"
 
 // Indeterminate loading spinner with an accessible status label. Presentational
 // leaf — no state.
-const spinnerVariants = cva("animate-spin text-muted-foreground", {
+const spinnerVariants = cva("motion-safe:animate-spin text-muted-foreground", {
   variants: {
     size: { sm: "h-4 w-4", default: "h-5 w-5", lg: "h-8 w-8" },
   },

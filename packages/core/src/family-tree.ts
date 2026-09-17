@@ -1,4 +1,5 @@
-import type { ReferralUser, TreeNode } from "@camp404/types";
+import type { ReferralUser, TreeNode, ViewerRank } from "@camp404/types";
+import { canReadMemberField } from "./privacy";
 
 // Pure family-tree (referral graph) builders. CYCLE-GUARDED throughout (OD9):
 // a cyclic `inviterId` chain (A→B→A — possible via manual DB edits, migrations,
@@ -67,11 +68,10 @@ export function buildTree(roster: readonly ReferralUser[]): TreeNode[] {
 }
 
 /**
- * Ids matching `query` (over display name + invite code), with every ancestor
- * of a match promoted so the path to it stays visible. Returns null for an
- * empty query. Ancestor promotion is cycle-guarded.
+ * Ids whose display name or invite code contains `query`, and nothing else:
+ * the people a search found, for highlighting. Returns null for an empty query.
  */
-export function computeMatchIds(
+export function computeLiteralMatchIds(
   roster: readonly ReferralUser[],
   query: string,
 ): Set<string> | null {
@@ -83,6 +83,23 @@ export function computeMatchIds(
     const hay = `${u.displayName ?? ""} ${u.inviteCode ?? ""}`.toLowerCase();
     if (hay.includes(q)) matches.add(u.id);
   }
+  return matches;
+}
+
+/**
+ * Ids matching `query` (over display name + invite code), with every ancestor
+ * of a match promoted so the path to it stays visible. Returns null for an
+ * empty query. Ancestor promotion is cycle-guarded. For which rows to
+ * highlight, use computeLiteralMatchIds: an ancestor is on the path, not a
+ * match.
+ */
+export function computeMatchIds(
+  roster: readonly ReferralUser[],
+  query: string,
+): Set<string> | null {
+  const literal = computeLiteralMatchIds(roster, query);
+  if (!literal) return null;
+  const matches = new Set(literal);
 
   const parentById = new Map<string, string | null>(
     roster.map((u) => [u.id, u.inviterId]),
@@ -108,4 +125,26 @@ export function subtreeHasMatch(node: TreeNode, matches: Set<string>): boolean {
 /** "1 descendant" / "N descendants" — pluralised count label. */
 export function descendantCountLabel(count: number): string {
   return `${count} ${count === 1 ? "descendant" : "descendants"}`;
+}
+
+/**
+ * The referral roster as one viewer may read it, projected on the server
+ * before it reaches the page. An invite code can still let someone in (a
+ * captain's code may allow 100 uses, pre-approved), and `users.inviteCode` is
+ * captain-only in MEMBER_FIELD_READERS. So anyone below captain gets their own
+ * code and no one else's. Who invited whom (`inviterId`) stays: that link is
+ * the tree.
+ */
+export function referralRosterForViewer(
+  roster: readonly ReferralUser[],
+  viewer: { id: string; rank: ViewerRank },
+): ReferralUser[] {
+  return roster.map((row) =>
+    canReadMemberField(
+      { rank: viewer.rank, isSelf: row.id === viewer.id },
+      "users.inviteCode",
+    )
+      ? row
+      : { ...row, inviteCode: null },
+  );
 }

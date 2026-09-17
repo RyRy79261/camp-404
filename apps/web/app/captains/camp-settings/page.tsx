@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { captainPageGate } from "@/lib/captain-gate";
@@ -24,7 +25,7 @@ export default async function CampSettingsPage() {
 
   return (
     <main className="mx-auto max-w-lg px-4 py-6">
-      <GhostBack href="/captains/tools" className="-ml-2 mb-4">
+      <GhostBack linkAs={Link} href="/captains/tools" className="-ml-2 mb-4">
         Camp tools
       </GhostBack>
       <header className="mb-6">

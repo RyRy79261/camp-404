@@ -34,7 +34,12 @@ export function DeleteAccountForm() {
           <span>{state.error}</span>
         </Alert>
       ) : null}
-      <Button type="submit" variant="destructive" disabled={pending}>
+      <Button
+        type="submit"
+        variant="destructive"
+        disabled={pending}
+        className="w-full"
+      >
         {pending ? "Deleting…" : "Delete my account"}
       </Button>
     </form>

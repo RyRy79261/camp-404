@@ -33,9 +33,11 @@ function ProgressBar({
       )}
       {...props}
     >
+      {/* scaleX, not width: a transform animates on the compositor, so the
+          fill glides without re-laying out the bar on every frame. */}
       <div
-        className="h-full rounded-full bg-primary transition-[width] duration-300"
-        style={{ width: `${pct}%` }}
+        className="h-full w-full origin-left rounded-full bg-primary motion-safe:transition-transform motion-safe:duration-300"
+        style={{ transform: `scaleX(${pct / 100})` }}
       />
     </div>
   )

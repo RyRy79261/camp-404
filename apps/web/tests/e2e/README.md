@@ -27,7 +27,7 @@ the following fixture env (see `playwright.config.ts`):
 
 | Var | Value | Purpose |
 |---|---|---|
-| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,inspect,complete-onboarding,set-approval}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
+| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,seed-team,inspect,complete-onboarding,set-approval,set-rank}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
 | `INVITE_CODES` | `test-invite-e2e-only-code` | One known bootstrap (env-list) code for redemption specs. The specs type it in capitals to prove redemption ignores case. It is at least 20 characters, so it lets a member in without approval. |
 | `GOD_EMAILS` | `god@example.com` | One whitelisted god account that bypasses the invite gate. |
 
@@ -37,9 +37,56 @@ Run with:
 # First time only:
 pnpm --filter @camp404/web exec playwright install chromium
 
-# Run the suite:
+# Run the suite (desktop, as every PR runs it):
 pnpm --filter @camp404/web test:e2e
+
+# The same suite at 360 px wide, as the nightly workflow runs it:
+pnpm --filter @camp404/web test:e2e:mobile
 ```
+
+### The real-database run
+
+The in-memory store cannot run the questionnaire engine or the year rollover,
+and the owner chose a real Postgres per run over growing the store (E2E-DB,
+2026-09-16). `playwright.db.config.ts` keeps the test login and the
+outside-service stubs, but sets `E2E_DATABASE=real`, so every query goes to
+the local stack (`docker-compose.local.yml`):
+
+```bash
+pnpm db:local:up && pnpm db:local:migrate      # from the repo root
+pnpm --filter @camp404/web test:e2e:db
+```
+
+- Specs live in `tests/e2e-db/`, with shared steps in `_flows.ts`:
+  `questionnaire-lifecycle.spec.ts` (build, publish, a blocking send, a
+  late-joining member answers, metrics, responses, CSV) and
+  `year-rollover.spec.ts` (name the year, answer, start the next year, be
+  asked again, each year keeps its answer).
+- `personas.ts` makes each persona the way the app would (invite, onboarding,
+  approval, lead, rank) in its own browser context: `anonymous`, `pending`,
+  `camp_member`, `team_lead`, `captain`. `forbidden-matrix.spec.ts` checks
+  every captain page against every persona, with a meta-test that keeps the
+  table complete. `captain-review.spec.ts` covers the member panel, the ID
+  read, approve and reject.
+- `usesTestStore()` in `lib/test-mode.ts` is the data switch;
+  `isE2ETestMode()` still turns on the test login and the stubs for GitHub,
+  Blob and the rate limiter. The `/api/test/*` seams write the store or the
+  local database, whichever the run uses; `/api/test/inspect` is store-only.
+- `/api/test/reset` empties the local database. Every helper in
+  `@camp404/db/e2e` refuses unless the process points at the local stack.
+- CI runs it as the `e2e-db` job, with Postgres and the Neon proxy as service
+  containers.
+
+### Helpers
+
+- `_helpers.ts`: the test-mode seams (`login`, `resetTestState`,
+  `completeOnboarding`, `redeemInviteAtGate`, `setRank`).
+- `lib/dom.ts`: `appAlerts(page, text?)` finds the app's own alerts and
+  skips Next's route announcer (a bare `getByRole("alert")` collides with
+  it); `desktopOnly(testInfo, reason)` skips a test on the `mobile-360`
+  project when it drives a desktop-only layout.
+- CI sets `forbidOnly`, so a stray `test.only` fails the run instead of
+  silently skipping the rest.
 
 ### How auth bypass works
 
@@ -100,6 +147,18 @@ complete and jump straight to the gates that follow it (home vs.
   not-approved screen, an unauthenticated visit to a protected page
   redirects to sign-in, the sign-up page is guarded by the invite cookie,
   and voice transcribe accepts an authed request while rejecting bad input.
+- `anon-routes.spec.ts` — the public pages render for a signed-out
+  visitor, and every member and captain page sends them to sign in, each
+  check proving the page it reached rendered its heading.
+- `gate-ladder.spec.ts` — the member ladder holds on every member page:
+  invite, then onboarding, then approval, then the page itself.
+  `/notifications` stays open past the invite rung (owner's call: an
+  applicant reads their inbox).
+- `team-lead.spec.ts` — a member who leads a team this year (seeded with
+  `seedTeam`, POST `/api/test/seed-team`) gets the Questionnaires tool and
+  the builder hub, with a lock on the captain tools; a member on a team who
+  does not lead it stays locked out. The hub opens empty in test mode: the
+  store models no builder questionnaires.
 - `invite-tracking.spec.ts` — env (bootstrap) code redemption survives
   signup, DB-backed codes record their issuer and use count, an
   approval-required code creates a `pending` account and a pre-approved

@@ -16,10 +16,16 @@ const hook: {
   state: RecorderState;
   error: string | null;
   transcript: string | null;
-} = { state: "idle", error: null, transcript: null };
+  stoppedAtLimit: boolean;
+} = { state: "idle", error: null, transcript: null, stoppedAtLimit: false };
 
 vi.mock("../use-voice-recorder", () => ({
-  useVoiceRecorder: () => ({ ...hook, ...fns, analyser: null }),
+  useVoiceRecorder: () => ({
+    ...hook,
+    ...fns,
+    analyser: null,
+    maxDurationMs: 120_000,
+  }),
 }));
 
 import { RecorderPanel } from "../recorder-panel";
@@ -28,7 +34,11 @@ const onTranscript = vi.fn();
 const onDismiss = vi.fn();
 
 function renderPanel(over: Partial<typeof hook> = {}) {
-  Object.assign(hook, { state: "idle", error: null, transcript: null }, over);
+  Object.assign(
+    hook,
+    { state: "idle", error: null, transcript: null, stoppedAtLimit: false },
+    over,
+  );
   return render(
     <RecorderPanel onTranscript={onTranscript} onDismiss={onDismiss} />,
   );
@@ -137,5 +147,47 @@ describe("RecorderPanel — board S21", () => {
   it("uses only short-form colour tokens (no [color:var(--color-*)])", () => {
     const { container } = renderPanel({ state: "error", error: "x" });
     expect(container.innerHTML).not.toContain("[color:var(--color-");
+  });
+
+  it("puts focus on the control each state needs next", () => {
+    renderPanel();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Start recording" }),
+    );
+
+    cleanup();
+    renderPanel({ state: "recording" });
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /stop & transcribe/i }),
+    );
+
+    cleanup();
+    renderPanel({ state: "transcript-review", transcript: "bring a tent" });
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("Edit transcript"),
+    );
+
+    cleanup();
+    renderPanel({ state: "error", error: "x" });
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /try again/i }),
+    );
+  });
+
+  it("says when a clip was stopped at the length limit", () => {
+    renderPanel({
+      state: "transcript-review",
+      transcript: "a long story",
+      stoppedAtLimit: true,
+    });
+    expect(
+      screen.getByText(
+        "Recording stopped at 2 minutes, the longest one clip can be.",
+      ),
+    ).toBeDefined();
+
+    cleanup();
+    renderPanel({ state: "transcript-review", transcript: "short" });
+    expect(screen.queryByText(/Recording stopped at/)).toBeNull();
   });
 });

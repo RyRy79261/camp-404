@@ -6,7 +6,7 @@ import {
 } from "@camp404/db/invite-codes";
 import { normalizeInviteCode } from "@camp404/core";
 import { envList, MIN_PREAPPROVED_ENV_CODE_LENGTH } from "./integration-config";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
 export interface ClaimedInvite {
@@ -71,7 +71,7 @@ function isEnvCode(code: string): boolean {
 }
 
 async function consumeDbCode(code: string) {
-  if (isE2ETestMode()) {
+  if (usesTestStore()) {
     return testStore.consumeInviteCode(code);
   }
   return dbConsumeInviteCode(code);

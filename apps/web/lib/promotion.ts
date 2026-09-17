@@ -13,7 +13,7 @@ import type {
   IncomingPromotionRequest,
   PromotionRequestStatus,
 } from "@camp404/types";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
 // Captain-promotion data facade. Routes every read and write through the
@@ -86,7 +86,7 @@ const testBackend: PromotionBackend = {
 };
 
 function backend(): PromotionBackend {
-  return isE2ETestMode() ? testBackend : realBackend;
+  return usesTestStore() ? testBackend : realBackend;
 }
 
 export function sendCaptainPromotion(input: {

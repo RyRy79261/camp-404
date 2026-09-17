@@ -18,7 +18,7 @@ import {
   type TeamConfigEntry,
 } from "@camp404/db/camp-config";
 import type { AuditEvent } from "@camp404/db/audit";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
 // Camp-config data facade. Routes reads/writes through the Neon-backed
@@ -43,7 +43,7 @@ export {
 };
 
 export function getTeamsConfig(): Promise<TeamsConfig> {
-  return isE2ETestMode()
+  return usesTestStore()
     ? Promise.resolve(testStore.getTeamsConfig())
     : dbGetTeamsConfig();
 }
@@ -58,7 +58,7 @@ export function mutateTeamsConfig(
   transform: (current: TeamsConfig) => TeamsConfig,
   audit?: AuditEvent,
 ): Promise<TeamsConfig> {
-  if (isE2ETestMode()) {
+  if (usesTestStore()) {
     const next = transform(testStore.getTeamsConfig());
     testStore.setTeamsConfig(next);
     return Promise.resolve(next);
@@ -79,7 +79,7 @@ export function mutateTeamsConfig(
  * test-store change, and it stays honest if the store ever grows a cycles key.
  */
 export function getCurrentCycle(): Promise<CycleEntry | null> {
-  return isE2ETestMode()
+  return usesTestStore()
     ? Promise.resolve(currentCycle(resolveCycles(testStore.getTeamsConfig())))
     : dbGetCurrentCycle();
 }
@@ -89,7 +89,7 @@ export function getCurrentCycle(): Promise<CycleEntry | null> {
  * until a captain names the founding year. Same E2E split as getCurrentCycle.
  */
 export function getCycles(): Promise<CycleEntry[]> {
-  return isE2ETestMode()
+  return usesTestStore()
     ? Promise.resolve(resolveCycles(testStore.getTeamsConfig()))
     : dbGetCycles();
 }

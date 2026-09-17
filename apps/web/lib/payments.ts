@@ -1,7 +1,7 @@
 import "server-only";
 
 import { ensureMemberRefCode } from "@camp404/db/payments";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 
 /**
  * The member's own payment reference, for their profile. Given out the first
@@ -9,6 +9,6 @@ import { isE2ETestMode } from "./test-mode";
  * none.
  */
 export async function getMemberRefCode(userId: string): Promise<string | null> {
-  if (isE2ETestMode()) return null;
+  if (usesTestStore()) return null;
   return ensureMemberRefCode(userId);
 }

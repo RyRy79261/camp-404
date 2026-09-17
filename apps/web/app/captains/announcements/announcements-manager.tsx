@@ -1,6 +1,12 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, useTransition } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import { CAMP_TIME_ZONE, readRate } from "@camp404/core";
 import {
@@ -41,7 +47,9 @@ import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
 import { RecorderPanel } from "@/components/voice/recorder-panel";
+import { useDictationToggle } from "@/components/voice/use-dictation-toggle";
 import { useVoiceSupported } from "@/components/voice/use-voice-recorder";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 import {
   deleteDraftAction,
   previewPublishAction,
@@ -56,7 +64,12 @@ import { appendTranscript } from "./transcript";
 // roll-up. Every mutation routes through the captain-gated server actions; the
 // page re-renders from the server on success. Presentation is composed onto the
 // @camp404/ui leaves (Card / InputField / Alert / Badge / SectionHeader /
-// EmptyState); all the island logic is unchanged.
+// EmptyState).
+//
+// Feedback follows one rule on every captain screen: a problem with what is
+// typed in a form (or a dialog) shows inline beside it; a one-tap action on a
+// list row (delete, publish) reports its failure as a toast, and only the
+// button that was tapped spins.
 
 const PRESENTATION_META: Record<
   AnnouncementPresentation,
@@ -151,9 +164,17 @@ export function AnnouncementsManager({
   };
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
-  const [dictating, setDictating] = useState(false);
+  const dictation = useDictationToggle();
   const voiceSupported = useVoiceSupported();
   const [pending, startTransition] = useTransition();
+  // A one-tap action on a draft card: which card, and which button spins.
+  const [rowPending, startRowAction] = useTransition();
+  const [busy, setBusy] = useState<{ id: string; action: DraftAction } | null>(
+    null,
+  );
+  const composerRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const reducedMotion = useReducedMotion();
   // The draft waiting on the publish confirmation, with the audience it would
   // reach. Publishing cannot be taken back, so the captain sees who and how
   // before it goes out.
@@ -176,7 +197,7 @@ export function AnnouncementsManager({
   const reset = () => {
     setForm(emptyForm);
     setError(null);
-    setDictating(false);
+    dictation.setDictating(false);
   };
 
   // Append a dictated transcript to the message body (mirrors the questionnaire
@@ -219,12 +240,24 @@ export function AnnouncementsManager({
     });
   };
 
+  // Edit fills the composer at the top of the page. On a phone the card that
+  // was tapped can be far below it, so take the captain there.
+  const editingId = form.editingId;
+  useEffect(() => {
+    if (!editingId) return;
+    composerRef.current?.scrollIntoView?.({
+      behavior: reducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+    titleRef.current?.focus({ preventScroll: true });
+  }, [editingId, reducedMotion]);
+
   const handleDelete = (id: string) => {
-    setError(null);
-    startTransition(async () => {
+    setBusy({ id, action: "delete" });
+    startRowAction(async () => {
       const result = await deleteDraftAction(id);
       if (!result.ok) {
-        setError(result.error);
+        toast.error(result.error);
         return;
       }
       if (form.editingId === id) reset();
@@ -234,11 +267,11 @@ export function AnnouncementsManager({
   };
 
   const handlePublish = (announcement: AnnouncementSummary) => {
-    setError(null);
-    startTransition(async () => {
+    setBusy({ id: announcement.id, action: "publish" });
+    startRowAction(async () => {
       const preview = await previewPublishAction(announcement.audience);
       if (!preview.ok) {
-        setError(preview.error);
+        toast.error(preview.error);
         return;
       }
       setConfirming({
@@ -270,7 +303,7 @@ export function AnnouncementsManager({
   return (
     <div className="space-y-6">
       {/* Composer */}
-      <Card className="space-y-4 p-4">
+      <Card ref={composerRef} className="scroll-mt-4 space-y-4 p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold">
             {form.editingId ? "Edit draft" : "New announcement"}
@@ -292,6 +325,7 @@ export function AnnouncementsManager({
         <InputField
           label="Title"
           id="announcement-title"
+          ref={titleRef}
           value={form.title}
           maxLength={120}
           placeholder="Burn-night briefing"
@@ -312,14 +346,15 @@ export function AnnouncementsManager({
           />
           {/* Voice dictation — same pattern as the questionnaire long-text
               fields: tap to swap in the recorder, each transcript appends. */}
-          {!voiceSupported ? null : dictating ? (
+          {!voiceSupported ? null : dictation.dictating ? (
             <RecorderPanel
               onTranscript={appendToBody}
-              onDismiss={() => setDictating(false)}
+              onDismiss={dictation.close}
             />
           ) : (
             <DictatePill
-              onActivate={() => setDictating(true)}
+              ref={dictation.pillRef}
+              onActivate={dictation.open}
               disabled={pending}
               className="self-end"
             />
@@ -361,7 +396,10 @@ export function AnnouncementsManager({
             }
             disabled={pending}
           >
-            <SelectTrigger id="announcement-presentation">
+            <SelectTrigger
+              id="announcement-presentation"
+              aria-describedby="announcement-presentation-hint"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -380,7 +418,12 @@ export function AnnouncementsManager({
               })}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">{activeMeta.hint}</p>
+          <p
+            id="announcement-presentation-hint"
+            className="text-xs text-muted-foreground"
+          >
+            {activeMeta.hint}
+          </p>
         </div>
 
         {error && (
@@ -394,7 +437,9 @@ export function AnnouncementsManager({
           type="button"
           className="w-full gap-1.5"
           onClick={handleSave}
-          disabled={pending || !form.title.trim() || !form.body.trim()}
+          disabled={
+            pending || rowPending || !form.title.trim() || !form.body.trim()
+          }
         >
           {pending && <Loader2 className="h-4 w-4 animate-spin" />}
           {form.editingId ? "Update draft" : "Save draft"}
@@ -417,7 +462,10 @@ export function AnnouncementsManager({
                 announcement={a}
                 audienceName={audienceName(a.audience)}
                 currentUserId={currentUserId}
-                pending={pending}
+                disabled={pending || rowPending || publishing}
+                busyAction={
+                  rowPending && busy?.id === a.id ? busy.action : null
+                }
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onPublish={handlePublish}
@@ -467,6 +515,8 @@ export function AnnouncementsManager({
     </div>
   );
 }
+
+type DraftAction = "delete" | "publish";
 
 function members(n: number): string {
   return `${n} member${n === 1 ? "" : "s"}`;
@@ -530,11 +580,15 @@ function AnnouncementHeader({
   const Icon = meta.icon;
   return (
     <div className="flex items-start justify-between gap-3">
-      <h3 className="text-base font-bold leading-tight">{a.title}</h3>
+      <h3 className="text-[15px] font-bold leading-tight">{a.title}</h3>
+      {/* Board S18 pill: sentence case, 11px semibold. */}
       <Badge
         variant={meta.badge}
         title={meta.hint}
-        className={cn("shrink-0", meta.badgeClassName)}
+        className={cn(
+          "shrink-0 px-2.5 py-[3px] text-[11px] font-semibold normal-case tracking-normal",
+          meta.badgeClassName,
+        )}
       >
         <Icon className="h-3 w-3" aria-hidden />
         {meta.short}
@@ -588,7 +642,8 @@ function DraftCard({
   announcement: a,
   audienceName,
   currentUserId,
-  pending,
+  disabled,
+  busyAction,
   onEdit,
   onDelete,
   onPublish,
@@ -596,7 +651,10 @@ function DraftCard({
   announcement: AnnouncementSummary;
   audienceName: string;
   currentUserId: string;
-  pending: boolean;
+  /** Another write is running, so no new one may start. */
+  disabled: boolean;
+  /** The button on this card whose action is running, if any. */
+  busyAction: DraftAction | null;
   onEdit: (a: AnnouncementSummary) => void;
   onDelete: (id: string) => void;
   onPublish: (a: AnnouncementSummary) => void;
@@ -622,7 +680,7 @@ function DraftCard({
               size="sm"
               className="gap-1.5"
               onClick={() => onEdit(a)}
-              disabled={pending}
+              disabled={disabled}
             >
               <Pencil className="h-4 w-4" /> Edit
             </Button>
@@ -632,18 +690,18 @@ function DraftCard({
               size="sm"
               className="gap-1.5 border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => onDelete(a.id)}
-              disabled={pending}
+              disabled={disabled}
             >
-              <Trash2 className="h-4 w-4" /> Delete
+              <BusyIcon busy={busyAction === "delete"} icon={Trash2} /> Delete
             </Button>
             <Button
               type="button"
               size="sm"
               className="gap-1.5"
               onClick={() => onPublish(a)}
-              disabled={pending}
+              disabled={disabled}
             >
-              <Send className="h-4 w-4" />{" "}
+              <BusyIcon busy={busyAction === "publish"} icon={Send} />{" "}
               {a.audience.scope === "team"
                 ? `Publish to ${audienceName}`
                 : "Publish to camp"}
@@ -652,6 +710,14 @@ function DraftCard({
         )}
       </Card>
     </li>
+  );
+}
+
+function BusyIcon({ busy, icon: Icon }: { busy: boolean; icon: LucideIcon }) {
+  return busy ? (
+    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+  ) : (
+    <Icon className="h-4 w-4" aria-hidden />
   );
 }
 

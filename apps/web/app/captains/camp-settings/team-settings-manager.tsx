@@ -1,12 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, Check, Pencil, TriangleAlert, X } from "lucide-react";
-import { Alert } from "@camp404/ui/components/alert";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Pencil,
+  Users,
+  X,
+} from "lucide-react";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { Card } from "@camp404/ui/components/card";
+import { EmptyState } from "@camp404/ui/components/empty-state";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
 import { Switch } from "@camp404/ui/components/switch";
@@ -23,6 +31,20 @@ import {
 // (active + archived), order-sorted; this island edits it one operation at a
 // time — rename / reorder / archive — each persisted via a server action and
 // re-read with router.refresh() (no optimistic UI; the server stays the truth).
+//
+// Feedback, as on every captain screen: a problem with the typed name shows on
+// the name field; a failed one-tap move or archive is a toast. Only the control
+// that was used spins, and no second change starts while one runs.
+//
+// No board draws this editor; it is built from the kit (40px icon buttons,
+// EmptyState, InputField, Switch).
+
+// The server refuses to archive below this (MIN_ACTIVE_TEAMS in ./actions);
+// the switch says so before the captain tries.
+const MIN_ACTIVE_TEAMS = 2;
+
+type Busy = { key: string; action: "up" | "down" | "archive" | "rename" };
+type Control = "up" | "down" | "rename";
 
 // The row shape the editor renders. Structurally a TeamConfigEntry; kept as a
 // local structural type (like the roster toolbar's `teams` prop) so this client
@@ -39,31 +61,70 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
   const router = useRouter();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Busy | null>(null);
   const [pending, startTransition] = useTransition();
+  // A running change disables every control, which drops keyboard focus, and
+  // leaving rename mode removes the input that had it. Once the change lands,
+  // focus goes back to the control that was used (or the nearest enabled one
+  // on that row), so a keyboard user stays where they were.
+  const controls = useRef(new Map<string, HTMLButtonElement>());
+  const returnFocusTo = useRef<{ key: string; control: Control } | null>(null);
+  const controlRef =
+    (key: string, control: Control) => (el: HTMLButtonElement | null) => {
+      if (el) controls.current.set(`${key}:${control}`, el);
+      else controls.current.delete(`${key}:${control}`);
+    };
 
-  function run(action: () => Promise<TeamSettingsResult>, onOk?: () => void) {
-    setError(null);
+  useEffect(() => {
+    const target = returnFocusTo.current;
+    if (target === null || editingKey !== null || pending) return;
+    returnFocusTo.current = null;
+    const order: Control[] =
+      target.control === "up"
+        ? ["up", "down", "rename"]
+        : target.control === "down"
+          ? ["down", "up", "rename"]
+          : ["rename"];
+    const el = order
+      .map((control) => controls.current.get(`${target.key}:${control}`))
+      .find((button) => button && !button.disabled);
+    el?.focus();
+  }, [editingKey, pending]);
+
+  const activeCount = teams.filter((t) => !t.archived).length;
+  const atMinimum = activeCount <= MIN_ACTIVE_TEAMS;
+
+  function run(
+    next: Busy,
+    action: () => Promise<TeamSettingsResult>,
+    onOk: () => void,
+    onError: (message: string) => void = (message) => toast.error(message),
+  ) {
+    setBusy(next);
     startTransition(async () => {
       const result = await action();
       if (!result.ok) {
-        setError(result.error);
+        onError(result.error);
         return;
       }
-      onOk?.();
+      onOk();
       router.refresh();
     });
   }
 
   function startEdit(team: TeamRow) {
-    setError(null);
+    setRenameError(null);
     setEditingKey(team.key);
     setDraftLabel(team.label);
   }
 
   function cancelEdit() {
+    if (editingKey)
+      returnFocusTo.current = { key: editingKey, control: "rename" };
     setEditingKey(null);
     setDraftLabel("");
+    setRenameError(null);
   }
 
   function saveEdit(team: TeamRow) {
@@ -71,34 +132,59 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
     if (!label) {
       // Emptied then Enter/Save: keep the row in edit mode with a hint rather
       // than silently discarding the draft (the Save button is also disabled).
-      setError("A team needs a name.");
+      setRenameError("A team needs a name.");
       return;
     }
     if (label === team.label) {
       cancelEdit();
       return;
     }
-    run(() => renameTeamAction(team.key, label), () => {
-      toast.success("Team renamed");
-      cancelEdit();
-    });
+    setRenameError(null);
+    run(
+      { key: team.key, action: "rename" },
+      () => renameTeamAction(team.key, label),
+      () => {
+        toast.success("Team renamed");
+        cancelEdit();
+      },
+      setRenameError,
+    );
+  }
+
+  function move(team: TeamRow, direction: "up" | "down") {
+    returnFocusTo.current = { key: team.key, control: direction };
+    run(
+      { key: team.key, action: direction },
+      () => moveTeamAction(team.key, direction),
+      () => toast.success(`${team.label} moved ${direction}`),
+    );
   }
 
   if (teams.length === 0) {
     return (
-      <Alert variant="info">
-        <span>No teams are configured yet.</span>
-      </Alert>
+      <Card>
+        <EmptyState
+          icon={<Users aria-hidden />}
+          title="No teams yet."
+          description="The camp's teams appear here once they are set up."
+        />
+      </Card>
     );
   }
 
+  const spins = (key: string, action: Busy["action"]) =>
+    pending && busy?.key === key && busy.action === action;
+
   return (
     <div className="flex flex-col gap-4">
-      {error && (
-        <Alert variant="error">
-          <TriangleAlert aria-hidden />
-          <span>{error}</span>
-        </Alert>
+      {atMinimum && (
+        <p
+          id="team-minimum-active"
+          className="text-caption text-muted-foreground"
+        >
+          Only {activeCount} teams are active, and a camp needs at least{" "}
+          {MIN_ACTIVE_TEAMS}. Restore a team before you archive another.
+        </p>
       )}
 
       <Card className="divide-y divide-border p-0">
@@ -113,43 +199,58 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                   team.archived && "opacity-60",
                 )}
               >
-                {/* Reorder controls. */}
-                <div className="flex flex-col">
+                {/* Reorder controls: 40px targets, stacked with a gap. */}
+                <div className="flex flex-col gap-1">
                   <Button
+                    ref={controlRef(team.key, "up")}
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6"
                     aria-label={`Move ${team.label} up`}
                     disabled={pending || index === 0}
-                    onClick={() => run(() => moveTeamAction(team.key, "up"))}
+                    onClick={() => move(team, "up")}
                   >
-                    <ArrowUp className="h-4 w-4" aria-hidden />
+                    {spins(team.key, "up") ? (
+                      <Loader2 className="animate-spin" aria-hidden />
+                    ) : (
+                      <ChevronUp aria-hidden />
+                    )}
                   </Button>
                   <Button
+                    ref={controlRef(team.key, "down")}
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6"
                     aria-label={`Move ${team.label} down`}
                     disabled={pending || index === teams.length - 1}
-                    onClick={() => run(() => moveTeamAction(team.key, "down"))}
+                    onClick={() => move(team, "down")}
                   >
-                    <ArrowDown className="h-4 w-4" aria-hidden />
+                    {spins(team.key, "down") ? (
+                      <Loader2 className="animate-spin" aria-hidden />
+                    ) : (
+                      <ChevronDown aria-hidden />
+                    )}
                   </Button>
                 </div>
 
                 {/* Label — read mode (name + rename) or edit mode (input). */}
                 <div className="min-w-0 flex-1">
                   {editing ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-start gap-2">
                       <InputField
-                        label={`Rename ${team.label}`}
-                        wrapperClassName="flex-1"
+                        label={
+                          <span className="sr-only">Rename {team.label}</span>
+                        }
+                        wrapperClassName="flex-1 gap-0 [&>p]:mt-1"
                         value={draftLabel}
                         autoFocus
                         maxLength={40}
-                        onChange={(e) => setDraftLabel(e.target.value)}
+                        error={renameError ?? undefined}
+                        disabled={pending}
+                        onChange={(e) => {
+                          setDraftLabel(e.target.value);
+                          setRenameError(null);
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") saveEdit(team);
                           if (e.key === "Escape") cancelEdit();
@@ -163,7 +264,11 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                         disabled={pending || draftLabel.trim().length === 0}
                         onClick={() => saveEdit(team)}
                       >
-                        <Check className="h-4 w-4" aria-hidden />
+                        {spins(team.key, "rename") ? (
+                          <Loader2 className="animate-spin" aria-hidden />
+                        ) : (
+                          <Check aria-hidden />
+                        )}
                       </Button>
                       <Button
                         type="button"
@@ -173,7 +278,7 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                         disabled={pending}
                         onClick={cancelEdit}
                       >
-                        <X className="h-4 w-4" aria-hidden />
+                        <X aria-hidden />
                       </Button>
                     </div>
                   ) : (
@@ -183,15 +288,15 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                         <Badge variant="outline">Archived</Badge>
                       )}
                       <Button
+                        ref={controlRef(team.key, "rename")}
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
                         aria-label={`Rename ${team.label}`}
                         disabled={pending}
                         onClick={() => startEdit(team)}
                       >
-                        <Pencil className="h-3.5 w-3.5" aria-hidden />
+                        <Pencil aria-hidden />
                       </Button>
                     </div>
                   )}
@@ -199,19 +304,34 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
 
                 {/* Archive toggle. */}
                 <div className="flex shrink-0 items-center gap-2">
-                  <Label
-                    htmlFor={`archived-${team.key}`}
-                    className="text-caption text-muted-foreground"
-                  >
-                    Active
-                  </Label>
+                  {spins(team.key, "archive") ? (
+                    <Loader2
+                      className="size-4 animate-spin text-muted-foreground"
+                      aria-hidden
+                    />
+                  ) : (
+                    <Label
+                      htmlFor={`archived-${team.key}`}
+                      className="text-caption text-muted-foreground"
+                    >
+                      Active
+                    </Label>
+                  )}
                   <Switch
                     id={`archived-${team.key}`}
                     checked={!team.archived}
-                    disabled={pending}
+                    // An active team at the minimum cannot be archived; an
+                    // archived one can always come back.
+                    disabled={pending || (!team.archived && atMinimum)}
+                    aria-describedby={
+                      !team.archived && atMinimum
+                        ? "team-minimum-active"
+                        : undefined
+                    }
                     aria-label={`${team.label} active`}
                     onCheckedChange={(checked) =>
                       run(
+                        { key: team.key, action: "archive" },
                         () => setTeamArchivedAction(team.key, !checked),
                         () =>
                           toast.success(

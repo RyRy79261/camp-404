@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Questionnaire } from "../questionnaire";
 import {
+  Question,
+  SHORT_LABEL_MAX_LENGTH,
   diffResponses,
   displayResponseValue,
   flattenQuestions,
+  questionLabel,
   validateResponses,
 } from "../questionnaire";
 
@@ -287,6 +290,32 @@ describe("diffResponses", () => {
     expect(byField.bio).toMatchObject({ from: "—", to: "Sparkle" });
   });
 
+  it("names a change by the question's short label when it has one", () => {
+    const labelled: Questionnaire = {
+      version: "v1",
+      pages: [
+        {
+          id: "p",
+          kind: "questions",
+          title: "Logistics",
+          questions: [
+            Question.parse({
+              id: "driving",
+              kind: "boolean",
+              prompt: "Will you be driving a car to the burn?",
+              shortLabel: "Driving",
+            }),
+          ],
+        },
+      ],
+    };
+    expect(
+      diffResponses(labelled, { driving: false }, { driving: true }),
+    ).toEqual([
+      { fieldId: "driving", label: "Driving", from: "No", to: "Yes" },
+    ]);
+  });
+
   it("ignores stale keys not in the catalogue", () => {
     const changes = diffResponses(
       sample,
@@ -294,5 +323,31 @@ describe("diffResponses", () => {
       { removed_in_v2: "new" },
     );
     expect(changes).toEqual([]);
+  });
+});
+
+describe("shortLabel", () => {
+  const base = { id: "q", kind: "short_text", prompt: "What do you do?" };
+
+  it("falls back to the prompt when a question has no short label", () => {
+    expect(questionLabel(Question.parse(base))).toBe("What do you do?");
+    expect(questionLabel(Question.parse({ ...base, shortLabel: "Job" }))).toBe(
+      "Job",
+    );
+  });
+
+  it("is trimmed, and refuses a blank or over-long label", () => {
+    expect(Question.parse({ ...base, shortLabel: "  Job " }).shortLabel).toBe(
+      "Job",
+    );
+    expect(Question.safeParse({ ...base, shortLabel: "   " }).success).toBe(
+      false,
+    );
+    expect(
+      Question.safeParse({
+        ...base,
+        shortLabel: "x".repeat(SHORT_LABEL_MAX_LENGTH + 1),
+      }).success,
+    ).toBe(false);
   });
 });

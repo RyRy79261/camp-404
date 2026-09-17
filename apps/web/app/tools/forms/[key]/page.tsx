@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import type { QuestionnaireResponses } from "@camp404/types";
@@ -9,6 +10,8 @@ import { ChangeLog } from "./change-log";
 
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
+
+export const metadata = { title: "Update your answers — Camp 404" };
 
 const dateFmt = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
@@ -39,7 +42,7 @@ export default async function FormReplayPage({
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-4">
-      <GhostBack href="/tools/forms" className="-ml-2">
+      <GhostBack linkAs={Link} href="/tools/forms" className="-ml-2">
         My forms
       </GhostBack>
 

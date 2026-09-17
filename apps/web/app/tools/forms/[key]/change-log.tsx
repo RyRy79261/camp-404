@@ -40,12 +40,18 @@ export function ChangeLog({ edits }: { edits: FormEdit[] }) {
                   <p className="text-sm font-bold text-foreground">
                     {change.label}
                   </p>
+                  {/* The arrow is hidden from screen readers, so the words
+                      "changed from" and "to" carry the relation instead. */}
                   <div className="flex flex-wrap items-center gap-2 text-label">
-                    <span className="text-muted-foreground">{change.from}</span>
+                    <span className="text-muted-foreground">
+                      <span className="sr-only">Changed from </span>
+                      {change.from}
+                    </span>
                     <span className="text-muted-foreground" aria-hidden>
                       →
                     </span>
                     <span className="font-medium text-foreground">
+                      <span className="sr-only">to </span>
                       {change.to}
                     </span>
                   </div>

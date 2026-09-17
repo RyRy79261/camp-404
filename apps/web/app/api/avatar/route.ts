@@ -12,6 +12,11 @@ export const runtime = "nodejs";
 // navigation. Anything unrecognised is treated as missing.
 const SERVABLE_TYPES = new Set(["image/webp", "image/png", "image/jpeg"]);
 
+// A questionnaire photo answer: `avatars/<auth id>/answers/<question>/…`.
+const ANSWER_PHOTO = /^avatars\/([^/]+)\/answers\//;
+
+const UNSAFE_PATH = /(^|\/)\.{1,2}(\/|$)|\/\/|\\|%/;
+
 /**
  * Stream a private blob: a member's photo or image answer, or a picture in a
  * builder questionnaire.
@@ -24,6 +29,9 @@ const SERVABLE_TYPES = new Set(["image/webp", "image/png", "image/jpeg"]);
  * - `avatars/` — any approved member. Photos show across the home header,
  *   profiles, the family tree and the captain roster, so the gate is
  *   `isApproved`, not ownership.
+ * - `avatars/<auth id>/answers/` — a questionnaire photo answer. Answers are
+ *   captain-only data, so only the member who uploaded it and captains get
+ *   it, whoever else holds the link.
  * - `builder-images/` — anyone camp-active. A questionnaire can be sent to an
  *   applicant who is not approved yet, and its pictures are camp content, not
  *   anyone's personal data.
@@ -35,6 +43,12 @@ export async function GET(req: Request) {
   const pathname = new URL(req.url).searchParams.get("pathname");
   if (!pathname) {
     return new NextResponse("Missing pathname", { status: 400 });
+  }
+  // One literal blob key only. A "." or ".." segment, a backslash, an empty
+  // segment or an escape could be resolved into another folder by the URL the
+  // blob client builds, and slip past the owner check below.
+  if (UNSAFE_PATH.test(pathname)) {
+    return new NextResponse("Not found", { status: 404 });
   }
   const audience = pathname.startsWith("avatars/")
     ? "approved"
@@ -56,6 +70,14 @@ export async function GET(req: Request) {
       ? isApproved(campUser, user.primaryEmail)
       : hasCampAccess(campUser, user.primaryEmail));
   if (!allowed) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+  const answerOwner = ANSWER_PHOTO.exec(pathname)?.[1];
+  if (
+    answerOwner !== undefined &&
+    answerOwner !== user.id &&
+    campUser.rank !== "captain"
+  ) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 

@@ -9,13 +9,14 @@ import {
 } from "@camp404/db/invite-codes";
 import { findUserById } from "@camp404/db/burner-profile";
 import { parseMintArgs } from "./parse-mint-args";
+import { SCENARIOS, seedScenario, wipeSeededData, type Scenario } from "./seed";
 
 const [, , command, ...rest] = process.argv;
 
 async function main() {
   switch (command) {
     case "seed":
-      await seed();
+      await seed(rest);
       break;
     case "wipe-test-data":
       await wipeTestData();
@@ -42,14 +43,32 @@ async function main() {
   }
 }
 
-async function seed() {
-  console.log("TODO: seed minimum viable camp data (Phase 1).");
+async function seed(args: string[]) {
+  const flag = args.indexOf("--scenario");
+  const scenario = flag >= 0 ? args[flag + 1] : "small-camp";
+  if (!SCENARIOS.includes(scenario as Scenario)) {
+    console.error(
+      `Unknown scenario "${scenario}". Known: ${SCENARIOS.join(", ")}.`,
+    );
+    return process.exit(1);
+  }
+  try {
+    for (const line of await seedScenario(scenario as Scenario)) {
+      console.log(line);
+    }
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    return process.exit(1);
+  }
 }
 
 async function wipeTestData() {
-  console.log(
-    'TODO: wipe rows where email/name has a "test-" prefix (CI/Agent scope).',
-  );
+  try {
+    console.log(await wipeSeededData());
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    return process.exit(1);
+  }
 }
 
 async function mintInvite(args: string[]) {
@@ -211,8 +230,15 @@ function printHelp() {
     `camp404 — admin CLI
 
 Usage:
-  camp404 seed                      Seed minimum viable camp data
-  camp404 wipe-test-data            Remove all test- prefixed rows
+  camp404 seed [--scenario small-camp]
+                                    Fill an EMPTY database with a sample camp
+                                    through the app's own writers: a founder,
+                                    35 members in every standing, teams with
+                                    leads, a sent questionnaire with answers,
+                                    and payments. Refuses a database that has
+                                    anyone in it, and VERCEL_ENV=production.
+  camp404 wipe-test-data            Empty a database that holds only seeded
+                                    people. Refuses if anyone real is there.
   camp404 mint-invite --code CODE   Issue a new invite code
     --created-by UUID                 (REQUIRED — must be a captain's users.id)
     [--note 'free text']              (e.g. "Berlin crew", "Camp Lead VIP")

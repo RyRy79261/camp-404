@@ -21,7 +21,7 @@ import {
 } from "./member-export-csv";
 import { getQuestionnaireForResponses } from "./questionnaire-config";
 import { getCampManagementRoster } from "./roster";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 
 // The member export (owner's ruling, 2026-09-16): one button for every rank,
 // and the file holds exactly what the viewer's read level allows. The columns
@@ -116,7 +116,7 @@ export async function buildMemberExport(viewer: {
     // The E2E store keeps none of this data, so a test export has roster
     // columns only.
     safety || captain
-      ? isE2ETestMode()
+      ? usesTestStore()
         ? Promise.resolve([])
         : getMemberExportExtras({ safety, captain })
       : Promise.resolve([]),
@@ -140,7 +140,7 @@ export async function buildMemberExport(viewer: {
     }),
   );
 
-  if (!isE2ETestMode()) {
+  if (!usesTestStore()) {
     await appendAuditEvent({
       actorId: viewer.userId,
       action: "member.export",

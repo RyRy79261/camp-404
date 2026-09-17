@@ -22,6 +22,30 @@ function requireDatabaseUrl(): string {
   return process.env.DATABASE_URL ?? BUILD_PLACEHOLDER_URL;
 }
 
+/** The host the local stack answers on (docker-compose.local.yml). */
+export const LOCAL_PROXY_HOST = "db.localtest.me";
+const LOCAL_PROXY_PORT = 4444;
+
+/**
+ * Point BOTH Neon drivers at the local proxy when NEON_LOCAL_PROXY=1: the HTTP
+ * driver's fetch endpoint and the pooled driver's WebSocket. Only for the
+ * local host, so a real Neon URL in the same process is untouched. Before,
+ * only the WebSocket half was rerouted, so every HTTP query still went to
+ * Neon's cloud endpoint.
+ */
+function configureLocalProxy(): void {
+  if (process.env.NEON_LOCAL_PROXY !== "1") return;
+  neonConfig.fetchEndpoint = (host) =>
+    host === LOCAL_PROXY_HOST
+      ? `http://${host}:${LOCAL_PROXY_PORT}/sql`
+      : `https://${host}/sql`;
+  neonConfig.wsProxy = (host) =>
+    host === LOCAL_PROXY_HOST ? `${host}:${LOCAL_PROXY_PORT}/v2` : `${host}/v2`;
+  neonConfig.useSecureWebSocket = false;
+  neonConfig.pipelineTLS = false;
+  neonConfig.pipelineConnect = false;
+}
+
 // Test-only dependency-injection seam. Production never calls __setDbOverride,
 // so the overrides stay null and createHttpDb/createPooledDb behave exactly as
 // before. The PGlite-backed integration suite (packages/db/src/__tests__)
@@ -45,6 +69,7 @@ export function __setDbOverride(
  */
 export function createHttpDb(): Database {
   if (httpOverride) return httpOverride;
+  configureLocalProxy();
   const sql = neon(requireDatabaseUrl());
   return drizzleHttp(sql, { schema });
 }
@@ -55,11 +80,7 @@ export function createHttpDb(): Database {
  */
 export function createPooledDb(): PooledDatabase {
   if (pooledOverride) return pooledOverride;
-  // Allow self-hosted Neon proxy in development environments.
-  if (process.env.NEON_LOCAL_PROXY === "1") {
-    neonConfig.useSecureWebSocket = false;
-    neonConfig.wsProxy = (host) => `${host}:5433/v1`;
-  }
+  configureLocalProxy();
   const pool = new Pool({ connectionString: requireDatabaseUrl() });
   const db = drizzleServerless(pool, { schema });
   return { db, pool };

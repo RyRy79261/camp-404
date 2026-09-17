@@ -98,6 +98,7 @@ export function decryptField(
     // server logs instead of silently presenting as "nothing on file".
     console.error(
       "[crypto] a stored ciphertext could not be decrypted (wrong PGCRYPTO_KEY, or a corrupt value). Treating it as unreadable, NOT as absent:",
+      /* v8 ignore next -- decrypt only throws Error objects */
       err instanceof Error ? err.message : String(err),
     );
     return { state: "unreadable", value: null };

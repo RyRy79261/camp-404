@@ -2,9 +2,10 @@ import * as React from "react"
 
 import { cn } from "../lib/utils"
 
-// Empty/zero-data placeholder — rosters with no members, queues with nothing
-// outstanding, family trees with no accounts. An optional icon + title +
-// description, with room for a call-to-action via children.
+// Empty/zero-data placeholder (board 08) — rosters with no members, queues with
+// nothing outstanding, family trees with no accounts. A calm, borderless block:
+// an optional icon in a 64px circle, a title, a description, and room for a
+// call-to-action via children.
 export interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
   icon?: React.ReactNode
   title: string
@@ -22,19 +23,21 @@ function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-2 rounded-lg border border-dashed bg-muted/10 px-6 py-12 text-center",
+        "flex flex-col items-center gap-3 px-6 py-8 text-center",
         className,
       )}
       {...props}
     >
       {icon && (
-        <span className="flex h-10 w-10 items-center justify-center rounded-full border bg-muted/40 text-muted-foreground">
+        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-muted-foreground [&_svg]:h-6 [&_svg]:w-6">
           {icon}
         </span>
       )}
-      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="text-base font-bold text-foreground">{title}</p>
       {description && (
-        <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
+        <p className="max-w-sm text-[13px] text-muted-foreground">
+          {description}
+        </p>
       )}
       {children}
     </div>

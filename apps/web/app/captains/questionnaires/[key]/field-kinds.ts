@@ -126,24 +126,44 @@ const DEFAULT_OPTIONS = [
  * and resetting other kind-specific params to sensible defaults.
  */
 export function morphQuestion(q: Question, kind: BuilderFieldKind): Question {
-  const { id, prompt, helper, required } = q;
+  // The words a captain wrote travel with the field; only kind-specific
+  // settings reset.
+  const { id, prompt, helper, shortLabel, required } = q;
   const options =
     "options" in q && q.options.length >= 2 ? q.options : DEFAULT_OPTIONS;
   switch (kind) {
     case "short_text":
-      return { id, kind, prompt, helper, required, maxLength: 120 };
+      return { id, kind, prompt, helper, shortLabel, required, maxLength: 120 };
     case "long_text":
-      return { id, kind, prompt, helper, required, maxLength: 1000 };
+      return {
+        id,
+        kind,
+        prompt,
+        helper,
+        shortLabel,
+        required,
+        maxLength: 1000,
+      };
     case "email":
     case "phone":
     case "date":
     case "boolean":
     case "image":
-      return { id, kind, prompt, helper, required };
+      return { id, kind, prompt, helper, shortLabel, required };
     case "number":
-      return { id, kind, prompt, helper, required, min: 0, max: 6 };
+      return { id, kind, prompt, helper, shortLabel, required, min: 0, max: 6 };
     case "slider":
-      return { id, kind, prompt, helper, required, min: 1, max: 5, step: 1 };
+      return {
+        id,
+        kind,
+        prompt,
+        helper,
+        shortLabel,
+        required,
+        min: 1,
+        max: 5,
+        step: 1,
+      };
     case "single_select":
     case "multi_select":
       // Carry "Other…" across the two kinds that support it — flipping single
@@ -153,11 +173,12 @@ export function morphQuestion(q: Question, kind: BuilderFieldKind): Question {
         kind,
         prompt,
         helper,
+        shortLabel,
         required,
         options,
         allowOther: supportsAllowOther(q) ? q.allowOther : undefined,
       };
     case "combobox":
-      return { id, kind, prompt, helper, required, options };
+      return { id, kind, prompt, helper, shortLabel, required, options };
   }
 }

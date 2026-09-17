@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { isE2ETestMode } from "@/lib/test-mode";
+import { createInviteCode } from "@camp404/db/invite-codes";
+import { isE2ETestMode, usesTestStore } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
 
-// Seeds an entry into the in-memory invite_codes store. Used by Playwright
+// Seeds an invite code: into the in-memory store, or into the local database
+// in the real-database run. Used by Playwright
 // specs that need to verify DB-backed (rather than env-bootstrap) codes.
 
 export const runtime = "nodejs";
@@ -28,7 +30,7 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const row = testStore.seedInviteCode({
+  const input = {
     code: body.code,
     createdByUserId: body.createdByUserId ?? null,
     note: body.note ?? null,
@@ -36,6 +38,13 @@ export async function POST(req: Request) {
     expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
     assignedRank: body.assignedRank ?? null,
     requiresApproval: body.requiresApproval ?? false,
-  });
+  };
+  // The real-database run writes the invite_codes row itself.
+  const row = usesTestStore()
+    ? testStore.seedInviteCode(input)
+    : await createInviteCode({
+        ...input,
+        createdByUserId: input.createdByUserId ?? null,
+      });
   return NextResponse.json({ ok: true, inviteCode: row });
 }

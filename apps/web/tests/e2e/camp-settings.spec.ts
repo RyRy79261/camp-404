@@ -37,7 +37,7 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await expect(
       page.getByRole("heading", { name: "Camp settings" }),
     ).toBeVisible();
-    await expect(page.getByText("VIEW ONLY")).toBeVisible();
+    await expect(page.getByText("Captain access only")).toBeVisible();
     // The editor is withheld — no rename controls render.
     await expect(page.getByRole("button", { name: /^Rename / })).toHaveCount(0);
   });

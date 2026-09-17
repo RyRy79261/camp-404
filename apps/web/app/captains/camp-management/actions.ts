@@ -31,7 +31,7 @@ import {
   type MemberQuestionnaire,
   type ReviewOption,
 } from "@camp404/core";
-import { Team, type ApprovalStatus } from "@camp404/types";
+import type { ApprovalStatus, Team } from "@camp404/types";
 import { captainActionGate } from "@/lib/captain-gate";
 import { decideUserApproval, findCampUserById } from "@/lib/users";
 import {

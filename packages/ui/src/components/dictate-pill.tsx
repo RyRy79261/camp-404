@@ -20,6 +20,8 @@ export interface DictatePillProps {
   /** Suppress re-activation (host sets true while RecorderPanel is busy). */
   disabled?: boolean;
   className?: string;
+  /** Lets the host return focus here when the RecorderPanel closes. */
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
 /**
@@ -33,12 +35,14 @@ export function DictatePill({
   label = "Dictate instead",
   disabled = false,
   className,
+  ref,
 }: DictatePillProps) {
   // The label IS the button's accessible name — guard against an empty/
   // whitespace override so the pill never renders nameless.
   const text = label.trim() ? label : "Dictate instead";
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onActivate}
       disabled={disabled}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { displayResponseValue, getQuestionBlocks } from "@camp404/types";
@@ -43,7 +44,7 @@ export default async function AnsweredQuestionnairePage({
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-4">
-      <GhostBack href="/tools/forms" className="-ml-2">
+      <GhostBack linkAs={Link} href="/tools/forms" className="-ml-2">
         My forms
       </GhostBack>
 

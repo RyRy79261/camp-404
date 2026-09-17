@@ -135,7 +135,10 @@ canvas marks each conditional block and flags a broken one.
 ## 3. Field & block catalog
 
 **§3 is authoritative for catalog membership.** Each input field carries common
-`{ label, helper?, required }` plus kind-specific params.
+`{ prompt, helper?, shortLabel?, required }` plus kind-specific params.
+`shortLabel` (at most 40 characters) names the field where the prompt is too
+long, today the My forms change log; readers fall back to the prompt
+(`questionLabel`). Editing it is cosmetic.
 
 ### Input fields (`Question` discriminated union in `@camp404/types`)
 

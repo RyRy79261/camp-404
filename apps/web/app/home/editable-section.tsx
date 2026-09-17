@@ -74,7 +74,12 @@ export function EditableSection({
         <p className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
           Ungrouped
         </p>
-        <div className={cn("rounded-lg", isOver && "ring-2 ring-accent")}>
+        <div
+          className={cn(
+            "rounded-lg ring-accent motion-safe:transition-shadow motion-safe:duration-150",
+            isOver && "ring-2",
+          )}
+        >
           {rows}
         </div>
       </div>
@@ -85,11 +90,11 @@ export function EditableSection({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col gap-3 rounded-xl border p-3.5",
+        "flex flex-col gap-3 rounded-xl border p-3.5 ring-accent motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200 motion-safe:transition-shadow",
         kind === "custom"
           ? "border-accent/60 bg-accent/10"
           : "border-border bg-muted",
-        isOver && "ring-2 ring-accent",
+        isOver && "ring-2",
       )}
     >
       <div className="flex items-center justify-between gap-2">

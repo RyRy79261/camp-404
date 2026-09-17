@@ -18,6 +18,8 @@ import { RunnerEdgeCard } from "./edge-states";
 // Reads the Neon Auth session + the activation on every request.
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Questionnaire — Camp 404" };
+
 // The generic runner for a BUILDER questionnaire dispatched via an activation.
 // Unlike the bespoke onboarding gate, this is reachable by direct link, so it
 // enforces its own access predicate (the viewer must be targeted) and re-asserts

@@ -97,6 +97,9 @@ export function useVoiceRecorder({
   // The raw Whisper text, held while the member reviews/edits it. Committed
   // to `onTranscript` only on `accept`; never auto-fired.
   const [transcript, setTranscript] = React.useState<string | null>(null);
+  // The clip hit maxDurationMs and was stopped for the member. The panel says
+  // so, or a long answer would seem to be cut off for no reason.
+  const [stoppedAtLimit, setStoppedAtLimit] = React.useState(false);
 
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const chunksRef = React.useRef<Blob[]>([]);
@@ -144,6 +147,7 @@ export function useVoiceRecorder({
   async function start() {
     if (state === "recording" || state === "requesting") return;
     setError(null);
+    setStoppedAtLimit(false);
     safeSet(setState, "requesting");
 
     // TODO(capacitor): when running natively, swap MediaRecorder for the
@@ -205,7 +209,10 @@ export function useVoiceRecorder({
 
       rec.start();
       safeSet(setState, "recording");
-      timeoutRef.current = setTimeout(() => stop(), maxDurationMs);
+      timeoutRef.current = setTimeout(() => {
+        safeSet(setStoppedAtLimit, true);
+        stop();
+      }, maxDurationMs);
     } catch (err) {
       const name = err instanceof Error ? err.name : "Error";
       const message =
@@ -279,6 +286,7 @@ export function useVoiceRecorder({
 
   function reset() {
     setError(null);
+    safeSet(setStoppedAtLimit, false);
     safeSet(setTranscript, null);
     safeSet(setState, "idle");
   }
@@ -306,6 +314,8 @@ export function useVoiceRecorder({
     discard,
     analyser,
     transcript,
+    stoppedAtLimit,
+    maxDurationMs,
     supported,
   };
 }

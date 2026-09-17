@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
-import { getReferralRoster } from "@camp404/db/relations";
 import { requireMemberPage } from "@/lib/member-gate";
+import { getReferralRosterForViewer } from "@/lib/relations";
 import { FamilyTree } from "./family-tree";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +11,14 @@ export const metadata = { title: "Family tree — Camp 404" };
 export default async function FamilyTreePage() {
   const { campUser } = await requireMemberPage();
 
-  const roster = await getReferralRoster();
+  // Projected for this viewer on the server: only a captain receives other
+  // members' invite codes.
+  const roster = await getReferralRosterForViewer(campUser);
+  const showsInviteCodes = campUser.rank === "captain";
 
   return (
     <main className="mx-auto w-full max-w-3xl px-5 py-4">
-      <GhostBack href="/tools" className="-ml-2">
+      <GhostBack linkAs={Link} href="/tools" className="-ml-2">
         Tools
       </GhostBack>
 
@@ -27,7 +31,11 @@ export default async function FamilyTreePage() {
           </p>
         </div>
 
-        <FamilyTree roster={roster} viewerUserId={campUser.id} />
+        <FamilyTree
+          roster={roster}
+          viewerUserId={campUser.id}
+          showsInviteCodes={showsInviteCodes}
+        />
       </div>
     </main>
   );

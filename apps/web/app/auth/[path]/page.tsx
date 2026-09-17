@@ -9,6 +9,17 @@ import { SignUpForm } from "../sign-up-form";
 // renders via the AuthView fallback rather than 404ing.
 export const dynamic = "force-dynamic";
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ path: string }>;
+}) {
+  const { path } = await params;
+  const title =
+    path === "sign-up" ? "Sign up" : path === "sign-in" ? "Sign in" : "Account";
+  return { title: `${title} — Camp 404` };
+}
+
 export default async function AuthPage({
   params,
 }: {

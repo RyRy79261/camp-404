@@ -176,6 +176,17 @@ describe("create / rename / dissolve", () => {
     expect(created).toMatchObject({ kind: "custom", title: "New group", tiles: [] });
   });
 
+  it("numbers a second and third new group", () => {
+    const one = createCustomSection(base, "c1");
+    const two = createCustomSection(one, "c2");
+    const three = createCustomSection(two, "c3");
+    const titles = three.flatMap((s) => (s.kind === "custom" ? [s.title] : []));
+    expect(titles).toEqual(["New group", "New group 2", "New group 3"]);
+    // A given title is kept as it is.
+    const named = createCustomSection(base, "c4", "Favourites");
+    expect(named.at(-1)).toMatchObject({ title: "Favourites" });
+  });
+
   it("renames a custom section", () => {
     const withCustom = createCustomSection(base, "c-new");
     const out = renameCustomSection(withCustom, "c-new", "Favourites");

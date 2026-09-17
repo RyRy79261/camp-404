@@ -76,6 +76,7 @@ import {
   LifecycleBar,
   PublishButton,
 } from "./lifecycle-controls";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 type Status = "draft" | "published" | "unpublished";
 
@@ -297,6 +298,7 @@ export function BuilderCanvas({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [addingToPageId, setAddingToPageId] = useState<string | null>(null);
 
+  const reducedMotion = useReducedMotion();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -512,7 +514,7 @@ export function BuilderCanvas({
                     ))}
                   </ul>
                 </SortableContext>
-                <DragOverlay>
+                <DragOverlay dropAnimation={reducedMotion ? null : undefined}>
                   {(() => {
                     const dragged = page.blocks.find(
                       (b) => blockId(b) === draggingId,

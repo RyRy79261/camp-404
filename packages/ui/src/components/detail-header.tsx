@@ -4,14 +4,16 @@ import { cn } from "../lib/utils"
 
 // Header for a detail panel / modal — a leading slot (avatar or icon badge), a
 // title + optional subtitle, and a right-aligned action slot. Presentational
-// leaf; the heading level is configurable for a correct outline.
+// leaf; the heading level is configurable for a correct outline. A bar that
+// only names where Back goes is not a heading at all: pass `as="p"`, so the
+// page's own h1 comes first.
 export interface DetailHeaderProps
   extends React.HTMLAttributes<HTMLDivElement> {
   leading?: React.ReactNode
   title: string
   subtitle?: React.ReactNode
   action?: React.ReactNode
-  as?: "h1" | "h2" | "h3"
+  as?: "h1" | "h2" | "h3" | "p"
 }
 
 function DetailHeader({

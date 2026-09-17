@@ -53,6 +53,7 @@ export function nextPromotionStatus(
       return "declined";
     case "cancel":
       return "cancelled";
+    /* v8 ignore next 6 -- a compile-time guard, unreachable while the types hold */
     default: {
       // Exhaustiveness guard: adding a PromotionAction without a case here is a
       // compile error, so the `| null` contract can never silently leak undefined.

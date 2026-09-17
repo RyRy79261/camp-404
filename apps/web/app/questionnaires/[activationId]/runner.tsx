@@ -42,7 +42,7 @@ export function BuilderRunner({
       blocking={blocking}
       notice={seededFromPriorCycle ? CARRIED_OVER : undefined}
       title={title}
-      submitLabel="Finish"
+      submitLabel="Submit"
     />
   );
 }

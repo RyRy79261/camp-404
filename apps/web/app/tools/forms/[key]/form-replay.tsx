@@ -36,6 +36,8 @@ export function FormReplay({
         action={(responses, final) => saveFormReplay(formKey, responses, final)}
         persistProgress={false}
         submitLabel="Save changes"
+        // "Saved" is only true until the next edit.
+        onResponsesChange={() => setSaved(false)}
         onComplete={() => {
           setSaved(true);
           router.refresh();

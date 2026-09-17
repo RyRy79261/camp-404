@@ -46,6 +46,10 @@ export function useHomeLayout(
   const [sections, setSectionsState] = useState<Section[]>(
     () => seedLayout(catalogue, lockedGroupIds).sections,
   );
+  // False until the saved layout has replaced the seed. The panel stays
+  // transparent until then, so a member with a custom order never sees the
+  // default order jump into theirs.
+  const [ready, setReady] = useState(false);
 
   // Catalogue is static and lockedGroupIds is server-stable for the session, so
   // seed/reconcile once on mount (the values from first render are captured).
@@ -56,6 +60,7 @@ export function useHomeLayout(
         ? reconcileLayout(saved, catalogue, lockedGroupIds).sections
         : seedLayout(catalogue, lockedGroupIds).sections,
     );
+    setReady(true);
   }, []);
 
   const setSections = useCallback(
@@ -72,5 +77,11 @@ export function useHomeLayout(
     [],
   );
 
-  return { sections, setSections };
+  // Back to the default: catalogue order, no custom groups. Saved like any
+  // other change.
+  const reset = useCallback(() => {
+    setSections(seedLayout(catalogue, lockedGroupIds).sections);
+  }, [catalogue, lockedGroupIds, setSections]);
+
+  return { sections, setSections, reset, ready };
 }

@@ -16,5 +16,26 @@ export default defineConfig({
     // later. The migration replay happens once per file, not per test.
     hookTimeout: 60_000,
     testTimeout: 30_000,
+    // `pnpm test:coverage` (CI). The floors are the coverage measured on
+    // 2026-09-16 minus 3 points, so coverage can drift down only a little
+    // before CI says so. Files that guard secrets, IDs and access stay at 100%.
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/__tests__/**", "src/**/*.stories.tsx", "src/schema.ts"],
+      reporter: ["text-summary", "json-summary"],
+      thresholds: {
+        statements: 75,
+        branches: 70,
+        functions: 73,
+        lines: 78,
+        "src/crypto.ts": {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+      },
+    },
   },
 });

@@ -133,6 +133,7 @@ function emergencyContactQuestions(slot: 1 | 2, required: boolean): Question[] {
       kind: "short_text",
       role: "emergency_contact_relationship",
       prompt: `${which}How do you know them?`,
+      shortLabel: `${which}Relationship`,
       placeholder: "e.g. partner, parent, friend",
       maxLength: 40,
       required,
@@ -197,6 +198,7 @@ export function buildQuestionnaire(
             id: "country",
             kind: "combobox",
             prompt: "Country you're flying from",
+            shortLabel: "Country",
             helper: "Where you'll be travelling to Afrikaburn from.",
             options: COUNTRY_OPTIONS,
             placeholder: "Pick your country…",
@@ -237,6 +239,7 @@ export function buildQuestionnaire(
             role: "bio",
             enableDictation: true,
             prompt: "Tell us about yourself",
+            shortLabel: "About you",
             helper:
               "Who you are when you're in the dust — this is the bio your team lead reads first.",
             maxLength: 2000,
@@ -256,6 +259,7 @@ export function buildQuestionnaire(
             kind: "long_text",
             enableDictation: true,
             prompt: "What do you want to make happen?",
+            shortLabel: "Burn ideas",
             helper:
               "Rough is fine — the dust shapes the plan. Tap the mic to dictate.",
             maxLength: 2000,
@@ -287,6 +291,7 @@ export function buildQuestionnaire(
             id: "competency.cooking",
             kind: "scale",
             prompt: "How would you describe your cooking?",
+            shortLabel: "Cooking",
             steps: [
               { value: "create", label: "Good cook — I can create recipes" },
               { value: "teach", label: "Adequate — I can teach recipes" },
@@ -308,6 +313,7 @@ export function buildQuestionnaire(
             id: "team_lead.interests",
             kind: "multi_select",
             prompt: "I would like to be a team lead of…",
+            shortLabel: "Team lead of",
             helper: "Pick none if you'd rather just be in the trenches.",
             options: teamLeadOptions(teams),
             required: false,
@@ -316,6 +322,7 @@ export function buildQuestionnaire(
             id: "logistics.driving",
             kind: "single_select",
             prompt: "Will you be driving a car to the burn?",
+            shortLabel: "Driving",
             options: [
               { value: "yes", label: "Yes" },
               { value: "no", label: "No" },
@@ -327,6 +334,7 @@ export function buildQuestionnaire(
             id: "logistics.onsite_before",
             kind: "single_select",
             prompt: "Can you be on-site BEFORE the burn for build week?",
+            shortLabel: "Build week",
             options: [
               { value: "yes_full", label: "Yes — the whole build week" },
               { value: "yes_partial", label: "Some of build week" },
@@ -338,6 +346,7 @@ export function buildQuestionnaire(
             id: "logistics.onsite_after",
             kind: "single_select",
             prompt: "Can you stay on-site AFTER the burn for strike / clean-up?",
+            shortLabel: "Strike",
             options: [
               { value: "yes_full", label: "Yes — through to MOOP sweep" },
               { value: "yes_partial", label: "A day or two" },
@@ -358,6 +367,7 @@ export function buildQuestionnaire(
             id: "history.camp404_years",
             kind: "multi_select",
             prompt: "Which years have you been with Camp 404?",
+            shortLabel: "Years with Camp 404",
             helper: "Leave blank if this would be your first year with us.",
             options: [
               { value: "2019", label: "2019" },
@@ -373,6 +383,7 @@ export function buildQuestionnaire(
             id: "history.afrikaburn_count",
             kind: "single_select",
             prompt: "How many Afrikaburns have you been to?",
+            shortLabel: "Afrikaburns",
             options: [
               { value: "0", label: "None — first one" },
               { value: "1_2", label: "1–2" },
@@ -386,6 +397,7 @@ export function buildQuestionnaire(
             kind: "long_text",
             enableDictation: true,
             prompt: "Other burns you've been to?",
+            shortLabel: "Other burns",
             helper:
               "Burning Man, regional burns, theme camps, fire-arts collectives — anything dusty.",
             maxLength: 1000,
@@ -404,6 +416,7 @@ export function buildQuestionnaire(
             id: "intent.this_year",
             kind: "scale",
             prompt: "How likely are you coming to burn this year?",
+            shortLabel: "Coming this year",
             steps: [
               { value: "definite", label: "100% coming" },
               { value: "want", label: "Definitely want to" },
@@ -445,6 +458,7 @@ export function buildQuestionnaire(
             id: "dietary.allergies",
             kind: "multi_select",
             prompt: "Ingredients I'm allergic / intolerant to",
+            shortLabel: "Allergies",
             helper:
               "Hard rules — these can't be in your food. Flag anaphylactic ones in the notes below.",
             options: [...DIETARY_INGREDIENTS],
@@ -455,6 +469,7 @@ export function buildQuestionnaire(
             kind: "long_text",
             enableDictation: true,
             prompt: "Anything else the kitchen should know?",
+            shortLabel: "Kitchen notes",
             helper:
               "Anaphylaxis, religious requirements, eating-disorder triggers, fasting windows — anything that doesn't fit a checkbox.",
             maxLength: 1000,
