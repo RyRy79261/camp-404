@@ -71,7 +71,7 @@ const MAX_TAPPABLE_STEPS = 11;
  * The DOM id of a question's control. Prefixed, so a question id can never
  * collide with another element's id on the page.
  */
-export function questionFieldId(questionId: string): string {
+function questionFieldId(questionId: string): string {
   return `q-${questionId}`;
 }
 
