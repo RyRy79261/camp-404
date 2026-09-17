@@ -23,7 +23,7 @@ function Skeleton({ className, ...props }: SkeletonProps) {
     <div
       aria-hidden
       className={cn(
-        "motion-safe:animate-pulse rounded-md bg-muted-foreground/15",
+        "motion-safe:animate-pulse rounded-md bg-muted",
         className,
       )}
       {...props}
@@ -244,6 +244,74 @@ function SkeletonPage({
   )
 }
 
+// The AfrikaBurn console loading vocabulary: plain pieces (no region of their
+// own) that a `loading.tsx` composes inside one `SkeletonRegion`.
+
+// The page-heading block: eyebrow, title, description.
+function SkeletonHeading({
+  eyebrow = true,
+  description = true,
+  className,
+}: {
+  eyebrow?: boolean
+  description?: boolean
+  className?: string
+}) {
+  return (
+    <div className={cn("flex flex-col gap-3", className)}>
+      {eyebrow && <Skeleton className="h-3 w-40" />}
+      <Skeleton className="h-7 w-64 max-w-full" />
+      {description && <Skeleton className="h-3.5 w-full max-w-xl" />}
+    </div>
+  )
+}
+
+// One row of a list or table: a wide primary column plus trailing metadata.
+function SkeletonRow({
+  columns = 3,
+  className,
+}: {
+  columns?: number
+  className?: string
+}) {
+  return (
+    <div className={cn("flex items-center gap-4", className)}>
+      <Skeleton className="h-4 flex-1" />
+      {Array.from({ length: Math.max(0, columns - 1) }).map((_, i) => (
+        <Skeleton
+          key={i}
+          className={cn("h-4", i % 2 === 0 ? "w-24" : "w-16")}
+        />
+      ))}
+    </div>
+  )
+}
+
+// A grid of bordered cards: dashboards, quick links, catalogues.
+function SkeletonCardGrid({
+  cards = 6,
+  lines = 2,
+  className = "grid gap-4 sm:grid-cols-2 lg:grid-cols-3",
+}: {
+  cards?: number
+  lines?: number
+  className?: string
+}) {
+  return (
+    <div className={className}>
+      {Array.from({ length: cards }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-xl border border-border bg-card/40 p-5"
+        >
+          <Skeleton className="h-4 w-1/3" />
+          <SkeletonText lines={lines} className="mt-4" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export {
   Skeleton,
   SkeletonRegion,
@@ -254,4 +322,7 @@ export {
   SkeletonTable,
   SkeletonForm,
   SkeletonPage,
+  SkeletonHeading,
+  SkeletonRow,
+  SkeletonCardGrid,
 }

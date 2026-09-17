@@ -44,7 +44,7 @@ const AckRow = React.forwardRef<
 >(({ children, className, rowClassName, ...props }, ref) => (
   <label
     className={cn(
-      "flex min-h-[44px] cursor-pointer items-start gap-3 py-2 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60",
+      "flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md border border-input bg-background p-3 text-sm hover:bg-muted/40 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60",
       rowClassName
     )}
   >

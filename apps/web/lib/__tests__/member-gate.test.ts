@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({
     throw new Error("NEXT_REDIRECT");
   }),
 }));
-vi.mock("@/lib/auth", () => ({ getAuthenticatedUserOrRedirect: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   getPendingRequiredActions: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock("@/lib/users", () => ({
 }));
 
 import { redirect } from "next/navigation";
-import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
+import { getAuthenticatedUser } from "@/lib/auth";
 import {
   ensureCampUser,
   getPendingRequiredActions,
@@ -26,7 +26,11 @@ import {
   isApproved,
   syncOpenGates,
 } from "@/lib/users";
-import { memberBlock, requireMemberPage } from "../member-gate";
+import {
+  memberBlock,
+  requireMemberPage,
+  resolveMemberState,
+} from "../member-gate";
 
 const campUser = { id: "user-1" } as never;
 const BLOCKING_SEND = {
@@ -125,7 +129,7 @@ describe("memberBlock", () => {
 
 describe("requireMemberPage", () => {
   beforeEach(() => {
-    vi.mocked(getAuthenticatedUserOrRedirect).mockResolvedValue({
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
       id: "auth-1",
       primaryEmail: "a@example.com",
       displayName: "A",
@@ -146,5 +150,39 @@ describe("requireMemberPage", () => {
 
     await expect(requireMemberPage()).rejects.toThrow("NEXT_REDIRECT");
     expect(redirect).toHaveBeenCalledWith("/questionnaires/act-1");
+  });
+
+  it("sends a signed-out visitor to sign in", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
+
+    await expect(requireMemberPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/auth/sign-in");
+    expect(ensureCampUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveMemberState", () => {
+  it("reports a signed-out visitor without redirecting", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
+
+    await expect(resolveMemberState()).resolves.toEqual({ kind: "signed_out" });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("reports the block instead of redirecting on it", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-1",
+      primaryEmail: null,
+      displayName: null,
+    });
+    vi.mocked(ensureCampUser).mockResolvedValue(campUser);
+    vi.mocked(isApproved).mockReturnValue(false);
+
+    await expect(resolveMemberState()).resolves.toMatchObject({
+      kind: "member",
+      campUser,
+      block: { reason: "approval", href: "/pending-approval" },
+    });
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

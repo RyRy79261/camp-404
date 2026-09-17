@@ -204,7 +204,7 @@ Decisions baked into the schema — keep new code consistent with them:
     (fail-closed on an unknown rank or a missing team). It is pure and
     tested, and LIVE on two send paths. Questionnaire sends
     (`sendAction` and `previewAudienceCount` in
-    `apps/web/app/captains/questionnaires/actions.ts`) gate in two moves:
+    `apps/web/app/(console)/captains/questionnaires/actions.ts`) gate in two moves:
     `gateAuthor()` for the rank (>= `team_lead`), then this function for the
     specific audience. The Send page offers a lead only the team scope, for
     the teams they lead. Team announcements let a lead publish only to a team

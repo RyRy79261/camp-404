@@ -9,8 +9,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "A calm command centre for a chaotic desert.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0d061e",
-    theme_color: "#0d061e",
+    background_color: "#17191b",
+    theme_color: "#17191b",
     icons: [
       {
         src: "/icon.svg",

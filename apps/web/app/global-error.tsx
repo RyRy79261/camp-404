@@ -33,8 +33,8 @@ export default function GlobalError({
           gap: "1.5rem",
           padding: "3rem 1rem",
           textAlign: "center",
-          background: "#0d061e",
-          color: "#f6eef7",
+          background: "#17191b",
+          color: "#f4f0e8",
           fontFamily:
             "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
         }}

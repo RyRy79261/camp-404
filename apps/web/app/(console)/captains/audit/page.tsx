@@ -4,7 +4,7 @@ import { isAuditCursor, listAuditLog } from "@camp404/db/audit";
 import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { EmptyState } from "@camp404/ui/components/empty-state";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { PageHeading } from "@camp404/ui/components/page-heading";
 import {
   ResponsiveDataTable,
   type ResponsiveColumn,
@@ -19,9 +19,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Audit log — Camp 404" };
 
 // The audit trail: who changed or read someone else's data, newest first.
-// Captain-only, preview-but-locked (D3): anyone else sees the chrome and a
-// lock, and no row is read. No board draws this page; it reuses the captain
-// pages' chrome, EmptyState and ResponsiveDataTable.
+// Captain-only, preview-but-locked (D3): anyone else sees the heading and a
+// lock, and no row is read.
 
 const COLUMNS: ResponsiveColumn<AuditEntry>[] = [
   {
@@ -83,17 +82,12 @@ export default async function AuditLogPage({
     : null;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6">
-      <GhostBack linkAs={Link} href="/captains/tools" className="-ml-2 mb-4">
-        Camp tools
-      </GhostBack>
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold">Audit log</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Every change to someone else&apos;s data, and every read of private
-          data, newest first.
-        </p>
-      </header>
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow="Captains / Audit"
+        title="Audit log"
+        description="Every change to someone else's data, and every read of private data, newest first."
+      />
 
       {!data ? (
         <CaptainLock message="The audit log is captain-only. Your rank doesn't have clearance for this." />
@@ -113,7 +107,7 @@ export default async function AuditLogPage({
           data={data.entries}
           getRowKey={(e) => e.id}
           label="Audit log"
-          className="md:rounded-xl md:border md:bg-card/40"
+          className="md:rounded-xl md:border md:bg-card md:shadow-sm"
         />
       )}
 
@@ -140,6 +134,6 @@ export default async function AuditLogPage({
           )}
         </nav>
       )}
-    </main>
+    </div>
   );
 }

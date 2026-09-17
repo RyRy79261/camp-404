@@ -2,10 +2,11 @@ import { Lock } from "lucide-react"
 
 import { cn } from "../lib/utils"
 
-// Preview-but-locked (board 09): the page shows its chrome, and this card
-// stands where the data would be. The page sends no data for a rank below its
-// bar, so this is the whole of what that viewer gets. `title` names who may see
-// it; `message` says what the viewer is missing.
+// Preview-but-locked: the page shows its heading, and this card stands where
+// the data would be. The page sends no data for a rank below its bar, so this
+// is the whole of what that viewer gets. Drawn as the console's dashed empty
+// state with a lock. `title` names who may see it; `message` says what the
+// viewer is missing.
 export interface CaptainLockProps {
   /** @default "Captain access only" */
   title?: string
@@ -22,15 +23,17 @@ export function CaptainLock({
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-2.5 rounded-[var(--radius)] border bg-card p-6 text-center",
+        "flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card/40 px-6 py-16 text-center",
         className,
       )}
     >
-      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
-        <Lock aria-hidden className="h-5 w-5 text-primary" />
-      </span>
-      <p className="text-[15px] font-bold text-foreground">{title}</p>
-      <p className="text-xs text-muted-foreground">{message}</p>
+      <Lock aria-hidden className="h-6 w-6 text-muted-foreground" />
+      <div className="flex flex-col gap-1.5">
+        <p className="text-base font-medium text-foreground">{title}</p>
+        <p className="mx-auto max-w-md text-sm text-muted-foreground">
+          {message}
+        </p>
+      </div>
     </div>
   )
 }

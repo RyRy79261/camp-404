@@ -13,6 +13,9 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <NeonAuthUIProvider
       authClient={authClient}
+      // The app is dark-first (AfrikaBurn's "Tankwa Night" tokens). Left on
+      // "system", next-themes swaps in the light palette on a light-mode OS.
+      defaultTheme="dark"
       navigate={router.push}
       replace={router.replace}
       onSessionChange={() => router.refresh()}

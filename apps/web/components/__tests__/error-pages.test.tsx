@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import NotFound from "@/app/not-found";
 import ErrorPage from "@/app/error";
-import CaptainsError from "@/app/captains/error";
-import ToolsError from "@/app/tools/error";
+import CaptainsError from "@/app/(console)/captains/error";
+import ToolsError from "@/app/(console)/tools/error";
 
 // Smoke tests for the recovery surfaces added alongside the onboarding fix.
 // (global-error.tsx renders its own <html>/<body>, which jsdom's container

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono, Montserrat } from "next/font/google";
 import { Toaster } from "@camp404/ui/components/toast";
 import { Providers } from "./providers";
 import { AcknowledgementGate } from "./acknowledgement-gate";
@@ -8,15 +8,17 @@ import "@camp404/ui/styles.css";
 import { SITE_URL } from "@/lib/site";
 
 // Brand faces, exposed as CSS vars consumed by --font-sans / --font-mono in
-// @camp404/ui globals.css. Inter = UI; JetBrains Mono = the data-console motif.
-const inter = Inter({
+// @camp404/ui globals.css. Montserrat is the AfrikaBurn app's face (body 500,
+// headings up to 800); JetBrains Mono sets eyebrows and data.
+const montserrat = Montserrat({
   subsets: ["latin"],
-  variable: "--font-inter",
+  weight: ["500", "600", "700", "800"],
+  variable: "--font-brand",
   display: "swap",
 });
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
+  variable: "--font-brand-mono",
   display: "swap",
 });
 
@@ -49,7 +51,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#0d061e",
+  themeColor: "#17191b",
 };
 
 export default function RootLayout({
@@ -57,15 +59,16 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // next-themes (via NeonAuthUIProvider) sets class="dark" on <html> on the
-  // client; suppressHydrationWarning silences the resulting attribute mismatch.
+  // Dark-first, wearing the Camp 404 accent skin over AfrikaBurn's surfaces.
+  // next-themes (via NeonAuthUIProvider) also sets class="dark" on <html> on
+  // the client; suppressHydrationWarning silences the attribute mismatch.
   return (
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${jetbrainsMono.variable}`}
+      className={`dark camp-accent ${montserrat.variable} ${jetbrainsMono.variable}`}
     >
-      <body className="font-sans">
+      <body className="font-sans antialiased">
         <Providers>
           {children}
           <AcknowledgementGate />
