@@ -4,8 +4,10 @@ import { and, eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
 import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
+import type { AuditEvent } from "@camp404/db/audit";
 import { decryptField } from "@camp404/db/crypto";
 import { canReadMemberField } from "@camp404/core";
+import { auditReadsAfterResponse } from "../../audit";
 import { canSeeIdDocuments } from "../consent";
 import { notFound, runTool, truncateList } from "../tool-utils";
 
@@ -65,7 +67,13 @@ export function registerPeopleTools(server: McpServer): void {
             })
             .map((r) => shapeUser(r, byUser.get(r.id) ?? [], scope));
 
-          return truncateList(shaped);
+          const listed = truncateList(shaped);
+          // The same trail the app leaves: one row per member whose private
+          // data this call returned.
+          auditReadsAfterResponse(
+            listed.rows.flatMap((user) => sensitiveReadEvents(user, scope)),
+          );
+          return listed;
         },
       }),
   );
@@ -103,7 +111,9 @@ export function registerPeopleTools(server: McpServer): void {
                 eq(schema.teamMemberships.cycle, await currentCycleNumber()),
               ),
             );
-          return shapeUser(row, memberships, scope);
+          const user = shapeUser(row, memberships, scope);
+          auditReadsAfterResponse(sensitiveReadEvents(user, scope));
+          return user;
         },
       }),
   );
@@ -179,4 +189,41 @@ export function shapeUser(
     };
   }
   return extended;
+}
+
+/**
+ * The audit rows one shaped user owes, the same ones the app writes when a
+ * captain reads someone else's emergency contacts or ID. Only values actually
+ * returned count, and a caller reading their own record owes none. Marked
+ * `via: "mcp"` so the audit page can say the read went through Claude.
+ */
+export function sensitiveReadEvents(
+  user: Record<string, unknown>,
+  scope: { campUserId: string },
+): AuditEvent[] {
+  const target = typeof user.id === "string" ? user.id : null;
+  if (!target || target === scope.campUserId) return [];
+  const read = (action: AuditEvent["action"], extra = {}): AuditEvent => ({
+    actorId: scope.campUserId,
+    action,
+    target,
+    metadata: { basis: "captain", via: "mcp", ...extra },
+  });
+  const events: AuditEvent[] = [];
+  if (
+    Array.isArray(user.emergencyContacts) &&
+    user.emergencyContacts.length > 0
+  ) {
+    events.push(read("safety.emergency_contacts.view"));
+  }
+  if (typeof user.passport === "string") {
+    events.push(read("member.id_document.viewed", { idType: "passport" }));
+  }
+  if (typeof user.saId === "string") {
+    events.push(read("member.id_document.viewed", { idType: "sa_id" }));
+  }
+  if (typeof user.eft === "string") {
+    events.push(read("member.bank_details.viewed"));
+  }
+  return events;
 }

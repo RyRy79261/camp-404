@@ -21,3 +21,21 @@ export function auditReadAfterResponse(event: AuditEvent): void {
     }
   });
 }
+
+/**
+ * Several reads from one request (a directory listing), written in one
+ * after-response task so a long list does not queue one task per row. Same
+ * fail-open, logged behaviour as auditReadAfterResponse.
+ */
+export function auditReadsAfterResponse(events: readonly AuditEvent[]): void {
+  if (events.length === 0) return;
+  after(async () => {
+    for (const event of events) {
+      try {
+        await appendAuditEvent(event);
+      } catch (error) {
+        console.error(`audit write failed: ${event.action}`, error);
+      }
+    }
+  });
+}

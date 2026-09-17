@@ -6,6 +6,7 @@ import {
   computeLiteralMatchIds,
   computeMatchIds,
   descendantCountLabel,
+  referralRosterForViewer,
   subtreeHasMatch,
 } from "../family-tree";
 
@@ -96,5 +97,31 @@ describe("subtreeHasMatch", () => {
     const root = buildTree([u("a", null), u("b", "a")])[0];
     expect(root ? subtreeHasMatch(root, new Set(["b"])) : null).toBe(true);
     expect(root ? subtreeHasMatch(root, new Set(["zzz"])) : null).toBe(false);
+  });
+});
+
+describe("referralRosterForViewer", () => {
+  const roster = [
+    { ...u("a", null, "Marlo"), inviteCode: null },
+    { ...u("b", "a", "Sara"), inviteCode: "neon-toaster" },
+    { ...u("c", "b", "Dust"), inviteCode: "velvet-anvil" },
+  ];
+
+  it("gives a captain every invite code", () => {
+    expect(
+      referralRosterForViewer(roster, { id: "a", rank: "captain" }),
+    ).toEqual(roster);
+  });
+
+  it("gives anyone else only their own code, and keeps who invited whom", () => {
+    for (const rank of ["camp_member", "team_lead"] as const) {
+      const seen = referralRosterForViewer(roster, { id: "b", rank });
+      expect(seen.map((r) => r.inviteCode)).toEqual([
+        null,
+        "neon-toaster",
+        null,
+      ]);
+      expect(seen.map((r) => r.inviterId)).toEqual([null, "a", "b"]);
+    }
   });
 });

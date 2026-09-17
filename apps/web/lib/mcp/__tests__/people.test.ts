@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type * as schema from "@camp404/db/schema";
 import { encrypt } from "@camp404/db/crypto";
-import { shapeUser } from "@/lib/mcp/tools/people";
+import { sensitiveReadEvents, shapeUser } from "@/lib/mcp/tools/people";
 
 // The people tools take their columns from the app's one field-access list
 // (canReadMemberField). These pin what each caller gets back.
@@ -116,5 +116,55 @@ describe("shapeUser", () => {
       duesPaid: true,
       passport: "P1234567",
     });
+  });
+});
+
+describe("sensitiveReadEvents", () => {
+  it("records a captain's read of contacts and a shown ID, marked as Claude", () => {
+    const shaped = shapeUser(row(), memberships, {
+      campUserId: CALLER,
+      isCaptain: true,
+    });
+
+    expect(sensitiveReadEvents(shaped, { campUserId: CALLER })).toEqual([
+      {
+        actorId: CALLER,
+        action: "safety.emergency_contacts.view",
+        target: SUBJECT,
+        metadata: { basis: "captain", via: "mcp" },
+      },
+      {
+        actorId: CALLER,
+        action: "member.id_document.viewed",
+        target: SUBJECT,
+        metadata: { basis: "captain", via: "mcp", idType: "passport" },
+      },
+    ]);
+  });
+
+  it("records bank details only when they were returned", () => {
+    const withEft = shapeUser(
+      row({ passportEncrypted: null, eftDetailsEncrypted: encrypt("FNB 123") }),
+      memberships,
+      { campUserId: CALLER, isCaptain: true },
+    );
+    expect(
+      sensitiveReadEvents(withEft, { campUserId: CALLER }).map((e) => e.action),
+    ).toEqual(["safety.emergency_contacts.view", "member.bank_details.viewed"]);
+  });
+
+  it("owes nothing for no private data, or for the caller's own record", () => {
+    const noConsent = shapeUser(
+      row({ aiDataConsent: false, emergencyContacts: null }),
+      memberships,
+      { campUserId: CALLER, isCaptain: true },
+    );
+    expect(sensitiveReadEvents(noConsent, { campUserId: CALLER })).toEqual([]);
+
+    const own = shapeUser(row(), memberships, {
+      campUserId: SUBJECT,
+      isCaptain: false,
+    });
+    expect(sensitiveReadEvents(own, { campUserId: SUBJECT })).toEqual([]);
   });
 });

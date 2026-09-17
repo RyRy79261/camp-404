@@ -84,6 +84,19 @@ describe("auditDetail", () => {
     );
   });
 
+  it("marks a private read made through Claude", () => {
+    for (const action of [
+      "member.id_document.viewed",
+      "member.bank_details.viewed",
+      "safety.emergency_contacts.view",
+    ]) {
+      expect(auditDetail(action, { basis: "captain", via: "mcp" })).toBe(
+        "Through Claude",
+      );
+      expect(auditDetail(action, { basis: "captain" })).toBeNull();
+    }
+  });
+
   it("shows nothing for a shape it does not know", () => {
     expect(auditDetail("member.rank_changed", { to: 42 })).toBeNull();
     expect(auditDetail("member.approval_decided", null)).toBeNull();

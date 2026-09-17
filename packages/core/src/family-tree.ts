@@ -1,4 +1,5 @@
-import type { ReferralUser, TreeNode } from "@camp404/types";
+import type { ReferralUser, TreeNode, ViewerRank } from "@camp404/types";
+import { canReadMemberField } from "./privacy";
 
 // Pure family-tree (referral graph) builders. CYCLE-GUARDED throughout (OD9):
 // a cyclic `inviterId` chain (A→B→A — possible via manual DB edits, migrations,
@@ -124,4 +125,26 @@ export function subtreeHasMatch(node: TreeNode, matches: Set<string>): boolean {
 /** "1 descendant" / "N descendants" — pluralised count label. */
 export function descendantCountLabel(count: number): string {
   return `${count} ${count === 1 ? "descendant" : "descendants"}`;
+}
+
+/**
+ * The referral roster as one viewer may read it, projected on the server
+ * before it reaches the page. An invite code can still let someone in (a
+ * captain's code may allow 100 uses, pre-approved), and `users.inviteCode` is
+ * captain-only in MEMBER_FIELD_READERS. So anyone below captain gets their own
+ * code and no one else's. Who invited whom (`inviterId`) stays: that link is
+ * the tree.
+ */
+export function referralRosterForViewer(
+  roster: readonly ReferralUser[],
+  viewer: { id: string; rank: ViewerRank },
+): ReferralUser[] {
+  return roster.map((row) =>
+    canReadMemberField(
+      { rank: viewer.rank, isSelf: row.id === viewer.id },
+      "users.inviteCode",
+    )
+      ? row
+      : { ...row, inviteCode: null },
+  );
 }

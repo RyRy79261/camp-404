@@ -17,9 +17,15 @@ import type { ReferralUser, TreeNode } from "@camp404/types";
 export function FamilyTree({
   roster,
   viewerUserId,
+  showsInviteCodes = false,
 }: {
   roster: ReferralUser[];
   viewerUserId: string;
+  /**
+   * The roster carries other members' invite codes (captains only; the server
+   * removes them for everyone else). Only changes the search hint.
+   */
+  showsInviteCodes?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -73,7 +79,11 @@ export function FamilyTree({
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name or invite code…"
+          placeholder={
+            showsInviteCodes
+              ? "Search by name or invite code…"
+              : "Search by name…"
+          }
           aria-label="Search the family tree"
           className="pl-10"
         />
@@ -127,6 +137,8 @@ interface BranchProps {
   matchIds: Set<string> | null;
   literalMatchIds: Set<string> | null;
   viewerUserId: string;
+  /** The parent row's name; absent on a root. */
+  inviterName?: string;
 }
 
 function Branch({
@@ -137,6 +149,7 @@ function Branch({
   matchIds,
   literalMatchIds,
   viewerUserId,
+  inviterName,
 }: BranchProps) {
   const childrenId = useId();
   const isOpen = expanded.has(node.user.id);
@@ -222,7 +235,11 @@ function Branch({
               <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
                 {node.user.inviteCode
                   ? `via ${node.user.inviteCode}`
-                  : "root"}
+                  : inviterName
+                    ? // A member does not receive other members' codes, so
+                      // the line names who invited them instead.
+                      `via ${inviterName}`
+                    : "root"}
               </p>
             </div>
             {hasChildren && (
@@ -246,6 +263,7 @@ function Branch({
               matchIds={matchIds}
               literalMatchIds={literalMatchIds}
               viewerUserId={viewerUserId}
+              inviterName={name}
             />
           ))}
         </ul>

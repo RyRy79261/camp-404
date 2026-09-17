@@ -65,4 +65,48 @@ describe("GET /api/avatar", () => {
     expect((await GET(req("receipts/r1.png"))).status).toBe(404);
     expect(getAuthenticatedUser).not.toHaveBeenCalled();
   });
+
+  it("serves a photo answer only to the member who gave it and to captains", async () => {
+    vi.mocked(isApproved).mockReturnValue(true);
+    const answer = "avatars/auth-2/answers/id-photo/image-x.webp";
+
+    vi.mocked(findCampUserByAuthId).mockResolvedValue({
+      id: "u1",
+      rank: "member",
+    } as never);
+    expect((await GET(req(answer))).status).toBe(401);
+    expect(get).not.toHaveBeenCalled();
+    // Their own profile photo folder is still open to every approved member.
+    expect((await GET(req("avatars/auth-2/avatar-x.webp"))).status).toBe(200);
+
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-2",
+      primaryEmail: "owner@example.com",
+    } as never);
+    expect((await GET(req(answer))).status).toBe(200);
+
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-9",
+      primaryEmail: "c@example.com",
+    } as never);
+    vi.mocked(findCampUserByAuthId).mockResolvedValue({
+      id: "u9",
+      rank: "captain",
+    } as never);
+    expect((await GET(req(answer))).status).toBe(200);
+  });
+
+  it("refuses a path that could resolve into another folder", async () => {
+    vi.mocked(isApproved).mockReturnValue(true);
+    for (const pathname of [
+      "avatars/auth-1/../auth-2/answers/id-photo/image-x.webp",
+      "avatars/./auth-2/answers/id-photo/image-x.webp",
+      "avatars//auth-2/answers/image-x.webp",
+      "avatars/auth-1/%2e%2e/auth-2/answers/image-x.webp",
+      "avatars\\auth-2\\answers\\image-x.webp",
+    ]) {
+      expect((await GET(req(pathname))).status).toBe(404);
+    }
+    expect(get).not.toHaveBeenCalled();
+  });
 });

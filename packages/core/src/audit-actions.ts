@@ -20,6 +20,7 @@ export const AUDIT_ACTION_LABELS = {
   "document.updated": "Edited a camp document",
   "invite.revoked": "Revoked an invite code",
   "member.approval_decided": "Decided an application",
+  "member.bank_details.viewed": "Viewed bank details",
   "member.export": "Exported the member list",
   "member.id_document.viewed": "Viewed an ID number",
   "member.note_added": "Added a captain note",
@@ -177,6 +178,12 @@ export function auditDetail(
         ? `Moved ${direction}`
         : null;
     }
+    // A read made through the Claude connector (MCP) says so; the app's own
+    // reads need no note.
+    case "member.id_document.viewed":
+    case "member.bank_details.viewed":
+    case "safety.emergency_contacts.view":
+      return text(metadata, "via") === "mcp" ? "Through Claude" : null;
     case "member.export": {
       const rows = count(metadata, "rows");
       return rows === null

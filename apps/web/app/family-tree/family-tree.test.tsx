@@ -76,4 +76,20 @@ describe("FamilyTree", () => {
     render(<FamilyTree roster={roster} viewerUserId="z" />);
     expect(screen.getByText("2 descendants")).toBeTruthy();
   });
+
+  it("names the inviter for a member, who gets no one else's code", () => {
+    const memberView = roster.map((r) => ({ ...r, inviteCode: null }));
+    render(<FamilyTree roster={memberView} viewerUserId="z" />);
+    expect(screen.getByText("root")).toBeTruthy();
+    expect(screen.getByText("via Marlo Vex")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Search by name…")).toBeTruthy();
+  });
+
+  it("shows codes and code search to a captain", () => {
+    render(<FamilyTree roster={roster} viewerUserId="z" showsInviteCodes />);
+    expect(screen.getByText("via code-b")).toBeTruthy();
+    expect(
+      screen.getByPlaceholderText("Search by name or invite code…"),
+    ).toBeTruthy();
+  });
 });
