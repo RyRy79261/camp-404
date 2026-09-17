@@ -5,7 +5,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@camp404/ui/components/dialog";
@@ -15,12 +14,15 @@ import { Textarea } from "@camp404/ui/components/textarea";
 import { Label } from "@camp404/ui/components/label";
 import {
   Bug,
+  Check,
   CheckCircle2,
   ExternalLink,
   Lightbulb,
+  Link as LinkIcon,
   Loader2,
 } from "lucide-react";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
+import { cn } from "@camp404/ui/lib/utils";
 import { RecorderPanel } from "../voice/recorder-panel";
 import { useDictationToggle } from "../voice/use-dictation-toggle";
 import { useVoiceSupported } from "../voice/use-voice-recorder";
@@ -47,9 +49,9 @@ interface ReportBugDialogProps {
 
 /**
  * Bug / feature-request modal. Files a GitHub issue via the feedback server
- * action — nothing is stored in our DB. Layout copied from
- * RyRy79261/intake-tracker's report-bug dialog (minus its manual section and
- * diagnostics capture), adapted to our Dialog + voice RecorderPanel. The
+ * action — nothing is stored in our DB. Drawn as the AfrikaBurn reporter
+ * (header, body and footer bands; type cards; dictation beside the label),
+ * with our voice RecorderPanel. The
  * "Improve with AI" toggle restructures the report server-side before filing.
  */
 export function ReportBugDialog({
@@ -71,9 +73,10 @@ export function ReportBugDialog({
     null,
   );
   const [error, setError] = React.useState<string | null>(null);
-  const [result, setResult] = React.useState<
-    Extract<FeedbackResult, { ok: true }> | null
-  >(null);
+  const [result, setResult] = React.useState<Extract<
+    FeedbackResult,
+    { ok: true }
+  > | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
   // Reset on each closed→open transition.
@@ -116,7 +119,9 @@ export function ReportBugDialog({
           useAi: aiAvailable && useAi,
           ...(attached ? { diagnostics: attached } : {}),
           route:
-            typeof window !== "undefined" ? window.location.pathname : undefined,
+            typeof window !== "undefined"
+              ? window.location.pathname
+              : undefined,
         });
         if (res.ok) setResult(res);
         else setError(res.error);
@@ -144,17 +149,17 @@ export function ReportBugDialog({
     >
       <DialogContent
         ref={contentRef}
-        className="max-h-[90vh] max-w-lg overflow-y-auto"
+        className="max-h-[92dvh] gap-0 overflow-y-auto p-0 sm:max-w-[600px]"
         style={result && sentHeight ? { minHeight: sentHeight } : undefined}
       >
         {result ? (
-          <div className="flex flex-col gap-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-[color:var(--color-primary)]" />
+          <div className="flex flex-col gap-4 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">
+            <DialogHeader className="text-left">
+              <DialogTitle className="flex items-center gap-2 text-lg font-extrabold">
+                <CheckCircle2 className="h-5 w-5 text-primary" aria-hidden />
                 Report filed
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="leading-relaxed">
                 {result.number > 0
                   ? `Issue #${result.number} was created on GitHub. Thanks!`
                   : "Thanks — your report was sent."}
@@ -164,65 +169,72 @@ export function ReportBugDialog({
               href={result.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-sm text-sm text-[color:var(--color-primary)] underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-ring)] focus-visible:ring-offset-2"
+              className="flex items-center gap-2 rounded-sm text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <ExternalLink className="h-4 w-4" />
-              {result.number > 0 ? `View issue #${result.number}` : "Open the tracker"}
+              <ExternalLink className="h-4 w-4" aria-hidden />
+              {result.number > 0
+                ? `View issue #${result.number}`
+                : "Open the tracker"}
             </a>
-            <DialogFooter className="mt-auto">
+            <div className="mt-auto flex justify-end">
               <Button onClick={() => onOpenChange(false)}>Done</Button>
-            </DialogFooter>
+            </div>
           </div>
         ) : (
           <>
-            <DialogHeader>
-              <DialogTitle>
+            <DialogHeader className="gap-1 p-5 pr-12 text-left">
+              <DialogTitle className="text-lg font-extrabold">
                 {kind === "bug" ? "Report a bug" : "Request a feature"}
               </DialogTitle>
-              <DialogDescription>
-                This opens a GitHub issue on our public tracker — please don&rsquo;t
-                include personal details.
+              <DialogDescription className="text-xs leading-relaxed">
+                This opens a GitHub issue on our public tracker — please
+                don&rsquo;t include personal details.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 border-t border-border p-5">
               {/* Kind toggle */}
               <div
                 role="group"
                 aria-label="Report type"
-                className="flex gap-2"
+                className="flex flex-col gap-2 sm:flex-row sm:gap-3"
               >
-                <Button
-                  type="button"
-                  variant={kind === "bug" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1 gap-2"
-                  aria-pressed={kind === "bug"}
-                  onClick={() => setKind("bug")}
-                >
-                  <Bug className="h-4 w-4" />
-                  Bug
-                </Button>
-                <Button
-                  type="button"
-                  variant={kind === "feature" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1 gap-2"
-                  aria-pressed={kind === "feature"}
-                  onClick={() => setKind("feature")}
-                >
-                  <Lightbulb className="h-4 w-4" />
-                  Feature
-                </Button>
+                <KindOption
+                  selected={kind === "bug"}
+                  onSelect={() => setKind("bug")}
+                  icon={Bug}
+                  label="Bug"
+                  description="Something is broken or behaving oddly."
+                />
+                <KindOption
+                  selected={kind === "feature"}
+                  onSelect={() => setKind("feature")}
+                  icon={Lightbulb}
+                  label="Feature"
+                  description="Something is missing or could work better."
+                />
               </div>
 
               {/* Description */}
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="feedback-description">
-                  {kind === "bug"
-                    ? "What went wrong?"
-                    : "What would you like to see?"}
-                </Label>
+              <div className="flex flex-col gap-2">
+                <div className="flex min-h-9 items-center justify-between gap-3">
+                  <Label
+                    htmlFor="feedback-description"
+                    className="font-semibold"
+                  >
+                    {kind === "bug"
+                      ? "What went wrong?"
+                      : "What would you like to see?"}
+                  </Label>
+                  {/* Voice dictation — appends to the description. Hidden in
+                      a browser that cannot record. */}
+                  {voiceSupported && !dictation.dictating && (
+                    <DictatePill
+                      ref={dictation.pillRef}
+                      onActivate={dictation.open}
+                    />
+                  )}
+                </div>
                 <Textarea
                   id="feedback-description"
                   value={description}
@@ -235,25 +247,16 @@ export function ReportBugDialog({
                       : "Describe the capability or improvement you have in mind."
                   }
                 />
+                {voiceSupported && dictation.dictating && (
+                  // No promptKey: the transcribe route has no bug-report
+                  // prompt, and free-form feedback doesn't benefit from one.
+                  // Dictation runs with the generic (unbiased) transcription.
+                  <RecorderPanel
+                    onTranscript={appendTranscript}
+                    onDismiss={dictation.close}
+                  />
+                )}
               </div>
-
-              {/* Voice dictation — appends to the description. Hidden in a
-                  browser that cannot record. */}
-              {!voiceSupported ? null : dictation.dictating ? (
-                // No promptKey: the transcribe route has no bug-report prompt,
-                // and free-form feedback doesn't benefit from one. Dictation
-                // runs with the generic (unbiased) transcription.
-                <RecorderPanel
-                  onTranscript={appendTranscript}
-                  onDismiss={dictation.close}
-                />
-              ) : (
-                <DictatePill
-                  ref={dictation.pillRef}
-                  onActivate={dictation.open}
-                  className="self-start"
-                />
-              )}
 
               {/* Improve with AI — only when the server has a Claude key. */}
               {aiAvailable && (
@@ -261,62 +264,69 @@ export function ReportBugDialog({
                   id="feedback-use-ai"
                   checked={useAi}
                   onCheckedChange={(c) => setUseAi(c === true)}
-                  rowClassName="rounded-md border border-[color:var(--color-border)] px-3"
+                  rowClassName="rounded-lg border-border bg-card"
                 >
-                  <span className="block font-medium">Improve with AI</span>
-                  <span className="block text-xs text-[color:var(--color-muted-foreground)]">
-                    Restructures your report into a clear title and steps
-                    before filing.
+                  <span className="block font-semibold">Improve with AI</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Restructures your report into a clear title and steps before
+                    filing.
                   </span>
                 </AckRow>
               )}
 
               {/* Diagnostics: off until the member ticks it, and then they see
-                  every line that will be sent. No board draws this panel; it
-                  reuses the AI toggle's row and a plain list. */}
-              <div className="flex flex-col gap-3 rounded-md border border-[color:var(--color-border)] p-3">
+                  every line that will be sent. */}
+              <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
                 <AckRow
                   id="feedback-attach-diagnostics"
                   checked={attached !== null}
                   onCheckedChange={(c) =>
                     setAttached(c === true ? collectDiagnostics() : null)
                   }
-                  rowClassName="py-0"
+                  rowClassName="border-0 bg-transparent p-0 hover:bg-transparent"
                 >
-                  <span className="block font-medium">
+                  <span className="block font-semibold">
                     Attach device details and recent errors
                   </span>
-                  <span className="block text-xs text-[color:var(--color-muted-foreground)]">
-                    Helps find the fault. You see everything that is sent
-                    below.
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Helps find the fault. You see everything that is sent below.
                   </span>
                 </AckRow>
                 {attached && <DiagnosticsList diagnostics={attached} />}
               </div>
 
               {error && (
-                <p
-                  role="alert"
-                  className="rounded-md border border-[color:var(--color-destructive)] bg-[color:var(--color-destructive)]/10 px-3 py-2 text-sm text-[color:var(--color-destructive)]"
-                >
+                <p role="alert" className="text-xs text-destructive">
                   {error}
                 </p>
               )}
             </div>
 
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isPending}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleSubmit} disabled={!canSubmit} className="gap-2">
-                {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isPending ? "Sending…" : "Send report"}
-              </Button>
-            </DialogFooter>
+            <div className="flex items-center justify-between gap-4 border-t border-border p-4 max-sm:flex-col-reverse max-sm:items-stretch">
+              <p className="flex items-center gap-2 text-xs text-muted-foreground max-sm:justify-center">
+                <LinkIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                You&rsquo;ll get the issue link once it&rsquo;s filed.
+              </p>
+              <div className="flex items-center gap-2.5 max-sm:flex-row-reverse">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  className="max-sm:flex-1"
+                >
+                  {isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  )}
+                  {isPending ? "Sending…" : "Send report"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isPending}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
           </>
         )}
       </DialogContent>
@@ -324,20 +334,81 @@ export function ReportBugDialog({
   );
 }
 
+/** One report type, as a selectable card (the AfrikaBurn reporter's). */
+function KindOption({
+  selected,
+  onSelect,
+  icon: Icon,
+  label,
+  description,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  icon: typeof Bug;
+  label: string;
+  description: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={cn(
+        "flex-1 rounded-lg border p-3.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        selected
+          ? "border-primary bg-primary/10"
+          : "border-input bg-card hover:border-muted-foreground/40",
+      )}
+    >
+      <span className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2">
+          <Icon
+            className={cn(
+              "h-4 w-4 shrink-0",
+              selected ? "text-primary" : "text-muted-foreground",
+            )}
+            aria-hidden
+          />
+          <span className="text-sm font-bold text-foreground">{label}</span>
+        </span>
+        <span
+          aria-hidden
+          className={cn(
+            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+            selected ? "border-primary bg-primary" : "border-input",
+          )}
+        >
+          {selected && (
+            <Check
+              className="h-3 w-3 text-primary-foreground"
+              strokeWidth={3}
+            />
+          )}
+        </span>
+      </span>
+      <span className="mt-1.5 block text-xs leading-relaxed text-muted-foreground">
+        {description}
+      </span>
+    </button>
+  );
+}
+
 /** Every line a report attaches, before it is sent. */
 function DiagnosticsList({ diagnostics }: { diagnostics: ReportDiagnostics }) {
   return (
     <div className="flex flex-col gap-2 text-xs">
-      <p className="text-[color:var(--color-muted-foreground)]">
+      <p className="text-muted-foreground">
         This goes on a public GitHub issue. Your name, email and account are
-        never attached. Personal details found in these lines are removed
-        first, but that can miss things.
+        never attached. Personal details found in these lines are removed first,
+        but that can miss things.
       </p>
-      <dl className="flex flex-col gap-1 rounded-md bg-[color:var(--color-muted)] p-2">
+      <dl className="flex flex-col gap-1 rounded-md bg-muted p-2">
         {diagnostics.environment.map((field) => (
           <div key={field.label} className="flex gap-2">
             <dt className="w-20 shrink-0 font-semibold">{field.label}</dt>
-            <dd className="min-w-0 flex-1 break-all font-mono">{field.value}</dd>
+            <dd className="min-w-0 flex-1 break-all font-mono">
+              {field.value}
+            </dd>
           </div>
         ))}
       </dl>
@@ -346,7 +417,7 @@ function DiagnosticsList({ diagnostics }: { diagnostics: ReportDiagnostics }) {
       ) : (
         <ul
           aria-label="Recent errors"
-          className="flex flex-col gap-1 rounded-md bg-[color:var(--color-muted)] p-2 font-mono"
+          className="flex flex-col gap-1 rounded-md bg-muted p-2 font-mono"
         >
           {diagnostics.errors.map((e, i) => (
             <li key={`${e.at}-${i}`} className="break-all">

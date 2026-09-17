@@ -36,10 +36,15 @@ export function RequiredChip() {
 }
 
 /**
- * The sticky runner header: title + Required/Optional badge, an escape, and a
- * progress bar over the scrolling wizard body. A blocking questionnaire holds
- * the whole app, so its only escape is Sign out. An optional one can wait, so
- * its escape is "Later", back to the inbox where it stays listed.
+ * The runner header: title + Required/Optional badge, an escape, and a progress
+ * bar over the wizard body.
+ *
+ * A blocking questionnaire holds the whole app, so the console draws no header
+ * around it and this is the page's only chrome: a bar that sticks to the top,
+ * whose only escape is Sign out. An optional one can wait, so it renders inside
+ * the console under its sticky header; a second sticky bar would slide beneath
+ * that one, so it is a plain page heading instead, and its escape is "Later",
+ * back to the inbox where it stays listed.
  */
 export function BlockingTopBar({
   title,
@@ -56,6 +61,42 @@ export function BlockingTopBar({
   showProgress?: boolean;
   blocking?: boolean;
 }) {
+  const progress = showProgress && (
+    <div className="flex items-center gap-2.5">
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+        Step {current} of {total}
+      </span>
+      <ProgressBar
+        value={current}
+        max={total}
+        label="Questionnaire progress"
+        className="flex-1"
+      />
+    </div>
+  );
+
+  if (!blocking) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <BlockingBadge blocking={false} />
+            </div>
+            {/* The runner page's level-1 heading (the page has no other). */}
+            <h1 className="break-words text-2xl font-semibold tracking-tight text-foreground">
+              {title}
+            </h1>
+          </div>
+          <Button type="button" variant="outline" size="sm" asChild>
+            <a href="/notifications">Later</a>
+          </Button>
+        </div>
+        {progress}
+      </div>
+    );
+  }
+
   return (
     <div className="sticky top-0 z-20 -mx-4 flex flex-col gap-2 border-b bg-card px-4 py-3">
       <div className="flex items-center gap-2.5">
@@ -63,28 +104,12 @@ export function BlockingTopBar({
         <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">
           {title}
         </h1>
-        <BlockingBadge blocking={blocking} />
+        <BlockingBadge blocking />
         <Button type="button" variant="ghost" size="sm" asChild>
-          {blocking ? (
-            <SignOutLink href={signOutHref} />
-          ) : (
-            <a href="/notifications">Later</a>
-          )}
+          <SignOutLink href={signOutHref} />
         </Button>
       </div>
-      {showProgress && (
-        <div className="flex items-center gap-2.5">
-          <span className="shrink-0 font-mono text-caption text-muted-foreground">
-            Step {current} of {total}
-          </span>
-          <ProgressBar
-            value={current}
-            max={total}
-            label="Questionnaire progress"
-            className="flex-1"
-          />
-        </div>
-      )}
+      {progress}
     </div>
   );
 }
@@ -99,7 +124,9 @@ export function BlockingNotice() {
   return (
     <Alert variant="error" role="status">
       <TriangleAlert aria-hidden />
-      <span>You can&apos;t use the rest of the app until this is finished.</span>
+      <span>
+        You can&apos;t use the rest of the app until this is finished.
+      </span>
     </Alert>
   );
 }

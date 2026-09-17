@@ -1,7 +1,8 @@
 import "server-only";
 
+import { cache } from "react";
 import { redirect } from "next/navigation";
-import { getAuthenticatedUserOrRedirect, type AuthenticatedUser } from "./auth";
+import { getAuthenticatedUser, type AuthenticatedUser } from "./auth";
 import { nextGate } from "./required-actions";
 import {
   ensureCampUser,
@@ -51,6 +52,29 @@ export async function memberBlock(
   return null;
 }
 
+/** Where the signed-in viewer stands on the member ladder. */
+export type MemberState =
+  | { kind: "signed_out" }
+  | {
+      kind: "member";
+      authUser: AuthenticatedUser;
+      campUser: CampUser;
+      block: MemberBlock | null;
+    };
+
+/**
+ * Sign-in plus the member ladder, read once per request. The console layout
+ * (to decide whether to draw the header) and the page (to redirect) both ask,
+ * and `cache` makes the second ask free: one session read, one gate sync.
+ */
+export const resolveMemberState = cache(async (): Promise<MemberState> => {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) return { kind: "signed_out" };
+  const campUser = await ensureCampUser(authUser);
+  const block = await memberBlock(campUser, authUser.primaryEmail);
+  return { kind: "member", authUser, campUser, block };
+});
+
 /**
  * Sign-in plus the member ladder for a server page: redirects on the first
  * rung the viewer has not cleared, otherwise returns who they are.
@@ -59,9 +83,8 @@ export async function requireMemberPage(): Promise<{
   authUser: AuthenticatedUser;
   campUser: CampUser;
 }> {
-  const authUser = await getAuthenticatedUserOrRedirect();
-  const campUser = await ensureCampUser(authUser);
-  const block = await memberBlock(campUser, authUser.primaryEmail);
-  if (block) redirect(block.href);
-  return { authUser, campUser };
+  const state = await resolveMemberState();
+  if (state.kind === "signed_out") redirect("/auth/sign-in");
+  if (state.block) redirect(state.block.href);
+  return { authUser: state.authUser, campUser: state.campUser };
 }

@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { ClipboardList, Lock } from "lucide-react";
+import { ClipboardList, ListChecks, Lock, Timer } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
-import { IconBadge } from "@camp404/ui/components/icon-badge";
-import { QuestionnaireSummaryCard } from "@camp404/ui/components/questionnaire-summary-card";
+import { Card, CardContent } from "@camp404/ui/components/card";
+import { GateScreen } from "@/components/auth-shell";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 
-// Surface 23 — the gate interstitial shown before a required questionnaire. A
-// read-only, server-rendered "Before you go any further" hold: what's ahead, a
-// Start CTA into the runner, and a sign-out escape. No form, no writes, no rank
-// gate (gating is auth + invite + completion; the page owns those redirects).
+// The gate interstitial shown before a required questionnaire, drawn as the
+// AfrikaBurn organiser gate screen. A read-only, server-rendered "Before you go
+// any further" hold: what's ahead, a Start CTA into the runner, and a sign-out
+// escape. No form, no writes, no rank gate (gating is auth + invite +
+// completion; the page owns those redirects).
 
 export function QuestionnaireGate({
   title,
@@ -22,41 +23,41 @@ export function QuestionnaireGate({
   startHref: string;
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 py-12 text-center">
-      <IconBadge size="lg" shape="circle" tone="primary">
-        <ClipboardList aria-hidden />
-      </IconBadge>
+    <GateScreen
+      icon={<ClipboardList aria-hidden />}
+      eyebrow="Required questionnaire"
+      title="Before you go any further"
+      description="We need a few details before you can use the rest of the app. It only takes a couple of minutes."
+    >
+      <Card>
+        <CardContent className="flex flex-col gap-2 p-5">
+          <p className="text-base font-semibold text-foreground">{title}</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <ListChecks aria-hidden className="h-4 w-4 shrink-0" />
+              {questionCount} {questionCount === 1 ? "question" : "questions"}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Timer aria-hidden className="h-4 w-4 shrink-0" />
+              about {estimatedMinutes} min
+            </span>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="flex flex-col gap-2">
-        <span className="font-mono text-xs uppercase tracking-[0.16em] text-accent">
-          Required questionnaire
-        </span>
-        <h1 className="text-2xl font-bold leading-tight">
-          Before you go any further
-        </h1>
-        <p className="max-w-prose text-balance text-muted-foreground">
-          We need a few details before you can use the rest of the app. It only
-          takes a couple of minutes.
-        </p>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Button asChild size="lg">
+          <Link href={startHref}>Start questionnaire</Link>
+        </Button>
+        <Button asChild variant="outline" size="lg">
+          <SignOutLink />
+        </Button>
       </div>
 
-      <QuestionnaireSummaryCard
-        className="w-full max-w-sm"
-        title={title}
-        questionCount={questionCount}
-        estimatedMinutes={estimatedMinutes}
-      />
-
-      <Button asChild size="lg" className="w-full max-w-sm">
-        <Link href={startHref}>Start questionnaire</Link>
-      </Button>
-
-      <p className="inline-flex items-center gap-1.5 text-caption text-muted-foreground">
-        <Lock aria-hidden className="size-3" />
+      <p className="inline-flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <Lock aria-hidden className="h-3 w-3" />
         You can&apos;t skip this — it&apos;s required to continue.
       </p>
-
-      <SignOutLink className="text-label text-muted-foreground underline-offset-4 hover:underline" />
-    </div>
+    </GateScreen>
   );
 }

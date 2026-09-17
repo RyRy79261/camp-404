@@ -5,21 +5,21 @@ import { ImageResponse } from "next/og";
    assets to commit and the artwork stays in sync with the brand in code.
 
    It recreates the landing page's glitched "404" — the magenta/cyan
-   RGB-split chromatic aberration on a midnight-violet field — as a single
+   RGB-split chromatic aberration on a charcoal field — as a single
    static frame (link-preview crawlers and browser tabs don't animate, so
    one crisp frame renders identically everywhere). */
 
-// Hex equivalents of the oklch design tokens in packages/ui globals.css.
-const BACKGROUND = "#0d061e"; // --color-background / themeColor
-const FOREGROUND = "#f7ecf3"; // --color-foreground (off-white pink)
-const MUTED = "#b29ab0"; // --color-muted-foreground
+// Hex equivalents of the design tokens in packages/ui globals.css.
+const BACKGROUND = "#17191b"; // --color-background / themeColor
+const FOREGROUND = "#f4f0e8"; // --color-foreground (warm off-white)
+const MUTED = "#adb6b3"; // --color-muted-foreground
 const MAGENTA = "rgba(255, 0, 140, 0.92)"; // primary glitch channel
 const CYAN = "rgba(0, 220, 255, 0.92)"; // accent glitch channel
 
 export const SHARE_SIZE = { width: 1200, height: 630 } as const;
 export const SHARE_CONTENT_TYPE = "image/png";
 export const SHARE_ALT =
-  "Camp 404 — a glitched 404 logo on a midnight-violet field. A calm command centre for a chaotic desert.";
+  "Camp 404 — a glitched 404 logo on a charcoal field. A calm command centre for a chaotic desert.";
 
 /** 1200×630 Open Graph / Twitter share card. */
 export function renderShareImage(): ImageResponse {
@@ -45,7 +45,7 @@ export function renderShareImage(): ImageResponse {
             inset: 0,
             display: "flex",
             backgroundImage:
-              "radial-gradient(circle at 50% 46%, rgba(255,0,160,0.20), rgba(13,6,30,0) 58%)",
+              "radial-gradient(circle at 50% 46%, rgba(255,0,160,0.20), rgba(23,25,27,0) 58%)",
           }}
         />
 

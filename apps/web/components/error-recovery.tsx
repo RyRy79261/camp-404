@@ -2,19 +2,19 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { TriangleAlert } from "lucide-react";
+import { RotateCw, TriangleAlert } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
-import { CodeDisplay } from "@camp404/ui/components/code-display";
-import { IconBadge } from "@camp404/ui/components/icon-badge";
-import { cn } from "@camp404/ui/lib/utils";
+import { Card, CardContent } from "@camp404/ui/components/card";
 import { openReportProblem } from "@/components/feedback/report-problem";
+import { GateScreen } from "@/components/auth-shell";
 import { authClient } from "@/lib/auth-client";
 
-// What an error boundary shows (board S22): what happened, the trace to quote,
-// and three ways on: Report, Try again, and a way back. `standalone` fills the
-// screen (the app's root boundary); `inline` sits in a section's page area, so
-// a failed captain, tools or questionnaire page keeps the app around it and
-// offers the section's own way back.
+// What an error boundary shows: what happened, the trace to quote, and three
+// ways on: Report, Try again, and a way back. `standalone` fills the screen as
+// the AfrikaBurn organiser gate screen (the app's root boundary); `inline` is
+// the console's page-level card, so a failed captain, tools or questionnaire
+// page keeps the header and nav around it and offers the section's own way
+// back.
 
 export interface ErrorRecoveryProps {
   error: Error & { digest?: string };
@@ -26,6 +26,10 @@ export interface ErrorRecoveryProps {
   backLabel?: string;
 }
 
+const TITLE = "Something went sideways.";
+const DESCRIPTION =
+  "An unexpected error tripped us up. Try again — if it keeps happening, let a camp captain know.";
+
 export function ErrorRecovery({
   error,
   reset,
@@ -34,8 +38,7 @@ export function ErrorRecovery({
   backLabel = "Back to camp",
 }: ErrorRecoveryProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
-  // The reporter only opens for someone signed in (the S22 error board draws
-  // a Report button beside Reload).
+  // The reporter only opens for someone signed in.
   const { data: session } = authClient.useSession();
   useEffect(() => {
     // Surface it for diagnostics; the digest correlates with the server log.
@@ -46,60 +49,76 @@ export function ErrorRecovery({
     headingRef.current?.focus();
   }, [error]);
 
-  return (
-    <main
-      className={cn(
-        "mx-auto flex w-full max-w-lg flex-col items-center gap-6 px-4 text-center",
-        frame === "standalone"
-          ? "min-h-[100dvh] justify-center py-12"
-          : "py-16",
-      )}
-    >
-      <div className="flex flex-col items-center gap-2">
-        <IconBadge size="lg" tone="destructive" className="mb-2">
-          <TriangleAlert aria-hidden />
-        </IconBadge>
-        <h1
-          ref={headingRef}
-          tabIndex={-1}
-          className="text-2xl font-semibold outline-none"
+  // Trace code: correlates this error with the server logs. Quote it when
+  // reporting so a captain can find the matching entry.
+  const trace = error.digest ? (
+    <p className="font-mono text-xs text-muted-foreground">
+      Trace: {error.digest}
+    </p>
+  ) : null;
+
+  const actions = (
+    <div className="flex flex-wrap items-center justify-center gap-3">
+      {session && (
+        <Button
+          variant="outline"
+          onClick={() =>
+            openReportProblem({
+              description: error.digest
+                ? `The page showed an error. Trace: ${error.digest}\n\nWhat I was doing: `
+                : "The page showed an error.\n\nWhat I was doing: ",
+            })
+          }
         >
-          Something went sideways.
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          An unexpected error tripped us up. Try again &mdash; if it keeps
-          happening, let a camp captain know.
-        </p>
-        {error.digest && (
-          // Trace code: correlates this error with the server logs. Quote it
-          // when reporting so a captain can find the matching entry.
-          <CodeDisplay
-            aria-label="Error trace"
-            code={`Trace: ${error.digest}`}
-            className="mt-1 self-center border-0 bg-muted text-xs text-muted-foreground"
-          />
-        )}
-      </div>
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        {session && (
-          <Button
-            variant="outline"
-            onClick={() =>
-              openReportProblem({
-                description: error.digest
-                  ? `The page showed an error. Trace: ${error.digest}\n\nWhat I was doing: `
-                  : "The page showed an error.\n\nWhat I was doing: ",
-              })
-            }
-          >
-            Report
-          </Button>
-        )}
-        <Button onClick={reset}>Try again</Button>
-        <Button variant="outline" asChild>
-          <Link href={backHref}>{backLabel}</Link>
+          Report
         </Button>
-      </div>
-    </main>
+      )}
+      <Button onClick={reset}>
+        <RotateCw aria-hidden />
+        Try again
+      </Button>
+      <Button variant="outline" asChild>
+        <Link href={backHref}>{backLabel}</Link>
+      </Button>
+    </div>
+  );
+
+  if (frame === "inline") {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center gap-4 p-10 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-accent">
+            <TriangleAlert className="h-5 w-5" aria-hidden />
+          </span>
+          <div className="flex flex-col gap-1.5">
+            <h1
+              ref={headingRef}
+              tabIndex={-1}
+              className="text-lg font-semibold tracking-tight outline-none"
+            >
+              {TITLE}
+            </h1>
+            <p className="mx-auto max-w-md text-sm text-muted-foreground">
+              {DESCRIPTION}
+            </p>
+            {trace}
+          </div>
+          {actions}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <GateScreen
+      icon={<TriangleAlert aria-hidden />}
+      eyebrow="Camp 404"
+      title={TITLE}
+      description={DESCRIPTION}
+      meta={trace}
+      headingRef={headingRef}
+    >
+      {actions}
+    </GateScreen>
   );
 }

@@ -17,11 +17,6 @@ interface Route {
 
 const ROUTES: Route[] = [
   {
-    path: "/captains/tools",
-    bar: "team_lead",
-    open: (p) => p.getByRole("link", { name: /Questionnaires/ }),
-  },
-  {
     path: "/captains/questionnaires",
     bar: "team_lead",
     open: (p) => p.getByRole("button", { name: "New questionnaire" }),

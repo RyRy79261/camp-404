@@ -1,7 +1,7 @@
 import { renderSquareIcon } from "@/lib/og-image";
 
 // iOS home-screen icon. Apple requires PNG and ignores transparency, so the
-// renderer fills the midnight-violet background edge to edge.
+// renderer fills the charcoal background edge to edge.
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 

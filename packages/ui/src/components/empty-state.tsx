@@ -2,20 +2,24 @@ import * as React from "react"
 
 import { cn } from "../lib/utils"
 
-// Empty/zero-data placeholder (board 08) — rosters with no members, queues with
-// nothing outstanding, family trees with no accounts. A calm, borderless block:
-// an optional icon in a 64px circle, a title, a description, and room for a
-// call-to-action via children.
+// A calm, centred empty or parked state (from the AfrikaBurn app): a dashed
+// card for a surface with nothing to show yet. Warm and honest, never an
+// error. A call-to-action goes in `action` (or children).
 export interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** Optional decorative leading icon. */
   icon?: React.ReactNode
   title: string
-  description?: string
+  /** Optional supporting sentence(s). */
+  description?: React.ReactNode
+  /** Optional call-to-action (button/link). */
+  action?: React.ReactNode
 }
 
 function EmptyState({
   icon,
   title,
   description,
+  action,
   className,
   children,
   ...props
@@ -23,22 +27,28 @@ function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-3 px-6 py-8 text-center",
+        "flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card/40 px-6 py-16 text-center",
         className,
       )}
       {...props}
     >
       {icon && (
-        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-muted-foreground [&_svg]:h-6 [&_svg]:w-6">
+        <span
+          className="text-muted-foreground [&_svg]:h-6 [&_svg]:w-6"
+          aria-hidden
+        >
           {icon}
         </span>
       )}
-      <p className="text-base font-bold text-foreground">{title}</p>
-      {description && (
-        <p className="max-w-sm text-[13px] text-muted-foreground">
-          {description}
-        </p>
-      )}
+      <div className="flex flex-col gap-1.5">
+        <p className="text-base font-medium text-foreground">{title}</p>
+        {description && (
+          <p className="mx-auto max-w-md text-sm text-muted-foreground">
+            {description}
+          </p>
+        )}
+      </div>
+      {action}
       {children}
     </div>
   )

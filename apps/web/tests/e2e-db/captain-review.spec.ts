@@ -75,9 +75,9 @@ test("approve one applicant, reject another with a reason", async ({
     0,
   );
 
-  await ada.goto("/tools");
+  await ada.goto("/tools/forms");
   await expect(
-    ada.getByRole("heading", { level: 1, name: "Tools" }),
+    ada.getByRole("heading", { level: 1, name: "My forms" }),
   ).toBeVisible();
 
   // Reject Bo, telling him why.

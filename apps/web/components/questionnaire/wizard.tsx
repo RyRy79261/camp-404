@@ -332,10 +332,10 @@ function WizardProgress({ current, total }: { current: number; total: number }) 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="text-xs tabular-nums text-muted-foreground">
           Step {current} of {total}
         </span>
-        <span className="font-mono text-xs text-accent">{pct}%</span>
+        <span className="text-xs tabular-nums text-accent">{pct}%</span>
       </div>
       <ProgressBar value={current} max={total} label="Onboarding progress" />
     </div>

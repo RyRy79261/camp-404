@@ -75,24 +75,26 @@ export default async function QuestionnairePage({
   const questionCount = flattenQuestions(questionnaire).length;
   const estimatedMinutes = Math.max(2, Math.round(questionCount / 8));
 
+  if (!start) {
+    return (
+      <QuestionnaireGate
+        title={TITLE}
+        questionCount={questionCount}
+        estimatedMinutes={estimatedMinutes}
+        startHref="/onboarding/questionnaire?start=1"
+      />
+    );
+  }
+
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 py-8">
-      {start ? (
-        <QuestionnaireWizard
-          questionnaire={questionnaire}
-          initialResponses={initialResponses}
-          action={saveBurnerProfile}
-          variant="runner"
-          title={TITLE}
-        />
-      ) : (
-        <QuestionnaireGate
-          title={TITLE}
-          questionCount={questionCount}
-          estimatedMinutes={estimatedMinutes}
-          startHref="/onboarding/questionnaire?start=1"
-        />
-      )}
+    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col px-4 py-8 sm:px-6">
+      <QuestionnaireWizard
+        questionnaire={questionnaire}
+        initialResponses={initialResponses}
+        action={saveBurnerProfile}
+        variant="runner"
+        title={TITLE}
+      />
     </main>
   );
 }

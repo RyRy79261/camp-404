@@ -1,0 +1,111 @@
+import { redirect } from "next/navigation";
+import { flattenBuilderQuestions } from "@camp404/types";
+import type { QuestionnaireResponses } from "@camp404/types";
+import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
+import {
+  ensureCampUser,
+  getPendingRequiredActions,
+  hasCampAccess,
+  syncOpenGates,
+} from "@/lib/users";
+import { getActivationById, getRequiredAction } from "@camp404/db/activations";
+import { loadQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
+import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
+import { nextGate } from "@/lib/required-actions";
+import { BuilderRunner } from "./runner";
+import { RunnerEdgeCard } from "./edge-states";
+import { RunnerFrame } from "./runner-frame";
+
+// Reads the Neon Auth session + the activation on every request.
+export const dynamic = "force-dynamic";
+
+export const metadata = { title: "Questionnaire — Camp 404" };
+
+// The generic runner for a BUILDER questionnaire dispatched via an activation.
+// Unlike the bespoke onboarding gate, this is reachable by direct link, so it
+// enforces its own access predicate (the viewer must be targeted) and re-asserts
+// the blocking-gate spine so a deep link can't jump an earlier required gate.
+export default async function QuestionnaireRunnerPage({
+  params,
+}: {
+  params: Promise<{ activationId: string }>;
+}) {
+  const { activationId } = await params;
+  const authUser = await getAuthenticatedUserOrRedirect();
+  const campUser = await ensureCampUser(authUser);
+  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+    redirect("/signup/required");
+  }
+
+  const activation = await getActivationById(activationId);
+  if (!activation) return <RunnerEdgeCard kind="closed" />;
+
+  // Access predicate: the questionnaire must have been sent to this viewer and
+  // still be pending — a completed/waived/expired obligation can't answer here.
+  // A member who joined the audience after the send opened is gated first, so
+  // a link from a reminder or a teammate does not say "not invited".
+  await syncOpenGates(campUser.id);
+  const targeted = await getRequiredAction(
+    campUser.id,
+    activation.questionnaireKey,
+  );
+  if (!targeted) return <RunnerEdgeCard kind="not-invited" />;
+  // Must be a PENDING obligation that belongs to THIS activation — a stale row
+  // pointing at a different (e.g. older) activation for the same key can't answer
+  // here (nextGate routes them to the right one).
+  if (
+    targeted.status === "completed" &&
+    targeted.activationId === activation.id
+  ) {
+    return <RunnerEdgeCard kind="completed" />;
+  }
+  if (
+    targeted.status !== "pending" ||
+    targeted.activationId !== activation.id
+  ) {
+    return <RunnerEdgeCard kind="closed" />;
+  }
+
+  // A direct link must not bypass an EARLIER pending blocking gate.
+  const gate = nextGate(await getPendingRequiredActions(campUser.id));
+  if (gate && gate !== `/questionnaires/${activationId}`) redirect(gate);
+
+  if (activation.status !== "open") return <RunnerEdgeCard kind="closed" />;
+
+  // Render the exact version this activation pinned, so historical responses
+  // stay valid against what was answered.
+  const definition = await getBuilderDefinition(
+    activation.questionnaireKey,
+    activation.version,
+  );
+  if (!definition) return <RunnerEdgeCard kind="unavailable" />;
+  if (flattenBuilderQuestions(definition).length === 0) {
+    return <RunnerEdgeCard kind="empty" />;
+  }
+
+  // The activation's FROZEN year namespace, never the live config: a rollover
+  // landing mid-form must not change which row this page prefills from or the
+  // row the save writes to. `carryOver` picks the prefill rule — carry reads the
+  // newest answer at or below this cycle, fresh reads strictly this one.
+  const stored = await loadQuestionnaireResponse(
+    campUser.id,
+    activation.questionnaireKey,
+    { cycle: activation.cycle, carryOver: activation.carryOver },
+  );
+  const initialResponses: QuestionnaireResponses = stored?.responses ?? {};
+
+  // A blocking send renders bare and full-screen under its own chrome; an
+  // optional one sits in the console like any other page (RunnerFrame).
+  return (
+    <RunnerFrame>
+      <BuilderRunner
+        activationId={activation.id}
+        definition={definition}
+        initialResponses={initialResponses}
+        seededFromPriorCycle={stored?.seededFromCycle != null}
+        title={activation.title}
+        blocking={activation.blocking}
+      />
+    </RunnerFrame>
+  );
+}

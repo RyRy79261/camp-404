@@ -49,12 +49,12 @@ test("build, publish, send, answer, read the results", async ({
   // The open send is blocking, so it comes before the profile on the ladder.
   await expect(member).toHaveURL(/\/(questionnaires\/|onboarding\/)/);
   await completeOnboarding(request, "db-member");
-  await member.goto("/tools");
+  await member.goto("/tools/forms");
   await answerGate(member, { ...GEAR, text: "A bell tent" });
   // Answered, the member uses the app again.
-  await member.goto("/tools");
+  await member.goto("/tools/forms");
   await expect(
-    member.getByRole("heading", { level: 1, name: "Tools" }),
+    member.getByRole("heading", { level: 1, name: "My forms" }),
   ).toBeVisible();
 
   // Read the results: the counts, then each answer.

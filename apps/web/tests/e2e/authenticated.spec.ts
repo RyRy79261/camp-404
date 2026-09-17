@@ -65,15 +65,16 @@ test.describe("authenticated flow (test-mode)", () => {
 
     await page.goto("/");
     await expect(page).toHaveURL("/");
-    // Home now shows the control panel instead of the sign-in CTA: the
-    // heading plus the always-cleared Team Member group's live "My Profile"
-    // tile (a link, unlike the coming-soon tiles which are inert).
+    // Home is now the console Overview instead of the sign-in CTA: the
+    // heading, and the console nav with a member destination in it.
     await expect(
-      page.getByRole("heading", { name: "Control panel" }),
+      page.getByRole("heading", { level: 1, name: "Overview" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: /My Profile/ }),
-    ).toBeVisible();
+      page
+        .getByRole("navigation", { name: "Console" })
+        .getByRole("link", { name: "My forms" }),
+    ).toHaveAttribute("href", "/tools/forms");
   });
 
   test("a pending member is held at /pending-approval after onboarding", async ({
@@ -96,7 +97,7 @@ test.describe("authenticated flow (test-mode)", () => {
     await expect(page.getByText("Application submitted")).toBeVisible();
 
     // The gate holds on other protected routes too, not just home.
-    await page.goto("/tools");
+    await page.goto("/tools/forms");
     await expect(page).toHaveURL(/\/pending-approval/);
   });
 
@@ -105,7 +106,7 @@ test.describe("authenticated flow (test-mode)", () => {
   }) => {
     // No test-user cookie → getAuthenticatedUserOrRedirect bounces to the
     // Neon Auth sign-in page.
-    await page.goto("/tools");
+    await page.goto("/tools/forms");
     await expect(page).toHaveURL(/\/auth\/sign-in/);
   });
 

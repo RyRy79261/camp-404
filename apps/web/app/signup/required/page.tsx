@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { KeyRound } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
@@ -27,7 +28,11 @@ export default async function SignupRequiredPage() {
   }
 
   return (
-    <AuthShell hideBack footer="Camp 404 is invite-only.">
+    <AuthShell
+      eyebrow="Invite required"
+      icon={<KeyRound aria-hidden />}
+      footer="Camp 404 is invite-only."
+    >
       <InviteGateForm email={authUser.primaryEmail} />
     </AuthShell>
   );

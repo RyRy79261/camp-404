@@ -1,10 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
-import { TriangleAlert } from "lucide-react";
-import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
-import { InputField } from "@camp404/ui/components/input-field";
+import { Input } from "@camp404/ui/components/input";
+import { Label } from "@camp404/ui/components/label";
 import { submitInviteCode, type SubmitInviteResult } from "./actions";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 
@@ -21,47 +20,46 @@ export function InviteGateForm({ email }: { email: string | null }) {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <h1 className="text-subtitle-hero font-bold text-card-foreground">
-          One more thing
-        </h1>
-        <p className="text-label text-muted-foreground">
-          {email ? (
-            <>
-              You&apos;re signed in as{" "}
-              <span className="font-medium text-foreground">{email}</span>.{" "}
-            </>
-          ) : null}
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl">One more thing</h1>
+        <p className="text-sm text-muted-foreground">
           Camp 404 is invite-only — drop your code below to come aboard.
         </p>
       </div>
 
-      <InputField
-        id="invite-code"
-        name="code"
-        label="Invite code"
-        placeholder="CAMP-XXXX-XXXX"
-        autoComplete="off"
-        spellCheck={false}
-        autoCapitalize="off"
-        autoCorrect="off"
-        required
-      />
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="invite-code">Invite code</Label>
+        <Input
+          id="invite-code"
+          name="code"
+          placeholder="CAMP-XXXX-XXXX"
+          autoComplete="off"
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          required
+        />
+      </div>
 
       {state && !state.ok && (
-        <Alert variant="error">
-          <TriangleAlert />
-          <span>{state.error}</span>
-        </Alert>
+        <p role="alert" className="text-sm font-medium text-destructive">
+          {state.error}
+        </p>
       )}
 
-      <Button type="submit" className="w-full" disabled={isPending}>
+      <Button type="submit" size="lg" disabled={isPending}>
         {isPending ? "Checking…" : "Enter camp"}
       </Button>
 
-      <div className="flex justify-center">
-        <SignOutLink className="text-label font-medium text-accent hover:underline" />
-      </div>
+      <p className="text-center text-xs text-muted-foreground">
+        {email ? (
+          <>
+            Signed in as <span className="text-foreground">{email}</span>
+            {" · "}
+          </>
+        ) : null}
+        <SignOutLink className="font-medium text-primary hover:underline" />
+      </p>
     </form>
   );
 }

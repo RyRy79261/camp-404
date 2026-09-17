@@ -3,18 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { TriangleAlert } from "lucide-react";
-import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
-import { Divider } from "@camp404/ui/components/divider";
-import { InputField } from "@camp404/ui/components/input-field";
-import { OAuthButton } from "@camp404/ui/components/google-button";
+import { Input } from "@camp404/ui/components/input";
+import { Label } from "@camp404/ui/components/label";
 import { authClient } from "@/lib/auth-client";
 
 /**
- * Email/password sign-up form, mirroring RyRy79261/intake-tracker's
- * login-04 block. We deliberately don't ask for a name — it goes through
- * silently as the email so Better Auth's required field is satisfied.
+ * Email/password sign-up form, in the AfrikaBurn auth form's markup. We
+ * deliberately don't ask for a name — it goes through silently as the email so Better Auth's required field is satisfied.
  * Camp 404's displayName is reconciled later from the burner profile if
  * we ever need a richer string.
  */
@@ -84,77 +80,91 @@ export function SignUpForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h1 className="text-subtitle-hero font-bold text-card-foreground">
-          Create your account
-        </h1>
-        <p className="text-label text-muted-foreground">
+        <h1 className="text-2xl">Create your account</h1>
+        <p className="text-sm text-muted-foreground">
           Set a password or continue with Google. We&apos;ll ask the rest in the
           questionnaire.
         </p>
       </div>
 
-      <InputField
-        id="signup-email"
-        label="Email"
-        type="email"
-        placeholder="you@example.com"
-        autoComplete="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        disabled={loading}
-      />
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="signup-email">Email</Label>
+        <Input
+          id="signup-email"
+          type="email"
+          placeholder="you@example.com"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={loading}
+        />
+      </div>
 
-      <InputField
-        id="signup-password"
-        label="Password"
-        type="password"
-        placeholder="••••••••"
-        autoComplete="new-password"
-        required
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        disabled={loading}
-      />
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="signup-password">Password</Label>
+        <Input
+          id="signup-password"
+          type="password"
+          placeholder="••••••••"
+          autoComplete="new-password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={loading}
+        />
+      </div>
 
-      <InputField
-        id="signup-confirm-password"
-        label="Confirm password"
-        type="password"
-        placeholder="••••••••"
-        autoComplete="new-password"
-        required
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-        disabled={loading}
-      />
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="signup-confirm-password">Confirm password</Label>
+        <Input
+          id="signup-confirm-password"
+          type="password"
+          placeholder="••••••••"
+          autoComplete="new-password"
+          required
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          disabled={loading}
+        />
+      </div>
 
       {error && (
-        <Alert variant="error">
-          <TriangleAlert />
-          <span>{error}</span>
-        </Alert>
+        <p role="alert" className="text-sm font-medium text-destructive">
+          {error}
+        </p>
       )}
 
-      <Button type="submit" className="w-full" disabled={loading}>
+      <Button type="submit" size="lg" disabled={loading}>
         {loading ? "Creating account…" : "Create account"}
       </Button>
 
-      <div className="flex items-center gap-2.5">
-        <Divider className="flex-1" />
-        <span className="text-micro text-muted-foreground">
-          Or continue with
+      <div className="flex items-center gap-3 py-1">
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-xs uppercase tracking-widest text-muted-foreground">
+          or
         </span>
-        <Divider className="flex-1" />
+        <span className="h-px flex-1 bg-border" />
       </div>
 
-      <OAuthButton onClick={handleGoogle} disabled={loading} />
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        onClick={handleGoogle}
+        disabled={loading}
+      >
+        Continue with Google
+      </Button>
 
-      <p className="text-center text-label text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link className="font-medium text-accent hover:underline" href="/auth/sign-in">
+        <Link
+          className="font-medium text-primary hover:underline"
+          href="/auth/sign-in"
+        >
           Sign in
         </Link>
       </p>

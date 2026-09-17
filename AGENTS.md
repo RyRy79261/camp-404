@@ -63,26 +63,34 @@ Four traps that already cost real time:
 - **A `"use server"` file may export only async functions.** A `const`
   export breaks the page under `next dev`, and neither typecheck nor lint
   catches it. Put shared constants in a plain module.
+- **A `loading.tsx` above a page that calls `notFound()` makes it answer 200,
+  and a `redirect()` below one happens in the browser instead of on the
+  server.** The loading boundary streams first, so the status is already sent.
+  Leave `loading.tsx` out of any segment (and its parents) whose page can 404,
+  and never put one directly in `app/(console)/`, where the Overview redirects
+  through the member ladder.
 - **"branches limit exceeded" in the `schema-migration` job is capacity, not
   code.** Each run makes a Neon branch; several stacked PRs pushed together
   hit the project's limit. Re-run the failed job.
 
-## Design (pencil.dev)
+## Design
 
-The design system is captured from the running app and recreated in Pencil. See
-[`design/README.md`](design/README.md) for the full pipeline; tokens live in
-`packages/ui/src/styles/globals.css` (mirrored in `design/brief.md`).
+**The look is the AfrikaBurn contributors app's organiser console** (owner's
+call, 2026-09-17): a desktop dashboard with a sticky header and nav, AfrikaBurn's
+tokens and kit, and Camp 404 magenta as the accent skin. The earlier Pencil
+boards in `design/` are history, not the target; do not keep a phone-only
+layout because a board drew one. For a new surface, copy the composition of
+AfrikaBurn's nearest equivalent (`apps/org/app/(console)/**` in that repo) and
+restyle only with tokens; do not invent a design.
 
-```bash
-pnpm --filter @camp404/web design:capture   # Playwright → design/reference/*.png (mobile, dark)
-pnpm --filter @camp404/web design:status     # pencil status
-```
-
-The Pencil CLI is a **global** tool, not a repo dependency: `npm i -g
-@pencil.dev/cli` then `pencil login` (stored at `~/.pencil/session-cli.json`).
-`scripts/pencil/run.sh` puts the pnpm global bin on `$PATH` and **guards the
-machine-wide singleton** — never run two `pencil` processes at once (any repo);
-they share one global canvas and corrupt each other.
+- Tokens: `packages/ui/src/styles/globals.css` (AfrikaBurn's file plus the
+  `.camp-accent` skin on `<html>`). Montserrat, dark-first; `providers.tsx`
+  holds next-themes on dark.
+- Shell: `apps/web/app/(console)/layout.tsx` draws the header and a nav bar
+  filtered by rank on the server (`lib/console-nav.ts`). A page starts with
+  `PageHeading` (`@camp404/ui/components/page-heading`) and owns no container.
+- Loading: a segment's `loading.tsx` shows `ConsoleHeadingSkeleton` plus the
+  page's shape (`components/console/console-skeleton.tsx`).
 
 ## Database — read this before touching the schema
 
@@ -204,7 +212,7 @@ Decisions baked into the schema — keep new code consistent with them:
     (fail-closed on an unknown rank or a missing team). It is pure and
     tested, and LIVE on two send paths. Questionnaire sends
     (`sendAction` and `previewAudienceCount` in
-    `apps/web/app/captains/questionnaires/actions.ts`) gate in two moves:
+    `apps/web/app/(console)/captains/questionnaires/actions.ts`) gate in two moves:
     `gateAuthor()` for the rank (>= `team_lead`), then this function for the
     specific audience. The Send page offers a lead only the team scope, for
     the teams they lead. Team announcements let a lead publish only to a team

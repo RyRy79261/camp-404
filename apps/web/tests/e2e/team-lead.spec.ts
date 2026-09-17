@@ -39,19 +39,18 @@ test.describe("team lead persona", () => {
     await approvedMember(page, request, "kitchen-lead");
     await seedTeam(request, "kitchen-lead", "kitchen", true);
 
-    await page.goto("/captains/tools");
+    // The console nav offers a lead the builder and announcements, and none
+    // of the captain-only destinations.
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "Console" });
     await expect(
-      page.getByRole("heading", { name: "Camp tools" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: /Questionnaires/ }),
+      nav.getByRole("link", { name: "Questionnaires" }),
     ).toHaveAttribute("href", "/captains/questionnaires");
     await expect(
-      page.getByRole("link", { name: /Roster & approvals/ }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByText("The other camp tools are captain-only."),
+      nav.getByRole("link", { name: "Announcements" }),
     ).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Payments" })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: "Audit" })).toHaveCount(0);
 
     await page.goto("/captains/questionnaires");
     await expect(

@@ -14,7 +14,12 @@ import {
 // their inbox (owner's call PENDING-GATES, 2026-09-16), where the approval
 // notice and any questionnaire they must answer arrive.
 
-const LADDER_PAGES = ["/tools", "/tools/forms", "/profile", "/family-tree"];
+const LADDER_PAGES = [
+  "/tools/invite",
+  "/tools/forms",
+  "/profile",
+  "/family-tree",
+];
 const MEMBER_PAGES = [...LADDER_PAGES, "/notifications"];
 
 async function expectInbox(page: Page): Promise<void> {
@@ -89,7 +94,7 @@ test.describe("member gate ladder", () => {
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
     await completeOnboarding(request, "ladder-ok");
     const headings: Record<string, string | RegExp> = {
-      "/tools": "Tools",
+      "/tools/invite": /Invite/,
       "/tools/forms": "My forms",
       "/profile": /.+/,
       "/family-tree": "Family tree",
