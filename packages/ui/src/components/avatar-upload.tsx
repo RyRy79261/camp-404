@@ -150,8 +150,8 @@ export function AvatarUpload({
 
       {error && (
         <div className="flex flex-col items-center gap-1 text-center" role="alert">
-          <p className="text-label font-semibold text-destructive">Upload failed</p>
-          <p className="text-label text-destructive">{error}</p>
+          <p className="text-sm font-semibold text-destructive">Upload failed</p>
+          <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
 
@@ -164,7 +164,7 @@ export function AvatarUpload({
         {triggerLabel}
       </Button>
 
-      <p className="text-label text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         A clear photo of your face works best.
       </p>
 
