@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MEDICAL_AUDIENCE_NOTE } from "@camp404/core";
-import { validateResponses } from "@camp404/types";
+import { pageQuestions, validateResponses } from "@camp404/types";
 import {
   QUESTIONNAIRE_VERSION,
   buildQuestionnaire,
@@ -57,7 +57,7 @@ describe("buildQuestionnaire", () => {
       "team_interest.structures",
     ]);
     // Board OB-step-06: a 0–6 number picker, not a slider.
-    const first = page.questions[0]!;
+    const first = pageQuestions(page)[0]!;
     expect(first.kind).toBe("number");
     expect(first.prompt).toBe("Cuisine"); // the relabel flows into the prompt
     if (first.kind === "number") {
@@ -135,7 +135,7 @@ describe("the safety pages tell the member who can see their answers", () => {
     const page = buildQuestionnaire(ACTIVE).pages.find(
       (p) => p.id === "emergency_contacts",
     );
-    const questions = page?.kind === "questions" ? page.questions : [];
+    const questions = page?.kind === "questions" ? pageQuestions(page) : [];
     expect(
       questions.map((q) => [q.id, "role" in q ? q.role : null, q.required]),
     ).toEqual([

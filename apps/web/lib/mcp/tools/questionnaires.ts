@@ -1,11 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { canViewBuilderDefinition } from "@camp404/core";
+import {
+  canViewBuilderDefinition,
+  definitionLimitErrors,
+  validateQuestionnaireDefinition,
+} from "@camp404/core";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import {
-  BuilderQuestionnaire,
-  builderDefinitionLimitErrors,
-  builderQuestionnaireIssues,
+  Questionnaire,
+  parseStoredDefinition,
   type ViewerRank,
 } from "@camp404/types";
 import { canEditQuestionnaire } from "@/lib/questionnaire-authoring";
@@ -29,6 +32,12 @@ import {
 // draft. Publishing and sending stay in the app: a send fans out gates that
 // block members, and a person presses that button. The rules are the builder
 // actions' own: canEditQuestionnaire, the Zod schema and the size limits.
+//
+// Definitions go in and come out in the unified questionnaire model
+// (`Questionnaire`, @camp404/types). Only that shape is in the tool schema: an
+// MCP client reads the schema on every connection, so nothing depends on the
+// builder's older shape, and offering both doubled the schema every client
+// loads into its context.
 
 const BUILDER_PATH = (key: string) => `/captains/questionnaires/${key}`;
 const Title = z.string().trim().min(1).max(120);
@@ -47,19 +56,32 @@ function requireAuthor(scope: McpScope): ViewerRank {
   return rank;
 }
 
+/** A definition as a tool accepts it: the unified questionnaire model. */
+const DefinitionInput = Questionnaire;
+
+/** The input read the way a stored row is read, so it gets its defaults. */
+function unified(input: z.infer<typeof DefinitionInput>): Questionnaire {
+  return parseStoredDefinition(input);
+}
+
 /** Refuse a definition the builder would refuse to save. */
-function checkSaveable(definition: BuilderQuestionnaire): void {
-  const tooBig = builderDefinitionLimitErrors(definition);
+function checkSaveable(definition: Questionnaire): void {
+  const tooBig = definitionLimitErrors(definition);
   if (tooBig.length > 0) throw new ToolError(tooBig[0]!);
 }
 
-/** What the author needs next: where it is, and what still blocks publishing. */
-function draftReceipt(key: string, definition: BuilderQuestionnaire) {
+/**
+ * What the author needs next: where it is, and what still blocks publishing —
+ * the publish check's issues, each with its code, message, path, page and
+ * block.
+ */
+function draftReceipt(key: string, definition: Questionnaire) {
+  const validation = validateQuestionnaireDefinition(definition);
   return {
     key,
-    title: definition.title,
+    title: definition.title ?? "",
     builderPath: BUILDER_PATH(key),
-    publishProblems: builderQuestionnaireIssues(definition),
+    publishProblems: validation.ok ? [] : validation.issues,
   };
 }
 
@@ -99,7 +121,7 @@ export function registerQuestionnaireTools(server: McpServer): void {
     {
       title: "Read a builder questionnaire",
       description:
-        "Returns the working definition the builder edits, its status, and what still blocks publishing. Use it before update_questionnaire_draft.",
+        "Returns the working definition the builder edits (in the unified questionnaire model), its status, and what still blocks publishing. Use it before update_questionnaire_draft.",
       inputSchema: { key: z.string().min(1) },
     },
     async (args, extra) =>
@@ -138,10 +160,10 @@ export function registerQuestionnaireTools(server: McpServer): void {
     {
       title: "Draft a questionnaire",
       description:
-        "A captain or a team lead starts a builder questionnaire as a draft, blank or from a full definition. Returns its key, the builder page, and what still blocks publishing. Publishing and sending happen in the app.",
+        "A captain or a team lead starts a builder questionnaire as a draft, blank or from a full definition (the unified questionnaire model). Returns its key, the builder page, and what still blocks publishing. Publishing and sending happen in the app.",
       inputSchema: {
         title: Title,
-        definition: BuilderQuestionnaire.optional(),
+        definition: DefinitionInput.optional(),
       },
     },
     async (args, extra) =>
@@ -155,7 +177,7 @@ export function registerQuestionnaireTools(server: McpServer): void {
         handler: async ({ scope }) => {
           requireAuthor(scope);
           const definition = args.definition
-            ? { ...args.definition, title: args.title }
+            ? { ...unified(args.definition), title: args.title }
             : undefined;
           if (definition) checkSaveable(definition);
           const key = await createDraft({
@@ -182,10 +204,10 @@ export function registerQuestionnaireTools(server: McpServer): void {
     {
       title: "Replace a questionnaire's working definition",
       description:
-        "Saves a whole definition over the working head, as the builder's autosave does. A captain may change any questionnaire; a team lead only their own. On a published questionnaire the live version keeps serving open sends until a captain re-publishes in the app.",
+        "Saves a whole definition over the working head, as the builder's autosave does (the unified questionnaire model). A captain may change any questionnaire; a team lead only their own. On a published questionnaire the live version keeps serving open sends until a captain re-publishes in the app.",
       inputSchema: {
         key: z.string().min(1),
-        definition: BuilderQuestionnaire,
+        definition: DefinitionInput,
       },
     },
     async (args, extra) =>
@@ -210,7 +232,10 @@ export function registerQuestionnaireTools(server: McpServer): void {
           }
           const current = await getBuilderDefinition(args.key);
           if (!current) notFound("No questionnaire with that key.");
-          const definition = { ...args.definition, version: current.version };
+          const definition = {
+            ...unified(args.definition),
+            version: current.version,
+          };
           checkSaveable(definition);
           await updateDefinition(args.key, definition);
           return draftReceipt(args.key, definition);

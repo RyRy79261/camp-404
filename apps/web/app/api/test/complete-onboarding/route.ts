@@ -10,7 +10,7 @@ import {
 // Marks a test user's burner-profile onboarding complete, so specs can reach
 // the post-onboarding gates (home, /pending-approval) without walking the
 // questionnaire UI — that walk is covered at the component layer in
-// `components/__tests__/wizard.test.tsx`. The user row must already exist
+// `components/__tests__/runner.test.tsx`. The user row must already exist
 // (created lazily on their first authenticated page load). Goes through the
 // lib/users facades, so it writes the store or, in the real-database run, the
 // local database.

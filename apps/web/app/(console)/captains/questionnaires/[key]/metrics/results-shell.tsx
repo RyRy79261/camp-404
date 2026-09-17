@@ -1,18 +1,21 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
+import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
+import { CloseActivationButton } from "./close-send-button";
 import { cycleLabel, type ResultsView } from "./results-data";
-import { ResultsNav, type ResultsViewName } from "./results-nav";
+import { YearSwitch } from "./year-switch";
 
 // The page frame both results routes share, from the AfrikaBurn console's
-// results page: the heading, the year and send badges, and the view/year switch. Kept
-// here beside the loader so /metrics and /responses can never drift into two
+// activation results page: the way back, the heading with its actions, and the
+// badges saying which year and which send the numbers describe. Kept beside
+// the loader so /metrics and /responses can never drift into two
 // different-looking versions of one surface.
 
 const SENT_ON = new Intl.DateTimeFormat("en-GB", {
@@ -22,17 +25,39 @@ const SENT_ON = new Intl.DateTimeFormat("en-GB", {
   timeZone: CAMP_TIME_ZONE,
 });
 
+const DUE_ON = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: CAMP_TIME_ZONE,
+});
+
 const EYEBROW = "Questionnaires / Results";
 
-/** The way to the editor, the heading's one action. */
+/** The way to the editor. */
 function EditAction({ questionnaireKey }: { questionnaireKey: string }) {
   return (
-    <Button asChild variant="outline">
+    <Button asChild variant="outline" size="sm">
       <Link href={`/captains/questionnaires/${questionnaireKey}`}>
         <Pencil aria-hidden />
         Edit questionnaire
       </Link>
     </Button>
+  );
+}
+
+function BackLink() {
+  return (
+    <div className="mb-4">
+      <Button asChild variant="ghost" size="sm">
+        <Link href="/captains/questionnaires">
+          <ArrowLeft aria-hidden />
+          All questionnaires
+        </Link>
+      </Button>
+    </div>
   );
 }
 
@@ -46,6 +71,7 @@ export function ResultsLocked({
   // the key already in the URL; a lead may be this questionnaire's author.
   return (
     <div className="flex flex-col">
+      <BackLink />
       <PageHeading
         eyebrow={EYEBROW}
         title="Results"
@@ -63,6 +89,7 @@ export function ResultsUnpublished({
 }) {
   return (
     <div className="flex flex-col">
+      <BackLink />
       <PageHeading
         eyebrow={EYEBROW}
         title="Results"
@@ -87,14 +114,12 @@ export function ResultsUnpublished({
 /** The frame around real results, with the year and the send it describes. */
 export function ResultsShell({
   view,
-  viewName,
-  toolbar,
+  audience,
   children,
 }: {
   view: ResultsView;
-  viewName: ResultsViewName;
-  /** Controls for this view, beside the view/year switch (e.g. the export). */
-  toolbar?: ReactNode;
+  /** Who the send being viewed went to, as a captain reads it. */
+  audience: string | null;
   children: ReactNode;
 }) {
   const active = view.activeActivation;
@@ -108,6 +133,8 @@ export function ResultsShell({
 
   return (
     <div className="flex flex-col">
+      <BackLink />
+
       <PageHeading
         eyebrow={EYEBROW}
         title={view.title}
@@ -116,29 +143,42 @@ export function ResultsShell({
             ? `${active.status === "open" ? "Sent" : "Last sent"} ${SENT_ON.format(active.openedAt ?? active.createdAt)} · version ${active.version}`
             : `Not sent in ${year}.`
         }
-        actions={<EditAction questionnaireKey={view.key} />}
+        actions={
+          <>
+            {active?.status === "open" && (
+              <CloseActivationButton
+                activationId={active.id}
+                questionnaireKey={view.key}
+              />
+            )}
+            <EditAction questionnaireKey={view.key} />
+          </>
+        }
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <Badge variant={isPastYear ? "outline" : "default"}>{year}</Badge>
+        {active && <BlockingBadge blocking={active.blocking} />}
         {active && (
           <Badge variant={active.status === "open" ? "success" : "outline"}>
             {active.status === "open" ? "Open" : "Closed"}
           </Badge>
         )}
-      </div>
-
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <ResultsNav
+        {audience && <Badge variant="secondary">{audience}</Badge>}
+        {active?.dueAt && (
+          <span className="text-xs text-muted-foreground">
+            Due {DUE_ON.format(active.dueAt)}
+          </span>
+        )}
+        <YearSwitch
+          className="w-auto shrink-0 sm:ml-auto"
           questionnaireKey={view.key}
-          view={viewName}
           cycle={view.cycle}
           cycles={view.cycleOptions.map((c) => ({
             value: c,
             label: cycleLabel(c, view.currentCycle, view.cycleNames),
           }))}
         />
-        {toolbar}
       </div>
 
       {/*

@@ -19,6 +19,11 @@ export interface AvatarUploadProps {
   preprocessImage?: (file: File) => Promise<Blob | File>;
   /** Endpoint that accepts `FormData { image }` and returns `{ url }`. */
   uploadUrl?: string;
+  /**
+   * The line under the button. Defaults to the profile-photo advice; pass
+   * null for a photo that is not of the member (a questionnaire's gear shot).
+   */
+  hint?: string | null;
   className?: string;
 }
 
@@ -38,6 +43,7 @@ export function AvatarUpload({
   onChange,
   preprocessImage = passthrough,
   uploadUrl = "/api/uploads/avatar",
+  hint = "A clear photo of your face works best.",
   className,
 }: AvatarUploadProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -164,9 +170,7 @@ export function AvatarUpload({
         {triggerLabel}
       </Button>
 
-      <p className="text-sm text-muted-foreground">
-        A clear photo of your face works best.
-      </p>
+      {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
 
       <input
         ref={inputRef}

@@ -52,6 +52,7 @@ import { put } from "@vercel/blob";
 import { deleteQuestionnaireImageBlobs } from "@/lib/avatar-blob";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
+import { parseStoredDefinition } from "@camp404/types";
 import { getActivationById, getRequiredAction } from "@camp404/db/activations";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 
@@ -164,7 +165,10 @@ describe("POST /api/uploads/questionnaire-image", () => {
       version: "2",
       activationId: ACTIVATION,
     } as never);
-    vi.mocked(getBuilderDefinition).mockResolvedValue(BUILDER as never);
+    // The loader serves the unified model, whichever shape the row is in.
+    vi.mocked(getBuilderDefinition).mockResolvedValue(
+      parseStoredDefinition(BUILDER),
+    );
     vi.mocked(put).mockResolvedValue({
       pathname: "avatars/u1/answers/kitchen-setup_photo/image-x7f2.webp",
     } as never);

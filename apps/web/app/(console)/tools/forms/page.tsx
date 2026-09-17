@@ -111,7 +111,7 @@ export default async function FormsListPage() {
                     <li key={`${a.definitionKey}:${a.cycle}`}>
                       <FormCard
                         href={`/tools/forms/answers/${encodeURIComponent(a.definitionKey)}/${a.cycle}`}
-                        title={a.questionnaire.title}
+                        title={a.questionnaire.title ?? ""}
                         description={
                           year ? `Your answers for ${year}.` : "Your answers."
                         }

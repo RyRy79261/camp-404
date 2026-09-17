@@ -1,12 +1,18 @@
 import {
   flattenQuestions,
   isOtherAnswer,
+  type CheckboxGridQuestion,
+  type LinearScaleQuestion,
+  type MultiChoiceGridQuestion,
   type NumberQuestion,
   type Question,
   type Questionnaire,
   type QuestionnaireResponses,
   type QuestionnaireResponseValue,
+  type RatingQuestion,
   type SliderQuestion,
+  type TimeQuestion,
+  type YearsQuestion,
 } from "@camp404/types";
 
 // The questionnaire read-back engine (builder Phase E, plan items 3.2 + 3.5).
@@ -48,19 +54,34 @@ import {
 //      flagged `known: false`.
 //   4. An out-of-range numeric answer keeps its own bucket, flagged
 //      `inRange: false`, rather than being clamped into a neighbour.
+//
+// THE UNIFIED MODEL'S KINDS. AB's results engine is not imported (its
+// aggregates quote free text back); its chart shapes are rebuilt here inside
+// the boundary above:
+//
+//   * `linear_scale` and `rating` are `numeric` — an enumerated histogram with
+//     mean and median, the AB "scale"/"rating" chart;
+//   * `time` and `years` are `timeline` — sorted distinct values with counts
+//     and the earliest/latest. Both are closed value sets (a clock time, a burn
+//     year), never typed text. `date` deliberately stays a `count`: Camp 404
+//     put it behind a count as one person's plan (§7.2), and AB's date timeline
+//     does not override that;
+//   * `file_link` is a `count` — a URL is free text;
+//   * the grids are `grid` — per-row column tallies over the author's own
+//     rows and columns.
 
 /** Every discriminant of the `Question` union. */
 export type QuestionKind = Question["kind"];
 
 /** How a kind's answers may be summarised. */
-export type AggregateShape = "choice" | "numeric" | "count";
+export type AggregateShape = "choice" | "numeric" | "count" | "timeline" | "grid";
 
 /**
  * The kind → shape routing table, and the exhaustiveness guard for this whole
  * module.
  *
- * It is a mapped type over `Question["kind"]`, so a fifteenth member of the
- * union cannot be added without this file failing to compile with an error
+ * It is a mapped type over `Question["kind"]`, so a new member of the union
+ * cannot be added without this file failing to compile with an error
  * naming it — the same mechanical link `_kind-samples.ts` puts on
  * `validateOne`. `aggregateOne` dispatches through this table rather than
  * switching on `q.kind` directly, so the table is load-bearing: it cannot rot
@@ -81,12 +102,19 @@ export const KIND_SHAPE: { [K in QuestionKind]: AggregateShape } = {
   boolean: "choice",
   slider: "numeric",
   number: "numeric",
+  linear_scale: "numeric",
+  rating: "numeric",
   short_text: "count",
   long_text: "count",
   date: "count",
   email: "count",
   phone: "count",
   image: "count",
+  file_link: "count",
+  time: "timeline",
+  years: "timeline",
+  multi_choice_grid: "grid",
+  checkbox_grid: "grid",
 };
 
 /** The single row every `other:<text>` answer collapses into. */
@@ -181,10 +209,61 @@ export interface CountAggregate extends AggregateBase {
   shape: "count";
 }
 
+/** One distinct value's line in a timeline. */
+export interface TimelineBucket {
+  /** The stored value: `hh:mm` for a time, `yyyy` for an attended year. */
+  value: string;
+  count: number;
+  /** `count / answered`, 0-100, whole. Can sum past 100 for a year list. */
+  pct: number;
+}
+
+/**
+ * A kind whose answers are points on a closed, ordered scale — a clock time or
+ * a burn year (AB's "timeline" chart). Values are sorted ascending; only values
+ * somebody gave get a bucket.
+ */
+export interface TimelineAggregate extends AggregateBase {
+  shape: "timeline";
+  /** True for `years`: one respondent contributes several buckets. */
+  multi: boolean;
+  buckets: TimelineBucket[];
+  earliest: string | null;
+  latest: string | null;
+}
+
+/** One grid row's tally. */
+export interface GridRowAggregate {
+  id: string;
+  /** The row's label, or its raw id when the row is gone. */
+  label: string;
+  /** Respondents who picked anything in THIS row — the row's denominator. */
+  answered: number;
+  /** False when the definition no longer declares this row (property 3). */
+  known: boolean;
+  /**
+   * Declared columns in declared order (zero-count ones included), then any
+   * undeclared stored column values, sorted, flagged `known: false`.
+   * `pct` is of this row's `answered`.
+   */
+  cells: ChoiceRow[];
+}
+
+/** A grid question: a column tally per row (AB's "grid" chart). */
+export interface GridAggregate extends AggregateBase {
+  shape: "grid";
+  /** True for `checkbox_grid`: one respondent may pick several cells a row. */
+  multi: boolean;
+  columns: { value: string; label: string }[];
+  rows: GridRowAggregate[];
+}
+
 export type QuestionAggregate =
   | ChoiceAggregate
   | NumericAggregate
-  | CountAggregate;
+  | CountAggregate
+  | TimelineAggregate
+  | GridAggregate;
 
 /**
  * An answer to a question the definition no longer has (property 2). Counted
@@ -233,6 +312,10 @@ function bucketKey(n: number): number {
 function isAnswered(value: QuestionnaireResponseValue | undefined): boolean {
   if (value === undefined || value === null || value === "") return false;
   if (Array.isArray(value)) return value.length > 0;
+  // A grid answer counts once any row carries a pick.
+  if (typeof value === "object") {
+    return Object.values(value).some((picks) => picks.length > 0);
+  }
   return true;
 }
 
@@ -271,6 +354,11 @@ function choiceOptions(
  * "kitchen" twice is one person who picked the kitchen.
  */
 function choiceSelections(value: QuestionnaireResponseValue): string[] {
+  // A grid map under a choice kind (a field morphed after answers came in) is
+  // not a choice; it contributes nothing rather than a "[object Object]" row.
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return [];
+  }
   const raw = Array.isArray(value) ? value : [value];
   const out: string[] = [];
   for (const entry of raw) {
@@ -338,31 +426,43 @@ function aggregateChoice(
   };
 }
 
-/** The declared step between adjacent values. `number` picks whole cells. */
-function numericStep(question: SliderQuestion | NumberQuestion): number {
+/** The kinds summarised as a numeric distribution. */
+type NumericQuestion =
+  | SliderQuestion
+  | NumberQuestion
+  | LinearScaleQuestion
+  | RatingQuestion;
+
+/** The declared step between adjacent values. Only a slider strides. */
+function numericStep(question: NumericQuestion): number {
   if (question.kind === "slider") return question.step > 0 ? question.step : 1;
   return 1;
 }
 
+/** The declared range. A rating runs 1..steps. */
+function numericRange(question: NumericQuestion): { min: number; max: number } {
+  if (question.kind === "rating") return { min: 1, max: question.steps };
+  return { min: question.min, max: question.max };
+}
+
 /**
  * Whether the kind picks from discrete cells rather than a dragged range —
- * `number` always, `slider` only in its segmented variant
- * (`docs/questionnaire-builder.md:396`). Discrete ranges get zero-count
- * buckets so an option nobody chose is visible; a continuous one gets only
- * the values people actually landed on.
+ * `number`, `linear_scale` and `rating` always, `slider` only in its segmented
+ * variant (`docs/questionnaire-builder.md:396`). Discrete ranges get
+ * zero-count buckets so an option nobody chose is visible; a continuous one
+ * gets only the values people actually landed on.
  */
-function isDiscreteNumeric(question: SliderQuestion | NumberQuestion): boolean {
-  if (question.kind === "number") return true;
+function isDiscreteNumeric(question: NumericQuestion): boolean {
+  if (question.kind !== "slider") return true;
   return question.display === "segmented";
 }
 
 function aggregateNumeric(
-  question: SliderQuestion | NumberQuestion,
+  question: NumericQuestion,
   base: AggregateBase,
   answers: QuestionnaireResponseValue[],
 ): NumericAggregate {
-  const declaredMin = question.min;
-  const declaredMax = question.max;
+  const { min: declaredMin, max: declaredMax } = numericRange(question);
 
   const samples: number[] = [];
   for (const answer of answers) {
@@ -435,6 +535,115 @@ function aggregateNumeric(
   };
 }
 
+/** Stored timeline values, as strings: a list for years, one for a time. */
+function timelineValues(value: QuestionnaireResponseValue): string[] {
+  if (Array.isArray(value)) return [...new Set(value)];
+  return typeof value === "string" ? [value] : [];
+}
+
+function aggregateTimeline(
+  question: TimeQuestion | YearsQuestion,
+  base: AggregateBase,
+  answers: QuestionnaireResponseValue[],
+): TimelineAggregate {
+  const counts = new Map<string, number>();
+  for (const answer of answers) {
+    for (const value of timelineValues(answer)) {
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+  }
+  // `hh:mm` and `yyyy` both sort correctly as strings.
+  const buckets: TimelineBucket[] = [...counts.keys()].sort().map((value) => ({
+    value,
+    count: counts.get(value) ?? 0,
+    pct: percent(counts.get(value) ?? 0, base.answered),
+  }));
+  return {
+    ...base,
+    shape: "timeline",
+    multi: question.kind === "years",
+    buckets,
+    earliest: buckets[0]?.value ?? null,
+    latest: buckets[buckets.length - 1]?.value ?? null,
+  };
+}
+
+/** A stored grid answer's picks for one row, de-duplicated; [] for anything
+ * that is not a grid map. */
+function gridPicks(value: QuestionnaireResponseValue, rowId: string): string[] {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return [];
+  }
+  const picks = value[rowId];
+  return Array.isArray(picks) ? [...new Set(picks)] : [];
+}
+
+function aggregateGrid(
+  question: MultiChoiceGridQuestion | CheckboxGridQuestion,
+  base: AggregateBase,
+  answers: QuestionnaireResponseValue[],
+): GridAggregate {
+  const columns = question.columns.map(({ value, label }) => ({ value, label }));
+  const declaredColumns = new Set(columns.map((column) => column.value));
+
+  // Rows: the declared ones in order, then any row id a stored answer still
+  // carries after its row was deleted (property 3), sorted.
+  const declaredRows = new Set(question.rows.map((row) => row.id));
+  const storedRows = new Set<string>();
+  for (const answer of answers) {
+    if (answer !== null && typeof answer === "object" && !Array.isArray(answer)) {
+      for (const [rowId, picks] of Object.entries(answer)) {
+        if (picks.length > 0) storedRows.add(rowId);
+      }
+    }
+  }
+  const rowList = [
+    ...question.rows.map((row) => ({ ...row, known: true })),
+    ...[...storedRows]
+      .filter((rowId) => !declaredRows.has(rowId))
+      .sort()
+      .map((rowId) => ({ id: rowId, label: rowId, known: false })),
+  ];
+
+  const rows: GridRowAggregate[] = rowList.map((row) => {
+    const counts = new Map<string, number>();
+    let answered = 0;
+    for (const answer of answers) {
+      const picks = gridPicks(answer, row.id);
+      if (picks.length === 0) continue;
+      answered += 1;
+      for (const pick of picks) counts.set(pick, (counts.get(pick) ?? 0) + 1);
+    }
+    const cells: ChoiceRow[] = columns.map((column) => ({
+      value: column.value,
+      label: column.label,
+      count: counts.get(column.value) ?? 0,
+      pct: percent(counts.get(column.value) ?? 0, answered),
+      known: true,
+    }));
+    for (const value of [...counts.keys()]
+      .filter((v) => !declaredColumns.has(v))
+      .sort()) {
+      cells.push({
+        value,
+        label: value,
+        count: counts.get(value) ?? 0,
+        pct: percent(counts.get(value) ?? 0, answered),
+        known: false,
+      });
+    }
+    return { id: row.id, label: row.label, answered, known: row.known, cells };
+  });
+
+  return {
+    ...base,
+    shape: "grid",
+    multi: question.kind === "checkbox_grid",
+    columns,
+    rows,
+  };
+}
+
 function aggregateOne(
   question: Question,
   responses: readonly QuestionnaireResponses[],
@@ -462,11 +671,16 @@ function aggregateOne(
     case "choice":
       return aggregateChoice(question, base, answers);
     case "numeric":
-      // `KIND_SHAPE` routes only `slider` and `number` here, but the table is
-      // a lookup rather than a narrowing, so the compiler needs this said out
+      // `KIND_SHAPE` routes only the numeric kinds here, but the table is a
+      // lookup rather than a narrowing, so the compiler needs this said out
       // loud. Unreachable in practice; a throw beats a widened parameter that
       // would let a genuinely wrong kind through unnoticed.
-      if (question.kind !== "slider" && question.kind !== "number") {
+      if (
+        question.kind !== "slider" &&
+        question.kind !== "number" &&
+        question.kind !== "linear_scale" &&
+        question.kind !== "rating"
+      ) {
         throw new Error(
           `Numeric shape routed a non-numeric kind: ${question.kind}`,
         );
@@ -477,6 +691,21 @@ function aggregateOne(
       // thrown away unread. Free text does not get a value breakdown
       // (`docs/questionnaire-builder.md:400`).
       return { ...base, shape: "count" };
+    case "timeline":
+      if (question.kind !== "time" && question.kind !== "years") {
+        throw new Error(
+          `Timeline shape routed a non-timeline kind: ${question.kind}`,
+        );
+      }
+      return aggregateTimeline(question, base, answers);
+    case "grid":
+      if (
+        question.kind !== "multi_choice_grid" &&
+        question.kind !== "checkbox_grid"
+      ) {
+        throw new Error(`Grid shape routed a non-grid kind: ${question.kind}`);
+      }
+      return aggregateGrid(question, base, answers);
     default: {
       // Unreachable while `AggregateShape` and this switch agree; a new shape
       // added to the union without an arm here is a compile error naming it.
@@ -510,15 +739,24 @@ export function aggregateResponses(
 }
 
 /**
+ * Summarise ONE question — the per-question drill-down (AB's name). The same
+ * aggregate `aggregateResponses` produces for it.
+ */
+export function aggregateQuestion(
+  question: Question,
+  responses: readonly QuestionnaireResponses[],
+): QuestionAggregate {
+  return aggregateOne(question, responses);
+}
+
+/**
  * The same summary from an already-flat question list.
  *
- * This is the primitive; `aggregateResponses` is the legacy-`Questionnaire`
- * wrapper over it. The split exists because the two questionnaire shapes
- * flatten differently — a `BuilderQuestionnaire` uses
- * `flattenBuilderQuestions`, the legacy one `flattenQuestions` — and the
- * builder shape is the only kind that HAS a results screen. Taking the flat
- * list keeps this module out of that split entirely, and keeps `/metrics` on
- * this engine rather than growing a second one beside it.
+ * This is the primitive; `aggregateResponses` is the `Questionnaire` wrapper
+ * over it. `/metrics` passes `flattenQuestions` of the unified definition every
+ * stored row is read as (the builder's older shape converts on read). Taking
+ * the flat list keeps this module free of any definition shape, and keeps
+ * `/metrics` on this engine rather than growing a second one beside it.
  */
 export function aggregateQuestions(
   questions: readonly Question[],

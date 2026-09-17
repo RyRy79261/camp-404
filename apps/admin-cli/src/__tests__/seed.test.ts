@@ -134,6 +134,7 @@ describe("seedScenario", () => {
     vi.mocked(publishDefinition).mockResolvedValueOnce({
       ok: false,
       errors: ["Broken."],
+      issues: [],
     });
     await expect(seedScenario("small-camp")).rejects.toThrow("Broken.");
     expect(sendActivation).not.toHaveBeenCalled();

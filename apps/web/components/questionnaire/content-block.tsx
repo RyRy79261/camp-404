@@ -1,28 +1,83 @@
+import { Info, Megaphone, TriangleAlert } from "lucide-react";
 import { isAllowedBuilderImageUrl, type ContentBlock } from "@camp404/types";
 import { Alert } from "@camp404/ui/components/alert";
-import { Megaphone, TriangleAlert } from "lucide-react";
+import { cn } from "@camp404/ui/lib/utils";
 
-// Display-only renderer for a builder questionnaire's content blocks (header
-// breaks, explainers, images, dividers). These capture nothing — there is no
-// value/onChange — and the response validators skip them. Rendered inside the
-// builder runner's page→block loop.
-export function ContentBlockRenderer({ block }: { block: ContentBlock }) {
+// Content blocks (AfrikaBurn's `content-block.tsx`, plus Camp 404's header
+// breaks, explainers and dividers). These take NO answer: they never appear in
+// the response map, never count towards progress, and never gate completion —
+// `pageQuestions()` / `visibleQuestions()` filter them out upstream, so this
+// component is purely decorative by construction. A block's `visibleIf` is the
+// runner's business, not this component's.
+
+type SizeFit = NonNullable<
+  Extract<ContentBlock, { kind: "image_block" }>["sizeFit"]
+>;
+
+// fit: the picture at its own size, never wider than the column; fill: the
+// column's width; full-width: the column's width with no frame.
+const IMAGE_FIT: Record<SizeFit, string> = {
+  fit: "mx-auto h-auto max-w-full rounded-md border border-border",
+  fill: "w-full rounded-md border border-border object-cover",
+  "full-width": "w-full object-cover",
+};
+
+export function ContentBlockView({ block }: { block: ContentBlock }) {
   switch (block.kind) {
+    case "info_block":
+      return (
+        <div className="flex gap-3 rounded-md border border-border bg-muted/40 p-4">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+          <div className="flex min-w-0 flex-col gap-1">
+            {block.heading && (
+              <p className="text-sm font-semibold">{block.heading}</p>
+            )}
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+              {block.body}
+            </p>
+          </div>
+        </div>
+      );
+
+    case "image_block":
+      return (
+        <figure className="flex flex-col gap-1.5">
+          {/* A plain img: next/image needs a host allowlist. Only images Camp
+              404 stores are shown — a definition saved before that rule could
+              hold another site's link, and rendering it would make every
+              member's browser call that site. */}
+          {isAllowedBuilderImageUrl(block.url) && (
+            <img
+              src={block.url}
+              alt={block.alt}
+              loading="lazy"
+              className={IMAGE_FIT[block.sizeFit ?? "fit"]}
+            />
+          )}
+          {block.caption && (
+            <figcaption className="text-xs text-muted-foreground">
+              {block.caption}
+            </figcaption>
+          )}
+        </figure>
+      );
+
     case "header_break":
       return (
         <div
-          className={
+          className={cn(
+            "flex flex-col gap-1.5",
             block.alignment === "center"
-              ? "flex flex-col items-center gap-1.5 text-center"
-              : "flex flex-col items-start gap-1.5 text-left"
-          }
+              ? "items-center text-center"
+              : "items-start text-left",
+          )}
         >
           {block.eyebrow && (
             <span className="font-mono text-xs uppercase tracking-[0.2em] text-accent">
               {block.eyebrow}
             </span>
           )}
-          <h3 className="text-lg font-bold text-foreground">
+          <h3 className="text-lg font-semibold text-foreground">
             {block.headingText}
           </h3>
           {block.subtext && (
@@ -30,13 +85,17 @@ export function ContentBlockRenderer({ block }: { block: ContentBlock }) {
           )}
         </div>
       );
+
     case "explainer": {
-      // plain = naked muted paragraph; note/callout = accent info tone (callout
-      // adds a megaphone); warning = warning tone with an alert triangle.
+      // plain = a muted paragraph; note/callout = the info tone (callout adds a
+      // megaphone); warning = the warning tone with a triangle.
       if (block.style === "plain") {
-        return <p className="text-sm text-muted-foreground">{block.bodyText}</p>;
+        return (
+          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+            {block.bodyText}
+          </p>
+        );
       }
-      const variant = block.style === "warning" ? "warning" : "info";
       const Icon =
         block.style === "callout"
           ? Megaphone
@@ -44,37 +103,13 @@ export function ContentBlockRenderer({ block }: { block: ContentBlock }) {
             ? TriangleAlert
             : null;
       return (
-        <Alert variant={variant}>
-          {Icon && <Icon className="h-4 w-4" aria-hidden />}
-          <span className="text-sm">{block.bodyText}</span>
+        <Alert variant={block.style === "warning" ? "warning" : "info"}>
+          {Icon && <Icon aria-hidden />}
+          <span className="whitespace-pre-wrap">{block.bodyText}</span>
         </Alert>
       );
     }
-    case "image_block": {
-      const fitClass =
-        block.sizeFit === "full-width"
-          ? "w-full -mx-4"
-          : block.sizeFit === "fill"
-            ? "w-full"
-            : "w-full rounded-md";
-      return (
-        <figure className="flex flex-col gap-2">
-          {/* A plain img on purpose: next/image needs a configured domain
-              allowlist, which an arbitrary author/Blob URL can't satisfy. */}
-          {/* Only images Camp 404 stores. A definition saved before that
-              rule could hold another site's link, and rendering it would make
-              every member's browser call that site. */}
-          {isAllowedBuilderImageUrl(block.imageUrl) && (
-            <img src={block.imageUrl} alt={block.altText} className={fitClass} />
-          )}
-          {block.caption && (
-            <figcaption className="text-center text-xs text-muted-foreground">
-              {block.caption}
-            </figcaption>
-          )}
-        </figure>
-      );
-    }
+
     case "divider":
       return <hr className="border-border" />;
   }

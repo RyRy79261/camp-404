@@ -6,13 +6,13 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { BuilderQuestionnaire } from "@camp404/types";
+import { parseStoredDefinition } from "@camp404/types";
 
 import { BuilderPreview } from "../questionnaire/builder-preview";
 
 vi.mock("next/navigation", () => ({ useParams: () => null }));
 
-const def = BuilderQuestionnaire.parse({
+const def = parseStoredDefinition({
   version: "1",
   title: "Survey",
   pages: [
@@ -24,7 +24,12 @@ const def = BuilderQuestionnaire.parse({
         { id: "h", kind: "header_break", headingText: "Welcome" },
         {
           kind: "question",
-          question: { id: "name", kind: "short_text", prompt: "Name", required: false },
+          question: {
+            id: "name",
+            kind: "short_text",
+            prompt: "Name",
+            required: false,
+          },
         },
       ],
     },
@@ -51,7 +56,7 @@ describe("BuilderPreview", () => {
     const onComplete = vi.fn();
     render(
       <BuilderPreview
-        questionnaire={BuilderQuestionnaire.parse({
+        questionnaire={parseStoredDefinition({
           version: "1",
           title: "Photos",
           pages: [

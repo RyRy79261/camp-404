@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
-import { Card } from "@camp404/ui/components/card";
+import { Card, CardContent } from "@camp404/ui/components/card";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import {
@@ -13,6 +13,7 @@ import {
   respondentsOf,
 } from "../../metrics/results-data";
 import { ResultsLocked, ResultsUnpublished } from "../../metrics/results-shell";
+import { ResponseAnswers } from "@/components/questionnaires/response-viewer";
 import { answerColumns, formatAnswer } from "../answer-values";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,8 @@ const COMPLETED = new Intl.DateTimeFormat("en-GB", {
 });
 
 // One member's answers to one questionnaire in one year (§7.3, "per-respondent
-// detail view"), as a card of question-and-answer rows. Same gate and same year
+// detail view"): the same question-and-answer list the results table's View
+// dialog shows, as a page a captain can link to. Same gate and same year
 // resolution as the table it is reached from — a deep link into this page is
 // captain-checked on its own, not on the strength of having come from the list.
 export default async function RespondentPage({
@@ -113,25 +115,17 @@ export default async function RespondentPage({
       />
 
       <Card className="max-w-3xl">
-        <dl className="flex flex-col divide-y divide-border">
-          {columns.map((column) => (
-            <div key={column.id} className="flex flex-col gap-1 p-5">
-              <dt className="flex items-start justify-between gap-3 text-sm font-medium">
-                <span className="min-w-0 flex-1 break-words">
-                  {column.label}
-                </span>
-                {!column.question && (
-                  <Badge variant="warning" className="shrink-0">
-                    removed
-                  </Badge>
-                )}
-              </dt>
-              <dd className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
-                {formatAnswer(column, respondent.responses) || "—"}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <CardContent className="p-5">
+          <ResponseAnswers
+            className="flex flex-col gap-4"
+            answers={columns.map((column) => ({
+              id: column.id,
+              label: column.question ? column.label : column.id,
+              value: formatAnswer(column, respondent.responses),
+              removed: column.question === null,
+            }))}
+          />
+        </CardContent>
       </Card>
     </>,
   );

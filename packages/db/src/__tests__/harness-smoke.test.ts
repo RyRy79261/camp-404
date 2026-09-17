@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BuilderQuestionnaire } from "@camp404/types";
+import type { Questionnaire } from "@camp404/types";
 import { useTestDb } from "./_harness";
 import {
   getQuestionnaireDefinitionRow,
@@ -7,10 +7,10 @@ import {
   listDefinitionRows,
 } from "../questionnaire-definitions";
 
-const DEF: BuilderQuestionnaire = {
+const DEF: Questionnaire = {
   version: "1",
   title: "Smoke",
-  pages: [{ id: "p1", type: "question", title: "", blocks: [] }],
+  pages: [{ id: "p1", kind: "questions", title: "", questions: [] }],
 };
 
 // Proves the whole chain wires up: PGlite boots, the committed migrations apply

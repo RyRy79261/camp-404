@@ -11,9 +11,13 @@ import {
 } from "@/lib/users";
 import { mergeIdNumber } from "@camp404/db/id-documents";
 import { getQuestionnaireForPicker } from "@/lib/questionnaire-config";
-import { QuestionnaireWizard } from "@/components/questionnaire/wizard";
+import { Card, CardContent } from "@camp404/ui/components/card";
+import {
+  BlockingNotice,
+  RunnerHeader,
+} from "@/components/questionnaire/blocking-chrome";
 import { QuestionnaireGate } from "./gate";
-import { saveBurnerProfile } from "./actions";
+import { BurnerProfileRunner } from "./burner-profile-runner";
 import type { QuestionnaireResponses } from "@camp404/types";
 
 // Reads the Neon Auth session on every request.
@@ -21,9 +25,9 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Your burner profile — Camp 404" };
 
-// The burner profile is a blocking required action, so this route is the S23/S24
+// The burner profile is a blocking required action, so this route is the
 // blocking flow: a gate interstitial first, then — on "Start" (?start=1) — the
-// wizard in its runner variant (sticky Required top bar + persistent notice).
+// shared runner under the blocking chrome (Required, Sign out, the lock line).
 // It's only ever reached as the required flow (the gating spine redirects here
 // when burner_profile is pending and away once it's complete), so the chrome is
 // unconditional — no per-request required-action lookup needed.
@@ -87,14 +91,17 @@ export default async function QuestionnairePage({
   }
 
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col px-4 py-8 sm:px-6">
-      <QuestionnaireWizard
-        questionnaire={questionnaire}
-        initialResponses={initialResponses}
-        action={saveBurnerProfile}
-        variant="runner"
-        title={TITLE}
-      />
+    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6">
+      <RunnerHeader title={TITLE} blocking />
+      <Card>
+        <CardContent className="pt-6">
+          <BurnerProfileRunner
+            questionnaire={questionnaire}
+            initialResponses={initialResponses}
+          />
+        </CardContent>
+      </Card>
+      <BlockingNotice />
     </main>
   );
 }

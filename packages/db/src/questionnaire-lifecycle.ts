@@ -1,16 +1,16 @@
 import { and, eq, gt, gte, inArray, lte } from "drizzle-orm";
 import {
   QUESTIONNAIRE_REF_TYPE,
+  classifyChange,
+  definitionLimitErrors,
   questionnaireReleaseNotification,
   questionnaireReminderNotification,
+  validateQuestionnaireDefinition,
+  type DefinitionIssue,
   type NotificationPayload,
 } from "@camp404/core";
 import { deliveryValues } from "./deliveries";
-import {
-  BuilderQuestionnaire,
-  classifyChange,
-  validateBuilderQuestionnaire,
-} from "@camp404/types";
+import { safeParseStoredDefinition } from "@camp404/types";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { nextBuilderVersion } from "./versions";
@@ -25,8 +25,11 @@ import { carryOverFor, currentCycleNumber } from "./cycles";
 // unpublish (status + cascade close), send (open an activation with the one-open
 // invariant), close, and REMIND (nudge the members still outstanding on an open
 // send — §7.4, at the foot of this file). The pure decisions live in
-// @camp404/types (classifyChange / validateBuilderQuestionnaire) and ./versions
+// @camp404/core (validateQuestionnaireDefinition / definitionLimitErrors /
+// classifyChange, all over the unified questionnaire model) and ./versions
 // (nextBuilderVersion); this module is the thin DB orchestration around them.
+// A stored definition of either shape (the builder's, or the unified model) is
+// read through parseStoredDefinition; what publish writes is always unified.
 // See docs/questionnaire-builder.md §6.
 
 type Scope = (typeof schema.questionnaireScopeEnum.enumValues)[number];
@@ -66,16 +69,29 @@ const ONE_OPEN_ERROR =
 
 export type PublishResult =
   | { ok: true; version: string; change: "initial" | "cosmetic" | "breaking" }
-  | { ok: false; errors: string[] };
+  | {
+      ok: false;
+      /** Every reason, as sentences for the author (size limits included). */
+      errors: string[];
+      /**
+       * The definition's publish blockers, each with its code, path, page and
+       * block, so an editor can show a problem where it is. Empty when the
+       * refusal is not about the definition's content (not found, malformed,
+       * not allowed).
+       */
+      issues: DefinitionIssue[];
+    };
 
 /**
- * Publish the working head of a builder definition. Validates it (publish-time
- * blockers, §6.2); then classifies the change against the latest published
- * snapshot (§6.1): the first publish and any BREAKING change mint a new version
+ * Publish the working head of a builder definition. Reads it as the unified
+ * model and validates it (publish-time blockers and the save limits, §6.2);
+ * then classifies the change against the latest published snapshot, both sides
+ * unified (§6.1): the first publish and any BREAKING change mint a new version
  * row; a COSMETIC change overwrites the current version's snapshot in place (no
- * bump, open activations keep serving). Always flips status → published (so a
- * re-publish of an unpublished definition brings it back online). Atomic:
- * snapshot write + head pointer update in one transaction.
+ * bump, open activations keep serving). The snapshot written is the unified
+ * definition. Always flips status → published (so a re-publish of an
+ * unpublished definition brings it back online). Atomic: snapshot write + head
+ * pointer update in one transaction.
  */
 export async function publishDefinition(
   key: string,
@@ -90,14 +106,30 @@ export async function publishDefinition(
     .from(schema.questionnaireDefinitions)
     .where(eq(schema.questionnaireDefinitions.key, key))
     .limit(1);
-  if (!head) return { ok: false, errors: ["Questionnaire not found."] };
-
-  const parsed = BuilderQuestionnaire.safeParse(head.definition);
-  if (!parsed.success) {
-    return { ok: false, errors: ["This questionnaire is malformed."] };
+  if (!head) {
+    return { ok: false, errors: ["Questionnaire not found."], issues: [] };
   }
-  const blockers = validateBuilderQuestionnaire(parsed.data);
-  if (blockers.length > 0) return { ok: false, errors: blockers };
+
+  const parsed = safeParseStoredDefinition(head.definition);
+  if (!parsed) {
+    return {
+      ok: false,
+      errors: ["This questionnaire is malformed."],
+      issues: [],
+    };
+  }
+  const validation = validateQuestionnaireDefinition(parsed);
+  const issues = validation.ok ? [] : validation.issues;
+  const errors = [
+    ...new Set([
+      ...definitionLimitErrors(parsed),
+      ...issues.map((issue) => issue.message),
+    ]),
+  ];
+  if (!validation.ok || errors.length > 0) {
+    return { ok: false, errors, issues };
+  }
+  const snapshot = validation.definition;
 
   let version: string;
   let change: "initial" | "cosmetic" | "breaking";
@@ -115,15 +147,18 @@ export async function publishDefinition(
         ),
       )
       .limit(1);
+    // The live snapshot may be in either stored shape (snapshots are never
+    // rewritten), so it is read as the unified model before comparing: an old
+    // builder-shaped snapshot and the same questionnaire saved unified are the
+    // same questionnaire, not a breaking change.
     const latestParsed = latest
-      ? BuilderQuestionnaire.safeParse(latest.definition)
+      ? safeParseStoredDefinition(latest.definition)
       : null;
     // A missing/corrupt prior snapshot is treated as breaking (mint fresh) so we
     // never silently overwrite with an unknown baseline.
-    const cls =
-      latestParsed?.success
-        ? classifyChange(latestParsed.data, parsed.data)
-        : "breaking";
+    const cls = latestParsed
+      ? classifyChange(latestParsed, snapshot)
+      : "breaking";
     if (cls === "cosmetic") {
       version = head.version;
       change = "cosmetic";
@@ -133,7 +168,6 @@ export async function publishDefinition(
     }
   }
 
-  const snapshot = parsed.data;
   const now = new Date();
   await withTransaction(async (tx) => {
     await tx

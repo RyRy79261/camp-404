@@ -63,12 +63,14 @@ Four traps that already cost real time:
 - **A `"use server"` file may export only async functions.** A `const`
   export breaks the page under `next dev`, and neither typecheck nor lint
   catches it. Put shared constants in a plain module.
-- **A `loading.tsx` above a page that calls `notFound()` makes it answer 200,
-  and a `redirect()` below one happens in the browser instead of on the
-  server.** The loading boundary streams first, so the status is already sent.
-  Leave `loading.tsx` out of any segment (and its parents) whose page can 404,
-  and never put one directly in `app/(console)/`, where the Overview redirects
-  through the member ladder.
+- **No `loading.tsx` under `app/(console)/`.** Three reasons, each found the
+  hard way. A page below one that calls `notFound()` answers 200, and its
+  `redirect()` happens in the browser instead of on the server. And the console
+  header's `next/link`s hydrate before the streamed page arrives, so React
+  client-renders the page and leaves the server's copy behind in a hidden
+  `<div id="S:0">`: the page is in the DOM twice (invisible, but a Playwright
+  `getByLabel` sees two). Navigation feedback comes from the nav item's own
+  pending state (`useLinkStatus` in `components/console/console-nav.tsx`).
 - **"branches limit exceeded" in the `schema-migration` job is capacity, not
   code.** Each run makes a Neon branch; several stacked PRs pushed together
   hit the project's limit. Re-run the failed job.
@@ -89,8 +91,8 @@ restyle only with tokens; do not invent a design.
 - Shell: `apps/web/app/(console)/layout.tsx` draws the header and a nav bar
   filtered by rank on the server (`lib/console-nav.ts`). A page starts with
   `PageHeading` (`@camp404/ui/components/page-heading`) and owns no container.
-- Loading: a segment's `loading.tsx` shows `ConsoleHeadingSkeleton` plus the
-  page's shape (`components/console/console-skeleton.tsx`).
+- Loading: no `loading.tsx` in the console (see the gotcha under Commands);
+  the pressed nav item pulses while the next page renders.
 
 ## Database — read this before touching the schema
 

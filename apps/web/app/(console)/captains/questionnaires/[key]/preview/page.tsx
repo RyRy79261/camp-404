@@ -59,18 +59,21 @@ export default async function BuilderPreviewPage({
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  return chrome(
-    definition.title,
-    <Card className="w-full max-w-2xl">
-      <CardContent className="flex flex-col p-6">
-        <BuilderPreview questionnaire={definition} />
-      </CardContent>
-    </Card>,
+  const backToEditor = (
     <Button asChild variant="outline">
       <Link href={`/captains/questionnaires/${key}`}>
         <Pencil aria-hidden />
         Back to editor
       </Link>
-    </Button>,
+    </Button>
+  );
+  return chrome(
+    definition.title || "Preview",
+    <Card className="w-full max-w-2xl">
+      <CardContent className="flex flex-col p-6">
+        <BuilderPreview questionnaire={definition} />
+      </CardContent>
+    </Card>,
+    backToEditor,
   );
 }

@@ -53,6 +53,7 @@ import {
   emptyStateFor,
   loadResults,
   outstandingFor,
+  recipientsOf,
   respondentsOf,
   summarise,
   type ResultsView,
@@ -87,29 +88,27 @@ beforeEach(() => {
     version: "1",
     createdBy: "someone",
   } as never);
+  // The loader serves the unified model, whichever shape the row is in.
   vi.mocked(getBuilderDefinition).mockResolvedValue({
     version: "1",
     title: "Camp feedback",
     pages: [
       {
         id: "p1",
-        type: "question",
-        title: "",
-        blocks: [
+        kind: "questions",
+        title: "Feedback",
+        questions: [
           {
-            kind: "question",
-            question: {
-              id: "colour",
-              kind: "short_text",
-              prompt: "Colour",
-              maxLength: 120,
-              required: true,
-            },
+            id: "colour",
+            kind: "short_text",
+            prompt: "Colour",
+            maxLength: 120,
+            required: true,
           },
         ],
       },
     ],
-  } as never);
+  });
   vi.mocked(listResultCycles).mockResolvedValue([2027, 2026]);
   vi.mocked(getCycles).mockResolvedValue([
     {
@@ -159,6 +158,11 @@ describe("loadResults — the captain gate", () => {
   it("lets a captain through", async () => {
     const access = await loadResults(KEY);
     expect(access.ok).toBe(true);
+    // Every question of the unified head, in document order.
+    expect(access.ok && access.view.questions.map((q) => q.id)).toEqual([
+      "colour",
+    ]);
+    expect(access.ok && access.view.title).toBe("Camp feedback");
     expect(listActivationResponses).toHaveBeenCalledWith({
       definitionKey: KEY,
       cycle: 2027,
@@ -285,6 +289,9 @@ const activation = {
   version: "1",
   title: "Camp feedback",
   status: "open" as const,
+  scope: "everyone" as const,
+  team: null,
+  blocking: true,
   cycle: 2027,
   dueAt: null,
   openedAt: new Date("2027-02-01T00:00:00Z"),
@@ -298,7 +305,12 @@ describe("outstandingFor", () => {
       activations: [activation],
       activeActivation: activation,
       rows: [
-        { ...ROW, userId: "a", gateStatus: "pending", gateActivationId: "act1" },
+        {
+          ...ROW,
+          userId: "a",
+          gateStatus: "pending",
+          gateActivationId: "act1",
+        },
         {
           ...ROW,
           userId: "b",
@@ -326,6 +338,85 @@ describe("outstandingFor", () => {
     });
 
     expect(outstandingFor(view)).toEqual([]);
+  });
+});
+
+describe("recipientsOf", () => {
+  it("lists finished answers first, then who the send is waiting on", () => {
+    const view = viewWith({
+      activations: [activation],
+      activeActivation: activation,
+      rows: [
+        {
+          ...ROW,
+          userId: "pending",
+          displayName: "Bo",
+          gateStatus: "pending",
+          gateActivationId: "act1",
+        },
+        {
+          ...ROW,
+          userId: "done",
+          displayName: "Cy",
+          gateStatus: "completed",
+          gateActivationId: "act1",
+          responses: { colour: "red" },
+          completedAt: new Date("2027-02-02T00:00:00Z"),
+        },
+        {
+          ...ROW,
+          userId: "halfway",
+          displayName: "Di",
+          gateStatus: "pending",
+          gateActivationId: "act1",
+          responses: { colour: "bl" },
+        },
+        {
+          ...ROW,
+          userId: "closed",
+          displayName: "Ed",
+          gateStatus: "expired",
+          gateActivationId: "act1",
+        },
+      ],
+    });
+
+    expect(
+      recipientsOf(view).map((r) => [
+        r.userId,
+        r.status,
+        r.respondent !== null,
+      ]),
+    ).toEqual([
+      ["done", "completed", true],
+      ["pending", "pending", false],
+      // A part-filled form is a status, never an answer.
+      ["halfway", "started", false],
+      ["closed", "expired", false],
+    ]);
+  });
+
+  it("says nothing about a member whose gate belongs to another send", () => {
+    // After a rollover the gate row points at next year's send. Reading last
+    // year, that gate must not list the member as pending here.
+    const view = viewWith({
+      activations: [activation],
+      activeActivation: activation,
+      rows: [
+        {
+          ...ROW,
+          userId: "a",
+          gateStatus: "pending",
+          gateActivationId: "next",
+        },
+        // …and an orphaned gate (activation deleted) with no active send.
+        { ...ROW, userId: "b", gateStatus: "pending", gateActivationId: null },
+      ],
+    });
+    expect(recipientsOf(view)).toEqual([]);
+    expect(
+      recipientsOf({ ...view, activeActivation: null, activations: [] }),
+    ).toEqual([]);
   });
 });
 
@@ -380,6 +471,7 @@ describe("summarise", () => {
 
     const summary = summarise(view);
     expect(summary.sent).toBe(3);
+    expect(summary.completed).toBe(1);
     expect(summary.outstanding).toBe(1);
     expect(summary.completionPercent).toBe(50);
     expect(summary.reachIsPartial).toBe(false);

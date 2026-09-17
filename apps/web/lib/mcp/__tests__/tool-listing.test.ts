@@ -39,10 +39,21 @@ describe("MCP tool listing", () => {
       expect(tool.inputSchema.type).toBe("object");
     }
     const draft = tools.find((t) => t.name === "update_questionnaire_draft")!;
+    // A definition is the unified questionnaire model, and only that: one
+    // object schema, so every client loads it into its context once.
     const definition = (
-      draft.inputSchema.properties as Record<string, { type?: string }>
+      draft.inputSchema.properties as Record<
+        string,
+        { type?: string; anyOf?: unknown; properties?: Record<string, unknown> }
+      >
     ).definition;
+    expect(definition?.anyOf).toBeUndefined();
     expect(definition?.type).toBe("object");
+    expect(Object.keys(definition?.properties ?? {})).toEqual([
+      "version",
+      "title",
+      "pages",
+    ]);
 
     await client.close();
     await server.close();

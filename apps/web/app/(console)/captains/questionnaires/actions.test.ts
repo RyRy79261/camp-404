@@ -101,6 +101,7 @@ describe("publishAction — captain gate", () => {
     expect(res).toEqual({
       ok: false,
       errors: ["Only captains can publish or send."],
+      issues: [],
     });
     expect(publishDefinition).not.toHaveBeenCalled();
   });
@@ -129,7 +130,32 @@ describe("publishAction — captain gate", () => {
     expect(await publishAction("nope")).toEqual({
       ok: false,
       errors: ["Questionnaire not found."],
+      issues: [],
     });
+  });
+
+  it("passes the located publish issues through", async () => {
+    asViewer("captain");
+    vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+      key: "feedback",
+      status: "draft",
+      version: null,
+      createdBy: "u1",
+    });
+    const refused = {
+      ok: false as const,
+      errors: ["Page 1 needs a title."],
+      issues: [
+        {
+          path: "pages[0].title",
+          code: "missing_page_title" as const,
+          message: "Page 1 needs a title.",
+          pageId: "p1",
+        },
+      ],
+    };
+    vi.mocked(publishDefinition).mockResolvedValue(refused);
+    expect(await publishAction("feedback")).toEqual(refused);
   });
 });
 
@@ -679,15 +705,16 @@ describe("remindPendingAction — what the captain is told", () => {
 // A team lead authors their OWN drafts; a captain may touch any. Every refusal
 // is asserted to reach no writer, because these actions take any POST.
 
+// A draft as the unified model, which is what a save stores.
 const BLANK = {
   version: "1",
   title: "Kitchen rota",
   pages: [
     {
       id: "00000000-0000-4000-8000-000000000001",
-      type: "question",
-      title: "",
-      blocks: [],
+      kind: "questions",
+      title: "Kitchen rota",
+      questions: [],
     },
   ],
 };
@@ -808,6 +835,105 @@ describe("draft authoring — a captain", () => {
     expect((await duplicateDraftAction("kitchen-rota")).ok).toBe(true);
     expect(await deleteDraftAction("kitchen-rota")).toEqual({ ok: true });
     expect(deleteDraft).toHaveBeenCalledWith("kitchen-rota");
+  });
+
+  it("stores the parsed unified model, defaults applied", async () => {
+    asViewer("captain");
+    definitionRow("draft", "u1");
+
+    expect(
+      await updateDefinitionAction("kitchen-rota", {
+        version: "1",
+        title: "Kitchen rota",
+        pages: [
+          {
+            id: "p1",
+            kind: "questions",
+            title: "",
+            questions: [
+              {
+                id: "q",
+                kind: "short_text",
+                prompt: "Shift?",
+                visibleIf: { fieldId: "x", op: "is_answered" },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({ ok: true });
+    expect(updateDefinition).toHaveBeenCalledWith("kitchen-rota", {
+      version: "1",
+      title: "Kitchen rota",
+      pages: [
+        {
+          id: "p1",
+          kind: "questions",
+          title: "",
+          questions: [
+            {
+              id: "q",
+              kind: "short_text",
+              prompt: "Shift?",
+              maxLength: 120,
+              required: true,
+              visibleIf: { fieldId: "x", op: "is_answered" },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("refuses the old canvas's builder shape now the builder saves the unified model", async () => {
+    asViewer("captain");
+    definitionRow("draft", "u1");
+
+    expect(
+      await updateDefinitionAction("kitchen-rota", {
+        version: "1",
+        title: "Kitchen rota",
+        pages: [
+          {
+            id: "p1",
+            type: "question",
+            title: "",
+            blocks: [
+              {
+                kind: "question",
+                question: { id: "q", kind: "short_text", prompt: "Shift?" },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({
+      ok: false,
+      error: "The questionnaire is malformed and wasn't saved.",
+    });
+    expect(updateDefinition).not.toHaveBeenCalled();
+  });
+
+  it("refuses a malformed or oversized save, writing nothing", async () => {
+    asViewer("captain");
+    definitionRow("draft", "u1");
+
+    expect(
+      await updateDefinitionAction("kitchen-rota", { version: "1", pages: [] }),
+    ).toEqual({
+      ok: false,
+      error: "The questionnaire is malformed and wasn't saved.",
+    });
+    expect(
+      await updateDefinitionAction("kitchen-rota", {
+        ...BLANK,
+        title: "x".repeat(201),
+      }),
+    ).toEqual({
+      ok: false,
+      error: "Keep the title to 200 characters or fewer.",
+    });
+    expect(updateDefinition).not.toHaveBeenCalled();
   });
 
   it("cannot delete a published questionnaire", async () => {

@@ -43,23 +43,26 @@ export function ReminderButton({
   }
 
   return (
-    <div className="mt-4 flex flex-col gap-1.5">
-      <div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={remind}
-          disabled={pending}
-        >
-          {pending ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-          ) : (
-            <BellRing className="size-4" aria-hidden />
-          )}
-          Remind who hasn&rsquo;t answered
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+    <div className="flex flex-col items-start gap-1.5">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={remind}
+        disabled={pending}
+      >
+        {pending ? (
+          <Loader2 className="animate-spin" aria-hidden />
+        ) : (
+          <BellRing aria-hidden />
+        )}
+        Remind who hasn&rsquo;t answered
+      </Button>
+      <p
+        className="text-xs text-muted-foreground"
+        role="status"
+        aria-live="polite"
+      >
         {note ??
           (outstanding === 0
             ? "Everyone who was asked has answered."

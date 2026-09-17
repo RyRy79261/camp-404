@@ -1,9 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { boundDraftResponses } from "@camp404/core";
 import {
-  boundDraftResponses,
-  flattenQuestions,
   incompleteContactErrors,
   questionIdForRole,
   questionsWithRole,
@@ -86,10 +85,7 @@ export async function saveBurnerProfile(
     }
     responses = result.responses;
   } else {
-    const draft = boundDraftResponses(
-      rawResponses,
-      flattenQuestions(questionnaire).map((q) => q.id),
-    );
+    const draft = boundDraftResponses(questionnaire, rawResponses);
     if (!draft.ok) {
       return {
         ok: false,

@@ -6,10 +6,17 @@ import { getOpenActivationForKey } from "@camp404/db/questionnaire-lifecycle";
 import { Alert } from "@camp404/ui/components/alert";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
+import {
+  ActivationForm,
+  type AudienceChoice,
+  type AudienceOption,
+  type MemberOption,
+} from "@/components/questionnaires/activation-form";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getLeadTeams } from "@/lib/users";
 import {
   audienceLabel,
+  getCurrentCycle,
   getTeamsConfig,
   memberTeamsLabel,
   teamLabelMap,
@@ -17,7 +24,7 @@ import {
 } from "@/lib/camp-config";
 import { getCampManagementRoster } from "@/lib/roster";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
-import { SendForm, type AudienceOption, type MemberOption } from "./send-form";
+import { parseSendPrefill } from "./prefill";
 
 // The scopes this screen offers a captain, in picker order. `drivers` is
 // broadcast-only and `opt_in` has no send path yet, so neither is listed — but
@@ -30,26 +37,25 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Send questionnaire — Camp 404" };
 
-// The Send/Activate screen (§6.4), laid out like the AfrikaBurn console's
-// activate page. Captains send to any audience; a team lead
-// sends to the teams they lead. Anyone else gets the locked shell before any
-// questionnaire read. Only a published questionnaire can be sent.
+// The Send/Activate screen (§6.4), from the AfrikaBurn console's activate
+// page. Captains send to any audience; a team lead sends to the teams they
+// lead. Anyone else gets the locked shell before any questionnaire read. Only
+// a published questionnaire can be sent.
 export default async function SendPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ key: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { key } = await params;
   const { cleared, rank, campUser } = await captainPageGate("team_lead");
   const isCaptain = rank === "captain";
-  // The AfrikaBurn console's send screen: the heading, then the Audience and
-  // Delivery cards. The form's Cancel is the way back (to the editor for a
-  // captain, the hub for a lead, who edits only their own questionnaires).
-  const chrome = (children: ReactNode, description?: string) => (
+  const chrome = (children: ReactNode, title: string, description?: string) => (
     <div className="flex flex-col">
       <PageHeading
         eyebrow="Questionnaires / Send"
-        title="Send to members"
+        title={title}
         description={description}
       />
       {children}
@@ -61,11 +67,14 @@ export default async function SendPage({
   const leadTeams =
     cleared && !isCaptain ? await getLeadTeams(campUser.id) : [];
   if (!cleared || (!isCaptain && leadTeams.length === 0)) {
+    // Nothing about the questionnaire is read for a viewer who can't send, so
+    // the heading names the page, not the questionnaire.
     return chrome(
       <CaptainLock
         title="Team leads and captains only"
         message="Only captains and team leads can send questionnaires to members."
       />,
+      "Send to members",
     );
   }
 
@@ -84,23 +93,26 @@ export default async function SendPage({
           </Link>
         </span>
       </Alert>,
+      "Send to members",
     );
   }
 
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  const [openActivation, roster, config] = await Promise.all([
+  const [openActivation, roster, config, year, query] = await Promise.all([
     getOpenActivationForKey(key),
     // Members are picked only for an `individual` send, which a lead can't make.
     isCaptain ? getCampManagementRoster() : Promise.resolve([]),
     getTeamsConfig(),
+    getCurrentCycle(),
+    searchParams,
   ]);
 
   // Both pickers and the member subtitles come from the camp config through the
   // one audience vocabulary — teamPickerOptions drops ARCHIVED teams, and
   // memberTeamsLabel renders "Kitchen" where the raw `power_and_lighting` used
-  // to print, ten lines from where the pretty string lives.
+  // to print.
   const teamOptions: AudienceOption[] = teamPickerOptions(config).filter(
     (option) => isCaptain || leadTeams.includes(option.value),
   );
@@ -118,18 +130,40 @@ export default async function SendPage({
     sub: memberTeamsLabel(m.teams, labels),
   }));
 
+  // The editor may hand its choices over in the query string. Anything the
+  // viewer may not choose simply pre-fills nothing; the send is authorised on
+  // the server as always.
+  const prefill = parseSendPrefill(query);
+  const initialAudience: AudienceChoice | null =
+    prefill.audience &&
+    scopeOptions.some((o) => o.value === prefill.audience?.scope)
+      ? prefill.audience
+      : null;
+  const title = definition.title || key;
+
   return chrome(
-    <div className="w-full max-w-3xl">
-      <SendForm
+    <div className="w-full max-w-4xl">
+      <ActivationForm
         questionnaireKey={key}
-        title={definition.title}
+        title={title}
         members={members}
         scopeOptions={scopeOptions}
         teamOptions={teamOptions}
         openActivationId={openActivation?.id ?? null}
         asLead={!isCaptain}
+        yearLabel={
+          year
+            ? year.name
+              ? `${year.year} (${year.name})`
+              : String(year.year)
+            : null
+        }
+        initialAudience={initialAudience}
+        initialBlocking={prefill.blocking}
+        initialDueAt={prefill.dueAt}
       />
     </div>,
-    `Choose who answers “${definition.title}”, and whether it holds the app until they do.`,
+    title,
+    "Choose an audience and delivery options, then send.",
   );
 }

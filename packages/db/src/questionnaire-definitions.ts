@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { BuilderQuestionnaire } from "@camp404/types";
+import type { Questionnaire } from "@camp404/types";
 import { createHttpDb } from "./index";
 import { questionnaireDefinitions, questionnaireVersions } from "./schema";
 
@@ -21,10 +21,11 @@ export const RESERVED_DEFINITION_KEYS: ReadonlySet<string> = new Set([
 // Stored questionnaire-definition reads. A questionnaire's catalogue is the
 // @camp404/types `Questionnaire` JSON kept on `questionnaire_definitions`,
 // keyed by its stable questionnaire_key. This module stays dumb (just SQL) —
-// the app facade (apps/web/lib/questionnaire-definitions.ts) validates the
-// JSONB with the zod schema and falls back to the code template + serves the
-// E2E test store, mirroring the camp-config split. The writer lands with the
-// in-app builder in a later phase.
+// the app facade (apps/web/lib/questionnaire-definitions.ts) reads the JSONB
+// through parseStoredDefinition (a row may still hold the builder's older
+// shape, and version snapshots are never rewritten) and falls back to the code
+// template + serves the E2E test store, mirroring the camp-config split. The
+// writers below take the unified model only.
 
 export interface QuestionnaireDefinitionRow {
   key: string;
@@ -162,7 +163,7 @@ export async function insertDefinitionDraft(input: {
   key: string;
   title: string;
   createdBy: string | null;
-  definition: BuilderQuestionnaire;
+  definition: Questionnaire;
 }): Promise<void> {
   const db = createHttpDb();
   await db.insert(questionnaireDefinitions).values({
@@ -182,7 +183,7 @@ export async function insertDefinitionDraft(input: {
 export async function updateDefinitionRow(input: {
   key: string;
   title: string;
-  definition: BuilderQuestionnaire;
+  definition: Questionnaire;
 }): Promise<void> {
   const db = createHttpDb();
   await db

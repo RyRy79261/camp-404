@@ -7,8 +7,8 @@ Two complementary layers cover the questionnaire and invite-gate flows.
 `apps/web/components/__tests__/*` — pure React tests run under jsdom. No
 server, no DB, no network. Exercises:
 
-- the questionnaire wizard's multi-page navigation, validation, and
-  submission contract (`wizard.test.tsx`),
+- the questionnaire runner's multi-page navigation, validation, and
+  submission contract (`runner.test.tsx`),
 - the questionnaire schema + validator (`questionnaire.test.ts`),
 - the in-memory rate limiter (`rate-limit.test.ts`).
 
@@ -109,7 +109,7 @@ Neon-backed reads/writes in this mode.
 
 The burner-profile questionnaire is a 13-page wizard. Its page-by-page
 navigation, validation and submission contract are covered at the
-component layer (`components/__tests__/wizard.test.tsx`), so e2e specs
+component layer (`components/__tests__/runner.test.tsx`), so e2e specs
 don't re-drive every field — they call `completeOnboarding(request,
 authUserId)` (POST `/api/test/complete-onboarding`) to mark the profile
 complete and jump straight to the gates that follow it (home vs.
@@ -181,7 +181,7 @@ suite — covered elsewhere, or only coverable by the future real-auth suite:
   `context.addCookies()` for the session token).
 - **Questionnaire field-by-field validation.** The 13-page wizard's
   navigation, required-field blocking and submission contract are covered at
-  the component layer in `components/__tests__/wizard.test.tsx` (jsdom). E2E
+  the component layer in `components/__tests__/runner.test.tsx` (jsdom). E2E
   jumps past it via the `complete-onboarding` seam, so it only asserts the
   gates on either side, not each field.
 - **Captain approve / reject from the UI.** The camp-management roster
