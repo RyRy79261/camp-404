@@ -92,9 +92,14 @@ export async function getCampManagementRoster(
         where tm.user_id = ${schema.users.id} and tm.is_lead = true
           and tm.cycle = ${cycle}
       )`,
+      // ::text on purpose. An array of the `team` enum reaches the Neon driver
+      // as the raw string "{kitchen,structures}": the driver parses only
+      // built-in array types, and a custom enum's array OID is not one. PGlite
+      // parses it, so the unit tests never saw the string; the send page,
+      // the member panel and the CSV export all crashed on `.map` in production.
       teams: sql<
         string[]
-      >`coalesce((select array_agg(tm.team order by tm.team) from team_memberships tm where tm.user_id = ${schema.users.id} and tm.cycle = ${cycle}), '{}')`,
+      >`coalesce((select array_agg(tm.team::text order by tm.team) from team_memberships tm where tm.user_id = ${schema.users.id} and tm.cycle = ${cycle}), '{}'::text[])`,
       pendingRequiredActions: sql<number>`(
         select count(*)::int from required_actions ra
         where ra.user_id = ${schema.users.id}
