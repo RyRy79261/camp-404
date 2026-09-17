@@ -64,7 +64,8 @@ function toBuilder(def: Questionnaire): BuilderQuestionnaire {
     version: def.version,
     title: def.title ?? "",
     pages: def.pages.map((page) => {
-      if (page.kind !== "questions") throw new Error("intro has no builder page");
+      if (page.kind !== "questions")
+        throw new Error("intro has no builder page");
       return toBuilderPage(page);
     }),
   };
@@ -154,7 +155,10 @@ describe("fromBuilderQuestionnaire", () => {
   it("keeps the title and version, and turns every page into a questions page", () => {
     expect(unified.version).toBe("3");
     expect(unified.title).toBe("Transport");
-    expect(unified.pages.map((p) => p.kind)).toEqual(["questions", "questions"]);
+    expect(unified.pages.map((p) => p.kind)).toEqual([
+      "questions",
+      "questions",
+    ]);
   });
 
   it("marks a content page, moves intro to subtitle and keeps requiredToContinue", () => {
@@ -167,7 +171,10 @@ describe("fromBuilderQuestionnaire", () => {
     expect(drive?.pageType).toBe("question");
     expect(drive).not.toHaveProperty("subtitle");
     expect(drive).not.toHaveProperty("requiredToContinue");
-    expect(drive?.visibleIf).toEqual({ fieldId: "welcome_seen", op: "is_empty" });
+    expect(drive?.visibleIf).toEqual({
+      fieldId: "welcome_seen",
+      op: "is_empty",
+    });
   });
 
   it("unwraps a question block, moving its visibleIf onto the question", () => {
@@ -248,7 +255,9 @@ describe("parseStoredDefinition", () => {
       parseStoredDefinition({
         version: "1",
         title: "Broken",
-        pages: [{ id: "p", type: "question", title: "P", blocks: [{ kind: "nope" }] }],
+        pages: [
+          { id: "p", type: "question", title: "P", blocks: [{ kind: "nope" }] },
+        ],
       }),
     ).toThrow();
     expect(() => parseStoredDefinition(null)).toThrow();

@@ -96,6 +96,8 @@ export * from "./audience-authz";
 export * from "./csv";
 export * from "./questionnaire-csv";
 export * from "./questionnaire-results";
+export * from "./questionnaire-definition";
+export * from "./questionnaire-runtime";
 export * from "./notification-links";
 export * from "./notifications";
 export * from "./read-rate";

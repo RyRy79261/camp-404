@@ -233,7 +233,11 @@ describe("displayResponseValue and diffResponses over the new kinds", () => {
     ).toEqual([]);
     expect(diffResponses(def, { shift: {} }, {})).toEqual([]);
     expect(
-      diffResponses(def, { shift: { mon: ["am"] } }, { shift: { mon: ["pm"] } }),
+      diffResponses(
+        def,
+        { shift: { mon: ["am"] } },
+        { shift: { mon: ["pm"] } },
+      ),
     ).toEqual([
       {
         fieldId: "shift",
@@ -247,7 +251,9 @@ describe("displayResponseValue and diffResponses over the new kinds", () => {
 
 describe("the visibleIf helpers over the new kinds", () => {
   it("offers numeric comparisons on a linear scale and a rating", () => {
-    expect(visibleIfOpsFor(KIND_SAMPLES.linear_scale.question)).toContain("gte");
+    expect(visibleIfOpsFor(KIND_SAMPLES.linear_scale.question)).toContain(
+      "gte",
+    );
     expect(visibleIfOpsFor(KIND_SAMPLES.rating.question)).toContain("lt");
   });
 
@@ -295,7 +301,10 @@ describe("the visibleIf helpers over the new kinds", () => {
     ).toBe("wrong_value");
     const years = KIND_SAMPLES.years.question;
     expect(
-      visibleIfProblem({ fieldId: years.id, op: "includes", value: "2020" }, years),
+      visibleIfProblem(
+        { fieldId: years.id, op: "includes", value: "2020" },
+        years,
+      ),
     ).toBe("wrong_value");
     expect(
       visibleIfProblem({ fieldId: GRID.id, op: "eq", value: "am" }, GRID),
@@ -361,7 +370,12 @@ describe("the builder schema reads exactly as it did before the model grew", () 
     }
     expect(
       BuilderQuestionnaire.safeParse(
-        builderWith({ id: "t", kind: "short_text", prompt: "T", format: "url" }),
+        builderWith({
+          id: "t",
+          kind: "short_text",
+          prompt: "T",
+          format: "url",
+        }),
       ).success,
     ).toBe(true);
   });
@@ -446,7 +460,9 @@ describe("the builder schema reads exactly as it did before the model grew", () 
       ],
     });
     const blocks = parsed.pages[0]!.blocks;
-    const questions = blocks.map((b) => (b.kind === "question" ? b.question : null));
+    const questions = blocks.map((b) =>
+      b.kind === "question" ? b.question : null,
+    );
     expect(questions).toEqual([
       {
         id: "one",

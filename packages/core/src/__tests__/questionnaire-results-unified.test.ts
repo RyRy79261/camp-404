@@ -138,7 +138,10 @@ describe("linear_scale and rating — an enumerated distribution", () => {
   });
 
   it("runs a rating from 1 to its step count", () => {
-    const agg = as(aggregateQuestion(RATING, [{ depot: 4 }, { depot: 3 }]), "numeric");
+    const agg = as(
+      aggregateQuestion(RATING, [{ depot: 4 }, { depot: 3 }]),
+      "numeric",
+    );
     expect(agg.buckets.map((b) => b.value)).toEqual([1, 2, 3, 4]);
     expect(agg.mean).toBe(3.5);
     expect(agg.min).toBe(3);
@@ -224,7 +227,10 @@ describe("grids — per-row tallies", () => {
       { shift: { mon: ["am"], tue: ["am"] } },
       { shift: { mon: ["pm"] } },
     ];
-    const agg: GridAggregate = as(aggregateQuestion(MC_GRID, responses), "grid");
+    const agg: GridAggregate = as(
+      aggregateQuestion(MC_GRID, responses),
+      "grid",
+    );
     expect(agg.multi).toBe(false);
     expect(agg.answered).toBe(3);
     const [mon, tue] = agg.rows;
@@ -242,7 +248,11 @@ describe("grids — per-row tallies", () => {
 
   it("counts an all-empty grid as skipped", () => {
     const agg = as(
-      aggregateQuestion(CB_GRID, [{ cover: {} }, { cover: { kitchen: [] } }, {}]),
+      aggregateQuestion(CB_GRID, [
+        { cover: {} },
+        { cover: { kitchen: [] } },
+        {},
+      ]),
       "grid",
     );
     expect(agg.answered).toBe(0);
