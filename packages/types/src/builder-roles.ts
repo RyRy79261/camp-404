@@ -1,12 +1,4 @@
-import type {
-  Question,
-  QuestionnaireResponses,
-  QuestionRole,
-} from "./questionnaire";
-import {
-  evalVisibleIf,
-  type BuilderQuestionnaire,
-} from "./questionnaire-builder";
+import type { Question, QuestionRole } from "./questionnaire";
 
 // What a camp-authored questionnaire's answers are FOR, when the app uses them
 // beyond storing them. Dietary and driver facts used to be code questionnaires
@@ -14,7 +6,9 @@ import {
 // onto the builder when the camp needs to ask them again. A captain marks a
 // question with one of these roles, and a final submit copies the answer into
 // dietary_requirements or this year's driver_profiles row, which the roster,
-// the export and the "drivers" audience already read.
+// the export and the "drivers" audience already read. The copy itself is
+// `questionnaireRoleMirror` in @camp404/core, which knows which questions a
+// member was actually asked.
 
 export type BuilderRole = Extract<
   QuestionRole,
@@ -79,70 +73,4 @@ export interface DriverMirror {
 export interface RoleMirror {
   dietary: DietaryMirror | null;
   driver: DriverMirror | null;
-}
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-/** A date answer ("2027-04-26") as the start of that day in UTC, or null. */
-function dayAnswer(value: unknown): Date | null {
-  if (typeof value !== "string" || !DAY.test(value)) return null;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function textAnswer(value: unknown): string | null {
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
-}
-
-/**
- * The domain-table facts a submitted questionnaire carries. Every role question
- * in the definition writes its column: its answer when the member can see it,
- * and empty (null, or false for a yes/no) when it is hidden or unanswered, so a
- * member who now says "no allergies" does not keep last year's list. A
- * questionnaire with no role question writes nothing.
- */
-export function builderRoleMirror(
-  definition: BuilderQuestionnaire,
-  responses: QuestionnaireResponses,
-): RoleMirror {
-  const dietary: DietaryMirror = {};
-  const driver: DriverMirror = {};
-  for (const page of definition.pages) {
-    const pageShown =
-      !page.visibleIf || evalVisibleIf(page.visibleIf, responses);
-    for (const block of page.blocks) {
-      if (block.kind !== "question") continue;
-      const q = block.question;
-      const role = "role" in q ? q.role : undefined;
-      if (!isBuilderRole(role)) continue;
-      const shown =
-        pageShown &&
-        (!block.visibleIf || evalVisibleIf(block.visibleIf, responses));
-      const value = shown ? responses[q.id] : undefined;
-      switch (role) {
-        case "dietary_allergies":
-          dietary.allergies = textAnswer(value);
-          break;
-        case "dietary_notes":
-          dietary.notes = textAnswer(value);
-          break;
-        case "dietary_anaphylactic":
-          dietary.isAnaphylactic = value === true;
-          break;
-        case "driving_this_year":
-          driver.intendsToDrive = value === true;
-          break;
-        case "arrival_date":
-          driver.arrivalAt = dayAnswer(value);
-          break;
-        case "departure_date":
-          driver.departureAt = dayAnswer(value);
-          break;
-      }
-    }
-  }
-  return {
-    dietary: Object.keys(dietary).length > 0 ? dietary : null,
-    driver: Object.keys(driver).length > 0 ? driver : null,
-  };
 }

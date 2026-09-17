@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  BUILDER_ROLES,
-  builderRoleMirror,
-  builderRolesFor,
-} from "../builder-roles";
+import { BUILDER_ROLES, builderRolesFor } from "../builder-roles";
 import {
   BuilderQuestionnaire,
   validateBuilderQuestionnaire,
@@ -77,62 +73,6 @@ describe("builderRolesFor", () => {
     for (const meta of Object.values(BUILDER_ROLES)) {
       expect(meta.label.length).toBeGreaterThan(0);
     }
-  });
-});
-
-describe("builderRoleMirror", () => {
-  it("copies visible answers and a day as the start of that UTC day", () => {
-    expect(
-      builderRoleMirror(TRANSPORT, {
-        drives: true,
-        arrive: "2027-04-26",
-        has: true,
-        allergies: "  Peanuts ",
-      }),
-    ).toEqual({
-      dietary: { allergies: "Peanuts" },
-      driver: {
-        intendsToDrive: true,
-        arrivalAt: new Date("2027-04-26T00:00:00.000Z"),
-      },
-    });
-  });
-
-  it("clears a hidden or unanswered role answer instead of keeping an old one", () => {
-    expect(
-      builderRoleMirror(TRANSPORT, {
-        drives: false,
-        has: false,
-        allergies: "Peanuts (last year)",
-      }),
-    ).toEqual({
-      dietary: { allergies: null },
-      driver: { intendsToDrive: false, arrivalAt: null },
-    });
-  });
-
-  it("writes nothing for a questionnaire with no role questions", () => {
-    const plain = BuilderQuestionnaire.parse({
-      version: "1",
-      title: "Feedback",
-      pages: [
-        {
-          id: "p1",
-          type: "question",
-          title: "P",
-          blocks: [
-            {
-              kind: "question",
-              question: { id: "q", kind: "short_text", prompt: "Thoughts?" },
-            },
-          ],
-        },
-      ],
-    });
-    expect(builderRoleMirror(plain, { q: "Great" })).toEqual({
-      dietary: null,
-      driver: null,
-    });
   });
 });
 

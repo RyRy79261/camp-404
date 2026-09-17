@@ -615,7 +615,7 @@ function longTextIn(value: unknown, limit: number): boolean {
  * it may: the server's bounds (Camp 404's `BUILDER_LIMITS`), checked on every
  * save whatever the editor sent. Publish-only rules stay in
  * `validateQuestionnaireDefinition`, so a half-built draft still saves. The
- * unified model's counterpart to the builder's `builderDefinitionLimitErrors`.
+ * draft save, the MCP drafting tools and publish all apply it.
  */
 export function definitionLimitErrors(definition: Questionnaire): string[] {
   const L = BUILDER_LIMITS;

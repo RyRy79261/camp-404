@@ -752,13 +752,11 @@ export function aggregateQuestion(
 /**
  * The same summary from an already-flat question list.
  *
- * This is the primitive; `aggregateResponses` is the legacy-`Questionnaire`
- * wrapper over it. The split exists because the two questionnaire shapes
- * flatten differently — a `BuilderQuestionnaire` uses
- * `flattenBuilderQuestions`, the legacy one `flattenQuestions` — and the
- * builder shape is the only kind that HAS a results screen. Taking the flat
- * list keeps this module out of that split entirely, and keeps `/metrics` on
- * this engine rather than growing a second one beside it.
+ * This is the primitive; `aggregateResponses` is the `Questionnaire` wrapper
+ * over it. `/metrics` passes `flattenQuestions` of the unified definition every
+ * stored row is read as (the builder's older shape converts on read). Taking
+ * the flat list keeps this module free of any definition shape, and keeps
+ * `/metrics` on this engine rather than growing a second one beside it.
  */
 export function aggregateQuestions(
   questions: readonly Question[],

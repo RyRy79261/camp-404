@@ -388,51 +388,6 @@ export function visiblePages(
 }
 
 /**
- * Deep-clone a questionnaire with fresh ids for every page, content block and
- * field, remapping each page- and block-level `visibleIf.fieldId` through the
- * old→new field-id map so the copy's conditional branching keeps referring to
- * ITS OWN fields. Without the remap the copied references dangle: branching
- * mis-renders at runtime and the copy fails the publish "shows-when references
- * an earlier field" check. `nextId` supplies fresh unique ids.
- */
-export function regenerateBuilderIds(
-  q: BuilderQuestionnaire,
-  nextId: () => string,
-): BuilderQuestionnaire {
-  // Pass 1: assign a new id to every question and record old → new, so a
-  // visibleIf referencing any field (even one on a later page) can be remapped.
-  const idMap = new Map<string, string>();
-  for (const page of q.pages) {
-    for (const block of page.blocks) {
-      if (block.kind === "question") idMap.set(block.question.id, nextId());
-    }
-  }
-  const remap = (v: VisibleIf | undefined): VisibleIf | undefined =>
-    v ? { ...v, fieldId: idMap.get(v.fieldId) ?? v.fieldId } : undefined;
-  // Pass 2: rebuild with fresh page/block ids + remapped visibleIf.
-  return {
-    ...q,
-    pages: q.pages.map((page) => ({
-      ...page,
-      id: nextId(),
-      visibleIf: remap(page.visibleIf),
-      blocks: page.blocks.map((block) =>
-        block.kind === "question"
-          ? {
-              ...block,
-              question: {
-                ...block.question,
-                id: idMap.get(block.question.id) ?? block.question.id,
-              },
-              visibleIf: remap(block.visibleIf),
-            }
-          : { ...block, id: nextId(), visibleIf: remap(block.visibleIf) },
-      ),
-    })),
-  };
-}
-
-/**
  * Validate a response map against a builder questionnaire. Visibility-aware:
  * required checks are skipped for fields hidden by an unmet `visibleIf`, and a
  * hidden field's value is retained if it is a legal answer for that field
@@ -485,49 +440,6 @@ export function validateBuilderResponses(
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
-  return { ok: true, responses };
-}
-
-// --- Draft (non-final) response bounds ----------------------------------
-// A partial save can't be validated per-field — the respondent hasn't finished
-// — but it must still be bounded: a server action accepts whatever the client
-// posts and the result lands verbatim in a JSONB column. Serves BOTH the
-// builder and the legacy routes (it takes ids, not a questionnaire). Sized for
-// text answers; mirrors the hard-cap idiom in app/api/uploads/avatar/route.ts.
-// `.length` on the serialized JSON is UTF-16 units, not bytes — deliberately
-// dependency- and Buffer-free so this module stays browser-safe.
-const MAX_DRAFT_KEYS = 500;
-const MAX_DRAFT_JSON_LENGTH = 128 * 1024;
-
-/**
- * Bound an unvalidated draft response map: structurally parse it, drop every
- * key that is not a field id in `allowedIds`, and reject it outright past the
- * key-count / serialized-length caps. Per-field and required checks
- * deliberately do NOT run — a draft is allowed to be incomplete and wrong —
- * but nothing outside the definition, and nothing unbounded, reaches storage.
- */
-export function boundDraftResponses(
-  raw: unknown,
-  allowedIds: Iterable<string>,
-):
-  | { ok: true; responses: QuestionnaireResponses }
-  | { ok: false; error: string } {
-  const parsed = QuestionnaireResponses.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, error: "Malformed response payload" };
-  }
-  const entries = Object.entries(parsed.data);
-  if (entries.length > MAX_DRAFT_KEYS) {
-    return { ok: false, error: "Too many answers" };
-  }
-  const allowed = new Set(allowedIds);
-  const responses: QuestionnaireResponses = {};
-  for (const [key, value] of entries) {
-    if (allowed.has(key)) responses[key] = value;
-  }
-  if (JSON.stringify(responses).length > MAX_DRAFT_JSON_LENGTH) {
-    return { ok: false, error: "Answers are too large" };
-  }
   return { ok: true, responses };
 }
 
@@ -603,67 +515,6 @@ export function isAllowedBuilderImageUrl(url: string): boolean {
 
 const IMAGE_HOST_ERROR = (where: string) =>
   `An image on ${where} links to another website. Only images stored by Camp 404 can be shown.`;
-
-function longTextIn(value: unknown, limit: number): boolean {
-  if (typeof value === "string") return value.length > limit;
-  if (Array.isArray(value)) return value.some((v) => longTextIn(v, limit));
-  if (value && typeof value === "object") {
-    return Object.values(value).some((v) => longTextIn(v, limit));
-  }
-  return false;
-}
-
-/**
- * Why a definition may not be SAVED, as sentences for the author, or [] when
- * it may. These are the server's bounds, checked on every save whatever the
- * editor sent. Publish-only rules (alt text, a picture on every image block)
- * stay in validateBuilderQuestionnaire, so a half-built draft still saves.
- */
-export function builderDefinitionLimitErrors(q: BuilderQuestionnaire): string[] {
-  const L = BUILDER_LIMITS;
-  const errors: string[] = [];
-  if (q.title.length > L.titleLength) {
-    errors.push(`Keep the title to ${L.titleLength} characters or fewer.`);
-  }
-  if (q.pages.length > L.pages) {
-    errors.push(`A questionnaire can have at most ${L.pages} pages.`);
-  }
-  q.pages.forEach((page, pi) => {
-    const pageLabel = page.title.trim() || `Page ${pi + 1}`;
-    if (page.blocks.length > L.blocksPerPage) {
-      errors.push(`${pageLabel} has more than ${L.blocksPerPage} blocks.`);
-    }
-    for (const block of page.blocks) {
-      if (
-        block.kind === "question" &&
-        "options" in block.question &&
-        block.question.options.length > L.optionsPerQuestion
-      ) {
-        errors.push(
-          `"${block.question.prompt.slice(0, 60)}" has more than ${L.optionsPerQuestion} options.`,
-        );
-      }
-      if (
-        block.kind === "image_block" &&
-        block.imageUrl.trim().length > 0 &&
-        !isAllowedBuilderImageUrl(block.imageUrl)
-      ) {
-        errors.push(IMAGE_HOST_ERROR(pageLabel));
-      }
-    }
-  });
-  if (longTextIn(q, L.textLength)) {
-    errors.push(
-      `One piece of text is longer than ${L.textLength} characters. Shorten it or split it up.`,
-    );
-  }
-  if (JSON.stringify(q).length > L.totalLength) {
-    errors.push(
-      "This questionnaire is too large to save. Split it into smaller questionnaires.",
-    );
-  }
-  return errors;
-}
 
 /** A condition's publish blockers, worded for the author. */
 function visibleIfErrors(
@@ -786,7 +637,7 @@ export function builderQuestionnaireIssues(
   //      spuriously — a dangling condition gets accepted because its twin
   //      already seeded the set. Rejecting the duplicate closes both.
   // Content-block and page ids join the namespace because `classifyChange`
-  // keys its visibleIf map by them: a collision there can read a branching
+  // (@camp404/core) keys its visibleIf map by them: a collision there can read a branching
   // edit as cosmetic and skip the re-submit gate.
   const seen = new Map<string, string>();
   const claimId = (
@@ -919,115 +770,4 @@ export function builderQuestionnaireIssues(
     );
   }
   return errors;
-}
-
-// --- Structural diff (drives the publish re-submit prompt) ---------------
-
-function fieldMap(q: BuilderQuestionnaire): Map<string, Question> {
-  const m = new Map<string, Question>();
-  for (const field of flattenBuilderQuestions(q)) m.set(field.id, field);
-  return m;
-}
-
-
-/**
- * True when changing `prev` field into `next` (same id, same kind) can
- * invalidate a stored answer or change the obligation — i.e. a breaking change.
- */
-function breakingParamChange(prev: Question, next: Question): boolean {
-  // Removing or renaming an option value is breaking; adding one is not.
-  const prevOpts = choiceValues(prev);
-  const nextOpts = choiceValues(next);
-  if (prevOpts && nextOpts) {
-    const nextSet = new Set(nextOpts);
-    if (prevOpts.some((v) => !nextSet.has(v))) return true;
-  }
-  // Narrowing a text/number bound can invalidate a stored answer.
-  if (
-    (prev.kind === "short_text" || prev.kind === "long_text") &&
-    (next.kind === "short_text" || next.kind === "long_text") &&
-    next.maxLength < prev.maxLength
-  ) {
-    return true;
-  }
-  if (
-    (prev.kind === "slider" || prev.kind === "number") &&
-    (next.kind === "slider" || next.kind === "number") &&
-    (next.min > prev.min || next.max < prev.max)
-  ) {
-    return true;
-  }
-  // Turning "Other…" off invalidates every stored `other:` answer, exactly the
-  // way removing an option does.
-  if (
-    (prev.kind === "single_select" || prev.kind === "multi_select") &&
-    (next.kind === "single_select" || next.kind === "multi_select") &&
-    prev.allowOther === true &&
-    next.allowOther !== true
-  ) {
-    return true;
-  }
-  // Adding or tightening a text format can invalidate stored free text;
-  // dropping to plain "text" only ever widens.
-  if (prev.kind === "short_text" && next.kind === "short_text") {
-    const before = prev.format ?? "text";
-    const after = next.format ?? "text";
-    if (after !== before && after !== "text") return true;
-  }
-  return false;
-}
-
-function sameVisibleIf(a?: VisibleIf, b?: VisibleIf): boolean {
-  if (!a && !b) return true;
-  if (!a || !b) return false;
-  return a.fieldId === b.fieldId && a.op === b.op && a.value === b.value;
-}
-
-/** Map of stable element id → its `visibleIf` (page- and block-level). A
- *  question's visibleIf lives on its block but is keyed by the stable
- *  question.id; content blocks key by their own id; pages by page id. */
-function visibleIfMap(
-  q: BuilderQuestionnaire,
-): Map<string, VisibleIf | undefined> {
-  const m = new Map<string, VisibleIf | undefined>();
-  for (const page of q.pages) {
-    m.set(`p:${page.id}`, page.visibleIf);
-    for (const block of page.blocks) {
-      const key = block.kind === "question" ? block.question.id : block.id;
-      m.set(`b:${key}`, block.visibleIf);
-    }
-  }
-  return m;
-}
-
-/**
- * Classify the change between two builder questionnaires as `cosmetic` (no
- * version bump, no re-submit) or `breaking` (version bump, re-opens the gate on
- * the next Send). See docs/questionnaire-builder.md §6.1.
- */
-export function classifyChange(
-  prev: BuilderQuestionnaire,
-  next: BuilderQuestionnaire,
-): "cosmetic" | "breaking" {
-  const a = fieldMap(prev);
-  const b = fieldMap(next);
-  for (const id of a.keys()) if (!b.has(id)) return "breaking"; // removed
-  for (const id of b.keys()) if (!a.has(id)) return "breaking"; // added
-  for (const [id, prevField] of a) {
-    const nextField = b.get(id)!;
-    if (prevField.kind !== nextField.kind) return "breaking";
-    if (prevField.required !== nextField.required) return "breaking";
-    if (breakingParamChange(prevField, nextField)) return "breaking";
-  }
-  // Adding, removing, or editing any visibleIf is breaking (spec §6.1): it
-  // changes branching, so the gate must re-open rather than patch in place.
-  const va = visibleIfMap(prev);
-  const vb = visibleIfMap(next);
-  for (const [key, cond] of va) {
-    if (!sameVisibleIf(cond, vb.get(key))) return "breaking";
-  }
-  for (const key of vb.keys()) {
-    if (!va.has(key)) return "breaking";
-  }
-  return "cosmetic";
 }

@@ -39,10 +39,9 @@ export interface QuestionnaireCsvRespondent {
 
 export interface QuestionnaireCsvInput {
   /**
-   * The questionnaire's fields in document order. Callers hold a
-   * `BuilderQuestionnaire` and pass `flattenBuilderQuestions(def)`; the legacy
-   * shape passes `flattenQuestions(def)`. Taking the flat list keeps this
-   * module out of the builder-vs-legacy split.
+   * The questionnaire's fields in document order: `flattenQuestions(def)` over
+   * the unified definition every stored row is read as. Taking the flat list
+   * keeps this module free of any definition shape.
    */
   questions: readonly Question[];
   respondents: readonly QuestionnaireCsvRespondent[];
