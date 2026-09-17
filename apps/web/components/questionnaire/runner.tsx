@@ -252,6 +252,9 @@ export function QuestionnaireRunner({
           if (target && target !== currentPageId) jumpTo(target);
           return;
         }
+        // A host that stays on the form after submitting (My forms) keeps
+        // saving drafts; one that moves on has unmounted by then.
+        submitting.current = false;
         if (autosave) setSaveState("saved");
         onOk();
       } catch {
