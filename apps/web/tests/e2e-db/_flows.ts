@@ -65,8 +65,12 @@ export async function sendBlockingToEveryone(
 ): Promise<void> {
   await captain.goto("/captains/questionnaires");
   await captain.getByRole("link", { name: `Send ${title}` }).click();
-  await captain.getByLabel("Blocking").click();
-  await captain.getByRole("button", { name: "Send", exact: true }).click();
+  // Everyone is the first audience card, and chosen when the form opens.
+  await expect(
+    captain.getByRole("radio", { name: /^Everyone/, checked: true }),
+  ).toBeVisible();
+  await captain.getByRole("switch", { name: "Blocking" }).click();
+  await captain.getByRole("button", { name: "Send questionnaire" }).click();
   await captain.getByRole("button", { name: "Send to everyone" }).click();
 }
 

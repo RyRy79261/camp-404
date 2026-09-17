@@ -31,7 +31,11 @@ test.describe("questionnaire Send screen — captain gate (test-mode)", () => {
       page.getByText(/only captains and team leads can send questionnaires/i),
     ).toBeVisible();
     // The Send form is withheld: no audience picker, no Send button.
-    await expect(page.getByText(/who should answer/i)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^Send$/ })).toHaveCount(0);
+    await expect(
+      page.getByRole("radiogroup", { name: /who should answer/i }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /^Send questionnaire$/ }),
+    ).toHaveCount(0);
   });
 });
