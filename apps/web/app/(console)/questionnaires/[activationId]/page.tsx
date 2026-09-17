@@ -1,9 +1,6 @@
 import { redirect } from "next/navigation";
-import {
-  flattenQuestions,
-  toBuilderQuestionnaire,
-  type QuestionnaireResponses,
-} from "@camp404/types";
+import { flattenQuestions, type QuestionnaireResponses } from "@camp404/types";
+import { Card, CardContent } from "@camp404/ui/components/card";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -15,7 +12,11 @@ import { getActivationById, getRequiredAction } from "@camp404/db/activations";
 import { loadQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { nextGate } from "@/lib/required-actions";
-import { BuilderRunner } from "./runner";
+import {
+  BlockingNotice,
+  RunnerHeader,
+} from "@/components/questionnaire/blocking-chrome";
+import { QuestionnaireFill } from "@/components/questionnaire/fill";
 import { RunnerEdgeCard } from "./edge-states";
 import { RunnerFrame } from "./runner-frame";
 
@@ -24,11 +25,12 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Questionnaire — Camp 404" };
 
-// The generic runner for a BUILDER questionnaire dispatched via an activation.
-// Unlike the bespoke onboarding gate, this is reachable by direct link, so it
-// enforces its own access predicate (the viewer must be targeted) and re-asserts
-// the blocking-gate spine so a deep link can't jump an earlier required gate.
-export default async function QuestionnaireRunnerPage({
+// The fill page for a questionnaire dispatched via an activation, laid out like
+// AfrikaBurn's. Unlike the bespoke onboarding gate, this is reachable by direct
+// link, so it enforces its own access predicate (the viewer must be targeted)
+// and re-asserts the blocking-gate spine so a deep link can't jump an earlier
+// required gate.
+export default async function QuestionnaireFillPage({
   params,
 }: {
   params: Promise<{ activationId: string }>;
@@ -85,11 +87,6 @@ export default async function QuestionnaireRunnerPage({
   if (flattenQuestions(definition).length === 0) {
     return <RunnerEdgeCard kind="empty" />;
   }
-  // TEMPORARY: removed when the AB runner UI lands. The runner below still
-  // renders the builder's shape; a definition using what it cannot show is
-  // unavailable here rather than shown with parts missing.
-  const runnable = toBuilderQuestionnaire(definition);
-  if (!runnable) return <RunnerEdgeCard kind="unavailable" />;
 
   // The activation's FROZEN year namespace, never the live config: a rollover
   // landing mid-form must not change which row this page prefills from or the
@@ -102,18 +99,35 @@ export default async function QuestionnaireRunnerPage({
   );
   const initialResponses: QuestionnaireResponses = stored?.responses ?? {};
 
-  // A blocking send renders bare and full-screen under its own chrome; an
-  // optional one sits in the console like any other page (RunnerFrame).
+  const fill = (
+    <QuestionnaireFill
+      activationId={activation.id}
+      questionnaire={definition}
+      initialResponses={initialResponses}
+      seededFromPriorCycle={stored?.seededFromCycle != null}
+      gate={activation.blocking}
+      respondentSeed={campUser.id}
+    />
+  );
+
+  // A blocking send is a HARD gate whose only reachable actions are filling it
+  // in and signing out: bare and full-screen (RunnerFrame), the form in a card.
+  // An optional send sits in the console like any other page, and can wait.
   return (
-    <RunnerFrame>
-      <BuilderRunner
-        activationId={activation.id}
-        definition={runnable}
-        initialResponses={initialResponses}
-        seededFromPriorCycle={stored?.seededFromCycle != null}
-        title={activation.title}
-        blocking={activation.blocking}
-      />
+    <RunnerFrame className="max-w-xl">
+      <div className="flex flex-col gap-6">
+        <RunnerHeader title={activation.title} blocking={activation.blocking} />
+        {activation.blocking ? (
+          <>
+            <Card>
+              <CardContent className="pt-6">{fill}</CardContent>
+            </Card>
+            <BlockingNotice />
+          </>
+        ) : (
+          fill
+        )}
+      </div>
     </RunnerFrame>
   );
 }

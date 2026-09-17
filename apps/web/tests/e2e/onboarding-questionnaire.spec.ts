@@ -8,7 +8,7 @@ import { login, resetTestState, redeemInviteAtGate } from "./_helpers";
 // missing PGCRYPTO_KEY made encrypt() throw) was silently swallowed by the
 // wizard, blocking the advance. This spec proves the GREEN-PATH advance past
 // that page. The throw → error-banner recovery behaviour is covered by the
-// wizard unit test, since E2E_TEST_MODE bypasses encryption (the in-memory
+// runner unit test, since E2E_TEST_MODE bypasses encryption (the in-memory
 // backend stores the ID raw) so the save cannot throw here.
 //
 // Relies on E2E_TEST_MODE=1 + INVITE_CODES=TEST-INVITE-E2E-ONLY-CODE (see playwright.config.ts).
@@ -34,8 +34,11 @@ test.describe("onboarding questionnaire wizard", () => {
       page.getByText(/can't use the rest of the app/i),
     ).toBeVisible();
 
-    // Page 1 — profile photo: optional, so skip it.
-    await expect(page.getByText("Add a profile photo")).toBeVisible();
+    // Page 1 — profile photo: optional, so skip it. By its heading: the step
+    // rail above the form names every section too.
+    await expect(
+      page.getByRole("heading", { name: "Add a profile photo", exact: true }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Skip" }).click();
 
     // Page 2 — "About you": fill every required field, crucially the ID number

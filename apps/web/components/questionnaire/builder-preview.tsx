@@ -1,32 +1,40 @@
 "use client";
 
-import type { BuilderQuestionnaire, QuestionnaireResponses } from "@camp404/types";
+import {
+  fromBuilderQuestionnaire,
+  isBuilderDefinition,
+  type BuilderQuestionnaire,
+  type Questionnaire,
+  type QuestionnaireResponses,
+} from "@camp404/types";
 import { toast } from "@camp404/ui/components/toast";
-import { BuilderWizard } from "./builder-wizard";
+import { QuestionnaireRunner } from "./runner";
 
-// Author-side preview of a builder questionnaire: the REAL runner driven from
-// empty (or supplied) answers with NO persistence and NO side effects — Next/Back
-// advance locally and the final submit is a no-op. Lets a captain see exactly
-// what members will see (branching, validation, progress) without dispatching.
-// Reused by the builder editor's Preview (Phase C).
+const noSave = async () => ({ ok: true as const });
+
+// Author-side preview of a questionnaire: the REAL runner driven from empty (or
+// supplied) answers with NO persistence and NO side effects — Next/Back advance
+// locally and the final submit is a no-op. Lets a captain see exactly what
+// members will see (branching, validation, progress) without dispatching.
 export function BuilderPreview({
   questionnaire,
   initialResponses = {},
   onComplete,
 }: {
-  questionnaire: BuilderQuestionnaire;
+  /** The unified model; the builder's own shape is still accepted. */
+  questionnaire: Questionnaire | BuilderQuestionnaire;
   initialResponses?: QuestionnaireResponses;
   onComplete?: () => void;
 }) {
+  const definition: Questionnaire = isBuilderDefinition(questionnaire)
+    ? fromBuilderQuestionnaire(questionnaire as BuilderQuestionnaire)
+    : (questionnaire as Questionnaire);
   return (
-    <BuilderWizard
-      questionnaire={questionnaire}
+    <QuestionnaireRunner
+      questionnaire={definition}
       initialResponses={initialResponses}
-      action={async () => ({ ok: true as const })}
-      persistProgress={false}
+      action={noSave}
       preview
-      variant="onboarding"
-      title={questionnaire.title}
       submitLabel="Finish preview"
       onComplete={
         onComplete ??

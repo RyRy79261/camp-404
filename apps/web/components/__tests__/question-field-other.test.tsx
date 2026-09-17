@@ -7,7 +7,7 @@ import { Question } from "@camp404/types";
 
 vi.mock("next/navigation", () => ({ useParams: () => null }));
 
-import { QuestionField } from "../questionnaire/question";
+import { QuestionField } from "../questionnaire/field";
 
 afterEach(cleanup);
 
@@ -98,6 +98,30 @@ describe("QuestionField — Other…", () => {
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Other…" }));
     expect(onChange).toHaveBeenLastCalledWith(["veg"]);
+  });
+});
+
+describe("QuestionField — Other… in a dropdown", () => {
+  it("shows the text box once Other is the answer, and keeps the typed text", () => {
+    const onChange = vi.fn();
+    render(
+      <QuestionField
+        question={Question.parse({
+          id: "diet",
+          kind: "single_select",
+          prompt: "Diet",
+          display: "dropdown",
+          options,
+          allowOther: true,
+        })}
+        value="other:Pescatarian"
+        onChange={onChange}
+      />,
+    );
+    const box = screen.getByLabelText("Your other answer to: Diet");
+    expect((box as HTMLInputElement).value).toBe("Pescatarian");
+    fireEvent.change(box, { target: { value: "Pescatarian, mostly" } });
+    expect(onChange).toHaveBeenLastCalledWith("other:Pescatarian, mostly");
   });
 });
 
