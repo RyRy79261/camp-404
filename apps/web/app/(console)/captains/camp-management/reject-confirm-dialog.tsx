@@ -4,7 +4,7 @@ import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 import { Label } from "@camp404/ui/components/label";
 import { Textarea } from "@camp404/ui/components/textarea";
 
-// Reject-confirm dialog (board S17 RejectConfirm). Rejecting goes through a
+// Reject-confirm dialog. Rejecting goes through a
 // confirm step. The decision itself runs in the parent; this only gates it
 // behind a confirmation and suppresses dismissal mid-send. Built on the shared
 // ConfirmDialog.
@@ -101,9 +101,7 @@ export function RejectConfirmDialog({
       cancelLabel={copy.cancelLabel}
       confirmLabel={copy.confirmLabel}
     >
-      <p className="font-mono text-lg font-bold text-foreground">
-        {copy.question}
-      </p>
+      <p className="text-base font-semibold text-foreground">{copy.question}</p>
       <div className="flex flex-col gap-2">
         <Label htmlFor="reject-reason">{copy.reasonLabel}</Label>
         <Textarea

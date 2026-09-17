@@ -2,11 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import { Check, Search, X } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
+import { Card, CardContent } from "@camp404/ui/components/card";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { EmptyState } from "@camp404/ui/components/empty-state";
-import { StatTile } from "@camp404/ui/components/stat-tile";
+import { cn } from "@camp404/ui/lib/utils";
 import {
   DEFAULT_ROSTER_SORT,
   deriveRosterStats,
@@ -26,9 +27,10 @@ import { RosterList } from "./roster-list";
 import { RosterTable, type RosterSelection } from "./roster-table";
 import { RosterToolbar } from "./roster-toolbar";
 
-// Captains' camp-management roster (board S17, iteration B — terminal console).
-// Captain-only triage surface: full rows + the approval stats strip + the
-// approve/reject/assign actions. Non-captain members are routed to the public
+// Captains' camp-management roster, composed like the AfrikaBurn console's
+// registrations page: KPI cards, the filter strip, the table, then the member's
+// review below it. Captain-only triage surface: full rows + the approval
+// counts + the approve/reject/assign actions. Non-captain members are routed to the public
 // `MemberRoster` by the page (server-side), so this island always renders the
 // captain view. All the island LOGIC (filter/search/chip state, row→profile
 // selection, bulk decisions) is here; the detail fetch + single decisions +
@@ -38,8 +40,8 @@ import { RosterToolbar } from "./roster-toolbar";
 // longer matches the filter (a just-approved applicant under Pending), so the
 // captain sees the result. Changing the search, chip or team starts afresh.
 //
-// Under Pending, rows can be ticked and decided together. No board draws the
-// bulk bar; it reuses the shared Checkbox and Button.
+// Under Pending, rows can be ticked and decided together, from a bar above the
+// table built from the shared Checkbox and Button.
 
 type BulkOutcome = Extract<BulkApprovalResult, { ok: true }>;
 
@@ -192,47 +194,58 @@ export function CampManagementRoster({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Stats strip — captain-only (approval-derived counts). Desktop:
-          label-over-number with a hint (board 37); mobile: compact
-          number-over-label, no hint (board 38). */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
-        <StatTile
-          className="hidden bg-muted sm:block"
-          label="Members"
-          value={<span className="font-mono text-foreground">{stats.members}</span>}
-          hint="All sign-ups"
-        />
-        <StatTile
-          className="bg-muted sm:hidden"
-          compact
-          label="Members"
-          value={<span className="font-mono text-foreground">{stats.members}</span>}
-        />
-        <StatTile
-          className="hidden bg-muted sm:block"
-          label="Approved"
-          value={<span className="font-mono text-success">{stats.approved}</span>}
-          hint="Cleared to camp"
-        />
-        <StatTile
-          className="bg-muted sm:hidden"
-          compact
-          label="Approved"
-          value={<span className="font-mono text-success">{stats.approved}</span>}
-        />
-        <StatTile
-          className="hidden bg-muted sm:block"
-          label="Incomplete"
-          value={<span className="font-mono text-warning">{stats.incomplete}</span>}
-          hint="Notices & questionnaires unfinished"
-        />
-        <StatTile
-          className="bg-muted sm:hidden"
-          compact
-          label="Incomplete"
-          value={<span className="font-mono text-warning">{stats.incomplete}</span>}
-        />
-      </div>
+      {/* Headline numbers — captain-only (approval-derived counts), drawn as
+          the AfrikaBurn console's KPI cards. */}
+      <section
+        aria-label="Roster at a glance"
+        className="grid grid-cols-3 gap-2 sm:gap-4"
+      >
+        {(
+          [
+            {
+              kicker: "Members",
+              value: stats.members,
+              sub: "All sign-ups",
+              dot: "bg-primary",
+            },
+            {
+              kicker: "Approved",
+              value: stats.approved,
+              sub: "Cleared to camp",
+              dot: "bg-success",
+            },
+            {
+              kicker: "Incomplete",
+              value: stats.incomplete,
+              sub: "Notices & questionnaires unfinished",
+              dot: "bg-warning",
+            },
+          ] as const
+        ).map((kpi) => (
+          <Card key={kpi.kicker} className="h-full">
+            <CardContent className="flex flex-col gap-2 p-3 sm:p-5">
+              <div className="flex items-center gap-2">
+                <span
+                  aria-hidden
+                  className={cn(
+                    "hidden h-2 w-2 shrink-0 rounded-full sm:block",
+                    kpi.dot,
+                  )}
+                />
+                <span className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                  {kpi.kicker}
+                </span>
+              </div>
+              <p className="text-3xl font-extrabold leading-none tabular-nums">
+                {kpi.value}
+              </p>
+              <p className="hidden text-xs font-medium text-muted-foreground sm:block">
+                {kpi.sub}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
 
       <RosterToolbar
         query={query}
@@ -250,7 +263,7 @@ export function CampManagementRoster({
         <div
           role="group"
           aria-label="Decide several applications"
-          className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted px-3.5 py-2.5"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-accent/40 bg-card px-4 py-3 text-card-foreground shadow-sm"
         >
           <Checkbox
             aria-label="Select every pending member shown"
@@ -265,7 +278,7 @@ export function CampManagementRoster({
               setChecked(value === true ? new Set(selectable) : new Set())
             }
           />
-          <span className="font-mono text-caption text-muted-foreground">
+          <span className="text-sm tabular-nums text-muted-foreground">
             {ticked.length} selected
           </span>
           <div className="ml-auto flex gap-2">
@@ -275,15 +288,17 @@ export function CampManagementRoster({
               disabled={ticked.length === 0 || bulkPending}
               onClick={() => decideTicked("approved")}
             >
+              <Check aria-hidden />
               Approve {ticked.length}
             </Button>
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant="destructive"
               disabled={ticked.length === 0 || bulkPending}
               onClick={() => setBulkRejectOpen(true)}
             >
+              <X aria-hidden />
               Reject {ticked.length}
             </Button>
           </div>
@@ -310,10 +325,13 @@ export function CampManagementRoster({
         // (motion-safe). Typing a search does not: it would flicker per key.
         <div
           key={`${chip}|${team ?? ""}`}
-          className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150"
+          className="flex flex-col gap-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150"
         >
+          <p className="text-sm tabular-nums text-muted-foreground">
+            {filtered.length} {filtered.length === 1 ? "member" : "members"}
+          </p>
           <RosterTable
-            className="hidden sm:block"
+            className="hidden md:block"
             rows={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}
@@ -321,7 +339,7 @@ export function CampManagementRoster({
             sort={{ value: sort, onChange: setSort }}
           />
           <RosterList
-            className="sm:hidden"
+            className="md:hidden"
             rows={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}

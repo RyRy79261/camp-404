@@ -3,8 +3,8 @@
 import { Minus, Plus } from "lucide-react";
 import { cn } from "@camp404/ui/lib/utils";
 
-// The −/+ number stepper the board draws for the multi-use cap (board S14 §4):
-// a real `<input type="number">` (so the value submits and stays keyboard- /
+// The −/+ number stepper for the multi-use cap, drawn as a console input: a
+// real `<input type="number">` (so the value submits and stays keyboard- /
 // AT-accessible) flanked by decrement/increment buttons, clamped to [min, max].
 // Named apart from the @camp404/ui Stepper (the onboarding step dots).
 interface NumberStepperProps {
@@ -33,17 +33,19 @@ export function NumberStepper({
   // Always emit a whole number in [min, max] — the action takes an integer
   // count, and a non-numeric/empty value falls back to min (never "NaN").
   const clamp = (n: number) =>
-    String(Math.round(Math.min(max, Math.max(min, Number.isFinite(n) ? n : min))));
+    String(
+      Math.round(Math.min(max, Math.max(min, Number.isFinite(n) ? n : min))),
+    );
 
-  // 44px targets inside the 48px box: the icons stay board-sized, the tap
-  // area does not.
+  // The step buttons fill the field's height, so the tap area is the whole
+  // square, not only the icon.
   const stepButton =
-    "flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&>svg]:h-4 [&>svg]:w-4";
+    "flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&>svg]:h-4 [&>svg]:w-4";
 
   return (
     <div
       className={cn(
-        "flex h-12 items-center justify-between rounded-lg border border-border bg-muted pl-4 pr-0.5",
+        "flex h-10 items-center justify-between rounded-md border border-input bg-background pl-3 pr-0.5 has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ring",
         className,
       )}
     >

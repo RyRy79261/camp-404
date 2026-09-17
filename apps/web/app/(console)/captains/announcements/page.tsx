@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { Team } from "@camp404/types";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { PageHeading } from "@camp404/ui/components/page-heading";
 import { listAnnouncements } from "@/lib/notifications";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
@@ -15,10 +14,10 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Announcements — Camp 404" };
 
-// The announcements composer (board S18). Captains post to the camp or any
-// team; a team lead posts only to the teams they lead (owner's call,
-// 2026-09-16), and sees only their own announcements. Preview-but-locked (D3):
-// anyone else sees the chrome + a CaptainLock instead of a redirect, and the
+// The announcements composer, laid out like the AfrikaBurn console's bulletins.
+// Captains post to the camp or any team; a team lead posts only to the teams
+// they lead (owner's call, 2026-09-16), and sees only their own announcements. Preview-but-locked (D3):
+// anyone else sees the heading + a CaptainLock instead of a redirect, and the
 // server never fetches announcement data for them.
 
 export default async function AnnouncementsPage() {
@@ -52,28 +51,20 @@ export default async function AnnouncementsPage() {
       }));
 
   return (
-    <main className="mx-auto max-w-lg px-4 py-6">
-      {isCaptain ? (
-        <GhostBack linkAs={Link} href="/captains/tools" className="-ml-2 mb-4">
-          Camp tools
-        </GhostBack>
-      ) : (
-        <GhostBack linkAs={Link} href="/" className="-ml-2 mb-4">
-          Home
-        </GhostBack>
-      )}
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold">
-          Announcements &amp; notifications
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isCaptain
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow={
+          gate.cleared && !isCaptain
+            ? "Team leads / Announcements"
+            : "Captains / Announcements"
+        }
+        title="Announcements & notifications"
+        description={`${
+          isCaptain
             ? "Compose a message, save it as a draft, then publish it to the whole camp or one team. Everyone in it but you receives it."
-            : "Compose a message for a team you lead, save it as a draft, then publish it. Everyone on the team but you receives it."}{" "}
-          A full-screen announcement takes over each member&apos;s screen until
-          they acknowledge it.
-        </p>
-      </header>
+            : "Compose a message for a team you lead, save it as a draft, then publish it. Everyone on the team but you receives it."
+        } A full-screen announcement takes over each member's screen until they acknowledge it.`}
+      />
 
       {cleared ? (
         <AnnouncementsManager
@@ -88,6 +79,6 @@ export default async function AnnouncementsPage() {
           message="Announcements are for team leads and captains. Your rank doesn’t have clearance for this."
         />
       )}
-    </main>
+    </div>
   );
 }

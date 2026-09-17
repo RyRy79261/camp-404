@@ -1,6 +1,5 @@
 import { isAllowedBuilderImageUrl, type ContentBlock } from "@camp404/types";
 import { Alert } from "@camp404/ui/components/alert";
-import { Divider } from "@camp404/ui/components/divider";
 import { Megaphone, TriangleAlert } from "lucide-react";
 
 // Display-only renderer for a builder questionnaire's content blocks (header
@@ -19,7 +18,7 @@ export function ContentBlockRenderer({ block }: { block: ContentBlock }) {
           }
         >
           {block.eyebrow && (
-            <span className="text-eyebrow uppercase text-accent">
+            <span className="font-mono text-xs uppercase tracking-[0.2em] text-accent">
               {block.eyebrow}
             </span>
           )}
@@ -69,7 +68,7 @@ export function ContentBlockRenderer({ block }: { block: ContentBlock }) {
             <img src={block.imageUrl} alt={block.altText} className={fitClass} />
           )}
           {block.caption && (
-            <figcaption className="text-caption text-center text-muted-foreground">
+            <figcaption className="text-center text-xs text-muted-foreground">
               {block.caption}
             </figcaption>
           )}
@@ -77,6 +76,6 @@ export function ContentBlockRenderer({ block }: { block: ContentBlock }) {
       );
     }
     case "divider":
-      return <Divider />;
+      return <hr className="border-border" />;
   }
 }

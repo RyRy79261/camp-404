@@ -1,13 +1,17 @@
+import type { ReactNode } from "react";
+import { X } from "lucide-react";
 import { humanizeKey, initialsFrom } from "@camp404/core";
+import { Badge, type BadgeProps } from "@camp404/ui/components/badge";
+import { Button } from "@camp404/ui/components/button";
 import { cn } from "@camp404/ui/lib/utils";
 import type { RosterStatus } from "@/lib/camp-roster";
 import { COUNTRIES } from "@/lib/countries";
 
-// Shared presentational helpers for the terminal-console roster (board S17,
-// iteration B): the mono-tinted member avatar, the three-rank role badge, team
-// chips and the per-status colour bar. Pure presentation — no state, no I/O — so
-// the row/list/profile components stay thin. Identity colours (avatar tints,
-// team dots) are intentional brand hex, not semantic status tokens.
+// Shared presentational helpers for the roster (the AfrikaBurn console's
+// badge vocabulary): the member avatar, the three-rank role badge, team chips
+// and the per-status badge. Pure presentation — no state, no I/O — so the
+// row/list/profile components stay thin. Identity colours (avatar tints, team
+// dots) are intentional brand hex, not semantic status tokens.
 
 // The active team list is no longer hardcoded here — it comes from the camp
 // config (`getTeamsConfig`), resolved server-side and threaded into the toolbar
@@ -24,8 +28,8 @@ import { COUNTRIES } from "@/lib/countries";
  */
 export const teamLabel = humanizeKey;
 
-// A small, stable identity palette (the board's avatar/team hues). Picked by
-// hashing an id so a member keeps the same tint across renders.
+// A small, stable identity palette (avatar and team hues). Picked by hashing an
+// id so a member keeps the same tint across renders.
 const IDENTITY_TINTS = [
   "#ff008c",
   "#00dcff",
@@ -43,9 +47,11 @@ function hashIndex(seed: string, mod: number): number {
   return h % mod;
 }
 
-/** A stable per-member avatar tint (mono initials sit on this). */
+/** A stable per-member avatar tint (the initials sit on this). */
 export function avatarTintFor(id: string): string {
-  return IDENTITY_TINTS[hashIndex(id, IDENTITY_TINTS.length)] ?? IDENTITY_TINTS[0];
+  return (
+    IDENTITY_TINTS[hashIndex(id, IDENTITY_TINTS.length)] ?? IDENTITY_TINTS[0]
+  );
 }
 
 /** A stable dot colour for a team chip. */
@@ -56,8 +62,8 @@ export function teamColorFor(team: string): string {
 }
 
 // The roster row carries the resolved country *name* (not the ISO code), so to
-// draw the board's flag glyph we reverse-resolve the name back to its alpha-2
-// code — purely presentational, no view-model change.
+// draw a flag glyph we reverse-resolve the name back to its alpha-2 code —
+// purely presentational, no view-model change.
 const CODE_BY_NAME = new Map(COUNTRIES.map((c) => [c.label, c.value]));
 
 /** The flag emoji for a resolved country name, or "" when it can't be mapped. */
@@ -69,26 +75,43 @@ export function countryFlag(name: string | null): string {
   );
 }
 
+type BadgeVariant = NonNullable<BadgeProps["variant"]>;
+
 /**
- * The 4px row status bar colour, by overall standing (spec §4): green when
- * cleared/ready, destructive when rejected/blocked, accent otherwise
- * (onboarding / awaiting a decision / action needed).
+ * A member's overall standing (spec §4) → Badge variant, the way AfrikaBurn's
+ * `StatusBadge` maps a registration: cleared is success, rejected is
+ * destructive, a decision waiting on a captain is the primary tint, an
+ * unfinished required action is a warning, and onboarding is quiet.
  */
-export function statusBarClass(status: RosterStatus): string {
-  switch (status) {
-    case "ready":
-      return "bg-success";
-    case "rejected":
-      return "bg-destructive";
-    default:
-      return "bg-accent";
-  }
+const STATUS_VARIANT: Record<RosterStatus, BadgeVariant> = {
+  ready: "success",
+  rejected: "destructive",
+  awaiting_approval: "default",
+  pending: "warning",
+  onboarding: "outline",
+};
+
+/** A roster status pill (captain view only — members never get a status). */
+export function RosterStatusBadge({
+  status,
+  label,
+  className,
+}: {
+  status: RosterStatus;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <Badge variant={STATUS_VARIANT[status]} className={className}>
+      {label}
+    </Badge>
+  );
 }
 
 export interface Role {
   emoji: string;
   label: string;
-  className: string;
+  variant: BadgeVariant;
 }
 
 /**
@@ -98,38 +121,34 @@ export interface Role {
  */
 export function roleFor(rank: "captain" | "member", isLead: boolean): Role {
   if (rank === "captain")
-    return { emoji: "🦩", label: "Captain", className: "text-primary" };
-  if (isLead)
-    return { emoji: "🪄", label: "Lead", className: "text-secondary-foreground" };
-  return { emoji: "🐱", label: "Member", className: "text-muted-foreground" };
+    return { emoji: "🦩", label: "Captain", variant: "default" };
+  if (isLead) return { emoji: "🪄", label: "Lead", variant: "secondary" };
+  return { emoji: "🐱", label: "Member", variant: "outline" };
 }
 
-/** A mono-initialled avatar tile on the member's identity tint. */
+/** An initialled round avatar on the member's identity tint. */
 export function RosterAvatar({
   name,
   id,
   px,
-  radius = 6,
   className,
 }: {
   name: string;
   id: string;
   px: number;
-  radius?: number;
   className?: string;
 }) {
   return (
     <span
       aria-hidden
       className={cn(
-        "inline-flex shrink-0 items-center justify-center font-mono font-bold leading-none text-white",
+        "inline-flex shrink-0 items-center justify-center rounded-full font-semibold leading-none text-white",
         className,
       )}
       style={{
         width: px,
         height: px,
-        borderRadius: radius,
-        fontSize: Math.round(px * 0.4),
+        fontSize: Math.round(px * 0.38),
         backgroundColor: avatarTintFor(id),
       }}
     >
@@ -145,14 +164,14 @@ export function RosterAvatar({
  */
 export function TeamBadge({ team, label }: { team: string; label?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 font-mono text-micro font-bold text-foreground">
+    <Badge variant="outline" className="gap-1.5 text-foreground">
       <span
         aria-hidden
         className="h-1.5 w-1.5 rounded-full"
         style={{ backgroundColor: teamColorFor(team) }}
       />
       {label ?? teamLabel(team)}
-    </span>
+    </Badge>
   );
 }
 
@@ -168,14 +187,90 @@ export function RoleBadge({
 }) {
   const role = roleFor(rank, isLead);
   return (
-    <span className={cn("inline-flex items-center gap-1.5", className)}>
-      <span aria-hidden className="text-[15px] leading-none">
+    <Badge variant={role.variant} className={cn("gap-1.5", className)}>
+      <span aria-hidden className="text-sm leading-none">
         {role.emoji}
       </span>
-      <span className={cn("text-sm font-semibold", role.className)}>
-        {role.label}
-      </span>
-    </span>
+      {role.label}
+    </Badge>
+  );
+}
+
+/**
+ * The head of a member's profile panel, laid out like the AfrikaBurn review
+ * header: an eyebrow, the name with its badges inline, then a muted meta line
+ * (@handle · country) and the team chips. Paints from the roster row, so it is
+ * on screen before the detail loads. `badges` goes beside the name (the
+ * captain view's approval badge). The close control sits top right.
+ */
+export function ProfileHead({
+  row,
+  index,
+  teamLabels,
+  badges,
+  onClose,
+}: {
+  row: {
+    id: string;
+    displayName: string;
+    handle: string | null;
+    country: string | null;
+    rank: "captain" | "member";
+    isLead: boolean;
+    teams: readonly string[];
+  };
+  /** The member's stable position in the full roster. */
+  index: number;
+  teamLabels: Record<string, string>;
+  badges?: ReactNode;
+  onClose: () => void;
+}) {
+  const flag = countryFlag(row.country);
+  return (
+    <header className="flex items-start gap-4">
+      <RosterAvatar name={row.displayName} id={row.id} px={56} />
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <p className="font-mono text-xs uppercase tracking-[0.25em] text-accent">
+          Record #{String(index).padStart(2, "0")}
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {row.displayName}
+          </h2>
+          {badges}
+          <RoleBadge rank={row.rank} isLead={row.isLead} />
+        </div>
+        {(row.handle || row.country) && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            {row.handle && <span>@{row.handle}</span>}
+            {row.handle && row.country && <span aria-hidden>·</span>}
+            {row.country && (
+              <span className="inline-flex items-center gap-1.5">
+                {flag && <span aria-hidden>{flag}</span>}
+                {row.country}
+              </span>
+            )}
+          </div>
+        )}
+        {row.teams.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {row.teams.map((team) => (
+              <TeamBadge key={team} team={team} label={teamLabels[team]} />
+            ))}
+          </div>
+        )}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={onClose}
+        aria-label="Close profile"
+        className="-mr-2 -mt-2 shrink-0"
+      >
+        <X aria-hidden />
+      </Button>
+    </header>
   );
 }
 
@@ -188,9 +283,10 @@ export function RoleBadge({
 export function focusRosterTrigger(id: string): void {
   if (typeof document === "undefined") return;
   requestAnimationFrame(() => {
-    // Both the ≥sm table and the <sm list render a trigger with this id; only one
-    // is visible per breakpoint. Focus the VISIBLE one — focusing the hidden
-    // (display:none) variant is a silent no-op that drops focus to <body>.
+    // Both the ≥md table and the <md card list render a trigger with this id;
+    // only one is visible per breakpoint. Focus the VISIBLE one — focusing the
+    // hidden (display:none) variant is a silent no-op that drops focus to
+    // <body>.
     const selector = `[data-roster-trigger="${CSS.escape(id)}"]`;
     const candidates = Array.from(
       document.querySelectorAll<HTMLElement>(selector),

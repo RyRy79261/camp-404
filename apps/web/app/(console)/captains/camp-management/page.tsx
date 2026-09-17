@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getCampManagementRoster } from "@/lib/roster";
@@ -42,45 +41,21 @@ export default async function CampManagementPage() {
   const teamLabels = teamLabelMap(config);
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
-      <GhostBack linkAs={Link} href="/captains/tools" className="-ml-2 mb-3">
-        Camp tools
-      </GhostBack>
-
-      <header className="mb-6 flex flex-col gap-3">
-        {/* TermBar — terminal chrome, ≥ sm only. */}
-        <div className="hidden items-center gap-2.5 self-start rounded-lg border bg-muted px-3.5 py-2 sm:inline-flex">
-          <span className="font-mono text-caption font-medium text-muted-foreground">
-            camp404 · roster
-          </span>
-          <span className="font-mono text-caption font-medium text-accent">
-            {members.length} {members.length === 1 ? "record" : "records"}
-          </span>
-        </div>
-
-        <h1 className="flex items-center gap-2.5 text-2xl font-bold text-foreground sm:font-mono">
-          <span aria-hidden className="hidden text-accent sm:inline">
-            {">"}
-          </span>
-          Camp management
-          <span
-            aria-hidden
-            className="hidden h-6 w-3 motion-safe:animate-pulse bg-accent sm:inline-block"
-          />
-        </h1>
-
-        <p className="hidden max-w-2xl text-sm text-muted-foreground sm:block">
-          {isCaptain
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow={isCaptain ? "Captains / Roster" : "Camp / Roster"}
+        title="Camp management"
+        description={
+          isCaptain
             ? "The full roster. Open a member to read their profile, approve or reject pending sign-ups, and — captain to captain — assign captain rank."
-            : "Browse who's at camp — names, teams, and what folks are bringing. Approval status and contact details stay captain-only."}
-        </p>
-
-        {/* One export for every rank; the file holds only what this viewer
-            may read (lib/member-export.ts). */}
-        <div className="self-start">
+            : "Browse who's at camp — names, teams, and what folks are bringing. Approval status and contact details stay captain-only."
+        }
+        actions={
+          // One export for every rank; the file holds only what this viewer
+          // may read (lib/member-export.ts).
           <ExportCsvButton href="/captains/camp-management/export" />
-        </div>
-      </header>
+        }
+      />
 
       {roster.isCaptain ? (
         <CampManagementRoster
@@ -89,8 +64,12 @@ export default async function CampManagementPage() {
           teamLabels={teamLabels}
         />
       ) : (
-        <MemberRoster rows={roster.rows} teams={teams} teamLabels={teamLabels} />
+        <MemberRoster
+          rows={roster.rows}
+          teams={teams}
+          teamLabels={teamLabels}
+        />
       )}
-    </main>
+    </div>
   );
 }

@@ -196,7 +196,7 @@ function CarryOverToggle({ questionnaireKey }: { questionnaireKey: string }) {
           onCheckedChange={change}
         />
       </div>
-      <p className="text-caption text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {askAgain === null
           ? "Checking this questionnaire’s setting…"
           : askAgain
@@ -288,7 +288,7 @@ export function LifecycleBar({
   return (
     <Card className="flex flex-col gap-3 p-4">
       {confirmDialog}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Badge variant={badge.variant}>{badge.label}</Badge>
         {status === "published" && version && (
           <span className="font-mono text-xs text-muted-foreground">

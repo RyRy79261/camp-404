@@ -175,7 +175,7 @@ function NumericSummary({ result }: { result: NumericAggregate }) {
 
 export function MetricCard({ result }: { result: QuestionAggregate }) {
   return (
-    <section className="rounded-xl border bg-card/40 p-4">
+    <section className="rounded-xl border bg-card p-5 shadow-sm">
       <h3 className="break-words text-sm font-semibold">{result.prompt}</h3>
       <Skips result={result} />
 
@@ -206,7 +206,7 @@ export function MetricCard({ result }: { result: QuestionAggregate }) {
  */
 export function OrphanCard({ orphan }: { orphan: OrphanAggregate }) {
   return (
-    <section className="rounded-xl border bg-card/40 p-4">
+    <section className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <h3 className="min-w-0 flex-1 break-words text-sm font-semibold">
           {orphan.questionId}

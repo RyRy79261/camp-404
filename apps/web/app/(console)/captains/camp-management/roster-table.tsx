@@ -1,5 +1,14 @@
 import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react";
+import { Button } from "@camp404/ui/components/button";
 import { Checkbox } from "@camp404/ui/components/checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@camp404/ui/components/table";
 import { cn } from "@camp404/ui/lib/utils";
 import type {
   RosterDisplayRow,
@@ -9,20 +18,25 @@ import type {
 import {
   RoleBadge,
   RosterAvatar,
+  RosterStatusBadge,
   countryFlag,
-  statusBarClass,
 } from "./roster-presentation";
 
-// Terminal-console roster table (board S17, ≥ sm). One row per member: a status
-// colour bar, mono-tinted avatar, name, @handle, country (flag + name), the
-// three-rank role badge and a chevron open affordance. The chevron is a real
-// focusable button so the row is keyboard-reachable; the whole row is also
-// clickable for pointer users. Serves both the captain view (coloured status
-// bar) and the member view (no `status` → a neutral bar, no approval signal).
+// The roster as a console table (≥ md), in the AfrikaBurn registrations/accounts
+// table surface. One row per member: avatar + name, @handle, country (flag +
+// name), the role badge, the status badge (captain view only) and a chevron
+// open control. The chevron is a real focusable button so the row is
+// keyboard-reachable; the whole row is also clickable for pointer users.
+//
+// Not `ResponsiveDataTable`: the column headers sort (`aria-sort` lives on the
+// <th>), rows select, and a selected row is marked — none of which that
+// component carries. It uses the same kit table leaves, so it reads the same.
+// Serves both the captain view and the member view; a public row has no
+// `status`, so the member table has no status column at all.
 
 /**
- * Ticking rows for a bulk decision (captain view, Pending filter). No board
- * draws it; it reuses the shared Checkbox.
+ * Ticking rows for a bulk decision (captain view, Pending filter). Reuses the
+ * shared Checkbox.
  */
 export interface RosterSelection {
   checked: ReadonlySet<string>;
@@ -51,15 +65,15 @@ function SortHeader({
 }) {
   if (!sort) {
     return (
-      <th scope="col" className={cn("font-bold", className)}>
+      <TableHead scope="col" className={className}>
         {label}
-      </th>
+      </TableHead>
     );
   }
   const active = sort.value.key === sortKey;
   const direction = active ? sort.value.direction : null;
   return (
-    <th
+    <TableHead
       scope="col"
       aria-sort={
         direction === "asc"
@@ -68,7 +82,7 @@ function SortHeader({
             ? "descending"
             : "none"
       }
-      className={cn("font-bold", className)}
+      className={className}
     >
       <button
         type="button"
@@ -79,15 +93,19 @@ function SortHeader({
           })
         }
         className={cn(
-          "inline-flex items-center gap-1 uppercase tracking-wide transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-          active && "text-accent",
+          "-mx-1 inline-flex items-center gap-1 rounded-sm px-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          active && "text-foreground",
         )}
       >
         {label}
-        {direction === "asc" && <ArrowUp aria-hidden className="h-3 w-3" />}
-        {direction === "desc" && <ArrowDown aria-hidden className="h-3 w-3" />}
+        {direction === "asc" && (
+          <ArrowUp aria-hidden className="h-3.5 w-3.5 text-accent" />
+        )}
+        {direction === "desc" && (
+          <ArrowDown aria-hidden className="h-3.5 w-3.5 text-accent" />
+        )}
       </button>
-    </th>
+    </TableHead>
   );
 }
 
@@ -106,80 +124,53 @@ export function RosterTable({
   sort?: RosterTableSort;
   className?: string;
 }) {
+  // Rows are either all captain rows or all public rows.
+  const showStatus = rows.some((r) => r.status !== undefined);
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-lg border bg-card",
+        "rounded-xl border bg-card text-card-foreground shadow-sm",
         className,
       )}
     >
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr className="border-b bg-black/20 font-mono text-micro font-bold uppercase tracking-wide text-muted-foreground">
-            <th className="w-1 p-0" aria-hidden />
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
             {selection && (
-              <th scope="col" className="w-10 py-3 pl-4">
+              <TableHead scope="col" className="w-10 pl-4">
                 <span className="sr-only">Select</span>
-              </th>
+              </TableHead>
             )}
             <SortHeader
               label="Member"
               sortKey="name"
               sort={sort}
-              className="px-4 py-3"
+              className={cn(!selection && "pl-4")}
             />
-            <SortHeader
-              label="Handle"
-              sortKey="handle"
-              sort={sort}
-              className="w-[180px] px-2 py-3"
-            />
-            <SortHeader
-              label="Country"
-              sortKey="country"
-              sort={sort}
-              className="w-[220px] px-2 py-3"
-            />
-            <SortHeader
-              label="Role"
-              sortKey="role"
-              sort={sort}
-              className="w-[160px] px-2 py-3"
-            />
-            <th scope="col" className="w-[80px] px-2 py-3">
+            <SortHeader label="Handle" sortKey="handle" sort={sort} />
+            <SortHeader label="Country" sortKey="country" sort={sort} />
+            <SortHeader label="Role" sortKey="role" sort={sort} />
+            {showStatus && (
+              <SortHeader label="Status" sortKey="status" sort={sort} />
+            )}
+            <TableHead scope="col" className="w-12 pr-4">
               <span className="sr-only">Open</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((r) => {
             const selected = r.id === selectedId;
             return (
-              <tr
+              <TableRow
                 key={r.id}
+                data-state={selected ? "selected" : undefined}
                 onClick={() => onSelect(r.id)}
-                className={cn(
-                  "cursor-pointer border-b transition-colors last:border-0",
-                  selected
-                    ? "bg-accent/10"
-                    : "even:bg-white/[0.025] hover:bg-white/[0.04]",
-                )}
+                className="cursor-pointer"
               >
-                <td className="relative w-1 p-0">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "absolute inset-y-0 left-0 w-1",
-                      r.status ? statusBarClass(r.status) : "bg-border",
-                    )}
-                  />
-                  {r.statusLabel && (
-                    <span className="sr-only">{r.statusLabel}</span>
-                  )}
-                </td>
                 {selection && (
-                  <td
-                    className="w-10 py-3 pl-4"
+                  <TableCell
+                    className="w-10 pl-4"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {selection.canSelect(r) && (
@@ -189,37 +180,51 @@ export function RosterTable({
                         onCheckedChange={() => selection.onToggle(r.id)}
                       />
                     )}
-                  </td>
+                  </TableCell>
                 )}
-                <td className="px-4 py-3">
+                <TableCell className={cn("py-3", !selection && "pl-4")}>
                   <div className="flex items-center gap-3">
-                    <RosterAvatar name={r.displayName} id={r.id} px={30} />
-                    <span className="font-semibold text-foreground">
+                    <RosterAvatar name={r.displayName} id={r.id} px={28} />
+                    <span
+                      className={cn("font-medium", selected && "text-accent")}
+                    >
                       {r.displayName}
                     </span>
                   </div>
-                </td>
-                <td className="px-2 py-3 font-mono text-label text-muted-foreground">
+                </TableCell>
+                <TableCell className="text-muted-foreground">
                   {r.handle ? `@${r.handle}` : "—"}
-                </td>
-                <td className="px-2 py-3 text-sm text-foreground">
+                </TableCell>
+                <TableCell>
                   {r.country ? (
                     <span className="inline-flex items-center gap-2">
-                      <span aria-hidden className="text-base">
-                        {countryFlag(r.country)}
-                      </span>
+                      <span aria-hidden>{countryFlag(r.country)}</span>
                       {r.country}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
-                </td>
-                <td className="px-2 py-3">
+                </TableCell>
+                <TableCell>
                   <RoleBadge rank={r.rank} isLead={r.isLead} />
-                </td>
-                <td className="px-2 py-3 text-right">
-                  <button
+                </TableCell>
+                {showStatus && (
+                  <TableCell>
+                    {r.status && r.statusLabel ? (
+                      <RosterStatusBadge
+                        status={r.status}
+                        label={r.statusLabel}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                )}
+                <TableCell className="w-12 pr-4 text-right">
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     data-roster-trigger={r.id}
                     aria-current={selected ? "true" : undefined}
                     aria-label={`Open ${r.displayName}'s profile`}
@@ -227,16 +232,16 @@ export function RosterTable({
                       e.stopPropagation();
                       onSelect(r.id);
                     }}
-                    className="inline-flex items-center justify-center rounded-md p-1 text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="h-8 w-8"
                   >
-                    <ChevronRight aria-hidden className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
+                    <ChevronRight aria-hidden />
+                  </Button>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

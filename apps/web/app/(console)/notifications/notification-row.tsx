@@ -1,3 +1,4 @@
+import { Badge } from "@camp404/ui/components/badge";
 import { cn } from "@camp404/ui/lib/utils";
 import { formatRelativeTime, presentationIcon } from "./presentation-meta";
 import type { InboxItem } from "@/lib/notifications";
@@ -18,9 +19,10 @@ interface NotificationRowProps {
   href?: string;
 }
 
-// One inbox row (board S12): a muted icon circle, the title + optional "New"
-// pill, a relative timestamp, the body, and a sender/acknowledgement line.
-// Unread rows wear a primary tint + border. Server component — no interactivity.
+// One inbox row, drawn like the AfrikaBurn NotificationItem: a muted icon
+// circle, the title with a "New" badge while unread, the body, and a meta line
+// of the relative time and the sender/acknowledgement. Rows sit in a day card,
+// divided by a rule. Server component — no interactivity.
 export function NotificationRow({
   presentation,
   title,
@@ -43,28 +45,33 @@ export function NotificationRow({
         : `From ${senderName}`
     : null;
 
-  const frame = cn(
-    "flex gap-3 rounded-xl border p-3.5",
-    isNew ? "border-primary bg-primary/10" : "border-border bg-card",
-  );
+  const frame = "flex items-start gap-3 rounded-lg px-3 py-3 text-left";
   const content = (
     <>
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
-        <Icon className="h-5 w-5" aria-hidden="true" />
+      <span
+        className={cn(
+          "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+          isNew
+            ? "bg-primary/15 text-primary"
+            : "bg-muted text-muted-foreground",
+        )}
+      >
+        <Icon className="h-4 w-4" aria-hidden="true" />
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold leading-tight text-foreground">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h3
+              className={cn(
+                "text-sm leading-snug text-foreground",
+                isNew ? "font-semibold" : "font-medium",
+              )}
+            >
               {title}
             </h3>
-            {isNew ? (
-              <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-micro-xs font-bold text-primary-foreground">
-                New
-              </span>
-            ) : null}
+            {isNew ? <Badge className="shrink-0">New</Badge> : null}
           </div>
-          <time className="shrink-0 text-xs text-muted-foreground">
+          <time className="shrink-0 text-xs tabular-nums text-muted-foreground">
             {formatRelativeTime(createdAt)}
           </time>
         </div>
@@ -85,13 +92,13 @@ export function NotificationRow({
   );
 
   return (
-    <li>
+    <li className="border-b border-border last:border-b-0">
       {href ? (
         <a
           href={href}
           className={cn(
             frame,
-            "transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           )}
         >
           {content}

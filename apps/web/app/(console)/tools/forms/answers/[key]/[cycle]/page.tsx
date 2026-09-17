@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { displayResponseValue, getQuestionBlocks } from "@camp404/types";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { Button } from "@camp404/ui/components/button";
+import { Card, CardContent, CardHeader } from "@camp404/ui/components/card";
+import { PageHeading } from "@camp404/ui/components/page-heading";
+import { cn } from "@camp404/ui/lib/utils";
 import { getAnsweredQuestionnaire } from "@/lib/forms";
 import { requireMemberPage } from "@/lib/member-gate";
 
@@ -17,9 +21,11 @@ const dateFmt = new Intl.DateTimeFormat("en-ZA", {
 });
 
 // A finished builder questionnaire, read-only (WP4.replay): what this member
-// answered, shown against the version they answered, page by page. Answers are
-// fixed once submitted, so there is nothing to edit here. Only the member's own
-// answers are ever read; another member's key or year is a 404.
+// answered, shown against the version they answered, one card per page with
+// each question beside its answer (the AfrikaBurn response viewer's question
+// and answer list). Answers are fixed once submitted, so there is nothing to
+// edit here. Only the member's own answers are ever read; another member's key
+// or year is a 404.
 export default async function AnsweredQuestionnairePage({
   params,
 }: {
@@ -43,47 +49,57 @@ export default async function AnsweredQuestionnairePage({
     .filter((p) => p.questions.length > 0);
 
   return (
-    <main className="mx-auto w-full max-w-lg px-4 py-4">
-      <GhostBack linkAs={Link} href="/tools/forms" className="-ml-2">
-        My forms
-      </GhostBack>
+    <div className="flex flex-col">
+      <div className="mb-4">
+        <Button asChild variant="ghost" size="sm" className="-ml-3">
+          <Link href="/tools/forms">
+            <ArrowLeft aria-hidden />
+            My forms
+          </Link>
+        </Button>
+      </div>
 
-      <div className="flex flex-col gap-5 pt-2">
-        <header className="flex flex-col gap-1.5">
-          <h1 className="text-2xl font-bold [overflow-wrap:anywhere]">
-            {answers.questionnaire.title}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Submitted {dateFmt.format(answers.completedAt)}. Answers are fixed
-            once submitted.
-          </p>
-        </header>
+      <div className="[overflow-wrap:anywhere]">
+        <PageHeading
+          eyebrow="Tools / My forms"
+          title={answers.questionnaire.title}
+          description={`Submitted ${dateFmt.format(answers.completedAt)}. Answers are fixed once submitted.`}
+        />
+      </div>
 
+      <div className="flex flex-col gap-6">
         {pages.map(({ page, questions }) => (
-          <section key={page.id} className="flex flex-col gap-3">
+          <Card key={page.id}>
             {page.title && (
-              <h2 className="text-base font-bold text-foreground">
-                {page.title}
-              </h2>
+              <CardHeader>
+                <h2 className="text-base font-semibold normal-case leading-snug tracking-normal [overflow-wrap:anywhere]">
+                  {page.title}
+                </h2>
+              </CardHeader>
             )}
-            <dl className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
-              {questions.map((question) => (
-                <div key={question.id} className="flex flex-col gap-0.5">
-                  <dt className="text-label text-muted-foreground">
-                    {question.prompt}
-                  </dt>
-                  <dd className="whitespace-pre-wrap text-sm text-foreground [overflow-wrap:anywhere]">
-                    {displayResponseValue(
-                      question,
-                      answers.responses[question.id],
-                    )}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
+            <CardContent className={cn(!page.title && "pt-6")}>
+              <dl className="flex flex-col divide-y divide-border">
+                {questions.map((question) => (
+                  <div
+                    key={question.id}
+                    className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:grid sm:grid-cols-3 sm:gap-6"
+                  >
+                    <dt className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                      {question.prompt}
+                    </dt>
+                    <dd className="whitespace-pre-wrap text-sm text-foreground [overflow-wrap:anywhere] sm:col-span-2">
+                      {displayResponseValue(
+                        question,
+                        answers.responses[question.id],
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </CardContent>
+          </Card>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

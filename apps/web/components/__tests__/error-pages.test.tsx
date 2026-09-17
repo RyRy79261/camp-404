@@ -51,13 +51,15 @@ describe("section error boundaries", () => {
     );
     expect(
       screen
-        .getByRole("link", { name: "Back to camp tools" })
+        .getByRole("link", { name: "Back to overview" })
         .getAttribute("href"),
-    ).toBe("/captains/tools");
+    ).toBe("/");
     unmount();
     render(<ToolsError error={new Error("boom")} reset={() => {}} />);
     expect(
-      screen.getByRole("link", { name: "Back to tools" }).getAttribute("href"),
-    ).toBe("/tools");
+      screen
+        .getByRole("link", { name: "Back to overview" })
+        .getAttribute("href"),
+    ).toBe("/");
   });
 });

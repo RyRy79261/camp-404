@@ -135,7 +135,7 @@ export function EnablePush() {
         {error ? "Try again" : "Enable notifications"}
       </Button>
       {error && (
-        <p role="alert" className="text-center text-caption text-destructive">
+        <p role="alert" className="text-center text-xs text-destructive">
           {error}
         </p>
       )}

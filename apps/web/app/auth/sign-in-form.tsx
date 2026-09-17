@@ -3,18 +3,15 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { TriangleAlert } from "lucide-react";
-import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
-import { Divider } from "@camp404/ui/components/divider";
-import { InputField } from "@camp404/ui/components/input-field";
-import { OAuthButton } from "@camp404/ui/components/google-button";
+import { Input } from "@camp404/ui/components/input";
+import { Label } from "@camp404/ui/components/label";
 import { authClient } from "@/lib/auth-client";
 import { safeInternalPath } from "@/lib/safe-redirect";
 
 /**
- * Email/password + Google sign-in form, mirroring the intake-tracker
- * login-04 block. No invite-code field — invite-only enforcement lives
+ * Email/password + Google sign-in form, in the AfrikaBurn auth form's
+ * markup. No invite-code field — invite-only enforcement lives
  * after auth at the /signup/required gate.
  */
 
@@ -106,69 +103,78 @@ export function SignInForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h1 className="text-subtitle-hero font-bold text-card-foreground">
-          Welcome back
-        </h1>
-        <p className="text-label text-muted-foreground">
+        <h1 className="text-2xl">Welcome back</h1>
+        <p className="text-sm text-muted-foreground">
           Sign in to your Camp 404 account.
         </p>
       </div>
 
-      <InputField
-        id="signin-email"
-        label="Email"
-        type="email"
-        placeholder="you@example.com"
-        autoComplete="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        disabled={loading}
-      />
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="signin-email">Email</Label>
+        <Input
+          id="signin-email"
+          type="email"
+          placeholder="you@example.com"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={loading}
+        />
+      </div>
 
-      <InputField
-        id="signin-password"
-        label="Password"
-        type="password"
-        placeholder="••••••••"
-        autoComplete="current-password"
-        required
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        disabled={loading}
-      />
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="signin-password">Password</Label>
+        <Input
+          id="signin-password"
+          type="password"
+          placeholder="••••••••"
+          autoComplete="current-password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={loading}
+        />
+      </div>
 
-      <div className="flex justify-end">
+      <div className="-mt-1 text-right">
         <Link
           href="/auth/forgot-password"
-          className="text-label font-medium text-accent hover:underline"
+          className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           Forgot your password?
         </Link>
       </div>
 
       {error && (
-        <Alert variant="error">
-          <TriangleAlert />
-          <span>{error}</span>
-        </Alert>
+        <p role="alert" className="text-sm font-medium text-destructive">
+          {error}
+        </p>
       )}
 
-      <Button type="submit" className="w-full" disabled={loading}>
+      <Button type="submit" size="lg" disabled={loading}>
         {loading ? "Signing in…" : "Sign in"}
       </Button>
 
-      <div className="flex items-center gap-2.5">
-        <Divider className="flex-1" />
-        <span className="text-micro text-muted-foreground">
-          Or continue with
+      <div className="flex items-center gap-3 py-1">
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-xs uppercase tracking-widest text-muted-foreground">
+          or
         </span>
-        <Divider className="flex-1" />
+        <span className="h-px flex-1 bg-border" />
       </div>
 
-      <OAuthButton onClick={handleGoogle} disabled={loading} />
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        onClick={handleGoogle}
+        disabled={loading}
+      >
+        Continue with Google
+      </Button>
     </form>
   );
 }

@@ -10,10 +10,17 @@ import {
   ShieldCheck,
   Shuffle,
   TriangleAlert,
+  UserPlus,
   Users,
 } from "lucide-react";
 import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+} from "@camp404/ui/components/card";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { CodeDisplay } from "@camp404/ui/components/code-display";
 import { Input } from "@camp404/ui/components/input";
@@ -111,90 +118,107 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-[18px]">
-      <h1 className="text-2xl font-bold text-foreground">Invite a member</h1>
+    <Card>
+      <CardHeader>
+        <h2 className="flex items-center gap-2 text-base font-semibold normal-case leading-none tracking-normal">
+          <UserPlus className="h-4 w-4 text-accent" aria-hidden />
+          New invite code
+        </h2>
+        <CardDescription>
+          Pick a code, or shuffle for a silly one, then share it with them.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={formAction} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="code">Invite code</Label>
+            <div className="flex gap-2">
+              <Input
+                id="code"
+                name="code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toLowerCase())}
+                spellCheck={false}
+                autoComplete="off"
+                required
+                className="font-mono"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                aria-label="Generate a new silly code"
+                onClick={() => setCode(generateInviteCode())}
+              >
+                <Shuffle aria-hidden />
+              </Button>
+            </div>
+            <AvailabilityHint availability={shownAvailability} code={code} />
+          </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="code">Invite code</Label>
-        <div className="flex gap-2.5">
-          <Input
-            id="code"
-            name="code"
-            value={code}
-            onChange={(e) => setCode(e.target.value.toLowerCase())}
-            spellCheck={false}
-            autoComplete="off"
-            required
-            className="font-mono"
-          />
+          {/* The owner chose a one-line name over a "why you're inviting them"
+              note (ba8a003): the code is what matters, and the name only helps
+              a captain place the person. */}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="note">Name (optional)</Label>
+            <Input
+              id="note"
+              name="note"
+              autoComplete="off"
+              placeholder="Sara"
+            />
+          </div>
+
+          {isCaptain ? (
+            <CaptainOptions
+              preApprove={preApprove}
+              onPreApproveChange={setPreApprove}
+              maxUses={maxUses}
+              onMaxUsesChange={setMaxUses}
+            />
+          ) : (
+            // A quiet muted note, tonally distinct from the captain options.
+            <div className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <span>
+                Anyone who signs up with this code will need a captain&apos;s
+                approval before they can use the app.
+              </span>
+            </div>
+          )}
+
+          {result && !result.ok && (
+            <Alert variant="error">
+              <TriangleAlert aria-hidden />
+              <span>{result.error}</span>
+            </Alert>
+          )}
+
           <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Generate a new silly code"
-            onClick={() => setCode(generateInviteCode())}
+            type="submit"
+            // Block in-flight / failed checks; idle stays enabled (impl-plan
+            // gating matrix) and the required code input guards the empty case
+            // natively.
+            disabled={
+              isPending ||
+              shownAvailability.state === "checking" ||
+              shownAvailability.state === "taken" ||
+              shownAvailability.state === "invalid"
+            }
+            className="w-full"
           >
-            <Shuffle aria-hidden />
+            {isPending ? (
+              <>
+                <Loader2 className="animate-spin" aria-hidden /> Creating…
+              </>
+            ) : (
+              "Create invite"
+            )}
           </Button>
-        </div>
-        <AvailabilityHint availability={shownAvailability} code={code} />
-      </div>
-
-      {/* Board S14 draws a "Why you're inviting them" textarea. The owner
-          chose a one-line name instead (ba8a003): the code is what matters,
-          and the name only helps a captain place the person. */}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="note">Name (optional)</Label>
-        <Input id="note" name="note" autoComplete="off" placeholder="Sara" />
-      </div>
-
-      {isCaptain ? (
-        <CaptainOptions
-          preApprove={preApprove}
-          onPreApproveChange={setPreApprove}
-          maxUses={maxUses}
-          onMaxUsesChange={setMaxUses}
-        />
-      ) : (
-        // Board S14 draws this as a quiet muted note (fill:$muted), not an
-        // accent Alert — keeps it tonally distinct from Captain options.
-        <div className="flex items-start gap-2.5 rounded-xl bg-muted p-3.5 text-label text-muted-foreground">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <span>
-            Anyone who signs up with this code will need a captain&apos;s
-            approval before they can use the app.
-          </span>
-        </div>
-      )}
-
-      {result && !result.ok && (
-        <Alert variant="error">
-          <TriangleAlert aria-hidden />
-          <span>{result.error}</span>
-        </Alert>
-      )}
-
-      <Button
-        type="submit"
-        // Block in-flight / failed checks; idle stays enabled (impl-plan gating
-        // matrix) and the required code input guards the empty case natively.
-        disabled={
-          isPending ||
-          shownAvailability.state === "checking" ||
-          shownAvailability.state === "taken" ||
-          shownAvailability.state === "invalid"
-        }
-        className="w-full"
-      >
-        {isPending ? (
-          <>
-            <Loader2 className="animate-spin" aria-hidden /> Creating…
-          </>
-        ) : (
-          "Create invite"
-        )}
-      </Button>
-    </form>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -211,10 +235,12 @@ function CaptainOptions({
   onMaxUsesChange: (v: string) => void;
 }) {
   return (
-    <div className="flex flex-col gap-3.5 rounded-xl border border-border bg-accent/15 p-4">
+    <div className="flex flex-col gap-4 rounded-lg border border-accent/50 bg-accent/10 p-4">
       <div className="flex items-center gap-2">
         <Shield className="h-4 w-4 text-accent" aria-hidden />
-        <span className="text-label font-bold text-accent">Captain options</span>
+        <span className="text-sm font-semibold text-accent">
+          Captain options
+        </span>
       </div>
 
       <div className="flex items-start gap-2.5">
@@ -294,71 +320,77 @@ function SuccessPanel({
     : "They'll be pre-approved — no captain sign-off needed.";
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">
-      <div className="flex items-center gap-2.5">
-        <CircleCheck className="h-5 w-5 text-success" aria-hidden />
-        <h2
-          ref={headingRef}
-          tabIndex={-1}
-          className="text-lg font-bold text-foreground outline-none"
-        >
-          Invite ready
-        </h2>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        {recipientName
-          ? `Share this code with ${recipientName}.`
-          : "Share this code with whoever you’re inviting."}
-      </p>
-
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Users className="h-4 w-4 shrink-0" aria-hidden />
-          <span>{usesLine}</span>
+    <Card className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <CircleCheck className="h-5 w-5 text-success" aria-hidden />
+          <h2
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-base font-semibold normal-case leading-none tracking-normal outline-none"
+          >
+            Invite ready
+          </h2>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
-          <span>{approvalLine}</span>
+        <CardDescription>
+          {recipientName
+            ? `Share this code with ${recipientName}.`
+            : "Share this code with whoever you’re inviting."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <CodeDisplay
+          code={code}
+          className="flex h-12 w-full justify-center border-border bg-muted text-base"
+        />
+
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Users className="h-4 w-4 shrink-0" aria-hidden />
+            <span>{usesLine}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
+            <span>{approvalLine}</span>
+          </div>
         </div>
-      </div>
 
-      <CodeDisplay
-        code={code}
-        className="flex h-12 w-full justify-center border-border bg-muted text-base"
-      />
-
-      <div className="flex flex-col gap-2.5 pt-1">
-        <Button
-          type="button"
-          className="w-full"
-          onClick={async () => {
-            // Clipboard access can be denied (permissions policy, insecure
-            // context, iOS quirks) — fall back to pointing at the visible code
-            // instead of letting the rejection vanish into the void.
-            try {
-              await navigator.clipboard.writeText(code);
-              setCopied(true);
-              setCopyFailed(false);
-            } catch {
-              // A failed retry inside the success timeout must not show
-              // "Copied" and the failure hint at the same time.
-              setCopied(false);
-              setCopyFailed(true);
-            }
-          }}
-        >
-          <Copy aria-hidden /> {copied ? "Copied" : "Copy"}
-        </Button>
-        {copyFailed && (
-          <p className="text-center text-xs text-muted-foreground" role="status">
-            Couldn&apos;t copy automatically — select the code above and copy it
-            by hand.
-          </p>
-        )}
-        <Button asChild variant="outline" className="w-full">
-          <a href="/tools/invite">Send another</a>
-        </Button>
-      </div>
-    </div>
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            className="w-full"
+            onClick={async () => {
+              // Clipboard access can be denied (permissions policy, insecure
+              // context, iOS quirks) — fall back to pointing at the visible code
+              // instead of letting the rejection vanish into the void.
+              try {
+                await navigator.clipboard.writeText(code);
+                setCopied(true);
+                setCopyFailed(false);
+              } catch {
+                // A failed retry inside the success timeout must not show
+                // "Copied" and the failure hint at the same time.
+                setCopied(false);
+                setCopyFailed(true);
+              }
+            }}
+          >
+            <Copy aria-hidden /> {copied ? "Copied" : "Copy"}
+          </Button>
+          {copyFailed && (
+            <p
+              className="text-center text-xs text-muted-foreground"
+              role="status"
+            >
+              Couldn&apos;t copy automatically — select the code above and copy
+              it by hand.
+            </p>
+          )}
+          <Button asChild variant="outline" className="w-full">
+            <a href="/tools/invite">Send another</a>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Info,
   Loader2,
   Pencil,
   Users,
@@ -13,11 +14,23 @@ import {
 } from "lucide-react";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
-import { Card } from "@camp404/ui/components/card";
-import { EmptyState } from "@camp404/ui/components/empty-state";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
 import { InputField } from "@camp404/ui/components/input-field";
-import { Label } from "@camp404/ui/components/label";
 import { Switch } from "@camp404/ui/components/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@camp404/ui/components/table";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
 import {
@@ -36,8 +49,8 @@ import {
 // the name field; a failed one-tap move or archive is a toast. Only the control
 // that was used spins, and no second change starts while one runs.
 //
-// No board draws this editor; it is built from the kit (40px icon buttons,
-// EmptyState, InputField, Switch).
+// Drawn like the AfrikaBurn console's category editor: a table in a card, one
+// row per team, with the reorder and rename controls at the end of the row.
 
 // The server refuses to archive below this (MIN_ACTIVE_TEAMS in ./actions);
 // the switch says so before the captain tries.
@@ -160,194 +173,229 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
     );
   }
 
-  if (teams.length === 0) {
-    return (
-      <Card>
-        <EmptyState
-          icon={<Users aria-hidden />}
-          title="No teams yet."
-          description="The camp's teams appear here once they are set up."
-        />
-      </Card>
-    );
-  }
-
   const spins = (key: string, action: Busy["action"]) =>
     pending && busy?.key === key && busy.action === action;
 
   return (
     <div className="flex flex-col gap-4">
-      {atMinimum && (
-        <p
-          id="team-minimum-active"
-          className="text-caption text-muted-foreground"
-        >
-          Only {activeCount} teams are active, and a camp needs at least{" "}
-          {MIN_ACTIVE_TEAMS}. Restore a team before you archive another.
-        </p>
-      )}
-
-      <Card className="divide-y divide-border p-0">
-        <ul>
-          {teams.map((team, index) => {
-            const editing = editingKey === team.key;
-            return (
-              <li
-                key={team.key}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3",
-                  team.archived && "opacity-60",
-                )}
-              >
-                {/* Reorder controls: 40px targets, stacked with a gap. */}
-                <div className="flex flex-col gap-1">
-                  <Button
-                    ref={controlRef(team.key, "up")}
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Move ${team.label} up`}
-                    disabled={pending || index === 0}
-                    onClick={() => move(team, "up")}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="h-4 w-4 text-accent" aria-hidden />
+            Teams
+          </CardTitle>
+          <CardDescription>
+            Rename them, change their order, or archive ones you&apos;re not
+            using. Archived teams stay on existing records but drop out of the
+            roster&apos;s team filter.
+          </CardDescription>
+          {atMinimum && (
+            <p
+              id="team-minimum-active"
+              className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-card/40 px-3 py-2.5 text-xs text-muted-foreground"
+            >
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-accent"
+                aria-hidden
+              />
+              <span>
+                Only {activeCount} teams are active, and a camp needs at least{" "}
+                {MIN_ACTIVE_TEAMS}. Restore a team before you archive another.
+              </span>
+            </p>
+          )}
+        </CardHeader>
+        <CardContent className="border-t p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-6">Team</TableHead>
+                <TableHead className="w-28">Active</TableHead>
+                <TableHead className="w-36 pr-6 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {teams.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={3}
+                    className="whitespace-normal px-6 py-10 text-center text-sm text-muted-foreground"
                   >
-                    {spins(team.key, "up") ? (
-                      <Loader2 className="animate-spin" aria-hidden />
-                    ) : (
-                      <ChevronUp aria-hidden />
-                    )}
-                  </Button>
-                  <Button
-                    ref={controlRef(team.key, "down")}
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Move ${team.label} down`}
-                    disabled={pending || index === teams.length - 1}
-                    onClick={() => move(team, "down")}
-                  >
-                    {spins(team.key, "down") ? (
-                      <Loader2 className="animate-spin" aria-hidden />
-                    ) : (
-                      <ChevronDown aria-hidden />
-                    )}
-                  </Button>
-                </div>
-
-                {/* Label — read mode (name + rename) or edit mode (input). */}
-                <div className="min-w-0 flex-1">
-                  {editing ? (
-                    <div className="flex items-start gap-2">
-                      <InputField
-                        label={
-                          <span className="sr-only">Rename {team.label}</span>
-                        }
-                        wrapperClassName="flex-1 gap-0 [&>p]:mt-1"
-                        value={draftLabel}
-                        autoFocus
-                        maxLength={40}
-                        error={renameError ?? undefined}
-                        disabled={pending}
-                        onChange={(e) => {
-                          setDraftLabel(e.target.value);
-                          setRenameError(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") saveEdit(team);
-                          if (e.key === "Escape") cancelEdit();
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Save name for ${team.label}`}
-                        disabled={pending || draftLabel.trim().length === 0}
-                        onClick={() => saveEdit(team)}
-                      >
-                        {spins(team.key, "rename") ? (
-                          <Loader2 className="animate-spin" aria-hidden />
+                    <span className="block font-medium text-foreground">
+                      No teams yet.
+                    </span>
+                    <span className="block">
+                      The camp&apos;s teams appear here once they are set up.
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                teams.map((team, index) => {
+                  const editing = editingKey === team.key;
+                  return (
+                    <TableRow key={team.key}>
+                      {/* The name: read mode, or the rename field. */}
+                      <TableCell className="whitespace-normal py-2 pl-6">
+                        {editing ? (
+                          <div className="flex items-start gap-1">
+                            <InputField
+                              label={
+                                <span className="sr-only">
+                                  Rename {team.label}
+                                </span>
+                              }
+                              wrapperClassName="max-w-xs flex-1 gap-0 [&>p]:mt-1"
+                              value={draftLabel}
+                              autoFocus
+                              maxLength={40}
+                              error={renameError ?? undefined}
+                              disabled={pending}
+                              onChange={(e) => {
+                                setDraftLabel(e.target.value);
+                                setRenameError(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") saveEdit(team);
+                                if (e.key === "Escape") cancelEdit();
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Save name for ${team.label}`}
+                              disabled={
+                                pending || draftLabel.trim().length === 0
+                              }
+                              onClick={() => saveEdit(team)}
+                            >
+                              {spins(team.key, "rename") ? (
+                                <Loader2 className="animate-spin" aria-hidden />
+                              ) : (
+                                <Check aria-hidden />
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Cancel rename"
+                              disabled={pending}
+                              onClick={cancelEdit}
+                            >
+                              <X aria-hidden />
+                            </Button>
+                          </div>
                         ) : (
-                          <Check aria-hidden />
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span
+                              className={cn(
+                                "truncate font-medium",
+                                team.archived && "text-muted-foreground",
+                              )}
+                            >
+                              {team.label}
+                            </span>
+                            {team.archived && (
+                              <Badge variant="outline">Archived</Badge>
+                            )}
+                          </span>
                         )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Cancel rename"
-                        disabled={pending}
-                        onClick={cancelEdit}
-                      >
-                        <X aria-hidden />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-medium">{team.label}</span>
-                      {team.archived && (
-                        <Badge variant="outline">Archived</Badge>
-                      )}
-                      <Button
-                        ref={controlRef(team.key, "rename")}
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Rename ${team.label}`}
-                        disabled={pending}
-                        onClick={() => startEdit(team)}
-                      >
-                        <Pencil aria-hidden />
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                      </TableCell>
 
-                {/* Archive toggle. */}
-                <div className="flex shrink-0 items-center gap-2">
-                  {spins(team.key, "archive") ? (
-                    <Loader2
-                      className="size-4 animate-spin text-muted-foreground"
-                      aria-hidden
-                    />
-                  ) : (
-                    <Label
-                      htmlFor={`archived-${team.key}`}
-                      className="text-caption text-muted-foreground"
-                    >
-                      Active
-                    </Label>
-                  )}
-                  <Switch
-                    id={`archived-${team.key}`}
-                    checked={!team.archived}
-                    // An active team at the minimum cannot be archived; an
-                    // archived one can always come back.
-                    disabled={pending || (!team.archived && atMinimum)}
-                    aria-describedby={
-                      !team.archived && atMinimum
-                        ? "team-minimum-active"
-                        : undefined
-                    }
-                    aria-label={`${team.label} active`}
-                    onCheckedChange={(checked) =>
-                      run(
-                        { key: team.key, action: "archive" },
-                        () => setTeamArchivedAction(team.key, !checked),
-                        () =>
-                          toast.success(
-                            checked ? "Team restored" : "Team archived",
-                          ),
-                      )
-                    }
-                  />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                      {/* Archive toggle. */}
+                      <TableCell className="py-2">
+                        <span className="flex items-center gap-2">
+                          <Switch
+                            id={`archived-${team.key}`}
+                            checked={!team.archived}
+                            // An active team at the minimum cannot be
+                            // archived; an archived one can always come back.
+                            disabled={pending || (!team.archived && atMinimum)}
+                            aria-describedby={
+                              !team.archived && atMinimum
+                                ? "team-minimum-active"
+                                : undefined
+                            }
+                            aria-label={`${team.label} active`}
+                            onCheckedChange={(checked) =>
+                              run(
+                                { key: team.key, action: "archive" },
+                                () => setTeamArchivedAction(team.key, !checked),
+                                () =>
+                                  toast.success(
+                                    checked ? "Team restored" : "Team archived",
+                                  ),
+                              )
+                            }
+                          />
+                          {spins(team.key, "archive") && (
+                            <Loader2
+                              className="size-4 animate-spin text-muted-foreground"
+                              aria-hidden
+                            />
+                          )}
+                        </span>
+                      </TableCell>
+
+                      {/* Reorder and rename. */}
+                      <TableCell className="py-2 pr-6">
+                        <span className="flex items-center justify-end gap-1">
+                          <Button
+                            ref={controlRef(team.key, "up")}
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Move ${team.label} up`}
+                            disabled={pending || index === 0}
+                            onClick={() => move(team, "up")}
+                          >
+                            {spins(team.key, "up") ? (
+                              <Loader2 className="animate-spin" aria-hidden />
+                            ) : (
+                              <ChevronUp aria-hidden />
+                            )}
+                          </Button>
+                          <Button
+                            ref={controlRef(team.key, "down")}
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Move ${team.label} down`}
+                            disabled={pending || index === teams.length - 1}
+                            onClick={() => move(team, "down")}
+                          >
+                            {spins(team.key, "down") ? (
+                              <Loader2 className="animate-spin" aria-hidden />
+                            ) : (
+                              <ChevronDown aria-hidden />
+                            )}
+                          </Button>
+                          {!editing && (
+                            <Button
+                              ref={controlRef(team.key, "rename")}
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Rename ${team.label}`}
+                              disabled={pending}
+                              onClick={() => startEdit(team)}
+                            >
+                              <Pencil aria-hidden />
+                            </Button>
+                          )}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
       </Card>
 
-      <p className="text-caption text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Renaming, reordering, or archiving a team updates the roster and the
         sign-up questionnaire right away. Archived teams stay valid on existing
         profiles; at least two teams must stay active.

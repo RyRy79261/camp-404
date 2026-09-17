@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { planRollover } from "@camp404/db/cycle-rollover";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { PageHeading } from "@camp404/ui/components/page-heading";
 import { captainPageGate } from "@/lib/captain-gate";
 import { RolloverPanel, type RolloverPlanView } from "./rollover-panel";
 
@@ -15,7 +14,7 @@ export const metadata = { title: "The camp's year — Camp 404" };
 // planRollover() reports which by returning `from: null`.
 //
 // Preview-but-locked (D3) like every other captain surface: non-captains see the
-// chrome and a CaptainLock, and the plan is withheld server-side — never
+// heading and a CaptainLock, and the plan is withheld server-side — never
 // fetched, never sent.
 //
 // planRollover() is a pure read with zero writes, so calling it on every page
@@ -34,30 +33,22 @@ export default async function CycleRolloverPage() {
   const founded = plan?.from != null;
 
   return (
-    <main className="mx-auto max-w-lg px-4 py-6">
-      <GhostBack
-        linkAs={Link}
-        href="/captains/camp-settings"
-        className="-ml-2 mb-4"
-      >
-        Camp settings
-      </GhostBack>
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold">
-          {founded ? "Start a new year" : "The camp\u2019s year"}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {founded
-            ? "When the camp moves on to the next burn, this is where you say so. Some questionnaires go out again on a blank form; most stay exactly as they are. Nothing is ever deleted \u2014 every previous year\u2019s answers stay readable."
-            : "Every questionnaire sent and every answer given is filed under a year. The camp hasn\u2019t said which year this is yet, so nothing is filed under one. Say so here and it will be."}
-        </p>
-      </header>
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow="Captains / Camp settings / Year"
+        title={founded ? "Start a new year" : "The camp’s year"}
+        description={
+          founded
+            ? "When the camp moves on to the next burn, this is where you say so. Some questionnaires go out again on a blank form; most stay exactly as they are. Nothing is ever deleted — every previous year’s answers stay readable."
+            : "Every questionnaire sent and every answer given is filed under a year. The camp hasn’t said which year this is yet, so nothing is filed under one. Say so here and it will be."
+        }
+      />
 
       {plan ? (
         <RolloverPanel plan={plan} />
       ) : (
         <CaptainLock message="Starting a new year is captain-only. Your rank doesn't have clearance for this." />
       )}
-    </main>
+    </div>
   );
 }

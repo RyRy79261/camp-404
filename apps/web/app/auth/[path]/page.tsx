@@ -32,7 +32,7 @@ export default async function AuthPage({
     // /signup/required gate, since we can't stop Neon Auth (Google
     // especially) from creating an identity at sign-in time.
     return (
-      <AuthShell hideBack>
+      <AuthShell>
         <SignUpForm />
       </AuthShell>
     );
@@ -40,7 +40,7 @@ export default async function AuthPage({
 
   if (path === "sign-in") {
     return (
-      <AuthShell hideBack>
+      <AuthShell>
         <Suspense fallback={null}>
           <SignInForm />
         </Suspense>
@@ -52,7 +52,7 @@ export default async function AuthPage({
   // Neon Auth's hosted UI. Those flows are side trips we haven't (yet)
   // built bespoke screens for.
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col items-center justify-center px-6 py-12">
+    <main className="mx-auto flex min-h-svh w-full max-w-md flex-col items-center justify-center px-6 py-12">
       <AuthView path={path} />
     </main>
   );

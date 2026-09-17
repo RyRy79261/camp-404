@@ -129,7 +129,11 @@ describe("PaymentsManager", () => {
         payments={[payment()]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Mark received" }));
+    // The ledger draws each row twice (a table from md up, a card below it),
+    // and CSS hides one; the test DOM has both, so take the first.
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Mark received" })[0]!,
+    );
     await waitFor(() =>
       expect(setPaymentStatusAction).toHaveBeenCalledWith({
         paymentId: "p1",
@@ -137,6 +141,38 @@ describe("PaymentsManager", () => {
         to: "reconciled",
       }),
     );
+  });
+
+  it("spins only the tapped button and holds every other write", async () => {
+    let land!: (value: { ok: true }) => void;
+    vi.mocked(setPaymentStatusAction).mockReturnValueOnce(
+      new Promise((resolve) => {
+        land = resolve;
+      }) as never,
+    );
+    render(
+      <PaymentsManager
+        yearLabel="2027"
+        members={MEMBERS}
+        payments={[payment()]}
+      />,
+    );
+    const received = screen.getAllByRole("button", {
+      name: "Mark received",
+    })[0]!;
+    fireEvent.click(received);
+
+    await waitFor(() =>
+      expect(received.querySelector(".animate-spin")).not.toBeNull(),
+    );
+    const waive = screen.getAllByRole("button", { name: "Waive" })[0]!;
+    expect(waive.querySelector(".animate-spin")).toBeNull();
+    expect(waive).toHaveProperty("disabled", true);
+    const recordButton = screen.getByRole("button", { name: "Record payment" });
+    expect(recordButton.querySelector(".animate-spin")).toBeNull();
+
+    land({ ok: true });
+    await waitFor(() => expect(waive).toHaveProperty("disabled", false));
   });
 
   it("asks before putting a received payment back to pending", async () => {
@@ -147,7 +183,9 @@ describe("PaymentsManager", () => {
         payments={[payment({ status: "reconciled" })]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Back to pending" }));
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Back to pending" })[0]!,
+    );
     const dialog = await screen.findByRole("dialog");
     expect(setPaymentStatusAction).not.toHaveBeenCalled();
     fireEvent.click(

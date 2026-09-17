@@ -1,10 +1,23 @@
-import { ClipboardCheck, ClipboardX } from "lucide-react";
-import { IconBadge } from "@camp404/ui/components/icon-badge";
+import { CheckCircle2, ClipboardX } from "lucide-react";
+import { Button } from "@camp404/ui/components/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+} from "@camp404/ui/components/card";
+import { RunnerFrame } from "./runner-frame";
 
 // Read-only cards the generic runner shows instead of the form when it can't be
 // answered: a closed/missing activation, a non-targeted viewer, a malformed or
-// empty definition.
-type EdgeKind = "closed" | "not-invited" | "unavailable" | "empty" | "completed";
+// empty definition. One card, like the AfrikaBurn fill page's "Already
+// submitted", bare and centred for a member held by a gate, or in the console.
+type EdgeKind =
+  | "closed"
+  | "not-invited"
+  | "unavailable"
+  | "empty"
+  | "completed";
 
 const COPY: Record<EdgeKind, { title: string; body: string }> = {
   closed: {
@@ -34,30 +47,31 @@ const COPY: Record<EdgeKind, { title: string; body: string }> = {
 export function RunnerEdgeCard({ kind }: { kind: EdgeKind }) {
   const { title, body } = COPY[kind];
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 py-8">
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 py-12 text-center">
-        {kind === "completed" ? (
-          <IconBadge size="lg" shape="circle" tone="accent">
-            <ClipboardCheck aria-hidden />
-          </IconBadge>
-        ) : (
-          <IconBadge size="lg" shape="circle" tone="muted">
-            <ClipboardX aria-hidden />
-          </IconBadge>
-        )}
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-bold leading-tight">{title}</h1>
-          <p className="max-w-prose text-balance text-muted-foreground">
-            {body}
-          </p>
-        </div>
-        <a
-          href="/"
-          className="text-label text-muted-foreground underline-offset-4 hover:underline"
-        >
-          Back to camp
-        </a>
-      </div>
-    </main>
+    <RunnerFrame className="max-w-xl justify-center">
+      <Card>
+        <CardHeader>
+          <h1 className="flex items-center gap-2 text-base font-semibold normal-case tracking-normal">
+            {kind === "completed" ? (
+              <CheckCircle2
+                className="h-5 w-5 shrink-0 text-success"
+                aria-hidden
+              />
+            ) : (
+              <ClipboardX
+                className="h-5 w-5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            )}
+            {title}
+          </h1>
+          <CardDescription>{body}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild variant="secondary">
+            <a href="/">Back to camp</a>
+          </Button>
+        </CardContent>
+      </Card>
+    </RunnerFrame>
   );
 }

@@ -48,8 +48,8 @@ describe("TeamAssignment", () => {
     });
 
     expect(
-      (screen.getByRole("checkbox", { name: "Kitchen" }) as HTMLElement)
-        .dataset.state,
+      (screen.getByRole("checkbox", { name: "Kitchen" }) as HTMLElement).dataset
+        .state,
     ).toBe("checked");
     expect(
       (screen.getByRole("checkbox", { name: "Structures" }) as HTMLElement)

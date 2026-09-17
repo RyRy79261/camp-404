@@ -19,6 +19,8 @@ export const dynamic = "force-dynamic";
  * The page asks the same `resolveMemberState`, which is cached per request, so
  * drawing the header costs no second session read or gate sync.
  */
+const CONTENT = "mx-auto w-full max-w-6xl px-4 py-8 sm:px-6";
+
 export default async function ConsoleLayout({
   children,
 }: {
@@ -27,6 +29,13 @@ export default async function ConsoleLayout({
   const bootstrapped = await isCampBootstrapped();
   const state = bootstrapped ? await resolveMemberState() : null;
 
+  // An applicant waiting on approval may still read their inbox (every other
+  // page sends them to /pending-approval), so they get the content column
+  // without the nav. Every other hold stays bare: a blocking questionnaire
+  // owns the whole screen.
+  if (state?.kind === "member" && state.block?.reason === "approval") {
+    return <div className={CONTENT}>{children}</div>;
+  }
   if (!state || state.kind !== "member" || state.block) {
     return <>{children}</>;
   }
@@ -37,9 +46,7 @@ export default async function ConsoleLayout({
         campUser={state.campUser}
         email={state.authUser.primaryEmail}
       />
-      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
-        {children}
-      </div>
+      <div className={CONTENT}>{children}</div>
     </div>
   );
 }

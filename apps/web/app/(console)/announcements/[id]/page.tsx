@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
-import { CheckCircle2 } from "lucide-react";
-import { BackButton } from "@camp404/ui/components/back-button";
-import { DetailHeader } from "@camp404/ui/components/detail-header";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { getAnnouncementForMember, markRead } from "@/lib/notifications";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
@@ -20,7 +18,9 @@ const dateFmt = new Intl.DateTimeFormat("en-ZA", {
 });
 
 // One announcement in full: where a tap on its inbox row or its push message
-// lands. The inbox shows a clipped preview; this page is the whole message.
+// lands. The inbox shows a clipped preview; this page is the whole message,
+// laid out like the AfrikaBurn bulletin page (a link back to the inbox, the
+// kicker, the title, then the body).
 //
 // Only a member it was delivered to can open it. Anyone else, and any id that
 // is not a published announcement, gets the same 404, so the page does not
@@ -46,50 +46,49 @@ export default async function AnnouncementPage({
   const Icon = presentationIcon(announcement.presentation);
 
   return (
-    <main className="mx-auto w-full max-w-lg">
-      <DetailHeader
-        as="p"
-        title="Notifications"
-        className="px-3 py-3.5"
-        leading={
-          <BackButton
-            linkAs={Link}
-            href="/notifications"
-            label="Back to notifications"
-          />
-        }
-      />
+    <article className="flex w-full max-w-3xl flex-col gap-5">
+      <Link
+        href="/notifications"
+        className="inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Back to notifications
+      </Link>
 
-      <article className="flex flex-col gap-4 px-4 pb-8 pt-3">
-        <header className="flex flex-col gap-2">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground">
-            <Icon className="h-5 w-5" aria-hidden />
-          </span>
-          <h1 className="text-2xl font-bold leading-tight [overflow-wrap:anywhere]">
-            {announcement.title}
-          </h1>
-          <p className="text-label text-muted-foreground">
-            {announcement.senderName
-              ? `From ${announcement.senderName} · `
-              : ""}
+      <header className="flex flex-col gap-3">
+        <p className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-[0.25em] text-accent">
+          <Icon className="h-3.5 w-3.5" aria-hidden />
+          Announcement
+          {announcement.senderName ? ` · From ${announcement.senderName}` : ""}
+        </p>
+        <h1 className="text-3xl tracking-tight [overflow-wrap:anywhere]">
+          {announcement.title}
+        </h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+          <span>
+            Published{" "}
             <time dateTime={announcement.publishedAt.toISOString()}>
               {dateFmt.format(announcement.publishedAt)}
             </time>
-          </p>
-        </header>
+          </span>
+          {announcement.acknowledgedAt && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="inline-flex items-center gap-1.5 font-medium text-accent">
+                <CheckCircle2 className="h-4 w-4" aria-hidden />
+                You acknowledged this on{" "}
+                {dateFmt.format(announcement.acknowledgedAt)}
+              </span>
+            </>
+          )}
+        </div>
+      </header>
 
-        <p className="whitespace-pre-wrap text-base text-foreground [overflow-wrap:anywhere]">
-          {announcement.body}
-        </p>
+      <hr className="border-border" />
 
-        {announcement.acknowledgedAt && (
-          <p className="inline-flex items-center gap-1.5 text-sm font-medium text-accent">
-            <CheckCircle2 className="h-4 w-4" aria-hidden />
-            You acknowledged this on{" "}
-            {dateFmt.format(announcement.acknowledgedAt)}
-          </p>
-        )}
-      </article>
-    </main>
+      <p className="whitespace-pre-wrap text-base leading-relaxed text-foreground [overflow-wrap:anywhere]">
+        {announcement.body}
+      </p>
+    </article>
   );
 }

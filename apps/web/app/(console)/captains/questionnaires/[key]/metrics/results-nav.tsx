@@ -44,8 +44,9 @@ export function ResultsNav({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
       <SegmentedControl
+        className="sm:w-auto"
         aria-label="Results view"
         value={view}
         onValueChange={(v) => go(v as ResultsViewName, cycle)}
@@ -56,6 +57,7 @@ export function ResultsNav({
       />
       {cycles.length > 1 && (
         <SegmentedControl
+          className="sm:w-auto"
           aria-label="Year"
           value={String(cycle)}
           onValueChange={(v) => go(view, Number(v))}

@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { PageHeading } from "@camp404/ui/components/page-heading";
 import { requireMemberPage } from "@/lib/member-gate";
 import { getReferralRosterForViewer } from "@/lib/relations";
 import { FamilyTree } from "./family-tree";
@@ -17,26 +16,18 @@ export default async function FamilyTreePage() {
   const showsInviteCodes = campUser.rank === "captain";
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-5 py-4">
-      <GhostBack linkAs={Link} href="/tools" className="-ml-2">
-        Tools
-      </GhostBack>
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow="Tools / Family tree"
+        title="Family tree"
+        description="Who brought who onto Camp 404. Roots are accounts that pre-date the invite system; every other branch is one invite-code redemption."
+      />
 
-      <div className="flex flex-col gap-4 pt-2">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl font-bold">Family tree</h1>
-          <p className="text-sm text-muted-foreground">
-            Who brought who onto Camp 404. Roots are accounts that pre-date the
-            invite system; every other branch is one invite-code redemption.
-          </p>
-        </div>
-
-        <FamilyTree
-          roster={roster}
-          viewerUserId={campUser.id}
-          showsInviteCodes={showsInviteCodes}
-        />
-      </div>
-    </main>
+      <FamilyTree
+        roster={roster}
+        viewerUserId={campUser.id}
+        showsInviteCodes={showsInviteCodes}
+      />
+    </div>
   );
 }

@@ -1,17 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Lock, X } from "lucide-react";
-import { Spinner } from "@camp404/ui/components/spinner";
+import { Lock } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
+import { SkeletonRegion, SkeletonText } from "@camp404/ui/components/skeleton";
 import type { PublicRosterRow } from "@/lib/camp-roster";
 import { getPublicMemberProfileAction } from "./actions";
-import { RoleBadge, RosterAvatar, TeamBadge } from "./roster-presentation";
+import { ProfileHead } from "./roster-presentation";
 
-// Inline PUBLIC member card (member view). Identity (name, @handle, country,
-// role, teams) comes from the already-public roster row; the bio + this-year
-// ideas load via getPublicMemberProfileAction — an allowlist, so approval
-// status, contact details, government ID and admin actions never reach a member.
-// A lock note stands in for the captain-only section.
+// Inline PUBLIC member profile (member view), in the same review layout as the
+// captain's: the header, the public record in the main column and a locked
+// card where the captain-only controls would be. Identity (name, @handle,
+// country, role, teams) comes from the already-public roster row; the bio +
+// this-year ideas load via getPublicMemberProfileAction — an allowlist, so
+// approval status, contact details, government ID and admin actions never
+// reach a member.
 
 type State =
   | { state: "loading" }
@@ -67,105 +75,68 @@ export function PublicMemberProfile({
       ref={panelRef}
       tabIndex={-1}
       aria-label={`${row.displayName} profile`}
-      className="flex flex-col gap-5 rounded-lg border bg-card p-5 outline-none sm:p-6"
+      className="flex scroll-mt-24 flex-col gap-6 border-t pt-8 outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200"
     >
-      {/* PanelBar: console prompt + record index + close. */}
-      <div className="flex items-center gap-2 border-b pb-3.5">
-        <span aria-hidden className="font-mono text-sm font-bold text-accent">
-          {">"}
-        </span>
-        <span className="flex-1 truncate font-mono text-caption text-muted-foreground">
-          {row.displayName.toLowerCase()} · profile
-        </span>
-        <span className="font-mono text-caption font-semibold text-accent">
-          #{String(index).padStart(2, "0")}
-        </span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close profile"
-          className="ml-1 inline-flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <X aria-hidden className="h-4 w-4" />
-        </button>
-      </div>
-
       {/* Head — entirely from the public row. */}
-      <div className="flex items-start gap-4">
-        <RosterAvatar name={row.displayName} id={row.id} px={64} radius={8} />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <h2 className="font-mono text-2xl font-bold text-foreground">
-            {row.displayName}
-          </h2>
-          {row.handle && (
-            <p className="font-mono text-sm text-muted-foreground">
-              @{row.handle}
-            </p>
-          )}
-          {row.country && (
-            <p className="text-sm text-muted-foreground">{row.country}</p>
-          )}
-          {row.teams.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-              {row.teams.map((team) => (
-                <TeamBadge key={team} team={team} label={teamLabels[team]} />
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="shrink-0">
-          <RoleBadge
-            rank={row.rank}
-            isLead={row.isLead}
-            className="rounded-full bg-muted px-2.5 py-1"
-          />
-        </div>
-      </div>
+      <ProfileHead
+        row={row}
+        index={index}
+        teamLabels={teamLabels}
+        onClose={onClose}
+      />
 
-      {/* Public body: bio + this-year ideas (allowlisted). */}
-      {detail.state === "loading" && (
-        <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-          <Spinner size="sm" />
-          Loading…
-        </div>
-      )}
-      {detail.state === "error" && (
-        <p className="py-6 text-center text-sm text-destructive">
-          {detail.message}
-        </p>
-      )}
-      {detail.state === "loaded" && (
-        <div className="flex flex-col gap-4">
-          {detail.bio ? (
-            <p className="whitespace-pre-line text-sm text-foreground">
-              {detail.bio}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">No bio on record yet.</p>
-          )}
-          {detail.contribution && (
-            <div className="flex flex-col gap-1">
-              <h3 className="font-mono text-micro font-bold uppercase tracking-wide text-muted-foreground">
-                What they bring to camp
-              </h3>
-              <p className="whitespace-pre-line text-sm text-foreground">
-                {detail.contribution}
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        {/* Public body: bio + this-year ideas (allowlisted). */}
+        <Card className="min-w-0 lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">About</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {detail.state === "loading" && (
+              <SkeletonRegion label="Loading profile…">
+                <SkeletonText lines={3} />
+              </SkeletonRegion>
+            )}
+            {detail.state === "error" && (
+              <p className="py-4 text-center text-sm text-destructive">
+                {detail.message}
               </p>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+            {detail.state === "loaded" && (
+              <div className="flex flex-col gap-5">
+                {detail.bio ? (
+                  <p className="whitespace-pre-line text-sm text-foreground">
+                    {detail.bio}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No bio on record yet.
+                  </p>
+                )}
+                {detail.contribution && (
+                  <div>
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      What they bring to camp
+                    </h3>
+                    <p className="mt-1 whitespace-pre-line text-sm text-foreground">
+                      {detail.contribution}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Captain-only section — locked for members (decision: privacy). */}
-      <div className="flex items-center gap-3 rounded-lg border border-dashed bg-muted/20 px-4 py-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border bg-muted/40">
-          <Lock aria-hidden className="h-4 w-4 text-muted-foreground" />
-        </span>
-        <p className="text-caption text-muted-foreground">
-          <span className="font-semibold text-foreground">Captains only.</span>{" "}
-          Approval status, contact details and admin actions are visible to
-          captains.
-        </p>
+        {/* Captain-only section — locked for members (decision: privacy). */}
+        <aside className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card/40 px-6 py-10 text-center lg:sticky lg:top-24">
+          <Lock aria-hidden className="h-6 w-6 text-muted-foreground" />
+          <p className="max-w-xs text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Captains only.</span>{" "}
+            Approval status, contact details and admin actions are visible to
+            captains.
+          </p>
+        </aside>
       </div>
     </section>
   );

@@ -13,11 +13,16 @@ import {
 } from "lucide-react";
 import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
-import { Card } from "@camp404/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
 import { AckRow } from "@camp404/ui/components/checkbox";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
-import { SectionHeader } from "@camp404/ui/components/section-header";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import {
@@ -187,36 +192,39 @@ function PlanSection({
 }) {
   if (entries.length === 0) return null;
   return (
-    <Card className="flex flex-col gap-3 p-4">
-      <SectionHeader
-        as="h3"
-        title={`${title} (${entries.length})`}
-        description={summary}
-      />
-      <ul className="flex flex-col gap-2">
-        {entries.map((entry) => (
-          <li key={entry.key} className="flex items-start gap-2 text-sm">
-            <span aria-hidden className="mt-0.5 shrink-0 text-muted-foreground">
-              {icon}
-            </span>
-            <span className="min-w-0">
-              <span className="font-medium">{entry.title}</span>
+    <Card>
+      <CardHeader className="pb-4">
+        <CardTitle className="text-base">{`${title} (${entries.length})`}</CardTitle>
+        <CardDescription>{summary}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul className="flex flex-col divide-y divide-border">
+          {entries.map((entry) => (
+            <li
+              key={entry.key}
+              className="flex items-start gap-3 py-2.5 text-sm first:pt-0 last:pb-0"
+            >
+              <span aria-hidden className="mt-0.5 shrink-0 text-accent">
+                {icon}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">{entry.title}</span>
+                {!entry.sendable && (
+                  <span className="block text-xs text-muted-foreground">
+                    Built into the app — nothing can send this one, so it stays
+                    as it is.
+                  </span>
+                )}
+              </span>
               {showCounts && (
-                <span className="text-muted-foreground">
-                  {" "}
-                  — {plural(entry.recipientCount, "member", "members")}
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  {plural(entry.recipientCount, "member", "members")}
                 </span>
               )}
-              {!entry.sendable && (
-                <span className="block text-caption text-muted-foreground">
-                  Built into the app — nothing can send this one, so it stays as
-                  it is.
-                </span>
-              )}
-            </span>
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
     </Card>
   );
 }
@@ -252,23 +260,20 @@ function FoundingYearForm({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {error && (
-        <Alert variant="error">
-          <TriangleAlert aria-hidden />
-          <span>{error}</span>
-        </Alert>
-      )}
-
-      <Card className="flex flex-col gap-4 p-4">
-        <SectionHeader
-          as="h2"
-          title="What year is it?"
-          description="Camp 404 files everything under a year — every questionnaire sent, every answer given. It doesn't know which year this is yet, so nothing else has one either. Tell it, and everything already on file is filed under that year."
-        />
-
+    <Card className="max-w-2xl">
+      <CardHeader>
+        <CardTitle className="text-base">What year is it?</CardTitle>
+        <CardDescription>
+          Camp 404 files everything under a year — every questionnaire sent,
+          every answer given. It doesn&apos;t know which year this is yet, so
+          nothing else has one either. Tell it, and everything already on file
+          is filed under that year.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
         <InputField
           label="This year"
+          wrapperClassName="max-w-xs"
           helper="Four digits, the year the camp is in right now. For example 2026."
           value={year}
           inputMode="numeric"
@@ -278,21 +283,29 @@ function FoundingYearForm({
           onChange={(event) => setYear(digits(event.target.value))}
         />
 
-        <p className="text-caption text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Nothing is deleted and nobody is asked anything again. This only says
           which year the camp is in. Next year you come back here and say so.
         </p>
 
+        {error && (
+          <Alert variant="error">
+            <TriangleAlert aria-hidden />
+            <span>{error}</span>
+          </Alert>
+        )}
+
         <Button
           type="button"
+          className="self-start"
           onClick={save}
           disabled={pending || !isYear(year)}
         >
           {pending && <Loader2 aria-hidden className="size-4 animate-spin" />}
           {isYear(year) ? `The camp is in ${year}` : "Type the year"}
         </Button>
-      </Card>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -326,7 +339,7 @@ function YearNameEditor({ year, name }: { year: number; name: string | null }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 pt-3">
+    <div className="flex max-w-md flex-col gap-2">
       <InputField
         label={`Name for ${year} (optional)`}
         helper="For example the burn's theme. It shows beside the year. The year itself does not change."
@@ -425,7 +438,7 @@ function AdvanceYearPanel({
   // --- The receipt (§8.4) --------------------------------------------------
   if (report) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex max-w-3xl flex-col gap-6">
         <Alert variant="success">
           <CircleCheck aria-hidden />
           <span>
@@ -434,256 +447,285 @@ function AdvanceYearPanel({
           </span>
         </Alert>
 
-        <Card className="flex flex-col gap-3 p-4">
-          <SectionHeader
-            as="h2"
-            title="What just happened"
-            description={
-              report.plan.from
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base">What just happened</CardTitle>
+            <CardDescription>
+              {report.plan.from
                 ? `${report.plan.from.year} is closed. ${report.to.year} is now the year everything new is filed under.`
-                : `${report.to.year} is now the year everything new is filed under.`
-            }
-          />
-          <ul className="flex flex-col gap-2 text-sm">
-            {report.reGated.map((entry) => (
-              <li key={entry.key} className="flex items-start gap-2">
-                <RefreshCw
-                  aria-hidden
-                  className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                />
-                <span>
-                  <span className="font-medium">{entry.title}</span> — asked
-                  again, {plural(entry.gatesWritten, "member", "members")}. The
-                  old send is closed, not deleted.
-                </span>
-              </li>
-            ))}
-            {report.reGated.length === 0 && (
-              <li className="text-muted-foreground">
-                No questionnaire needed re-asking.
-              </li>
-            )}
-            {report.duesCleared.length > 0 && (
-              <li className="flex items-start gap-2">
-                <Check
-                  aria-hidden
-                  className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                />
-                <span>
-                  Dues ticks cleared for{" "}
-                  {plural(report.duesCleared.length, "member", "members")}.
-                </span>
-              </li>
-            )}
-            {report.announcementBroadcastId && (
-              <li className="flex items-start gap-2">
-                <Check
-                  aria-hidden
-                  className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                />
-                <span>An announcement went out to everyone.</span>
-              </li>
-            )}
-          </ul>
-          <p className="text-caption text-muted-foreground">
-            Receipt <span className="font-mono">{report.auditLogId}</span>
-          </p>
+                : `${report.to.year} is now the year everything new is filed under.`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <ul className="flex flex-col gap-2 text-sm">
+              {report.reGated.map((entry) => (
+                <li key={entry.key} className="flex items-start gap-2">
+                  <RefreshCw
+                    aria-hidden
+                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                  />
+                  <span>
+                    <span className="font-medium">{entry.title}</span> — asked
+                    again, {plural(entry.gatesWritten, "member", "members")}.
+                    The old send is closed, not deleted.
+                  </span>
+                </li>
+              ))}
+              {report.reGated.length === 0 && (
+                <li className="text-muted-foreground">
+                  No questionnaire needed re-asking.
+                </li>
+              )}
+              {report.duesCleared.length > 0 && (
+                <li className="flex items-start gap-2">
+                  <Check
+                    aria-hidden
+                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                  />
+                  <span>
+                    Dues ticks cleared for{" "}
+                    {plural(report.duesCleared.length, "member", "members")}.
+                  </span>
+                </li>
+              )}
+              {report.announcementBroadcastId && (
+                <li className="flex items-start gap-2">
+                  <Check
+                    aria-hidden
+                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                  />
+                  <span>An announcement went out to everyone.</span>
+                </li>
+              )}
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              Receipt <span className="font-mono">{report.auditLogId}</span>
+            </p>
+          </CardContent>
         </Card>
 
-        <Button type="button" variant="outline" onClick={startOver}>
+        <Button
+          type="button"
+          variant="outline"
+          className="self-start"
+          onClick={startOver}
+        >
           Done
         </Button>
       </div>
     );
   }
 
-  // --- The plan, and the confirm form beneath it (§8.1/§8.2) ---------------
+  // --- The plan, and the confirm form beside it (§8.1/§8.2) ----------------
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       {founded && <FoundedNotice report={founded} />}
 
-      {error && (
-        <Alert variant="error">
-          <TriangleAlert aria-hidden />
-          <span>{error}</span>
-        </Alert>
-      )}
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarClock aria-hidden className="size-4 text-accent" />
+                You&apos;re in {from.year}
+                {from.name ? ` (${from.name})` : ""}
+              </CardTitle>
+              <CardDescription>
+                Everything sent and answered right now is filed under{" "}
+                {from.year}. Starting a new year files it under the next one
+                instead. Everything on this page is what would happen — nothing
+                has changed yet.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <YearNameEditor year={from.year} name={from.name ?? null} />
+            </CardContent>
+          </Card>
 
-      <Card className="flex flex-col gap-1 p-4">
-        <div className="flex items-center gap-2">
-          <CalendarClock aria-hidden className="size-4 text-primary" />
-          <h2 className="text-lg font-semibold">
-            You&apos;re in {from.year}
-            {from.name ? ` (${from.name})` : ""}
-          </h2>
+          <PlanSection
+            title="Will be asked again"
+            summary={`Each one starts on a blank form. Everyone's ${from.year} answers stay readable.`}
+            entries={plan.reGate}
+            showCounts
+            icon={<RefreshCw className="size-4" />}
+          />
+
+          <PlanSection
+            title="Will stay as they are"
+            summary="Anyone who already answered stays done. Anyone who hasn't is still being asked, exactly as they are today."
+            entries={plan.carriesOver}
+            icon={<Check className="size-4" />}
+          />
+
+          <PlanSection
+            title="Not being asked right now"
+            summary="Nothing happens to these. Send the ones you want yourself."
+            entries={plan.notSent}
+            icon={<Check className="size-4" />}
+          />
         </div>
-        <p className="text-sm text-muted-foreground">
-          Everything sent and answered right now is filed under {from.year}.
-          Starting a new year files it under the next one instead. Everything
-          below is what would happen — nothing has changed yet.
-        </p>
-        <YearNameEditor year={from.year} name={from.name ?? null} />
-      </Card>
 
-      <PlanSection
-        title="Will be asked again"
-        summary={`Each one starts on a blank form. Everyone's ${from.year} answers stay readable.`}
-        entries={plan.reGate}
-        showCounts
-        icon={<RefreshCw className="size-4" />}
-      />
+        <div className="flex flex-col gap-6">
+          {/* As prominent as the change lists — deliberately. It heads the side
+              column, level with the first of them. */}
+          <Card className="border-success/40">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Nothing else changes</CardTitle>
+              <CardDescription>
+                Everything in this list is left exactly as it is.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="flex flex-col gap-2">
+                {plan.untouched.map((line) => (
+                  <li key={line} className="flex items-start gap-2 text-sm">
+                    <ShieldCheck
+                      aria-hidden
+                      className="mt-0.5 size-4 shrink-0 text-success"
+                    />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
 
-      <PlanSection
-        title="Will stay as they are"
-        summary="Anyone who already answered stays done. Anyone who hasn't is still being asked, exactly as they are today."
-        entries={plan.carriesOver}
-        icon={<Check className="size-4" />}
-      />
-
-      <PlanSection
-        title="Not being asked right now"
-        summary="Nothing happens to these. Send the ones you want yourself."
-        entries={plan.notSent}
-        icon={<Check className="size-4" />}
-      />
-
-      {/* As prominent as the change lists above — deliberately. */}
-      <Card className="flex flex-col gap-3 p-4">
-        <SectionHeader
-          as="h3"
-          title="Nothing else changes"
-          description="Everything in this list is left exactly as it is."
-        />
-        <ul className="flex flex-col gap-2">
-          {plan.untouched.map((line) => (
-            <li key={line} className="flex items-start gap-2 text-sm">
-              <ShieldCheck
-                aria-hidden
-                className="mt-0.5 size-4 shrink-0 text-success"
-              />
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-      </Card>
-
-      {!confirming ? (
-        <Button type="button" onClick={() => setConfirming(true)}>
-          Start a new year
-        </Button>
-      ) : (
-        <Card className="flex flex-col gap-4 p-4">
-          <SectionHeader
-            as="h3"
-            title="Start a new year"
-            description="Type the year the camp is moving to, then type it again to confirm."
-          />
-
-          <InputField
-            label="The new year"
-            helper={`Usually ${from.year + 1}. Type a later one if the camp skipped a burn.`}
-            error={
-              tooEarly
-                ? `The camp is already in ${from.year}. A new year has to be later.`
-                : undefined
-            }
-            value={year}
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={4}
-            autoFocus
-            onChange={(event) => setYear(digits(event.target.value))}
-          />
-
-          <InputField
-            label={
-              isYear(year) && !tooEarly
-                ? `Type ${year} again to confirm`
-                : "Type the year again to confirm"
-            }
-            value={confirm}
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={4}
-            disabled={!isYear(year) || tooEarly}
-            onChange={(event) => setConfirm(digits(event.target.value))}
-          />
-
-          {plan.duesPaidCount > 0 && (
-            <AckRow
-              id="reset-dues"
-              checked={resetDues}
-              onCheckedChange={(checked) => setResetDues(checked === true)}
-            >
-              Clear the dues tick for{" "}
-              {plural(plan.duesPaidCount, "member", "members")}
-              <span className="block text-caption text-muted-foreground">
-                They&apos;ll show as unpaid for the new year. Who was cleared is
-                written into the receipt.
-              </span>
-            </AckRow>
-          )}
-
-          <div className="flex flex-col gap-3">
-            <AckRow
-              id="announce"
-              checked={announce}
-              onCheckedChange={(checked) => setAnnounce(checked === true)}
-            >
-              Also post an announcement to everyone
-              <span className="block text-caption text-muted-foreground">
-                It lands full-screen, and each person taps to acknowledge it.
-              </span>
-            </AckRow>
-
-            {announce && (
-              <div className="flex flex-col gap-3 pl-7">
+          {!confirming ? (
+            <Button type="button" onClick={() => setConfirming(true)}>
+              Start a new year
+            </Button>
+          ) : (
+            <Card className="border-accent/40">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base">Start a new year</CardTitle>
+                <CardDescription>
+                  Type the year the camp is moving to, then type it again to
+                  confirm.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
                 <InputField
-                  label="Announcement title"
-                  value={announceTitle}
-                  maxLength={120}
-                  placeholder="A new year at Camp 404"
-                  onChange={(event) => setAnnounceTitle(event.target.value)}
+                  label="The new year"
+                  helper={`Usually ${from.year + 1}. Type a later one if the camp skipped a burn.`}
+                  error={
+                    tooEarly
+                      ? `The camp is already in ${from.year}. A new year has to be later.`
+                      : undefined
+                  }
+                  value={year}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={4}
+                  autoFocus
+                  onChange={(event) => setYear(digits(event.target.value))}
                 />
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="announce-body">What it says</Label>
-                  <Textarea
-                    id="announce-body"
-                    value={announceBody}
-                    maxLength={2000}
-                    placeholder="We've started a new year. A few questionnaires will ask you again — everything else is as you left it."
-                    onChange={(event) => setAnnounceBody(event.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              onClick={advance}
-              disabled={pending || !canAdvance}
-            >
-              {pending && (
-                <Loader2 aria-hidden className="size-4 animate-spin" />
-              )}
-              Start {isYear(year) && !tooEarly ? year : "the new year"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={() => {
-                setConfirming(false);
-                setError(null);
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </Card>
-      )}
+                <InputField
+                  label={
+                    isYear(year) && !tooEarly
+                      ? `Type ${year} again to confirm`
+                      : "Type the year again to confirm"
+                  }
+                  value={confirm}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={4}
+                  disabled={!isYear(year) || tooEarly}
+                  onChange={(event) => setConfirm(digits(event.target.value))}
+                />
+
+                {plan.duesPaidCount > 0 && (
+                  <AckRow
+                    id="reset-dues"
+                    checked={resetDues}
+                    onCheckedChange={(checked) =>
+                      setResetDues(checked === true)
+                    }
+                  >
+                    Clear the dues tick for{" "}
+                    {plural(plan.duesPaidCount, "member", "members")}
+                    <span className="block text-xs text-muted-foreground">
+                      They&apos;ll show as unpaid for the new year. Who was
+                      cleared is written into the receipt.
+                    </span>
+                  </AckRow>
+                )}
+
+                <div className="flex flex-col gap-3">
+                  <AckRow
+                    id="announce"
+                    checked={announce}
+                    onCheckedChange={(checked) => setAnnounce(checked === true)}
+                  >
+                    Also post an announcement to everyone
+                    <span className="block text-xs text-muted-foreground">
+                      It lands full-screen, and each person taps to acknowledge
+                      it.
+                    </span>
+                  </AckRow>
+
+                  {announce && (
+                    <div className="flex flex-col gap-3">
+                      <InputField
+                        label="Announcement title"
+                        value={announceTitle}
+                        maxLength={120}
+                        placeholder="A new year at Camp 404"
+                        onChange={(event) =>
+                          setAnnounceTitle(event.target.value)
+                        }
+                      />
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="announce-body">What it says</Label>
+                        <Textarea
+                          id="announce-body"
+                          value={announceBody}
+                          maxLength={2000}
+                          placeholder="We've started a new year. A few questionnaires will ask you again — everything else is as you left it."
+                          onChange={(event) =>
+                            setAnnounceBody(event.target.value)
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {error && (
+                  <Alert variant="error">
+                    <TriangleAlert aria-hidden />
+                    <span>{error}</span>
+                  </Alert>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={advance}
+                    disabled={pending || !canAdvance}
+                  >
+                    {pending && (
+                      <Loader2 aria-hidden className="size-4 animate-spin" />
+                    )}
+                    Start {isYear(year) && !tooEarly ? year : "the new year"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => {
+                      setConfirming(false);
+                      setError(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

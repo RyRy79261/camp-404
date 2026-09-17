@@ -104,9 +104,9 @@ describe("MemberProfile — team assignment", () => {
     await waitFor(() =>
       expect(screen.getByRole("checkbox", { name: "Kitchen" })).toBeTruthy(),
     );
-    expect(
-      (screen.getByRole("switch") as HTMLElement).dataset.state,
-    ).toBe("checked");
+    expect((screen.getByRole("switch") as HTMLElement).dataset.state).toBe(
+      "checked",
+    );
   });
 
   it("offers no lead switch until the member is actually on the team", async () => {

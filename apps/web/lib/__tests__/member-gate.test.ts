@@ -139,7 +139,11 @@ describe("requireMemberPage", () => {
 
   it("returns the viewer when nothing blocks them", async () => {
     await expect(requireMemberPage()).resolves.toEqual({
-      authUser: { id: "auth-1", primaryEmail: "a@example.com", displayName: "A" },
+      authUser: {
+        id: "auth-1",
+        primaryEmail: "a@example.com",
+        displayName: "A",
+      },
       campUser,
     });
     expect(redirect).not.toHaveBeenCalled();

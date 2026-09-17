@@ -6,8 +6,9 @@ import { Button } from "@camp404/ui/components/button";
 // browser until someone asks for the file. Used by questionnaire responses and
 // the member roster.
 //
-// A plain <a>, not next/link: the target is a file download, not a page, so
-// there is nothing to prefetch or client-navigate to.
+// A plain <a download>, not next/link (as AfrikaBurn's placement export): the
+// target is a file download, not a page, so there is nothing to prefetch or
+// client-navigate to. The route's Content-Disposition names the file.
 
 export function ExportCsvButton({
   href,
@@ -26,7 +27,7 @@ export function ExportCsvButton({
   }
   return (
     <Button asChild variant="outline" size="sm">
-      <a href={href}>
+      <a href={href} download>
         <Download className="h-4 w-4" aria-hidden />
         Export CSV
       </a>

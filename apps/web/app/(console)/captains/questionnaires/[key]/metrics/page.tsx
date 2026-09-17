@@ -1,7 +1,7 @@
 import { ClipboardList } from "lucide-react";
 import { aggregateQuestions } from "@camp404/core";
+import { Card, CardContent } from "@camp404/ui/components/card";
 import { EmptyState } from "@camp404/ui/components/empty-state";
-import { StatTile } from "@camp404/ui/components/stat-tile";
 import { MetricCard, OrphanCard } from "./metric-card";
 import { ReminderButton } from "./reminder-button";
 import {
@@ -60,37 +60,57 @@ export default async function MetricsPage({
     view.questions,
     respondents.map((r) => r.responses),
   );
+  const kpis: { label: string; value: string | number }[] = [
+    { label: "Answered", value: summary.respondents },
+    { label: "Still to answer", value: summary.outstanding },
+    // A send with no gates recorded has no reach to show, not a reach of 0.
+    { label: "Sent to", value: summary.sent > 0 ? summary.sent : "—" },
+    {
+      label: "Complete",
+      value:
+        summary.completionPercent === null
+          ? "—"
+          : `${summary.completionPercent}%`,
+    },
+  ];
 
   return (
     <ResultsShell view={view} viewName="metrics">
-      <div className="grid grid-cols-2 gap-3">
-        <StatTile
-          compact
-          label="Answered"
-          value={summary.respondents}
-          icon={<ClipboardList className="h-3.5 w-3.5" aria-hidden />}
-        />
-        <StatTile compact label="Still to answer" value={summary.outstanding} />
-      </div>
+      {/* The AfrikaBurn console's KPI cards. */}
+      <section
+        aria-label="Answers at a glance"
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      >
+        {kpis.map((kpi) => (
+          <Card key={kpi.label}>
+            <CardContent className="flex flex-col gap-1 p-5">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {kpi.label}
+              </span>
+              <span className="text-3xl font-bold tabular-nums">
+                {kpi.value}
+              </span>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
 
-      <p className="mt-3 text-xs text-muted-foreground">
-        {summary.sent > 0
-          ? `Sent to ${summary.sent} ${summary.sent === 1 ? "member" : "members"}${
-              summary.completionPercent === null
-                ? ""
-                : ` · ${summary.completionPercent}% complete`
-            }.`
-          : "Reach isn't recorded for this send."}
-        {summary.inProgress > 0 &&
-          ` ${summary.inProgress} started and haven't finished — their part-answers aren't counted below.`}
-        {/*
-          §7.1: required_actions keeps one row per (member, questionnaire), so a
-          re-send overwrites the previous send's reach in place. The answers
-          survive — the count of who was asked does not.
-        */}
-        {summary.reachIsPartial &&
-          " Some answers here came from an earlier send this year, which the numbers above can't account for."}
-      </p>
+      {(summary.sent === 0 ||
+        summary.inProgress > 0 ||
+        summary.reachIsPartial) && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          {summary.sent === 0 && "Reach isn't recorded for this send."}
+          {summary.inProgress > 0 &&
+            ` ${summary.inProgress} started and haven't finished — their part-answers aren't counted below.`}
+          {/*
+            §7.1: required_actions keeps one row per (member, questionnaire), so a
+            re-send overwrites the previous send's reach in place. The answers
+            survive — the count of who was asked does not.
+          */}
+          {summary.reachIsPartial &&
+            " Some answers here came from an earlier send this year, which the numbers above can't account for."}
+        </p>
+      )}
 
       {/*
         §7.4: the nudge, and only while a send is actually OPEN. A closed send

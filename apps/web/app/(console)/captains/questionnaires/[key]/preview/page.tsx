@@ -1,9 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
+import { Pencil } from "lucide-react";
 import { canViewBuilderDefinition } from "@camp404/core";
+import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { Card, CardContent } from "@camp404/ui/components/card";
+import { PageHeading } from "@camp404/ui/components/page-heading";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
@@ -15,7 +18,8 @@ export const metadata = { title: "Questionnaire preview — Camp 404" };
 
 // Author preview — the real runner driven from empty answers, no persistence,
 // no side-effects (BuilderPreview). Team-lead+ only: a lower rank gets the
-// locked page chrome (preview-but-locked, D3) and no definition is read.
+// locked page (preview-but-locked, D3) and no definition is read. The form sits
+// in a card at the width a member reads it, like the AfrikaBurn fill page.
 export default async function BuilderPreviewPage({
   params,
 }: {
@@ -23,21 +27,21 @@ export default async function BuilderPreviewPage({
 }) {
   const { key } = await params;
   const { campUser, rank, cleared } = await captainPageGate("team_lead");
-  const chrome = (children: ReactNode) => (
-    <main className="mx-auto max-w-2xl px-4 py-6">
-      <GhostBack
-        linkAs={Link}
-        href={`/captains/questionnaires/${key}`}
-        className="-ml-2 mb-4"
-      >
-        Back to editor
-      </GhostBack>
+  const chrome = (title: string, children: ReactNode, actions?: ReactNode) => (
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow="Questionnaires / Preview"
+        title={title}
+        description="What members see. Nothing you enter here is saved or sent."
+        actions={actions}
+      />
       {children}
-    </main>
+    </div>
   );
 
   if (!cleared) {
     return chrome(
+      "Preview",
       <CaptainLock
         title="Team leads and captains only"
         message="Questionnaire previews are for team leads and captains."
@@ -55,5 +59,18 @@ export default async function BuilderPreviewPage({
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  return chrome(<BuilderPreview questionnaire={definition} />);
+  return chrome(
+    definition.title,
+    <Card className="w-full max-w-2xl">
+      <CardContent className="flex flex-col p-6">
+        <BuilderPreview questionnaire={definition} />
+      </CardContent>
+    </Card>,
+    <Button asChild variant="outline">
+      <Link href={`/captains/questionnaires/${key}`}>
+        <Pencil aria-hidden />
+        Back to editor
+      </Link>
+    </Button>,
+  );
 }

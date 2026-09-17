@@ -1,10 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
+import { ChevronRight } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
+import { Card } from "@camp404/ui/components/card";
 import { EmptyState } from "@camp404/ui/components/empty-state";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { PageHeading } from "@camp404/ui/components/page-heading";
 import {
   cycleLabel,
   loadResults,
@@ -27,9 +29,9 @@ const COMPLETED = new Intl.DateTimeFormat("en-GB", {
 });
 
 // One member's answers to one questionnaire in one year (§7.3, "per-respondent
-// detail view"). Same gate and same year resolution as the table it is reached
-// from — a deep link into this page is captain-checked on its own, not on the
-// strength of having come from the list.
+// detail view"), as a card of question-and-answer rows. Same gate and same year
+// resolution as the table it is reached from — a deep link into this page is
+// captain-checked on its own, not on the strength of having come from the list.
 export default async function RespondentPage({
   params,
   searchParams,
@@ -54,13 +56,26 @@ export default async function RespondentPage({
   const backHref = `/captains/questionnaires/${key}/responses?cycle=${view.cycle}`;
   const year = cycleLabel(view.cycle, view.currentCycle, view.cycleNames);
 
+  // A detail page under a list the nav can't reach, so it carries the
+  // AfrikaBurn console's breadcrumb (as on its registration detail page).
   const chrome = (children: ReactNode) => (
-    <main className="mx-auto max-w-lg px-4 py-6">
-      <GhostBack linkAs={Link} href={backHref} className="-ml-2 mb-4">
-        All answers
-      </GhostBack>
+    <div className="flex flex-col">
+      <nav
+        aria-label="Breadcrumb"
+        className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground"
+      >
+        <Link href="/captains/questionnaires" className="hover:text-foreground">
+          Questionnaires
+        </Link>
+        <ChevronRight className="h-3.5 w-3.5 opacity-60" aria-hidden />
+        <Link href={backHref} className="hover:text-foreground">
+          {view.title}
+        </Link>
+        <ChevronRight className="h-3.5 w-3.5 opacity-60" aria-hidden />
+        <span className="text-foreground">{respondent?.name ?? "Member"}</span>
+      </nav>
       {children}
-    </main>
+    </div>
   );
 
   // A member with no finished answers IN THIS YEAR is not an error — they may
@@ -68,10 +83,13 @@ export default async function RespondentPage({
   // came up empty rather than 404ing the whole page.
   if (!respondent) {
     return chrome(
-      <EmptyState
-        title="No answers this year"
-        description={`This member hasn't finished ${view.title} in ${year}.`}
-      />,
+      <>
+        <PageHeading title="Answers" />
+        <EmptyState
+          title="No answers this year"
+          description={`This member hasn't finished ${view.title} in ${year}.`}
+        />
+      </>,
     );
   }
 
@@ -82,36 +100,39 @@ export default async function RespondentPage({
 
   return chrome(
     <>
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold">{respondent.name}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {view.title} · {year} · finished{" "}
-          {COMPLETED.format(respondent.completedAt)}
-        </p>
-        {respondent.definitionVersion && (
-          <Badge variant="outline" className="mt-2">
-            answered version {respondent.definitionVersion}
-          </Badge>
-        )}
-      </header>
+      <PageHeading
+        title={respondent.name}
+        description={`${view.title} · ${year} · finished ${COMPLETED.format(respondent.completedAt)}`}
+        actions={
+          respondent.definitionVersion ? (
+            <Badge variant="outline">
+              answered version {respondent.definitionVersion}
+            </Badge>
+          ) : undefined
+        }
+      />
 
-      <dl className="flex flex-col gap-4">
-        {columns.map((column) => (
-          <div key={column.id} className="rounded-xl border bg-card/40 p-4">
-            <dt className="flex items-start justify-between gap-3 text-sm font-medium">
-              <span className="min-w-0 flex-1 break-words">{column.label}</span>
-              {!column.question && (
-                <Badge variant="warning" className="shrink-0">
-                  removed
-                </Badge>
-              )}
-            </dt>
-            <dd className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
-              {formatAnswer(column, respondent.responses) || "—"}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <Card className="max-w-3xl">
+        <dl className="flex flex-col divide-y divide-border">
+          {columns.map((column) => (
+            <div key={column.id} className="flex flex-col gap-1 p-5">
+              <dt className="flex items-start justify-between gap-3 text-sm font-medium">
+                <span className="min-w-0 flex-1 break-words">
+                  {column.label}
+                </span>
+                {!column.question && (
+                  <Badge variant="warning" className="shrink-0">
+                    removed
+                  </Badge>
+                )}
+              </dt>
+              <dd className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                {formatAnswer(column, respondent.responses) || "—"}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
     </>,
   );
 }

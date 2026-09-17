@@ -6,11 +6,17 @@ import {
   type MemberQuestionnaireStatus,
 } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
 
-// Where each of a member's questionnaires stands, on the captain's member
-// panel (docs/questionnaire-builder.md §9 Phase E). The board draws only the
-// "Outstanding: N to complete" line; this list is built from the panel's own
-// parts (the section heading the answers use, Badge) and sits right under it.
+// Where each of a member's questionnaires stands, a card in the captain's
+// member profile (docs/questionnaire-builder.md §9 Phase E). A divided list of
+// title, due or finish date and a status badge, like the AfrikaBurn console's
+// member list.
 
 const STATUS: Record<
   MemberQuestionnaireStatus,
@@ -53,42 +59,44 @@ export function MemberQuestionnaires({
   questionnaires: MemberQuestionnaire[];
 }) {
   return (
-    <div className="flex flex-col gap-3">
-      <h3 className="font-mono text-micro font-bold uppercase tracking-wide text-muted-foreground">
-        Questionnaires
-      </h3>
-      {questionnaires.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Nothing has been sent to them yet.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {questionnaires.map((q) => {
-            const status = STATUS[q.status];
-            const detail = detailFor(q);
-            return (
-              <li
-                key={q.key}
-                className="flex items-center justify-between gap-3 rounded-md border bg-muted px-3 py-2"
-              >
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate font-mono text-sm text-foreground">
-                    {q.title}
-                  </span>
-                  {detail && (
-                    <span className="font-mono text-caption text-muted-foreground">
-                      {detail}
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Questionnaires</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {questionnaires.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing has been sent to them yet.
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border">
+            {questionnaires.map((q) => {
+              const status = STATUS[q.status];
+              const detail = detailFor(q);
+              return (
+                <li
+                  key={q.key}
+                  className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                >
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {q.title}
                     </span>
-                  )}
-                </div>
-                <Badge variant={status.variant} className="shrink-0">
-                  {status.label}
-                </Badge>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+                    {detail && (
+                      <span className="text-xs text-muted-foreground">
+                        {detail}
+                      </span>
+                    )}
+                  </div>
+                  <Badge variant={status.variant} className="shrink-0">
+                    {status.label}
+                  </Badge>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }

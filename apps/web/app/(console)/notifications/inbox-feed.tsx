@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { groupByDay, NOTIFICATION_FALLBACK_LINK } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
+import { Card, CardContent } from "@camp404/ui/components/card";
 import { Spinner } from "@camp404/ui/components/spinner";
 import type { InboxItem } from "@/lib/notifications";
 import { loadOlderNotificationsAction } from "./actions";
 import { NotificationRow } from "./notification-row";
 
-// The inbox list: notifications under camp-day headings, newest first. The
-// server renders the first page; older pages load when the member scrolls near
+// The inbox list: notifications under camp-day headings, newest first, each
+// day in its own card (the AfrikaBurn console inbox). The server renders the
+// first page; older pages load when the member scrolls near
 // the end (owner's call, 2026-09-16: page the inbox, load more as you scroll).
 // A "Load older" button does the same for anyone who cannot scroll it into view.
 
@@ -81,34 +83,38 @@ export function InboxFeed({
   const groups = groupByDay(items, now);
 
   return (
-    <div className="flex flex-col gap-5 px-4 pb-5 pt-2">
+    <div className="flex flex-col gap-6">
       {groups.map((group) => (
         <section
           key={group.key}
           aria-labelledby={`inbox-day-${group.key}`}
-          className="flex flex-col gap-3"
+          className="flex flex-col gap-2"
         >
           <h2
             id={`inbox-day-${group.key}`}
-            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground"
           >
             {group.label}
           </h2>
-          <ul className="flex flex-col gap-3">
-            {group.items.map((item) => (
-              <NotificationRow
-                key={item.id}
-                presentation={item.presentation}
-                title={item.title}
-                body={item.body}
-                senderName={item.senderName}
-                isNew={item.readAt === null}
-                acknowledgedAt={item.acknowledgedAt}
-                createdAt={item.createdAt}
-                href={linkFor(item)}
-              />
-            ))}
-          </ul>
+          <Card>
+            <CardContent className="p-1">
+              <ul className="flex flex-col">
+                {group.items.map((item) => (
+                  <NotificationRow
+                    key={item.id}
+                    presentation={item.presentation}
+                    title={item.title}
+                    body={item.body}
+                    senderName={item.senderName}
+                    isNew={item.readAt === null}
+                    acknowledgedAt={item.acknowledgedAt}
+                    createdAt={item.createdAt}
+                    href={linkFor(item)}
+                  />
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         </section>
       ))}
 
@@ -123,7 +129,6 @@ export function InboxFeed({
             type="button"
             variant="outline"
             size="sm"
-            className="gap-2"
             onClick={() => void loadOlder()}
             disabled={loading}
           >

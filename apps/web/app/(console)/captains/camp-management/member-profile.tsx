@@ -1,8 +1,15 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, RotateCcw, Shield, UserX, X } from "lucide-react";
+import {
+  Check,
+  Lock,
+  RotateCcw,
+  Shield,
+  ShieldAlert,
+  UserX,
+} from "lucide-react";
 import {
   REVIEW_TARGET,
   availableReviewActions,
@@ -13,9 +20,19 @@ import type { MemberQuestionnaire } from "@camp404/core";
 import type { ApprovalStatus } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
-import { Divider } from "@camp404/ui/components/divider";
-import { Skeleton, SkeletonRegion } from "@camp404/ui/components/skeleton";
+import {
+  Skeleton,
+  SkeletonRegion,
+  SkeletonText,
+} from "@camp404/ui/components/skeleton";
 import { Spinner } from "@camp404/ui/components/spinner";
 import type { RosterRow } from "@/lib/camp-roster";
 import { approvalSummary } from "@/lib/approval-summary";
@@ -31,21 +48,22 @@ import { AssignCaptainDialog } from "./assign-captain-dialog";
 import { MemberNotes } from "./member-notes";
 import { RejectConfirmDialog } from "./reject-confirm-dialog";
 import { MemberQuestionnaires } from "./member-questionnaires";
-import { RoleBadge, RosterAvatar, TeamBadge } from "./roster-presentation";
+import { ProfileHead } from "./roster-presentation";
 import { TeamAssignment } from "./team-assignment";
 
-// Inline member profile (board S17 MemberProfile). A row selection expands this
-// panel below the roster (not a modal). The head paints instantly from the row;
-// the detail (decrypted ID, grouped questionnaire answers, promotion state)
-// loads via the captain-gated server action. KEEPS the modal's fetch-with-cancel
-// + optimistic decide() + router.refresh() from the previous MemberModal.
+// The captain's member profile, laid out like the AfrikaBurn registration
+// review: a header, then the member's record in cards down a main column and
+// the decision, rank and team controls in a sticky side column. A row
+// selection opens it inline below the roster (not a modal). The head paints
+// instantly from the row; the detail (decrypted ID, grouped questionnaire
+// answers, promotion state) loads via the captain-gated server action. KEEPS
+// the fetch-with-cancel + optimistic decide() + router.refresh() from the
+// previous MemberModal.
 //
-// The decision panel renders every vetting decision that exists from the
+// The decision card renders every vetting decision that exists from the
 // member's status (owner's call, 2026-09-16: approve, reject, and reverse or
 // re-open either), straight from the server's `reviewOptions`. A refused
-// decision stays visible, disabled, with the server's sentence beside it. The
-// board draws only Approve / Reject on a pending applicant; the rest reuses
-// those buttons.
+// decision stays visible, disabled, with the server's sentence beside it.
 
 type DetailState =
   | { state: "loading" }
@@ -79,20 +97,21 @@ const STATUS_BADGE: Record<
   rejected: { variant: "destructive", label: "Rejected" },
 };
 
+/** A definition list of read-only fields (AfrikaBurn's `FieldList`). */
 function FieldGrid({ items }: { items: DetailItem[] }) {
   if (items.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">Nothing recorded.</p>
-    );
+    return <p className="text-sm text-muted-foreground">Nothing recorded.</p>;
   }
   return (
-    <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
       {items.map((item, i) => (
-        <div key={`${item.label}-${i}`} className="flex flex-col gap-1">
-          <dt className="font-mono text-micro font-semibold text-muted-foreground">
+        <div key={`${item.label}-${i}`}>
+          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {item.label}
           </dt>
-          <dd className="text-sm text-foreground">{item.value}</dd>
+          <dd className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+            {item.value}
+          </dd>
         </div>
       ))}
     </dl>
@@ -277,8 +296,7 @@ export function MemberProfile({
   }
 
   const member = detail.state === "loaded" ? detail.member : null;
-  const canAssignCaptain =
-    detail.state === "loaded" && detail.canAssignCaptain;
+  const canAssignCaptain = detail.state === "loaded" && detail.canAssignCaptain;
   const promotionStep =
     detail.state === "loaded"
       ? detail.promotionStep
@@ -341,187 +359,186 @@ export function MemberProfile({
       ref={panelRef}
       tabIndex={-1}
       aria-label={`${row.displayName} profile`}
-      className="flex flex-col gap-5 rounded-lg border bg-card p-5 outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200 sm:p-6"
+      className="flex scroll-mt-24 flex-col gap-6 border-t pt-8 outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200"
     >
-      {/* PanelBar: console prompt + record index + close. */}
-      <div className="flex items-center gap-2 border-b pb-3.5">
-        <span aria-hidden className="font-mono text-sm font-bold text-accent">
-          {">"}
-        </span>
-        <span className="flex-1 truncate font-mono text-caption text-muted-foreground">
-          {row.displayName.toLowerCase()} · profile
-        </span>
-        <span className="font-mono text-caption font-semibold text-accent">
-          #{String(index).padStart(2, "0")}
-        </span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close profile"
-          className="ml-1 inline-flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <X aria-hidden className="h-4 w-4" />
-        </button>
-      </div>
+      {/* Head — paints from the row instantly. */}
+      <ProfileHead
+        row={row}
+        index={index}
+        teamLabels={teamLabels}
+        badges={
+          status && <Badge variant={status.variant}>{status.label}</Badge>
+        }
+        onClose={onClose}
+      />
 
-      {/* ProfileHead — paints from the row instantly. */}
-      <div className="flex items-start gap-4">
-        <RosterAvatar
-          name={row.displayName}
-          id={row.id}
-          px={64}
-          radius={8}
-        />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <h2 className="font-mono text-2xl font-bold text-foreground">
-            {row.displayName}
-          </h2>
-          {row.handle && (
-            <p className="font-mono text-sm text-muted-foreground">
-              @{row.handle}
-            </p>
-          )}
-          {row.teams.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-              {row.teams.map((team) => (
-                <TeamBadge key={team} team={team} label={teamLabels[team]} />
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          {status && <Badge variant={status.variant}>{status.label}</Badge>}
-          <RoleBadge
-            rank={row.rank}
-            isLead={row.isLead}
-            className="rounded-full bg-muted px-2.5 py-1"
-          />
-        </div>
-      </div>
-
-      {/* Body — loads via the captain-gated action. */}
-      {/* The shape of what is coming (the detail rows, then a section), so
-          the panel does not jump when it arrives. One announcing region. */}
+      {/* Body — loads via the captain-gated action. The shape of what is
+          coming (the record cards, then the side column), so the panel does
+          not jump when it arrives. One announcing region. */}
       {detail.state === "loading" && (
         <SkeletonRegion
           label="Loading profile…"
-          className="flex flex-col gap-4 py-2"
+          className="grid items-start gap-6 lg:grid-cols-3"
         >
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-x-4 gap-y-3">
-            {Array.from({ length: 6 }, (_, i) => (
-              <Fragment key={i}>
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-full max-w-48" />
-              </Fragment>
+          <div className="flex flex-col gap-6 lg:col-span-2">
+            {[6, 3].map((lines) => (
+              <div
+                key={lines}
+                className="rounded-xl border bg-card p-6 shadow-sm"
+              >
+                <Skeleton className="h-4 w-32" />
+                <SkeletonText lines={lines} className="mt-5" />
+              </div>
             ))}
           </div>
-          <Skeleton className="h-5 w-32" />
-          <Skeleton className="h-14 w-full rounded-lg" />
+          <div className="rounded-xl border bg-card p-6 shadow-sm">
+            <Skeleton className="h-4 w-24" />
+            <SkeletonText lines={2} className="mt-5" />
+            <Skeleton className="mt-5 h-9 w-full" />
+          </div>
         </SkeletonRegion>
       )}
       {detail.state === "error" && (
-        <p className="py-8 text-center text-sm text-destructive">
-          {detail.message}
-        </p>
+        <Card>
+          <CardContent className="p-8 text-center text-sm text-destructive">
+            {detail.message}
+          </CardContent>
+        </Card>
       )}
 
       {member && (
-        <>
-          {member.bio && (
-            <p className="whitespace-pre-line text-sm text-foreground">
-              {member.bio}
-            </p>
-          )}
+        <div className="grid items-start gap-6 lg:grid-cols-3">
+          {/* The member's record. */}
+          <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Overview</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-5">
+                {member.bio && (
+                  <p className="whitespace-pre-line text-sm text-foreground">
+                    {member.bio}
+                  </p>
+                )}
+                <FieldGrid items={overviewItems} />
+              </CardContent>
+            </Card>
 
-          <p className="font-mono text-caption text-muted-foreground">
-            {member.approvalSummary}
-          </p>
-
-          <FieldGrid items={overviewItems} />
-
-          {detail.state === "loaded" && (
-            <MemberQuestionnaires questionnaires={detail.questionnaires} />
-          )}
-
-          {member.profileSections.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No questionnaire answers on record yet.
-            </p>
-          ) : (
-            member.profileSections.map((section) => (
-              <div key={section.title} className="flex flex-col gap-3">
-                <h3 className="font-mono text-micro font-bold uppercase tracking-wide text-muted-foreground">
-                  {section.title}
-                </h3>
-                <FieldGrid items={section.items} />
-              </div>
-            ))
-          )}
-
-          <Divider />
-
-          {/* Team assignment — the write path behind every team-scoped
-              broadcast, questionnaire send and roster badge. */}
-          <TeamAssignment
-            userId={row.id}
-            teams={teams}
-            assignableTeams={assignableTeams}
-            teamLabels={teamLabels}
-            onChange={applyTeams}
-          />
-
-          <Divider />
-
-          <MemberNotes
-            userId={row.id}
-            notes={detail.state === "loaded" ? detail.notes : []}
-            onChange={(notes) =>
-              setDetail((prev) =>
-                prev.state === "loaded" ? { ...prev, notes } : prev,
-              )
-            }
-          />
-
-          <Divider />
-
-          {/* Actions — captain decisions + assign-captain. */}
-          <div className="flex flex-col gap-3">
-            {actionError && (
-              <p role="alert" className="text-sm text-destructive">
-                {actionError}
-              </p>
+            {detail.state === "loaded" && (
+              <MemberQuestionnaires questionnaires={detail.questionnaires} />
             )}
-            {reviewOptions.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-col gap-2.5 sm:flex-row">
-                  {reviewOptions.map((option) => (
-                    <DecisionButton
-                      key={option.action}
-                      option={option}
-                      from={member.approvalStatus}
-                      busy={isPending}
-                      onChoose={(action) => void choose(action)}
-                    />
-                  ))}
-                </div>
+
+            {member.profileSections.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center text-sm text-muted-foreground">
+                  No questionnaire answers on record yet.
+                </CardContent>
+              </Card>
+            ) : (
+              member.profileSections.map((section) => (
+                <Card key={section.title}>
+                  <CardHeader>
+                    <CardTitle className="text-base">{section.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <FieldGrid items={section.items} />
+                  </CardContent>
+                </Card>
+              ))
+            )}
+
+            <MemberNotes
+              userId={row.id}
+              notes={detail.state === "loaded" ? detail.notes : []}
+              onChange={(notes) =>
+                setDetail((prev) =>
+                  prev.state === "loaded" ? { ...prev, notes } : prev,
+                )
+              }
+            />
+          </div>
+
+          {/* The action rail — decisions, rank and teams. */}
+          <aside className="flex flex-col gap-6 lg:sticky lg:top-24">
+            <Card className="border-accent/40">
+              <CardHeader>
+                <CardTitle className="text-base">Decision</CardTitle>
+                <CardDescription>{member.approvalSummary}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                {actionError && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {actionError}
+                  </p>
+                )}
+                {reviewOptions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {reviewOptions.map((option) => (
+                      <DecisionButton
+                        key={option.action}
+                        option={option}
+                        from={member.approvalStatus}
+                        busy={isPending}
+                        onChoose={(action) => void choose(action)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No decision is open for this member.
+                  </p>
+                )}
                 {refusals.map((refusal) => (
-                  <p key={refusal} className="text-xs text-muted-foreground">
-                    {refusal}
+                  <p
+                    key={refusal}
+                    className="flex items-start gap-2 text-xs text-muted-foreground"
+                  >
+                    <ShieldAlert
+                      aria-hidden
+                      className="mt-px h-3.5 w-3.5 shrink-0"
+                    />
+                    <span>{refusal}</span>
                   </p>
                 ))}
-              </div>
-            )}
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Lock aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                  Every decision is logged to the audit trail.
+                </p>
+              </CardContent>
+            </Card>
+
             {canAssignCaptain && (
-              <button
-                type="button"
-                onClick={() => setAssignOpen(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-secondary bg-secondary/10 py-3 font-mono text-base font-semibold text-secondary-foreground transition-colors hover:bg-secondary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
-              >
-                <Shield aria-hidden className="h-4 w-4" />
-                Assign captain rank
-              </button>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Captain rank</CardTitle>
+                  <CardDescription>
+                    They accept in their own app before it takes effect.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setAssignOpen(true)}
+                  >
+                    <Shield aria-hidden />
+                    Assign captain rank
+                  </Button>
+                </CardContent>
+              </Card>
             )}
-          </div>
+
+            {/* Team assignment — the write path behind every team-scoped
+                broadcast, questionnaire send and roster badge. */}
+            <TeamAssignment
+              userId={row.id}
+              teams={teams}
+              assignableTeams={assignableTeams}
+              teamLabels={teamLabels}
+              onChange={applyTeams}
+            />
+          </aside>
 
           {confirmDialog}
           <RejectConfirmDialog
@@ -557,7 +574,7 @@ export function MemberProfile({
               onCancelled={markPromotionCancelled}
             />
           )}
-        </>
+        </div>
       )}
     </section>
   );
@@ -581,15 +598,10 @@ function DecisionButton({
       return (
         <Button
           type="button"
-          className="flex-1"
           disabled={disabled}
           onClick={() => onChoose("approve")}
         >
-          {busy ? (
-            <Spinner size="sm" />
-          ) : (
-            <Check aria-hidden className="h-4 w-4" />
-          )}
+          {busy ? <Spinner size="sm" /> : <Check aria-hidden />}
           Approve
         </Button>
       );
@@ -597,12 +609,11 @@ function DecisionButton({
       return (
         <Button
           type="button"
-          variant="outline"
-          className="flex-1"
+          variant="destructive"
           disabled={disabled}
           onClick={() => onChoose("reject")}
         >
-          {from === "approved" && <UserX aria-hidden className="h-4 w-4" />}
+          {from === "approved" && <UserX aria-hidden />}
           {from === "approved" ? "Remove from camp" : "Reject"}
         </Button>
       );
@@ -610,12 +621,11 @@ function DecisionButton({
       return (
         <Button
           type="button"
-          variant="ghost"
-          className="flex-1"
+          variant="outline"
           disabled={disabled}
           onClick={() => onChoose("reopen")}
         >
-          <RotateCcw aria-hidden className="h-4 w-4" />
+          <RotateCcw aria-hidden />
           Move back to pending
         </Button>
       );

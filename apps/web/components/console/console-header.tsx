@@ -7,7 +7,11 @@ import { SignOutLink } from "@/components/auth/sign-out-link";
 import { rankLabel } from "@/lib/camp-roster";
 import { consoleNavFor } from "@/lib/console-nav";
 import { countUnread } from "@/lib/notifications";
-import { getPendingQuestionnaires, isTeamLead, type CampUser } from "@/lib/users";
+import {
+  getPendingQuestionnaires,
+  isTeamLead,
+  type CampUser,
+} from "@/lib/users";
 import { ConsoleNav } from "./console-nav";
 
 /**

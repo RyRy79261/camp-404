@@ -105,18 +105,20 @@ export default async function ResponsesPage({
   ];
 
   return (
-    <ResultsShell view={view} viewName="responses" wide>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {summary.respondents}{" "}
-          {summary.respondents === 1 ? "answer" : "answers"}
-          {summary.inProgress > 0 && ` · ${summary.inProgress} unfinished`}
-        </p>
+    <ResultsShell
+      view={view}
+      viewName="responses"
+      toolbar={
         <ExportCsvButton
           href={responsesCsvHref(view.key, view.cycle)}
           disabled={respondents.length === 0}
         />
-      </div>
+      }
+    >
+      <p className="mb-4 text-sm text-muted-foreground">
+        {summary.respondents} {summary.respondents === 1 ? "answer" : "answers"}
+        {summary.inProgress > 0 && ` · ${summary.inProgress} unfinished`}
+      </p>
 
       {empty ? (
         <EmptyState
@@ -134,13 +136,13 @@ export default async function ResponsesPage({
           getRowKey={(r) => r.userId}
           label="Answers"
           pairLayout="stacked"
-          className="md:rounded-xl md:border md:bg-card/40"
+          className="md:rounded-xl md:border md:bg-card md:shadow-sm"
         />
       )}
 
       {outstanding.length > 0 && (
         <section className="mt-6">
-          <h2 className="text-sm font-semibold">
+          <h2 className="text-sm font-semibold normal-case tracking-normal">
             Still to answer ({outstanding.length})
           </h2>
           <ul className="mt-2 flex flex-wrap gap-2">

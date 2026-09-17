@@ -48,11 +48,7 @@ async function resolveClientOrError(params: AuthorizeParams) {
   }
   const scope = params.scope ?? DEFAULT_SCOPE;
   if (!isAllowedScope(scope)) {
-    return redirectError(
-      params.redirect_uri,
-      "invalid_scope",
-      params.state,
-    );
+    return redirectError(params.redirect_uri, "invalid_scope", params.state);
   }
   return { client, scope };
 }
@@ -187,10 +183,12 @@ export async function POST(req: Request) {
 }
 
 // ---------------------------------------------------------------------------
-// HTML helpers (board S20 — MCP connect). This route emits raw HTML outside the
-// Next/React/Tailwind shell, so the brand tokens are resolved inline as an
-// OKLCH :root block (kept in sync with packages/ui globals.css) and the lucide
-// glyphs are inlined as SVG.
+// HTML helpers. This route emits raw HTML outside the Next/React/Tailwind
+// shell, so the console's tokens are resolved inline as a :root block (kept in
+// sync with packages/ui globals.css: the AfrikaBurn surfaces wearing the Camp
+// 404 magenta accent) and the lucide glyphs are inlined as SVG. The page is the
+// console's auth card: an icon circle and eyebrow over one card. Montserrat
+// can't be loaded here, so it keeps a system stack.
 // ---------------------------------------------------------------------------
 
 function escapeHtml(s: string): string {
@@ -202,12 +200,15 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-// Inlined lucide paths: user, shield, lock (sized by CSS).
+// Inlined lucide paths: user, shield, lock, triangle-alert (sized by CSS).
 const ICON = {
   user: `<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`,
   shield: `<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>`,
   lock: `<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`,
+  alert: `<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>`,
 } as const;
+
+type IconName = keyof typeof ICON;
 
 function svgIcon(inner: string): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
@@ -220,79 +221,93 @@ const SCOPE_COPY: Record<string, string> = {
 
 const THEME_STYLE = `
   :root {
-    --background: oklch(0.15 0.05 295);
-    --foreground: oklch(0.97 0.02 330);
-    --card: oklch(0.26 0.08 295);
-    --card-foreground: oklch(0.97 0.02 330);
-    --muted: oklch(0.22 0.06 295);
-    --muted-foreground: oklch(0.7 0.05 325);
-    --border: oklch(0.35 0.1 305);
-    --primary: oklch(0.65 0.27 340);
-    --primary-foreground: oklch(0.99 0.005 340);
-    --accent: oklch(0.62 0.18 255);
-    --radius: 0.625rem;
+    --background: #17191b;
+    --foreground: #f4f0e8;
+    --card: #1f2326;
+    --card-foreground: #f4f0e8;
+    --muted: #262b2f;
+    --muted-foreground: #adb6b3;
+    --border: #323a3f;
+    --primary: oklch(0.72 0.2 345);
+    --primary-foreground: #17191b;
+    --accent: oklch(0.72 0.2 345);
+    --accent-soft: oklch(0.72 0.2 345 / 0.15);
+    --radius: 0.75rem;
+    --radius-control: 0.375rem;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; min-height: 100dvh; padding: 1.5rem;
+    margin: 0; min-height: 100dvh; padding: 3rem 1.5rem;
     display: flex; align-items: center; justify-content: center;
     background: var(--background); color: var(--foreground);
-    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font: 500 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
-  .shell { width: 100%; max-width: 28rem; display: flex; flex-direction: column; gap: 1.25rem; }
-  h1.title { font-size: 1.625rem; font-weight: 700; margin: 0; }
+  .shell { width: 100%; max-width: 24rem; display: flex; flex-direction: column; gap: 1rem; }
+  .mark { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; text-align: center; }
+  .mark-icon {
+    width: 3rem; height: 3rem; border-radius: 9999px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .mark-icon svg { width: 1.25rem; height: 1.25rem; }
+  .eyebrow {
+    margin: 0; font-family: var(--mono); font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.3em; color: var(--accent);
+  }
+  h1.title {
+    margin: 0; font-size: 1.5rem; line-height: 2rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.01em; color: var(--card-foreground);
+  }
   .card {
-    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem;
+    background: var(--card); color: var(--card-foreground);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;
   }
   .muted { color: var(--muted-foreground); }
   .identity { display: flex; gap: 0.625rem; align-items: center; }
   .avatar {
     width: 2rem; height: 2rem; border-radius: 9999px; flex: none;
     display: flex; align-items: center; justify-content: center;
-    background: oklch(0.65 0.27 340 / 0.18); color: var(--primary);
+    background: var(--accent-soft); color: var(--accent);
   }
-  .avatar svg, .scope-icon svg { width: 1.125rem; height: 1.125rem; }
-  .identity-name { font-size: 1rem; font-weight: 700; color: var(--card-foreground); }
+  .avatar svg, .scope-icon svg { width: 1rem; height: 1rem; }
+  .identity-name { font-size: 0.875rem; font-weight: 600; color: var(--card-foreground); }
   .req-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
-  .req-row .label { font-size: 0.8125rem; color: var(--muted-foreground); }
+  .req-row .label { font-size: 0.875rem; color: var(--muted-foreground); }
   .req-row .value { font-size: 0.875rem; font-weight: 600; color: var(--card-foreground); }
   .scope-row {
     display: flex; gap: 0.75rem; align-items: center; padding: 0.75rem;
-    border-radius: var(--radius); background: var(--muted);
+    border-radius: 0.5rem; background: var(--muted);
   }
   .scope-icon {
-    width: 2.125rem; height: 2.125rem; border-radius: 0.5rem; flex: none;
+    width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex: none;
     display: flex; align-items: center; justify-content: center;
-    background: oklch(0.62 0.18 255 / 0.15); color: var(--accent);
+    background: var(--accent-soft); color: var(--accent);
   }
   .scope-text { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; }
-  .scope-name {
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.8125rem; font-weight: 600; color: var(--card-foreground);
-  }
+  .scope-name { font-family: var(--mono); font-size: 0.75rem; color: var(--card-foreground); }
   .scope-desc { font-size: 0.75rem; color: var(--muted-foreground); }
   form { margin: 0; }
   .btn-row { display: flex; gap: 0.75rem; }
   .btn {
-    flex: 1; padding: 0.8125rem 1rem; border-radius: var(--radius);
-    font-size: 0.9375rem; font-weight: 600; cursor: pointer; border: 1px solid;
-    font-family: inherit;
+    flex: 1; height: 2.75rem; padding: 0 1rem; border-radius: var(--radius-control);
+    font-family: inherit; font-size: 0.875rem; font-weight: 500; cursor: pointer; border: 1px solid;
   }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .btn-primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
-  .btn-outline { background: transparent; color: var(--foreground); border-color: var(--border); }
-  .gate { background: var(--muted); align-items: center; text-align: center; gap: 0.875rem; }
-  .lock-wrap {
-    width: 2.5rem; height: 2.5rem; border-radius: 9999px; background: var(--card);
-    color: var(--muted-foreground); display: flex; align-items: center; justify-content: center;
+  .btn-outline { background: var(--background); color: var(--foreground); border-color: var(--border); }
+  .gate-text { font-size: 0.875rem; color: var(--muted-foreground); margin: 0; }
+  .err-title {
+    margin: 0; font-size: 1.125rem; line-height: 1.75rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.01em;
   }
-  .lock-wrap svg { width: 1.25rem; height: 1.25rem; }
-  .gate-text { font-size: 0.8125rem; color: var(--card-foreground); margin: 0; }
-  .err-title { font-size: 1.25rem; font-weight: 700; margin: 0 0 0.25rem; }
-  .err-desc { margin: 0; color: var(--muted-foreground); }
+  .card.tight { gap: 0.375rem; }
+  .err-desc { margin: 0; font-size: 0.875rem; color: var(--muted-foreground); }
 `;
 
-function htmlDoc(title: string, inner: string): string {
+function htmlDoc(title: string, icon: IconName, inner: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -301,7 +316,13 @@ function htmlDoc(title: string, inner: string): string {
   <title>${escapeHtml(title)}</title>
   <style>${THEME_STYLE}</style>
 </head>
-<body><div class="shell">${inner}</div></body>
+<body><main class="shell">
+  <div class="mark">
+    <span class="mark-icon">${svgIcon(ICON[icon])}</span>
+    <p class="eyebrow">Camp 404</p>
+  </div>
+  ${inner}
+</main></body>
 </html>`;
 }
 
@@ -328,8 +349,8 @@ function consentHtml(opts: {
   const scopeDesc = SCOPE_COPY[opts.scope] ?? "Access your camp data";
 
   const inner = `
-    <h1 class="title">Connect Claude</h1>
     <div class="card">
+      <h1 class="title">Connect Claude</h1>
       <div class="identity">
         <span class="avatar">${svgIcon(ICON.user)}</span>
         <span class="identity-name">Signed in as ${escapeHtml(opts.displayName)}</span>
@@ -356,23 +377,25 @@ function consentHtml(opts: {
 
   return htmlResponse(
     200,
-    htmlDoc(`Connect ${opts.clientName} — Camp 404`, inner),
+    htmlDoc(`Connect ${opts.clientName} — Camp 404`, "shield", inner),
   );
 }
 
-/** The board-styled 403 gate card (pending_approval). */
+/** The 403 gate card (pending_approval), under a lock. */
 function gateCardHtml(description: string): NextResponse {
   const inner = `
-    <h1 class="title">Connect Claude</h1>
-    <div class="card gate">
-      <span class="lock-wrap">${svgIcon(ICON.lock)}</span>
+    <div class="card">
+      <h1 class="title">Connect Claude</h1>
       <p class="gate-text">${escapeHtml(description)}</p>
     </div>`;
-  return htmlResponse(403, htmlDoc("Approval needed — Camp 404", inner));
+  return htmlResponse(
+    403,
+    htmlDoc("Approval needed — Camp 404", "lock", inner),
+  );
 }
 
-/** Route a gate denial: the board styles pending_approval as a lock card; the
- * other gate failures fall back to the generic themed error page. */
+/** Route a gate denial: pending_approval is the lock card; the other gate
+ * failures fall back to the generic themed error page. */
 function denialResponse(denied: McpAccessDenial): NextResponse {
   if (denied.error === "pending_approval") {
     return gateCardHtml(denied.description);
@@ -400,7 +423,10 @@ function htmlRedirect(target: string): NextResponse {
   });
 }
 
-function buildRedirectUrl(base: string, params: Record<string, string>): string {
+function buildRedirectUrl(
+  base: string,
+  params: Record<string, string>,
+): string {
   const url = new URL(base);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   return url.toString();
@@ -426,9 +452,9 @@ function errorPage(
 ): NextResponse {
   const pretty = error.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
   const inner = `
-    <div class="card">
+    <div class="card tight">
       <h1 class="err-title">${escapeHtml(pretty)}</h1>
       <p class="err-desc">${escapeHtml(description)}</p>
     </div>`;
-  return htmlResponse(status, htmlDoc(`${pretty} — Camp 404`, inner));
+  return htmlResponse(status, htmlDoc(`${pretty} — Camp 404`, "alert", inner));
 }

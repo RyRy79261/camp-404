@@ -5,7 +5,7 @@ import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import { getOpenActivationForKey } from "@camp404/db/questionnaire-lifecycle";
 import { Alert } from "@camp404/ui/components/alert";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { PageHeading } from "@camp404/ui/components/page-heading";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getLeadTeams } from "@/lib/users";
 import {
@@ -17,11 +17,7 @@ import {
 } from "@/lib/camp-config";
 import { getCampManagementRoster } from "@/lib/roster";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
-import {
-  SendForm,
-  type AudienceOption,
-  type MemberOption,
-} from "./send-form";
+import { SendForm, type AudienceOption, type MemberOption } from "./send-form";
 
 // The scopes this screen offers a captain, in picker order. `drivers` is
 // broadcast-only and `opt_in` has no send path yet, so neither is listed — but
@@ -34,7 +30,8 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Send questionnaire — Camp 404" };
 
-// The Send/Activate screen (§6.4). Captains send to any audience; a team lead
+// The Send/Activate screen (§6.4), laid out like the AfrikaBurn console's
+// activate page. Captains send to any audience; a team lead
 // sends to the teams they lead. Anyone else gets the locked shell before any
 // questionnaire read. Only a published questionnaire can be sent.
 export default async function SendPage({
@@ -45,33 +42,30 @@ export default async function SendPage({
   const { key } = await params;
   const { cleared, rank, campUser } = await captainPageGate("team_lead");
   const isCaptain = rank === "captain";
-  const chrome = (children: ReactNode) => (
-    <main className="mx-auto max-w-lg px-4 py-6">
-      {/* A lead edits only their own questionnaires, so the hub is the way back. */}
-      {isCaptain ? (
-        <GhostBack
-          linkAs={Link}
-          href={`/captains/questionnaires/${key}`}
-          className="-ml-2 mb-4"
-        >
-          Editor
-        </GhostBack>
-      ) : (
-        <GhostBack linkAs={Link} href="/captains/questionnaires" className="-ml-2 mb-4">
-          Questionnaires
-        </GhostBack>
-      )}
-      <h1 className="mb-4 text-2xl font-bold">Send to members</h1>
+  // The AfrikaBurn console's send screen: the heading, then the Audience and
+  // Delivery cards. The form's Cancel is the way back (to the editor for a
+  // captain, the hub for a lead, who edits only their own questionnaires).
+  const chrome = (children: ReactNode, description?: string) => (
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow="Questionnaires / Send"
+        title="Send to members"
+        description={description}
+      />
       {children}
-    </main>
+    </div>
   );
 
   // A lead sends only to a team they lead this year (owner's call, 2026-09-16).
   // sendAction checks the same rule again (canSendToAudience).
-  const leadTeams = cleared && !isCaptain ? await getLeadTeams(campUser.id) : [];
+  const leadTeams =
+    cleared && !isCaptain ? await getLeadTeams(campUser.id) : [];
   if (!cleared || (!isCaptain && leadTeams.length === 0)) {
     return chrome(
-      <CaptainLock title="Team leads and captains only" message="Only captains and team leads can send questionnaires to members." />,
+      <CaptainLock
+        title="Team leads and captains only"
+        message="Only captains and team leads can send questionnaires to members."
+      />,
     );
   }
 
@@ -125,14 +119,17 @@ export default async function SendPage({
   }));
 
   return chrome(
-    <SendForm
-      questionnaireKey={key}
-      title={definition.title}
-      members={members}
-      scopeOptions={scopeOptions}
-      teamOptions={teamOptions}
-      openActivationId={openActivation?.id ?? null}
-      asLead={!isCaptain}
-    />,
+    <div className="w-full max-w-3xl">
+      <SendForm
+        questionnaireKey={key}
+        title={definition.title}
+        members={members}
+        scopeOptions={scopeOptions}
+        teamOptions={teamOptions}
+        openActivationId={openActivation?.id ?? null}
+        asLead={!isCaptain}
+      />
+    </div>,
+    `Choose who answers “${definition.title}”, and whether it holds the app until they do.`,
   );
 }

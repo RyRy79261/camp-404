@@ -385,194 +385,204 @@ export function BuilderCanvas({
     : null;
 
   return (
-    <div className="flex flex-col gap-5 pb-24">
+    // Two columns on a desktop, like the AfrikaBurn builder's rail: the pages on
+    // the left, and the name, the live-edit warning and the lifecycle controls
+    // in a rail on the right that stays in view. One column, in that order, on
+    // a phone.
+    <div className="grid gap-6 pb-24 lg:grid-cols-3 lg:items-start">
       {confirmDialog}
-      <InputField
-        label="Questionnaire name"
-        value={working.title}
-        onChange={(e) =>
-          setWorking((w) => ({ ...w, title: e.currentTarget.value }))
-        }
-        onBlur={() => persist(working)}
-        placeholder="Untitled questionnaire"
-      />
-
-      {status !== "draft" && <EditPublishedBanner status={status} />}
-
-      {canPublish && (
-        <LifecycleBar
-          questionnaireKey={questionnaireKey}
-          status={status}
-          version={publishedVersion}
-          openActivationId={openActivationId}
-          openActivationBlocking={openActivationBlocking}
+      <div className="flex flex-col gap-5 lg:sticky lg:top-32 lg:order-last">
+        <InputField
+          label="Questionnaire name"
+          value={working.title}
+          onChange={(e) =>
+            setWorking((w) => ({ ...w, title: e.currentTarget.value }))
+          }
+          onBlur={() => persist(working)}
+          placeholder="Untitled questionnaire"
         />
-      )}
 
-      <div className="flex flex-col gap-4">
-        {working.pages.map((page, pageIndex) => (
-          <Card key={page.id} className="flex flex-col gap-3 p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 flex-col">
-                <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                  Page {pageIndex + 1} · {page.type === "content" ? "Content" : "Questions"}
-                </span>
-                {problemsAt(page.id).map((message) => (
-                  <span key={message} className="text-xs text-warning">
-                    {message}
-                  </span>
-                ))}
-                {page.visibleIf && (
-                  <PageCondition
-                    {...describeVisibleIf(
-                      page.visibleIf,
-                      fieldsBefore(working, page.id, null),
-                    )}
-                  />
-                )}
-              </div>
-              <div className="flex items-center gap-0.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Page settings"
-                  onClick={() => setSettingsPageId(page.id)}
-                >
-                  <Settings2 />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Move page up"
-                  disabled={pageIndex === 0}
-                  onClick={() => persist(movePage(working, pageIndex, pageIndex - 1))}
-                >
-                  <ChevronUp />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Move page down"
-                  disabled={pageIndex === working.pages.length - 1}
-                  onClick={() => persist(movePage(working, pageIndex, pageIndex + 1))}
-                >
-                  <ChevronDown />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Delete page"
-                  disabled={working.pages.length <= 1}
-                  onClick={() => void confirmRemovePage(page)}
-                >
-                  <Trash2 className="text-destructive" />
-                </Button>
-              </div>
-            </div>
+        {status !== "draft" && <EditPublishedBanner status={status} />}
 
-            {page.blocks.length > 0 ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragStart={(e) => setDraggingId(String(e.active.id))}
-                onDragCancel={() => setDraggingId(null)}
-                onDragEnd={(e) => onBlockDragEnd(page.id, e)}
-              >
-                <SortableContext
-                  items={page.blocks.map(blockId)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <ul className="flex flex-col gap-2">
-                    {page.blocks.map((block) => (
-                      <BlockRow
-                        key={blockId(block)}
-                        block={block}
-                        problems={problemsAt(page.id, blockId(block))}
-                        condition={
-                          block.visibleIf
-                            ? describeVisibleIf(
-                                block.visibleIf,
-                                fieldsBefore(working, page.id, blockId(block)),
-                              )
-                            : null
-                        }
-                        onEdit={() => {
-                          setEditing({
-                            pageId: page.id,
-                            blockId: blockId(block),
-                          });
-                          setEditorOpen(true);
-                        }}
-                        onDelete={() =>
-                          void confirmRemoveBlock(page.id, block)
-                        }
-                      />
-                    ))}
-                  </ul>
-                </SortableContext>
-                <DragOverlay dropAnimation={reducedMotion ? null : undefined}>
-                  {(() => {
-                    const dragged = page.blocks.find(
-                      (b) => blockId(b) === draggingId,
-                    );
-                    if (!dragged) return null;
-                    const { label, icon: DragIcon } = describeBlock(dragged);
-                    return (
-                      <div className="flex items-center gap-2.5 rounded-lg border border-accent bg-card px-3 py-2.5 shadow-lg">
-                        <GripVertical
-                          aria-hidden
-                          className="size-4 text-accent"
-                        />
-                        <DragIcon aria-hidden className="size-4 text-accent" />
-                        <span className="truncate text-sm font-medium">
-                          {label}
-                        </span>
-                      </div>
-                    );
-                  })()}
-                </DragOverlay>
-              </DndContext>
-            ) : (
-              <p className="rounded-lg border border-dashed border-border py-4 text-center text-xs text-muted-foreground">
-                No blocks yet.
-              </p>
-            )}
-
-            <Button
-              type="button"
-              variant="outline"
-              className="border-dashed"
-              onClick={() => setAddingToPageId(page.id)}
-            >
-              <Plus /> Add block
-            </Button>
-          </Card>
-        ))}
+        {canPublish && (
+          <LifecycleBar
+            questionnaireKey={questionnaireKey}
+            status={status}
+            version={publishedVersion}
+            openActivationId={openActivationId}
+            openActivationBlocking={openActivationBlocking}
+          />
+        )}
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() =>
-          persist(
-            addPage(working, working.pages.at(-1)?.id ?? null, {
-              id: newId(),
-              type: "question",
-              title: "",
-              blocks: [],
-            }),
-          )
-        }
-      >
-        <Plus /> Add page
-      </Button>
+      <div className="flex flex-col gap-5 lg:col-span-2">
+        <div className="flex flex-col gap-4">
+          {working.pages.map((page, pageIndex) => (
+            <Card key={page.id} className="flex flex-col gap-3 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-col">
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                    Page {pageIndex + 1} · {page.type === "content" ? "Content" : "Questions"}
+                  </span>
+                  {problemsAt(page.id).map((message) => (
+                    <span key={message} className="text-xs text-warning">
+                      {message}
+                    </span>
+                  ))}
+                  {page.visibleIf && (
+                    <PageCondition
+                      {...describeVisibleIf(
+                        page.visibleIf,
+                        fieldsBefore(working, page.id, null),
+                      )}
+                    />
+                  )}
+                </div>
+                <div className="flex items-center gap-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Page settings"
+                    onClick={() => setSettingsPageId(page.id)}
+                  >
+                    <Settings2 />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Move page up"
+                    disabled={pageIndex === 0}
+                    onClick={() => persist(movePage(working, pageIndex, pageIndex - 1))}
+                  >
+                    <ChevronUp />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Move page down"
+                    disabled={pageIndex === working.pages.length - 1}
+                    onClick={() => persist(movePage(working, pageIndex, pageIndex + 1))}
+                  >
+                    <ChevronDown />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Delete page"
+                    disabled={working.pages.length <= 1}
+                    onClick={() => void confirmRemovePage(page)}
+                  >
+                    <Trash2 className="text-destructive" />
+                  </Button>
+                </div>
+              </div>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-lg items-center gap-3">
+              {page.blocks.length > 0 ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={(e) => setDraggingId(String(e.active.id))}
+                  onDragCancel={() => setDraggingId(null)}
+                  onDragEnd={(e) => onBlockDragEnd(page.id, e)}
+                >
+                  <SortableContext
+                    items={page.blocks.map(blockId)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <ul className="flex flex-col gap-2">
+                      {page.blocks.map((block) => (
+                        <BlockRow
+                          key={blockId(block)}
+                          block={block}
+                          problems={problemsAt(page.id, blockId(block))}
+                          condition={
+                            block.visibleIf
+                              ? describeVisibleIf(
+                                  block.visibleIf,
+                                  fieldsBefore(working, page.id, blockId(block)),
+                                )
+                              : null
+                          }
+                          onEdit={() => {
+                            setEditing({
+                              pageId: page.id,
+                              blockId: blockId(block),
+                            });
+                            setEditorOpen(true);
+                          }}
+                          onDelete={() =>
+                            void confirmRemoveBlock(page.id, block)
+                          }
+                        />
+                      ))}
+                    </ul>
+                  </SortableContext>
+                  <DragOverlay dropAnimation={reducedMotion ? null : undefined}>
+                    {(() => {
+                      const dragged = page.blocks.find(
+                        (b) => blockId(b) === draggingId,
+                      );
+                      if (!dragged) return null;
+                      const { label, icon: DragIcon } = describeBlock(dragged);
+                      return (
+                        <div className="flex items-center gap-2.5 rounded-lg border border-accent bg-card px-3 py-2.5 shadow-lg">
+                          <GripVertical
+                            aria-hidden
+                            className="size-4 text-accent"
+                          />
+                          <DragIcon aria-hidden className="size-4 text-accent" />
+                          <span className="truncate text-sm font-medium">
+                            {label}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </DragOverlay>
+                </DndContext>
+              ) : (
+                <p className="rounded-lg border border-dashed border-border py-4 text-center text-xs text-muted-foreground">
+                  No blocks yet.
+                </p>
+              )}
+
+              <Button
+                type="button"
+                variant="outline"
+                className="border-dashed"
+                onClick={() => setAddingToPageId(page.id)}
+              >
+                <Plus /> Add block
+              </Button>
+            </Card>
+          ))}
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() =>
+            persist(
+              addPage(working, working.pages.at(-1)?.id ?? null, {
+                id: newId(),
+                type: "question",
+                title: "",
+                blocks: [],
+              }),
+            )
+          }
+        >
+          <Plus /> Add page
+        </Button>
+      </div>
+
+      {/* Lined up with the console's content column, so the save state sits
+          under the canvas and the actions at the column's right edge. */}
+      <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 py-3 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
           <span
             role="status"
             className="flex items-center gap-1.5 text-xs text-muted-foreground"

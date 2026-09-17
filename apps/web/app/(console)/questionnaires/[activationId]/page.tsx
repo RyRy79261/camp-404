@@ -14,6 +14,7 @@ import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { nextGate } from "@/lib/required-actions";
 import { BuilderRunner } from "./runner";
 import { RunnerEdgeCard } from "./edge-states";
+import { RunnerFrame } from "./runner-frame";
 
 // Reads the Neon Auth session + the activation on every request.
 export const dynamic = "force-dynamic";
@@ -44,7 +45,10 @@ export default async function QuestionnaireRunnerPage({
   // A member who joined the audience after the send opened is gated first, so
   // a link from a reminder or a teammate does not say "not invited".
   await syncOpenGates(campUser.id);
-  const targeted = await getRequiredAction(campUser.id, activation.questionnaireKey);
+  const targeted = await getRequiredAction(
+    campUser.id,
+    activation.questionnaireKey,
+  );
   if (!targeted) return <RunnerEdgeCard kind="not-invited" />;
   // Must be a PENDING obligation that belongs to THIS activation — a stale row
   // pointing at a different (e.g. older) activation for the same key can't answer
@@ -55,7 +59,10 @@ export default async function QuestionnaireRunnerPage({
   ) {
     return <RunnerEdgeCard kind="completed" />;
   }
-  if (targeted.status !== "pending" || targeted.activationId !== activation.id) {
+  if (
+    targeted.status !== "pending" ||
+    targeted.activationId !== activation.id
+  ) {
     return <RunnerEdgeCard kind="closed" />;
   }
 
@@ -87,8 +94,10 @@ export default async function QuestionnaireRunnerPage({
   );
   const initialResponses: QuestionnaireResponses = stored?.responses ?? {};
 
+  // A blocking send renders bare and full-screen under its own chrome; an
+  // optional one sits in the console like any other page (RunnerFrame).
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 py-8">
+    <RunnerFrame>
       <BuilderRunner
         activationId={activation.id}
         definition={definition}
@@ -97,6 +106,6 @@ export default async function QuestionnaireRunnerPage({
         title={activation.title}
         blocking={activation.blocking}
       />
-    </main>
+    </RunnerFrame>
   );
 }

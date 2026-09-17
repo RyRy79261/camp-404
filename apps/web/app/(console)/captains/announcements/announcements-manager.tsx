@@ -29,13 +29,17 @@ import type { AnnouncementSummary, Audience } from "@camp404/db/broadcasts";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
-import { Card } from "@camp404/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
 import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
-import { SectionHeader } from "@camp404/ui/components/section-header";
 import {
   Select,
   SelectContent,
@@ -59,12 +63,12 @@ import {
 } from "./actions";
 import { appendTranscript } from "./transcript";
 
-// Captain composer + list (board S18). Compose a draft up top; below, drafts can
-// be edited / published / deleted and published announcements show their delivery
-// roll-up. Every mutation routes through the captain-gated server actions; the
-// page re-renders from the server on success. Presentation is composed onto the
-// @camp404/ui leaves (Card / InputField / Alert / Badge / SectionHeader /
-// EmptyState).
+// Captain composer + list, laid out like the AfrikaBurn console's bulletins: the
+// drafts and published announcements as cards in the main column, the composer
+// in a card beside them. Drafts can be edited / published / deleted, and
+// published announcements show their delivery roll-up. Every mutation routes
+// through the captain-gated server actions; the page re-renders from the server
+// on success.
 //
 // Feedback follows one rule on every captain screen: a problem with what is
 // typed in a form (or a dialog) shows inline beside it; a one-tap action on a
@@ -78,9 +82,6 @@ const PRESENTATION_META: Record<
     short: string;
     hint: string;
     icon: LucideIcon;
-    badge: "default" | "secondary" | "outline";
-    /** Tint override where the board's pill colour has no matching Badge variant. */
-    badgeClassName?: string;
   }
 > = {
   acknowledge: {
@@ -88,26 +89,24 @@ const PRESENTATION_META: Record<
     short: "Acknowledge",
     hint: "Takes over each member's screen. They scroll and press Acknowledge to dismiss.",
     icon: Megaphone,
-    badge: "default",
   },
   popup: {
     label: "Pop-up — dismissable",
     short: "Pop-up",
     hint: "Shows once as a pop-up on each member's screen, then stays in their inbox.",
     icon: MessageSquare,
-    badge: "secondary",
   },
   feed: {
     label: "Quiet — inbox only",
     short: "Inbox",
     hint: "No interruption. Lands behind the header bell.",
     icon: Inbox,
-    // The board tints the inbox pill accent (#00dcff26 + $accent); Badge has no
-    // accent variant, so override onto the same accent token used elsewhere.
-    badge: "outline",
-    badgeClassName: "border-transparent bg-accent/15 text-accent",
   },
 };
+
+/** The console's section label (the AfrikaBurn bulletins list's "Sent"). */
+const SECTION_LABEL =
+  "font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground";
 
 const dateFmt = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
@@ -240,8 +239,9 @@ export function AnnouncementsManager({
     });
   };
 
-  // Edit fills the composer at the top of the page. On a phone the card that
-  // was tapped can be far below it, so take the captain there.
+  // Edit fills the composer. It sits beside the list on a wide screen and below
+  // it on a phone, and either way the card that was tapped can be far from it,
+  // so take the captain there.
   const editingId = form.editingId;
   useEffect(() => {
     if (!editingId) return;
@@ -301,205 +301,220 @@ export function AnnouncementsManager({
   const activeMeta = PRESENTATION_META[form.presentation];
 
   return (
-    <div className="space-y-6">
-      {/* Composer */}
-      <Card ref={composerRef} className="scroll-mt-4 space-y-4 p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold">
-            {form.editingId ? "Edit draft" : "New announcement"}
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+      <div className="flex min-w-0 flex-col gap-8">
+        {/* Drafts */}
+        <section
+          aria-labelledby="announcement-drafts"
+          className="flex flex-col gap-3"
+        >
+          <h2 id="announcement-drafts" className={SECTION_LABEL}>
+            {drafts.length > 0 ? `Drafts (${drafts.length})` : "Drafts"}
           </h2>
+          {drafts.length === 0 ? (
+            <EmptyState
+              icon={<Pencil aria-hidden />}
+              title="No drafts."
+              description="Save one from the composer, then publish it from here."
+              className="py-10"
+            />
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {drafts.map((a) => (
+                <DraftCard
+                  key={a.id}
+                  announcement={a}
+                  audienceName={audienceName(a.audience)}
+                  currentUserId={currentUserId}
+                  disabled={pending || rowPending || publishing}
+                  busyAction={
+                    rowPending && busy?.id === a.id ? busy.action : null
+                  }
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onPublish={handlePublish}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Published */}
+        <section
+          aria-labelledby="announcement-published"
+          className="flex flex-col gap-3"
+        >
+          <h2 id="announcement-published" className={SECTION_LABEL}>
+            {published.length > 0
+              ? `Published (${published.length})`
+              : "Published"}
+          </h2>
+          {published.length === 0 ? (
+            <EmptyState
+              icon={<Megaphone aria-hidden />}
+              title="Nothing published yet."
+              description="A published announcement shows who it reached and how many have seen it."
+              className="py-10"
+            />
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {published.map((a) => (
+                <PublishedCard
+                  key={a.id}
+                  announcement={a}
+                  audienceName={audienceName(a.audience)}
+                  currentUserId={currentUserId}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      {/* Composer */}
+      <Card ref={composerRef} className="scroll-mt-24">
+        <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-4">
+          <CardTitle className="text-base">
+            {form.editingId ? "Edit draft" : "New announcement"}
+          </CardTitle>
           {form.editingId && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="gap-1.5"
+              className="-my-2"
               onClick={reset}
               disabled={pending}
             >
-              <X className="h-4 w-4" /> Cancel edit
+              <X aria-hidden /> Cancel edit
             </Button>
           )}
-        </div>
-
-        <InputField
-          label="Title"
-          id="announcement-title"
-          ref={titleRef}
-          value={form.title}
-          maxLength={120}
-          placeholder="Burn-night briefing"
-          onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-          disabled={pending}
-        />
-
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="announcement-body">Message</Label>
-          <Textarea
-            id="announcement-body"
-            value={form.body}
-            maxLength={5000}
-            rows={6}
-            placeholder="What does everyone need to know?"
-            onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <InputField
+            label="Title"
+            id="announcement-title"
+            ref={titleRef}
+            value={form.title}
+            maxLength={120}
+            placeholder="Burn-night briefing"
+            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
             disabled={pending}
           />
-          {/* Voice dictation — same pattern as the questionnaire long-text
-              fields: tap to swap in the recorder, each transcript appends. */}
-          {!voiceSupported ? null : dictation.dictating ? (
-            <RecorderPanel
-              onTranscript={appendToBody}
-              onDismiss={dictation.close}
-            />
-          ) : (
-            <DictatePill
-              ref={dictation.pillRef}
-              onActivate={dictation.open}
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="announcement-body">Message</Label>
+            <Textarea
+              id="announcement-body"
+              value={form.body}
+              maxLength={5000}
+              rows={6}
+              placeholder="What does everyone need to know?"
+              onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
               disabled={pending}
-              className="self-end"
             />
-          )}
-        </div>
+            {/* Voice dictation — same pattern as the questionnaire long-text
+                fields: tap to swap in the recorder, each transcript appends. */}
+            {!voiceSupported ? null : dictation.dictating ? (
+              <RecorderPanel
+                onTranscript={appendToBody}
+                onDismiss={dictation.close}
+              />
+            ) : (
+              <DictatePill
+                ref={dictation.pillRef}
+                onActivate={dictation.open}
+                disabled={pending}
+                className="self-end"
+              />
+            )}
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="announcement-audience">Who it&apos;s for</Label>
-          <Select
-            value={form.audience}
-            onValueChange={(v) => setForm((f) => ({ ...f, audience: v }))}
-            disabled={pending || audienceOptions.length < 2}
-          >
-            <SelectTrigger id="announcement-audience">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {audienceOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  <span className="flex items-center gap-2">
-                    <Users className="h-4 w-4" aria-hidden />
-                    {option.label}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="announcement-presentation">How it lands</Label>
-          <Select
-            value={form.presentation}
-            onValueChange={(v) =>
-              setForm((f) => ({
-                ...f,
-                presentation: v as AnnouncementPresentation,
-              }))
-            }
-            disabled={pending}
-          >
-            <SelectTrigger
-              id="announcement-presentation"
-              aria-describedby="announcement-presentation-hint"
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="announcement-audience">Who it&apos;s for</Label>
+            <Select
+              value={form.audience}
+              onValueChange={(v) => setForm((f) => ({ ...f, audience: v }))}
+              disabled={pending || audienceOptions.length < 2}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(
-                Object.keys(PRESENTATION_META) as AnnouncementPresentation[]
-              ).map((key) => {
-                const Icon = PRESENTATION_META[key].icon;
-                return (
-                  <SelectItem key={key} value={key}>
+              <SelectTrigger id="announcement-audience">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {audienceOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
                     <span className="flex items-center gap-2">
-                      <Icon className="h-4 w-4" aria-hidden />
-                      {PRESENTATION_META[key].label}
+                      <Users className="h-4 w-4" aria-hidden />
+                      {option.label}
                     </span>
                   </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-          <p
-            id="announcement-presentation-hint"
-            className="text-xs text-muted-foreground"
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="announcement-presentation">How it lands</Label>
+            <Select
+              value={form.presentation}
+              onValueChange={(v) =>
+                setForm((f) => ({
+                  ...f,
+                  presentation: v as AnnouncementPresentation,
+                }))
+              }
+              disabled={pending}
+            >
+              <SelectTrigger
+                id="announcement-presentation"
+                aria-describedby="announcement-presentation-hint"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(
+                  Object.keys(PRESENTATION_META) as AnnouncementPresentation[]
+                ).map((key) => {
+                  const Icon = PRESENTATION_META[key].icon;
+                  return (
+                    <SelectItem key={key} value={key}>
+                      <span className="flex items-center gap-2">
+                        <Icon className="h-4 w-4" aria-hidden />
+                        {PRESENTATION_META[key].label}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            <p
+              id="announcement-presentation-hint"
+              className="text-xs text-muted-foreground"
+            >
+              {activeMeta.hint}
+            </p>
+          </div>
+
+          {error && (
+            <Alert variant="error">
+              <TriangleAlert aria-hidden />
+              <span>{error}</span>
+            </Alert>
+          )}
+
+          <Button
+            type="button"
+            className="w-full"
+            onClick={handleSave}
+            disabled={
+              pending || rowPending || !form.title.trim() || !form.body.trim()
+            }
           >
-            {activeMeta.hint}
-          </p>
-        </div>
-
-        {error && (
-          <Alert variant="error">
-            <TriangleAlert aria-hidden />
-            <span>{error}</span>
-          </Alert>
-        )}
-
-        <Button
-          type="button"
-          className="w-full gap-1.5"
-          onClick={handleSave}
-          disabled={
-            pending || rowPending || !form.title.trim() || !form.body.trim()
-          }
-        >
-          {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-          {form.editingId ? "Update draft" : "Save draft"}
-        </Button>
+            {pending && <Loader2 className="animate-spin" aria-hidden />}
+            {form.editingId ? "Update draft" : "Save draft"}
+          </Button>
+        </CardContent>
       </Card>
-
-      {/* Drafts */}
-      <section className="space-y-3">
-        <SectionHeader
-          as="h2"
-          title={drafts.length > 0 ? `Drafts (${drafts.length})` : "Drafts"}
-        />
-        {drafts.length === 0 ? (
-          <EmptyState title="No drafts." />
-        ) : (
-          <ul className="space-y-3">
-            {drafts.map((a) => (
-              <DraftCard
-                key={a.id}
-                announcement={a}
-                audienceName={audienceName(a.audience)}
-                currentUserId={currentUserId}
-                disabled={pending || rowPending || publishing}
-                busyAction={
-                  rowPending && busy?.id === a.id ? busy.action : null
-                }
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onPublish={handlePublish}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* Published */}
-      <section className="space-y-3">
-        <SectionHeader
-          as="h2"
-          title={
-            published.length > 0
-              ? `Published (${published.length})`
-              : "Published"
-          }
-        />
-        {published.length === 0 ? (
-          <EmptyState title="Nothing published yet." />
-        ) : (
-          <ul className="space-y-3">
-            {published.map((a) => (
-              <PublishedCard
-                key={a.id}
-                announcement={a}
-                audienceName={audienceName(a.audience)}
-                currentUserId={currentUserId}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
 
       {confirming && (
         <PublishConfirm
@@ -571,29 +586,37 @@ function PublishConfirm({
   );
 }
 
+/**
+ * The top of an announcement card, like the AfrikaBurn bulletin card: a kicker
+ * naming how it lands, the audience beside it, then the title.
+ */
 function AnnouncementHeader({
   announcement: a,
+  audienceName,
 }: {
   announcement: AnnouncementSummary;
+  audienceName: string;
 }) {
   const meta = PRESENTATION_META[a.presentation];
   const Icon = meta.icon;
   return (
-    <div className="flex items-start justify-between gap-3">
-      <h3 className="text-[15px] font-bold leading-tight">{a.title}</h3>
-      {/* Board S18 pill: sentence case, 11px semibold. */}
-      <Badge
-        variant={meta.badge}
-        title={meta.hint}
-        className={cn(
-          "shrink-0 px-2.5 py-[3px] text-[11px] font-semibold normal-case tracking-normal",
-          meta.badgeClassName,
-        )}
-      >
-        <Icon className="h-3 w-3" aria-hidden />
-        {meta.short}
-      </Badge>
-    </div>
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span
+          title={meta.hint}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+        >
+          <Icon className="h-3.5 w-3.5 text-accent" aria-hidden />
+          {meta.short}
+        </span>
+        <Badge variant="outline" className="shrink-0">
+          {a.audience.scope === "team" ? audienceName : "Everyone"}
+        </Badge>
+      </div>
+      <h3 className="text-base font-semibold leading-snug tracking-tight [overflow-wrap:anywhere]">
+        {a.title}
+      </h3>
+    </>
   );
 }
 
@@ -665,49 +688,49 @@ function DraftCard({
   const mine = a.senderId === currentUserId;
   return (
     <li>
-      <Card className="space-y-3 p-4">
-        <AnnouncementHeader announcement={a} />
-        <p className="text-xs text-muted-foreground">
-          For {audienceName}
-          {mine ? "" : ` · by ${a.senderName ?? "another captain"}`}
-        </p>
-        <ClampedBody body={a.body} />
-        {mine && (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => onEdit(a)}
-              disabled={disabled}
-            >
-              <Pencil className="h-4 w-4" /> Edit
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5 border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => onDelete(a.id)}
-              disabled={disabled}
-            >
-              <BusyIcon busy={busyAction === "delete"} icon={Trash2} /> Delete
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => onPublish(a)}
-              disabled={disabled}
-            >
-              <BusyIcon busy={busyAction === "publish"} icon={Send} />{" "}
-              {a.audience.scope === "team"
-                ? `Publish to ${audienceName}`
-                : "Publish to camp"}
-            </Button>
-          </div>
-        )}
+      <Card>
+        <CardContent className="flex flex-col gap-2 p-4">
+          <AnnouncementHeader announcement={a} audienceName={audienceName} />
+          <ClampedBody body={a.body} />
+          <p className="text-xs text-muted-foreground">
+            Draft · not sent · for {audienceName}
+            {mine ? "" : ` · by ${a.senderName ?? "another captain"}`}
+          </p>
+          {mine && (
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onEdit(a)}
+                disabled={disabled}
+              >
+                <Pencil aria-hidden /> Edit
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => onDelete(a.id)}
+                disabled={disabled}
+              >
+                <BusyIcon busy={busyAction === "delete"} icon={Trash2} /> Delete
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => onPublish(a)}
+                disabled={disabled}
+              >
+                <BusyIcon busy={busyAction === "publish"} icon={Send} />{" "}
+                {a.audience.scope === "team"
+                  ? `Publish to ${audienceName}`
+                  : "Publish to camp"}
+              </Button>
+            </div>
+          )}
+        </CardContent>
       </Card>
     </li>
   );
@@ -730,42 +753,55 @@ function PublishedCard({
   audienceName: string;
   currentUserId: string;
 }) {
+  // The AfrikaBurn read-rate bar. An acknowledge announcement counts who
+  // acknowledged it; the kinds nobody acknowledges count who has seen it.
+  const acknowledge = a.presentation === "acknowledge";
+  const rate = acknowledge
+    ? readRate(a.acknowledgedCount, a.recipientCount)
+    : readRate(a.readCount, a.recipientCount);
+  const RateIcon = acknowledge ? CheckCircle2 : Eye;
   return (
     <li>
-      <Card className="space-y-3 p-4">
-        <AnnouncementHeader announcement={a} />
-        <ClampedBody body={a.body} />
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
-          <span className="text-muted-foreground">
+      <Card>
+        <CardContent className="flex flex-col gap-2 p-4">
+          <AnnouncementHeader announcement={a} audienceName={audienceName} />
+          <ClampedBody body={a.body} />
+          <p className="text-xs text-muted-foreground">
+            {a.publishedAt && (
+              <>Published {dateFmt.format(new Date(a.publishedAt))} · </>
+            )}
             Sent to {a.recipientCount} member
             {a.recipientCount === 1 ? "" : "s"}
             {a.audience.scope === "team" ? ` of ${audienceName}` : ""}
             {a.senderId === currentUserId ? " · by you" : ""}
-          </span>
-          {a.presentation === "acknowledge" ? (
-            <span className="inline-flex items-center gap-1 font-medium text-accent">
-              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-              {a.acknowledgedCount}/{a.recipientCount} acknowledged
-            </span>
-          ) : (
-            // The board's count, for the kinds nobody acknowledges: how many
-            // have seen it in their inbox.
-            (() => {
-              const rate = readRate(a.readCount, a.recipientCount);
-              return (
-                <span className="inline-flex items-center gap-1 font-medium text-accent">
-                  <Eye className="h-3.5 w-3.5" aria-hidden />
-                  {rate.read}/{rate.of} seen
-                </span>
-              );
-            })()
-          )}
-        </div>
-        {a.publishedAt && (
-          <p className="text-[11px] text-muted-foreground">
-            Published {dateFmt.format(new Date(a.publishedAt))}
           </p>
-        )}
+          <div className="flex flex-col gap-1 pt-1">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="inline-flex items-center gap-1 font-medium text-accent">
+                <RateIcon className="h-3.5 w-3.5" aria-hidden />
+                {acknowledge
+                  ? `${a.acknowledgedCount}/${a.recipientCount} acknowledged`
+                  : `${rate.read}/${rate.of} seen`}
+              </span>
+              <span className="tabular-nums text-muted-foreground">
+                {rate.percent}%
+              </span>
+            </div>
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-valuenow={rate.percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={acknowledge ? "Acknowledged" : "Seen"}
+            >
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${rate.percent}%` }}
+              />
+            </div>
+          </div>
+        </CardContent>
       </Card>
     </li>
   );

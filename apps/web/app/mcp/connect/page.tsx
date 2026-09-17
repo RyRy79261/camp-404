@@ -2,15 +2,14 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { TriangleAlert } from "lucide-react";
-import { Alert } from "@camp404/ui/components/alert";
-import { Card } from "@camp404/ui/components/card";
-import { OAuthButton } from "@camp404/ui/components/google-button";
+import { Plug } from "lucide-react";
+import { Button } from "@camp404/ui/components/button";
+import { AuthShell } from "@/components/auth-shell";
 import { authClient } from "@/lib/auth-client";
 import { safeInternalPath } from "@/lib/safe-redirect";
 
 /**
- * Sign-in bridge for the MCP OAuth authorize flow (board S20 — Bridge Card).
+ * Sign-in bridge for the MCP OAuth authorize flow, drawn as the auth card.
  *
  * `/api/mcp/oauth/authorize` redirects unauthenticated callers here with
  * `?next=<authorize-url>`. We sign the user in (Better Auth's `signIn`
@@ -64,42 +63,47 @@ function MCPConnectInner() {
   }
 
   return (
-    <Shell>
-      <h1 className="text-title font-bold text-foreground">Connect Claude</h1>
-      <Card className="flex flex-col gap-4 p-5">
-        <p className="text-sm text-card-foreground">
-          You&apos;ll see exactly what you&apos;re approving before anything
-          connects.
-        </p>
-        <OAuthButton
-          label="Sign in with Google"
+    <AuthShell icon={<Plug aria-hidden />}>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl">Connect Claude</h1>
+          <p className="text-sm text-muted-foreground">
+            You&apos;ll see exactly what you&apos;re approving before anything
+            connects.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
           onClick={onGoogle}
           disabled={loading}
-        />
+        >
+          Sign in with Google
+        </Button>
         {error && (
-          <Alert variant="error">
-            <TriangleAlert />
-            <span>{error}</span>
-          </Alert>
+          <p role="alert" className="text-sm font-medium text-destructive">
+            {error}
+          </p>
         )}
         <p className="text-center text-sm text-muted-foreground">
           New to Camp 404?{" "}
           <a
-            className="font-semibold text-accent hover:underline"
+            className="font-medium text-primary hover:underline"
             href="/auth/sign-in"
           >
             Sign in
           </a>
         </p>
-      </Card>
-    </Shell>
+      </div>
+    </AuthShell>
   );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col justify-center gap-6 px-6 py-12">
-      {children}
-    </main>
+    <AuthShell icon={<Plug aria-hidden />}>
+      <p className="text-center text-sm text-muted-foreground">{children}</p>
+    </AuthShell>
   );
 }

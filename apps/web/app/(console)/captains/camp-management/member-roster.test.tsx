@@ -93,7 +93,9 @@ describe("MemberRoster — member view", () => {
     fireEvent.click(
       screen.getAllByRole("button", { name: /Open Nova Reyes/ })[0]!,
     );
-    await waitFor(() => expect(screen.getByText("Captains only.")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText("Captains only.")).toBeTruthy(),
+    );
     // Narrow to captains — Nova (a member) drops out, so her panel closes.
     fireEvent.click(screen.getByRole("button", { name: /Captains 1/ }));
     expect(screen.queryByText("Captains only.")).toBeNull();

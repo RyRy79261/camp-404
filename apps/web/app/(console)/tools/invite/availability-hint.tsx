@@ -5,7 +5,7 @@ import type { Availability } from "./types";
 
 // The live availability line beneath the invite-code field. A polite live region
 // so screen readers announce the result of the debounced check; success in the
-// status-token green, failures in destructive (board S14 availability states).
+// status-token green, failures in destructive.
 export function AvailabilityHint({
   availability,
   code,
@@ -17,7 +17,7 @@ export function AvailabilityHint({
     <p
       role="status"
       aria-live="polite"
-      className="flex min-h-5 items-center gap-1.5 text-label"
+      className="flex min-h-5 items-center gap-1.5 text-xs"
     >
       {code && availability.state === "checking" ? (
         <span className="flex items-center gap-1.5 text-muted-foreground">

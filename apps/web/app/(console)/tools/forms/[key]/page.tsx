@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import type { QuestionnaireResponses } from "@camp404/types";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { Button } from "@camp404/ui/components/button";
+import { Card, CardContent } from "@camp404/ui/components/card";
+import { PageHeading } from "@camp404/ui/components/page-heading";
 import { requireMemberPage } from "@/lib/member-gate";
 import { getReplayableForm, listFormEdits } from "@/lib/forms";
 import { FormReplay } from "./form-replay";
@@ -19,6 +22,9 @@ const dateFmt = new Intl.DateTimeFormat("en-ZA", {
   timeZone: CAMP_TIME_ZONE,
 });
 
+// Replaying a completed form, laid out like an AfrikaBurn console detail page:
+// one small link back to the list above the heading, the form in the main
+// column and its change log beside it.
 export default async function FormReplayPage({
   params,
 }: {
@@ -41,28 +47,37 @@ export default async function FormReplayPage({
   const lastEdited = state.updatedAt ?? state.completedAt;
 
   return (
-    <main className="mx-auto w-full max-w-lg px-4 py-4">
-      <GhostBack linkAs={Link} href="/tools/forms" className="-ml-2">
-        My forms
-      </GhostBack>
+    <div className="flex flex-col">
+      <div className="mb-4">
+        <Button asChild variant="ghost" size="sm" className="-ml-3">
+          <Link href="/tools/forms">
+            <ArrowLeft aria-hidden />
+            My forms
+          </Link>
+        </Button>
+      </div>
 
-      <div className="flex flex-col gap-4 pt-2">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl font-bold">{form.title}</h1>
-          <p className="text-sm text-muted-foreground">
-            Step back through the form and update anything that&apos;s changed.
-            Last edited {dateFmt.format(new Date(lastEdited))}.
-          </p>
-        </div>
-
-        <FormReplay
-          formKey={form.key}
-          questionnaire={form.questionnaire}
-          initialResponses={state.responses as QuestionnaireResponses}
+      <div className="[overflow-wrap:anywhere]">
+        <PageHeading
+          eyebrow="Tools / My forms"
+          title={form.title}
+          description={`Step back through the form and update anything that's changed. Last edited ${dateFmt.format(new Date(lastEdited))}.`}
         />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardContent className="flex flex-col p-6">
+            <FormReplay
+              formKey={form.key}
+              questionnaire={form.questionnaire}
+              initialResponses={state.responses as QuestionnaireResponses}
+            />
+          </CardContent>
+        </Card>
 
         <ChangeLog edits={edits} />
       </div>
-    </main>
+    </div>
   );
 }

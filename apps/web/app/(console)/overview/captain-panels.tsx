@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { listAuditLog } from "@camp404/db/audit";
-import { Card, CardContent, CardHeader, CardTitle } from "@camp404/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
 import { auditEntry } from "@/lib/audit-format";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { deriveRosterStats, toRosterRow } from "@/lib/camp-roster";
@@ -39,7 +44,8 @@ export async function CaptainKpis() {
     {
       label: "Awaiting approval",
       value: stats.pending,
-      hint: stats.pending === 0 ? "Nobody waiting" : "Open the roster to decide",
+      hint:
+        stats.pending === 0 ? "Nobody waiting" : "Open the roster to decide",
       href: "/captains/camp-management",
     },
     {
@@ -92,7 +98,9 @@ export async function RecentActivity() {
   ]);
   const labels = teamLabelMap(teams);
   const now = new Date();
-  const entries = page.rows.map((row) => auditEntry(row, (key) => labels[key] ?? key, now));
+  const entries = page.rows.map((row) =>
+    auditEntry(row, (key) => labels[key] ?? key, now),
+  );
 
   return (
     <Card>
@@ -108,9 +116,7 @@ export async function RecentActivity() {
       </CardHeader>
       <CardContent>
         {entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nothing recorded yet.
-          </p>
+          <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
         ) : (
           <ul className="flex flex-col divide-y divide-border">
             {entries.map((e) => (

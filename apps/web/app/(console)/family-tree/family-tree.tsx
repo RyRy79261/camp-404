@@ -1,10 +1,21 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Search, User as UserIcon } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  GitBranch,
+  Search,
+  User as UserIcon,
+} from "lucide-react";
+import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
+import { EmptyState } from "@camp404/ui/components/empty-state";
 import { Input } from "@camp404/ui/components/input";
+import { cn } from "@camp404/ui/lib/utils";
 import {
   buildTree,
   computeLiteralMatchIds,
@@ -70,60 +81,64 @@ export function FamilyTree({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="relative">
-        <Search
-          className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-        <Input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={
-            showsInviteCodes
-              ? "Search by name or invite code…"
-              : "Search by name…"
-          }
-          aria-label="Search the family tree"
-          className="pl-10"
-        />
-      </div>
-      <div className="flex gap-2.5">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setExpanded(new Set(roster.map((u) => u.id)))}
-        >
-          Expand all
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setExpanded(new Set())}
-        >
-          Collapse
-        </Button>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="relative flex-1">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={
+              showsInviteCodes
+                ? "Search by name or invite code…"
+                : "Search by name…"
+            }
+            aria-label="Search the family tree"
+            className="pl-9"
+          />
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setExpanded(new Set(roster.map((u) => u.id)))}
+          >
+            <ChevronsUpDown aria-hidden />
+            Expand all
+          </Button>
+          <Button variant="outline" onClick={() => setExpanded(new Set())}>
+            <ChevronsDownUp aria-hidden />
+            Collapse
+          </Button>
+        </div>
       </div>
 
       {visibleTrees.length === 0 ? (
-        <div className="rounded-xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
-          {query ? "No matches." : "No accounts yet."}
-        </div>
+        <EmptyState
+          icon={<GitBranch aria-hidden />}
+          title={query ? "No matches." : "No accounts yet."}
+        />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {visibleTrees.map((node) => (
-            <Branch
-              key={node.user.id}
-              node={node}
-              depth={0}
-              expanded={effectiveExpanded}
-              onToggle={toggle}
-              matchIds={matchIds}
-              literalMatchIds={literalMatchIds}
-              viewerUserId={viewerUserId}
-            />
-          ))}
-        </ul>
+        <Card>
+          <CardContent className="p-2 sm:p-3">
+            <ul className="flex flex-col gap-1">
+              {visibleTrees.map((node) => (
+                <Branch
+                  key={node.user.id}
+                  node={node}
+                  depth={0}
+                  expanded={effectiveExpanded}
+                  onToggle={toggle}
+                  matchIds={matchIds}
+                  literalMatchIds={literalMatchIds}
+                  viewerUserId={viewerUserId}
+                />
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
@@ -167,14 +182,14 @@ function Branch({
 
   return (
     <li>
-      {/* Board S16: one 20px guide segment per level above this row, then a
-          22px toggle, then the card. */}
+      {/* One guide segment per level above this row, then the disclosure
+          toggle, then the row itself. */}
       <div className="flex items-center">
         {Array.from({ length: depth }, (_, level) => (
           <span
             key={level}
             aria-hidden
-            className="flex w-5 shrink-0 justify-center self-stretch"
+            className="flex w-6 shrink-0 justify-center self-stretch"
           >
             <span className="h-full w-px bg-border" />
           </span>
@@ -187,7 +202,7 @@ function Branch({
             aria-expanded={isOpen}
             aria-controls={isOpen ? childrenId : undefined}
             aria-label={`People ${name} invited`}
-            className="flex h-11 w-[22px] shrink-0 items-center justify-center rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-11 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {isOpen ? (
               <ChevronDown className="h-4 w-4" aria-hidden />
@@ -198,61 +213,62 @@ function Branch({
         ) : (
           <span
             aria-hidden
-            className="flex h-11 w-[22px] shrink-0 items-center justify-center"
+            className="flex h-11 w-6 shrink-0 items-center justify-center"
           >
             <span className="size-[5px] rounded-full bg-muted-foreground" />
           </span>
         )}
 
-        <Card
-          className={[
-            "flex-1 transition-colors",
+        <div
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-3 rounded-lg border px-3 py-2 transition-colors",
             // A search match (accent) wins over the viewer's own border
-            // (primary) so the two never fight; the "You" pill still marks self.
-            isMatch ? "border-accent" : isViewer ? "border-primary" : "",
-          ].join(" ")}
+            // (primary) so the two never fight; the "You" badge still marks self.
+            isMatch
+              ? "border-accent bg-accent/10"
+              : isViewer
+                ? "border-primary/60 bg-primary/5"
+                : "border-transparent hover:bg-muted/40",
+          )}
         >
-          <CardContent className="flex items-center gap-2.5 px-3 py-2">
-            <span className="flex size-[30px] shrink-0 items-center justify-center rounded-full bg-muted">
-              <UserIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="truncate text-sm font-semibold text-foreground">
-                  {name}
-                </span>
-                {node.user.rank === "captain" && (
-                  <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-micro font-semibold text-accent">
-                    Captain
-                  </span>
-                )}
-                {isViewer && (
-                  <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-micro font-semibold text-primary-foreground">
-                    You
-                  </span>
-                )}
-              </div>
-              <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-                {node.user.inviteCode
-                  ? `via ${node.user.inviteCode}`
-                  : inviterName
-                    ? // A member does not receive other members' codes, so
-                      // the line names who invited them instead.
-                      `via ${inviterName}`
-                    : "root"}
-              </p>
-            </div>
-            {hasChildren && (
-              <span className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-micro font-medium text-muted-foreground">
-                {descendantCountLabel(node.descendantCount)}
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+            <UserIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="truncate text-sm font-medium text-foreground">
+                {name}
               </span>
-            )}
-          </CardContent>
-        </Card>
+              {node.user.rank === "captain" && (
+                <Badge className="shrink-0 bg-accent/15 text-accent">
+                  Captain
+                </Badge>
+              )}
+              {isViewer && <Badge className="shrink-0">You</Badge>}
+            </div>
+            <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+              {node.user.inviteCode
+                ? `via ${node.user.inviteCode}`
+                : inviterName
+                  ? // A member does not receive other members' codes, so
+                    // the line names who invited them instead.
+                    `via ${inviterName}`
+                  : "root"}
+            </p>
+          </div>
+          {hasChildren && (
+            <Badge
+              variant="outline"
+              className="shrink-0 normal-case tracking-normal"
+            >
+              {descendantCountLabel(node.descendantCount)}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {hasChildren && isOpen && (
-        <ul id={childrenId} className="mt-2 space-y-2">
+        <ul id={childrenId} className="mt-1 flex flex-col gap-1">
           {visibleChildren.map((child) => (
             <Branch
               key={child.user.id}
@@ -271,4 +287,3 @@ function Branch({
     </li>
   );
 }
-

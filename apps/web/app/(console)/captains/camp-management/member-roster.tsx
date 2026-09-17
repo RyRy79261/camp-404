@@ -15,8 +15,8 @@ import { RosterList } from "./roster-list";
 import { RosterTable } from "./roster-table";
 import { RosterToolbar } from "./roster-toolbar";
 
-// Member-facing roster (board S17 "MemberReadOnly" intent, revived per the
-// owner's call). Any approved camp member may browse who's at camp — names,
+// Member-facing roster (revived per the owner's call), in the same console
+// composition as the captain's minus the captain chrome. Any approved camp member may browse who's at camp — names,
 // handles, country, role, teams — and open a PUBLIC card (bio + what they bring).
 // Approval status, join date, contact details, government ID and admin actions
 // are withheld SERVER-SIDE: this island only ever receives PublicRosterRow, so it
@@ -92,20 +92,23 @@ export function MemberRoster({
           title={emptyTitle}
         />
       ) : (
-        <>
+        <div className="flex flex-col gap-3">
+          <p className="text-sm tabular-nums text-muted-foreground">
+            {filtered.length} {filtered.length === 1 ? "member" : "members"}
+          </p>
           <RosterTable
-            className="hidden sm:block"
+            className="hidden md:block"
             rows={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
           <RosterList
-            className="sm:hidden"
+            className="md:hidden"
             rows={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
-        </>
+        </div>
       )}
 
       {selectedRow && (

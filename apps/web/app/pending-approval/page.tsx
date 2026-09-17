@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import { Clock, ShieldX } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
-import { IconBadge } from "@camp404/ui/components/icon-badge";
-import { AuthShell } from "@/components/auth-shell";
+import { GateScreen } from "@/components/auth-shell";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -50,47 +49,46 @@ export default async function PendingApprovalPage() {
   const rejected = campUser.approvalStatus === "rejected";
 
   return (
-    <AuthShell hideBack>
-      <div className="flex flex-col items-center gap-6 text-center">
-        <IconBadge size="lg" tone={rejected ? "destructive" : "accent"}>
-          {rejected ? <ShieldX aria-hidden /> : <Clock aria-hidden />}
-        </IconBadge>
-
-        {rejected ? (
-          <div className="flex flex-col gap-2">
-            <h1 className="text-subtitle-hero font-bold text-card-foreground">
-              Application not approved
-            </h1>
-            <p className="text-balance text-label text-muted-foreground">
-              A captain has reviewed your application and it wasn&apos;t
-              approved for camp access this time. If you think this is a
-              mistake, reach out to whoever invited you.
-            </p>
-            {campUser.approvalDecisionReason && (
-              <p className="whitespace-pre-line text-balance text-label text-card-foreground">
-                <span className="font-semibold">The captain said: </span>
-                {campUser.approvalDecisionReason}
-              </p>
-            )}
-          </div>
+    <GateScreen
+      icon={rejected ? <ShieldX aria-hidden /> : <Clock aria-hidden />}
+      tone={rejected ? "destructive" : "accent"}
+      eyebrow="Camp access"
+      title={rejected ? "Application not approved" : "Application submitted"}
+      description={
+        rejected ? (
+          <>
+            A captain has reviewed your application and it wasn&apos;t approved
+            for camp access this time. If you think this is a mistake, reach out
+            to whoever invited you.
+          </>
         ) : (
-          <div className="flex flex-col gap-2">
-            <h1 className="text-subtitle-hero font-bold text-card-foreground">
-              Application submitted
-            </h1>
-            <p className="text-balance text-label text-muted-foreground">
-              Thanks{campUser.displayName ? `, ${campUser.displayName}` : ""} —
-              your profile is in. A captain needs to approve your access before
-              you can use the rest of the app. We&apos;ll let you in as soon as
-              they do; just check back here.
-            </p>
-          </div>
-        )}
+          <>
+            Thanks{campUser.displayName ? `, ${campUser.displayName}` : ""} —
+            your profile is in. A captain needs to approve your access before
+            you can use the rest of the app. We&apos;ll let you in as soon as
+            they do; just check back here.
+          </>
+        )
+      }
+    >
+      {rejected && campUser.approvalDecisionReason && (
+        <p className="whitespace-pre-line rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
+          <span className="font-semibold">The captain said: </span>
+          {campUser.approvalDecisionReason}
+        </p>
+      )}
 
-        <Button asChild variant="outline" className="w-full">
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Button asChild variant="outline">
           <SignOutLink />
         </Button>
       </div>
-    </AuthShell>
+      {authUser.primaryEmail && (
+        <p className="text-center text-xs text-muted-foreground">
+          Signed in as{" "}
+          <span className="text-foreground">{authUser.primaryEmail}</span>
+        </p>
+      )}
+    </GateScreen>
   );
 }

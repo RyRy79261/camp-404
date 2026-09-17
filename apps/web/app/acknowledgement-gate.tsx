@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Megaphone, TriangleAlert } from "lucide-react";
 import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
-import { IconBadge } from "@camp404/ui/components/icon-badge";
+import { Card, CardContent } from "@camp404/ui/components/card";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { toast } from "@camp404/ui/components/toast";
 
@@ -18,6 +18,9 @@ import { toast } from "@camp404/ui/components/toast";
 //
 // The same poll shows "pop-up" notifications: each one once, as a toast, when
 // the tab is visible and no takeover is on screen (owner's call, 2026-09-16).
+//
+// Drawn as the AfrikaBurn organiser gate screen (icon circle, eyebrow, heading)
+// over the message in a card.
 //
 // While the takeover is up, everything else on the page is inert: focus starts
 // on the message title and cannot leave the takeover, and nothing behind it can
@@ -238,58 +241,55 @@ export function AcknowledgementGate() {
       onKeyDown={trapTab}
       className="fixed inset-0 z-[100] overflow-hidden bg-background"
     >
-      {/* Faint scan-line wash (board S22 #00dcff08) behind the content. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0 bg-accent/5"
-      />
       <div
         ref={scrollRef}
-        className="relative z-10 mx-auto flex h-full max-w-2xl flex-col overflow-y-auto px-6 py-10"
+        className="mx-auto flex h-full w-full max-w-2xl flex-col gap-6 overflow-y-auto px-6 py-12"
       >
-        {/* Board S22 draws the disc at 60px; nudge the lg (56px) rung to match. */}
-        <IconBadge size="lg" tone="primary" className="mb-4 h-[60px] w-[60px]">
-          <Megaphone aria-hidden />
-        </IconBadge>
-        <span className="font-mono text-micro font-bold uppercase tracking-wide text-accent">
-          Camp announcement
-        </span>
-
-        <h1
-          id="ack-title"
-          ref={titleRef}
-          tabIndex={-1}
-          className="mt-2 text-title font-bold focus:outline-none"
-        >
-          {current.title}
-        </h1>
-        <p className="mt-1 text-caption text-muted-foreground">
-          {current.senderName ? `From ${current.senderName} · ` : ""}
-          {new Date(current.createdAt).toLocaleString()}
-        </p>
-
-        <div className="mt-6 flex-1 whitespace-pre-wrap text-subtitle-dense leading-relaxed">
-          {current.body}
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-accent">
+            <Megaphone className="h-5 w-5" aria-hidden />
+          </span>
+          <p className="font-mono text-xs uppercase tracking-[0.3em] text-accent">
+            Camp announcement
+          </p>
+          <h1
+            id="ack-title"
+            ref={titleRef}
+            tabIndex={-1}
+            className="text-2xl font-semibold tracking-tight focus:outline-none"
+          >
+            {current.title}
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            {current.senderName ? `From ${current.senderName} · ` : ""}
+            {new Date(current.createdAt).toLocaleString()}
+          </p>
         </div>
+
+        <Card>
+          <CardContent className="whitespace-pre-wrap p-6 text-sm leading-relaxed">
+            {current.body}
+          </CardContent>
+        </Card>
 
         {/* Acknowledge sits at the end of the scroll — not pinned. The member
             scrolls through the message to reach it. */}
-        <div className="mt-10 border-t pt-6">
+        <div className="flex flex-col gap-3">
           {ackError && (
-            <Alert variant="error" className="mb-3">
+            <Alert variant="error">
               <TriangleAlert aria-hidden />
               <span>{ackError}</span>
             </Alert>
           )}
           {queue.length > 1 && (
-            <p className="mb-3 text-caption text-muted-foreground">
+            <p className="text-center text-xs text-muted-foreground">
               {queue.length - 1} more after this.
             </p>
           )}
           <Button
             type="button"
             size="lg"
-            className="w-full gap-2"
+            className="w-full"
             onClick={acknowledge}
             disabled={acking}
           >
@@ -302,7 +302,7 @@ export function AcknowledgementGate() {
             )}
             Acknowledge
           </Button>
-          <p className="mt-3 text-micro text-muted-foreground">
+          <p className="text-center text-xs text-muted-foreground">
             You can&rsquo;t dismiss this until you acknowledge.
           </p>
         </div>

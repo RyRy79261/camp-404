@@ -18,7 +18,7 @@ import {
   sendCaptainPromotionAction,
 } from "./actions";
 
-// Assign-captain double-opt-in dialog (board S17 AssignCaptain). Captain rank is
+// Assign-captain double-opt-in dialog. Captain rank is
 // two-sided: sending a request never flips rank — only the target accepting in
 // their own app does (on the home / notifications surface). This dialog sends and
 // (while the request is still open) can cancel; the step tracker reflects the
@@ -37,20 +37,18 @@ function OptInStepTracker({
     { label: "They accept in their app", done: accepted },
   ];
   return (
-    <ol className="flex flex-col gap-3 rounded-lg border bg-muted p-3.5">
+    <ol className="flex flex-col divide-y divide-border rounded-lg border bg-muted/40 px-3">
       {steps.map((step) => (
-        <li key={step.label} className="flex items-center gap-2.5">
+        <li key={step.label} className="flex items-center gap-2.5 py-2.5">
           {step.done ? (
             <CircleCheck aria-hidden className="h-4 w-4 text-accent" />
           ) : (
             <Circle aria-hidden className="h-4 w-4 text-muted-foreground" />
           )}
-          <span className="flex-1 font-mono text-label text-foreground">
-            {step.label}
-          </span>
+          <span className="flex-1 text-sm text-foreground">{step.label}</span>
           <span
             className={cn(
-              "font-mono text-caption font-bold",
+              "text-xs font-medium uppercase tracking-wide",
               step.done ? "text-accent" : "text-muted-foreground",
             )}
           >
@@ -141,16 +139,10 @@ export function AssignCaptainDialog({
 
   return (
     <Dialog open={open} onOpenChange={requestOpenChange}>
-      <DialogContent
-        className="border-secondary sm:max-w-md"
-        showCloseButton={!isPending}
-      >
+      <DialogContent className="sm:max-w-md" showCloseButton={!isPending}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ShieldPlus
-              aria-hidden
-              className="h-4 w-4 text-secondary-foreground"
-            />
+            <ShieldPlus aria-hidden className="h-4 w-4 text-accent" />
             Assign captain
           </DialogTitle>
           <DialogDescription>
@@ -160,7 +152,7 @@ export function AssignCaptainDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <p className="font-mono text-lg font-bold text-foreground">
+        <p className="text-base font-semibold text-foreground">
           Make {name} a captain?
         </p>
 

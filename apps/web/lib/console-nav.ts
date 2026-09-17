@@ -21,8 +21,16 @@ export const CONSOLE_NAV: readonly ConsoleNavEntry[] = [
   // Every approved member browses the roster; captains get the full triage
   // view (captains/camp-management/page.tsx picks the projection).
   { href: "/captains/camp-management", label: "Roster", rank: "camp_member" },
-  { href: "/captains/questionnaires", label: "Questionnaires", rank: "team_lead" },
-  { href: "/captains/announcements", label: "Announcements", rank: "team_lead" },
+  {
+    href: "/captains/questionnaires",
+    label: "Questionnaires",
+    rank: "team_lead",
+  },
+  {
+    href: "/captains/announcements",
+    label: "Announcements",
+    rank: "team_lead",
+  },
   { href: "/captains/payments", label: "Payments", rank: "captain" },
   { href: "/captains/camp-settings", label: "Camp settings", rank: "captain" },
   { href: "/captains/audit", label: "Audit", rank: "captain" },

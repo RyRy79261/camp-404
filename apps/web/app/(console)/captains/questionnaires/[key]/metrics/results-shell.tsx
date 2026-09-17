@@ -1,16 +1,19 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
+import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
-import { GhostBack } from "@camp404/ui/components/ghost-back";
+import { PageHeading } from "@camp404/ui/components/page-heading";
 import { cycleLabel, type ResultsView } from "./results-data";
 import { ResultsNav, type ResultsViewName } from "./results-nav";
 
-// The page frame both results routes share: back link, title, year, and the
-// view/year switch. Kept here beside the loader so /metrics and /responses can
-// never drift into two different-looking versions of one surface.
+// The page frame both results routes share, from the AfrikaBurn console's
+// results page: the heading, the year and send badges, and the view/year switch. Kept
+// here beside the loader so /metrics and /responses can never drift into two
+// different-looking versions of one surface.
 
 const SENT_ON = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -19,27 +22,17 @@ const SENT_ON = new Intl.DateTimeFormat("en-GB", {
   timeZone: CAMP_TIME_ZONE,
 });
 
-/** The frame with no data behind it — the locked / not-yet-published states. */
-export function ResultsFrame({
-  questionnaireKey,
-  wide = false,
-  children,
-}: {
-  questionnaireKey: string;
-  wide?: boolean;
-  children: ReactNode;
-}) {
+const EYEBROW = "Questionnaires / Results";
+
+/** The way to the editor, the heading's one action. */
+function EditAction({ questionnaireKey }: { questionnaireKey: string }) {
   return (
-    <main className={`mx-auto px-4 py-6 ${wide ? "max-w-3xl" : "max-w-lg"}`}>
-      <GhostBack
-        linkAs={Link}
-        href={`/captains/questionnaires/${questionnaireKey}`}
-        className="-ml-2 mb-4"
-      >
-        Editor
-      </GhostBack>
-      {children}
-    </main>
+    <Button asChild variant="outline">
+      <Link href={`/captains/questionnaires/${questionnaireKey}`}>
+        <Pencil aria-hidden />
+        Edit questionnaire
+      </Link>
+    </Button>
   );
 }
 
@@ -48,11 +41,18 @@ export function ResultsLocked({
 }: {
   questionnaireKey: string;
 }) {
+  // Nothing about the questionnaire is read for a viewer below captain, so the
+  // heading names the page, not the questionnaire. The editor link carries only
+  // the key already in the URL; a lead may be this questionnaire's author.
   return (
-    <ResultsFrame questionnaireKey={questionnaireKey}>
-      <h1 className="mb-4 text-2xl font-bold">Results</h1>
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow={EYEBROW}
+        title="Results"
+        actions={<EditAction questionnaireKey={questionnaireKey} />}
+      />
       <CaptainLock message="Only captains can see questionnaire answers." />
-    </ResultsFrame>
+    </div>
   );
 }
 
@@ -62,9 +62,13 @@ export function ResultsUnpublished({
   questionnaireKey: string;
 }) {
   return (
-    <ResultsFrame questionnaireKey={questionnaireKey}>
-      <h1 className="mb-4 text-2xl font-bold">Results</h1>
-      <Alert variant="info">
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow={EYEBROW}
+        title="Results"
+        actions={<EditAction questionnaireKey={questionnaireKey} />}
+      />
+      <Alert variant="info" className="max-w-3xl">
         <span>
           This questionnaire has never been published, so nobody has been asked
           it yet.{" "}
@@ -76,7 +80,7 @@ export function ResultsUnpublished({
           </Link>
         </span>
       </Alert>
-    </ResultsFrame>
+    </div>
   );
 }
 
@@ -84,12 +88,13 @@ export function ResultsUnpublished({
 export function ResultsShell({
   view,
   viewName,
-  wide = false,
+  toolbar,
   children,
 }: {
   view: ResultsView;
   viewName: ResultsViewName;
-  wide?: boolean;
+  /** Controls for this view, beside the view/year switch (e.g. the export). */
+  toolbar?: ReactNode;
   children: ReactNode;
 }) {
   const active = view.activeActivation;
@@ -102,24 +107,28 @@ export function ResultsShell({
       : cycleLabel(view.currentCycle, view.currentCycle, view.cycleNames);
 
   return (
-    <ResultsFrame questionnaireKey={view.key} wide={wide}>
-      <header className="mb-4">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="min-w-0 flex-1 break-words text-2xl font-bold">
-            {view.title}
-          </h1>
-          <Badge variant={isPastYear ? "outline" : "default"} className="mt-1">
-            {year}
-          </Badge>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {active
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow={EYEBROW}
+        title={view.title}
+        description={
+          active
             ? `${active.status === "open" ? "Sent" : "Last sent"} ${SENT_ON.format(active.openedAt ?? active.createdAt)} · version ${active.version}`
-            : `Not sent in ${year}.`}
-        </p>
-      </header>
+            : `Not sent in ${year}.`
+        }
+        actions={<EditAction questionnaireKey={view.key} />}
+      />
 
-      <div className="mb-5">
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <Badge variant={isPastYear ? "outline" : "default"}>{year}</Badge>
+        {active && (
+          <Badge variant={active.status === "open" ? "success" : "outline"}>
+            {active.status === "open" ? "Open" : "Closed"}
+          </Badge>
+        )}
+      </div>
+
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ResultsNav
           questionnaireKey={view.key}
           view={viewName}
@@ -129,6 +138,7 @@ export function ResultsShell({
             label: cycleLabel(c, view.currentCycle, view.cycleNames),
           }))}
         />
+        {toolbar}
       </div>
 
       {/*
@@ -138,7 +148,7 @@ export function ResultsShell({
         a number.
       */}
       {isPastYear && (
-        <Alert variant="info" className="mb-4">
+        <Alert variant="info" className="mb-6">
           <span>
             You&rsquo;re looking at {year}. These answers are kept as they were;
             this year&rsquo;s are under {currentYear}.
@@ -147,6 +157,6 @@ export function ResultsShell({
       )}
 
       {children}
-    </ResultsFrame>
+    </div>
   );
 }

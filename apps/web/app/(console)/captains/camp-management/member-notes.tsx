@@ -3,16 +3,23 @@
 import { useState, useTransition } from "react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
 import { Label } from "@camp404/ui/components/label";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { addMemberNoteAction, type MemberNotesResult } from "./actions";
 
-// Captains' notes on a member, inside the captain's member-profile panel
-// (owner's call, 2026-09-16: captains only, audited, never in the CSV). The
-// member never sees them. Append-only: there is no edit or delete, so the list
-// is its own history. No board draws this section; it reuses the panel's
-// section heading and the Label + Textarea pair the reject dialog uses.
+// Captains' notes on a member, a card in the captain's member profile (owner's
+// call, 2026-09-16: captains only, audited, never in the CSV). The member never
+// sees them. Append-only: there is no edit or delete, so the list is its own
+// history. Drawn like the AfrikaBurn console's org-internal notes: a timeline
+// of bordered notes, then an add form.
 
 type Note = Extract<MemberNotesResult, { ok: true }>["notes"][number];
 
@@ -53,60 +60,62 @@ export function MemberNotes({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <h3 className="font-mono text-micro font-bold uppercase tracking-wide text-muted-foreground">
-          Captain notes
-        </h3>
-        <p className="text-xs text-muted-foreground">
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Captain notes</CardTitle>
+        <CardDescription>
           Only captains see these. The member never does.
-        </p>
-      </div>
-
-      {notes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No notes yet.</p>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {notes.map((note) => (
-            <li key={note.id} className="flex flex-col gap-1">
-              <p className="whitespace-pre-line text-sm text-foreground">
-                {note.body}
-              </p>
-              <p className="font-mono text-caption text-muted-foreground">
-                {note.authorName ?? "A former captain"} ·{" "}
-                {when.format(new Date(note.createdAt))}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={fieldId}>Add a note</Label>
-        <Textarea
-          id={fieldId}
-          value={draft}
-          onChange={(e) => setDraft(e.currentTarget.value)}
-          rows={3}
-          maxLength={MAX_LENGTH}
-          disabled={isPending}
-        />
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {notes.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+            No notes yet.
           </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {notes.map((note) => (
+              <li key={note.id} className="rounded-lg border bg-muted/40 p-3">
+                <p className="whitespace-pre-line text-sm text-foreground">
+                  {note.body}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {note.authorName ?? "A former captain"} ·{" "}
+                  {when.format(new Date(note.createdAt))}
+                </p>
+              </li>
+            ))}
+          </ul>
         )}
-        <Button
-          type="button"
-          variant="outline"
-          className="self-start"
-          disabled={isPending || draft.trim().length === 0}
-          onClick={add}
-        >
-          {isPending && <Spinner size="sm" />}
-          Add note
-        </Button>
-      </div>
-    </div>
+
+        <div className="flex flex-col gap-2 border-t pt-4">
+          <Label htmlFor={fieldId}>Add a note</Label>
+          <Textarea
+            id={fieldId}
+            value={draft}
+            onChange={(e) => setDraft(e.currentTarget.value)}
+            rows={3}
+            maxLength={MAX_LENGTH}
+            disabled={isPending}
+          />
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              disabled={isPending || draft.trim().length === 0}
+              onClick={add}
+            >
+              {isPending && <Spinner size="sm" />}
+              Add note
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

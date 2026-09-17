@@ -6,7 +6,13 @@ import { useRouter } from "next/navigation";
 import { Loader2, Search, Send, TriangleAlert, Undo2 } from "lucide-react";
 import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
-import { Card } from "@camp404/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import {
   Dialog,
@@ -275,158 +281,186 @@ export function SendForm({
 
   if (openActivationId) {
     return (
-      <Card className="flex flex-col gap-4 p-4">
-        {confirmDialog}
-        <Alert variant="warning">
-          <TriangleAlert aria-hidden />
-          <span>
-            {!asLead
-              ? `“${title}” is already sent. Close the current send before sending it again with new settings.`
-              : `“${title}” is already sent. A captain can close that send so it can go out again.`}
-          </span>
-        </Alert>
-        <div className="flex gap-2">
-          {!asLead && (
-            <Button
-              type="button"
-              onClick={() => void closeCurrent()}
-              disabled={pending}
-            >
-              {pending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Undo2 className="size-4" />
-              )}
-              Close current send
-            </Button>
-          )}
-          <Button asChild variant="outline">
-            {asLead ? (
-              <Link href="/captains/questionnaires">
-                Back to questionnaires
-              </Link>
-            ) : (
-              <Link href={`/captains/questionnaires/${questionnaireKey}`}>
-                Back to editor
-              </Link>
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-6">
+          {confirmDialog}
+          <Alert variant="warning">
+            <TriangleAlert aria-hidden />
+            <span>
+              {!asLead
+                ? `“${title}” is already sent. Close the current send before sending it again with new settings.`
+                : `“${title}” is already sent. A captain can close that send so it can go out again.`}
+            </span>
+          </Alert>
+          <div className="flex gap-2">
+            {!asLead && (
+              <Button
+                type="button"
+                onClick={() => void closeCurrent()}
+                disabled={pending}
+              >
+                {pending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Undo2 className="size-4" />
+                )}
+                Close current send
+              </Button>
             )}
-          </Button>
-        </div>
+            <Button asChild variant="outline">
+              {asLead ? (
+                <Link href="/captains/questionnaires">
+                  Back to questionnaires
+                </Link>
+              ) : (
+                <Link href={`/captains/questionnaires/${questionnaireKey}`}>
+                  Back to editor
+                </Link>
+              )}
+            </Button>
+          </div>
+        </CardContent>
       </Card>
     );
   }
 
+  // The AfrikaBurn activate form: an Audience card, a Delivery card, then the
+  // Send row.
   return (
-    <Card className="flex flex-col gap-5 p-4">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="send-scope">Who should answer “{title}”?</Label>
-        <Select value={scope} onValueChange={(v) => setScope(v as Scope)}>
-          <SelectTrigger id="send-scope">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {scopeOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+    <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Audience</CardTitle>
+          <CardDescription>Who is asked to answer.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="send-scope">Who should answer “{title}”?</Label>
+            <Select value={scope} onValueChange={(v) => setScope(v as Scope)}>
+              <SelectTrigger id="send-scope">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {scopeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-      {scope === "team" && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="send-team">Which team?</Label>
-          <Select value={team} onValueChange={setTeam}>
-            <SelectTrigger id="send-team">
-              <SelectValue placeholder="Pick a team" />
-            </SelectTrigger>
-            <SelectContent>
-              {teamOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+          {scope === "team" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="send-team">Which team?</Label>
+              <Select value={team} onValueChange={setTeam}>
+                <SelectTrigger id="send-team">
+                  <SelectValue placeholder="Pick a team" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teamOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-      {scope === "individual" && (
-        <div className="flex flex-col gap-2">
-          <Label>Choose members ({selected.size} selected)</Label>
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3">
-            <Search aria-hidden className="size-4 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.currentTarget.value)}
-              placeholder="Search members"
-              aria-label="Search members"
-              className="border-0 bg-transparent px-0 focus-visible:ring-0"
+          {scope === "individual" && (
+            <div className="flex flex-col gap-2">
+              <Label>Choose members ({selected.size} selected)</Label>
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3">
+                <Search aria-hidden className="size-4 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.currentTarget.value)}
+                  placeholder="Search members"
+                  aria-label="Search members"
+                  className="border-0 bg-transparent px-0 focus-visible:ring-0"
+                />
+              </div>
+              <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-lg border border-border p-1">
+                {filtered.length === 0 ? (
+                  <li className="px-2 py-3 text-center text-sm text-muted-foreground">
+                    No members match “{query}”.
+                  </li>
+                ) : (
+                  filtered.map((m) => (
+                    <li key={m.id}>
+                      <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted">
+                        <Checkbox
+                          checked={selected.has(m.id)}
+                          onCheckedChange={() => toggle(m.id)}
+                          aria-label={m.label}
+                        />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate text-sm font-medium">
+                            {m.label}
+                          </span>
+                          {m.sub && (
+                            <span className="truncate text-xs text-muted-foreground">
+                              {m.sub}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          )}
+
+          <AudienceCount count={audienceCount} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Delivery</CardTitle>
+          <CardDescription>
+            Whether it holds the app, and when it is due.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="send-blocking">Blocking</Label>
+                <BlockingBadge blocking={blocking} />
+              </div>
+              <span className="text-xs text-muted-foreground">
+                Members must answer before they can use the rest of the app.
+              </span>
+            </div>
+            <Switch
+              id="send-blocking"
+              checked={blocking}
+              onCheckedChange={setBlocking}
             />
           </div>
-          <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-lg border border-border p-1">
-            {filtered.length === 0 ? (
-              <li className="px-2 py-3 text-center text-sm text-muted-foreground">
-                No members match “{query}”.
-              </li>
-            ) : (
-              filtered.map((m) => (
-                <li key={m.id}>
-                  <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted">
-                    <Checkbox
-                      checked={selected.has(m.id)}
-                      onCheckedChange={() => toggle(m.id)}
-                      aria-label={m.label}
-                    />
-                    <span className="flex min-w-0 flex-col">
-                      <span className="truncate text-sm font-medium">
-                        {m.label}
-                      </span>
-                      {m.sub && (
-                        <span className="truncate text-xs text-muted-foreground">
-                          {m.sub}
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
 
-      <AudienceCount count={audienceCount} />
-
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="send-blocking">Blocking</Label>
-            <BlockingBadge blocking={blocking} />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="send-due">Due date (optional)</Label>
+            <Input
+              id="send-due"
+              type="datetime-local"
+              className="max-w-xs"
+              value={dueAtLocal}
+              onChange={(e) => setDueAtLocal(e.currentTarget.value)}
+            />
           </div>
-          <span className="text-xs text-muted-foreground">
-            Members must answer before they can use the rest of the app.
-          </span>
-        </div>
-        <Switch
-          id="send-blocking"
-          checked={blocking}
-          onCheckedChange={setBlocking}
-        />
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="send-due">Due date (optional)</Label>
-        <Input
-          id="send-due"
-          type="datetime-local"
-          value={dueAtLocal}
-          onChange={(e) => setDueAtLocal(e.currentTarget.value)}
-        />
-      </div>
-
-      <div className="flex gap-2">
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button asChild variant="outline">
+          <Link href={`/captains/questionnaires/${questionnaireKey}`}>
+            Cancel
+          </Link>
+        </Button>
         <Button type="button" onClick={attemptSend} disabled={pending}>
           {pending ? (
             <Loader2 className="size-4 animate-spin" />
@@ -434,11 +468,6 @@ export function SendForm({
             <Send className="size-4" />
           )}
           Send
-        </Button>
-        <Button asChild variant="outline">
-          <Link href={`/captains/questionnaires/${questionnaireKey}`}>
-            Cancel
-          </Link>
         </Button>
       </div>
 
@@ -465,6 +494,6 @@ export function SendForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }
