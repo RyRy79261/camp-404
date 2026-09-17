@@ -59,16 +59,37 @@ test("build, publish, send, answer, read the results", async ({
 
   // Read the results: the counts, then each answer.
   await captain.goto(`/captains/questionnaires/${GEAR.key}/metrics`);
-  // A compact StatTile: the number, then a row holding the label.
-  const answered = captain
-    .getByText("Answered", { exact: true })
-    .locator("xpath=../..");
-  await expect(answered).toContainText("2");
-  await captain.goto(`/captains/questionnaires/${GEAR.key}/responses`);
+  // The completion card counts both finished answers, and the Summary tab
+  // charts the one question: a count, since the answers are free text.
+  await expect(captain.getByText(/^2 answers summarised/)).toBeVisible();
+  await expect(captain.getByText("2 answered · 0 skipped")).toBeVisible();
+  await expect(captain.getByText("A dome tent")).toHaveCount(0);
+  // The Individual tab lists each answer under its question…
+  await captain
+    .getByRole("radiogroup", { name: "Results view" })
+    .getByRole("radio", { name: "Individual" })
+    .click();
+  await expect(captain).toHaveURL(
+    new RegExp(`/captains/questionnaires/${GEAR.key}/responses\\?cycle=`),
+  );
   const answers = captain.getByRole("table", { name: "Answers" });
   await expect(answers.getByText("A dome tent")).toBeVisible();
   await expect(answers.getByText("A bell tent")).toBeVisible();
-  await expect(captain.getByText("2 answers")).toBeVisible();
+  // …and opens one member's answers in the viewer.
+  await answers
+    .getByRole("button", { name: "View Mem Ber\u2019s response" })
+    .click();
+  const viewer = captain.getByRole("dialog", {
+    name: "Mem Ber\u2019s response",
+  });
+  await expect(viewer.getByText(GEAR.prompt)).toBeVisible();
+  await expect(viewer.getByText("A bell tent")).toBeVisible();
+  await captain.keyboard.press("Escape");
+  // /responses still opens straight on the table.
+  await captain.goto(`/captains/questionnaires/${GEAR.key}/responses`);
+  await expect(
+    captain.getByRole("table", { name: "Answers" }).getByText("A bell tent"),
+  ).toBeVisible();
 
   const href = await captain
     .getByRole("link", { name: /Export/ })

@@ -172,6 +172,8 @@ export interface ResultsSummary {
   inProgress: number;
   /** Members the ACTIVE send reached — see the note on `reachIsPartial`. */
   sent: number;
+  /** Of those, answered. */
+  completed: number;
   /** Of those, still pending. */
   outstanding: number;
   /** completed / (pending + completed) over the active send, or null. */
@@ -205,6 +207,79 @@ export function outstandingFor(view: ResultsView): ActivationResponseRow[] {
   );
 }
 
+/**
+ * Where one member stands on the send being viewed, as the Individual table's
+ * Status column reads it (AfrikaBurn's four statuses, plus `started`).
+ */
+export type RecipientStatus =
+  | "completed"
+  | "started"
+  | "pending"
+  | "waived"
+  | "expired";
+
+/** One row of the Individual table: a member, their status, their answers. */
+export interface Recipient {
+  userId: string;
+  name: string;
+  status: RecipientStatus;
+  /** Their finished answers this year, or null when they have none. */
+  respondent: Respondent | null;
+}
+
+/**
+ * Everyone the Individual table lists: each finished answer this year (newest
+ * first), then, by name, everyone the ACTIVE send is still waiting on or has
+ * closed on, and anyone who started the form this year without finishing.
+ *
+ * A gate that belongs to another send says nothing about this one — after a
+ * rollover the gate row points at next year's send — so, as in `outstandingFor`,
+ * only the active send's gates give a status. A part-filled form is `started`
+ * and carries no answers: part-answers are not results.
+ */
+export function recipientsOf(view: ResultsView): Recipient[] {
+  const respondents = respondentsOf(view);
+  const finished = new Set(respondents.map((r) => r.userId));
+  const activeId = view.activeActivation?.id ?? null;
+
+  const rest: Recipient[] = [];
+  for (const row of view.rows) {
+    if (finished.has(row.userId)) continue;
+    const started = row.responses !== null;
+    let status: RecipientStatus | null = null;
+    if (activeId && row.gateActivationId === activeId && row.gateStatus) {
+      status =
+        row.gateStatus === "pending"
+          ? started
+            ? "started"
+            : "pending"
+          : row.gateStatus;
+    } else if (started) {
+      status = "started";
+    }
+    if (status) {
+      rest.push({
+        userId: row.userId,
+        name: memberName(row.displayName),
+        status,
+        respondent: null,
+      });
+    }
+  }
+
+  return [
+    ...respondents.map(
+      (r): Recipient => ({
+        userId: r.userId,
+        name: r.name,
+        status: "completed",
+        respondent: r,
+      }),
+    ),
+    ...rest,
+  ];
+}
+
 /** The counts both results routes put at the top of the page. */
 export function summarise(view: ResultsView): ResultsSummary {
   const respondents = view.rows.filter((r) => r.completedAt !== null).length;
@@ -226,6 +301,7 @@ export function summarise(view: ResultsView): ResultsSummary {
     respondents,
     inProgress,
     sent: gates.length,
+    completed,
     outstanding,
     completionPercent:
       denominator === 0 ? null : Math.round((completed / denominator) * 100),
