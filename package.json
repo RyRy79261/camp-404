@@ -11,11 +11,15 @@
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "design:extract-boards": "node scripts/pencil/extract-boards.mjs design/app.pen design/.spec-extract",
+    "db:local:up": "docker compose -f docker-compose.local.yml up -d --wait",
+    "db:local:down": "docker compose -f docker-compose.local.yml down",
+    "db:local:migrate": "NEON_LOCAL_PROXY=1 DATABASE_URL=postgres://postgres:postgres@db.localtest.me:5432/main pnpm --filter @camp404/db exec tsx scripts/migrate-local.ts",
     "prepare": "husky"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",
     "@commitlint/config-conventional": "^21.2.2",
+    "@vitest/coverage-v8": "4.1.11",
     "husky": "^9.1.7",
     "prettier": "^3.8.3",
     "turbo": "^2.9.14",

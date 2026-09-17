@@ -54,9 +54,18 @@ export function ProfileEditForm({
         </Alert>
       )}
 
-      <div className="flex items-center justify-between">
-        <Button asChild variant="ghost" disabled={isPending}>
-          <Link href="/profile">Cancel</Link>
+      {/* Board S10: Cancel and Save sit together on the right. A link cannot be
+          disabled, so while saving it says so and ignores the pointer. */}
+      <div className="flex items-center justify-end gap-2">
+        <Button asChild variant="ghost">
+          <Link
+            href="/profile"
+            aria-disabled={isPending || undefined}
+            tabIndex={isPending ? -1 : undefined}
+            className={isPending ? "pointer-events-none opacity-50" : undefined}
+          >
+            Cancel
+          </Link>
         </Button>
         <Button type="submit" disabled={isPending}>
           {isPending ? "Saving…" : "Save changes"}

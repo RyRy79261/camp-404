@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { Fragment, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, RotateCcw, Shield, UserX, X } from "lucide-react";
 import {
@@ -15,8 +15,10 @@ import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { Divider } from "@camp404/ui/components/divider";
+import { Skeleton, SkeletonRegion } from "@camp404/ui/components/skeleton";
 import { Spinner } from "@camp404/ui/components/spinner";
 import type { RosterRow } from "@/lib/camp-roster";
+import { approvalSummary } from "@/lib/approval-summary";
 import type { DetailItem, PresentedMember } from "@/lib/member-detail";
 import {
   decideApprovalAction,
@@ -208,7 +210,13 @@ export function MemberProfile({
         prev.state === "loaded"
           ? {
               ...prev,
-              member: { ...prev.member, approvalStatus: to },
+              // The summary line too, or it says "Awaiting a captain's
+              // decision" beside an Approved badge until the panel reopens.
+              member: {
+                ...prev.member,
+                approvalStatus: to,
+                approvalSummary: approvalSummary(to),
+              },
               reviewOptions: availableReviewActions({
                 status: to,
                 isSelf: false,
@@ -333,7 +341,7 @@ export function MemberProfile({
       ref={panelRef}
       tabIndex={-1}
       aria-label={`${row.displayName} profile`}
-      className="flex flex-col gap-5 rounded-lg border bg-card p-5 outline-none sm:p-6"
+      className="flex flex-col gap-5 rounded-lg border bg-card p-5 outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200 sm:p-6"
     >
       {/* PanelBar: console prompt + record index + close. */}
       <div className="flex items-center gap-2 border-b pb-3.5">
@@ -392,11 +400,24 @@ export function MemberProfile({
       </div>
 
       {/* Body — loads via the captain-gated action. */}
+      {/* The shape of what is coming (the detail rows, then a section), so
+          the panel does not jump when it arrives. One announcing region. */}
       {detail.state === "loading" && (
-        <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-          <Spinner size="sm" />
-          Loading…
-        </div>
+        <SkeletonRegion
+          label="Loading profile…"
+          className="flex flex-col gap-4 py-2"
+        >
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-x-4 gap-y-3">
+            {Array.from({ length: 6 }, (_, i) => (
+              <Fragment key={i}>
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-full max-w-48" />
+              </Fragment>
+            ))}
+          </div>
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-14 w-full rounded-lg" />
+        </SkeletonRegion>
       )}
       {detail.state === "error" && (
         <p className="py-8 text-center text-sm text-destructive">

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import NotFound from "@/app/not-found";
 import ErrorPage from "@/app/error";
+import CaptainsError from "@/app/captains/error";
+import ToolsError from "@/app/tools/error";
 
 // Smoke tests for the recovery surfaces added alongside the onboarding fix.
 // (global-error.tsx renders its own <html>/<body>, which jsdom's container
@@ -39,5 +41,23 @@ describe("error boundary page", () => {
   it("omits the trace code when there is no digest", () => {
     render(<ErrorPage error={new Error("boom")} reset={() => {}} />);
     expect(screen.queryByText(/Trace:/)).toBeNull();
+  });
+});
+
+describe("section error boundaries", () => {
+  it("keeps the way back inside the section", () => {
+    const { unmount } = render(
+      <CaptainsError error={new Error("boom")} reset={() => {}} />,
+    );
+    expect(
+      screen
+        .getByRole("link", { name: "Back to camp tools" })
+        .getAttribute("href"),
+    ).toBe("/captains/tools");
+    unmount();
+    render(<ToolsError error={new Error("boom")} reset={() => {}} />);
+    expect(
+      screen.getByRole("link", { name: "Back to tools" }).getAttribute("href"),
+    ).toBe("/tools");
   });
 });

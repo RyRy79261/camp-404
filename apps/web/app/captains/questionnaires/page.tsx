@@ -1,9 +1,12 @@
+import Link from "next/link";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { GhostBack } from "@camp404/ui/components/ghost-back";
 import { captainPageGate } from "@/lib/captain-gate";
-import { listOpenSendBlocking } from "@camp404/db/questionnaire-lifecycle";
-import { listDefinitionsForViewer } from "@/lib/questionnaire-definitions";
+import {
+  listDefinitionsForViewer,
+  listOpenSendBlocking,
+} from "@/lib/questionnaire-definitions";
 import { QuestionnaireHub, type HubItem } from "./questionnaire-hub";
 
 export const dynamic = "force-dynamic";
@@ -50,11 +53,11 @@ export default async function QuestionnairesPage() {
   return (
     <main className="mx-auto max-w-lg px-4 py-6">
       {rank !== "camp_member" ? (
-        <GhostBack href="/captains/tools" className="-ml-2 mb-4">
+        <GhostBack linkAs={Link} href="/captains/tools" className="-ml-2 mb-4">
           Camp tools
         </GhostBack>
       ) : (
-        <GhostBack href="/" className="-ml-2 mb-4">
+        <GhostBack linkAs={Link} href="/" className="-ml-2 mb-4">
           Home
         </GhostBack>
       )}
@@ -69,7 +72,10 @@ export default async function QuestionnairesPage() {
       {canAuthor ? (
         <QuestionnaireHub items={items} />
       ) : (
-        <CaptainLock message="The questionnaire builder is for team leads and captains. Your rank doesn't have clearance for this." />
+        <CaptainLock
+          title="Team leads and captains only"
+          message="The questionnaire builder is for team leads and captains. Your rank doesn't have clearance for this."
+        />
       )}
     </main>
   );

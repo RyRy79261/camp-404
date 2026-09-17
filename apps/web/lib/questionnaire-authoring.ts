@@ -11,10 +11,10 @@ export type AuthoringCheck = { ok: true } | { ok: false; error: string };
  * a team lead only their own. Editing a PUBLISHED head is allowed (the §4.2
  * re-version flow): autosave changes the working head while the live snapshot
  * keeps serving open sends until a captain re-publishes. Shared by the builder
- * actions and the builder image upload route.
+ * actions, the builder image upload route and the MCP drafting tools.
  */
 export async function canEditQuestionnaire(
-  author: { campUser: CampUser; rank: ViewerRank },
+  author: { campUser: Pick<CampUser, "id">; rank: ViewerRank },
   key: string,
 ): Promise<AuthoringCheck> {
   const meta = await getDefinitionMetaRow(key);

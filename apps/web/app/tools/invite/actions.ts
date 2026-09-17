@@ -28,6 +28,8 @@ export type CreateInviteResult =
   | {
       ok: false;
       error: string;
+      /** The code was taken between the availability check and the save. */
+      taken?: string;
     };
 
 const MINT_REFUSAL: Record<MemberBlock["reason"], string> = {
@@ -138,7 +140,7 @@ export async function createInviteAction(
     }
     const existing = await findInviteCodeByCode(code);
     if (existing) {
-      return { ok: false, error: `'${code}' is already taken.` };
+      return { ok: false, error: `'${code}' is already taken.`, taken: code };
     }
   } else {
     code = await generateUnusedCode();

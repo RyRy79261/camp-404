@@ -7,6 +7,8 @@ import { SetupWizard } from "./setup-wizard";
 // statically prerendered.
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Set up Camp 404 — Camp 404" };
+
 /**
  * First-time setup. Reachable only on a fresh system (no captain yet) by a
  * signed-in user; it elects them the founding captain and mints the root

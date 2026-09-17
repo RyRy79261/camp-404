@@ -11,12 +11,15 @@ import {
   type QuestionnaireResponseValue,
   type TextFormat,
 } from "@camp404/types";
-import { Checkbox } from "@camp404/ui/components/checkbox";
 import { Combobox } from "@camp404/ui/components/combobox";
 import { DateControl } from "@camp404/ui/components/date-control";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
-import { OptionCardGroup } from "@camp404/ui/components/option-card-group";
+import {
+  CheckboxCard,
+  CheckboxCardGroup,
+  OptionCardGroup,
+} from "@camp404/ui/components/option-card-group";
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { Slider } from "@camp404/ui/components/slider";
 import { Switch } from "@camp404/ui/components/switch";
@@ -24,6 +27,7 @@ import { TextareaWithCount } from "@camp404/ui/components/textarea-with-count";
 import { CircleAlert } from "lucide-react";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { RecorderPanel } from "../voice/recorder-panel";
+import { useDictationToggle } from "../voice/use-dictation-toggle";
 import { useVoiceSupported } from "../voice/use-voice-recorder";
 import { AvatarUpload } from "@camp404/ui/components/avatar-upload";
 import { cropResizeToSquare } from "@/lib/image";
@@ -283,45 +287,28 @@ function FieldInput({
       );
     }
     case "multi_select": {
-      const selected = Array.isArray(value)
-        ? new Set(value as string[])
-        : new Set<string>();
+      const values = Array.isArray(value) ? (value as string[]) : [];
       return (
-        <div
+        <CheckboxCardGroup
           id={id}
-          role="group"
           aria-label={ariaLabel}
-          className="flex flex-col gap-3"
+          options={question.options}
+          values={values.filter((v) => !isOtherAnswer(v))}
+          onValuesChange={(picked) => {
+            // An "Other…" answer lives in the same list; keep it.
+            const other = values.filter((v) => isOtherAnswer(v));
+            onChange([...picked, ...other]);
+          }}
         >
-          {question.options.map((o) => {
-            const checkboxId = `${id}-${o.value}`;
-            return (
-              <div key={o.value} className="flex items-center gap-2.5">
-                <Checkbox
-                  id={checkboxId}
-                  checked={selected.has(o.value)}
-                  onCheckedChange={(checked) => {
-                    const next = new Set(selected);
-                    if (checked === true) next.add(o.value);
-                    else next.delete(o.value);
-                    onChange(Array.from(next));
-                  }}
-                />
-                <Label htmlFor={checkboxId} className="text-sm font-normal">
-                  {o.label}
-                </Label>
-              </div>
-            );
-          })}
           {question.allowOther && (
             <MultiOther
               id={`${id}-other`}
               prompt={question.prompt}
-              values={Array.isArray(value) ? (value as string[]) : []}
+              values={values}
               onChange={onChange}
             />
           )}
-        </div>
+        </CheckboxCardGroup>
       );
     }
     case "short_text":
@@ -497,18 +484,14 @@ function MultiOther({
   const rest = values.filter((v) => !isOtherAnswer(v));
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2.5">
-        <Checkbox
-          id={id}
-          checked={other !== undefined}
-          onCheckedChange={(checked) =>
-            onChange(checked === true ? [...rest, toOtherAnswer("")] : rest)
-          }
-        />
-        <Label htmlFor={id} className="text-sm font-normal">
-          Other…
-        </Label>
-      </div>
+      <CheckboxCard
+        id={id}
+        checked={other !== undefined}
+        label="Other…"
+        onCheckedChange={(checked) =>
+          onChange(checked ? [...rest, toOtherAnswer("")] : rest)
+        }
+      />
       {other !== undefined && (
         <Input
           aria-label={`Your other answer to: ${prompt}`}
@@ -554,7 +537,7 @@ function LongTextField({
   onChange: (value: string) => void;
   fullScreen?: boolean;
 }) {
-  const [dictating, setDictating] = React.useState(false);
+  const dictation = useDictationToggle();
   const voiceSupported = useVoiceSupported();
 
   function appendTranscript(text: string) {
@@ -580,15 +563,16 @@ function LongTextField({
       />
       {question.enableDictation &&
         voiceSupported &&
-        (dictating ? (
+        (dictation.dictating ? (
           <RecorderPanel
             onTranscript={appendTranscript}
-            onDismiss={() => setDictating(false)}
+            onDismiss={dictation.close}
             promptKey="questionnaire"
           />
         ) : (
           <DictatePill
-            onActivate={() => setDictating(true)}
+            ref={dictation.pillRef}
+            onActivate={dictation.open}
             className="self-end"
           />
         ))}

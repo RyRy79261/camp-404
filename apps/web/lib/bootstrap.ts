@@ -4,7 +4,7 @@ import {
   bootstrapFirstCaptain,
   getBootstrapState,
 } from "@camp404/db/bootstrap";
-import { isE2ETestMode } from "./test-mode";
+import { usesTestStore } from "./test-mode";
 import { seedBurnerProfileAction } from "./users";
 import type { AuthenticatedUser } from "./auth";
 
@@ -20,7 +20,7 @@ export const FOUNDER_CODE = "meowzit";
  * flow (the test backend models no captains or bootstrap latch).
  */
 export async function isCampBootstrapped(): Promise<boolean> {
-  if (isE2ETestMode()) return true;
+  if (usesTestStore()) return true;
   const state = await getBootstrapState();
   return state.captainCount > 0 || state.bootstrappedAt !== null;
 }
@@ -36,7 +36,7 @@ export type SetupResult = { ok: true } | { ok: false; error: string };
 export async function runFirstTimeSetup(
   authUser: AuthenticatedUser,
 ): Promise<SetupResult> {
-  if (isE2ETestMode()) return { ok: true };
+  if (usesTestStore()) return { ok: true };
   // Clamp to the same 80-char cap the profile editor enforces.
   const displayName = (
     authUser.displayName ??
@@ -65,7 +65,7 @@ export async function runFirstTimeSetup(
  * guard only fires at <= 1).
  */
 export async function countActiveCaptains(): Promise<number> {
-  if (isE2ETestMode()) return 2;
+  if (usesTestStore()) return 2;
   const state = await getBootstrapState();
   return state.captainCount;
 }

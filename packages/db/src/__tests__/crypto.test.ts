@@ -32,6 +32,17 @@ afterEach(() => {
   else process.env.PGCRYPTO_KEY = originalKey;
 });
 
+describe("the key", () => {
+  it("refuses to encrypt with no key or a key under 16 characters", async () => {
+    const short = await loadCrypto("too-short");
+    expect(() => short.encrypt("P1234567")).toThrow(
+      "PGCRYPTO_KEY env var is required and must be at least 16 characters.",
+    );
+    const none = await loadCrypto("");
+    expect(() => none.encrypt("P1234567")).toThrow("PGCRYPTO_KEY");
+  });
+});
+
 describe("decryptField", () => {
   it("reports an empty column as absent, not unreadable", async () => {
     const { decryptField } = await loadCrypto(KEY_A);

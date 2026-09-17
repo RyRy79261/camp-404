@@ -1,3 +1,4 @@
+import * as React from "react";
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Mail } from "lucide-react";
@@ -32,5 +33,20 @@ describe("NavCard", () => {
     expect(screen.getByText("No icon")).toBeTruthy();
     // With no icon chip, only the trailing chevron svg is present (no IconBadge).
     expect(container.querySelectorAll("svg")).toHaveLength(1);
+  });
+});
+
+describe("NavCard linkAs", () => {
+  it("renders through the app's link component when given one", () => {
+    const AppLink = React.forwardRef<
+      HTMLAnchorElement,
+      React.ComponentProps<"a">
+    >((props, ref) => <a ref={ref} data-app-link="" {...props} />);
+    render(
+      <NavCard href="/tools/invite" title="Invite a member" linkAs={AppLink} />,
+    );
+    const link = screen.getByRole("link", { name: /Invite a member/ });
+    expect(link.hasAttribute("data-app-link")).toBe(true);
+    expect(link.getAttribute("href")).toBe("/tools/invite");
   });
 });

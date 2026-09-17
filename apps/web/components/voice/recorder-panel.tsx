@@ -10,6 +10,7 @@ import {
   Square,
   X,
 } from "lucide-react";
+import { humanDuration } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { cn } from "@camp404/ui/lib/utils";
@@ -57,6 +58,8 @@ export function RecorderPanel({
     discard,
     analyser,
     transcript,
+    stoppedAtLimit,
+    maxDurationMs: limitMs,
   } = useVoiceRecorder({ onTranscript, promptKey, maxDurationMs });
 
   const [elapsedMs, setElapsedMs] = React.useState(0);
@@ -76,6 +79,27 @@ export function RecorderPanel({
   React.useEffect(() => {
     if (transcript !== null) setEditedTranscript(transcript);
   }, [transcript]);
+
+  // Each state has one control to act on next. The one that had focus unmounts
+  // on every change, so move focus to the new one: Start when the panel opens,
+  // Stop while recording, the transcript to review, Try again after an error.
+  const startRef = React.useRef<HTMLButtonElement>(null);
+  const stopRef = React.useRef<HTMLButtonElement>(null);
+  const transcriptRef = React.useRef<HTMLTextAreaElement>(null);
+  const retryRef = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => {
+    const target =
+      state === "idle"
+        ? startRef.current
+        : state === "recording"
+          ? stopRef.current
+          : state === "transcript-review"
+            ? transcriptRef.current
+            : state === "error"
+              ? retryRef.current
+              : null;
+    target?.focus();
+  }, [state]);
 
   const isRecording = state === "recording";
   const isBusy = state === "processing" || state === "requesting";
@@ -104,7 +128,7 @@ export function RecorderPanel({
       role="group"
       aria-label="Voice dictation"
       className={cn(
-        "relative rounded-md border bg-card p-4",
+        "relative rounded-md border bg-card p-4 transition-colors motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200",
         state === "error" ? "border-destructive" : "border-border",
       )}
     >
@@ -121,14 +145,21 @@ export function RecorderPanel({
       </Button>
 
       {reviewing ? (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2.5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">
           <div className="flex items-center gap-1.5" aria-live="polite">
             <Check className="h-4 w-4 text-accent" aria-hidden />
             <p className="text-sm font-semibold text-foreground">
               Transcript ready — review &amp; edit
             </p>
           </div>
+          {stoppedAtLimit && (
+            <p className="text-xs text-muted-foreground">
+              Recording stopped at {humanDuration(limitMs / 1000)}, the longest
+              one clip can be.
+            </p>
+          )}
           <Textarea
+            ref={transcriptRef}
             aria-label="Edit transcript"
             value={editedTranscript}
             onChange={(e) => setEditedTranscript(e.currentTarget.value)}
@@ -169,6 +200,7 @@ export function RecorderPanel({
 
           {state === "idle" ? (
             <button
+              ref={startRef}
               type="button"
               onClick={() => void start()}
               aria-label="Start recording"
@@ -184,6 +216,7 @@ export function RecorderPanel({
               aria-hidden
               className={cn(
                 RING_BASE,
+                "transition-colors",
                 state === "requesting" &&
                   "border-2 border-accent bg-muted text-accent",
                 state === "recording" &&
@@ -211,6 +244,7 @@ export function RecorderPanel({
                 {mmss} · Listening…
               </p>
               <Button
+                ref={stopRef}
                 type="button"
                 variant="default"
                 className="w-full gap-2"
@@ -265,6 +299,7 @@ export function RecorderPanel({
                 </p>
               </div>
               <Button
+                ref={retryRef}
                 type="button"
                 variant="outline"
                 className="gap-2"

@@ -14,8 +14,10 @@
 //     (./access)
 //   - approval review: availableReviewActions, reviewRefusal,
 //     isReviewTransition — which vetting decisions exist (./approval-review)
-//   - family tree: buildTree, computeMatchIds, subtreeHasMatch,
-//     descendantCountLabel (./family-tree) — all cycle-guarded (OD9)
+//   - family tree: buildTree, computeLiteralMatchIds, computeMatchIds,
+//     subtreeHasMatch, descendantCountLabel, referralRosterForViewer
+//     (./family-tree) — all
+//     cycle-guarded (OD9)
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
 //     (./invites)
 //   - text utils: initialsFrom, slugify, humanizeKey (./text-utils)
@@ -88,6 +90,7 @@ export * from "./notification-links";
 export * from "./notifications";
 export * from "./read-rate";
 export * from "./duration";
+export * from "./audit-actions";
 export * from "./notification-days";
 export * from "./notification-email";
 export * from "./time-zone";

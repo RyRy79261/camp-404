@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { isE2ETestMode, TEST_USER_COOKIE } from "@/lib/test-mode";
+import { upsertE2EAuthUser } from "@camp404/db/e2e";
+import {
+  isE2ETestMode,
+  TEST_USER_COOKIE,
+  usesTestStore,
+} from "@/lib/test-mode";
 
 // E2E test-only login. Sets the `camp404_test_user` cookie that
 // `getAuthenticatedUser()` reads instead of consulting Stack. Returns 404
@@ -24,6 +29,12 @@ export async function POST(req: Request) {
     primaryEmail: body.email ?? null,
     displayName: body.displayName ?? body.email ?? null,
   };
+
+  // In the real-database run, give the login the sign-in record Neon Auth
+  // would hold, so reads that join a member's email find it.
+  if (!usesTestStore()) {
+    await upsertE2EAuthUser({ id: user.id, email: user.primaryEmail });
+  }
 
   const cookieStore = await cookies();
   cookieStore.set(TEST_USER_COOKIE, encodeURIComponent(JSON.stringify(user)), {

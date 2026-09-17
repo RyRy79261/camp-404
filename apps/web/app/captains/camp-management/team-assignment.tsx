@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { Label } from "@camp404/ui/components/label";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { Switch } from "@camp404/ui/components/switch";
+import { toast } from "@camp404/ui/components/toast";
 import { teamLabel } from "./roster-presentation";
 import {
   assignTeamAction,
@@ -28,6 +29,9 @@ import {
 // server refuses one anyway if a stale panel submits it. A membership on a
 // since-archived team still renders below, with a Remove — archiving a team
 // must not strand the members left on it.
+//
+// Each tick is a one-tap change, so a refused one is a toast, as on every
+// captain list.
 //
 // Every action answers with the member's refreshed membership list, so this
 // re-renders from the server's truth rather than guessing at the outcome of a
@@ -62,7 +66,6 @@ export function TeamAssignment({
   /** Hand the refreshed membership list back to the panel. */
   onChange: (teams: TeamMembership[]) => void;
 }) {
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const membership = new Map(teams.map((t) => [t.team as string, t]));
@@ -73,11 +76,10 @@ export function TeamAssignment({
   );
 
   function run(action: () => Promise<TeamAssignmentResult>) {
-    setError(null);
     startTransition(async () => {
       const res = await action();
       if (!res.ok) {
-        setError(res.error);
+        toast.error(res.error);
         return;
       }
       onChange(res.teams);
@@ -92,12 +94,6 @@ export function TeamAssignment({
         </h3>
         {isPending && <Spinner size="sm" />}
       </div>
-
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
 
       {assignableTeams.length === 0 ? (
         <p className="text-sm text-muted-foreground">

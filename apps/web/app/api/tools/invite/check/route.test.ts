@@ -15,7 +15,10 @@ vi.mock("@camp404/db/invite-codes", () => ({ findInviteCodeByCode: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({
   rateLimiter: { limit: vi.fn(() => ({ ok: true, retryAfterSeconds: 0 })) },
 }));
-vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: () => false }));
+vi.mock("@/lib/test-mode", () => ({
+  isE2ETestMode: () => false,
+  usesTestStore: () => false,
+}));
 vi.mock("@/lib/test-store", () => ({ testStore: {} }));
 
 import { GET } from "./route";

@@ -122,6 +122,23 @@
   }
 }
 
+/* Reduced motion, app-wide. Someone who asks their device for less motion gets
+   it everywhere, including motion added later without a motion-safe: prefix:
+   animations and transitions finish at once (a spinner stands still, a
+   dialog appears instead of sliding). Outside every layer, with !important, so
+   it wins over utilities and inline transition styles alike. Motion driven by
+   script (the Web Animations API) checks the same media query itself. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Layer-switch transition for the control panel's quadrant grid. */
 @keyframes cp-layer-in {
   from {

@@ -6,7 +6,11 @@ vi.mock("./actions", () => ({
   removeTeamAction: vi.fn(),
   setTeamLeadAction: vi.fn(),
 }));
+vi.mock("@camp404/ui/components/toast", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
 
+import { toast } from "@camp404/ui/components/toast";
 import { TeamAssignment } from "./team-assignment";
 import {
   assignTeamAction,
@@ -142,7 +146,7 @@ describe("TeamAssignment", () => {
     );
   });
 
-  it("surfaces a refused write inline and does not touch the membership list", async () => {
+  it("reports a refused write as a toast and does not touch the membership list", async () => {
     vi.mocked(assignTeamAction).mockResolvedValue({
       ok: false,
       error: "Captain access only.",
@@ -152,9 +156,7 @@ describe("TeamAssignment", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Kitchen" }));
 
     await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toMatch(
-        /Captain access only/,
-      ),
+      expect(toast.error).toHaveBeenCalledWith("Captain access only."),
     );
     expect(onChange).not.toHaveBeenCalled();
   });

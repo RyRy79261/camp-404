@@ -955,6 +955,8 @@ describe("teams, team leads and car seats go fresh at a rollover", () => {
       schema.teamMemberships,
       schema.driverProfiles,
       schema.carMembers,
+      schema.teamBudgets,
+      schema.adoptees,
     ]) {
       expect(
         await db.select().from(table).where(eq(table.cycle, 2027)),
@@ -1124,6 +1126,10 @@ describe("setFoundingYear adopts the year-scoped roster facts", () => {
       memberUserId: rider.id,
       cycle: UNSET_CYCLE,
     });
+    await db.insert(schema.teamBudgets).values({ team: "kitchen" });
+    await db
+      .insert(schema.adoptees)
+      .values({ slotNumber: 1, name: "Adoptee" });
 
     const res = await setFoundingYear({ year: 2026, actorUserId: null });
     expect(res.ok).toBe(true);
@@ -1132,6 +1138,8 @@ describe("setFoundingYear adopts the year-scoped roster facts", () => {
       teamMembershipsStamped: 1,
       driverProfilesStamped: 1,
       carSeatsStamped: 1,
+      teamBudgetsStamped: 1,
+      adopteesStamped: 1,
     });
 
     // Without this, a live camp's driver profiles would vanish from the roster

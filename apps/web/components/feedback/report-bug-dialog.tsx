@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { RecorderPanel } from "../voice/recorder-panel";
+import { useDictationToggle } from "../voice/use-dictation-toggle";
 import { useVoiceSupported } from "../voice/use-voice-recorder";
 import {
   submitFeedbackAction,
@@ -60,7 +61,7 @@ export function ReportBugDialog({
 }: ReportBugDialogProps) {
   const [kind, setKind] = React.useState<FeedbackKind>(defaultKind);
   const [description, setDescription] = React.useState("");
-  const [dictating, setDictating] = React.useState(false);
+  const dictation = useDictationToggle();
   const voiceSupported = useVoiceSupported();
   const [dictated, setDictated] = React.useState(false);
   const [useAi, setUseAi] = React.useState(true);
@@ -81,7 +82,7 @@ export function ReportBugDialog({
     setKind(defaultKind);
     setDescription(defaultDescription);
     setAttached(null);
-    setDictating(false);
+    dictation.setDictating(false);
     setDictated(false);
     setUseAi(true);
     setError(null);
@@ -98,8 +99,14 @@ export function ReportBugDialog({
     });
   }
 
+  // The form's height when it was sent. The short "Report filed" panel keeps
+  // it, so the dialog does not jump smaller under the pointer.
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const [sentHeight, setSentHeight] = React.useState<number | null>(null);
+
   function handleSubmit() {
     setError(null);
+    setSentHeight(contentRef.current?.offsetHeight ?? null);
     startTransition(async () => {
       try {
         const res = await submitFeedbackAction({
@@ -135,9 +142,13 @@ export function ReportBugDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent
+        ref={contentRef}
+        className="max-h-[90vh] max-w-lg overflow-y-auto"
+        style={result && sentHeight ? { minHeight: sentHeight } : undefined}
+      >
         {result ? (
-          <>
+          <div className="flex flex-col gap-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-[color:var(--color-primary)]" />
@@ -158,10 +169,10 @@ export function ReportBugDialog({
               <ExternalLink className="h-4 w-4" />
               {result.number > 0 ? `View issue #${result.number}` : "Open the tracker"}
             </a>
-            <DialogFooter>
+            <DialogFooter className="mt-auto">
               <Button onClick={() => onOpenChange(false)}>Done</Button>
             </DialogFooter>
-          </>
+          </div>
         ) : (
           <>
             <DialogHeader>
@@ -228,17 +239,18 @@ export function ReportBugDialog({
 
               {/* Voice dictation — appends to the description. Hidden in a
                   browser that cannot record. */}
-              {!voiceSupported ? null : dictating ? (
+              {!voiceSupported ? null : dictation.dictating ? (
                 // No promptKey: the transcribe route has no bug-report prompt,
                 // and free-form feedback doesn't benefit from one. Dictation
                 // runs with the generic (unbiased) transcription.
                 <RecorderPanel
                   onTranscript={appendTranscript}
-                  onDismiss={() => setDictating(false)}
+                  onDismiss={dictation.close}
                 />
               ) : (
                 <DictatePill
-                  onActivate={() => setDictating(true)}
+                  ref={dictation.pillRef}
+                  onActivate={dictation.open}
                   className="self-start"
                 />
               )}

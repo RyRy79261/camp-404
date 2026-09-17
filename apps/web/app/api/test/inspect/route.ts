@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isE2ETestMode } from "@/lib/test-mode";
+import { isE2ETestMode, usesTestStore } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
 
 // Read-only view into the in-memory test store. Lets specs assert on
@@ -11,6 +11,14 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   if (!isE2ETestMode()) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  // Reads the in-memory store only; the real-database run inspects rows with
+  // its own queries.
+  if (!usesTestStore()) {
+    return NextResponse.json(
+      { error: "Not available in the real-database run" },
+      { status: 501 },
+    );
   }
   const url = new URL(req.url);
   const authUserId = url.searchParams.get("authUserId");

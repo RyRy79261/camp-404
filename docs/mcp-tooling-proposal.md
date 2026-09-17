@@ -326,6 +326,24 @@ Order: **smoke-test first, then camp member, then captains.**
 8. **Logistics + admin.** Inventory member tools, drivers/lifts,
    invite-code admin, audit log read, search.
 
+Status (2026-09-16): phases 1-6 are built. From phases 7-8, `apps/web/lib/mcp/tools/admin.ts`
+adds `assign_team_membership`, `remove_team_membership`, `set_team_lead` (captain),
+`list_invite_codes` / `revoke_invite_code` (captain: every code; anyone else: their own, as in
+the app) and `list_audit_log` (captain). `tools/reimbursements.ts` adds `list_reimbursements`,
+`approve_reimbursement` / `reject_reimbursement` (captain, or the lead of the claim's team) and
+`mark_reimbursement_paid` / `mark_reimbursement_reconciled` (captain); nobody moves their own
+claim. `tools/teams.ts` adds `set_team_budget` (captain or the team's lead); budgets are per year
+since migration 0034. `tools/documents.ts` adds `list_document_drafts`, `get_document_draft`,
+`create_document`, `update_document` (on the version read) and `publish_document`: a captain for
+any document, a team lead for their team's; members still read published documents only. Recipe
+review is not built: nothing moves a recipe out of `pending` until the analyse cron exists. `tools/questionnaires.ts` adds `list_questionnaire_drafts`,
+`get_questionnaire_draft`, `create_questionnaire_draft` and `update_questionnaire_draft` for
+authors (captain, or team lead for their own), with the builder's edit rule and size limits;
+publishing and sending stay in the app. `tools/lifts.ts` adds `list_drivers` (captain: driver details are captain-read in the
+field-access list), `list_car_riders`, `add_car_rider` and `remove_car_rider` (a driver for their
+own car, a captain for any); the seat limit holds under concurrent adds. `set_user_rank` is not built: a rank change is a
+two-sided request the member accepts in the app.
+
 Out of scope:
 - **Camp-wide broadcasts as a write surface.** Every notification that
   reaches phones is composed and sent from the captain's web UI.

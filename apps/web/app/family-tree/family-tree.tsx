@@ -1,19 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search, User as UserIcon } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { Input } from "@camp404/ui/components/input";
-import { buildTree, computeMatchIds, subtreeHasMatch } from "@camp404/core";
+import {
+  buildTree,
+  computeLiteralMatchIds,
+  computeMatchIds,
+  descendantCountLabel,
+  subtreeHasMatch,
+} from "@camp404/core";
 import type { ReferralUser, TreeNode } from "@camp404/types";
 
 export function FamilyTree({
   roster,
   viewerUserId,
+  showsInviteCodes = false,
 }: {
   roster: ReferralUser[];
   viewerUserId: string;
+  /**
+   * The roster carries other members' invite codes (captains only; the server
+   * removes them for everyone else). Only changes the search hint.
+   */
+  showsInviteCodes?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -25,6 +37,12 @@ export function FamilyTree({
 
   const matchIds = useMemo(
     () => computeMatchIds(roster, query),
+    [roster, query],
+  );
+  // Only the people the search found are highlighted. Their ancestors are
+  // shown so the path is visible, but they did not match.
+  const literalMatchIds = useMemo(
+    () => computeLiteralMatchIds(roster, query),
     [roster, query],
   );
 
@@ -58,10 +76,16 @@ export function FamilyTree({
           aria-hidden
         />
         <Input
+          type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name or invite code…"
-          className="h-12 pl-10"
+          placeholder={
+            showsInviteCodes
+              ? "Search by name or invite code…"
+              : "Search by name…"
+          }
+          aria-label="Search the family tree"
+          className="pl-10"
         />
       </div>
       <div className="flex gap-2.5">
@@ -95,8 +119,8 @@ export function FamilyTree({
               expanded={effectiveExpanded}
               onToggle={toggle}
               matchIds={matchIds}
+              literalMatchIds={literalMatchIds}
               viewerUserId={viewerUserId}
-              isLastChild
             />
           ))}
         </ul>
@@ -111,8 +135,10 @@ interface BranchProps {
   expanded: Set<string>;
   onToggle: (id: string) => void;
   matchIds: Set<string> | null;
+  literalMatchIds: Set<string> | null;
   viewerUserId: string;
-  isLastChild: boolean;
+  /** The parent row's name; absent on a root. */
+  inviterName?: string;
 }
 
 function Branch({
@@ -121,12 +147,15 @@ function Branch({
   expanded,
   onToggle,
   matchIds,
+  literalMatchIds,
   viewerUserId,
-  isLastChild,
+  inviterName,
 }: BranchProps) {
+  const childrenId = useId();
   const isOpen = expanded.has(node.user.id);
   const isViewer = node.user.id === viewerUserId;
-  const isMatch = matchIds?.has(node.user.id) ?? false;
+  const isMatch = literalMatchIds?.has(node.user.id) ?? false;
+  const name = node.user.displayName ?? "(no name)";
 
   const visibleChildren = matchIds
     ? node.children.filter((c) => subtreeHasMatch(c, matchIds))
@@ -137,75 +166,60 @@ function Branch({
   const hasChildren = visibleChildren.length > 0;
 
   return (
-    <li className="relative">
-      <div
-        className="flex items-stretch"
-        style={{ paddingLeft: depth * 20 }}
-      >
-        {/* Vertical guide line on the left of every non-root row,
-            with an elbow joining the row's badge. Pure CSS — no SVG
-            needed for the simple tree case. */}
-        {depth > 0 && (
-          <>
-            <span
-              aria-hidden
-              className="absolute border-l border-border"
-              style={{
-                left: (depth - 1) * 20 + 18,
-                top: 0,
-                bottom: isLastChild ? "50%" : 0,
-              }}
-            />
-            <span
-              aria-hidden
-              className="absolute border-t border-border"
-              style={{
-                left: (depth - 1) * 20 + 18,
-                width: 14,
-                top: 22,
-              }}
-            />
-          </>
-        )}
+    <li>
+      {/* Board S16: one 20px guide segment per level above this row, then a
+          22px toggle, then the card. */}
+      <div className="flex items-center">
+        {Array.from({ length: depth }, (_, level) => (
+          <span
+            key={level}
+            aria-hidden
+            className="flex w-5 shrink-0 justify-center self-stretch"
+          >
+            <span className="h-full w-px bg-border" />
+          </span>
+        ))}
 
-        <button
-          type="button"
-          onClick={() => hasChildren && onToggle(node.user.id)}
-          aria-label={isOpen ? "Collapse" : "Expand"}
-          className="flex h-11 w-6 items-center justify-center text-muted-foreground disabled:opacity-30"
-          disabled={!hasChildren}
-        >
-          {hasChildren ? (
-            isOpen ? (
-              <ChevronDown className="h-4 w-4" />
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => onToggle(node.user.id)}
+            aria-expanded={isOpen}
+            aria-controls={isOpen ? childrenId : undefined}
+            aria-label={`People ${name} invited`}
+            className="flex h-11 w-[22px] shrink-0 items-center justify-center rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {isOpen ? (
+              <ChevronDown className="h-4 w-4" aria-hidden />
             ) : (
-              <ChevronRight className="h-4 w-4" />
-            )
-          ) : (
-            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-          )}
-        </button>
+              <ChevronRight className="h-4 w-4" aria-hidden />
+            )}
+          </button>
+        ) : (
+          <span
+            aria-hidden
+            className="flex h-11 w-[22px] shrink-0 items-center justify-center"
+          >
+            <span className="size-[5px] rounded-full bg-muted-foreground" />
+          </span>
+        )}
 
         <Card
           className={[
             "flex-1 transition-colors",
             // A search match (accent) wins over the viewer's own border
             // (primary) so the two never fight; the "You" pill still marks self.
-            isMatch && matchIds
-              ? "border-accent"
-              : isViewer
-                ? "border-primary"
-                : "",
+            isMatch ? "border-accent" : isViewer ? "border-primary" : "",
           ].join(" ")}
         >
           <CardContent className="flex items-center gap-2.5 px-3 py-2">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+            <span className="flex size-[30px] shrink-0 items-center justify-center rounded-full bg-muted">
               <UserIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-semibold text-foreground">
-                  {node.user.displayName ?? "(no name)"}
+                  {name}
                 </span>
                 {node.user.rank === "captain" && (
                   <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-micro font-semibold text-accent">
@@ -221,13 +235,16 @@ function Branch({
               <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
                 {node.user.inviteCode
                   ? `via ${node.user.inviteCode}`
-                  : "root"}
+                  : inviterName
+                    ? // A member does not receive other members' codes, so
+                      // the line names who invited them instead.
+                      `via ${inviterName}`
+                    : "root"}
               </p>
             </div>
             {hasChildren && (
               <span className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-micro font-medium text-muted-foreground">
-                {node.descendantCount} descendant
-                {node.descendantCount === 1 ? "" : "s"}
+                {descendantCountLabel(node.descendantCount)}
               </span>
             )}
           </CardContent>
@@ -235,8 +252,8 @@ function Branch({
       </div>
 
       {hasChildren && isOpen && (
-        <ul className="mt-2 space-y-2">
-          {visibleChildren.map((child, idx) => (
+        <ul id={childrenId} className="mt-2 space-y-2">
+          {visibleChildren.map((child) => (
             <Branch
               key={child.user.id}
               node={child}
@@ -244,8 +261,9 @@ function Branch({
               expanded={expanded}
               onToggle={onToggle}
               matchIds={matchIds}
+              literalMatchIds={literalMatchIds}
               viewerUserId={viewerUserId}
-              isLastChild={idx === visibleChildren.length - 1}
+              inviterName={name}
             />
           ))}
         </ul>

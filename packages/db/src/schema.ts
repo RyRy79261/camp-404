@@ -973,14 +973,24 @@ export const reimbursements = pgTable(
 // Lightweight per-team budget: assigned (allocated) vs perceived
 // (projected) spend. Deliberately simple — reimbursements are the ledger.
 
-export const teamBudgets = pgTable("team_budgets", {
-  team: teamEnum("team").primaryKey(),
-  currency: text("currency").notNull().default("ZAR"),
-  assignedAmount: numeric("assigned_amount", { precision: 12, scale: 2 }),
-  perceivedAmount: numeric("perceived_amount", { precision: 12, scale: 2 }),
-  notes: text("notes"),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
-});
+// One budget per team PER YEAR: a new year starts with no budgets. `cycle`
+// defaults to the pre-namespace sentinel like every year-scoped table, and
+// setFoundingYear adopts sentinel rows into the founding year.
+export const teamBudgets = pgTable(
+  "team_budgets",
+  {
+    team: teamEnum("team").notNull(),
+    cycle: integer("cycle").notNull().default(1),
+    currency: text("currency").notNull().default("ZAR"),
+    assignedAmount: numeric("assigned_amount", { precision: 12, scale: 2 }),
+    perceivedAmount: numeric("perceived_amount", { precision: 12, scale: 2 }),
+    notes: text("notes"),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (tb) => ({
+    pk: primaryKey({ columns: [tb.team, tb.cycle] }),
+  }),
+);
 
 // --- Push notifications --------------------------------------------------
 
@@ -1187,25 +1197,37 @@ export const tasks = pgTable(
 
 // --- Burner adoption -----------------------------------------------------
 
-export const adoptees = pgTable("adoptees", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  slotNumber: integer("slot_number").notNull(),
-  name: text("name").notNull(),
-  contact: text("contact"),
-  dietaryNotes: text("dietary_notes"),
-  arrival: timestamp("arrival", { mode: "date" }),
-  departure: timestamp("departure", { mode: "date" }),
-  tentAssigned: text("tent_assigned"),
-  beddingAssigned: text("bedding_assigned"),
-  fridgeShelfAssigned: text("fridge_shelf_assigned"),
-  sponsorId: uuid("sponsor_id").references(() => users.id, {
-    onDelete: "set null",
+// Adoption slots are numbered afresh each year, so a slot number is unique
+// within its year only.
+export const adoptees = pgTable(
+  "adoptees",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull().default(1),
+    slotNumber: integer("slot_number").notNull(),
+    name: text("name").notNull(),
+    contact: text("contact"),
+    dietaryNotes: text("dietary_notes"),
+    arrival: timestamp("arrival", { mode: "date" }),
+    departure: timestamp("departure", { mode: "date" }),
+    tentAssigned: text("tent_assigned"),
+    beddingAssigned: text("bedding_assigned"),
+    fridgeShelfAssigned: text("fridge_shelf_assigned"),
+    sponsorId: uuid("sponsor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    approvedById: uuid("approved_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    cycleSlotIdx: uniqueIndex("adoptees_cycle_slot_idx").on(
+      a.cycle,
+      a.slotNumber,
+    ),
   }),
-  approvedById: uuid("approved_by_id").references(() => users.id, {
-    onDelete: "set null",
-  }),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-});
+);
 
 // --- Workshops -----------------------------------------------------------
 

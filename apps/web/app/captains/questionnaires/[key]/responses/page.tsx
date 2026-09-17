@@ -25,6 +25,8 @@ import { ExportCsvButton } from "@/components/export-csv-button";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Questionnaire answers — Camp 404" };
+
 const COMPLETED = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",

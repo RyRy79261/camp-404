@@ -26,7 +26,7 @@ describe("captain tools hub", () => {
     expect(screen.getAllByRole("link", { name: /./ }).length).toBeGreaterThan(
       5,
     );
-    expect(screen.queryByText("VIEW ONLY")).toBeNull();
+    expect(screen.queryByText("Captain access only")).toBeNull();
   });
 
   it("gives a team lead the Questionnaires card and locks the rest", async () => {

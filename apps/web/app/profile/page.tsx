@@ -19,6 +19,8 @@ import { PaymentReference } from "./payment-reference";
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Your profile — Camp 404" };
+
 export default async function ProfilePage() {
   const { authUser, campUser } = await requireMemberPage();
 

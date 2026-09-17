@@ -1,3 +1,4 @@
+import * as React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { Users } from "lucide-react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -37,5 +38,24 @@ describe("GridTile — disabled", () => {
     );
     expect(screen.queryByText("Not built yet.")).toBeNull();
     expect(screen.getByRole("link").getAttribute("href")).toBe("/teams");
+  });
+});
+
+describe("GridTile linkAs", () => {
+  it("renders a linked tile through the app's link component", () => {
+    const AppLink = React.forwardRef<
+      HTMLAnchorElement,
+      React.ComponentProps<"a">
+    >((props, ref) => <a ref={ref} data-app-link="" {...props} />);
+    render(
+      <GridTile
+        icon={Users}
+        title="Roster"
+        href="/captains/camp-management"
+        linkAs={AppLink}
+      />,
+    );
+    const link = screen.getByRole("link", { name: /Roster/ });
+    expect(link.hasAttribute("data-app-link")).toBe(true);
   });
 });

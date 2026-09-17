@@ -6,6 +6,7 @@ import {
   type Questionnaire,
 } from "@camp404/types";
 import type { CampMemberDetail } from "@camp404/db/roster";
+import { approvalSummary } from "./approval-summary";
 import { COUNTRIES } from "./countries";
 
 // Intentionally not `import "server-only"` — `presentMemberDetail` is a pure
@@ -92,30 +93,6 @@ function renderAnswer(question: Question, raw: unknown): string | null {
     case "long_text":
     default:
       return String(raw);
-  }
-}
-
-function describeApproval(detail: CampMemberDetail): string {
-  switch (detail.approvalStatus) {
-    case "approved":
-      return detail.approvalDecidedByName
-        ? `Approved by ${detail.approvalDecidedByName}${
-            detail.approvalDecidedAt
-              ? ` on ${dateFmt.format(detail.approvalDecidedAt)}`
-              : ""
-          }`
-        : "Approved";
-    case "rejected":
-      return detail.approvalDecidedByName
-        ? `Rejected by ${detail.approvalDecidedByName}${
-            detail.approvalDecidedAt
-              ? ` on ${dateFmt.format(detail.approvalDecidedAt)}`
-              : ""
-          }`
-        : "Rejected";
-    case "pending":
-    default:
-      return "Awaiting a captain's decision";
   }
 }
 
@@ -228,7 +205,10 @@ export function presentMemberDetail(
     displayName,
     rankLabel: detail.rank === "captain" ? "Captain" : "Member",
     approvalStatus: detail.approvalStatus,
-    approvalSummary: describeApproval(detail),
+    approvalSummary: approvalSummary(detail.approvalStatus, {
+      byName: detail.approvalDecidedByName,
+      at: detail.approvalDecidedAt,
+    }),
     bio,
     profileImageUrl,
     overview,

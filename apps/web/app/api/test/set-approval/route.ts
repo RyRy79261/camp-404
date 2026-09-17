@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { isE2ETestMode } from "@/lib/test-mode";
+import { setApprovalForE2E } from "@camp404/db/e2e";
+import { isE2ETestMode, usesTestStore } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
+import { findCampUserByAuthId } from "@/lib/users";
 
 // Forces a test user's captain-approval status, so specs can exercise the
 // gate's rejected/approved branches without driving the captain
@@ -33,13 +35,17 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const user = testStore.findUserByAuthId(body.authUserId);
+  const user = await findCampUserByAuthId(body.authUserId);
   if (!user) {
     return NextResponse.json(
       { error: `No user for authUserId ${body.authUserId}` },
       { status: 404 },
     );
   }
-  testStore.setUserApprovalStatus(user.id, body.status, body.reason ?? null);
+  if (usesTestStore()) {
+    testStore.setUserApprovalStatus(user.id, body.status, body.reason ?? null);
+  } else {
+    await setApprovalForE2E(user.id, body.status, body.reason ?? null);
+  }
   return NextResponse.json({ ok: true });
 }

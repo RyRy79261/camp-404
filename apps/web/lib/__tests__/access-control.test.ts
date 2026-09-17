@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // redeemer as pending; a long one keeps letting members straight in.
 
 vi.mock("@camp404/db/invite-codes", () => ({ consumeInviteCode: vi.fn() }));
-vi.mock("../test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));
+vi.mock("../test-mode", () => ({
+  isE2ETestMode: vi.fn(() => false),
+  usesTestStore: vi.fn(() => false),
+}));
 vi.mock("../test-store", () => ({ testStore: {} }));
 
 import { consumeInviteCode } from "@camp404/db/invite-codes";

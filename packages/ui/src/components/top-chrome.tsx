@@ -20,6 +20,11 @@ export interface TopChromeProps {
   bellHref?: string
   /** Avatar destination. @default "/profile" */
   avatarHref?: string
+  /**
+   * The link component to render, e.g. Next's `Link`, so navigation stays in
+   * the app instead of reloading the page. A plain `<a>` when left out.
+   */
+  linkAs?: React.ElementType
   className?: string
 }
 
@@ -29,6 +34,7 @@ function TopChrome({
   unreadCount,
   bellHref = "/notifications",
   avatarHref = "/profile",
+  linkAs: Link = "a",
   className,
 }: TopChromeProps) {
   const hasUnread = Boolean(unreadCount && unreadCount > 0)
@@ -46,7 +52,7 @@ function TopChrome({
         <span className="font-mono text-primary">404</span>
       </span>
       <div className="flex items-center gap-2.5">
-        <a
+        <Link
           href={bellHref}
           aria-label={
             hasUnread ? `Notifications (${countLabel} unread)` : "Notifications"
@@ -62,8 +68,8 @@ function TopChrome({
               {countLabel}
             </span>
           ) : null}
-        </a>
-        <a
+        </Link>
+        <Link
           href={avatarHref}
           aria-label="Your profile"
           className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -74,7 +80,7 @@ function TopChrome({
               {avatarInitials}
             </AvatarFallback>
           </Avatar>
-        </a>
+        </Link>
       </div>
     </header>
   )

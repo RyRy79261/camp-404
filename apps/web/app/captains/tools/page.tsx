@@ -1,7 +1,9 @@
+import Link from "next/link";
 import {
   CalendarClock,
   ClipboardList,
   Megaphone,
+  ScrollText,
   Shield,
   Users,
   Wallet,
@@ -85,6 +87,14 @@ const TOOLS: ToolEntry[] = [
     icon: <CalendarClock className="text-primary" />,
     rank: "captain",
   },
+  {
+    href: "/captains/audit",
+    title: "Audit log",
+    description:
+      "See who approved, changed or read whose data, and when. Newest first.",
+    icon: <ScrollText className="text-primary" />,
+    rank: "captain",
+  },
 ];
 
 export default async function CaptainToolsPage() {
@@ -95,7 +105,7 @@ export default async function CaptainToolsPage() {
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-4">
-      <GhostBack href="/" className="-ml-2">
+      <GhostBack linkAs={Link} href="/" className="-ml-2">
         {rank === "captain" ? "Captains" : "Home"}
       </GhostBack>
 
@@ -111,6 +121,7 @@ export default async function CaptainToolsPage() {
           <div className="flex flex-col gap-3">
             {tools.map((tool) => (
               <NavCard
+                linkAs={Link}
                 key={tool.href}
                 href={tool.href}
                 icon={tool.icon}

@@ -6,6 +6,8 @@ import { DeleteAccountForm } from "./delete-account";
 // Reads the Neon Auth session on every request.
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Edit profile — Camp 404" };
+
 export default async function ProfileEditPage() {
   const { authUser, campUser } = await requireMemberPage();
 

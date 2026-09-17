@@ -17,6 +17,13 @@
     "./member-notes": "./src/member-notes.ts",
     "./member-export": "./src/member-export.ts",
     "./payments": "./src/payments.ts",
+    "./seed-support": "./src/seed-support.ts",
+    "./e2e": "./src/e2e.ts",
+    "./mcp-oauth": "./src/mcp-oauth.ts",
+    "./cars": "./src/cars.ts",
+    "./documents": "./src/documents.ts",
+    "./reimbursements": "./src/reimbursements.ts",
+    "./team-budgets": "./src/team-budgets.ts",
     "./rate-limit": "./src/rate-limit.ts",
     "./captain-promotion": "./src/captain-promotion.ts",
     "./bootstrap": "./src/bootstrap.ts",
@@ -49,6 +56,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -64,6 +72,7 @@
     "@types/node": "^25.9.1",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.4.0",
+    "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   }

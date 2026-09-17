@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { SlidersHorizontal } from "lucide-react";
-import { CustomizeMode } from "./customize-mode";
 import { type Section, sectionKey } from "./home-layout";
 import { LooseTiles } from "./loose-tiles";
 import { RankGroupCard } from "./rank-group-card";
@@ -15,6 +15,7 @@ import {
   resolveTiles,
 } from "./tile-lookup";
 import { useHomeLayout } from "./use-home-layout";
+import { cn } from "@camp404/ui/lib/utils";
 
 // Home control-panel client island (board S08). Owns the Customize toggle and
 // the localStorage layout; renders the customizable sections (rank / custom /
@@ -22,9 +23,24 @@ import { useHomeLayout } from "./use-home-layout";
 // server (page.tsx) computes clearance and passes the locked group ids; locked
 // tiles are never stored in the layout (security boundary preserved).
 
+// Customize mode brings in @dnd-kit, which most visits never need. Load it on
+// first use, and start the download when the member points at or focuses the
+// Customize pill.
+const loadCustomizeMode = () =>
+  import("./customize-mode").then((m) => m.CustomizeMode);
+const CustomizeMode = dynamic(loadCustomizeMode, {
+  ssr: false,
+  loading: () => (
+    <div
+      aria-hidden
+      className="h-48 rounded-xl border border-border bg-muted/40 motion-safe:animate-pulse"
+    />
+  ),
+});
+
 export function HomeClient({ lockedGroupIds }: { lockedGroupIds: string[] }) {
   const [customizeActive, setCustomizeActive] = useState(false);
-  const { sections, setSections } = useHomeLayout(
+  const { sections, setSections, reset, ready } = useHomeLayout(
     LAYOUT_CATALOGUE,
     lockedGroupIds,
   );
@@ -98,6 +114,8 @@ export function HomeClient({ lockedGroupIds }: { lockedGroupIds: string[] }) {
             ref={pillRef}
             type="button"
             onClick={() => setCustomizeActive(true)}
+            onPointerEnter={() => void loadCustomizeMode()}
+            onFocus={() => void loadCustomizeMode()}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-2 text-label font-semibold text-foreground transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <SlidersHorizontal aria-hidden className="h-4 w-4" />
@@ -112,9 +130,17 @@ export function HomeClient({ lockedGroupIds }: { lockedGroupIds: string[] }) {
           setSections={setSections}
           lockedGroupIds={lockedGroupIds}
           onDone={() => setCustomizeActive(false)}
+          onReset={reset}
         />
       ) : (
-        <>
+        // Transparent until the saved order is in, then a short fade, so a
+        // custom layout never visibly jumps from the default order.
+        <div
+          className={cn(
+            "flex flex-col gap-5 motion-safe:transition-opacity motion-safe:duration-150",
+            ready ? "opacity-100" : "opacity-0",
+          )}
+        >
           {sections.map(renderSection)}
           {lockedGroups.map((group) => (
             <RankGroupCard
@@ -126,7 +152,7 @@ export function HomeClient({ lockedGroupIds }: { lockedGroupIds: string[] }) {
               tiles={[]}
             />
           ))}
-        </>
+        </div>
       )}
     </div>
   );

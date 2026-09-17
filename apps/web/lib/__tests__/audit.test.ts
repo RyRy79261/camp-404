@@ -11,10 +11,10 @@ vi.mock("next/server", () => ({
 }));
 vi.mock("@camp404/db/audit", () => ({ appendAuditEvent: vi.fn() }));
 
-import { appendAuditEvent } from "@camp404/db/audit";
+import { appendAuditEvent, type AuditEvent } from "@camp404/db/audit";
 import { auditReadAfterResponse } from "../audit";
 
-const EVENT = {
+const EVENT: AuditEvent = {
   actorId: "cap-1",
   action: "member.id_document.viewed",
   target: "member-1",

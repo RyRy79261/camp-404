@@ -20,6 +20,8 @@ export default defineConfig({
   // mid-flight. One worker, no intra-file parallelism.
   fullyParallel: false,
   workers: 1,
+  // A `test.only` left in a spec would silently skip the rest of the suite.
+  forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   // The web server is `next dev`, which compiles routes/server-actions on first
   // hit. The first invocation of a heavy action (e.g. announcement publish +
@@ -38,7 +40,21 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: devices["Desktop Chrome"] }],
+  // `chromium` runs on every PR. `mobile-360` is the same suite at the
+  // narrowest phone width the boards draw for; it runs nightly
+  // (.github/workflows/mobile.yml), and a desktop-only test opts out with
+  // desktopOnly() from tests/e2e/lib/dom.ts.
+  projects: [
+    { name: "chromium", use: devices["Desktop Chrome"] },
+    {
+      name: "mobile-360",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 360, height: 780 },
+        hasTouch: true,
+      },
+    },
+  ],
   webServer: skipWebServer
     ? undefined
     : {

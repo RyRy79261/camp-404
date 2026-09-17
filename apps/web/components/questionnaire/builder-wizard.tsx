@@ -17,11 +17,12 @@ import { CloudOff, TriangleAlert } from "lucide-react";
 import { QuestionField } from "./question";
 import { ContentBlockRenderer } from "./content-block";
 import { BlockingNotice, BlockingTopBar } from "./blocking-chrome";
+import { useStepFocus } from "./use-step-focus";
 import type { SaveResult } from "@camp404/types";
 
 // The block-based runner for BUILDER questionnaires. It reuses the legacy
 // wizard's chrome verbatim (blocking top bar + notice, the _form/_root error
-// banner, Back/Continue, startTransition, the persistProgress branch and the
+// banner, Back/Next, startTransition, the persistProgress branch and the
 // (responses, final) action contract) and forks only the page/block loop: pages
 // come from visiblePages() so branching hides/shows pages, each page renders its
 // blocks (every block honours its own visibleIf; content blocks are display-only
@@ -59,7 +60,7 @@ interface BuilderWizardProps {
   initialResponses: QuestionnaireResponses;
   action: (responses: unknown, final: boolean) => Promise<SaveResult>;
   // false ⇒ advance locally without saving (preview / author check). true ⇒
-  // persist on every Continue so a reload resumes where they left off.
+  // persist on every Next so a reload resumes where they left off.
   persistProgress?: boolean;
   onComplete?: () => void;
   submitLabel?: string;
@@ -78,7 +79,7 @@ interface BuilderWizardProps {
   notice?: string;
   /**
    * The author preview. Image fields cannot upload (nothing is saved and there
-   * is no send), so they show a note and do not block Continue.
+   * is no send), so they show a note and do not block Next.
    */
   preview?: boolean;
 }
@@ -89,7 +90,7 @@ export function BuilderWizard({
   action,
   persistProgress = true,
   onComplete,
-  submitLabel = "Finish",
+  submitLabel = "Submit",
   variant = "runner",
   blocking = true,
   title,
@@ -117,8 +118,9 @@ export function BuilderWizard({
   const isLast = clampedIndex === pages.length - 1;
 
   // Progress never goes backward (Back, or a branch hiding a later page, must
-  // not drop the bar below the furthest page reached).
-  const maxStepRef = React.useRef(pageIndex + 1);
+  // not drop the bar below the furthest page reached). Raised in handleNext.
+  const [maxStep, setMaxStep] = React.useState(pageIndex + 1);
+  const headingRef = useStepFocus<HTMLHeadingElement>(clampedIndex);
 
   if (!page) return null;
 
@@ -147,8 +149,12 @@ export function BuilderWizard({
 
   function handleNext() {
     if (!validateCurrentPage(page!)) return;
-    if (!persistProgress) {
+    const advance = () => {
       setPageIndex(clampedIndex + 1);
+      setMaxStep((m) => Math.max(m, clampedIndex + 2));
+    };
+    if (!persistProgress) {
+      advance();
       return;
     }
     startTransition(async () => {
@@ -158,7 +164,7 @@ export function BuilderWizard({
           setErrors(result.errors);
           return;
         }
-        setPageIndex(clampedIndex + 1);
+        advance();
       } catch {
         setErrors((prev) => ({ ...prev, [FORM_ERROR_KEY]: SAVE_FAILED }));
       }
@@ -166,6 +172,8 @@ export function BuilderWizard({
   }
 
   function handleBack() {
+    // A save failure belongs to the page it happened on.
+    setErrors(withoutFormErrors);
     setPageIndex(Math.max(0, clampedIndex - 1));
   }
 
@@ -189,11 +197,10 @@ export function BuilderWizard({
   const isRunner = variant === "runner";
   const current = clampedIndex + 1;
   const total = pages.length;
-  maxStepRef.current = Math.max(maxStepRef.current, current);
   // Non-decreasing high-water mark, but clamped to the current visible-page count
   // so branching that hides pages can't render "Page 3 of 2" / >100%. One source
   // for both variants.
-  const progressCurrent = Math.min(maxStepRef.current, total);
+  const progressCurrent = Math.min(Math.max(maxStep, current), total);
 
   return (
     <form
@@ -236,55 +243,84 @@ export function BuilderWizard({
         </Alert>
       )}
 
-      <section className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">{page.title}</h2>
-        {page.intro && (
-          <p className="text-sm text-muted-foreground">{page.intro}</p>
-        )}
-      </section>
+      {/* Keyed by page, so each page fades in (motion-safe). */}
+      <div
+        key={clampedIndex}
+        className="flex flex-col gap-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      >
+        <section className="flex flex-col gap-1">
+          <h2
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-lg font-semibold outline-none"
+          >
+            {page.title}
+          </h2>
+          {page.intro && (
+            <p className="text-sm text-muted-foreground">{page.intro}</p>
+          )}
+        </section>
 
-      <div className="flex flex-col gap-5">
-        {page.blocks.map((block) => {
-          // EVERY block kind honours its own `visibleIf` (spec §5.1) — a
-          // conditional explainer, header break, image or divider branches
-          // exactly like a conditional field does. The publish validator and
-          // classifyChange already treat content-block conditions as real, so
-          // the runner has to as well.
-          if (block.visibleIf && !evalVisibleIf(block.visibleIf, responses)) {
-            return null;
-          }
-          if (block.kind === "question") {
-            const q = block.question;
-            return (
-              <QuestionField
-                key={q.id}
-                question={q}
-                value={responses[q.id]}
-                onChange={(v) => setResponse(q.id, v)}
-                error={errors[q.id]}
-                uploadsOff={preview}
-              />
-            );
-          }
-          return <ContentBlockRenderer key={block.id} block={block} />;
-        })}
+        <div className="flex flex-col gap-5">
+          {page.blocks.map((block) => {
+            // EVERY block kind honours its own `visibleIf` (spec §5.1) — a
+            // conditional explainer, header break, image or divider branches
+            // exactly like a conditional field does. The publish validator and
+            // classifyChange already treat content-block conditions as real, so
+            // the runner has to as well.
+            if (block.visibleIf && !evalVisibleIf(block.visibleIf, responses)) {
+              return null;
+            }
+            if (block.kind === "question") {
+              const q = block.question;
+              return (
+                <QuestionField
+                  key={q.id}
+                  question={q}
+                  value={responses[q.id]}
+                  onChange={(v) => setResponse(q.id, v)}
+                  error={errors[q.id]}
+                  uploadsOff={preview}
+                />
+              );
+            }
+            return <ContentBlockRenderer key={block.id} block={block} />;
+          })}
+        </div>
       </div>
 
-      <div className="mt-auto flex items-center justify-between pt-6">
+      {/* Board S26 footer: Back and Next side by side, full width. */}
+      <div className="mt-auto grid grid-cols-2 gap-3 pt-6">
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           onClick={handleBack}
           disabled={clampedIndex === 0 || isPending}
         >
           Back
         </Button>
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Saving…" : isLast ? submitLabel : "Continue"}
+          {isPending
+            ? isLast
+              ? "Submitting…"
+              : "Saving…"
+            : isLast
+              ? submitLabel
+              : "Next"}
         </Button>
       </div>
     </form>
   );
+}
+
+function withoutFormErrors(
+  errors: Record<string, string>,
+): Record<string, string> {
+  if (!(FORM_ERROR_KEY in errors) && !(ROOT_ERROR_KEY in errors)) return errors;
+  const next = { ...errors };
+  delete next[FORM_ERROR_KEY];
+  delete next[ROOT_ERROR_KEY];
+  return next;
 }
 
 function BuilderProgress({ current, total }: { current: number; total: number }) {

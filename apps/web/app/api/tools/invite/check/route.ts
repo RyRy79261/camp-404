@@ -8,7 +8,7 @@ import {
   isSyntacticallyValidCode,
   normalizeInviteCode,
 } from "@/lib/invite-words";
-import { isE2ETestMode } from "@/lib/test-mode";
+import { usesTestStore } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
 
 export const runtime = "nodejs";
@@ -65,7 +65,7 @@ export async function GET(req: Request) {
     });
   }
 
-  const existing = isE2ETestMode()
+  const existing = usesTestStore()
     ? testStore.findUsableInviteCode(raw) ?? null
     : await findInviteCodeByCode(raw);
 

@@ -6,7 +6,8 @@ import { cn } from "@camp404/ui/lib/utils";
 // The −/+ number stepper the board draws for the multi-use cap (board S14 §4):
 // a real `<input type="number">` (so the value submits and stays keyboard- /
 // AT-accessible) flanked by decrement/increment buttons, clamped to [min, max].
-interface StepperProps {
+// Named apart from the @camp404/ui Stepper (the onboarding step dots).
+interface NumberStepperProps {
   id?: string;
   name?: string;
   value: string;
@@ -17,7 +18,7 @@ interface StepperProps {
   className?: string;
 }
 
-export function Stepper({
+export function NumberStepper({
   id,
   name,
   value,
@@ -26,7 +27,7 @@ export function Stepper({
   max = 100,
   className,
   "aria-label": ariaLabel,
-}: StepperProps) {
+}: NumberStepperProps) {
   const current = Number(value);
   const safe = Number.isFinite(current) ? current : min;
   // Always emit a whole number in [min, max] — the action takes an integer
@@ -34,13 +35,15 @@ export function Stepper({
   const clamp = (n: number) =>
     String(Math.round(Math.min(max, Math.max(min, Number.isFinite(n) ? n : min))));
 
+  // 44px targets inside the 48px box: the icons stay board-sized, the tap
+  // area does not.
   const stepButton =
-    "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&>svg]:h-4 [&>svg]:w-4";
+    "flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&>svg]:h-4 [&>svg]:w-4";
 
   return (
     <div
       className={cn(
-        "flex h-12 items-center justify-between rounded-lg border border-border bg-muted pl-4 pr-2",
+        "flex h-12 items-center justify-between rounded-lg border border-border bg-muted pl-4 pr-0.5",
         className,
       )}
     >
@@ -58,7 +61,7 @@ export function Stepper({
         onBlur={(e) => onChange(clamp(Number(e.target.value)))}
         className="w-full min-w-0 bg-transparent text-sm text-foreground outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center">
         <button
           type="button"
           aria-label="Decrease"

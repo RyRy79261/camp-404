@@ -18,6 +18,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Questionnaire results — Camp 404" };
+
 // Metrics (docs/questionnaire-builder.md §7.1–7.2) — the aggregate view of one
 // questionnaire in one year. Captain-only: the gate and the read both live in
 // loadResults, so a non-captain's request never fetches an answer.

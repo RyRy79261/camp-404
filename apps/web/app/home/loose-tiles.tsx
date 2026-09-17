@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { GridTile } from "@camp404/ui/components/grid-tile";
 import type { CatalogueTile } from "./tile-catalogue";
 import { homeToneFor } from "./tile-lookup";
@@ -12,6 +13,7 @@ export function LooseTiles({ tiles }: { tiles: CatalogueTile[] }) {
     <div className="grid grid-cols-2 gap-3">
       {tiles.map((tile) => (
         <GridTile
+          linkAs={Link}
           key={tile.id}
           icon={tile.icon}
           iconTone={homeToneFor(tile.id)}

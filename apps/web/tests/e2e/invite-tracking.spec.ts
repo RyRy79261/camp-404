@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { login, redeemInviteAtGate, resetTestState } from "./_helpers";
+import { appAlerts } from "./lib/dom";
 
 // Invite codes are redeemed at the post-auth gate (/signup/required): the
 // user signs in via Neon Auth first, then enters a code to come aboard.
@@ -152,9 +153,7 @@ test.describe("invite-code redemption", () => {
     // stays on the gate with an error.
     await login(page, { id: "bob-auth", email: "bob@example.com" });
     await redeemInviteAtGate(page, "ONE-SHOT");
-    await expect(
-      page.getByRole("alert").filter({ hasText: /isn't valid/i }),
-    ).toBeVisible();
+    await expect(appAlerts(page, /isn't valid/i)).toBeVisible();
     await expect(page).toHaveURL(/\/signup\/required/);
 
     // And no row was persisted for bob.

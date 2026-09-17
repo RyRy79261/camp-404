@@ -32,6 +32,7 @@ export function ResultsFrame({
   return (
     <main className={`mx-auto px-4 py-6 ${wide ? "max-w-3xl" : "max-w-lg"}`}>
       <GhostBack
+        linkAs={Link}
         href={`/captains/questionnaires/${questionnaireKey}`}
         className="-ml-2 mb-4"
       >

@@ -12,8 +12,11 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:mobile": "playwright test --project=mobile-360",
+    "test:e2e:db": "playwright test --config playwright.db.config.ts",
     "design:capture": "playwright test --config scripts/pencil/capture.config.ts",
     "design:cli": "bash ../../scripts/pencil/run.sh",
     "design:status": "bash ../../scripts/pencil/run.sh status"

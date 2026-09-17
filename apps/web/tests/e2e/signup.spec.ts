@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { login, resetTestState } from "./_helpers";
+import { appAlerts } from "./lib/dom";
 
 // The invite gate now lives AFTER auth: a signed-in user without a code on
 // file is held at /signup/required until they enter a valid one. These specs
@@ -30,12 +31,7 @@ test.describe("invite-code gate (post-auth)", () => {
     await page.getByLabel("Invite code").fill("DEFINITELY-NOT-VALID");
     await page.getByRole("button", { name: "Enter camp" }).click();
 
-    // Scope to our error alert by text — Next injects its own empty
-    // role="alert" route announcer on every page, so a bare getByRole("alert")
-    // is a strict-mode collision.
-    await expect(
-      page.getByRole("alert").filter({ hasText: /isn't valid/i }),
-    ).toBeVisible();
+    await expect(appAlerts(page, /isn't valid/i)).toBeVisible();
     await expect(page).toHaveURL(/\/signup\/required/);
   });
 

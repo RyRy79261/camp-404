@@ -137,12 +137,35 @@ const ICONS: Record<ToastVariant, React.ReactNode> = {
   error: <XCircle className="h-4 w-4 text-destructive" aria-hidden />,
 }
 
+/** How long a toast takes to leave, in ms. */
+const EXIT_MS = 150
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  )
+}
+
 function ToastItem({ toast: t }: { toast: ToastRecord }) {
+  const [leaving, setLeaving] = React.useState(false)
+
+  // Slide out, then leave the store. With reduced motion, leave at once.
+  const close = React.useCallback(() => {
+    if (prefersReducedMotion()) {
+      dismiss(t.id)
+      return
+    }
+    setLeaving(true)
+    setTimeout(() => dismiss(t.id), EXIT_MS)
+  }, [t.id])
+
   React.useEffect(() => {
     if (!Number.isFinite(t.duration)) return
-    const timer = setTimeout(() => dismiss(t.id), t.duration)
+    const timer = setTimeout(close, t.duration)
     return () => clearTimeout(timer)
-  }, [t.id, t.duration])
+  }, [close, t.duration])
 
   return (
     // Each toast carries its own live semantics — role="alert" (implicitly
@@ -151,7 +174,12 @@ function ToastItem({ toast: t }: { toast: ToastRecord }) {
     // (nesting a role="alert" inside aria-live="polite" is contradictory).
     <div
       role={t.variant === "error" ? "alert" : "status"}
-      className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-lg"
+      data-state={leaving ? "closed" : "open"}
+      className={cn(
+        "pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-lg",
+        "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200",
+        "data-[state=closed]:motion-safe:animate-out data-[state=closed]:motion-safe:fade-out-0 data-[state=closed]:motion-safe:slide-out-to-bottom-2",
+      )}
     >
       <span className="mt-0.5 shrink-0">{ICONS[t.variant]}</span>
       <div className="min-w-0 flex-1">
@@ -171,7 +199,7 @@ function ToastItem({ toast: t }: { toast: ToastRecord }) {
             type="button"
             onClick={() => {
               t.action?.onClick()
-              dismiss(t.id)
+              close()
             }}
             className="mt-1.5 rounded-sm text-[13px] font-semibold text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -181,7 +209,7 @@ function ToastItem({ toast: t }: { toast: ToastRecord }) {
       </div>
       <button
         type="button"
-        onClick={() => dismiss(t.id)}
+        onClick={close}
         aria-label={`Dismiss: ${t.title}`}
         className="-mr-1 -mt-0.5 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
