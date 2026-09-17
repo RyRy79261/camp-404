@@ -25,29 +25,48 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await setRank(request, authUserId, rank);
   }
 
-  test("/captains/tools: a non-captain sees the locked shell, no tool data", async ({
+  test("the console nav: a member sees no captain destinations", async ({
     page,
     request,
   }) => {
-    await asRank(page, request, "tools-member", "member");
+    await asRank(page, request, "nav-member", "member");
 
-    await page.goto("/captains/tools");
+    await page.goto("/");
 
-    await expect(page).toHaveURL("/captains/tools"); // no redirect home
-    await expect(
-      page.getByRole("heading", { name: "Camp tools" }),
-    ).toBeVisible();
-    await expect(page.getByText("Captain access only")).toBeVisible();
-    await expect(
-      page.getByText(/this tooling is captain-only/i),
-    ).toBeVisible();
-    // The tool list is withheld — no tool cards rendered.
-    await expect(
-      page.getByRole("link", { name: /Announcements & notifications/ }),
-    ).toHaveCount(0);
+    const nav = page.getByRole("navigation", { name: "Console" });
+    await expect(nav.getByRole("link", { name: "Overview" })).toBeVisible();
+    for (const name of [
+      "Questionnaires",
+      "Payments",
+      "Camp settings",
+      "Audit",
+    ]) {
+      await expect(nav.getByRole("link", { name })).toHaveCount(0);
+    }
   });
 
-  test("/captains/tools: a captain sees the tool list", async ({
+  test("the console nav: a captain sees every destination", async ({
+    page,
+    request,
+  }) => {
+    await asRank(page, request, "nav-captain", "captain");
+
+    await page.goto("/");
+
+    const nav = page.getByRole("navigation", { name: "Console" });
+    for (const name of [
+      "Roster",
+      "Questionnaires",
+      "Announcements",
+      "Payments",
+      "Camp settings",
+      "Audit",
+    ]) {
+      await expect(nav.getByRole("link", { name })).toBeVisible();
+    }
+  });
+
+  test("/captains/tools now leads to the Overview", async ({
     page,
     request,
   }) => {
@@ -55,10 +74,10 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
 
     await page.goto("/captains/tools");
 
+    await expect(page).toHaveURL(/\/$/);
     await expect(
-      page.getByRole("link", { name: /Announcements & notifications/ }),
+      page.getByRole("heading", { level: 1, name: "Overview" }),
     ).toBeVisible();
-    await expect(page.getByText("Captain access only")).toHaveCount(0);
   });
 
   test("/captains/announcements: a non-captain sees the locked shell, no composer", async ({

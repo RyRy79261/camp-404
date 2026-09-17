@@ -41,7 +41,7 @@ test("name the year, answer, start the next year, and be asked again", async ({
   await captain.getByRole("button", { name: "Start 2027" }).click();
 
   // Asked again in the new year.
-  await captain.goto("/tools");
+  await captain.goto("/tools/forms");
   await answerGate(captain, { ...GEAR, text: "A bigger dome tent" });
 
   // Each year keeps its own answer.

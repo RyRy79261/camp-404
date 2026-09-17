@@ -25,7 +25,6 @@ test.describe("signed-out visitor", () => {
   }
 
   const memberPages = [
-    "/tools",
     "/tools/forms",
     "/tools/invite",
     "/profile",
@@ -33,9 +32,20 @@ test.describe("signed-out visitor", () => {
     "/family-tree",
     "/notifications",
     "/pending-approval",
-    "/captains/tools",
     "/captains/audit",
   ];
+
+  // The old hubs are gone: the console nav replaced them, and they send
+  // everyone to the Overview at /, which is the landing page when signed out.
+  for (const path of ["/tools", "/captains/tools"]) {
+    test(`${path} now leads to the home page`, async ({ page }) => {
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/$/);
+      await expect(
+        page.getByRole("heading", { name: "Camp 404" }),
+      ).toBeVisible();
+    });
+  }
 
   for (const path of memberPages) {
     test(`${path} sends a signed-out visitor to sign in`, async ({ page }) => {
