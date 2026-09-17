@@ -147,12 +147,9 @@ describe("BuilderCanvas conditions", () => {
       />,
     );
 
+    // The server's publish check, so the canvas flags what publish refuses.
     expect(screen.getByText("Fix before publishing")).toBeTruthy();
-    expect(
-      screen.getByText(
-        ': "Diet" has two options with the value "veg". Each option needs its own value.',
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText(': duplicate option value "veg"')).toBeTruthy();
     expect(screen.getByText("Later has no blocks.")).toBeTruthy();
   });
 });

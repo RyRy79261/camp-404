@@ -2,13 +2,18 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
-  BuilderQuestionnaire,
-  flattenBuilderQuestions,
-  regenerateBuilderIds,
+  flattenQuestions,
+  safeParseStoredDefinition,
+  type Questionnaire,
+  type ViewerRank,
 } from "@camp404/types";
-import type { Questionnaire, ViewerRank } from "@camp404/types";
-import { canViewBuilderDefinition, slugify } from "@camp404/core";
 import {
+  canViewBuilderDefinition,
+  regenerateQuestionnaireIds,
+  slugify,
+} from "@camp404/core";
+import {
+  RESERVED_DEFINITION_KEYS,
   definitionKeyExists,
   deleteDefinitionRow,
   getDefinitionRowForClone,
@@ -19,20 +24,20 @@ import {
   updateDefinitionRow,
 } from "@camp404/db/questionnaire-definitions";
 import { listOpenSendBlocking as dbListOpenSendBlocking } from "@camp404/db/questionnaire-lifecycle";
-import {
-  BURNER_PROFILE_TEMPLATE,
-  parseStoredBuilderDefinition,
-  parseStoredDefinition,
-} from "./questionnaire";
+import { BURNER_PROFILE_TEMPLATE, readStoredDefinition } from "./questionnaire";
 import { usesTestStore } from "./test-mode";
 
 // Questionnaire-definition data facade. Reads the stored catalogue from the
-// Neon-backed `questionnaire_definitions` table, validating the JSONB with the
-// zod schema and falling back to the code template when the row is absent or
-// malformed — the same resolve-with-fallback shape camp-config uses. Under
-// E2E_TEST_MODE (no database during Playwright) it serves the template
-// directly. Team-bound questions are NOT resolved here; the caller
-// (questionnaire-config.ts) injects the live teams via resolveTeamBindings.
+// Neon-backed `questionnaire_definitions` / `questionnaire_versions` tables.
+// EVERY read goes through parseStoredDefinition (@camp404/types): a row may
+// hold the builder's older shape or the unified model, snapshots are never
+// rewritten, and callers only ever see the unified `Questionnaire`. Every
+// write stores the unified model. Code questionnaires fall back to their
+// template when the row is absent or malformed — the same resolve-with-fallback
+// shape camp-config uses. Under E2E_TEST_MODE (no database during Playwright)
+// it serves the template directly. Team-bound questions are NOT resolved here;
+// the caller (questionnaire-config.ts) injects the live teams via
+// resolveTeamBindings.
 
 // The code-defined questionnaires, served until a captain edits them in-app.
 // Today just the burner profile; new keys join as their templates land.
@@ -53,40 +58,54 @@ export async function getQuestionnaireDefinition(
   const row = await getQuestionnaireDefinitionRow(key);
   if (!row) return template;
 
-  return parseStoredDefinition(row.definition, template);
+  return readStoredDefinition(row.definition, template);
 }
 
 /**
- * Load a BUILDER questionnaire definition (the in-app, data-only kind). With a
- * `version`, reads the immutable published snapshot from questionnaire_versions
- * (what an activation pins); without one, reads the editable head from
- * questionnaire_definitions (what the builder edits). Returns null for an
- * absent/malformed row or a legacy code definition — those load via
- * getQuestionnaireDefinition instead. No code template: builder questionnaires
- * exist only as data.
+ * Load a BUILDER questionnaire definition (the in-app, data-only kind) as the
+ * unified model, whichever shape it is stored in. With a `version`, reads the
+ * immutable published snapshot from questionnaire_versions (what an activation
+ * pins); without one, reads the editable head from questionnaire_definitions
+ * (what the builder edits). Returns null for an absent/malformed row, and for a
+ * reserved code-questionnaire key — those load via getQuestionnaireDefinition
+ * instead. No code template: builder questionnaires exist only as data.
  */
 export async function getBuilderDefinition(
   key: string,
   version?: string,
-): Promise<BuilderQuestionnaire | null> {
+): Promise<Questionnaire | null> {
   if (usesTestStore()) return null;
+  if (RESERVED_DEFINITION_KEYS.has(key)) return null;
   const raw = version
     ? (await getQuestionnaireVersionRow(key, version))?.definition
     : (await getQuestionnaireDefinitionRow(key))?.definition;
   if (raw == null) return null;
-  return parseStoredBuilderDefinition(raw);
+  return safeParseStoredDefinition(raw);
 }
 
 // --- Builder authoring (Phase C) -----------------------------------------
 
 const DRAFT_VERSION = "1";
 
-/** A blank one-page builder questionnaire to start a draft from. */
-function blankDefinition(title: string): BuilderQuestionnaire {
+/**
+ * A blank one-page questionnaire to start a draft from. Its page takes the
+ * questionnaire's name, as AfrikaBurn's builder titles its first section: a
+ * page needs a title to publish, and a one-page questionnaire has no better
+ * one.
+ */
+function blankDefinition(title: string): Questionnaire {
   return {
     version: DRAFT_VERSION,
     title,
-    pages: [{ id: randomUUID(), type: "question", title: "", blocks: [] }],
+    pages: [
+      {
+        id: randomUUID(),
+        kind: "questions",
+        title,
+        pageType: "question",
+        questions: [],
+      },
+    ],
   };
 }
 
@@ -120,14 +139,14 @@ export async function createDraft(input: {
   return key;
 }
 
-/** Autosave the working head (validated upstream). */
+/** Autosave the working head (validated upstream), in the unified model. */
 export async function updateDefinition(
   key: string,
-  definition: BuilderQuestionnaire,
+  definition: Questionnaire,
 ): Promise<void> {
   await updateDefinitionRow({
     key,
-    title: definition.title.trim() || "Untitled questionnaire",
+    title: definition.title?.trim() || "Untitled questionnaire",
     definition,
   });
 }
@@ -137,18 +156,19 @@ export async function duplicateDefinition(input: {
   key: string;
   createdBy: string;
 }): Promise<string | null> {
+  if (RESERVED_DEFINITION_KEYS.has(input.key)) return null;
   const row = await getDefinitionRowForClone(input.key);
   if (!row) return null;
-  const parsed = BuilderQuestionnaire.safeParse(row.definition);
-  if (!parsed.success) return null;
-  const title = `${parsed.data.title || "Untitled questionnaire"} (copy)`;
+  const parsed = safeParseStoredDefinition(row.definition);
+  if (!parsed) return null;
+  const title = `${parsed.title || "Untitled questionnaire"} (copy)`;
   const key = await generateDefinitionKey(title);
   await insertDefinitionDraft({
     key,
     title,
     createdBy: input.createdBy,
-    definition: regenerateBuilderIds(
-      { ...parsed.data, version: DRAFT_VERSION, title },
+    definition: regenerateQuestionnaireIds(
+      { ...parsed, version: DRAFT_VERSION, title },
       randomUUID,
     ),
   });
@@ -185,14 +205,12 @@ export async function listDefinitionsForViewer(viewer: {
   return rows
     .filter((r) => canViewBuilderDefinition(viewer, r))
     .map((r) => {
-      const parsed = BuilderQuestionnaire.safeParse(r.definition);
+      const parsed = safeParseStoredDefinition(r.definition);
       return {
         key: r.key,
         title: r.title,
         status: r.status,
-        questionCount: parsed.success
-          ? flattenBuilderQuestions(parsed.data).length
-          : 0,
+        questionCount: parsed ? flattenQuestions(parsed).length : 0,
         createdBy: r.createdBy,
         updatedAt: r.updatedAt,
       };

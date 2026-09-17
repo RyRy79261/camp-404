@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
-import {
-  flattenBuilderQuestions,
-  flattenQuestions,
-  type Question,
-} from "@camp404/types";
+import { flattenQuestions, type Question } from "@camp404/types";
 import { getActivationById, getRequiredAction } from "@camp404/db/activations";
 import { getAuthenticatedUser, type AuthenticatedUser } from "@/lib/auth";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
@@ -257,7 +253,7 @@ async function resolveImageQuestion(
   );
   if (!definition) return FORBIDDEN;
   return imageQuestion(
-    flattenBuilderQuestions(definition).find((q) => q.id === questionId),
+    flattenQuestions(definition).find((q) => q.id === questionId),
   );
 }
 

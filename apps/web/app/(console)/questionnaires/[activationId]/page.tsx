@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
-import { flattenBuilderQuestions } from "@camp404/types";
-import type { QuestionnaireResponses } from "@camp404/types";
+import {
+  flattenQuestions,
+  toBuilderQuestionnaire,
+  type QuestionnaireResponses,
+} from "@camp404/types";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -79,9 +82,14 @@ export default async function QuestionnaireRunnerPage({
     activation.version,
   );
   if (!definition) return <RunnerEdgeCard kind="unavailable" />;
-  if (flattenBuilderQuestions(definition).length === 0) {
+  if (flattenQuestions(definition).length === 0) {
     return <RunnerEdgeCard kind="empty" />;
   }
+  // TEMPORARY: removed when the AB runner UI lands. The runner below still
+  // renders the builder's shape; a definition using what it cannot show is
+  // unavailable here rather than shown with parts missing.
+  const runnable = toBuilderQuestionnaire(definition);
+  if (!runnable) return <RunnerEdgeCard kind="unavailable" />;
 
   // The activation's FROZEN year namespace, never the live config: a rollover
   // landing mid-form must not change which row this page prefills from or the
@@ -100,7 +108,7 @@ export default async function QuestionnaireRunnerPage({
     <RunnerFrame>
       <BuilderRunner
         activationId={activation.id}
-        definition={definition}
+        definition={runnable}
         initialResponses={initialResponses}
         seededFromPriorCycle={stored?.seededFromCycle != null}
         title={activation.title}

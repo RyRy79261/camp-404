@@ -39,12 +39,15 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  builderQuestionnaireIssues,
+  fromBuilderQuestionnaire,
   type Block,
   type BuilderQuestionnaire,
-  type BuilderDefinitionIssue,
   type Question,
 } from "@camp404/types";
+import {
+  validateQuestionnaireDefinition,
+  type DefinitionIssueCode,
+} from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { Card } from "@camp404/ui/components/card";
@@ -133,7 +136,7 @@ function describeBlock(block: Block): {
 }
 
 /** Condition problems are shown by the condition's own badge and line. */
-const CONDITION_CODES: ReadonlySet<BuilderDefinitionIssue["code"]> = new Set([
+const CONDITION_CODES: ReadonlySet<DefinitionIssueCode> = new Set<DefinitionIssueCode>([
   "dangling_visible_if",
   "visible_if_wrong_operator",
   "visible_if_wrong_value",
@@ -283,7 +286,14 @@ export function BuilderCanvas({
   const [settingsPageId, setSettingsPageId] = useState<string | null>(null);
   // What publish would refuse, shown on the page or block that has it, so a
   // captain sees a problem where it is instead of only in the publish dialog.
-  const issues = useMemo(() => builderQuestionnaireIssues(working), [working]);
+  // The server's own publish check, run on the unified model the server
+  // stores, so the canvas flags exactly what publish refuses.
+  const issues = useMemo(() => {
+    const result = validateQuestionnaireDefinition(
+      fromBuilderQuestionnaire(working),
+    );
+    return result.ok ? [] : result.issues;
+  }, [working]);
   const problemsAt = (pageId: string, blockId?: string) =>
     issues
       .filter(

@@ -1,9 +1,9 @@
 import { MEDICAL_AUDIENCE_NOTE, humanizeKey } from "@camp404/core";
 import {
-  BuilderQuestionnaire,
-  Questionnaire,
   Team,
+  safeParseStoredDefinition,
   type Question,
+  type Questionnaire,
 } from "@camp404/types";
 import { COUNTRIES, countryFlag } from "./countries";
 
@@ -503,6 +503,20 @@ export const BURNER_PROFILE_TEMPLATE: Questionnaire =
   buildQuestionnaire(DEFAULT_TEAM_OPTIONS);
 
 /**
+ * Read a raw stored definition (untyped JSONB, in either stored shape) as the
+ * unified model, falling back to a known-good definition when it's absent or
+ * malformed — so a half-written row never renders a broken questionnaire. Pure
+ * (no DB / server-only), so the data facade stays a thin DB+E2E wrapper around
+ * it.
+ */
+export function readStoredDefinition(
+  raw: unknown,
+  fallback: Questionnaire | null,
+): Questionnaire | null {
+  return safeParseStoredDefinition(raw) ?? fallback;
+}
+
+/**
  * Inject the live camp teams into a stored questionnaire definition's two
  * team-bound anchors (the team-interest sliders page + the team-lead
  * multi-select), leaving every other page/question untouched. The caller picks
@@ -512,34 +526,6 @@ export const BURNER_PROFILE_TEMPLATE: Questionnaire =
  * exactly (asserted in questionnaire-definitions.test.ts), so persisting the
  * definition is behaviour-preserving.
  */
-/**
- * Validate a raw stored definition (untyped JSONB) against the schema, falling
- * back to a known-good definition when it's absent or malformed — so a
- * half-written / older-shape row never renders a broken questionnaire. Pure (no
- * DB / server-only), so the data facade stays a thin DB+E2E wrapper around it.
- */
-export function parseStoredDefinition(
-  raw: unknown,
-  fallback: Questionnaire | null,
-): Questionnaire | null {
-  const parsed = Questionnaire.safeParse(raw);
-  return parsed.success ? parsed.data : fallback;
-}
-
-/**
- * Validate a raw stored BUILDER definition (the in-app, data-only kind). There
- * is no code fallback — builder questionnaires exist only as data, so a
- * malformed/absent row (or a legacy code definition, which has pages with
- * `questions` not `blocks`) yields null. Pure, so the data facade stays a thin
- * DB wrapper around it.
- */
-export function parseStoredBuilderDefinition(
-  raw: unknown,
-): BuilderQuestionnaire | null {
-  const parsed = BuilderQuestionnaire.safeParse(raw);
-  return parsed.success ? parsed.data : null;
-}
-
 export function resolveTeamBindings(
   definition: Questionnaire,
   teams: ReadonlyArray<TeamOption>,

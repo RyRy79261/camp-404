@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
-import { displayResponseValue, getQuestionBlocks } from "@camp404/types";
+import { displayResponseValue, pageQuestions } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent, CardHeader } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
@@ -44,8 +44,10 @@ export default async function AnsweredQuestionnairePage({
   );
   if (!answers) notFound();
 
+  // Intro pages take no answer, so only questions pages carry a card.
   const pages = answers.questionnaire.pages
-    .map((page) => ({ page, questions: getQuestionBlocks(page) }))
+    .flatMap((page) => (page.kind === "questions" ? [page] : []))
+    .map((page) => ({ page, questions: pageQuestions(page) }))
     .filter((p) => p.questions.length > 0);
 
   return (
@@ -62,7 +64,7 @@ export default async function AnsweredQuestionnairePage({
       <div className="[overflow-wrap:anywhere]">
         <PageHeading
           eyebrow="Tools / My forms"
-          title={answers.questionnaire.title}
+          title={answers.questionnaire.title ?? ""}
           description={`Submitted ${dateFmt.format(answers.completedAt)}. Answers are fixed once submitted.`}
         />
       </div>

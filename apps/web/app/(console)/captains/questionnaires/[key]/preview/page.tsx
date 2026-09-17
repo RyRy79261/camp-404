@@ -3,8 +3,10 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { canViewBuilderDefinition } from "@camp404/core";
+import { toBuilderQuestionnaire } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
+import { EmptyState } from "@camp404/ui/components/empty-state";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { captainPageGate } from "@/lib/captain-gate";
@@ -59,18 +61,35 @@ export default async function BuilderPreviewPage({
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  return chrome(
-    definition.title,
-    <Card className="w-full max-w-2xl">
-      <CardContent className="flex flex-col p-6">
-        <BuilderPreview questionnaire={definition} />
-      </CardContent>
-    </Card>,
+  const backToEditor = (
     <Button asChild variant="outline">
       <Link href={`/captains/questionnaires/${key}`}>
         <Pencil aria-hidden />
         Back to editor
       </Link>
-    </Button>,
+    </Button>
+  );
+  // TEMPORARY: removed when the AB runner UI lands. The preview renders the
+  // builder's shape; a definition using what it cannot show says so.
+  const previewable = toBuilderQuestionnaire(definition);
+  if (!previewable) {
+    return chrome(
+      definition.title || "Preview",
+      <EmptyState
+        title="This questionnaire can't be previewed here yet"
+        description="It uses pages, question types or branching this preview can't show."
+      />,
+      backToEditor,
+    );
+  }
+
+  return chrome(
+    previewable.title,
+    <Card className="w-full max-w-2xl">
+      <CardContent className="flex flex-col p-6">
+        <BuilderPreview questionnaire={previewable} />
+      </CardContent>
+    </Card>,
+    backToEditor,
   );
 }

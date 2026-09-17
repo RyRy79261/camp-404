@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import {
-  flattenBuilderQuestions,
+  flattenQuestions,
   type Question,
   type QuestionnaireResponses,
 } from "@camp404/types";
@@ -116,7 +116,7 @@ export async function loadResults(
     view: {
       key,
       title: definition.title || key,
-      questions: flattenBuilderQuestions(definition),
+      questions: flattenQuestions(definition),
       cycle,
       cycleOptions,
       currentCycle,

@@ -39,7 +39,7 @@ type Status = "draft" | "published" | "unpublished";
 
 /**
  * Footer Publish/Re-publish button. Captains only. On a publish-time validation
- * failure it surfaces the blocker list (validateBuilderQuestionnaire) in a dialog
+ * failure it surfaces the blocker list (PublishResult.errors) in a dialog
  * instead of a terse toast, so the author can fix each one.
  */
 export function PublishButton({

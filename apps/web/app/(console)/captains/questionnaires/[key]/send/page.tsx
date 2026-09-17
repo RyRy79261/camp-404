@@ -122,7 +122,7 @@ export default async function SendPage({
     <div className="w-full max-w-3xl">
       <SendForm
         questionnaireKey={key}
-        title={definition.title}
+        title={definition.title ?? ""}
         members={members}
         scopeOptions={scopeOptions}
         teamOptions={teamOptions}

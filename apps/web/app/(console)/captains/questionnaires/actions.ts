@@ -2,16 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import {
-  BuilderQuestionnaire,
-  builderDefinitionLimitErrors,
-  Team,
-} from "@camp404/types";
+import { safeParseStoredDefinition, Team } from "@camp404/types";
 import type { ViewerRank } from "@camp404/types";
 import {
   CAMP_TIME_ZONE,
   canSendToAudience,
   canViewBuilderDefinition,
+  definitionLimitErrors,
   type AudienceSpec,
 } from "@camp404/core";
 import { carryOverFor } from "@camp404/db/cycles";
@@ -161,6 +158,16 @@ export async function createDraftAction(
   return { ok: true, key };
 }
 
+/**
+ * Autosave a questionnaire's working head. `rawDefinition` is a unified
+ * `Questionnaire` (@camp404/types); it is stored in that shape. A DRAFT may be
+ * incomplete — only the schema and the size limits apply here; the publish
+ * rules run at publish.
+ *
+ * TEMPORARY: a definition in the builder's older shape is accepted too and
+ * converted, because the builder canvas still edits that shape. Removed when
+ * the AB builder UI lands.
+ */
 export async function updateDefinitionAction(
   key: string,
   rawDefinition: unknown,
@@ -170,8 +177,8 @@ export async function updateDefinitionAction(
   if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
   const can = await assertCanEdit(gate, key);
   if (!can.ok) return can;
-  const parsed = BuilderQuestionnaire.safeParse(rawDefinition);
-  if (!parsed.success) {
+  const definition = safeParseStoredDefinition(rawDefinition);
+  if (!definition) {
     return {
       ok: false,
       error: "The questionnaire is malformed and wasn't saved.",
@@ -179,9 +186,9 @@ export async function updateDefinitionAction(
   }
   // The server's bounds: size, counts and image hosts. The editor cannot be
   // trusted to enforce them, because this action takes any POST.
-  const tooBig = builderDefinitionLimitErrors(parsed.data);
+  const tooBig = definitionLimitErrors(definition);
   if (tooBig.length > 0) return { ok: false, error: tooBig[0]! };
-  await updateDefinition(key, parsed.data);
+  await updateDefinition(key, definition);
   revalidateBuilder(key);
   return { ok: true };
 }
@@ -236,12 +243,22 @@ export async function deleteDraftAction(key: string): Promise<QResult> {
 
 // --- Lifecycle: publish / unpublish / send / close (captain-only, Phase D) ---
 
+/**
+ * Publish the working head (captain-only). On refusal, `errors` holds every
+ * reason as a sentence and `issues` the definition's publish blockers with
+ * their code, path, page and block (PublishResult in
+ * @camp404/db/questionnaire-lifecycle).
+ */
 export async function publishAction(key: string): Promise<PublishActionResult> {
   const gate = await gateCaptain();
-  if (!gate.ok) return { ok: false, errors: [gate.error] };
-  if (!Key.safeParse(key).success) return { ok: false, errors: ["Invalid key."] };
+  if (!gate.ok) return { ok: false, errors: [gate.error], issues: [] };
+  if (!Key.safeParse(key).success) {
+    return { ok: false, errors: ["Invalid key."], issues: [] };
+  }
   const meta = await getDefinitionMetaRow(key);
-  if (!meta) return { ok: false, errors: ["Questionnaire not found."] };
+  if (!meta) {
+    return { ok: false, errors: ["Questionnaire not found."], issues: [] };
+  }
   const result = await publishDefinition(key, gate.campUser.id);
   if (result.ok) revalidateBuilder(key);
   return result;

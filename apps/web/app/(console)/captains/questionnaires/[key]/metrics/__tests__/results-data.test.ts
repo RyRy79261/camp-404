@@ -87,29 +87,27 @@ beforeEach(() => {
     version: "1",
     createdBy: "someone",
   } as never);
+  // The loader serves the unified model, whichever shape the row is in.
   vi.mocked(getBuilderDefinition).mockResolvedValue({
     version: "1",
     title: "Camp feedback",
     pages: [
       {
         id: "p1",
-        type: "question",
-        title: "",
-        blocks: [
+        kind: "questions",
+        title: "Feedback",
+        questions: [
           {
-            kind: "question",
-            question: {
-              id: "colour",
-              kind: "short_text",
-              prompt: "Colour",
-              maxLength: 120,
-              required: true,
-            },
+            id: "colour",
+            kind: "short_text",
+            prompt: "Colour",
+            maxLength: 120,
+            required: true,
           },
         ],
       },
     ],
-  } as never);
+  });
   vi.mocked(listResultCycles).mockResolvedValue([2027, 2026]);
   vi.mocked(getCycles).mockResolvedValue([
     {
@@ -159,6 +157,11 @@ describe("loadResults — the captain gate", () => {
   it("lets a captain through", async () => {
     const access = await loadResults(KEY);
     expect(access.ok).toBe(true);
+    // Every question of the unified head, in document order.
+    expect(access.ok && access.view.questions.map((q) => q.id)).toEqual([
+      "colour",
+    ]);
+    expect(access.ok && access.view.title).toBe("Camp feedback");
     expect(listActivationResponses).toHaveBeenCalledWith({
       definitionKey: KEY,
       cycle: 2027,

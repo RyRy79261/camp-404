@@ -4,8 +4,7 @@ import {
   BURNER_PROFILE_TEMPLATE,
   DEFAULT_TEAM_OPTIONS,
   buildQuestionnaire,
-  parseStoredBuilderDefinition,
-  parseStoredDefinition,
+  readStoredDefinition,
   resolveTeamBindings,
   type TeamOption,
 } from "@/lib/questionnaire";
@@ -92,7 +91,7 @@ describe("DEFAULT_TEAM_OPTIONS drift guard", () => {
   });
 });
 
-describe("parseStoredDefinition (validate-or-fall-back)", () => {
+describe("readStoredDefinition (validate-or-fall-back)", () => {
   const fallback = BURNER_PROFILE_TEMPLATE;
 
   it("returns a stored definition that validates", () => {
@@ -101,27 +100,27 @@ describe("parseStoredDefinition (validate-or-fall-back)", () => {
       { value: "kitchen", label: "Kitchen" },
       { value: "structures", label: "Structures" },
     ]);
-    expect(parseStoredDefinition(stored, fallback)).toEqual(stored);
+    expect(readStoredDefinition(stored, fallback)).toEqual(stored);
   });
 
   it("falls back when the stored definition is malformed", () => {
     expect(
-      parseStoredDefinition({ version: "x", pages: "not-an-array" }, fallback),
+      readStoredDefinition({ version: "x", pages: "not-an-array" }, fallback),
     ).toEqual(fallback);
   });
 
   it("falls back when the row is empty / absent JSON", () => {
-    expect(parseStoredDefinition(null, fallback)).toEqual(fallback);
-    expect(parseStoredDefinition(undefined, fallback)).toEqual(fallback);
+    expect(readStoredDefinition(null, fallback)).toEqual(fallback);
+    expect(readStoredDefinition(undefined, fallback)).toEqual(fallback);
   });
 
   it("passes the null fallback through for an unknown key with bad data", () => {
-    expect(parseStoredDefinition({ nope: true }, null)).toBeNull();
+    expect(readStoredDefinition({ nope: true }, null)).toBeNull();
   });
 });
 
-describe("parseStoredBuilderDefinition (data-only, no fallback)", () => {
-  it("returns a valid builder definition", () => {
+describe("readStoredDefinition reads either stored shape", () => {
+  it("reads a builder-shaped row as the unified model", () => {
     const def = {
       version: "1",
       title: "Survey",
@@ -139,15 +138,21 @@ describe("parseStoredBuilderDefinition (data-only, no fallback)", () => {
         },
       ],
     };
-    const parsed = parseStoredBuilderDefinition(def);
-    expect(parsed?.title).toBe("Survey");
+    const read = readStoredDefinition(def, null);
+    expect(read?.title).toBe("Survey");
+    expect(read?.pages[0]).toMatchObject({
+      kind: "questions",
+      pageType: "question",
+      questions: [{ id: "a", kind: "short_text", prompt: "A" }],
+    });
   });
 
-  it("returns null for malformed, legacy, or absent definitions", () => {
-    expect(parseStoredBuilderDefinition({ version: "1", pages: "x" })).toBeNull();
-    // A legacy Questionnaire (pages carry `questions`, not `blocks`) is not a
-    // builder definition.
-    expect(parseStoredBuilderDefinition(BURNER_PROFILE_TEMPLATE)).toBeNull();
-    expect(parseStoredBuilderDefinition(null)).toBeNull();
+  it("falls back for a malformed builder-shaped row", () => {
+    expect(
+      readStoredDefinition(
+        { version: "1", title: "x", pages: [{ id: "p", blocks: "nope" }] },
+        null,
+      ),
+    ).toBeNull();
   });
 });

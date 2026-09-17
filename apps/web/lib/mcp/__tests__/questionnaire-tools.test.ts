@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { BuilderQuestionnaire } from "@camp404/types";
+import type { BuilderQuestionnaire, Questionnaire } from "@camp404/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Drafting questionnaires over MCP: authors only, the builder's own edit rule
@@ -65,7 +65,8 @@ async function call(name: string, args: unknown, as: string) {
   return result.isError ? { error: text } : { data: JSON.parse(text) };
 }
 
-const DEFINITION: BuilderQuestionnaire = {
+// The builder's older shape — still accepted, converted and stored unified.
+const BUILDER_DEFINITION: BuilderQuestionnaire = {
   version: "model-made-up",
   title: "Ignored title",
   pages: [
@@ -88,6 +89,28 @@ const DEFINITION: BuilderQuestionnaire = {
     },
   ],
 } as unknown as BuilderQuestionnaire;
+
+// The unified questionnaire model the tools take and return.
+const DEFINITION: Questionnaire = {
+  version: "model-made-up",
+  title: "Ignored title",
+  pages: [
+    {
+      id: "p1",
+      kind: "questions",
+      title: "Gear",
+      questions: [
+        {
+          id: "q1",
+          kind: "short_text",
+          prompt: "What tent do you bring?",
+          maxLength: 120,
+          required: true,
+        },
+      ],
+    },
+  ],
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -138,7 +161,103 @@ describe("questionnaire drafting tools", () => {
       key: "gear-check",
       builderPath: "/captains/questionnaires/gear-check",
     });
-    expect(Array.isArray(data.publishProblems)).toBe(true);
+    expect(data.publishProblems).toEqual([]);
+    expect(data.title).toBe("Gear check");
+  });
+
+  it("accepts a builder-shaped definition, stores it unified, and returns located publish problems", async () => {
+    vi.mocked(getBuilderDefinition)
+      .mockResolvedValueOnce({ version: "1", title: "Gear", pages: [] } as never)
+      .mockImplementationOnce(
+        async () => vi.mocked(updateDefinition).mock.calls[0]![1] as never,
+      );
+    const untitledPage = {
+      ...BUILDER_DEFINITION,
+      pages: [{ ...BUILDER_DEFINITION.pages[0]!, title: "" }],
+    };
+    const { data } = await call(
+      "create_questionnaire_draft",
+      { title: "Gear check", definition: untitledPage },
+      CAPTAIN,
+    );
+    const saved = vi.mocked(updateDefinition).mock.calls[0]![1];
+    expect(saved.pages[0]).toMatchObject({
+      kind: "questions",
+      pageType: "question",
+      questions: [{ id: "q1", kind: "short_text" }],
+    });
+    expect(data.publishProblems).toEqual([
+      {
+        path: "pages[0].title",
+        code: "missing_page_title",
+        message: "Page 1 needs a title.",
+        pageId: "p1",
+      },
+    ]);
+  });
+
+  it("refuses a definition over the size limits before creating anything", async () => {
+    expect(
+      await call(
+        "create_questionnaire_draft",
+        {
+          title: "Gear check",
+          definition: {
+            ...DEFINITION,
+            pages: [
+              {
+                ...DEFINITION.pages[0]!,
+                subtitle: "x".repeat(6_000),
+              },
+            ],
+          },
+        },
+        CAPTAIN,
+      ),
+    ).toEqual({
+      error:
+        "One piece of text is longer than 5000 characters. Shorten it or split it up.",
+    });
+    expect(createDraft).not.toHaveBeenCalled();
+  });
+
+  it("returns the working definition in the unified model", async () => {
+    vi.mocked(getDefinitionMetaRow).mockResolvedValueOnce({
+      key: "gear-check",
+      status: "draft",
+      version: null,
+      createdBy: CAPTAIN,
+    } as never);
+    vi.mocked(getBuilderDefinition).mockResolvedValueOnce(DEFINITION);
+    const { data } = await call(
+      "get_questionnaire_draft",
+      { key: "gear-check" },
+      CAPTAIN,
+    );
+    expect(data).toMatchObject({
+      key: "gear-check",
+      status: "draft",
+      canEdit: true,
+      definition: DEFINITION,
+      publishProblems: [],
+    });
+  });
+
+  it("saves an update over the head in the unified model, keeping its version", async () => {
+    vi.mocked(getBuilderDefinition).mockResolvedValueOnce({
+      ...DEFINITION,
+      version: "7",
+    });
+    await call(
+      "update_questionnaire_draft",
+      { key: "gear-check", definition: BUILDER_DEFINITION },
+      CAPTAIN,
+    );
+    expect(updateDefinition).toHaveBeenCalledWith("gear-check", {
+      ...DEFINITION,
+      pages: [{ ...DEFINITION.pages[0]!, pageType: "question" }],
+      version: "7",
+    });
   });
 
   it("uses the builder's edit rule, and says someone else's questionnaire in its words", async () => {

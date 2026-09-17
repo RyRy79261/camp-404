@@ -26,7 +26,11 @@ vi.mock("@/lib/questionnaire-definitions", () => ({
   getBuilderDefinition: vi.fn(),
 }));
 
-import { BuilderQuestionnaire } from "@camp404/types";
+import {
+  BuilderQuestionnaire,
+  Questionnaire,
+  fromBuilderQuestionnaire,
+} from "@camp404/types";
 import { redirect } from "next/navigation";
 import { saveBuilderResponses } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
@@ -39,8 +43,9 @@ import {
 import { upsertQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 
-// Parsed so Zod fills the defaulted field params (maxLength, …).
-const definition = BuilderQuestionnaire.parse({
+// A builder-authored definition as the loader serves it: read as the unified
+// model (parsed, so Zod fills the defaulted field params — maxLength, …).
+const definition = fromBuilderQuestionnaire(BuilderQuestionnaire.parse({
   version: "v2",
   title: "Kitchen shift",
   pages: [
@@ -61,7 +66,7 @@ const definition = BuilderQuestionnaire.parse({
       ],
     },
   ],
-});
+}));
 
 describe("saveBuilderResponses draft bounds", () => {
   beforeEach(() => {
@@ -139,6 +144,14 @@ describe("saveBuilderResponses draft bounds", () => {
     expect(result.ok).toBe(true);
     const { responses } = vi.mocked(upsertQuestionnaireResponse).mock.calls[0]![0]!;
     expect(responses).toEqual({ notes: "half typed" });
+  });
+
+  it("refuses a malformed draft payload before loading the definition", async () => {
+    const result = await saveBuilderResponses("act-1", "not answers", false);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors._form).toMatch(/couldn't read/i);
+    expect(getBuilderDefinition).not.toHaveBeenCalled();
   });
 
   it("returns 'This form is unavailable' when the pinned version is missing", async () => {
@@ -227,28 +240,30 @@ describe("saveBuilderResponses cycle stamping", () => {
 
   it("passes the answers marked for the app's tables with the final submit", async () => {
     vi.mocked(getBuilderDefinition).mockResolvedValue(
-      BuilderQuestionnaire.parse({
-        version: "v2",
-        title: "Transport",
-        pages: [
-          {
-            id: "p1",
-            type: "question",
-            title: "Travel",
-            blocks: [
-              {
-                kind: "question",
-                question: {
-                  id: "drives",
-                  kind: "boolean",
-                  prompt: "Driving?",
-                  role: "driving_this_year",
+      fromBuilderQuestionnaire(
+        BuilderQuestionnaire.parse({
+          version: "v2",
+          title: "Transport",
+          pages: [
+            {
+              id: "p1",
+              type: "question",
+              title: "Travel",
+              blocks: [
+                {
+                  kind: "question",
+                  question: {
+                    id: "drives",
+                    kind: "boolean",
+                    prompt: "Driving?",
+                    role: "driving_this_year",
+                  },
                 },
-              },
-            ],
-          },
-        ],
-      }),
+              ],
+            },
+          ],
+        }),
+      ),
     );
 
     await saveBuilderResponses("act-1", { drives: true }, true);
@@ -257,5 +272,98 @@ describe("saveBuilderResponses cycle stamping", () => {
       dietary: null,
       driver: { intendsToDrive: true },
     });
+  });
+});
+
+describe("saveBuilderResponses final submit on the unified model", () => {
+  // The final submit validates with the unified runtime: only the questions a
+  // member is ASKED — shown, and on the path their answers walk — are required,
+  // and a role answer on a page they branched past is not copied.
+  const ROUTED = Questionnaire.parse({
+    version: "v3",
+    title: "Food",
+    pages: [
+      {
+        id: "start",
+        kind: "questions",
+        title: "Start",
+        questions: [
+          {
+            id: "eat",
+            kind: "single_select",
+            prompt: "Eating with the camp?",
+            options: [
+              { value: "yes", label: "Yes" },
+              { value: "no", label: "No", goTo: "__submit__" },
+            ],
+          },
+        ],
+      },
+      {
+        id: "food",
+        kind: "questions",
+        title: "Food",
+        questions: [
+          {
+            id: "allergies",
+            kind: "short_text",
+            prompt: "Allergies",
+            role: "dietary_allergies",
+            required: true,
+          },
+        ],
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getAuthenticatedUserOrRedirect).mockResolvedValue({
+      id: "auth-1",
+      primaryEmail: "member@example.com",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ id: "camp-1" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(getActivationById).mockResolvedValue({
+      id: "act-1",
+      status: "open",
+      questionnaireKey: "food",
+      version: "v3",
+      cycle: 3,
+      carryOver: false,
+    } as never);
+    vi.mocked(getRequiredAction).mockResolvedValue({
+      status: "pending",
+      activationId: "act-1",
+    } as never);
+    vi.mocked(getBuilderDefinition).mockResolvedValue(ROUTED);
+    vi.mocked(completeBuilderResponse).mockResolvedValue(undefined as never);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("requires a question on the path, with its error keyed by question id", async () => {
+    const result = await saveBuilderResponses("act-1", { eat: "yes" }, true);
+    expect(result).toEqual({
+      ok: false,
+      errors: { allergies: "This question is required" },
+    });
+    expect(completeBuilderResponse).not.toHaveBeenCalled();
+  });
+
+  it("does not require a question the member branched past, nor copy its role answer", async () => {
+    await saveBuilderResponses(
+      "act-1",
+      { eat: "no", allergies: "Kept, but not asked" },
+      true,
+    );
+    const call = vi.mocked(completeBuilderResponse).mock.calls[0]![0];
+    expect(call.responses).toEqual({
+      eat: "no",
+      allergies: "Kept, but not asked",
+    });
+    expect(call.mirror).toEqual({ dietary: { allergies: null }, driver: null });
   });
 });

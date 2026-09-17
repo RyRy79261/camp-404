@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
+import { toBuilderQuestionnaire } from "@camp404/types";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import { getOpenActivationForKey } from "@camp404/db/questionnaire-lifecycle";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
+import { EmptyState } from "@camp404/ui/components/empty-state";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
@@ -16,8 +18,8 @@ export const metadata = { title: "Edit questionnaire — Camp 404" };
 // ("Questionnaires / Edit"). Authoring is team-lead+ (preview-but-locked
 // below); a team-lead may edit only their own drafts, a captain any. The
 // definition is withheld server-side when the viewer can't edit. Only builder
-// definitions open here — getBuilderDefinition returns null for a legacy code
-// questionnaire (those are never in the hub anyway).
+// definitions open here — getBuilderDefinition returns null for a code
+// questionnaire's reserved key (those are never in the hub anyway).
 export default async function BuilderCanvasPage({
   params,
 }: {
@@ -67,6 +69,19 @@ export default async function BuilderCanvasPage({
     );
   }
 
+  // TEMPORARY: removed when the AB builder UI lands. The canvas edits the
+  // builder's shape; a definition using what it cannot show (drafted over MCP,
+  // say) is not opened here, so an autosave can never strip it.
+  const editable = toBuilderQuestionnaire(definition);
+  if (!editable) {
+    return chrome(
+      <EmptyState
+        title="This questionnaire can't be edited here yet"
+        description="It uses pages, question types or branching this editor can't show. It is saved as it is."
+      />,
+    );
+  }
+
   // Lifecycle is captain-only; the open activation (if any) drives the Send vs.
   // close-and-resend affordance.
   const isCaptain = rank === "captain";
@@ -75,7 +90,7 @@ export default async function BuilderCanvasPage({
   return chrome(
     <BuilderCanvas
       questionnaireKey={key}
-      definition={definition}
+      definition={editable}
       canPublish={isCaptain}
       status={meta.status}
       publishedVersion={meta.version}

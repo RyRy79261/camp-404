@@ -39,10 +39,24 @@ describe("MCP tool listing", () => {
       expect(tool.inputSchema.type).toBe("object");
     }
     const draft = tools.find((t) => t.name === "update_questionnaire_draft")!;
+    // A definition is the unified questionnaire model, or the builder's older
+    // shape (still accepted and converted): either, as an object.
     const definition = (
-      draft.inputSchema.properties as Record<string, { type?: string }>
+      draft.inputSchema.properties as Record<
+        string,
+        { anyOf?: { type?: string; properties?: Record<string, unknown> }[] }
+      >
     ).definition;
-    expect(definition?.type).toBe("object");
+    expect(definition?.anyOf?.map((shape) => shape.type)).toEqual([
+      "object",
+      "object",
+    ]);
+    expect(
+      definition?.anyOf?.map((shape) => Object.keys(shape.properties ?? {})),
+    ).toEqual([
+      ["version", "title", "pages"],
+      ["version", "title", "pages"],
+    ]);
 
     await client.close();
     await server.close();

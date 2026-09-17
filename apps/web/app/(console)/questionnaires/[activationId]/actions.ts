@@ -1,14 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { QuestionnaireResponses, type SaveResult } from "@camp404/types";
 import {
-  QuestionnaireResponses,
   boundDraftResponses,
-  builderRoleMirror,
-  flattenBuilderQuestions,
-  validateBuilderResponses,
-  type SaveResult,
-} from "@camp404/types";
+  questionnaireRoleMirror,
+  validateSubmission,
+} from "@camp404/core";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 import {
@@ -28,10 +26,13 @@ const SAVE_REJECTED =
  * Persist a builder questionnaire's responses for the signed-in member.
  * `activationId` is bound at the runner so the wizard keeps its (responses,
  * final) action shape. Re-verifies the access predicate on every call (never
- * trust the client), bounds every save against the pinned definition and runs
- * the full per-field validator on the final submit, upserts the
- * latest-answer row for the activation's cycle, and on submit satisfies the
- * required action and goes to the S27 completion screen, which routes onward.
+ * trust the client), reads the activation's pinned version as the unified
+ * model, bounds every draft save against it (boundDraftResponses) and runs the
+ * branch- and visibility-aware validator on the final submit
+ * (validateSubmission), upserts the latest-answer row for the activation's
+ * cycle, and on submit satisfies the required action — copying role answers
+ * into the app's tables (questionnaireRoleMirror) — and goes to the S27
+ * completion screen, which routes onward.
  */
 export async function saveBuilderResponses(
   activationId: string,
@@ -85,18 +86,17 @@ export async function saveBuilderResponses(
 
   let toStore: QuestionnaireResponses;
   if (final) {
-    const result = validateBuilderResponses(definition, responses);
+    // Only the questions the member is ASKED — shown, on the path their
+    // answers walk — are required; any other valid answer is kept.
+    const result = validateSubmission(definition, responses);
     if (!result.ok) return { ok: false, errors: result.errors };
     toStore = result.responses;
   } else {
     // Non-final: no per-field / required checks — partial progress with empty
     // requireds must resume — but the draft is restricted to the definition's
-    // own field ids and size-capped before it reaches the JSONB. (DEFERRED.md
+    // own question ids and size-capped before it reaches the JSONB. (DEFERRED.md
     // "Server-side validation": size cap + key allow-list on non-final saves.)
-    const draft = boundDraftResponses(
-      responses,
-      flattenBuilderQuestions(definition).map((q) => q.id),
-    );
+    const draft = boundDraftResponses(definition, responses);
     if (!draft.ok) return { ok: false, errors: { _form: SAVE_REJECTED } };
     toStore = draft.responses;
   }
@@ -117,7 +117,7 @@ export async function saveBuilderResponses(
         activationId: activation.id,
         // Answers marked for the app's own tables (allergies, driving this
         // year, arrival day…) land there in the same transaction.
-        mirror: builderRoleMirror(definition, toStore),
+        mirror: questionnaireRoleMirror(definition, toStore),
       });
     } else {
       await upsertQuestionnaireResponse({
