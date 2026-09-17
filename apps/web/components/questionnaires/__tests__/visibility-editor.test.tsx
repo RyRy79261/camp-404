@@ -1,11 +1,19 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Question, type VisibleIf } from "@camp404/types";
 import { VisibilityEditor } from "../visibility-editor";
+import { choose, installSelectPolyfills, optionNames } from "./select-helpers";
 
-// The "show this when…" editor: off by default, on points at the nearest
+// The "Show only when…" editor: off by default, on points at the nearest
 // earlier question, and every control keeps the condition valid.
 
+beforeAll(installSelectPolyfills);
 afterEach(cleanup);
 
 const diet = Question.parse({
@@ -26,13 +34,14 @@ const drives = Question.parse({
 function renderEditor(
   value: VisibleIf | undefined,
   fields: Question[] = [diet, drives],
+  subject: "block" | "section" = "block",
 ) {
   const onChange = vi.fn();
   render(
     <VisibilityEditor
       value={value}
       fields={fields}
-      subject="block"
+      subject={subject}
       onChange={onChange}
     />,
   );
@@ -54,6 +63,13 @@ describe("VisibilityEditor", () => {
     ).toBeTruthy();
   });
 
+  it("says a section needs a question in an earlier section", () => {
+    renderEditor(undefined, [], "section");
+    expect(
+      screen.getByText("Add a question in an earlier section to use this."),
+    ).toBeTruthy();
+  });
+
   it("turns on pointing at the nearest earlier question", () => {
     const onChange = renderEditor(undefined);
     fireEvent.click(screen.getByRole("switch", { name: /Show only when/ }));
@@ -70,11 +86,9 @@ describe("VisibilityEditor", () => {
     expect(onChange).toHaveBeenCalledWith(undefined);
   });
 
-  it("starts afresh when the question changes", () => {
+  it("starts afresh when the question changes", async () => {
     const onChange = renderEditor({ fieldId: "drives", op: "eq", value: true });
-    fireEvent.change(screen.getByLabelText("Question"), {
-      target: { value: "diet" },
-    });
+    await choose(screen.getByRole("combobox", { name: "Question" }), "Diet");
     expect(onChange).toHaveBeenCalledWith({
       fieldId: "diet",
       op: "eq",
@@ -82,30 +96,42 @@ describe("VisibilityEditor", () => {
     });
   });
 
-  it("offers only the conditions and answers the question can have", () => {
+  it("offers only the conditions and answers the question can have", async () => {
     const onChange = renderEditor({ fieldId: "diet", op: "eq", value: "omni" });
-    const ops = Array.from(
-      (screen.getByLabelText("Condition") as HTMLSelectElement).options,
-    ).map((o) => o.textContent);
-    expect(ops).toEqual(["is", "is not", "is answered", "is not answered"]);
+    expect(
+      await optionNames(screen.getByRole("combobox", { name: "Condition" })),
+    ).toEqual(["is", "is not", "is answered", "is not answered"]);
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
 
-    fireEvent.change(screen.getByLabelText("Answer"), {
-      target: { value: "veg" },
-    });
+    await choose(
+      screen.getByRole("combobox", { name: "Answer" }),
+      "Vegetarian",
+    );
     expect(onChange).toHaveBeenLastCalledWith({
       fieldId: "diet",
       op: "eq",
       value: "veg",
     });
 
-    fireEvent.change(screen.getByLabelText("Condition"), {
-      target: { value: "is_answered" },
-    });
+    await choose(
+      screen.getByRole("combobox", { name: "Condition" }),
+      "is answered",
+    );
     expect(onChange).toHaveBeenLastCalledWith({
       fieldId: "diet",
       op: "is_answered",
     });
     expect(screen.getByText("Shown when “Diet” is Everything.")).toBeTruthy();
+  });
+
+  it("answers a yes/no question with Yes or No", () => {
+    const onChange = renderEditor({ fieldId: "drives", op: "eq", value: true });
+    fireEvent.click(screen.getByRole("radio", { name: "No" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      fieldId: "drives",
+      op: "eq",
+      value: false,
+    });
   });
 
   it("says on the answer box when a number is one the question cannot give", () => {
@@ -116,8 +142,10 @@ describe("VisibilityEditor", () => {
       min: 0,
       max: 6,
     });
-    renderEditor({ fieldId: "crew", op: "eq", value: 9 }, [crew]);
-    const answer = screen.getByLabelText("Answer");
+    const onChange = renderEditor({ fieldId: "crew", op: "eq", value: 9 }, [
+      crew,
+    ]);
+    const answer = screen.getByRole("spinbutton", { name: "Answer" });
     expect(answer.getAttribute("aria-invalid")).toBe("true");
     expect(answer.getAttribute("max")).toBe("6");
     expect(screen.getByRole("alert").textContent).toBe(
@@ -125,6 +153,13 @@ describe("VisibilityEditor", () => {
     );
     // A slip in the number is not a changed question.
     expect(screen.queryByText(/The question this depends on/)).toBeNull();
+
+    fireEvent.change(answer, { target: { value: "4" } });
+    expect(onChange).toHaveBeenLastCalledWith({
+      fieldId: "crew",
+      op: "eq",
+      value: 4,
+    });
   });
 
   it("warns when the question it depends on is gone", () => {
@@ -132,8 +167,8 @@ describe("VisibilityEditor", () => {
     expect(
       screen.getByText(/The question this depends on is missing/),
     ).toBeTruthy();
-    expect((screen.getByLabelText("Question") as HTMLSelectElement).value).toBe(
-      "",
-    );
+    expect(
+      screen.getByRole("combobox", { name: "Question" }).textContent,
+    ).toContain("Pick a question");
   });
 });

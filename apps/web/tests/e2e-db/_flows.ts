@@ -42,20 +42,28 @@ export async function buildAndPublish(
     new RegExp(`/captains/questionnaires/${input.key}$`),
   );
 
+  const rail = captain.getByRole("complementary", { name: "Publish and send" });
   if (input.askAgainNextYear) {
-    await captain
-      .getByRole("switch", { name: "Ask everyone again next year" })
-      .click();
+    // The switch loads its current setting first; a click before that is lost.
+    const askAgain = rail.getByRole("switch", {
+      name: "Ask everyone again next year",
+    });
+    await expect(askAgain).toBeEnabled();
+    await askAgain.click();
+    await expect(askAgain).toBeChecked();
   }
-  await captain.getByRole("button", { name: "Add block" }).first().click();
-  await captain.getByRole("button", { name: /^Short text/ }).click();
-  const editor = captain.getByRole("dialog");
-  await editor.getByLabel("Question", { exact: true }).fill(input.prompt);
-  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  // The palette adds to the section being worked on, and focuses the new
+  // question's prompt.
+  await captain
+    .getByRole("complementary", { name: "Add a block" })
+    .getByRole("button", { name: "Short answer", exact: true })
+    .click();
+  await captain.getByLabel("Question prompt").fill(input.prompt);
+  await captain.getByRole("button", { name: "Save draft" }).click();
   await expect(captain.getByText("All changes saved")).toBeVisible();
 
-  await captain.getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(captain.getByText("Published", { exact: true })).toBeVisible();
+  await rail.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(rail.getByText("Published", { exact: true })).toBeVisible();
 }
 
 /** Send a published questionnaire to everyone, blocking. */

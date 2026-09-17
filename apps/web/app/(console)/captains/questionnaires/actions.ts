@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { safeParseStoredDefinition, Team } from "@camp404/types";
+import { Questionnaire, Team } from "@camp404/types";
 import type { ViewerRank } from "@camp404/types";
 import {
   CAMP_TIME_ZONE,
@@ -159,14 +159,10 @@ export async function createDraftAction(
 }
 
 /**
- * Autosave a questionnaire's working head. `rawDefinition` is a unified
- * `Questionnaire` (@camp404/types); it is stored in that shape. A DRAFT may be
- * incomplete — only the schema and the size limits apply here; the publish
- * rules run at publish.
- *
- * TEMPORARY: a definition in the builder's older shape is accepted too and
- * converted, because the builder canvas still edits that shape. Removed when
- * the AB builder UI lands.
+ * Save a questionnaire's working head (the builder's "Save draft").
+ * `rawDefinition` is a unified `Questionnaire` (@camp404/types); it is stored in
+ * that shape, and nothing else is accepted. A DRAFT may be incomplete — only the
+ * schema and the size limits apply here; the publish rules run at publish.
  */
 export async function updateDefinitionAction(
   key: string,
@@ -177,13 +173,14 @@ export async function updateDefinitionAction(
   if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
   const can = await assertCanEdit(gate, key);
   if (!can.ok) return can;
-  const definition = safeParseStoredDefinition(rawDefinition);
-  if (!definition) {
+  const parsed = Questionnaire.safeParse(rawDefinition);
+  if (!parsed.success) {
     return {
       ok: false,
       error: "The questionnaire is malformed and wasn't saved.",
     };
   }
+  const definition = parsed.data;
   // The server's bounds: size, counts and image hosts. The editor cannot be
   // trusted to enforce them, because this action takes any POST.
   const tooBig = definitionLimitErrors(definition);

@@ -4,16 +4,27 @@ import { useId, useRef, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 
-// "Upload a picture" for an image block. Posts the file to the builder image
-// route and hands back the link the block stores. No board draws the builder;
-// this is a Button over a hidden file input, like the avatar uploader.
+// "Upload a picture" for an image block or an option picture. Posts the file to
+// Camp 404's builder image route rather than AB's FileUpload: the route checks
+// that the author may change this questionnaire, and stores the picture in the
+// app's own store, which is the only place a published image may come from
+// (`isAllowedBuilderImageUrl`). Hands back the link the block stores. A Button
+// over a hidden file input, like the avatar uploader.
 
 export function ImageUploadButton({
   questionnaireKey,
   onUploaded,
+  label = "Upload a picture",
+  ariaLabel,
+  size,
 }: {
   questionnaireKey: string;
   onUploaded: (url: string) => void;
+  /** The button's words ("Replace the picture" once one is set). */
+  label?: string;
+  /** A fuller name where several upload buttons share a screen. */
+  ariaLabel?: string;
+  size?: "sm" | "default";
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const errorId = useId();
@@ -64,7 +75,10 @@ export function ImageUploadButton({
       <Button
         type="button"
         variant="outline"
+        size={size}
+        className="self-start"
         disabled={uploading}
+        aria-label={ariaLabel}
         aria-describedby={error ? errorId : undefined}
         onClick={() => inputRef.current?.click()}
       >
@@ -73,7 +87,7 @@ export function ImageUploadButton({
         ) : (
           <Upload aria-hidden />
         )}
-        {uploading ? "Uploading…" : "Upload a picture"}
+        {uploading ? "Uploading…" : label}
       </Button>
       {error && (
         <p id={errorId} role="alert" className="text-xs text-destructive">

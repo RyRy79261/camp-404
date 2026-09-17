@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { BuilderQuestionnaire, Question } from "@camp404/types";
+import { Question, Questionnaire } from "@camp404/types";
 import {
+  choiceLabels,
   defaultConditionFor,
   describeVisibleIf,
   fieldsBefore,
+  rangeText,
   withOperator,
+  type NumericQuestion,
 } from "../visibility";
 
-// The pure half of the "show this when…" editor: which questions a condition
+// The pure half of the "Show only when…" editor: which questions a condition
 // may point at, what a fresh condition starts as, and how one reads.
 
 const diet = Question.parse({
@@ -32,35 +35,39 @@ const seats = Question.parse({
   max: 6,
 });
 const name = Question.parse({ id: "name", kind: "short_text", prompt: "Name" });
+const mood = Question.parse({
+  id: "mood",
+  kind: "rating",
+  prompt: "Mood",
+  steps: 5,
+});
 
-const DEF = BuilderQuestionnaire.parse({
+const DEF = Questionnaire.parse({
   version: "1",
   title: "T",
   pages: [
     {
       id: "p1",
-      type: "question",
+      kind: "questions",
       title: "One",
-      blocks: [
-        { kind: "question", question: diet },
+      questions: [
+        diet,
         { id: "note", kind: "explainer", bodyText: "Hi", style: "plain" },
-        { kind: "question", question: drives },
+        drives,
       ],
     },
+    { id: "intro", kind: "intro", heading: "Next up", body: "Seats" },
     {
       id: "p2",
-      type: "question",
+      kind: "questions",
       title: "Two",
-      blocks: [
-        { kind: "question", question: seats },
-        { kind: "question", question: name },
-      ],
+      questions: [seats, name],
     },
   ],
 });
 
 describe("fieldsBefore", () => {
-  it("gives a block the questions above it, across pages", () => {
+  it("gives a block the questions above it, across sections", () => {
     expect(fieldsBefore(DEF, "p2", "name").map((f) => f.id)).toEqual([
       "diet",
       "drives",
@@ -70,7 +77,7 @@ describe("fieldsBefore", () => {
     expect(fieldsBefore(DEF, "p1", "diet")).toEqual([]);
   });
 
-  it("gives a page only the questions on earlier pages", () => {
+  it("gives a section only the questions in earlier sections", () => {
     expect(fieldsBefore(DEF, "p2", null).map((f) => f.id)).toEqual([
       "diet",
       "drives",
@@ -93,6 +100,11 @@ describe("defaultConditionFor", () => {
     });
     expect(defaultConditionFor(seats)).toEqual({
       fieldId: "seats",
+      op: "eq",
+      value: 1,
+    });
+    expect(defaultConditionFor(mood)).toEqual({
+      fieldId: "mood",
       op: "eq",
       value: 1,
     });
@@ -150,5 +162,51 @@ describe("describeVisibleIf", () => {
       describeVisibleIf({ fieldId: "diet", op: "eq", value: "vegan" }, fields)
         .broken,
     ).toBe(true);
+  });
+});
+
+describe("choiceLabels and rangeText", () => {
+  it("names each answer a choice question can give, falling back to the value", () => {
+    expect(
+      choiceLabels(
+        Question.parse({
+          id: "t",
+          kind: "scale",
+          prompt: "Cooking",
+          steps: [
+            { value: "pro", label: "Pro" },
+            { value: "new", label: "New" },
+          ],
+        }),
+      ),
+    ).toEqual([
+      { value: "pro", label: "Pro" },
+      { value: "new", label: "New" },
+    ]);
+    const years = Question.parse({ id: "y", kind: "years", prompt: "Years" });
+    const labels = choiceLabels(years).map((c) => c.value);
+    expect(labels).toContain("2019");
+    expect(labels).not.toContain("2020");
+  });
+
+  it("says which numbers each numeric question can give", () => {
+    expect(rangeText(seats as NumericQuestion)).toBe(
+      "A whole number from 1 to 6.",
+    );
+    expect(rangeText(mood as NumericQuestion)).toBe(
+      "A whole number from 1 to 5.",
+    );
+    expect(
+      rangeText(
+        Question.parse({
+          id: "s",
+          kind: "slider",
+          prompt: "Loud",
+          min: 0,
+          max: 1,
+          step: 0.25,
+        }) as Extract<Question, { kind: "slider" }>,
+      ),
+    ).toBe("A number from 0 to 1, in steps of 0.25.");
   });
 });

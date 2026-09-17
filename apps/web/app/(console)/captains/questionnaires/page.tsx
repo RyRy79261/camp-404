@@ -55,7 +55,11 @@ export default async function QuestionnairesPage() {
         status: d.status,
         questionCount: d.questionCount,
         editedLabel: EDITED.format(d.updatedAt),
+        // The builder and the results page gate these again on the server;
+        // the hub only stops offering a link that would open a lock.
+        canEdit: rank === "captain" || d.createdBy === campUser.id,
         canDelete: d.status === "draft",
+        canSeeResults: rank === "captain",
         openSendBlocking: openSends.get(d.key) ?? null,
       }))
     : [];

@@ -3,26 +3,16 @@
 import { useEffect, useId, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  BarChart3,
-  CircleAlert,
-  Loader2,
-  Send,
-  TriangleAlert,
-  Undo2,
-} from "lucide-react";
+import { BarChart3, Loader2, Send, TriangleAlert, Undo2 } from "lucide-react";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
-import { Card } from "@camp404/ui/components/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@camp404/ui/components/dialog";
-import { Label } from "@camp404/ui/components/label";
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
 import { Switch } from "@camp404/ui/components/switch";
 import { toast } from "@camp404/ui/components/toast";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
@@ -30,91 +20,24 @@ import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
   closeActivationAction,
   getCarryOverAction,
-  publishAction,
   setCarryOverAction,
   unpublishAction,
 } from "../actions";
 
 type Status = "draft" | "published" | "unpublished";
 
-/**
- * Footer Publish/Re-publish button. Captains only. On a publish-time validation
- * failure it surfaces the blocker list (PublishResult.errors) in a dialog
- * instead of a terse toast, so the author can fix each one.
- */
-export function PublishButton({
-  questionnaireKey,
-  status,
-}: {
-  questionnaireKey: string;
-  status: Status;
-}) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [errors, setErrors] = useState<string[] | null>(null);
-
-  function publish() {
-    startTransition(async () => {
-      const result = await publishAction(questionnaireKey);
-      if (!result.ok) {
-        setErrors(result.errors);
-        return;
-      }
-      toast.success(
-        result.change === "cosmetic"
-          ? "Updated the live version"
-          : result.change === "breaking"
-            ? `Published a new version (${result.version})`
-            : "Published",
-      );
-      router.refresh();
-    });
-  }
-
-  return (
-    <>
-      <Button type="button" onClick={publish} disabled={pending}>
-        {pending && <Loader2 className="size-4 animate-spin" />}
-        {status === "draft" ? "Publish" : "Re-publish"}
-      </Button>
-
-      <Dialog
-        open={errors !== null}
-        onOpenChange={(open) => {
-          if (!open) setErrors(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Fix these before publishing</DialogTitle>
-            <DialogDescription>
-              A published questionnaire has to be complete and answerable.
-            </DialogDescription>
-          </DialogHeader>
-          <ul className="flex flex-col gap-2">
-            {(errors ?? []).map((message, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-2 text-sm text-foreground"
-              >
-                <CircleAlert
-                  aria-hidden
-                  className="mt-0.5 size-4 shrink-0 text-destructive"
-                />
-                <span>{message}</span>
-              </li>
-            ))}
-          </ul>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
+// The builder's right rail. AfrikaBurn's builder has an "Audience & send" card
+// there; Camp 404 publishes first and chooses the audience on the Send page, so
+// the same card holds this questionnaire's lifecycle instead: its status,
+// Publish, Send, Close send, See results, Unpublish and the year policy.
+// Publishing, closing, unpublishing, results and the year policy are
+// captain-only, and each action checks that again on the server; a team lead
+// sees the status, Send, and why Publish is out of reach.
 
 /**
- * Shown on the canvas while editing a published/unpublished questionnaire: head
- * edits don't reach members until the captain re-publishes (the live snapshot
- * keeps serving). Spec §4.2.
+ * Shown while editing a published/unpublished questionnaire: head edits don't
+ * reach members until a captain re-publishes (the live snapshot keeps serving).
+ * Spec §4.2.
  */
 export function EditPublishedBanner({ status }: { status: Status }) {
   return (
@@ -140,20 +63,32 @@ export function EditPublishedBanner({ status }: { status: Status }) {
  * activation carries a frozen copy, and a member halfway through a form keeps
  * the rules they started under.
  *
- * The bar loads the value itself rather than taking it as a prop, which keeps
+ * The rail loads the value itself rather than taking it as a prop, which keeps
  * the read beside the write and keeps a once-a-year setting off the builder
  * page's server render path.
  */
-function CarryOverToggle({ questionnaireKey }: { questionnaireKey: string }) {
+export function CarryOverToggle({
+  questionnaireKey,
+}: {
+  questionnaireKey: string;
+}) {
   const switchId = useId();
+  const hintId = useId();
   const [askAgain, setAskAgain] = useState<boolean | null>(null);
+  const [unreadable, setUnreadable] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     let live = true;
-    void getCarryOverAction(questionnaireKey).then((result) => {
-      if (live && result.ok) setAskAgain(!result.carryOver);
-    });
+    getCarryOverAction(questionnaireKey)
+      .then((result) => {
+        if (!live) return;
+        if (result.ok) setAskAgain(!result.carryOver);
+        else setUnreadable(true);
+      })
+      .catch(() => {
+        if (live) setUnreadable(true);
+      });
     return () => {
       live = false;
     };
@@ -178,27 +113,32 @@ function CarryOverToggle({ questionnaireKey }: { questionnaireKey: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-1.5 border-t border-border pt-3">
-      <div className="flex items-center gap-3">
-        <Label htmlFor={switchId} className="flex-1">
+    <div className="flex flex-col gap-1.5 border-t border-border pt-4">
+      <div className="flex items-start justify-between gap-4">
+        <label htmlFor={switchId} className="text-sm font-medium">
           Ask everyone again next year
-        </Label>
-        {askAgain === null && (
-          <Loader2
-            aria-hidden
-            className="size-4 animate-spin text-muted-foreground"
+        </label>
+        <div className="flex items-center gap-2">
+          {(askAgain === null && !unreadable) || pending ? (
+            <Loader2
+              aria-hidden
+              className="size-4 text-muted-foreground motion-safe:animate-spin"
+            />
+          ) : null}
+          <Switch
+            id={switchId}
+            checked={askAgain ?? false}
+            disabled={pending || askAgain === null}
+            aria-describedby={hintId}
+            onCheckedChange={change}
           />
-        )}
-        <Switch
-          id={switchId}
-          checked={askAgain ?? false}
-          disabled={pending || askAgain === null}
-          onCheckedChange={change}
-        />
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p id={hintId} className="text-xs text-muted-foreground">
         {askAgain === null
-          ? "Checking this questionnaire’s setting…"
+          ? unreadable
+            ? "This setting couldn’t be loaded. Reload the page to try again."
+            : "Checking this questionnaire’s setting…"
           : askAgain
             ? "When a captain starts a new year, this goes out again on a blank form. Everyone’s answers from previous years stay readable."
             : "When a captain starts a new year, nothing happens to this. Anyone who has answered stays answered."}
@@ -209,10 +149,10 @@ function CarryOverToggle({ questionnaireKey }: { questionnaireKey: string }) {
 
 const STATUS_BADGE: Record<
   Status,
-  { label: string; variant: "default" | "secondary" | "outline" }
+  { label: string; variant: "success" | "secondary" | "outline" }
 > = {
   draft: { label: "Draft", variant: "outline" },
-  published: { label: "Published", variant: "default" },
+  published: { label: "Published", variant: "success" },
   unpublished: { label: "Unpublished", variant: "secondary" },
 };
 
@@ -225,26 +165,40 @@ export const CLOSE_SEND_CONFIRM = {
 } as const;
 
 /**
- * Captain lifecycle bar: status, and the dispatch affordances for a published
- * questionnaire — Send to members (or close the current open send to re-send,
- * enforcing the one-open invariant) and Unpublish.
+ * The lifecycle card: status; Publish (or Re-publish); for a published
+ * questionnaire Send (or Close send while one is open), See results and
+ * Unpublish; and the year policy. `onPublish` belongs to the builder, which
+ * saves unsaved changes first and shows what publishing refused beside the
+ * blocks it is about.
  */
-export function LifecycleBar({
+export function LifecycleRail({
   questionnaireKey,
   status,
   version,
+  isCaptain,
   openActivationId,
   openActivationBlocking = null,
+  publishing,
+  unsaved,
+  onPublish,
 }: {
   questionnaireKey: string;
   status: Status;
   version: string | null;
+  /** Captains publish, close, unpublish and set the year policy. */
+  isCaptain: boolean;
   openActivationId: string | null;
+  /** The open send's blocking flag, shown beside "Currently sent". */
   openActivationBlocking?: boolean | null;
+  publishing: boolean;
+  /** The builder holds changes that are not saved yet. */
+  unsaved: boolean;
+  onPublish: () => void;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [busy, setBusy] = useState<"unpublish" | "close" | null>(null);
   const [confirm, confirmDialog] = useConfirm();
+  const reasonId = useId();
   const badge = STATUS_BADGE[status];
 
   async function unpublish() {
@@ -256,7 +210,8 @@ export function LifecycleBar({
       destructive: true,
     });
     if (!sure) return;
-    startTransition(async () => {
+    setBusy("unpublish");
+    try {
       const result = await unpublishAction(questionnaireKey);
       if (!result.ok) {
         toast.error(result.error);
@@ -264,14 +219,17 @@ export function LifecycleBar({
       }
       toast.success("Unpublished");
       router.refresh();
-    });
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function closeSend() {
     if (!openActivationId) return;
     const sure = await confirm(CLOSE_SEND_CONFIRM);
     if (!sure) return;
-    startTransition(async () => {
+    setBusy("close");
+    try {
       const result = await closeActivationAction(
         openActivationId,
         questionnaireKey,
@@ -282,76 +240,151 @@ export function LifecycleBar({
       }
       toast.success("Send closed");
       router.refresh();
-    });
+    } finally {
+      setBusy(null);
+    }
   }
 
+  const anyBusy = publishing || busy !== null;
+
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <aside
+      aria-label="Publish and send"
+      className="flex flex-col gap-4 xl:sticky xl:top-32 xl:self-start"
+    >
       {confirmDialog}
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={badge.variant}>{badge.label}</Badge>
-        {status === "published" && version && (
-          <span className="font-mono text-xs text-muted-foreground">
-            {version}
-          </span>
-        )}
-        {openActivationId && (
-          <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-            Currently sent to members
-            {openActivationBlocking !== null && (
-              <BlockingBadge blocking={openActivationBlocking} />
-            )}
-          </span>
-        )}
-      </div>
-
-      {status === "published" && (
-        <div className="flex flex-wrap gap-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Publish &amp; send</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={badge.variant}>{badge.label}</Badge>
+            {status !== "draft" && version ? (
+              <span className="font-mono text-xs text-muted-foreground">
+                {version}
+              </span>
+            ) : null}
+          </div>
           {openActivationId ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void closeSend()}
-              disabled={pending}
-            >
-              {pending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Undo2 className="size-4" />
-              )}
-              Close send
-            </Button>
-          ) : (
-            <Button asChild>
-              <Link href={`/captains/questionnaires/${questionnaireKey}/send`}>
-                <Send className="size-4" /> Send to members
-              </Link>
-            </Button>
-          )}
-          {/* The read-back half. Published is the right gate: a draft has no
-              answers, so the page would render an empty state that reads as
-              broken. Sits beside Send deliberately — sending and seeing what
-              came back are the same job, ten minutes apart. */}
-          <Button asChild variant="outline">
-            <Link
-              href={`/captains/questionnaires/${questionnaireKey}/metrics`}
-            >
-              <BarChart3 className="size-4" /> See results
-            </Link>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => void unpublish()}
-            disabled={pending}
-          >
-            Unpublish
-          </Button>
-        </div>
-      )}
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              Currently sent to members
+              {openActivationBlocking !== null ? (
+                <BlockingBadge blocking={openActivationBlocking} />
+              ) : null}
+            </div>
+          ) : null}
 
-      <CarryOverToggle questionnaireKey={questionnaireKey} />
-    </Card>
+          {status !== "draft" ? <EditPublishedBanner status={status} /> : null}
+
+          <div className="flex flex-col gap-1.5">
+            {isCaptain ? (
+              <>
+                <Button
+                  type="button"
+                  onClick={onPublish}
+                  disabled={anyBusy}
+                  aria-describedby={unsaved ? reasonId : undefined}
+                >
+                  {publishing ? (
+                    <Loader2
+                      aria-hidden
+                      className="size-4 motion-safe:animate-spin"
+                    />
+                  ) : null}
+                  {status === "draft" ? "Publish" : "Re-publish"}
+                </Button>
+                {unsaved ? (
+                  <span id={reasonId} className="text-xs text-muted-foreground">
+                    Your unsaved changes are saved first.
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Button type="button" disabled aria-describedby={reasonId}>
+                  {status === "draft" ? "Publish" : "Re-publish"}
+                </Button>
+                <span id={reasonId} className="text-xs text-muted-foreground">
+                  Only captains can publish. Save your draft, then ask a captain
+                  to publish it.
+                </span>
+              </>
+            )}
+          </div>
+
+          {status === "published" || (isCaptain && status !== "draft") ? (
+            <div className="flex flex-col gap-2">
+              {status === "published" ? (
+                isCaptain && openActivationId ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void closeSend()}
+                    disabled={anyBusy}
+                  >
+                    {busy === "close" ? (
+                      <Loader2
+                        aria-hidden
+                        className="size-4 motion-safe:animate-spin"
+                      />
+                    ) : (
+                      <Undo2 aria-hidden className="size-4" />
+                    )}
+                    Close send
+                  </Button>
+                ) : (
+                  <Button asChild variant="outline">
+                    <Link
+                      href={`/captains/questionnaires/${questionnaireKey}/send`}
+                    >
+                      <Send aria-hidden className="size-4" /> Send to members
+                    </Link>
+                  </Button>
+                )
+              ) : null}
+              {/* The read-back half. A draft has no answers, so the page would
+                  render an empty state that reads as broken. Results are
+                  captain-only. */}
+              {isCaptain ? (
+                <Button asChild variant="outline">
+                  <Link
+                    href={`/captains/questionnaires/${questionnaireKey}/metrics`}
+                  >
+                    <BarChart3 aria-hidden className="size-4" /> See results
+                  </Link>
+                </Button>
+              ) : null}
+              {isCaptain && status === "published" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => void unpublish()}
+                  disabled={anyBusy}
+                >
+                  {busy === "unpublish" ? (
+                    <Loader2
+                      aria-hidden
+                      className="size-4 motion-safe:animate-spin"
+                    />
+                  ) : null}
+                  Unpublish
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
+          <p className="text-xs text-muted-foreground">
+            Publishing puts this version online. Sending asks members to answer
+            it, on the Send page.
+          </p>
+
+          {isCaptain ? (
+            <CarryOverToggle questionnaireKey={questionnaireKey} />
+          ) : null}
+        </CardContent>
+      </Card>
+    </aside>
   );
 }

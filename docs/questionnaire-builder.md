@@ -215,6 +215,17 @@ islands persist via server action + `router.refresh()` (mirror
 `team-settings-manager`/`announcements-manager`). Reorder via `@dnd-kit` (with a
 **keyboard sensor / ArrowUp-Down fallback** for a11y).
 
+> **[CORRECTION 2026-09-17]** The owner replaced the boards below with
+> AfrikaBurn's desktop builder (`apps/web/components/questionnaires/builder.tsx`,
+> ported from AB's `builder-v2.tsx`). `/captains/questionnaires/[key]` is one
+> page: an "Add a block" palette rail, a Details card (title, description,
+> counts) and one card per section with its blocks edited inline (no sheets or
+> catalog dialog), and a right rail holding the lifecycle (status, Publish,
+> Send, Close send, See results, Unpublish, "Ask everyone again next year").
+> Section settings (shuffle, "After this section, go to", required to continue,
+> content only, "Show only when…") sit on the section card. Blocks reorder by
+> arrows or by dragging (keyboard too).
+
 | Board | Screen | Route |
 |---|---|---|
 | 49 | Hub: list (status badge, question count, edited date), New, empty state | `/captains/questionnaires` |
@@ -254,6 +265,14 @@ activation, not the definition.
   discards, with a "Discard changes?" confirm if dirty. The canvas has no global
   Save; Preview uses the autosaved state. **Autosave never bumps version** (only
   Publish snapshots).
+  **[CORRECTION 2026-09-17]** There is no autosave now. The builder edits the
+  unified `Questionnaire` in memory and "Save draft" writes it
+  (`updateDefinitionAction`, which accepts only the unified model). A draft
+  saves once every question, option and heading has its words; everything else
+  is checked at publish. Publish saves unsaved changes first, then
+  `publishAction` runs every rule on the server and its issues show beside the
+  section, block or option they are about. Deleting a block or a section, and
+  leaving with unsaved changes, ask first. Preview shows the saved draft.
 - **Concurrency:** last-write-wins, no optimistic locking in v1 (inherits the
   team-settings pattern).
 - **Hub-row overflow menu:** Draft → Rename, Duplicate, Delete (confirm);

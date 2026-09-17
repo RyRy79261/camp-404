@@ -837,7 +837,55 @@ describe("draft authoring — a captain", () => {
     expect(deleteDraft).toHaveBeenCalledWith("kitchen-rota");
   });
 
-  it("stores a builder-shaped save (the old canvas) as the unified model", async () => {
+  it("stores the parsed unified model, defaults applied", async () => {
+    asViewer("captain");
+    definitionRow("draft", "u1");
+
+    expect(
+      await updateDefinitionAction("kitchen-rota", {
+        version: "1",
+        title: "Kitchen rota",
+        pages: [
+          {
+            id: "p1",
+            kind: "questions",
+            title: "",
+            questions: [
+              {
+                id: "q",
+                kind: "short_text",
+                prompt: "Shift?",
+                visibleIf: { fieldId: "x", op: "is_answered" },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({ ok: true });
+    expect(updateDefinition).toHaveBeenCalledWith("kitchen-rota", {
+      version: "1",
+      title: "Kitchen rota",
+      pages: [
+        {
+          id: "p1",
+          kind: "questions",
+          title: "",
+          questions: [
+            {
+              id: "q",
+              kind: "short_text",
+              prompt: "Shift?",
+              maxLength: 120,
+              required: true,
+              visibleIf: { fieldId: "x", op: "is_answered" },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("refuses the old canvas's builder shape now the builder saves the unified model", async () => {
     asViewer("captain");
     definitionRow("draft", "u1");
 
@@ -854,35 +902,16 @@ describe("draft authoring — a captain", () => {
               {
                 kind: "question",
                 question: { id: "q", kind: "short_text", prompt: "Shift?" },
-                visibleIf: { fieldId: "x", op: "is_answered" },
               },
             ],
           },
         ],
       }),
-    ).toEqual({ ok: true });
-    expect(updateDefinition).toHaveBeenCalledWith("kitchen-rota", {
-      version: "1",
-      title: "Kitchen rota",
-      pages: [
-        {
-          id: "p1",
-          kind: "questions",
-          title: "",
-          pageType: "question",
-          questions: [
-            {
-              id: "q",
-              kind: "short_text",
-              prompt: "Shift?",
-              maxLength: 120,
-              required: true,
-              visibleIf: { fieldId: "x", op: "is_answered" },
-            },
-          ],
-        },
-      ],
+    ).toEqual({
+      ok: false,
+      error: "The questionnaire is malformed and wasn't saved.",
     });
+    expect(updateDefinition).not.toHaveBeenCalled();
   });
 
   it("refuses a malformed or oversized save, writing nothing", async () => {
