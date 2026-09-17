@@ -1269,6 +1269,9 @@ function ImageField({
             ? undefined
             : questionnaireImageUploadUrl(question.id, activationId)
         }
+        // The face-photo advice fits only the profile photo; any other photo
+        // question has its own helper text above.
+        hint={question.role === "profile_photo" ? undefined : null}
       />
     </div>
   );

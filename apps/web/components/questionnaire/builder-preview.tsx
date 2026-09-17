@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  fromBuilderQuestionnaire,
-  isBuilderDefinition,
-  type BuilderQuestionnaire,
-  type Questionnaire,
-  type QuestionnaireResponses,
-} from "@camp404/types";
+import type { Questionnaire, QuestionnaireResponses } from "@camp404/types";
 import { toast } from "@camp404/ui/components/toast";
 import { QuestionnaireRunner } from "./runner";
 
@@ -21,17 +15,13 @@ export function BuilderPreview({
   initialResponses = {},
   onComplete,
 }: {
-  /** The unified model; the builder's own shape is still accepted. */
-  questionnaire: Questionnaire | BuilderQuestionnaire;
+  questionnaire: Questionnaire;
   initialResponses?: QuestionnaireResponses;
   onComplete?: () => void;
 }) {
-  const definition: Questionnaire = isBuilderDefinition(questionnaire)
-    ? fromBuilderQuestionnaire(questionnaire as BuilderQuestionnaire)
-    : (questionnaire as Questionnaire);
   return (
     <QuestionnaireRunner
-      questionnaire={definition}
+      questionnaire={questionnaire}
       initialResponses={initialResponses}
       action={noSave}
       preview

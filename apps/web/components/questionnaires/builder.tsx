@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
-  Eye,
   GripVertical,
   Layers,
   Loader2,
@@ -97,6 +96,7 @@ import {
   type LocatedIssue,
 } from "./definition-issues";
 import { Labelled, ToggleRow } from "./editor-parts";
+import { QuestionnairePreview } from "./questionnaire-preview";
 import { VisibilityEditor } from "./visibility-editor";
 import { fieldsBefore } from "./visibility";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
@@ -666,12 +666,7 @@ export function QuestionnaireBuilderV2({
         <Button asChild variant="ghost">
           <Link href="/captains/questionnaires">Cancel</Link>
         </Button>
-        <Button asChild variant="outline">
-          <Link href={`/captains/questionnaires/${questionnaireKey}/preview`}>
-            <Eye aria-hidden />
-            Preview
-          </Link>
-        </Button>
+        <QuestionnairePreview definition={draft} />
         <Button
           variant="outline"
           onClick={() => void saveDraft()}

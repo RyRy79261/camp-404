@@ -205,11 +205,11 @@ function toBuilderBlock(block: PageBlock): Block | null {
 }
 
 /**
- * TEMPORARY: removed when the AB builder/runner UI lands.
- *
- * The unified definition in the builder's shape, for the old builder canvas,
- * member runner and preview — or null when it uses anything that shape cannot
- * hold. Exact by construction: the candidate is parsed as a builder definition
+ * The unified definition in the builder's older shape, or null when it uses
+ * anything that shape cannot hold. The app no longer calls this: the builder,
+ * runner and preview all read the unified model. It stays as the proof that
+ * reading an old stored row loses nothing — the tests convert every stored
+ * builder definition forward and back and require the identity. Exact by construction: the candidate is parsed as a builder definition
  * and converted back, and only a round trip that reproduces the input is
  * returned, so a field the builder would strip (AB's display modes, selection
  * bounds, option images, a numeric text format…) yields null instead of a

@@ -1,9 +1,5 @@
 import { Info, Megaphone, TriangleAlert } from "lucide-react";
-import {
-  isAllowedBuilderImageUrl,
-  type BuilderContentBlock,
-  type ContentBlock,
-} from "@camp404/types";
+import { isAllowedBuilderImageUrl, type ContentBlock } from "@camp404/types";
 import { Alert } from "@camp404/ui/components/alert";
 import { cn } from "@camp404/ui/lib/utils";
 
@@ -117,19 +113,4 @@ export function ContentBlockView({ block }: { block: ContentBlock }) {
     case "divider":
       return <hr className="border-border" />;
   }
-}
-
-/**
- * TEMPORARY: the builder's own block shape, for the builder's editor until it
- * reads the unified model. Its image block names the picture `imageUrl` /
- * `altText`; everything else is the same block.
- */
-export function ContentBlockRenderer({
-  block,
-}: {
-  block: BuilderContentBlock;
-}) {
-  if (block.kind !== "image_block") return <ContentBlockView block={block} />;
-  const { imageUrl, altText, ...rest } = block;
-  return <ContentBlockView block={{ ...rest, url: imageUrl, alt: altText }} />;
 }

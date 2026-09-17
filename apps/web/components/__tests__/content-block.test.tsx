@@ -2,10 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ContentBlock } from "@camp404/types";
 
-import {
-  ContentBlockRenderer,
-  ContentBlockView,
-} from "../questionnaire/content-block";
+import { ContentBlockView } from "../questionnaire/content-block";
 
 const STORED = "https://camp404store.public.blob.vercel-storage.com/playa.jpg";
 
@@ -105,24 +102,5 @@ describe("ContentBlockView", () => {
   it("renders a divider", () => {
     render(<ContentBlockView block={{ id: "d", kind: "divider" }} />);
     expect(screen.getByRole("separator")).toBeTruthy();
-  });
-});
-
-describe("ContentBlockRenderer (the builder's block shape)", () => {
-  it("reads the builder's image fields", () => {
-    render(
-      <ContentBlockRenderer
-        block={{
-          id: "i",
-          kind: "image_block",
-          imageUrl: STORED,
-          altText: "Playa sunset",
-          sizeFit: "fit",
-        }}
-      />,
-    );
-    expect(
-      screen.getByRole("img", { name: "Playa sunset" }).getAttribute("src"),
-    ).toBe(STORED);
   });
 });
