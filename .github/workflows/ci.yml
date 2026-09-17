@@ -41,12 +41,15 @@ jobs:
             # The migration check needs a Neon branch, and the project's branch
             # limit is shared with every open PR's preview. Run it only when
             # what it applies can change: the migrations, the schema or the
-            # migration tooling. Query code and tests run in the test job.
+            # migration tooling. The lockfile counts as tooling: it pins the
+            # drizzle-kit and driver versions the job installs. Query code and
+            # tests run in the test job.
             db:
               - 'packages/db/migrations/**'
               - 'packages/db/src/schema.ts'
               - 'packages/db/drizzle.config.ts'
               - 'packages/db/package.json'
+              - 'pnpm-lock.yaml'
 
   lint:
     runs-on: ubuntu-latest
