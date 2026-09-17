@@ -38,8 +38,12 @@ export async function buildAndPublish(
   await captain.getByRole("button", { name: "New questionnaire" }).click();
   await captain.getByLabel("Questionnaire name").fill(input.title);
   await captain.getByRole("button", { name: "Create" }).click();
+  // Create navigates to the builder once its page has rendered. Under next
+  // dev the builder (the largest client bundle in the app) compiles on its
+  // first visit, which can outlast the 15 s default on a busy machine.
   await expect(captain).toHaveURL(
     new RegExp(`/captains/questionnaires/${input.key}$`),
+    { timeout: 60_000 },
   );
 
   const rail = captain.getByRole("complementary", { name: "Publish and send" });
