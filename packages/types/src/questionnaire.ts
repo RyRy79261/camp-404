@@ -109,11 +109,25 @@ export function toOtherAnswer(text: string): string {
   return `${OTHER_PREFIX}${text}`;
 }
 
+/**
+ * A few words that name a question where the full prompt is too long: the
+ * My forms change log ("Driving" for "Will you be driving a car to the
+ * burn?"). Optional; readers fall back to the prompt (questionLabel).
+ */
+export const SHORT_LABEL_MAX_LENGTH = 40;
+const ShortLabel = z
+  .string()
+  .trim()
+  .min(1)
+  .max(SHORT_LABEL_MAX_LENGTH)
+  .optional();
+
 export const SliderQuestion = z.object({
   id: z.string().min(1),
   kind: z.literal("slider"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   min: z.number(),
   max: z.number(),
   step: z.number().positive().default(1),
@@ -137,6 +151,7 @@ export const NumberQuestion = z.object({
   kind: z.literal("number"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   min: z.number().int().default(0),
   max: z.number().int().default(6),
   minLabel: z.string().optional(),
@@ -150,6 +165,7 @@ export const SingleSelectQuestion = z.object({
   kind: z.literal("single_select"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   options: z
     .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
     .min(2),
@@ -166,6 +182,7 @@ export const MultiSelectQuestion = z.object({
   kind: z.literal("multi_select"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   options: z
     .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
     .min(2),
@@ -204,6 +221,7 @@ export const ShortTextQuestion = z.object({
   kind: z.literal("short_text"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   placeholder: z.string().optional(),
   maxLength: z.number().int().positive().default(120),
   // Format preset applied on top of the length bound. Absent ⇒ "text" (no
@@ -228,6 +246,7 @@ export const LongTextQuestion = z.object({
   kind: z.literal("long_text"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   placeholder: z.string().optional(),
   maxLength: z.number().int().positive().default(1000),
   // Opt-in voice dictation (the Groq transcription path). Absent/false ⇒ the
@@ -244,6 +263,7 @@ export const DateQuestion = z.object({
   kind: z.literal("date"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   role: z.enum(["arrival_date", "departure_date"]).optional(),
   required: z.boolean().default(true),
 });
@@ -257,6 +277,7 @@ export const ScaleQuestion = z.object({
   kind: z.literal("scale"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   // Ordered top → bottom for the vertical mobile layout. The selected
   // value is the option's `value`.
   steps: z
@@ -275,6 +296,7 @@ export const ToggleQuestion = z.object({
   kind: z.literal("toggle"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   options: z
     .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
     .min(2),
@@ -290,6 +312,7 @@ export const ComboboxQuestion = z.object({
   kind: z.literal("combobox"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   options: z
     .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
     .min(2),
@@ -307,6 +330,7 @@ export const ImageQuestion = z.object({
   kind: z.literal("image"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   // The member's own profile photo: uploads through the avatar route and is
   // mirrored onto users.profile_image_url.
   role: z.literal("profile_photo").optional(),
@@ -324,6 +348,7 @@ export const BooleanQuestion = z.object({
   kind: z.literal("boolean"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   role: z.enum(["dietary_anaphylactic", "driving_this_year"]).optional(),
   required: z.boolean().default(false),
 });
@@ -335,6 +360,7 @@ export const EmailQuestion = z.object({
   kind: z.literal("email"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   placeholder: z.string().optional(),
   required: z.boolean().default(true),
 });
@@ -347,6 +373,7 @@ export const PhoneQuestion = z.object({
   kind: z.literal("phone"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
+  shortLabel: ShortLabel,
   placeholder: z.string().optional(),
   role: z.literal("emergency_contact_phone").optional(),
   required: z.boolean().default(true),
@@ -441,13 +468,18 @@ export type QuestionnaireResponses = z.infer<typeof QuestionnaireResponses>;
 
 export const QuestionnaireFieldChange = z.object({
   fieldId: z.string().min(1),
-  // The question prompt at edit time, captured so the log stays readable
-  // even if the catalogue copy changes later.
+  // The question's short label (or its prompt) at edit time, captured so the
+  // log stays readable even if the catalogue copy changes later.
   label: z.string(),
   from: z.string(),
   to: z.string(),
 });
 export type QuestionnaireFieldChange = z.infer<typeof QuestionnaireFieldChange>;
+
+/** What to call a question in a list: its short label, else its prompt. */
+export function questionLabel(question: Question): string {
+  return question.shortLabel ?? question.prompt;
+}
 
 // Flatten a questionnaire's pages into a single ordered list of questions
 // (intro pages have none). Useful for diffing and for resolving a field id
@@ -561,7 +593,7 @@ export function diffResponses(
     if (sameValue(b, a)) continue;
     changes.push({
       fieldId: q.id,
-      label: q.prompt,
+      label: questionLabel(q),
       from: displayResponseValue(q, b),
       to: displayResponseValue(q, a),
     });

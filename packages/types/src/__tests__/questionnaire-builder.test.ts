@@ -716,7 +716,7 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
 describe("classifyChange", () => {
   const base = build({ version: "1", title: "T", pages: [QUESTION_PAGE] });
 
-  it("treats a relabel as cosmetic", () => {
+  it("treats a relabel, short label included, as cosmetic", () => {
     const next = build({
       version: "1",
       title: "T",
@@ -726,7 +726,13 @@ describe("classifyChange", () => {
           blocks: [
             {
               kind: "question",
-              question: { id: "name", kind: "short_text", prompt: "Your name", required: true },
+              question: {
+                id: "name",
+                kind: "short_text",
+                prompt: "Your name",
+                shortLabel: "Name",
+                required: true,
+              },
             },
             { id: "hdr", kind: "header_break", headingText: "More" },
             QUESTION_PAGE.blocks[2],
