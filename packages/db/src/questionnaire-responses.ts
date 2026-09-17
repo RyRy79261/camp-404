@@ -1,7 +1,7 @@
 import { and, desc, eq, isNotNull, lte } from "drizzle-orm";
 import {
-  BuilderQuestionnaire,
-  isBuilderDefinition,
+  safeParseStoredDefinition,
+  type Questionnaire,
   type QuestionnaireResponses,
 } from "@camp404/types";
 import { createHttpDb } from "./index";
@@ -141,16 +141,17 @@ export interface CompletedQuestionnaireAnswers {
   /**
    * The questionnaire exactly as the member answered it: the published version
    * their row is pinned to, not today's edit. Questions added or reworded since
-   * do not change what they see they said.
+   * do not change what they see they said. Read as the unified model, whichever
+   * shape the snapshot was stored in.
    */
-  questionnaire: BuilderQuestionnaire;
+  questionnaire: Questionnaire;
 }
 
 /**
  * A member's completed builder questionnaires, newest first, each with the
  * version they answered, for rereading on My forms. One per (questionnaire,
- * year). A row whose pinned version is missing or not a builder definition is
- * left out rather than shown against the wrong questions.
+ * year). A row whose pinned version is missing or malformed is left out rather
+ * than shown against the wrong questions.
  */
 export async function listCompletedQuestionnaireAnswers(
   userId: string,
@@ -196,16 +197,16 @@ export async function listCompletedQuestionnaireAnswers(
 
   const out: CompletedQuestionnaireAnswers[] = [];
   for (const row of rows) {
-    if (!row.completedAt || !isBuilderDefinition(row.definition)) continue;
-    const parsed = BuilderQuestionnaire.safeParse(row.definition);
-    if (!parsed.success) continue;
+    if (!row.completedAt) continue;
+    const questionnaire = safeParseStoredDefinition(row.definition);
+    if (!questionnaire) continue;
     out.push({
       definitionKey: row.definitionKey,
       cycle: row.cycle,
       completedAt: row.completedAt,
       updatedAt: row.updatedAt,
       responses: row.responses,
-      questionnaire: parsed.data,
+      questionnaire,
     });
   }
   return out;

@@ -1,6 +1,10 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import type { BuilderQuestionnaire } from "@camp404/types";
+import {
+  fromBuilderQuestionnaire,
+  type BuilderQuestionnaire,
+  type Questionnaire,
+} from "@camp404/types";
 import { useTestDb } from "./_harness";
 import { makeActivation, makeUser, requiredActionsFor } from "./_factories";
 import { insertDefinitionDraft } from "../questionnaire-definitions";
@@ -17,7 +21,8 @@ import { completeBuilderResponse, getActivationById } from "../activations";
 import { DEFAULT_CAMP_CONFIG } from "../camp-config";
 import * as schema from "../schema";
 
-function validDef(
+/** The same one-question questionnaire in the builder's stored shape. */
+function builderDef(
   title: string,
   opts: { prompt?: string; required?: boolean } = {},
 ): BuilderQuestionnaire {
@@ -28,7 +33,7 @@ function validDef(
       {
         id: "p1",
         type: "question",
-        title: "",
+        title: "About you",
         blocks: [
           {
             kind: "question",
@@ -46,19 +51,32 @@ function validDef(
   };
 }
 
+/** A one-question questionnaire, as a draft save now stores it (unified). */
+function validDef(
+  title: string,
+  opts: { prompt?: string; required?: boolean } = {},
+): Questionnaire {
+  return fromBuilderQuestionnaire(builderDef(title, opts));
+}
+
 async function seedDraft(
   db: ReturnType<ReturnType<typeof useTestDb>["db"]>,
   key: string,
-  def: BuilderQuestionnaire,
+  def: Questionnaire,
   createdBy: string | null = null,
 ): Promise<void> {
-  await insertDefinitionDraft({ key, title: def.title, createdBy, definition: def });
+  await insertDefinitionDraft({
+    key,
+    title: def.title ?? key,
+    createdBy,
+    definition: def,
+  });
 }
 
 async function setHead(
   db: ReturnType<ReturnType<typeof useTestDb>["db"]>,
   key: string,
-  def: BuilderQuestionnaire,
+  def: Questionnaire | BuilderQuestionnaire,
 ): Promise<void> {
   await db
     .update(schema.questionnaireDefinitions)
@@ -121,17 +139,27 @@ describe("publishDefinition", () => {
 
   it("rejects an invalid definition with publish-time blockers and leaves it a draft", async () => {
     const db = h.db();
-    // a content page carrying an input field is a hard blocker; also no input field overall once removed
-    const bad: BuilderQuestionnaire = {
+    // An empty, untitled page: nothing to answer, and a page with no title.
+    const bad: Questionnaire = {
       version: "1",
       title: "Broken",
-      pages: [{ id: "p1", type: "question", title: "", blocks: [] }],
+      pages: [{ id: "p1", kind: "questions", title: "", questions: [] }],
     };
     await seedDraft(db, "broken", bad);
 
     const res = await publishDefinition("broken", null);
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.errors.length).toBeGreaterThan(0);
+    if (!res.ok) {
+      // Located, so an editor can show each problem where it is.
+      expect(res.issues.map((i) => [i.code, i.pageId])).toEqual(
+        expect.arrayContaining([
+          ["missing_page_title", "p1"],
+          ["empty_page", "p1"],
+          ["no_inputs", undefined],
+        ]),
+      );
+      expect(res.errors).toEqual(res.issues.map((i) => i.message));
+    }
 
     const [meta] = await db
       .select()
@@ -153,10 +181,81 @@ describe("publishDefinition", () => {
 
     const versions = await versionRows(db, "feedback");
     expect(versions).toHaveLength(1); // no new version row
-    const snapshot = versions[0]!.definition as BuilderQuestionnaire;
-    expect(snapshot.pages[0]!.blocks[0]).toMatchObject({
-      kind: "question",
-      question: { prompt: "Full name" },
+    const snapshot = versions[0]!.definition as Questionnaire;
+    expect(snapshot.pages[0]).toMatchObject({
+      kind: "questions",
+      questions: [{ id: "q1", prompt: "Full name" }],
+    });
+  });
+
+  it("reads a head still in the builder's shape, and snapshots it unified", async () => {
+    const db = h.db();
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await setHead(db, "feedback", builderDef("Camp feedback"));
+
+    const res = await publishDefinition("feedback", null);
+    expect(res).toEqual({ ok: true, version: "feedback-v1", change: "initial" });
+    const [version] = await versionRows(db, "feedback");
+    expect(version!.definition).toEqual(validDef("Camp feedback"));
+  });
+
+  it("an old builder-shaped snapshot against the same questionnaire saved unified is NOT breaking", async () => {
+    // THE REGRESSION THIS GUARDS: snapshots are never rewritten, so a live
+    // version published before the move is still builder-shaped, while every
+    // save since stores the unified shape. Compared as stored, the two differ
+    // everywhere; read as what they are, they are the same questionnaire. A
+    // spurious "breaking" would mint feedback-v2 and re-gate every member on
+    // the next send for a change nobody made.
+    const db = h.db();
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await db
+      .update(schema.questionnaireDefinitions)
+      .set({ status: "published", version: "feedback-v1" })
+      .where(eq(schema.questionnaireDefinitions.key, "feedback"));
+    await db.insert(schema.questionnaireVersions).values({
+      definitionKey: "feedback",
+      version: "feedback-v1",
+      definition: builderDef("Camp feedback"),
+    });
+
+    const res = await publishDefinition("feedback", null);
+    expect(res).toEqual({ ok: true, version: "feedback-v1", change: "cosmetic" });
+    expect(await versionRows(db, "feedback")).toHaveLength(1);
+
+    // …while a real breaking edit against that old snapshot still mints one.
+    await db
+      .update(schema.questionnaireVersions)
+      .set({ definition: builderDef("Camp feedback") })
+      .where(eq(schema.questionnaireVersions.definitionKey, "feedback"));
+    await setHead(db, "feedback", validDef("Camp feedback", { required: true }));
+    expect(await publishDefinition("feedback", null)).toEqual({
+      ok: true,
+      version: "feedback-v2",
+      change: "breaking",
+    });
+  });
+
+  it("refuses a head over the size limits, and a malformed or missing one", async () => {
+    const db = h.db();
+    await seedDraft(
+      db,
+      "feedback",
+      validDef("Camp feedback", { prompt: "x".repeat(6_000) }),
+    );
+    const tooLong = await publishDefinition("feedback", null);
+    expect(tooLong.ok).toBe(false);
+    if (!tooLong.ok) expect(tooLong.errors[0]).toMatch(/longer than 5000/);
+
+    await setHead(db, "feedback", { version: "1", pages: "nope" } as never);
+    expect(await publishDefinition("feedback", null)).toEqual({
+      ok: false,
+      errors: ["This questionnaire is malformed."],
+      issues: [],
+    });
+    expect(await publishDefinition("nope", null)).toEqual({
+      ok: false,
+      errors: ["Questionnaire not found."],
+      issues: [],
     });
   });
 

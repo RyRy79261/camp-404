@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BuilderQuestionnaire } from "@camp404/types";
+import type { Questionnaire } from "@camp404/types";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
 import {
@@ -14,25 +14,22 @@ import {
 } from "../questionnaire-definitions";
 import * as schema from "../schema";
 
-function def(title: string): BuilderQuestionnaire {
+function def(title: string): Questionnaire {
   return {
     version: "1",
     title,
     pages: [
       {
         id: "p1",
-        type: "question",
-        title: "",
-        blocks: [
+        kind: "questions",
+        title: "About you",
+        questions: [
           {
-            kind: "question",
-            question: {
-              id: "q1",
-              kind: "short_text",
-              prompt: "Name",
-              required: false,
-              maxLength: 120,
-            },
+            id: "q1",
+            kind: "short_text",
+            prompt: "Name",
+            required: false,
+            maxLength: 120,
           },
         ],
       },

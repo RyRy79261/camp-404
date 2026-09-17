@@ -21,7 +21,7 @@ import {
 } from "@camp404/db/questionnaire-lifecycle";
 import { countPeople, wipeAllPublicTables } from "@camp404/db/seed-support";
 import { assignTeam, setLead } from "@camp404/db/team-memberships";
-import type { BuilderQuestionnaire } from "@camp404/types";
+import type { Questionnaire } from "@camp404/types";
 import {
   planSmallCamp,
   SEED_AUTH_PREFIX,
@@ -49,38 +49,34 @@ function refuseProduction(): void {
   }
 }
 
-const ARRIVAL_PLANS: BuilderQuestionnaire = {
+// Written in the unified questionnaire model, as every save now stores it.
+const ARRIVAL_PLANS: Questionnaire = {
   version: "1",
   title: "Arrival plans",
   pages: [
     {
       id: "arrival",
-      type: "question",
+      kind: "questions",
       title: "Getting there",
-      blocks: [
+      pageType: "question",
+      questions: [
         {
-          kind: "question",
-          question: {
-            id: "arrival_day",
-            kind: "single_select",
-            prompt: "Which day do you arrive?",
-            options: [
-              { value: "sunday", label: "Sunday" },
-              { value: "monday", label: "Monday" },
-              { value: "tuesday", label: "Tuesday" },
-            ],
-            required: true,
-          },
+          id: "arrival_day",
+          kind: "single_select",
+          prompt: "Which day do you arrive?",
+          options: [
+            { value: "sunday", label: "Sunday" },
+            { value: "monday", label: "Monday" },
+            { value: "tuesday", label: "Tuesday" },
+          ],
+          required: true,
         },
         {
-          kind: "question",
-          question: {
-            id: "bringing",
-            kind: "short_text",
-            prompt: "What are you bringing for the camp?",
-            maxLength: 120,
-            required: false,
-          },
+          id: "bringing",
+          kind: "short_text",
+          prompt: "What are you bringing for the camp?",
+          maxLength: 120,
+          required: false,
         },
       ],
     },
@@ -186,7 +182,7 @@ export async function seedScenario(scenario: Scenario): Promise<string[]> {
   // A published questionnaire, sent to everyone (not blocking), partly answered.
   await insertDefinitionDraft({
     key: "arrival-plans",
-    title: ARRIVAL_PLANS.title,
+    title: ARRIVAL_PLANS.title ?? "Arrival plans",
     createdBy: founder,
     definition: ARRIVAL_PLANS,
   });

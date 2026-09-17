@@ -749,9 +749,10 @@ export async function completeBuilderResponse(input: {
   responses: QuestionnaireResponses;
   activationId: string;
   /**
-   * Answers the definition marks for the app's own tables (builderRoleMirror in
-   * @camp404/types). Written in the same transaction, so the roster, export and
-   * drivers audience never see a submit half applied.
+   * Answers the definition marks for the app's own tables
+   * (questionnaireRoleMirror in @camp404/core). Written in the same
+   * transaction, so the roster, export and drivers audience never see a submit
+   * half applied.
    */
   mirror?: RoleMirror;
 }): Promise<void> {
