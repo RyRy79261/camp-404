@@ -7,7 +7,6 @@ import {
 } from "@camp404/core";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import {
-  BuilderQuestionnaire,
   Questionnaire,
   parseStoredDefinition,
   type ViewerRank,
@@ -35,9 +34,10 @@ import {
 // actions' own: canEditQuestionnaire, the Zod schema and the size limits.
 //
 // Definitions go in and come out in the unified questionnaire model
-// (`Questionnaire`, @camp404/types). A definition in the builder's older shape
-// (pages of `blocks`) is still accepted and converted, so a client that learnt
-// that shape keeps working; it is stored unified either way.
+// (`Questionnaire`, @camp404/types). Only that shape is in the tool schema: an
+// MCP client reads the schema on every connection, so nothing depends on the
+// builder's older shape, and offering both doubled the schema every client
+// loads into its context.
 
 const BUILDER_PATH = (key: string) => `/captains/questionnaires/${key}`;
 const Title = z.string().trim().min(1).max(120);
@@ -56,16 +56,10 @@ function requireAuthor(scope: McpScope): ViewerRank {
   return rank;
 }
 
-/**
- * A definition as a tool accepts it: the unified model, or the builder's older
- * shape (converted). Either parses; anything else is refused by the schema.
- */
-const DefinitionInput = z.union([Questionnaire, BuilderQuestionnaire]);
+/** A definition as a tool accepts it: the unified questionnaire model. */
+const DefinitionInput = Questionnaire;
 
-/**
- * The input as the unified model: read the way a stored row is read, so a
- * builder-shaped definition converts and either shape gets its defaults.
- */
+/** The input read the way a stored row is read, so it gets its defaults. */
 function unified(input: z.infer<typeof DefinitionInput>): Questionnaire {
   return parseStoredDefinition(input);
 }
@@ -166,7 +160,7 @@ export function registerQuestionnaireTools(server: McpServer): void {
     {
       title: "Draft a questionnaire",
       description:
-        "A captain or a team lead starts a builder questionnaire as a draft, blank or from a full definition (the unified questionnaire model; the builder's older pages-of-blocks shape is also accepted). Returns its key, the builder page, and what still blocks publishing. Publishing and sending happen in the app.",
+        "A captain or a team lead starts a builder questionnaire as a draft, blank or from a full definition (the unified questionnaire model). Returns its key, the builder page, and what still blocks publishing. Publishing and sending happen in the app.",
       inputSchema: {
         title: Title,
         definition: DefinitionInput.optional(),
@@ -210,7 +204,7 @@ export function registerQuestionnaireTools(server: McpServer): void {
     {
       title: "Replace a questionnaire's working definition",
       description:
-        "Saves a whole definition over the working head, as the builder's autosave does (the unified questionnaire model; the builder's older pages-of-blocks shape is also accepted). A captain may change any questionnaire; a team lead only their own. On a published questionnaire the live version keeps serving open sends until a captain re-publishes in the app.",
+        "Saves a whole definition over the working head, as the builder's autosave does (the unified questionnaire model). A captain may change any questionnaire; a team lead only their own. On a published questionnaire the live version keeps serving open sends until a captain re-publishes in the app.",
       inputSchema: {
         key: z.string().min(1),
         definition: DefinitionInput,

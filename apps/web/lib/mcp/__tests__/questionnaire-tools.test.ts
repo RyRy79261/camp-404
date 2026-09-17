@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { BuilderQuestionnaire, Questionnaire } from "@camp404/types";
+import type { Questionnaire } from "@camp404/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Drafting questionnaires over MCP: authors only, the builder's own edit rule
@@ -64,31 +64,6 @@ async function call(name: string, args: unknown, as: string) {
   const text = (result.content[0] as { text: string }).text;
   return result.isError ? { error: text } : { data: JSON.parse(text) };
 }
-
-// The builder's older shape — still accepted, converted and stored unified.
-const BUILDER_DEFINITION: BuilderQuestionnaire = {
-  version: "model-made-up",
-  title: "Ignored title",
-  pages: [
-    {
-      id: "p1",
-      type: "question",
-      title: "Gear",
-      blocks: [
-        {
-          id: "q1",
-          kind: "question",
-          question: {
-            id: "q1",
-            kind: "short_text",
-            prompt: "What tent do you bring?",
-            required: true,
-          },
-        },
-      ],
-    },
-  ],
-} as unknown as BuilderQuestionnaire;
 
 // The unified questionnaire model the tools take and return.
 const DEFINITION: Questionnaire = {
@@ -165,15 +140,19 @@ describe("questionnaire drafting tools", () => {
     expect(data.title).toBe("Gear check");
   });
 
-  it("accepts a builder-shaped definition, stores it unified, and returns located publish problems", async () => {
+  it("stores a definition with an untitled page, and returns the located publish problem", async () => {
     vi.mocked(getBuilderDefinition)
-      .mockResolvedValueOnce({ version: "1", title: "Gear", pages: [] } as never)
+      .mockResolvedValueOnce({
+        version: "1",
+        title: "Gear",
+        pages: [],
+      } as never)
       .mockImplementationOnce(
         async () => vi.mocked(updateDefinition).mock.calls[0]![1] as never,
       );
     const untitledPage = {
-      ...BUILDER_DEFINITION,
-      pages: [{ ...BUILDER_DEFINITION.pages[0]!, title: "" }],
+      ...DEFINITION,
+      pages: [{ ...DEFINITION.pages[0]!, title: "" }],
     };
     const { data } = await call(
       "create_questionnaire_draft",
@@ -183,7 +162,6 @@ describe("questionnaire drafting tools", () => {
     const saved = vi.mocked(updateDefinition).mock.calls[0]![1];
     expect(saved.pages[0]).toMatchObject({
       kind: "questions",
-      pageType: "question",
       questions: [{ id: "q1", kind: "short_text" }],
     });
     expect(data.publishProblems).toEqual([
@@ -250,12 +228,11 @@ describe("questionnaire drafting tools", () => {
     });
     await call(
       "update_questionnaire_draft",
-      { key: "gear-check", definition: BUILDER_DEFINITION },
+      { key: "gear-check", definition: DEFINITION },
       CAPTAIN,
     );
     expect(updateDefinition).toHaveBeenCalledWith("gear-check", {
       ...DEFINITION,
-      pages: [{ ...DEFINITION.pages[0]!, pageType: "question" }],
       version: "7",
     });
   });
