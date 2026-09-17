@@ -132,8 +132,8 @@ describe("writeAuditEvent", () => {
 
   it("also accepts a plain db handle for non-transactional callers", async () => {
     await writeAuditEvent(createHttpDb(), {
-      action: "cron.push_drained",
-      metadata: { sent: 3 },
+      action: "member.team_assigned",
+      metadata: { team: "kitchen" },
     });
 
     const rows = await h.db().select().from(schema.auditLog);
