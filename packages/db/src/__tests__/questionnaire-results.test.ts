@@ -227,4 +227,24 @@ describe("listResultCycles / listActivationsForCycle", () => {
     expect(acts[0]?.id).toBe(open.id);
     expect(acts.every((a) => a.cycle === 1)).toBe(true);
   });
+
+  it("says who each send went to and whether it held the app", async () => {
+    // The results page names the audience and draws the blocking badge from
+    // these, so a send to one team must not read back as a camp-wide one.
+    const db = h.db();
+    await makeActivation(db, {
+      status: "open",
+      cycle: 1,
+      scope: "team",
+      team: "kitchen",
+      blocking: false,
+    });
+
+    const [act] = await listActivationsForCycle(KEY, 1);
+    expect(act).toMatchObject({
+      scope: "team",
+      team: "kitchen",
+      blocking: false,
+    });
+  });
 });

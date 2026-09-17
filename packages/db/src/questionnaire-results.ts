@@ -126,6 +126,12 @@ export interface ResultsActivationRow {
   version: string;
   title: string;
   status: ActivationStatus;
+  /** Who the send went to — the results page names the audience. */
+  scope: (typeof schema.questionnaireScopeEnum.enumValues)[number];
+  /** The team a `team` send went to, else null. */
+  team: (typeof schema.teamEnum.enumValues)[number] | null;
+  /** Whether the send holds the app until answered. */
+  blocking: boolean;
   cycle: number;
   dueAt: Date | null;
   openedAt: Date | null;
@@ -153,6 +159,9 @@ export async function listActivationsForCycle(
         version: schema.questionnaireActivations.version,
         title: schema.questionnaireActivations.title,
         status: schema.questionnaireActivations.status,
+        scope: schema.questionnaireActivations.scope,
+        team: schema.questionnaireActivations.team,
+        blocking: schema.questionnaireActivations.blocking,
         cycle: schema.questionnaireActivations.cycle,
         dueAt: schema.questionnaireActivations.dueAt,
         openedAt: schema.questionnaireActivations.openedAt,
