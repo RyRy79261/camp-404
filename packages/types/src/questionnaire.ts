@@ -197,11 +197,10 @@ const ShortLabel = z
   .max(SHORT_LABEL_MAX_LENGTH)
   .optional();
 
-// The fields every question kind carries beyond its own `kind` payload.
-const questionBase = {
-  id: z.string().min(1),
-  prompt: z.string().min(1),
-  helper: z.string().optional(),
+// Camp 404's additions to EVERY question kind: a short label for lists, and a
+// visibility condition. Spread last into each AB schema below, so each one
+// reads as AB's field list plus these.
+const camp404QuestionFields = {
   shortLabel: ShortLabel,
   visibleIf: VisibleIf.optional(),
 };
@@ -256,10 +255,13 @@ const LabelledValue = z.object({
 });
 
 export const SingleSelectQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("single_select"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   options: z.array(QuestionOption).min(2),
   required: z.boolean().default(true),
+  // Builder v2 additions.
   display: ChoiceDisplay.optional(),
   // Opt-in "Other…" free text. Absent/false ⇒ the respondent may only pick a
   // listed option. When on, the stored value may be `other:<typed text>` (see
@@ -267,14 +269,18 @@ export const SingleSelectQuestion = z.object({
   allowOther: z.boolean().optional(),
   otherLabel: z.string().optional(),
   shuffleOptions: z.boolean().optional(),
+  ...camp404QuestionFields,
 });
 export type SingleSelectQuestion = z.infer<typeof SingleSelectQuestion>;
 
 export const MultiSelectQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("multi_select"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   options: z.array(QuestionOption).min(2),
   required: z.boolean().default(false),
+  // Builder v2 additions.
   display: MultiChoiceDisplay.optional(),
   // Opt-in "Other…" free text — one `other:<typed text>` entry alongside the
   // picked option values.
@@ -283,24 +289,27 @@ export const MultiSelectQuestion = z.object({
   shuffleOptions: z.boolean().optional(),
   minSelections: z.number().int().nonnegative().optional(),
   maxSelections: z.number().int().positive().optional(),
+  ...camp404QuestionFields,
 });
 export type MultiSelectQuestion = z.infer<typeof MultiSelectQuestion>;
 
 export const ShortTextQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("short_text"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   placeholder: z.string().optional(),
   maxLength: z.number().int().positive().default(120),
   required: z.boolean().default(true),
+  // Builder v2 response validation. `format` applies a preset check on top of
+  // the length bounds (short_text ONLY — `long_text` is a paragraph and is
+  // never format-checked); `min`/`max` bound the numeric value when format is
+  // number/integer.
   minLength: z.number().int().nonnegative().optional(),
-  // Format preset applied on top of the length bounds. Absent ⇒ "text" (no
-  // check). Deliberately short_text ONLY — `long_text` is a paragraph and is
-  // never format-checked, which is why `validateOne` narrows on the kind
-  // inside the shared text arm. `min`/`max` bound the value only under the
-  // numeric presets.
   format: TextFormat.optional(),
   min: z.number().optional(),
   max: z.number().optional(),
+  ...camp404QuestionFields,
   role: z
     .enum([
       "emergency_contact_name",
@@ -313,12 +322,15 @@ export const ShortTextQuestion = z.object({
 export type ShortTextQuestion = z.infer<typeof ShortTextQuestion>;
 
 export const LongTextQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("long_text"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   placeholder: z.string().optional(),
   maxLength: z.number().int().positive().default(1000),
   required: z.boolean().default(false),
   minLength: z.number().int().nonnegative().optional(),
+  ...camp404QuestionFields,
   // Opt-in voice dictation (the Groq transcription path). Absent/false ⇒ the
   // dictate affordance is hidden; shown only where the author enabled it.
   enableDictation: z.boolean().optional(),
@@ -328,9 +340,12 @@ export type LongTextQuestion = z.infer<typeof LongTextQuestion>;
 
 // ISO 8601 yyyy-mm-dd. Backed by `<input type="date">`.
 export const DateQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("date"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   required: z.boolean().default(true),
+  ...camp404QuestionFields,
   role: z.enum(["arrival_date", "departure_date"]).optional(),
 });
 export type DateQuestion = z.infer<typeof DateQuestion>;
@@ -340,29 +355,38 @@ export type DateQuestion = z.infer<typeof DateQuestion>;
 // options. Optional by default; an untouched required boolean is treated as
 // missing (the runner stores a value only after an explicit toggle).
 export const BooleanQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("boolean"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   required: z.boolean().default(false),
+  ...camp404QuestionFields,
   role: z.enum(["dietary_anaphylactic", "driving_this_year"]).optional(),
 });
 export type BooleanQuestion = z.infer<typeof BooleanQuestion>;
 
 // Email address — a single-line text answer validated against EMAIL_RE.
 export const EmailQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("email"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   placeholder: z.string().optional(),
   required: z.boolean().default(true),
+  ...camp404QuestionFields,
 });
 export type EmailQuestion = z.infer<typeof EmailQuestion>;
 
 // Phone number — a single-line text answer validated leniently against
 // PHONE_RE (7–15 digits, optional +/spacing). No phone library.
 export const PhoneQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("phone"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   placeholder: z.string().optional(),
   required: z.boolean().default(true),
+  ...camp404QuestionFields,
   role: z.literal("emergency_contact_phone").optional(),
 });
 export type PhoneQuestion = z.infer<typeof PhoneQuestion>;
@@ -399,52 +423,69 @@ export function attendedYearOptions(): { year: number; disabled: boolean }[] {
 // Multi-select of specific AfrikaBurn years attended. The response value is an
 // array of year strings (fitting QuestionnaireResponseValue's `string[]`).
 export const YearsQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("years"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   required: z.boolean().default(false),
+  ...camp404QuestionFields,
 });
 export type YearsQuestion = z.infer<typeof YearsQuestion>;
+
+// --- Builder v2 question kinds ------------------------------------------
 
 // Linear scale — `min` is 0 or 1, `max` is 2–10, with optional end labels
 // ("Not at all" … "Completely"). The response value is the chosen integer.
 export const LinearScaleQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("linear_scale"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   min: z.union([z.literal(0), z.literal(1)]),
   max: z.number().int().min(2).max(10),
   minLabel: z.string().optional(),
   maxLabel: z.string().optional(),
   required: z.boolean().default(true),
+  ...camp404QuestionFields,
 });
 export type LinearScaleQuestion = z.infer<typeof LinearScaleQuestion>;
 
 // Star rating — 3–10 steps, glyph is a render hint only. The response value is
 // the chosen integer, 1..steps.
 export const RatingQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("rating"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   steps: z.number().int().min(3).max(10),
   glyph: z.enum(["star", "heart", "number"]).optional(),
   required: z.boolean().default(true),
+  ...camp404QuestionFields,
 });
 export type RatingQuestion = z.infer<typeof RatingQuestion>;
 
 // Time of day, 24h `HH:MM`. Backed by `<input type="time">`.
 export const TimeQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("time"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   required: z.boolean().default(true),
+  ...camp404QuestionFields,
 });
 export type TimeQuestion = z.infer<typeof TimeQuestion>;
 
 // File upload rendered as a LINK: the respondent pastes a URL to a file they
-// host (Drive, Dropbox, …). The stored value is a URL either way, so an upload
-// affordance can land later without changing the kind.
+// host (Drive, Dropbox, …) rather than uploading. The stored value is a URL
+// either way, so an upload affordance can land later without changing the kind.
 export const FileLinkQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("file_link"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   placeholder: z.string().optional(),
   required: z.boolean().default(false),
+  ...camp404QuestionFields,
 });
 export type FileLinkQuestion = z.infer<typeof FileLinkQuestion>;
 
@@ -471,30 +512,40 @@ export type GridColumn = z.infer<typeof GridColumn>;
 // Multiple-choice grid — exactly one column may be chosen per row. `required`
 // (default true, matching Google Forms) means EVERY row must be answered.
 export const MultiChoiceGridQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("multi_choice_grid"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   rows: z.array(GridRow).min(1),
   columns: z.array(GridColumn).min(1),
   required: z.boolean().default(true),
+  ...camp404QuestionFields,
 });
 export type MultiChoiceGridQuestion = z.infer<typeof MultiChoiceGridQuestion>;
 
 // Checkbox grid — any number of columns may be chosen per row. `required`
 // (default false) means every row must carry at least one selection.
 export const CheckboxGridQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("checkbox_grid"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
   rows: z.array(GridRow).min(1),
   columns: z.array(GridColumn).min(1),
   required: z.boolean().default(false),
+  ...camp404QuestionFields,
 });
 export type CheckboxGridQuestion = z.infer<typeof CheckboxGridQuestion>;
 
 // --- Camp 404 question kinds ---------------------------------------------
+// As Camp 404 declared them, plus the `visibleIf` every kind now carries.
 
 export const SliderQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("slider"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  shortLabel: ShortLabel,
   min: z.number(),
   max: z.number(),
   step: z.number().positive().default(1),
@@ -505,6 +556,7 @@ export const SliderQuestion = z.object({
   // Same numeric value + validation either way. Absent ⇒ "continuous".
   display: z.enum(["continuous", "segmented"]).optional(),
   required: z.boolean().default(true),
+  visibleIf: VisibleIf.optional(),
 });
 export type SliderQuestion = z.infer<typeof SliderQuestion>;
 
@@ -514,13 +566,17 @@ export type SliderQuestion = z.infer<typeof SliderQuestion>;
 // (string-keyed labelled steps): the value here is a plain number, so it sorts
 // and aggregates. Optional min/max end labels ("Not for me" / "Sign me up").
 export const NumberQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("number"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  shortLabel: ShortLabel,
   min: z.number().int().default(0),
   max: z.number().int().default(6),
   minLabel: z.string().optional(),
   maxLabel: z.string().optional(),
   required: z.boolean().default(true),
+  visibleIf: VisibleIf.optional(),
 });
 export type NumberQuestion = z.infer<typeof NumberQuestion>;
 
@@ -528,12 +584,16 @@ export type NumberQuestion = z.infer<typeof NumberQuestion>;
 // mobile (top = highest, bottom = lowest) and a horizontal slider with
 // labels on desktop. Used for cooking / hardware competency.
 export const ScaleQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("scale"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  shortLabel: ShortLabel,
   // Ordered top → bottom for the vertical mobile layout. The selected
   // value is the option's `value`.
   steps: z.array(LabelledValue).min(2),
   required: z.boolean().default(true),
+  visibleIf: VisibleIf.optional(),
 });
 export type ScaleQuestion = z.infer<typeof ScaleQuestion>;
 
@@ -542,10 +602,14 @@ export type ScaleQuestion = z.infer<typeof ScaleQuestion>;
 // sets (2–4) where the dropdown is overkill and the choices benefit from
 // always being visible.
 export const ToggleQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("toggle"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  shortLabel: ShortLabel,
   options: z.array(LabelledValue).min(2),
   required: z.boolean().default(true),
+  visibleIf: VisibleIf.optional(),
 });
 export type ToggleQuestion = z.infer<typeof ToggleQuestion>;
 
@@ -553,12 +617,16 @@ export type ToggleQuestion = z.infer<typeof ToggleQuestion>;
 // but rendered as a Popover + cmdk filterable list. Use for long lookup
 // sets (countries, cities, …) where scrolling a plain Select is hostile.
 export const ComboboxQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("combobox"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  shortLabel: ShortLabel,
   options: z.array(LabelledValue).min(2),
   placeholder: z.string().optional(),
   searchPlaceholder: z.string().optional(),
   required: z.boolean().default(true),
+  visibleIf: VisibleIf.optional(),
 });
 export type ComboboxQuestion = z.infer<typeof ComboboxQuestion>;
 
@@ -566,12 +634,16 @@ export type ComboboxQuestion = z.infer<typeof ComboboxQuestion>;
 // (a Vercel Blob URL in production). Rendered as a large circular uploader
 // in the wizard. Optional by default; profile photos are never mandatory.
 export const ImageQuestion = z.object({
-  ...questionBase,
+  id: z.string().min(1),
   kind: z.literal("image"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  shortLabel: ShortLabel,
   // The member's own profile photo: uploads through the avatar route and is
   // mirrored onto users.profile_image_url.
   role: z.literal("profile_photo").optional(),
   required: z.boolean().default(false),
+  visibleIf: VisibleIf.optional(),
 });
 export type ImageQuestion = z.infer<typeof ImageQuestion>;
 
@@ -1024,14 +1096,6 @@ export function validateResponses(
   return { ok: true, responses };
 }
 
-/** An integer answer from a number or the numeric string a form posts, or
- * null. A boolean is refused outright: `Number(true)` would read as 1. */
-function integerAnswer(raw: unknown): number | null {
-  if (typeof raw === "boolean") return null;
-  const n = typeof raw === "number" ? raw : Number(raw);
-  return Number.isInteger(n) ? n : null;
-}
-
 export function validateOne(
   q: Question,
   raw: unknown,
@@ -1126,8 +1190,9 @@ export function validateOne(
       return { ok: true, value: filtered };
     }
     case "linear_scale": {
-      const n = integerAnswer(raw);
-      if (n === null) return { ok: false, error: "Pick a value on the scale" };
+      const n = typeof raw === "number" ? raw : Number(raw);
+      if (typeof raw === "boolean" || !Number.isInteger(n))
+        return { ok: false, error: "Pick a value on the scale" };
       if (n < q.min || n > q.max)
         return {
           ok: false,
@@ -1136,8 +1201,9 @@ export function validateOne(
       return { ok: true, value: n };
     }
     case "rating": {
-      const n = integerAnswer(raw);
-      if (n === null) return { ok: false, error: "Pick a rating" };
+      const n = typeof raw === "number" ? raw : Number(raw);
+      if (typeof raw === "boolean" || !Number.isInteger(n))
+        return { ok: false, error: "Pick a rating" };
       if (n < 1 || n > q.steps)
         return { ok: false, error: `Pick a rating between 1 and ${q.steps}` };
       return { ok: true, value: n };
@@ -1160,7 +1226,7 @@ export function validateOne(
     }
     case "multi_choice_grid":
     case "checkbox_grid": {
-      if (typeof raw !== "object" || Array.isArray(raw))
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw))
         return { ok: false, error: "Expected a grid of answers" };
       const incoming = raw as Record<string, unknown>;
       const columnValues = new Set(q.columns.map((c) => c.value));
@@ -1181,6 +1247,7 @@ export function validateOne(
           return { ok: false, error: `Pick one column for "${row.label}"` };
         if (picks.length > 0) value[row.id] = picks;
       }
+      const answeredRows = Object.keys(value).length;
       if (q.required) {
         const missing = q.rows.find((r) => (value[r.id] ?? []).length === 0);
         if (missing)
@@ -1190,7 +1257,7 @@ export function validateOne(
           };
       }
       // An optional grid left entirely blank is a valid skip.
-      if (Object.keys(value).length === 0) return { ok: true, value: undefined };
+      if (answeredRows === 0) return { ok: true, value: undefined };
       return { ok: true, value };
     }
     case "years": {

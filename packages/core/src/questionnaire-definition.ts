@@ -219,7 +219,7 @@ export function validateQuestionnaireDefinition(
 
   // --- ids: one flat namespace, globally unique ---------------------------
   // Question ids key the response map; page ids are branch targets; content
-  // block ids key the canvas. Sharing a namespace keeps "go to page X"
+  // block ids key the canvas. Sharing a namespace keeps "go to section X"
   // unambiguous and a condition's reference unique.
   const seenIds = new Map<string, string>();
   const pageIndexById = new Map<string, number>();
@@ -492,7 +492,7 @@ export function validateQuestionnaireDefinition(
       issues.push({
         path,
         code: "unknown_branch_target",
-        message: `"${target}" is not a page in this questionnaire`,
+        message: `"${target}" is not a section in this questionnaire`,
         pageId,
       });
       return false;
@@ -501,7 +501,7 @@ export function validateQuestionnaireDefinition(
       issues.push({
         path,
         code: "self_branch",
-        message: "a page cannot branch to itself — that is an infinite loop",
+        message: "a section cannot branch to itself — that is an infinite loop",
         pageId,
       });
       return false;
@@ -561,7 +561,7 @@ export function validateQuestionnaireDefinition(
         issues.push({
           path: `pages[${pageIndex}]`,
           code: "unreachable_page",
-          message: `page "${page.id}" can never be reached — no branch or fall-through leads to it`,
+          message: `section "${page.id}" can never be reached — no branch or fall-through leads to it`,
           pageId: page.id,
         });
       }
