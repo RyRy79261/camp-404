@@ -45,7 +45,7 @@ export async function resetTestState(
  * Mark a test user's burner-profile onboarding complete via the test seam.
  * The questionnaire is a 13-page wizard whose page-by-page navigation,
  * validation and submission contract are covered at the component layer
- * (`components/__tests__/wizard.test.tsx`); e2e only needs to reach the
+ * (`components/__tests__/runner.test.tsx`); e2e only needs to reach the
  * post-onboarding gates (home vs. /pending-approval), so it shortcuts there
  * deterministically instead of re-driving every field.
  *

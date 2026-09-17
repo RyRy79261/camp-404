@@ -45,6 +45,8 @@ const ROOT_ERROR_KEY = "_root";
 const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again — if it keeps happening, let a camp captain know.";
 const AUTOSAVE_DEBOUNCE_MS = 700;
+/** Past this many sections the rail names only the current one on screen. */
+const COMPACT_RAIL_AFTER = 5;
 
 /** Save the answers so far; `final` submits them. */
 export type RunnerAction = (
@@ -298,6 +300,7 @@ export function QuestionnaireRunner({
 
   const formError = errors[FORM_ERROR_KEY] ?? errors[ROOT_ERROR_KEY];
   const showProgress = answeredProgress || rail.length > 1;
+  const compactRail = rail.length > COMPACT_RAIL_AFTER;
 
   return (
     <form
@@ -351,9 +354,14 @@ export function QuestionnaireRunner({
                           i + 1
                         )}
                       </span>
+                      {/* Names are read out everywhere; on a phone, and on a
+                          long form beside all but the current section, only
+                          the numbers show, so the rail stays one line. */}
                       <span
                         className={cn(
-                          "hidden max-w-[12rem] truncate text-xs font-medium sm:inline",
+                          "sr-only max-w-[12rem] truncate text-xs font-medium",
+                          (!compactRail || state === "current") &&
+                            "sm:not-sr-only",
                           state === "upcoming"
                             ? "text-muted-foreground"
                             : "text-foreground",
@@ -501,28 +509,32 @@ export function QuestionnaireRunner({
  * the settled ones — "saved", "not saved" — not a "saving" on every pause.
  */
 function AutosaveIndicator({ state }: { state: SaveState }) {
+  // The live region is always mounted and never display:none (a region that
+  // appears with its text is not announced); empty, it leaves the flex row, so
+  // it takes no room.
   return (
-    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <span
+      aria-live="polite"
+      className="flex items-center gap-1.5 text-xs text-muted-foreground empty:absolute"
+    >
       {(state === "saving" || state === "unsaved") && (
         <span className="flex items-center gap-1.5" aria-hidden>
           <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" />
           Saving…
         </span>
       )}
-      <span aria-live="polite" className="flex items-center gap-1.5">
-        {state === "saved" && (
-          <>
-            <Check className="h-3.5 w-3.5 text-success" aria-hidden />
-            Saved
-          </>
-        )}
-        {state === "failed" && (
-          <>
-            <CloudOff className="h-3.5 w-3.5 text-destructive" aria-hidden />
-            Not saved
-          </>
-        )}
-      </span>
+      {state === "saved" && (
+        <>
+          <Check className="h-3.5 w-3.5 text-success" aria-hidden />
+          Saved
+        </>
+      )}
+      {state === "failed" && (
+        <>
+          <CloudOff className="h-3.5 w-3.5 text-destructive" aria-hidden />
+          Not saved
+        </>
+      )}
     </span>
   );
 }
