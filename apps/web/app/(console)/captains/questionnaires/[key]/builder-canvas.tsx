@@ -42,7 +42,7 @@ import {
   builderQuestionnaireIssues,
   type Block,
   type BuilderQuestionnaire,
-  type DefinitionIssue,
+  type BuilderDefinitionIssue,
   type Question,
 } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
@@ -133,7 +133,7 @@ function describeBlock(block: Block): {
 }
 
 /** Condition problems are shown by the condition's own badge and line. */
-const CONDITION_CODES: ReadonlySet<DefinitionIssue["code"]> = new Set([
+const CONDITION_CODES: ReadonlySet<BuilderDefinitionIssue["code"]> = new Set([
   "dangling_visible_if",
   "visible_if_wrong_operator",
   "visible_if_wrong_value",

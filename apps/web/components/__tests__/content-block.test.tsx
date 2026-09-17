@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import type { ContentBlock } from "@camp404/types";
+import type { BuilderContentBlock } from "@camp404/types";
 
 import { ContentBlockRenderer } from "../questionnaire/content-block";
 
 describe("ContentBlockRenderer", () => {
   it("renders a header break with eyebrow, heading and subtext", () => {
-    const block: ContentBlock = {
+    const block: BuilderContentBlock = {
       id: "h",
       kind: "header_break",
       headingText: "Tell us about you",
@@ -37,7 +37,7 @@ describe("ContentBlockRenderer", () => {
   });
 
   it("renders an image block with its alt text and caption", () => {
-    const block: ContentBlock = {
+    const block: BuilderContentBlock = {
       id: "i",
       kind: "image_block",
       imageUrl: "https://camp404store.public.blob.vercel-storage.com/playa.jpg",
@@ -54,7 +54,7 @@ describe("ContentBlockRenderer", () => {
   it("shows no picture for an image stored on another website", () => {
     // A definition saved before the host rule could still hold one. Rendering
     // it would make every member's browser call that site.
-    const block: ContentBlock = {
+    const block: BuilderContentBlock = {
       id: "i",
       kind: "image_block",
       imageUrl: "https://tracker.example/pixel.gif",

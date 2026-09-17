@@ -52,10 +52,20 @@
 //     questionnaireCsvFilename, displayOrphanedAnswer, collectOrphanFieldIds,
 //     ORPHAN_LABEL/ORPHAN_COLUMN_SUFFIX
 //     (./questionnaire-csv)
-//   - questionnaire results: aggregateResponses + tallyActivationCompletion,
-//     with KIND_SHAPE and the Choice/Numeric/Count aggregate shapes — the
-//     per-question read-back engine and the activation completion figure
+//   - questionnaire results: aggregateResponses / aggregateQuestions /
+//     aggregateQuestion + tallyActivationCompletion, with KIND_SHAPE and the
+//     Choice/Numeric/Count/Timeline/Grid aggregate shapes — the per-question
+//     read-back engine and the activation completion figure
 //     (./questionnaire-results)
+//   - questionnaire definition validation (the unified model, ported from
+//     AB): validateQuestionnaireDefinition, isValidQuestionnaireDefinition,
+//     definitionLimitErrors (./questionnaire-definition)
+//   - questionnaire runtime (the unified model, ported from AB): goTo/next
+//     routing and visibleIf visibility (nextPageId, firstPageId, resolvePath,
+//     visibleQuestions, isPageVisible, isBlockVisible, visibleBlocks),
+//     progress (deriveProgress), branch-aware submit validation
+//     (validateSubmission) and seeded shuffles (presentationBlocks,
+//     presentationOptions) (./questionnaire-runtime)
 //   - notification links: notificationLink, NOTIFICATION_FALLBACK_LINK — where
 //     tapping an inbox row or a push opens (./notification-links)
 //   - time zone: CAMP_TIME_ZONE, the zone every human-read date is formatted

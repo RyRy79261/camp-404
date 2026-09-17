@@ -1,5 +1,6 @@
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import {
+  pageQuestions,
   questionIdForRole,
   type EmergencyContact,
   type Question,
@@ -177,7 +178,7 @@ export function presentMemberDetail(
   for (const page of questionnaire.pages) {
     if (page.kind !== "questions") continue;
     const items: DetailItem[] = [];
-    for (const question of page.questions) {
+    for (const question of pageQuestions(page)) {
       // The bio is rendered as the lead paragraph, not as a grouped field.
       if (question.id === bioId) continue;
       const value = renderAnswer(question, responses[question.id]);

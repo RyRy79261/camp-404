@@ -1,4 +1,4 @@
-import { isAllowedBuilderImageUrl, type ContentBlock } from "@camp404/types";
+import { isAllowedBuilderImageUrl, type BuilderContentBlock } from "@camp404/types";
 import { Alert } from "@camp404/ui/components/alert";
 import { Megaphone, TriangleAlert } from "lucide-react";
 
@@ -6,7 +6,7 @@ import { Megaphone, TriangleAlert } from "lucide-react";
 // breaks, explainers, images, dividers). These capture nothing — there is no
 // value/onChange — and the response validators skip them. Rendered inside the
 // builder runner's page→block loop.
-export function ContentBlockRenderer({ block }: { block: ContentBlock }) {
+export function ContentBlockRenderer({ block }: { block: BuilderContentBlock }) {
   switch (block.kind) {
     case "header_break":
       return (

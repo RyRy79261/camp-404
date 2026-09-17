@@ -462,6 +462,10 @@ const FORMAT_INPUT: Record<
   email: { type: "email", inputMode: "email", autoComplete: "email" },
   url: { type: "url", inputMode: "url" },
   phone: { type: "tel", inputMode: "tel", autoComplete: "tel" },
+  // The unified model's numeric text formats. No palette offers them and the
+  // builder schema refuses them, so no Camp 404 question reaches these today.
+  number: { inputMode: "decimal" },
+  integer: { inputMode: "numeric" },
   alphanumeric: {},
 };
 

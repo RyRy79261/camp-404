@@ -1,14 +1,15 @@
 // --- The question-kind exhaustiveness fixture -----------------------------
 //
-// `Question` is a 14-arm discriminated union, and both `validateOne` and (from
-// Wave 3 on) the results engine switch over it. A kind that nobody remembered
+// `Question` is a 21-arm discriminated union (Camp 404's fourteen kinds plus
+// the seven the unified model took from AB), and both `validateOne` and the
+// results engine switch over it. A kind that nobody remembered
 // to handle does not announce itself: the switch simply falls through.
 //
 // This fixture is the mechanical link that makes forgetting impossible. It is
 // pinned to the union in TWO independent ways, on purpose:
 //
 //   1. COMPILE TIME — `KIND_SAMPLES` is a mapped type over `Question["kind"]`,
-//      so a fifteenth member of the union makes this file fail to compile with
+//      so a new member of the union makes this file fail to compile with
 //      a missing-property error naming the new kind.
 //   2. RUN TIME — `QUESTION_KINDS` is read off the zod schema itself
 //      (`Question.options`), never hand-listed, and `question-kinds.test.ts`
@@ -53,7 +54,7 @@ export interface KindSample<K extends QuestionKind> {
  *
  * Every sample sets `required: true` — including the kinds whose schema
  * default is `false` — so the shared "a missing answer to a required question
- * is rejected" assertion can run uniformly across all fourteen.
+ * is rejected" assertion can run uniformly across every kind.
  *
  * The mapped type is the point: adding a member to `Question` without adding
  * an entry here is a compile error.
@@ -250,6 +251,104 @@ export const KIND_SAMPLES: { [K in QuestionKind]: KindSample<K> } = {
     // character class, so only the digit-count check catches it.
     invalid: "555100",
     invalidError: "valid phone number",
+  },
+  // --- The kinds the unified model took from AB --------------------------
+  years: {
+    question: {
+      id: "k_years",
+      kind: "years",
+      prompt: "Which burns have you been to?",
+      required: true,
+    },
+    valid: ["2019", "2023"],
+    // 2020 had no burn: a fact about the event, refused by name.
+    invalid: ["2020"],
+    invalidError: "valid AfrikaBurn year",
+  },
+  linear_scale: {
+    question: {
+      id: "k_linear_scale",
+      kind: "linear_scale",
+      prompt: "How loud will you be?",
+      min: 1,
+      max: 5,
+      required: true,
+    },
+    valid: 3,
+    invalid: 6,
+    invalidError: "between 1 and 5",
+  },
+  rating: {
+    question: {
+      id: "k_rating",
+      kind: "rating",
+      prompt: "Rate the kitchen",
+      steps: 5,
+      required: true,
+    },
+    valid: 4,
+    invalid: 0,
+    invalidError: "between 1 and 5",
+  },
+  time: {
+    question: {
+      id: "k_time",
+      kind: "time",
+      prompt: "When do quiet hours start?",
+      required: true,
+    },
+    valid: "23:00",
+    invalid: "24:00",
+    invalidError: "24-hour hh:mm",
+  },
+  file_link: {
+    question: {
+      id: "k_file_link",
+      kind: "file_link",
+      prompt: "Link to your camp layout",
+      required: true,
+    },
+    valid: "https://example.com/layout.pdf",
+    invalid: "example.com/layout.pdf",
+    invalidError: "http:// or https://",
+  },
+  multi_choice_grid: {
+    question: {
+      id: "k_multi_choice_grid",
+      kind: "multi_choice_grid",
+      prompt: "Availability by day",
+      rows: [
+        { id: "mon", label: "Monday" },
+        { id: "tue", label: "Tuesday" },
+      ],
+      columns: [
+        { value: "am", label: "Morning" },
+        { value: "pm", label: "Afternoon" },
+      ],
+      required: true,
+    },
+    valid: { mon: ["am"], tue: ["pm"] },
+    invalid: { mon: ["am", "pm"], tue: ["am"] },
+    invalidError: "Pick one column",
+  },
+  checkbox_grid: {
+    question: {
+      id: "k_checkbox_grid",
+      kind: "checkbox_grid",
+      prompt: "Which slots can you cover, by area?",
+      rows: [{ id: "kitchen", label: "Kitchen" }],
+      columns: [
+        { value: "am", label: "Morning" },
+        { value: "pm", label: "Afternoon" },
+      ],
+      required: true,
+    },
+    valid: { kitchen: ["am", "pm"] },
+    // A row the grid does not have: dropped, which leaves the required row
+    // unanswered. (A shape-broken cell would fail the response-map parse
+    // before any arm ran, so it would test nothing here.)
+    invalid: { ghost_row: ["am"] },
+    invalidError: "Answer every row",
   },
 };
 

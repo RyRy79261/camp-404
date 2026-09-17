@@ -10,7 +10,7 @@ import {
   isBuilderRole,
   visibleIfProblem,
   type Block,
-  type ContentBlock,
+  type BuilderContentBlock,
   type Question,
   type VisibleIf,
 } from "@camp404/types";
@@ -439,7 +439,7 @@ function ContentEditor({
   patch,
   questionnaireKey,
 }: {
-  block: ContentBlock;
+  block: BuilderContentBlock;
   patch: (patch: Record<string, unknown>) => void;
   questionnaireKey: string;
 }) {

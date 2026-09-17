@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   incompleteContactErrors,
+  pageQuestions,
   validateOne,
   type Questionnaire,
   type QuestionnairePage,
@@ -102,7 +103,7 @@ export function QuestionnaireWizard({
   function validatePageLocally(p: QuestionnairePage): boolean {
     if (p.kind === "intro") return true;
     const next: Record<string, string> = {};
-    for (const q of p.questions) {
+    for (const q of pageQuestions(p)) {
       const v = responses[q.id];
       // Shared per-question validator — the same one the server runs in
       // validateResponses, so local and server verdicts can't drift.
@@ -287,7 +288,7 @@ export function QuestionnaireWizard({
                 : "flex flex-col gap-5"
             }
           >
-            {page.questions.map((q) => (
+            {pageQuestions(page).map((q) => (
               <QuestionField
                 key={q.id}
                 question={q}
