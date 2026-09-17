@@ -7,6 +7,7 @@ import {
   flattenBuilderQuestions,
   fromBuilderQuestionnaire,
   parseStoredDefinition,
+  toBuilderQuestionnaire,
   validateBuilderResponses,
   visiblePages,
   type Block,
@@ -136,6 +137,14 @@ describe("the frozen builder fixture converts cleanly", () => {
     expect(parseStoredDefinition(BUILDER_V1_QUESTIONNAIRE)).toStrictEqual(
       UNIFIED,
     );
+  });
+
+  it("converts back exactly for the old builder UI (TEMPORARY adapter)", () => {
+    expect(toBuilderQuestionnaire(UNIFIED)).toStrictEqual(BUILDER);
+    const storedUnified: unknown = JSON.parse(JSON.stringify(UNIFIED));
+    expect(
+      toBuilderQuestionnaire(parseStoredDefinition(storedUnified)),
+    ).toStrictEqual(BUILDER);
   });
 
   it("keeps every question, in order", () => {

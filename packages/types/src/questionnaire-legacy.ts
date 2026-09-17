@@ -1,6 +1,7 @@
 import {
   Questionnaire,
   type PageBlock,
+  type Question,
   type QuestionsPage,
 } from "./questionnaire";
 import {
@@ -122,4 +123,131 @@ export function safeParseStoredDefinition(json: unknown): Questionnaire | null {
   }
   const parsed = Questionnaire.safeParse(json);
   return parsed.success ? parsed.data : null;
+}
+
+// --- The unified model → the builder's shape (TEMPORARY) --------------------
+// TEMPORARY: removed when the AB builder/runner UI lands.
+//
+// The server reads and writes only the unified model. The builder canvas, the
+// member runner and the author preview still render `BuilderQuestionnaire`, so
+// the pages that host them convert at that boundary — and nowhere else. A
+// definition the old components cannot show (an intro page, `goTo` / `next`
+// routing, one of AB's kinds or fields, an info block) converts to null, and
+// the page says so rather than silently dropping what it cannot draw.
+
+/** A value as canonical JSON: keys sorted, `undefined` members dropped. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v as Record<string, unknown>).sort(([a], [b]) =>
+            a < b ? -1 : a > b ? 1 : 0,
+          ),
+        )
+      : v,
+  );
+}
+
+/**
+ * What `fromBuilderQuestionnaire` returns for a definition the builder CAN
+ * show: the defaults the builder shape writes out (a title, a page type, an
+ * image fit) filled in, and nothing else changed.
+ */
+function withBuilderDefaults(q: Questionnaire): Questionnaire {
+  return {
+    ...q,
+    title: q.title ?? "",
+    pages: q.pages.map((page) =>
+      page.kind !== "questions"
+        ? page
+        : {
+            ...page,
+            pageType: page.pageType ?? "question",
+            questions: page.questions.map((block) =>
+              block.kind === "image_block"
+                ? { ...block, sizeFit: block.sizeFit ?? "fit" }
+                : block,
+            ),
+          },
+    ),
+  };
+}
+
+function toBuilderBlock(block: PageBlock): Block | null {
+  switch (block.kind) {
+    case "image_block": {
+      const { url, alt, sizeFit, visibleIf, ...rest } = block;
+      return {
+        id: rest.id,
+        kind: "image_block",
+        imageUrl: url,
+        ...(rest.caption !== undefined ? { caption: rest.caption } : {}),
+        altText: alt,
+        sizeFit: sizeFit ?? "fit",
+        ...(visibleIf ? { visibleIf } : {}),
+      };
+    }
+    case "info_block":
+      return null;
+    case "header_break":
+    case "explainer":
+    case "divider":
+      return block;
+    default: {
+      const { visibleIf, ...question } = block;
+      return {
+        kind: "question",
+        question: question as Question,
+        ...(visibleIf ? { visibleIf } : {}),
+      };
+    }
+  }
+}
+
+/**
+ * TEMPORARY: removed when the AB builder/runner UI lands.
+ *
+ * The unified definition in the builder's shape, for the old builder canvas,
+ * member runner and preview — or null when it uses anything that shape cannot
+ * hold. Exact by construction: the candidate is parsed as a builder definition
+ * and converted back, and only a round trip that reproduces the input is
+ * returned, so a field the builder would strip (AB's display modes, selection
+ * bounds, option images, a numeric text format…) yields null instead of a
+ * definition that quietly lost it. Every stored builder definition converts
+ * (`fromBuilderQuestionnaire` then this is the identity).
+ */
+export function toBuilderQuestionnaire(
+  q: Questionnaire,
+): BuilderQuestionnaire | null {
+  const pages: BuilderPage[] = [];
+  for (const page of q.pages) {
+    if (page.kind !== "questions") return null;
+    const blocks: Block[] = [];
+    for (const block of page.questions) {
+      const converted = toBuilderBlock(block);
+      if (!converted) return null;
+      blocks.push(converted);
+    }
+    pages.push({
+      id: page.id,
+      type: page.pageType ?? "question",
+      title: page.title,
+      ...(page.subtitle !== undefined ? { intro: page.subtitle } : {}),
+      ...(page.requiredToContinue !== undefined
+        ? { requiredToContinue: page.requiredToContinue }
+        : {}),
+      blocks,
+      ...(page.visibleIf ? { visibleIf: page.visibleIf } : {}),
+    });
+  }
+  const parsed = BuilderQuestionnaire.safeParse({
+    version: q.version,
+    title: q.title ?? "",
+    pages,
+  });
+  if (!parsed.success) return null;
+  const roundTrip = fromBuilderQuestionnaire(parsed.data);
+  return canonicalJson(roundTrip) === canonicalJson(withBuilderDefaults(q))
+    ? parsed.data
+    : null;
 }

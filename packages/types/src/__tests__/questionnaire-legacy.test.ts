@@ -5,6 +5,7 @@ import {
   fromBuilderQuestionnaire,
   parseStoredDefinition,
   safeParseStoredDefinition,
+  toBuilderQuestionnaire,
   type Block,
   type BuilderPage,
   type PageBlock,
@@ -282,5 +283,107 @@ describe("safeParseStoredDefinition", () => {
       }),
     ).toBeNull();
     expect(safeParseStoredDefinition({ version: "1", pages: [] })).toBeNull();
+  });
+});
+
+describe("toBuilderQuestionnaire (TEMPORARY: removed when the AB builder/runner UI lands)", () => {
+  const builder = BuilderQuestionnaire.parse(BUILDER_JSON);
+
+  it("gives a stored builder definition back exactly, however it was read", () => {
+    expect(toBuilderQuestionnaire(fromBuilderQuestionnaire(builder))).toStrictEqual(
+      builder,
+    );
+    expect(toBuilderQuestionnaire(parseStoredDefinition(BUILDER_JSON))).toStrictEqual(
+      builder,
+    );
+    // …including after a trip through the JSONB column in the unified shape.
+    const storedUnified: unknown = JSON.parse(
+      JSON.stringify(fromBuilderQuestionnaire(builder)),
+    );
+    expect(
+      toBuilderQuestionnaire(parseStoredDefinition(storedUnified)),
+    ).toStrictEqual(builder);
+  });
+
+  it("converts a unified definition that only leaves the builder's defaults unsaid", () => {
+    const plain = Questionnaire.parse({
+      version: "1",
+      pages: [
+        {
+          id: "p1",
+          kind: "questions",
+          title: "P",
+          questions: [
+            { id: "q", kind: "short_text", prompt: "Q" },
+            { id: "img", kind: "image_block", url: "/a.png", alt: "A" },
+          ],
+        },
+      ],
+    });
+    expect(toBuilderQuestionnaire(plain)).toEqual({
+      version: "1",
+      title: "",
+      pages: [
+        {
+          id: "p1",
+          type: "question",
+          title: "P",
+          blocks: [
+            {
+              kind: "question",
+              question: {
+                id: "q",
+                kind: "short_text",
+                prompt: "Q",
+                maxLength: 120,
+                required: true,
+              },
+            },
+            {
+              id: "img",
+              kind: "image_block",
+              imageUrl: "/a.png",
+              altText: "A",
+              sizeFit: "fit",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  const page = (questions: unknown[], extra: Record<string, unknown> = {}) => ({
+    id: "p1",
+    kind: "questions",
+    title: "P",
+    questions,
+    ...extra,
+  });
+  const email = { id: "e", kind: "email", prompt: "Email" };
+  const choice = (extra: Record<string, unknown> = {}, option: Record<string, unknown> = {}) => ({
+    id: "c",
+    kind: "single_select",
+    prompt: "Pick",
+    options: [
+      { value: "a", label: "A", ...option },
+      { value: "b", label: "B" },
+    ],
+    ...extra,
+  });
+
+  it.each<[string, unknown]>([
+    ["an intro page", { version: "1", pages: [{ id: "i", kind: "intro", heading: "H", body: "B" }, page([email])] }],
+    ["a page's next", { version: "1", pages: [page([email], { next: "p2" }), { ...page([email]), id: "p2" }] }],
+    ["shuffled questions", { version: "1", pages: [page([email], { shuffleQuestions: true })] }],
+    ["an info block", { version: "1", pages: [page([email, { id: "i", kind: "info_block", body: "B" }])] }],
+    ["one of AB's kinds", { version: "1", pages: [page([{ id: "l", kind: "linear_scale", prompt: "L", min: 1, max: 5 }])] }],
+    ["an option's goTo", { version: "1", pages: [page([choice({}, { goTo: "__submit__" })])] }],
+    ["an option image", { version: "1", pages: [page([choice({}, { imageUrl: "/a.png" })])] }],
+    ["a display mode", { version: "1", pages: [page([choice({ display: "dropdown" })])] }],
+    ["a selection bound", { version: "1", pages: [page([{ ...choice(), kind: "multi_select", minSelections: 1 }])] }],
+    ["a minimum length", { version: "1", pages: [page([{ id: "t", kind: "long_text", prompt: "T", minLength: 3 }])] }],
+    ["a numeric text format", { version: "1", pages: [page([{ id: "n", kind: "short_text", prompt: "N", format: "integer" }])] }],
+  ])("is null for a definition with %s, rather than dropping it", (_name, raw) => {
+    expect(toBuilderQuestionnaire(Questionnaire.parse(raw))).toBeNull();
   });
 });

@@ -66,6 +66,13 @@
 //     progress (deriveProgress), branch-aware submit validation
 //     (validateSubmission) and seeded shuffles (presentationBlocks,
 //     presentationOptions) (./questionnaire-runtime)
+//   - questionnaire versioning: classifyChange — whether a re-publish is
+//     cosmetic or breaking, over unified definitions (./questionnaire-versioning)
+//   - questionnaire submission: boundDraftResponses (a draft's key allow-list
+//     and size cap) and questionnaireRoleMirror (the answers a submit copies
+//     into the app's own tables) (./questionnaire-submission)
+//   - questionnaire copy: regenerateQuestionnaireIds — fresh ids for a
+//     duplicate, references remapped (./questionnaire-copy)
 //   - notification links: notificationLink, NOTIFICATION_FALLBACK_LINK — where
 //     tapping an inbox row or a push opens (./notification-links)
 //   - time zone: CAMP_TIME_ZONE, the zone every human-read date is formatted
@@ -98,6 +105,9 @@ export * from "./questionnaire-csv";
 export * from "./questionnaire-results";
 export * from "./questionnaire-definition";
 export * from "./questionnaire-runtime";
+export * from "./questionnaire-versioning";
+export * from "./questionnaire-submission";
+export * from "./questionnaire-copy";
 export * from "./notification-links";
 export * from "./notifications";
 export * from "./read-rate";
