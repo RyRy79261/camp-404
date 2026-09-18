@@ -75,10 +75,14 @@ export async function answerGate(
   page: Page,
   input: { title: string; prompt: string; text: string },
 ): Promise<void> {
-  await expect(page).toHaveURL(/\/questionnaires\/[0-9a-f-]{36}$/);
+  // The gate redirect lands on the runner, whose client bundle next dev
+  // compiles on its first visit — slower than the 15 s default on CI.
+  await expect(page).toHaveURL(/\/questionnaires\/[0-9a-f-]{36}$/, {
+    timeout: 60_000,
+  });
   await expect(
     page.getByRole("heading", { level: 1, name: input.title }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   await page.getByRole("textbox", { name: input.prompt }).fill(input.text);
   await page.getByRole("button", { name: "Submit" }).click();
   await expect(
