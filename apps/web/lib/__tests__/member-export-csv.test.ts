@@ -76,16 +76,28 @@ describe("memberExportCells", () => {
     ]);
   });
 
-  it("says Pending for an applicant, in every rank's file", () => {
-    const applicant = memberExportCells({
-      columns: memberExportColumnsFor("camp_member"),
-      members: [member({ approvalStatus: "pending" })],
-      extras: new Map(),
-      teamLabels,
-    });
-    const [header, row] = applicant;
-    expect(row![header!.indexOf("Approval")]).toBe("Pending");
-  });
+  // Every rank's file carries the Approval column, so the name means all three.
+  // The loop also checks the word MOVES with the standing: an approved member
+  // must not read "Pending", or the assertion would pass on a constant.
+  it.each(["camp_member", "team_lead", "captain"] as const)(
+    "says Pending for an applicant and Approved for a member, in a %s's file",
+    (rank) => {
+      const wordFor = (approvalStatus: CampManagementMember["approvalStatus"]) => {
+        const [header, row] = memberExportCells({
+          columns: memberExportColumnsFor(rank),
+          members: [member({ approvalStatus })],
+          extras: new Map(),
+          teamLabels,
+        });
+        const at = header!.indexOf("Approval");
+        expect(at).toBeGreaterThanOrEqual(0);
+        return row![at];
+      };
+
+      expect(wordFor("pending")).toBe("Pending");
+      expect(wordFor("approved")).toBe("Approved");
+    },
+  );
 
   it("writes a team lead's safety columns as a person reads them", () => {
     const [header, row] = fileFor("team_lead");

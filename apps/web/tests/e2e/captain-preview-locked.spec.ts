@@ -133,8 +133,15 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await expect(page.getByLabel("Search the roster")).toBeVisible();
     // …and rows actually render (browse-positive: catch a zero-rows / error
     // regression that would otherwise look "locked down" yet be broken).
+    // The roster ships TWO views and keeps both in the DOM — a table for
+    // desktop (`hidden md:block`) and a card list for narrow screens
+    // (`md:hidden`) — so every row button exists twice. Scope to the table,
+    // the view Playwright's desktop viewport actually shows; an unscoped
+    // `.first()` could assert against the hidden copy. `.first()` inside the
+    // table is honest: there are several rows and any one proves rendering.
+    const roster = page.getByRole("table");
     await expect(
-      page.getByRole("button", { name: /Open .*profile/ }).first(),
+      roster.getByRole("button", { name: /Open .*profile/ }).first(),
     ).toBeVisible();
     // The Pending chip is theirs now too.
     await expect(page.getByRole("button", { name: /^Pending/ })).toBeVisible();
@@ -174,18 +181,19 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await expect(
       page.getByRole("heading", { name: "Camp management" }),
     ).toBeVisible();
+    // Scoped to the table — the view a desktop viewport shows — because the
+    // card list holds a second copy of every row (see the note above).
+    const roster = page.getByRole("table");
     await expect(
-      page
-        .getByRole("button", { name: "Open Pia Applicant's profile" })
-        .first(),
+      roster.getByRole("button", { name: "Open Pia Applicant's profile" }),
     ).toBeVisible();
     // She is marked as an applicant, and the chip counts exactly her.
     await expect(
       page.getByRole("button", { name: /^Pending 1/ }),
     ).toBeVisible();
-    await expect(
-      page.getByText("Pending", { exact: true }).first(),
-    ).toBeVisible();
+    // Exactly one "Pending" badge in the table: hers. Unscoped this would also
+    // match the Pending filter chip.
+    await expect(roster.getByText("Pending", { exact: true })).toHaveCount(1);
 
     // The declined sign-up is not on a member's roster at all — the default of
     // MEMBERS_SEE_REJECTED in apps/web/lib/camp-roster.ts.
