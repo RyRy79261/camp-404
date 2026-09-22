@@ -10,11 +10,13 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import type { DbOrTx } from "./audit";
+import { alias } from "drizzle-orm/pg-core";
+import { writeAuditEvent, type DbOrTx } from "./audit";
 import {
   announcementNotification,
   notificationLink,
   scheduledBroadcastNotification,
+  sortPinned,
   type NotificationKind,
 } from "@camp404/core";
 import {
@@ -220,6 +222,11 @@ export interface AnnouncementSummary {
   senderName: string | null;
   /** NULL while a draft; the publish timestamp once sent. */
   publishedAt: Date | null;
+  /**
+   * NULL when not pinned. On a draft it is the composer's mark — the pin only
+   * reaches a screen once the announcement is published and delivered.
+   */
+  pinnedAt: Date | null;
   createdAt: Date;
   /** Recipients fanned out to (0 for drafts). */
   recipientCount: number;
@@ -252,6 +259,7 @@ export async function listAnnouncements(
       senderId: schema.broadcasts.senderId,
       senderName: schema.users.displayName,
       publishedAt: schema.broadcasts.publishedAt,
+      pinnedAt: schema.broadcasts.pinnedAt,
       createdAt: schema.broadcasts.createdAt,
       recipientCount: sql<number>`(
         select count(*)::int from notification_deliveries nd
@@ -295,6 +303,21 @@ export interface DraftInput {
   body: string;
   presentation: AnnouncementPresentation;
   audience?: Audience;
+  /**
+   * The composer's "keep it at the top". Pinning is the second axis beside
+   * `presentation`: presentation is how loudly it lands, this is whether it
+   * stays on screen afterwards. Marked on the draft, inert until it is
+   * published — `listPinnedForUser` only ever reads a published broadcast the
+   * viewer actually received.
+   */
+  pinned?: boolean;
+}
+
+/** The pin columns for a draft carrying (or dropping) the composer's mark. */
+function pinColumns(senderId: string, pinned: boolean | undefined) {
+  return pinned
+    ? { pinnedAt: new Date(), pinnedBy: senderId }
+    : { pinnedAt: null, pinnedBy: null };
 }
 
 /** Create a new announcement draft (unpublished). Returns its id. */
@@ -311,6 +334,7 @@ export async function createAnnouncementDraft(
       title: input.title,
       body: input.body,
       presentation: input.presentation,
+      ...pinColumns(input.senderId, input.pinned),
     })
     .returning({ id: schema.broadcasts.id });
   return { id: row!.id };
@@ -327,6 +351,7 @@ export async function updateAnnouncementDraft(input: {
   body: string;
   presentation: AnnouncementPresentation;
   audience?: Audience;
+  pinned?: boolean;
 }): Promise<boolean> {
   const db = createHttpDb();
   const rows = await db
@@ -336,6 +361,7 @@ export async function updateAnnouncementDraft(input: {
       body: input.body,
       presentation: input.presentation,
       ...audienceColumns(input.audience ?? { scope: "everyone" }),
+      ...pinColumns(input.senderId, input.pinned),
     })
     .where(isOwnedAnnouncementDraft(input.id, input.senderId))
     .returning({ id: schema.broadcasts.id });
@@ -459,6 +485,241 @@ export async function publishAnnouncement(input: {
       ),
     }
   );
+}
+
+// --- Pinning --------------------------------------------------------------
+//
+// Pinning is the second axis beside `presentation`. Presentation is how loudly
+// an announcement LANDS (full-screen, pop-up, quiet); a pin is whether it STAYS
+// on screen afterwards, in a banner above every console page. Any presentation
+// may be pinned.
+//
+// PINNING AUTHORITY FOLLOWS POSTING AUTHORITY (owner's call, 2026-09-22): "If I
+// am allowed to post to everyone, then that means I'm also allowed to pin
+// something that is posted to everyone." The rule itself is `canSendToAudience`
+// in @camp404/core, applied by the caller against this broadcast's own
+// audience; the claim below re-checks the audience in its WHERE the way
+// `publishAnnouncement` does, so a lead who has lost a team cannot pin to it
+// between the check and the write.
+
+export const PIN_MISSING =
+  "That announcement no longer exists. Reload the page.";
+export const PIN_NOT_PUBLISHED =
+  "Only a published announcement can be pinned. Publish it first.";
+export const PIN_TEAM_NOT_LED =
+  "You can only pin an announcement to a team you lead.";
+export const PIN_ALREADY = "It's already pinned. Reload the page.";
+export const PIN_ALREADY_OFF = "It isn't pinned. Reload the page.";
+
+/** A pinned announcement as the banner shows it. */
+export interface PinnedAnnouncement {
+  id: string;
+  title: string;
+  publishedAt: Date;
+  /** When it was pinned — what the banner's order is on. */
+  pinnedAt: Date;
+  /** Whether a captain pinned it; breaks a tie in `comparePinned`. */
+  pinnedByCaptain: boolean;
+}
+
+/**
+ * Every pinned announcement THIS member actually received, in banner order.
+ *
+ * ALL of them, not a top few (owner's call, 2026-09-22): the banner is a
+ * scroller the reader moves through, and it names the count, so a pin can never
+ * be silently dropped off the end of a list. The set is small and bounded by
+ * what captains bother to pin, and a partial index covers the rows.
+ *
+ * The audience is not re-resolved here, and must not be: the member already has
+ * a `notification_deliveries` row for every broadcast that reached them, so the
+ * join IS the audience, settled at fan-out. Re-resolving would leak a team pin
+ * to a member who joined the team after the send — and, worse, would need a
+ * second, parallel answer to "who may see this".
+ *
+ * Consequences of the join, each covered by a test: a draft has no deliveries,
+ * so a pinned draft never shows; a delivery that was removed takes its pin with
+ * it; and a pin on a team announcement is invisible to everyone off that team.
+ *
+ * The ORDER is `sortPinned` in @camp404/core and nowhere else — newest pinned
+ * first, a captain's pin above a lead's on a tie, the id breaking the rest. It
+ * is done here rather than in SQL because it must be one function the banner,
+ * the test store and the tests all share; a second copy in an ORDER BY is
+ * exactly how the two would drift apart.
+ */
+export async function listPinnedForUser(
+  userId: string,
+): Promise<PinnedAnnouncement[]> {
+  const db = createHttpDb();
+  const pinner = alias(schema.users, "pinner");
+  const rows = await db
+    .select({
+      id: schema.broadcasts.id,
+      title: schema.broadcasts.title,
+      publishedAt: schema.broadcasts.publishedAt,
+      pinnedAt: schema.broadcasts.pinnedAt,
+      // NULL when nobody is on the other end of `pinned_by` — the column is
+      // `set null`, so a deleted captain leaves the pin standing but anonymous.
+      pinnerRank: pinner.rank,
+    })
+    .from(schema.broadcasts)
+    .innerJoin(
+      schema.notificationDeliveries,
+      and(
+        eq(schema.notificationDeliveries.broadcastId, schema.broadcasts.id),
+        eq(schema.notificationDeliveries.userId, userId),
+      ),
+    )
+    .leftJoin(pinner, eq(pinner.id, schema.broadcasts.pinnedBy))
+    .where(
+      and(
+        eq(schema.broadcasts.kind, "announcement"),
+        isNotNull(schema.broadcasts.pinnedAt),
+        isNotNull(schema.broadcasts.publishedAt),
+      ),
+    );
+  return sortPinned(
+    rows.flatMap((r) =>
+      r.publishedAt && r.pinnedAt
+        ? [
+            {
+              id: r.id,
+              title: r.title,
+              publishedAt: r.publishedAt,
+              pinnedAt: r.pinnedAt,
+              pinnedByCaptain: r.pinnerRank === "captain",
+            },
+          ]
+        : [],
+    ),
+  );
+}
+
+/** An announcement's audience and state, for the caller's authority check. */
+export interface AnnouncementPinContext {
+  audience: Audience;
+  published: boolean;
+  pinned: boolean;
+}
+
+/**
+ * The stored audience of one announcement, so the caller can ask
+ * `canSendToAudience` about it. Null when the id is not an announcement.
+ */
+export async function getAnnouncementPinContext(
+  id: string,
+): Promise<AnnouncementPinContext | null> {
+  if (!UUID.test(id)) return null;
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      kind: schema.broadcasts.kind,
+      scope: schema.broadcasts.scope,
+      team: schema.broadcasts.team,
+      publishedAt: schema.broadcasts.publishedAt,
+      pinnedAt: schema.broadcasts.pinnedAt,
+    })
+    .from(schema.broadcasts)
+    .where(eq(schema.broadcasts.id, id))
+    .limit(1);
+  if (!row || row.kind !== "announcement") return null;
+  return {
+    audience: audienceOf(row),
+    published: row.publishedAt !== null,
+    pinned: row.pinnedAt !== null,
+  };
+}
+
+/** A lead's claim narrows the WHERE to the teams they lead; a captain's does not. */
+function pinTeamClaim(allowedTeams: readonly Team[] | undefined) {
+  if (!allowedTeams) return undefined;
+  return and(
+    eq(schema.broadcasts.scope, "team"),
+    allowedTeams.length > 0
+      ? inArray(schema.broadcasts.team, [...allowedTeams])
+      : sql`false`,
+  );
+}
+
+export type PinResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Pin or unpin a published announcement, and record it.
+ *
+ * A compare-and-set: the WHERE names the state it expects to change (pinned or
+ * not), so two captains racing cannot silently overwrite each other — the loser
+ * gets a sentence. The audit row is written with the SAME transaction as the
+ * update, because a pin puts a message on every recipient's screen and leaves
+ * it there: that is a camp-config-grade act, and a receipt that can commit
+ * without its change is worse than none.
+ */
+export async function setAnnouncementPinned(input: {
+  id: string;
+  actorId: string;
+  pinned: boolean;
+  /** A team lead's teams, read now. A captain passes none. */
+  allowedTeams?: readonly Team[];
+}): Promise<PinResult> {
+  if (!UUID.test(input.id)) return { ok: false, error: PIN_MISSING };
+  const done = await withTransaction(async (tx) => {
+    const claimed = await tx
+      .update(schema.broadcasts)
+      .set(
+        input.pinned
+          ? { pinnedAt: new Date(), pinnedBy: input.actorId }
+          : { pinnedAt: null, pinnedBy: null },
+      )
+      .where(
+        and(
+          eq(schema.broadcasts.id, input.id),
+          eq(schema.broadcasts.kind, "announcement"),
+          // A pin only exists on a published announcement: enforced here, not
+          // only on the screen that offers the button.
+          isNotNull(schema.broadcasts.publishedAt),
+          input.pinned
+            ? isNull(schema.broadcasts.pinnedAt)
+            : isNotNull(schema.broadcasts.pinnedAt),
+          pinTeamClaim(input.allowedTeams),
+        ),
+      )
+      .returning({
+        scope: schema.broadcasts.scope,
+        team: schema.broadcasts.team,
+      });
+    const row = claimed[0];
+    if (!row) return false;
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: input.pinned ? "announcement.pinned" : "announcement.unpinned",
+      target: input.id,
+      metadata: { scope: row.scope, team: row.team },
+    });
+    return true;
+  });
+  if (done) return { ok: true };
+  // Read AFTER the transaction has ended: the claim wrote nothing, and saying
+  // which of the four reasons it was is a separate read.
+  return {
+    ok: false,
+    error: await explainPinRefusal(input.id, input.pinned, input.allowedTeams),
+  };
+}
+
+/** Why a pin or unpin claimed nothing, as the sentence the captain reads. */
+async function explainPinRefusal(
+  id: string,
+  pinned: boolean,
+  allowedTeams: readonly Team[] | undefined,
+): Promise<string> {
+  const context = await getAnnouncementPinContext(id);
+  if (!context) return PIN_MISSING;
+  if (!context.published) return PIN_NOT_PUBLISHED;
+  if (allowedTeams && !isAllowedAudience(context.audience, allowedTeams)) {
+    return PIN_TEAM_NOT_LED;
+  }
+  if (context.pinned === pinned) {
+    return pinned ? PIN_ALREADY : PIN_ALREADY_OFF;
+  }
+  return PIN_MISSING;
 }
 
 export interface DispatchFailure {

@@ -1062,10 +1062,37 @@ export const broadcasts = pgTable(
     // inline publish path); a future value defers fan-out to the dispatch cron.
     sendAt: timestamp("send_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+
+    // --- Pinning ---------------------------------------------------------
+    // "Does it stay on screen after it lands" — the second axis beside
+    // `presentation` ("how loudly it lands"). NULL means not pinned. A pinned
+    // announcement rides in a banner above every console page, for the members
+    // it was delivered to; any presentation may be pinned.
+    //
+    // Pinning authority follows POSTING authority (owner's call, 2026-09-22):
+    // whoever may address this broadcast's audience may pin it to that
+    // audience. `canSendToAudience` in @camp404/core decides, once.
+    //
+    // A pin only ever SHOWS on a published broadcast: the reader-facing query
+    // (`listPinnedForUser`) joins `notification_deliveries`, which only a
+    // published, fanned-out broadcast has, and requires `published_at`. A
+    // draft may carry the mark — it is the composer's "keep it at the top",
+    // recorded before the send — and it stays inert until publishing.
+    pinnedAt: timestamp("pinned_at", { mode: "date" }),
+    // Who set the mark. `set null` rather than cascade: losing the captain
+    // must not silently unpin the camp's standing notice.
+    pinnedBy: uuid("pinned_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
   },
   (b) => ({
     senderIdx: index("broadcasts_sender_idx").on(b.senderId),
     createdAtIdx: index("broadcasts_created_at_idx").on(b.createdAt),
+    // The banner's read is "the pinned ones", on every console page load, and
+    // the pinned set is tiny next to the table — a partial index keeps it so.
+    pinnedIdx: index("broadcasts_pinned_idx")
+      .on(b.publishedAt.desc())
+      .where(sql`${b.pinnedAt} is not null`),
   }),
 );
 
