@@ -19,6 +19,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@camp404/core": "workspace:*",
     "@camp404/db": "workspace:*",
     "zod": "^4.4.3"
   },

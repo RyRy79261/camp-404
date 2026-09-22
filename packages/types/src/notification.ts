@@ -37,3 +37,24 @@ export interface NotificationPayload {
   refType: string | null;
   refId: string | null;
 }
+
+/**
+ * Which slice of their inbox a member is looking at. The state lives in
+ * `?filter=` (never client state), so the list stays a server render and a
+ * filtered inbox is linkable and survives the back button.
+ */
+export const INBOX_FILTERS = ["all", "unread", "announcements"] as const;
+
+export type InboxFilter = (typeof INBOX_FILTERS)[number];
+
+/**
+ * The delivery kinds the "Announcements" tab shows: the broadcasts a captain
+ * or a team lead composed and sent. Everything else in the inbox is a personal
+ * event (a questionnaire sent your way, an approval decision, a captain
+ * request), which is what the tab is there to filter out.
+ */
+export const ANNOUNCEMENT_NOTIFICATION_KINDS = [
+  "announcement",
+  "team_message",
+  "lead_directive",
+] as const satisfies readonly NotificationKind[];

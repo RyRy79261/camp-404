@@ -8,7 +8,7 @@ import {
   type PushSend,
   type TokenSendResult,
 } from "./push-status";
-import { notificationLink } from "@camp404/core";
+import { notificationLink, plainPreview } from "@camp404/core";
 
 // Push-token + delivery-drain data layer. Deliberately Firebase-free: the FCM
 // send fn is INJECTED into `drainQueuedPush` (apps/web supplies the
@@ -103,9 +103,15 @@ export async function planPushDrain(
     if (d.refType) data.refType = d.refType;
     if (d.refId) data.refId = d.refId;
 
+    // A push notification is a plain-text boundary: the OS draws the body as
+    // typed, so an announcement written in markdown would reach a lock screen
+    // as "**Water** is *not* provided". The rendered version waits behind the
+    // tap, on the announcement page.
+    const body = plainPreview(d.body);
+
     const results: TokenSendResult[] = [];
     for (const batch of chunk(tokens, 500)) {
-      results.push(...(await send(batch, { title: d.title, body: d.body }, data)));
+      results.push(...(await send(batch, { title: d.title, body }, data)));
     }
     statusById.set(d.id, deliveryPushStatus(results));
     for (const r of results) {

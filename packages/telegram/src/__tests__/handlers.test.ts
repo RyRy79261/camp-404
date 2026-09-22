@@ -334,6 +334,33 @@ describe("announcement queue + dispatch", () => {
     expect(dbState.announcements[0]?.messageId).toBe("99");
   });
 
+  it("sends the body as plain words — the send carries no parse_mode", async () => {
+    dbState.announcements.push({
+      id: "a1",
+      broadcastId: "b1",
+      chatId: "-100999",
+      body: "## Burn night\n\n**Everyone** meets at *20:00*.\n\n- Bring [water](https://camp-404.com/water)",
+      status: "queued",
+      messageId: null,
+      errorMessage: null,
+      sendAfter: new Date("2026-05-23"),
+      sentAt: null,
+      createdAt: new Date("2026-05-23"),
+    });
+    const client = fakeClient();
+    await dispatchPendingAnnouncements({
+      client,
+      now: new Date("2026-05-24"),
+    });
+    const sendMessage = (
+      client as unknown as { sendMessage: ReturnType<typeof vi.fn> }
+    ).sendMessage;
+    expect(sendMessage).toHaveBeenCalledWith({
+      chatId: "-100999",
+      text: "Burn night\n\nEveryone meets at 20:00.\n\nBring water",
+    });
+  });
+
   it("marks rows failed when the API errors out", async () => {
     dbState.announcements.push({
       id: "a1",

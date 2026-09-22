@@ -1,14 +1,16 @@
 "use client";
 
 import {
+  memo,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
-import { CAMP_TIME_ZONE, readRate } from "@camp404/core";
+import { CAMP_TIME_ZONE, plainPreview, readRate } from "@camp404/core";
 import {
   CheckCircle2,
   Eye,
@@ -50,6 +52,10 @@ import {
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
+import {
+  MarkdownHint,
+  MarkdownPreview,
+} from "@/components/announcements/markdown-body";
 import { RecorderPanel } from "@/components/voice/recorder-panel";
 import { useDictationToggle } from "@/components/voice/use-dictation-toggle";
 import { useVoiceSupported } from "@/components/voice/use-voice-recorder";
@@ -404,12 +410,14 @@ export function AnnouncementsManager({
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="announcement-body">Message</Label>
+            <MarkdownHint id="announcement-body-hint" />
             <Textarea
               id="announcement-body"
               value={form.body}
               maxLength={5000}
               rows={6}
               placeholder="What does everyone need to know?"
+              aria-describedby="announcement-body-hint"
               onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
               disabled={pending}
             />
@@ -428,6 +436,7 @@ export function AnnouncementsManager({
                 className="self-end"
               />
             )}
+            <MarkdownPreview body={form.body} />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -625,7 +634,7 @@ function AnnouncementHeader({
  * them. A captain can always read the whole of what they wrote: the read page
  * is for recipients, and the author is not one.
  */
-function ClampedBody({ body }: { body: string }) {
+const ClampedBody = memo(function ClampedBody({ body }: { body: string }) {
   const ref = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
@@ -636,6 +645,14 @@ function ClampedBody({ body }: { body: string }) {
     setOverflows(el.scrollHeight > el.clientHeight + 1);
   }, [body, expanded]);
 
+  // A card is a glimpse of the message, not the message. The body is
+  // markdown; rendering it belongs on the surfaces that show the whole thing.
+  //
+  // Memoised, and the component itself is memo()'d, because the composer's
+  // form state lives in the page above: without this, every keystroke in the
+  // composer re-stripped every card on screen.
+  const text = useMemo(() => plainPreview(body), [body]);
+
   return (
     <div className="space-y-1">
       <p
@@ -645,7 +662,7 @@ function ClampedBody({ body }: { body: string }) {
           !expanded && "line-clamp-3",
         )}
       >
-        {body}
+        {text}
       </p>
       {(overflows || expanded) && (
         <button
@@ -659,7 +676,7 @@ function ClampedBody({ body }: { body: string }) {
       )}
     </div>
   );
-}
+});
 
 function DraftCard({
   announcement: a,

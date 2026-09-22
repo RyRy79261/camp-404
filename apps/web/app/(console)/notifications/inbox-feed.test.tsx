@@ -50,6 +50,7 @@ describe("InboxFeed", () => {
           item("b", "2026-09-15T21:30:00Z"),
         ]}
         initialCursor={null}
+        filter="all"
         now={NOW}
       />,
     );
@@ -69,12 +70,18 @@ describe("InboxFeed", () => {
       <InboxFeed
         initialItems={[item("a", "2026-09-16T09:00:00Z")]}
         initialCursor="cursor-1"
+        filter="all"
         now={NOW}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Load older" }));
     expect(await screen.findByText("Notice c")).toBeDefined();
-    expect(loadOlderNotificationsAction).toHaveBeenCalledWith("cursor-1");
+    // The tab travels with the cursor: an older page must stay inside the
+    // filter the member is reading, or the list mixes two queries.
+    expect(loadOlderNotificationsAction).toHaveBeenCalledWith(
+      "cursor-1",
+      "all",
+    );
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Load older" })).toBeNull(),
     );
@@ -94,6 +101,7 @@ describe("InboxFeed", () => {
       <InboxFeed
         initialItems={[item("a", "2026-09-16T09:00:00Z")]}
         initialCursor="cursor-1"
+        filter="all"
         now={NOW}
       />,
     );

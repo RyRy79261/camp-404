@@ -203,6 +203,131 @@ describe("CampManagementRoster — deciding in bulk", () => {
   });
 });
 
+describe("CampManagementRoster — the ?team= deep link", () => {
+  const TEAMS = [
+    { key: "kitchen", label: "Kitchen" },
+    { key: "structures", label: "Structures" },
+  ];
+
+  function onTeams(
+    id: string,
+    name: string,
+    teams: string[],
+    approvalStatus: CampManagementMember["approvalStatus"] = "approved",
+  ) {
+    return {
+      ...member(id, name, approvalStatus),
+      teams,
+    } as CampManagementMember;
+  }
+
+  const ROWS = rowsOf(
+    onTeams("m1", "Nova", ["kitchen"]),
+    onTeams("m2", "Ash", ["structures"]),
+  );
+
+  function teamSelect() {
+    return screen.getByLabelText("Filter by team") as HTMLSelectElement;
+  }
+
+  it("opens filtered to the team the URL named", () => {
+    render(
+      <CampManagementRoster rows={ROWS} teams={TEAMS} initialTeam="kitchen" />,
+    );
+
+    expect(teamSelect().value).toBe("kitchen");
+    expect(within(table()).getByText("Nova")).toBeTruthy();
+    expect(within(table()).queryByText("Ash")).toBeNull();
+  });
+
+  it("follows a ?team= that changes without leaving the route", () => {
+    // Browser Back/Forward between two `?team=` URLs of this route re-renders
+    // the server component but keeps this island mounted. Seeding useState once
+    // would leave the list showing Kitchen while the address bar said
+    // Structures — the roster would be lying about what it is showing.
+    const { rerender } = render(
+      <CampManagementRoster rows={ROWS} teams={TEAMS} initialTeam="kitchen" />,
+    );
+    expect(within(table()).queryByText("Ash")).toBeNull();
+
+    rerender(
+      <CampManagementRoster
+        rows={ROWS}
+        teams={TEAMS}
+        initialTeam="structures"
+      />,
+    );
+
+    expect(teamSelect().value).toBe("structures");
+    expect(within(table()).getByText("Ash")).toBeTruthy();
+    expect(within(table()).queryByText("Nova")).toBeNull();
+  });
+
+  it("clears the filter when the URL drops ?team= entirely", () => {
+    const { rerender } = render(
+      <CampManagementRoster rows={ROWS} teams={TEAMS} initialTeam="kitchen" />,
+    );
+
+    rerender(
+      <CampManagementRoster rows={ROWS} teams={TEAMS} initialTeam={null} />,
+    );
+
+    expect(teamSelect().value).toBe("");
+    expect(within(table()).getByText("Nova")).toBeTruthy();
+    expect(within(table()).getByText("Ash")).toBeTruthy();
+  });
+
+  it("does not carry a member pinned under one team into the next team's list", () => {
+    // A pinned row is rendered THROUGH the team filter, so a member kept on
+    // screen by a decision under Kitchen would otherwise still be listed after
+    // the rail's link swapped the filter to Structures — reading as if they
+    // were on Structures.
+    const pending = rowsOf(
+      onTeams("m1", "Nova", ["kitchen"], "pending"),
+      onTeams("m2", "Ash", ["structures"]),
+    );
+
+    const { rerender } = render(
+      <CampManagementRoster
+        rows={pending}
+        teams={TEAMS}
+        initialTeam="kitchen"
+      />,
+    );
+    fireEvent.click(within(table()).getByText("Nova"));
+    fireEvent.click(screen.getByRole("button", { name: "Decide on Nova" }));
+    expect(within(table()).getByText("Nova")).toBeTruthy();
+
+    rerender(
+      <CampManagementRoster
+        rows={pending}
+        teams={TEAMS}
+        initialTeam="structures"
+      />,
+    );
+
+    expect(within(table()).queryByText("Nova")).toBeNull();
+    expect(within(table()).getByText("Ash")).toBeTruthy();
+  });
+
+  it("leaves a filter the captain chose alone while the URL stays put", () => {
+    const { rerender } = render(
+      <CampManagementRoster rows={ROWS} teams={TEAMS} initialTeam={null} />,
+    );
+
+    fireEvent.change(teamSelect(), { target: { value: "structures" } });
+    expect(within(table()).queryByText("Nova")).toBeNull();
+
+    // A re-render for any other reason must not snap the filter back to the URL.
+    rerender(
+      <CampManagementRoster rows={ROWS} teams={TEAMS} initialTeam={null} />,
+    );
+
+    expect(teamSelect().value).toBe("structures");
+    expect(within(table()).queryByText("Nova")).toBeNull();
+  });
+});
+
 describe("bulkSummary", () => {
   const nameOf = (id: string) => ({ m1: "Nova", m2: "Ash" })[id] ?? id;
 

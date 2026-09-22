@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { Megaphone, TriangleAlert } from "lucide-react";
 import { Alert } from "@camp404/ui/components/alert";
@@ -8,6 +15,20 @@ import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { toast } from "@camp404/ui/components/toast";
+import { plainPreview } from "@camp404/core";
+
+// Loaded on demand, never with the app. This gate is mounted in the ROOT
+// layout, so a static import would put react-markdown and the whole
+// unified/remark/rehype stack behind it into the chunk every route downloads
+// — including sign-in, which can never show a takeover. Nothing here renders
+// before a poll has answered, so the import starts only once there is a
+// takeover to draw, and the Suspense fallback below means the member reads the
+// words either way.
+const MarkdownBody = lazy(() =>
+  import("@/components/announcements/markdown-body").then((m) => ({
+    default: m.MarkdownBody,
+  })),
+);
 
 // App-wide gate for the full-screen "acknowledge" notification variant. It
 // polls for the signed-in member's unacknowledged acknowledge-deliveries and,
@@ -96,8 +117,10 @@ export function AcknowledgementGate() {
       if (!res.ok) return;
       const { popups } = (await res.json()) as { popups: Popup[] };
       for (const popup of popups ?? []) {
+        // A toast is a one-line glimpse, not the message: markdown markers
+        // would show as punctuation, so it reads as plain text.
         toast.info(popup.title, {
-          description: popup.body,
+          description: plainPreview(popup.body, 200),
           duration: POPUP_DURATION_MS,
           action: { label: "Open", onClick: () => router.push(popup.link) },
         });
@@ -267,8 +290,21 @@ export function AcknowledgementGate() {
         </div>
 
         <Card>
-          <CardContent className="whitespace-pre-wrap p-6 text-sm leading-relaxed">
-            {current.body}
+          {/* The takeover is the whole message, so the body renders the
+              markdown the captain wrote. While the renderer's chunk is in
+              flight the same words are on screen as plain text — a member
+              being asked to acknowledge something must never be looking at an
+              empty card. */}
+          <CardContent className="p-6">
+            <Suspense
+              fallback={
+                <p className="whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">
+                  {plainPreview(current.body)}
+                </p>
+              }
+            >
+              <MarkdownBody className="text-sm">{current.body}</MarkdownBody>
+            </Suspense>
           </CardContent>
         </Card>
 

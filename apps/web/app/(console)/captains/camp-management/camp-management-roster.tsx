@@ -74,16 +74,29 @@ export function CampManagementRoster({
   rows,
   teams,
   teamLabels = {},
+  initialTeam = null,
 }: {
   rows: RosterRow[];
   teams: readonly { key: string; label: string }[];
   /** key → configured label for the profile team chips. */
   teamLabels?: Record<string, string>;
+  /**
+   * The team filter to open with — `?team=` on the URL, already checked by the
+   * page against the teams the config names. The Overview's coverage rail links
+   * here that way.
+   */
+  initialTeam?: string | null;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<RosterChip>("all");
-  const [team, setTeam] = useState<string | null>(null);
+  const [team, setTeam] = useState<string | null>(initialTeam);
+  // A navigation that changes only `?team=` stays on this route, so React keeps
+  // this component mounted and `useState`'s initial value is never re-read: the
+  // URL would say one team while the list below it showed another. React's
+  // documented adjust-state-on-prop-change, rather than an effect — it settles
+  // before the stale list is ever painted.
+  const [urlTeam, setUrlTeam] = useState(initialTeam);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sort, setSort] = useState<RosterSort>(DEFAULT_ROSTER_SORT);
   // Members decided since the filters last changed.
@@ -95,6 +108,22 @@ export function CampManagementRoster({
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkSummaryText, setBulkSummaryText] = useState<string | null>(null);
   const [bulkPending, startBulk] = useTransition();
+
+  // A navigation that changes only `?team=` stays on this route, so React keeps
+  // this component mounted and `useState`'s initial value is never re-read: the
+  // URL would say one team while the list below it showed another. React's
+  // documented adjust-state-on-prop-change, rather than an effect — it settles
+  // before the stale list is ever painted. It clears the pins and the ticks for
+  // the same reason `narrow` does: a pinned row is rendered THROUGH the team
+  // filter, so a member kept on screen by a decision under Kitchen would sit in
+  // the Structures list as if they were on Structures.
+  if (urlTeam !== initialTeam) {
+    setUrlTeam(initialTeam);
+    setTeam(initialTeam);
+    setPinned(new Set());
+    setChecked(new Set());
+    setBulkSummaryText(null);
+  }
 
   const stats = useMemo(() => deriveRosterStats(rows), [rows]);
 

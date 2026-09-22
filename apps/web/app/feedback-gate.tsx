@@ -13,13 +13,15 @@ import {
 } from "@/components/feedback/report-problem";
 import { authClient } from "@/lib/auth-client";
 import { installClientErrorCapture } from "@/lib/client-errors";
+import type { FeedbackKind } from "@/lib/github-feedback";
 
 /**
  * Mounted once in the root layout (sibling of AcknowledgementGate). Shaking the
  * device opens the bug/feature dialog; shake detection pauses while it's open.
- * The "Report a problem" item on /profile and the error page's Report button
- * open it too, through openReportProblem (owner's call, 2026-09-16: shake is
- * not the only way, but there is no floating button).
+ * The profile's "Bugs and feature requests" card ("Report a bug" / "Request a
+ * feature") and the error page's Report button open it too, through
+ * openReportProblem (owner's call, 2026-09-16: shake is not the only way, but
+ * there is no floating button). `kind` decides which type it opens on.
  *
  * Gated on the LIVE client session: the shake listener is only attached while a
  * user is actually signed in (and detaches immediately on sign-out), so the
@@ -31,6 +33,7 @@ export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
   const signedIn = !isPending && !!session;
   const [open, setOpen] = React.useState(false);
   const [prefill, setPrefill] = React.useState("");
+  const [kind, setKind] = React.useState<FeedbackKind>("bug");
 
   // Recent errors are kept from the first render, so a report made after
   // something broke can attach what happened before it.
@@ -40,6 +43,7 @@ export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
     enabled: signedIn && !open,
     onShake: () => {
       setPrefill("");
+      setKind("bug");
       setOpen(true);
     },
   });
@@ -49,6 +53,7 @@ export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
     const onRequest = (event: Event) => {
       const detail = (event as CustomEvent<ReportProblemRequest>).detail;
       setPrefill(detail?.description ?? "");
+      setKind(detail?.kind ?? "bug");
       setOpen(true);
     };
     window.addEventListener(REPORT_PROBLEM_EVENT, onRequest);
@@ -74,6 +79,7 @@ export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
       open={open}
       onOpenChange={setOpen}
       aiAvailable={aiAvailable}
+      defaultKind={kind}
       defaultDescription={prefill}
     />
   );

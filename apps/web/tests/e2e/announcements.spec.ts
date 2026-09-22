@@ -22,7 +22,9 @@ test.describe("captain announcements (test-mode)", () => {
     request,
   }) => {
     // Regression guard: the home page reads the member's unread count, which
-    // must resolve through the test store rather than hitting Neon.
+    // must resolve through the test store rather than hitting Neon. The bell is
+    // a Popover trigger now, not a link to the inbox — the count still has to
+    // reach it, and its panel still has to open.
     await login(page, { id: "god-auth", email: "god@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
@@ -30,8 +32,23 @@ test.describe("captain announcements (test-mode)", () => {
 
     await page.goto("/");
     await expect(page).toHaveURL("/");
+    const bell = page.getByRole("button", { name: /^Notifications,/ });
+    await expect(bell).toBeVisible();
+
+    await bell.click();
+    // Assert something PRESENT in the panel before anything about it, so the
+    // checks cannot pass against a popover that never opened.
+    const panel = page.getByRole("dialog");
     await expect(
-      page.getByRole("link", { name: /Notifications/ }),
+      panel.getByRole("heading", { name: "Notifications" }),
+    ).toBeVisible();
+    // The panel fetches its rows on open; an empty inbox says so, and the way
+    // through to the inbox is always there.
+    await expect(panel.getByText(/Nothing here yet/)).toBeVisible();
+    await panel.getByRole("link", { name: /See all/ }).click();
+    await expect(page).toHaveURL(/\/notifications$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Notifications" }),
     ).toBeVisible();
   });
 
@@ -66,7 +83,10 @@ test.describe("captain announcements (test-mode)", () => {
     // 3. Compose a draft (presentation defaults to the acknowledge variant)
     //    and publish it to the camp.
     await page.getByLabel("Title").fill("Burn-night briefing");
-    await page.getByLabel("Message").fill("Meet at the effigy at 20:00.");
+    // Written in markdown: a member reads it rendered where they read the
+    // whole message, and plain everywhere it is clipped.
+    await page.getByLabel("Message").fill("Meet at the **effigy** at 20:00.");
+    await expect(page.getByText(/Markdown supported/)).toBeVisible();
     await page.getByRole("button", { name: "Save draft" }).click();
     await page.getByRole("button", { name: "Publish to camp" }).click();
     // Publishing cannot be taken back, so a confirmation names the audience
@@ -90,6 +110,8 @@ test.describe("captain announcements (test-mode)", () => {
       gate.getByRole("heading", { name: "Burn-night briefing" }),
     ).toBeVisible();
     await expect(gate.getByText("Meet at the effigy at 20:00.")).toBeVisible();
+    // The takeover is the whole message, so it renders the markdown.
+    await expect(gate.locator("strong")).toHaveText("effigy");
     await expect(gate.getByText(/From Captain Jo/)).toBeVisible();
 
     // 5. Acknowledge dismisses it and it doesn't come back.
@@ -101,18 +123,55 @@ test.describe("captain announcements (test-mode)", () => {
     expect(pending.ok()).toBeTruthy();
     expect((await pending.json()).pending).toHaveLength(0);
 
-    // 6. The inbox row opens the whole announcement on its own page.
+    // 6. The inbox tabs are links: the filter lives in the URL, and it is
+    //    applied to the list rather than to the tab strip.
+    //
+    //    Both locators are scoped to the tab strip's own nav landmark. The tab
+    //    labels are not unique on the page — "Announcements" is also the
+    //    console nav's composer link for a lead or captain, and the Unread tab
+    //    grows a "· n" the moment anything is unread — so an unscoped
+    //    getByRole would either hit strict mode or match the wrong link.
     await page.goto("/notifications");
-    await page.getByRole("link", { name: /Burn-night briefing/ }).click();
+    const tabs = page.getByRole("navigation", { name: "Filter notifications" });
+    await tabs.getByRole("link", { name: /^Announcements/ }).click();
+    await expect(page).toHaveURL(/\/notifications\?filter=announcements$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Notifications" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Burn-night briefing/ }),
+    ).toBeVisible();
+
+    // The member acknowledged it in step 5, which read it — so the Unread tab
+    // is empty. Assert the page HAS rendered (the heading) before the absence.
+    await tabs.getByRole("link", { name: /^Unread/ }).click();
+    await expect(page).toHaveURL(/\/notifications\?filter=unread$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Notifications" }),
+    ).toBeVisible();
+    await expect(page.getByText("You're all caught up.")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Burn-night briefing/ }),
+    ).toHaveCount(0);
+
+    // 7. The inbox row opens the whole announcement on its own page.
+    await page.goto("/notifications");
+    // A row is a glimpse: it carries the words, never the markers.
+    const row = page.getByRole("link", { name: /Burn-night briefing/ });
+    await expect(row).toContainText("Meet at the effigy at 20:00.");
+    await expect(row.locator("strong")).toHaveCount(0);
+    await row.click();
     await expect(page).toHaveURL(/\/announcements\/[0-9a-f-]{36}$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Burn-night briefing" }),
     ).toBeVisible();
     await expect(page.getByText("Meet at the effigy at 20:00.")).toBeVisible();
+    // The page is the whole message, so here the markdown is rendered.
+    await expect(page.locator("article strong")).toHaveText("effigy");
     await expect(page.getByText(/You acknowledged this on/)).toBeVisible();
     const readPage = page.url();
 
-    // 7. The delivery is the permission: the author got no delivery, so the
+    // 8. The delivery is the permission: the author got no delivery, so the
     //    same link is a 404 for them.
     await login(page, {
       id: "captain-auth",

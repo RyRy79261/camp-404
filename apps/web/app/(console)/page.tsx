@@ -25,7 +25,7 @@ import { getPendingQuestionnaires, isTeamLead } from "@/lib/users";
 import { QueueCard } from "@/components/questionnaire/queue-card";
 import { EnablePush } from "@/components/push/enable-push";
 import { LandingHero } from "../landing-hero";
-import { CaptainKpis, RecentActivity } from "./overview/captain-panels";
+import { CaptainStatusBoard, RecentActivity } from "./overview/captain-panels";
 
 // Reads the Neon Auth session cookie on every request, so can't be
 // statically prerendered.
@@ -153,7 +153,7 @@ export default async function OverviewPage() {
         }
       />
 
-      {isCaptain && <CaptainKpis />}
+      {isCaptain && <CaptainStatusBoard />}
 
       {pending.length > 0 && (
         <section

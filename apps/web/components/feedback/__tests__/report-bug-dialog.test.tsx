@@ -98,8 +98,20 @@ describe("ReportBugDialog", () => {
         name: /Attach device details and recent errors/,
       }),
     );
+    // "You see everything that is sent below" is a promise, so assert the panel
+    // is actually SHOWING, not merely rendered. getByText matches inside a
+    // `hidden` container (@testing-library/dom's text query filters only on
+    // `ignore`), so the two getByText calls below would pass on a collapsed
+    // panel — this is the assertion that would not.
+    const panel = screen.getByRole("button", { name: /What this attaches/ });
+    expect(panel.getAttribute("aria-expanded")).toBe("true");
+    const body = document.getElementById(panel.getAttribute("aria-controls")!)!;
+    expect(body.hidden).toBe(false);
+
     expect(screen.getByText("Browser")).toBeTruthy();
     expect(screen.getByText("No recent errors in this tab.")).toBeTruthy();
+    // …and they are inside the panel that was just proved open.
+    expect(body.contains(screen.getByText("Browser"))).toBe(true);
 
     fillAndSend();
     await waitFor(() => expect(submitFeedbackAction).toHaveBeenCalled());

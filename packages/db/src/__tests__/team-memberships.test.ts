@@ -4,6 +4,7 @@ import { useTestDb } from "./_harness";
 import { makeMembership, makeUser } from "./_factories";
 import {
   assignTeam,
+  getTeamCoverage,
   getTeamMemberships,
   removeTeam,
   setLead,
@@ -358,5 +359,76 @@ describe("a team broadcast reaches the members a captain just assigned", () => {
         captain.id,
       ),
     ).toEqual([cook.id]);
+  });
+});
+
+describe("getTeamCoverage", () => {
+  const h = useTestDb();
+
+  it("counts each team's members and how many of them lead it", async () => {
+    const db = h.db();
+    const lead = await makeUser(db);
+    const cook = await makeUser(db);
+    const builder = await makeUser(db);
+    await makeMembership(db, {
+      userId: lead.id,
+      team: "kitchen",
+      isLead: true,
+    });
+    await makeMembership(db, { userId: cook.id, team: "kitchen" });
+    // A member on two teams counts once on each.
+    await makeMembership(db, { userId: cook.id, team: "structures" });
+    await makeMembership(db, { userId: builder.id, team: "structures" });
+
+    expect(await getTeamCoverage()).toEqual([
+      { team: "kitchen", members: 2, leads: 1, cycle: 1 },
+      // A leaderless team is a legitimate state, and it reports as one rather
+      // than disappearing.
+      { team: "structures", members: 2, leads: 0, cycle: 1 },
+    ]);
+  });
+
+  it("has no row for a team nobody is on", async () => {
+    const db = h.db();
+    const cook = await makeUser(db);
+    await makeMembership(db, { userId: cook.id, team: "kitchen" });
+
+    const coverage = await getTeamCoverage();
+
+    expect(coverage.map((c) => c.team)).toEqual(["kitchen"]);
+  });
+
+  it("counts THIS year only — last year's team is not this year's coverage", async () => {
+    const db = h.db();
+    const cook = await makeUser(db);
+    const veteran = await makeUser(db);
+    await foundedAt(db, 2027);
+    await makeMembership(db, {
+      userId: veteran.id,
+      team: "kitchen",
+      isLead: true,
+      cycle: 2026,
+    });
+    // The 2027 kitchen has one member and no lead: last year's lead flag must
+    // not carry over, or a rolled-over camp reads as already staffed.
+    await assignTeam({ userId: cook.id, team: "kitchen" });
+
+    expect(await getTeamCoverage()).toEqual([
+      { team: "kitchen", members: 1, leads: 0, cycle: 2027 },
+    ]);
+  });
+
+  it("leaves out the system actors and deleted accounts", async () => {
+    const db = h.db();
+    const cook = await makeUser(db);
+    const bot = await makeUser(db, { isSystem: true });
+    const lostCat = await makeUser(db, { sanitised: true });
+    for (const u of [cook, bot, lostCat]) {
+      await makeMembership(db, { userId: u.id, team: "kitchen" });
+    }
+
+    expect(await getTeamCoverage()).toEqual([
+      { team: "kitchen", members: 1, leads: 0, cycle: 1 },
+    ]);
   });
 });

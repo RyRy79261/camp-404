@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { BellOff, ClipboardList } from "lucide-react";
+import { BellOff, ClipboardList, Megaphone } from "lucide-react";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { listInbox, markRead } from "@/lib/notifications";
+import { countUnread, listInbox, markRead } from "@/lib/notifications";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   ensureCampUser,
@@ -14,6 +14,13 @@ import {
 import { getIncomingPromotionsForUser } from "@/lib/promotion";
 import { QueueCard } from "@/components/questionnaire/queue-card";
 import { InboxFeed } from "./inbox-feed";
+import { NotificationFilterTabs } from "./filter-tabs";
+import {
+  feedIds,
+  marksPageRead,
+  parseInboxFilter,
+  type InboxFilter,
+} from "./filter";
 import { PromotionRequestCard } from "./promotion-request-card";
 
 export const dynamic = "force-dynamic";
@@ -21,14 +28,52 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Notifications — Camp 404" };
 
 // The member-facing notification inbox behind the header bell, laid out like
-// the AfrikaBurn console inbox: a page heading, then the day groups, each in
-// its own card. Lists every notification delivered to the signed-in member,
-// newest first, flagging the ones that were still unread on arrival. Opening
-// the inbox clears the unread badge (marks everything read) — acknowledgements
-// are handled separately by the full-screen gate, so reading here never counts
-// as acknowledging.
+// the AfrikaBurn console inbox: a page heading, the All / Unread / Announcements
+// tabs, then the day groups, each in its own card. Lists every notification
+// delivered to the signed-in member, newest first, flagging the ones that were
+// still unread on arrival. Opening the inbox clears the unread badge (marks
+// everything read) — acknowledgements are handled separately by the full-screen
+// gate, so reading here never counts as acknowledging.
+//
+// The tab lives in `?filter=` and is applied in SQL (never to a fetched page,
+// which would break paging). The Unread tab is the one that does NOT mark its
+// page read, so it cannot empty itself while the member reads it — see
+// `marksPageRead` in ./filter.
 
-export default async function NotificationsPage() {
+/** The empty state each tab deserves: "nothing" and "nothing left" differ. */
+const EMPTY: Record<
+  InboxFilter,
+  { icon: React.ReactNode; title: string; description: string }
+> = {
+  all: {
+    icon: <BellOff aria-hidden />,
+    title: "No notifications yet.",
+    description:
+      "Announcements, captain requests and questionnaires land here as they are sent.",
+  },
+  unread: {
+    icon: <BellOff aria-hidden />,
+    title: "You're all caught up.",
+    description: "Everything in your inbox has been read.",
+  },
+  announcements: {
+    icon: <Megaphone aria-hidden />,
+    title: "No announcements yet.",
+    description:
+      "Messages a captain or a team lead sends the camp show up here.",
+  },
+};
+
+/**
+ * The inbox itself. Draws the first page on the server, clears the badge for
+ * exactly the rows it drew (except on the Unread tab), and hands the rest of
+ * the paging to `InboxFeed`.
+ */
+export default async function NotificationsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ filter?: string }>;
+}) {
   const authUser = await getAuthenticatedUserOrRedirect();
   const campUser = await ensureCampUser(authUser);
   if (!hasCampAccess(campUser, authUser.primaryEmail)) {
@@ -47,19 +92,26 @@ export default async function NotificationsPage() {
     ? await getIncomingPromotionsForUser(campUser.id)
     : [];
 
+  // An unknown ?filter= opens the whole inbox rather than 404ing: a shared link
+  // with a stale param should still show the member their notifications.
+  const filter = parseInboxFilter((await searchParams)?.filter);
+
   // Snapshot the first page (with pre-read state), then clear the badge for
   // exactly those rows — a delivery that arrives after the snapshot stays
   // unread, and so do older ones until they are scrolled into view.
-  const { items, nextCursor } = await listInbox(campUser.id);
-  try {
-    await markRead(
-      campUser.id,
-      items.map((i) => i.id),
-    );
-  } catch (err) {
-    // The list is still worth showing. The badge stays until the next visit.
-    console.error("notifications markRead failed", err);
+  const { items, nextCursor } = await listInbox(campUser.id, { filter });
+  if (marksPageRead(filter)) {
+    try {
+      await markRead(campUser.id, feedIds(items));
+    } catch (err) {
+      // The list is still worth showing. The badge stays until the next visit.
+      console.error("notifications markRead failed", err);
+    }
   }
+  // The number beside the Unread tab is read AFTER that clear, so it is what
+  // the Unread tab would actually list. Reading it first would put "Unread · 5"
+  // on a tab that this very render just emptied.
+  const unreadCount = await countUnread(campUser.id);
 
   return (
     <div className="flex flex-col">
@@ -70,6 +122,8 @@ export default async function NotificationsPage() {
       />
 
       <div className="flex flex-col gap-6">
+        <NotificationFilterTabs filter={filter} unreadCount={unreadCount} />
+
         {promotions.length > 0 && (
           <section aria-label="Captain request" className="flex flex-col gap-3">
             {promotions.map((p) => (
@@ -121,15 +175,20 @@ export default async function NotificationsPage() {
           pending.length === 0 &&
           promotions.length === 0 && (
             <EmptyState
-              icon={<BellOff aria-hidden />}
-              title="No notifications yet."
-              description="Announcements, captain requests and questionnaires land here as they are sent."
+              icon={EMPTY[filter].icon}
+              title={EMPTY[filter].title}
+              description={EMPTY[filter].description}
             />
           )
         ) : (
           <InboxFeed
+            // A tab switch is a same-route navigation, so React would keep the
+            // feed's rows and cursor and only swap `filter` — Announcements
+            // would open on the All tab's rows. The key starts it fresh.
+            key={filter}
             initialItems={items}
             initialCursor={nextCursor}
+            filter={filter}
             now={new Date()}
           />
         )}

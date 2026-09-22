@@ -241,6 +241,34 @@ describe("the camp-management roster reads the memberships", () => {
   });
 });
 
+describe("testStore.getTeamCoverage — the Overview rail, mirrored", () => {
+  it("counts each team's members and leads, this year only", () => {
+    // The mirror of the PGlite suite's getTeamCoverage cases: last year's lead
+    // must not carry over, or a rolled-over camp reads as already staffed.
+    const lead = makeUser("Ada");
+    const cook = makeUser("Grace");
+    testStore.seedTeamMembership({
+      userId: cook.id,
+      team: "structures",
+      isLead: true,
+      cycle: 2026,
+    });
+    foundedAt(2027);
+    testStore.assignTeam({ userId: lead.id, team: "kitchen" });
+    testStore.assignTeam({ userId: cook.id, team: "kitchen" });
+    testStore.setLead({ userId: lead.id, team: "kitchen", isLead: true });
+
+    expect(testStore.getTeamCoverage()).toEqual([
+      { team: "kitchen", members: 2, leads: 1, cycle: 2027 },
+    ]);
+  });
+
+  it("has no row for a team nobody is on", () => {
+    foundedAt(2027);
+    expect(testStore.getTeamCoverage()).toEqual([]);
+  });
+});
+
 // --- Agreement with the real backend ----------------------------------------
 // The same rows, through the same production functions. If the store's shape or
 // year-scoping drifted from `team_memberships`, these would answer differently

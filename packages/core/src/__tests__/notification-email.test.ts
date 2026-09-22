@@ -73,6 +73,33 @@ describe("renderNotificationEmail", () => {
     expect(email.text).toContain("Bring <b>water</b> & shade");
   });
 
+  it("sends the markdown a captain wrote as plain words, not markers", () => {
+    const email = renderNotificationEmail(
+      announcementNotification({
+        broadcastId: ID,
+        title: "Burn night briefing",
+        body: [
+          "## Burn night",
+          "",
+          "**Everyone** meets at *20:00*.",
+          "",
+          "- Bring [water](https://camp-404.com/water)",
+        ].join("\n"),
+      }),
+      "https://camp-404.com",
+    );
+    // Neither part of an email renders markdown: the text part has no
+    // renderer, and the HTML part escapes what it is handed.
+    for (const part of [email.text, email.html]) {
+      expect(part).toContain("Burn night");
+      expect(part).toContain("Everyone meets at 20:00.");
+      expect(part).toContain("Bring water");
+      expect(part).not.toContain("**");
+      expect(part).not.toContain("## ");
+      expect(part).not.toContain("](https://camp-404.com/water)");
+    }
+  });
+
   it("links a notice about nothing else to the inbox, and carries no secret", () => {
     const email = renderNotificationEmail(
       approvalNotification(),

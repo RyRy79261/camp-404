@@ -44,7 +44,12 @@ and `registration-funnel.tsx:7-12`:
 
 **Why Camp 404 cares.** Camp 404 has a captains camp-management surface (`/captains/tools`,
 `/captains/camp-management`) and **zero analytics** — no KPI row, no funnel, no chart, no
-completion rollup, no activity feed. The donor's whole tier-1 (`org-stats.ts`) and tier-3
+completion rollup, no activity feed.
+[CORRECTION 2026-09-22] Landed since this was written, all on the captain Overview
+(`apps/web/app/(console)/overview/`): the KPI row and the activity feed, then the readiness
+funnel, per-team coverage and questionnaire completion (`readiness.ts` derivations +
+`status-board.tsx` cards). Still not taken: the registrations-over-time chart, and there is no
+separate `/status` page — the nav is already ten entries wide. The donor's whole tier-1 (`org-stats.ts`) and tier-3
 (components + `status-board-format.ts`) are **pure, tenant-agnostic and drop-in-shaped**; only
 tier-2 (`getStatusBoard`) is welded to the donor's group/edition/org model. The chart is
 **hand-rolled inline SVG — no chart library at all** (verified: the only two `<svg>` files in

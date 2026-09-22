@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
+  getPendingQuestionnaires: vi.fn(async () => []),
   hasCampAccess: vi.fn(() => true),
   isApproved: vi.fn(() => true),
   setCampUserRank: vi.fn(),
@@ -22,18 +23,28 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/notifications", () => ({
   listInbox: vi.fn(),
   markRead: vi.fn(),
+  markAllRead: vi.fn(),
+  unreadClearableCount: vi.fn(),
 }));
 
 import {
   acceptCaptainPromotionAction,
   declineCaptainPromotionAction,
+  fetchNotificationPanelAction,
   loadOlderNotificationsAction,
+  markAllNotificationsReadAction,
 } from "./actions";
-import { listInbox, markRead } from "@/lib/notifications";
+import {
+  listInbox,
+  markAllRead,
+  markRead,
+  unreadClearableCount,
+} from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
   ensureCampUser,
+  getPendingQuestionnaires,
   hasCampAccess,
   isApproved,
   setCampUserRank,
@@ -319,8 +330,62 @@ describe("loadOlderNotificationsAction", () => {
       ok: true,
       data: { items: [{ id: "d1" }, { id: "d2" }], nextCursor: null },
     });
-    expect(listInbox).toHaveBeenCalledWith("user-1", { before: CURSOR });
+    expect(listInbox).toHaveBeenCalledWith("user-1", {
+      before: CURSOR,
+      filter: "all",
+    });
     expect(markRead).toHaveBeenCalledWith("user-1", ["d1", "d2"]);
+  });
+
+  // The first page already behaves this way (page.tsx). A fetched page that a
+  // failed clear threw away would show the member "something went wrong" over
+  // notifications they in fact have, and retrying could not help.
+  it("still returns the older page when clearing its rows fails", async () => {
+    vi.mocked(listInbox).mockResolvedValue({
+      items: [{ id: "d1" }] as never,
+      nextCursor: "older-cursor",
+    });
+    vi.mocked(markRead).mockRejectedValue(new Error("connection reset"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await loadOlderNotificationsAction(CURSOR);
+
+    expect(result).toEqual({
+      ok: true,
+      data: { items: [{ id: "d1" }], nextCursor: "older-cursor" },
+    });
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+
+  it("keeps an older page inside the tab being read", async () => {
+    vi.mocked(listInbox).mockResolvedValue({ items: [], nextCursor: null });
+    await loadOlderNotificationsAction(CURSOR, "announcements");
+    expect(listInbox).toHaveBeenCalledWith("user-1", {
+      before: CURSOR,
+      filter: "announcements",
+    });
+  });
+
+  it("reads the whole inbox for a filter it does not know", async () => {
+    vi.mocked(listInbox).mockResolvedValue({ items: [], nextCursor: null });
+    await loadOlderNotificationsAction(CURSOR, "bulletins");
+    expect(listInbox).toHaveBeenCalledWith("user-1", {
+      before: CURSOR,
+      filter: "all",
+    });
+  });
+
+  it("does not empty the Unread tab as the member scrolls it", async () => {
+    vi.mocked(listInbox).mockResolvedValue({
+      items: [{ id: "d1" }] as never,
+      nextCursor: null,
+    });
+    const result = await loadOlderNotificationsAction(CURSOR, "unread");
+    expect(result.ok).toBe(true);
+    // The rows came back, and none of them were marked read — an Unread tab
+    // that cleared what it drew would delete the list under the member.
+    expect(markRead).not.toHaveBeenCalled();
   });
 
   it("reads nothing for a signed-out caller, no camp access, or a junk cursor", async () => {
@@ -339,5 +404,109 @@ describe("loadOlderNotificationsAction", () => {
 
     expect(listInbox).not.toHaveBeenCalled();
     expect(markRead).not.toHaveBeenCalled();
+  });
+});
+
+describe("markAllNotificationsReadAction", () => {
+  beforeEach(() => {
+    vi.mocked(markAllRead).mockReset();
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-1",
+      primaryEmail: "m@example.com",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ id: "user-1" } as never);
+  });
+
+  it("clears the signed-in member's own inbox and says how many", async () => {
+    vi.mocked(markAllRead).mockResolvedValue(3);
+    const result = await markAllNotificationsReadAction();
+    expect(result).toEqual({ ok: true, data: { cleared: 3 } });
+    // The id is resolved from the session, never taken from the caller.
+    expect(markAllRead).toHaveBeenCalledWith("user-1");
+    expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
+  });
+
+  it("clears nothing for a signed-out caller or one with no camp access", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
+    expect((await markAllNotificationsReadAction()).ok).toBe(false);
+
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: "a" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(false);
+    expect((await markAllNotificationsReadAction()).ok).toBe(false);
+
+    expect(markAllRead).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed clear rather than throwing past the contract", async () => {
+    vi.mocked(markAllRead).mockRejectedValue(new Error("connection reset"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await markAllNotificationsReadAction()).ok).toBe(false);
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+});
+
+describe("fetchNotificationPanelAction", () => {
+  beforeEach(() => {
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-1",
+      primaryEmail: "m@example.com",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ id: "user-1" } as never);
+    vi.mocked(listInbox).mockResolvedValue({
+      items: [{ id: "n1" }],
+      nextCursor: null,
+    } as never);
+    vi.mocked(getPendingQuestionnaires).mockResolvedValue([] as never);
+    vi.mocked(unreadClearableCount).mockResolvedValue(0);
+  });
+
+  // The panel shows six rows at most, so the unread total cannot be counted
+  // off the rows it fetched: it is read separately, for the signed-in member.
+  it("reads the unread total separately from the six rows it shows", async () => {
+    vi.mocked(unreadClearableCount).mockResolvedValue(12);
+
+    const result = await fetchNotificationPanelAction();
+
+    expect(result).toEqual({
+      ok: true,
+      data: { recent: [{ id: "n1" }], pending: [], clearable: 12 },
+    });
+    // The id comes from the session, never from the caller.
+    expect(unreadClearableCount).toHaveBeenCalledExactlyOnceWith("user-1");
+    expect(listInbox).toHaveBeenCalledWith("user-1", { limit: 6 });
+  });
+
+  // A read that fails must say so. Handing back empty lists would paint "nothing
+  // was sent to you" over an inbox that could not be read — the opposite of true.
+  it("reports a failed read rather than passing off an empty inbox", async () => {
+    vi.mocked(listInbox).mockRejectedValue(new Error("connection reset"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await fetchNotificationPanelAction();
+
+    expect(result.ok).toBe(false);
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+
+  it("degrades to an empty panel for a caller with no camp inbox to read", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
+    expect(await fetchNotificationPanelAction()).toEqual({
+      ok: true,
+      data: { recent: [], pending: [], clearable: 0 },
+    });
+
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: "a" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(false);
+    expect(await fetchNotificationPanelAction()).toEqual({
+      ok: true,
+      data: { recent: [], pending: [], clearable: 0 },
+    });
+
+    expect(listInbox).not.toHaveBeenCalled();
+    expect(unreadClearableCount).not.toHaveBeenCalled();
   });
 });

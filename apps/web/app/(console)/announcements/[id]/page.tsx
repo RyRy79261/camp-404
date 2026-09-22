@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { MarkdownBody } from "@/components/announcements/markdown-body";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { getAnnouncementForMember, markRead } from "@/lib/notifications";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
@@ -86,9 +87,11 @@ export default async function AnnouncementPage({
 
       <hr className="border-border" />
 
-      <p className="whitespace-pre-wrap text-base leading-relaxed text-foreground [overflow-wrap:anywhere]">
+      {/* The whole message, so the body renders the markdown the captain
+          wrote. Every clipped view of it stays plain (plainPreview). */}
+      <MarkdownBody className="text-foreground">
         {announcement.body}
-      </p>
+      </MarkdownBody>
     </article>
   );
 }

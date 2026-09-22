@@ -6,6 +6,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -16,6 +17,10 @@ import {
   scheduledBroadcastNotification,
   type NotificationKind,
 } from "@camp404/core";
+import {
+  ANNOUNCEMENT_NOTIFICATION_KINDS,
+  type InboxFilter,
+} from "@camp404/types";
 import { deliveryValues } from "./deliveries";
 import { createHttpDb, createPooledDb, withTransaction } from "./index";
 import * as schema from "./schema";
@@ -762,13 +767,31 @@ export function isInboxCursor(value: string): boolean {
 }
 
 /**
+ * The tab's extra WHERE term. `all` adds nothing; drizzle drops an `undefined`
+ * arm of an `and(...)` rather than matching everything on it.
+ */
+function inboxFilterCondition(filter: InboxFilter) {
+  if (filter === "unread") return isNull(schema.notificationDeliveries.readAt);
+  if (filter === "announcements") {
+    return inArray(schema.notificationDeliveries.kind, [
+      ...ANNOUNCEMENT_NOTIFICATION_KINDS,
+    ]);
+  }
+  return undefined;
+}
+
+/**
  * One page of a member's inbox, newest first. Pass the previous page's
  * `nextCursor` as `before` to read further back. An unrecognised cursor reads
  * nothing, rather than restarting from the top.
  */
 export async function listInbox(
   userId: string,
-  options: { before?: string | null; limit?: number } = {},
+  options: {
+    before?: string | null;
+    limit?: number;
+    filter?: InboxFilter;
+  } = {},
 ): Promise<InboxPage> {
   const limit = options.limit ?? INBOX_PAGE_SIZE;
   let olderThan = undefined as ReturnType<typeof sql> | undefined;
@@ -777,6 +800,9 @@ export async function listInbox(
     if (!match) return { items: [], nextCursor: null };
     olderThan = sql`(${schema.notificationDeliveries.createdAt}, ${schema.notificationDeliveries.id}) < (${match[1]}::timestamp, ${match[2]}::uuid)`;
   }
+  // The tab narrows the WHERE, not the page that comes back: filtering a
+  // fetched page would hand back short pages and a cursor that skips rows.
+  const matchesFilter = inboxFilterCondition(options.filter ?? "all");
 
   const db = createHttpDb();
   const rows = await db
@@ -800,7 +826,13 @@ export async function listInbox(
       eq(schema.broadcasts.id, schema.notificationDeliveries.broadcastId),
     )
     .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
-    .where(and(eq(schema.notificationDeliveries.userId, userId), olderThan))
+    .where(
+      and(
+        eq(schema.notificationDeliveries.userId, userId),
+        olderThan,
+        matchesFilter,
+      ),
+    )
     .orderBy(
       desc(schema.notificationDeliveries.createdAt),
       desc(schema.notificationDeliveries.id),
@@ -925,4 +957,59 @@ export async function markRead(userId: string, ids: string[]): Promise<void> {
         isNull(schema.notificationDeliveries.readAt),
       ),
     );
+}
+
+/**
+ * Mark a member's unread deliveries read — the header panel's "Mark all read",
+ * which clears the badge without opening the inbox.
+ *
+ * Same UPDATE as {@link markRead} without the id list, so it is scoped to the
+ * caller's own rows by the very same `user_id` term: it can never touch
+ * another member's inbox. `.returning()` gives the caller the number of rows
+ * it actually cleared, so a second press reports 0 rather than pretending.
+ *
+ * `presentation = 'popup'` rows are LEFT UNREAD on purpose. For a pop-up,
+ * `read_at` is not "the member read this", it is "the member was shown this":
+ * {@link claimPopups} stamps it as it hands the pop-up to the screen, and
+ * {@link countUnseenPopups} counts the ones still owed. Clearing them here
+ * would consume a pop-up the member has never seen — exactly what the note on
+ * {@link markRead} warns against — and a questionnaire release that is meant
+ * to "shout until it's done" would never shout. They stay in the badge until
+ * the poller shows them, which takes seconds; the member loses nothing.
+ * {@link unreadClearableCount} is the same predicate, for the button's state.
+ */
+export async function markAllRead(userId: string): Promise<number> {
+  const db = createHttpDb();
+  const rows = await db
+    .update(schema.notificationDeliveries)
+    .set({ readAt: new Date() })
+    .where(clearableUnread(userId))
+    .returning({ id: schema.notificationDeliveries.id });
+  return rows.length;
+}
+
+/**
+ * The rows {@link markAllRead} would clear: a member's unread deliveries bar
+ * the pop-ups it deliberately leaves for the pop-up poller to show.
+ */
+function clearableUnread(userId: string) {
+  return and(
+    eq(schema.notificationDeliveries.userId, userId),
+    isNull(schema.notificationDeliveries.readAt),
+    ne(schema.notificationDeliveries.presentation, "popup"),
+  );
+}
+
+/**
+ * How many rows "Mark all read" would actually clear. The badge's
+ * {@link countUnread} is wider — it counts unshown pop-ups too — so the button
+ * asks this instead, or it would offer to clear a badge it cannot clear.
+ */
+export async function unreadClearableCount(userId: string): Promise<number> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.notificationDeliveries)
+    .where(clearableUnread(userId));
+  return row?.count ?? 0;
 }

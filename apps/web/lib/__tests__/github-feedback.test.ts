@@ -8,7 +8,11 @@ import {
 
 describe("labelsFor", () => {
   it("maps kind to the taxonomy's type, triage and source labels", () => {
-    expect(labelsFor("bug")).toEqual(["type: bug", "needs-triage", "source: in-app"]);
+    expect(labelsFor("bug")).toEqual([
+      "type: bug",
+      "needs-triage",
+      "source: in-app",
+    ]);
     expect(labelsFor("feature")).toEqual([
       "type: feature",
       "needs-triage",
@@ -21,13 +25,18 @@ describe("buildFeedbackIssue", () => {
   it("derives the title from the first line and embeds the opaque reporter ref + route", () => {
     const issue = buildFeedbackIssue({
       kind: "bug",
-      description: "Publish button does nothing\nSteps: tap publish, nothing happens",
+      description:
+        "Publish button does nothing\nSteps: tap publish, nothing happens",
       dictated: false,
       reporterRef: "camp-user-123",
       route: "/captains/announcements",
     });
     expect(issue.title).toBe("Publish button does nothing");
-    expect(issue.labels).toEqual(["type: bug", "needs-triage", "source: in-app"]);
+    expect(issue.labels).toEqual([
+      "type: bug",
+      "needs-triage",
+      "source: in-app",
+    ]);
     expect(issue.body).toContain("Publish button does nothing");
     expect(issue.body).toContain("camp-user-123");
     expect(issue.body).toContain("/captains/announcements");
@@ -269,7 +278,9 @@ describe("buildFeedbackIssue", () => {
     expect(start).toBeGreaterThan(issue.body.indexOf(UNTRUSTED_BEGIN));
     expect(start).toBeLessThan(issue.body.indexOf(UNTRUSTED_END));
     expect(issue.body).toContain("Browser: Firefox");
-    expect(issue.body).toContain("window.error: failed for [email] (at /profile)");
+    expect(issue.body).toContain(
+      "window.error: failed for [email] (at /profile)",
+    );
     expect(issue.body).not.toContain("jane@example.com");
   });
 

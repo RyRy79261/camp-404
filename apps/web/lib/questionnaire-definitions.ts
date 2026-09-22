@@ -24,6 +24,10 @@ import {
   updateDefinitionRow,
 } from "@camp404/db/questionnaire-definitions";
 import { listOpenSendBlocking as dbListOpenSendBlocking } from "@camp404/db/questionnaire-lifecycle";
+import {
+  listOpenSendGates as dbListOpenSendGates,
+  type OpenSendGateRow,
+} from "@camp404/db/questionnaire-results";
 import { BURNER_PROFILE_TEMPLATE, readStoredDefinition } from "./questionnaire";
 import { usesTestStore } from "./test-mode";
 
@@ -225,4 +229,18 @@ export async function listDefinitionsForViewer(viewer: {
 export async function listOpenSendBlocking(): Promise<Map<string, boolean>> {
   if (usesTestStore()) return new Map();
   return dbListOpenSendBlocking();
+}
+
+/**
+ * Every open send's gates, one row per gate — what the Overview turns into
+ * "answered out of reached" through @camp404/core's `tallyActivationCompletion`.
+ *
+ * Empty in E2E, where no sends are modelled. An empty list reads as "no
+ * questionnaire is open", which would be a claim the test store cannot make, so
+ * the panel that renders this withholds itself under the test store instead of
+ * printing zeroes (see the Overview's captain panels).
+ */
+export async function listOpenSendGates(): Promise<OpenSendGateRow[]> {
+  if (usesTestStore()) return [];
+  return dbListOpenSendGates();
 }

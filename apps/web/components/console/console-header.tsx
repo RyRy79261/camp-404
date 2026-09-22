@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Bell, LogOut, Tent, UserRound } from "lucide-react";
+import { LogOut, Tent, UserRound } from "lucide-react";
 import { deriveViewerRank } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { SignOutLink } from "@/components/auth/sign-out-link";
+import { NotificationPanel } from "@/components/notifications/notification-panel";
 import { rankLabel } from "@/lib/camp-roster";
 import { consoleNavFor } from "@/lib/console-nav";
 import { countUnread } from "@/lib/notifications";
@@ -21,6 +22,12 @@ import { ConsoleNav } from "./console-nav";
  *
  * The nav is filtered here, on the server, so the client never learns a
  * destination exists that the viewer's rank cannot open.
+ *
+ * The bell opens the notification panel rather than jumping to the inbox
+ * (AfrikaBurn's console header). The badge is still read here, on the server,
+ * so it is right before anyone touches it; the panel fetches its own rows AND
+ * its own unread total when it opens, so nothing it shows or offers is a stale
+ * copy of this render.
  */
 export async function ConsoleHeader({
   campUser,
@@ -39,8 +46,6 @@ export async function ConsoleHeader({
   const count = unread + pending.length;
   const viewerRank = deriveViewerRank(campUser.rank, lead);
   const navItems = consoleNavFor(viewerRank);
-  const bellLabel =
-    count > 0 ? `Notifications, ${count} unread` : "Notifications, none unread";
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -72,21 +77,7 @@ export async function ConsoleHeader({
                 {rankLabel(campUser.rank, lead)}
               </Badge>
             </div>
-            <Link
-              href="/notifications"
-              aria-label={bellLabel}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              <Bell className="h-5 w-5" aria-hidden />
-              {count > 0 ? (
-                <span
-                  aria-hidden
-                  className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground"
-                >
-                  {count > 99 ? "99+" : count}
-                </span>
-              ) : null}
-            </Link>
+            <NotificationPanel count={count} />
             <Button variant="ghost" size="sm" asChild>
               <Link href="/profile" aria-label="Your account">
                 <UserRound className="h-4 w-4" aria-hidden />

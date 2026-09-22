@@ -6,6 +6,8 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@camp404/ui/components/button";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
+import { PasswordInput } from "@camp404/ui/components/password-input";
+import { PASSWORD_MIN_LENGTH } from "@camp404/ui/lib/form-logic";
 import { authClient } from "@/lib/auth-client";
 
 /**
@@ -33,6 +35,14 @@ export function SignUpForm() {
     }
     if (!password) {
       setError("Password is required");
+      return;
+    }
+    // The meter under the field says "use at least N characters". This is what
+    // makes that a rule the form keeps rather than advice it ignores. It is a
+    // BROWSER-side rule only — see PASSWORD_MIN_LENGTH's [UNRESOLVED] note:
+    // the hosted auth service's own floor is lower and is not set from here.
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
       return;
     }
     if (password !== confirmPassword) {
@@ -105,25 +115,31 @@ export function SignUpForm() {
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="signup-password">Password</Label>
-        <Input
+        <PasswordInput
           id="signup-password"
-          type="password"
-          placeholder="••••••••"
+          placeholder="A sentence you'll remember"
           autoComplete="new-password"
+          minLength={PASSWORD_MIN_LENGTH}
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={loading}
         />
+        <p className="text-xs text-muted-foreground">
+          At least {PASSWORD_MIN_LENGTH} characters — passphrases welcome, and
+          you can paste from a password manager.
+        </p>
       </div>
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="signup-confirm-password">Confirm password</Label>
-        <Input
+        {/* AfrikaBurn has no confirm field; Camp 404 does, and keeps it. No
+            second meter on it — it scores a copy of what is already scored. */}
+        <PasswordInput
           id="signup-confirm-password"
-          type="password"
           placeholder="••••••••"
           autoComplete="new-password"
+          hideStrength
           required
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}

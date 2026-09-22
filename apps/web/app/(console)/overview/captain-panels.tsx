@@ -1,3 +1,4 @@
+import { cache } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { listAuditLog } from "@camp404/db/audit";
@@ -9,92 +10,116 @@ import {
 } from "@camp404/ui/components/card";
 import { auditEntry } from "@/lib/audit-format";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
-import { deriveRosterStats, toRosterRow } from "@/lib/camp-roster";
-import { listOpenSendBlocking } from "@/lib/questionnaire-definitions";
-import { getCampManagementRoster } from "@/lib/roster";
+import { toRosterRow } from "@/lib/camp-roster";
+import {
+  listOpenSendBlocking,
+  listOpenSendGates,
+} from "@/lib/questionnaire-definitions";
+import { getCampManagementRoster, getTeamCoverage } from "@/lib/roster";
 import { usesTestStore } from "@/lib/test-mode";
+import {
+  deriveKpis,
+  deriveReadinessFunnel,
+  deriveSendCompletion,
+  deriveTeamCoverage,
+} from "./readiness";
+import {
+  KpiCards,
+  ReadinessFunnelCard,
+  SendCompletionCard,
+  TeamCoverageCard,
+} from "./status-board";
 
-// The captain-only panels of the Overview (the AfrikaBurn console's KPI cards
-// and activity feed). Server components that read their own data; the page
-// renders them only for a captain, and every number is a real query result.
+// The captain-only panels of the Overview (the AfrikaBurn console's status
+// board: KPI cards, the funnel, the coverage rails, the activity feed). Server
+// components that read their own data; the page renders them only for a
+// captain, and every number is a real query result — or says it is not
+// available here, which is the one thing a number must never quietly stand in
+// for.
 
-interface Kpi {
-  label: string;
-  value: number;
-  hint: string;
-  href: string;
-}
+/**
+ * The camp's team config, read once per request.
+ *
+ * Both captain panels need the team labels, and they render on the same page in
+ * the same pass — two `camp_settings` selects on the stateless HTTP driver for
+ * one JSONB row that cannot change mid-render. Scoped to this module on purpose
+ * rather than applied to `getTeamsConfig` itself: `cache` lives for the whole
+ * request, which would hand a camp-settings server action its own pre-mutation
+ * config on the re-render that follows it. Nothing on the Overview mutates it.
+ */
+const overviewTeamsConfig = cache(getTeamsConfig);
 
-export async function CaptainKpis() {
-  const [members, openSends] = await Promise.all([
+/**
+ * The whole captain status board: the four KPI cards, the readiness funnel and
+ * the two coverage rails.
+ *
+ * One component because the funnel and the KPI cards are the SAME roster read —
+ * the counts would be a lie if the two halves of the page could disagree, and a
+ * second `getCampManagementRoster()` on one render would be a second answer.
+ */
+export async function CaptainStatusBoard() {
+  // Five independent reads, issued together. The two send reads are the ones
+  // the test store cannot answer, and they answer empty there.
+  const [members, openSends, coverage, teamsConfig, gates] = await Promise.all([
     getCampManagementRoster(),
     listOpenSendBlocking(),
+    getTeamCoverage(),
+    overviewTeamsConfig(),
+    listOpenSendGates(),
   ]);
-  const stats = deriveRosterStats(members.map(toRosterRow));
-  const approved = members.filter((m) => m.approvalStatus === "approved");
-  const duesPaid = approved.filter((m) => m.duesPaid).length;
-
-  const kpis: Kpi[] = [
-    {
-      label: "Members",
-      value: stats.approved,
-      hint: `${stats.captains} captain${stats.captains === 1 ? "" : "s"}`,
-      href: "/captains/camp-management",
-    },
-    {
-      label: "Awaiting approval",
-      value: stats.pending,
-      hint:
-        stats.pending === 0 ? "Nobody waiting" : "Open the roster to decide",
-      href: "/captains/camp-management",
-    },
-    {
-      label: "Dues paid",
-      value: duesPaid,
-      hint: `of ${approved.length} approved`,
-      href: "/captains/payments",
-    },
-    {
-      label: "Open sends",
-      value: openSends.size,
-      hint:
-        openSends.size === 0
-          ? "No questionnaire is open"
-          : "Questionnaires collecting answers",
-      href: "/captains/questionnaires",
-    },
-  ];
+  const rows = members.map(toRosterRow);
+  // The test store models no payments ledger and no required_actions, so those
+  // two rungs of the ladder are unknown there rather than zero — the same
+  // guard RecentActivity makes for the audit trail it also cannot read.
+  const readable = !usesTestStore();
+  const funnel = deriveReadinessFunnel(rows, {
+    dues: readable,
+    actions: readable,
+  });
+  // The WHOLE configured list, archived entries included: `deriveTeamCoverage`
+  // drops an archived team nobody is on and keeps one that still has members,
+  // under the label the captain gave it.
+  const teams = deriveTeamCoverage(coverage, teamsConfig.teams);
+  const sends = deriveSendCompletion(gates);
+  // The same two unknowns the funnel and the completion card respect, said in
+  // the KPI row's own shape: no open-send list and no ledger to read means
+  // those two cards have no figure, not a figure of 0.
+  const kpis = deriveKpis(rows, readable ? openSends.size : null, {
+    dues: readable,
+  });
 
   return (
-    <section
-      aria-label="Camp at a glance"
-      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-    >
-      {kpis.map((kpi) => (
-        <Link key={kpi.label} href={kpi.href} className="group">
-          <Card className="h-full transition-colors group-hover:border-accent/60">
-            <CardContent className="flex flex-col gap-1 p-5">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {kpi.label}
-              </span>
-              <span className="text-3xl font-bold tabular-nums">
-                {kpi.value}
-              </span>
-              <span className="text-xs text-muted-foreground">{kpi.hint}</span>
-            </CardContent>
-          </Card>
-        </Link>
-      ))}
-    </section>
+    <>
+      <KpiCards kpis={kpis} />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ReadinessFunnelCard funnel={funnel} />
+        </div>
+        <div className="flex flex-col gap-4">
+          <TeamCoverageCard rows={teams} />
+          {/* No send is modelled in the test store, so "no questionnaires are
+              open" would be this panel's only possible sentence there, true or
+              not. It withholds itself instead. */}
+          {readable && <SendCompletionCard sends={sends} />}
+        </div>
+      </div>
+    </>
   );
 }
 
+/**
+ * The last handful of audit rows, in plain sentences — the console's "what has
+ * been happening" panel, and the way into the full audit log.
+ *
+ * It renders NOTHING rather than an empty card where there is no audit trail to
+ * read (the E2E test store keeps none): "Nothing recorded yet" would be a claim
+ * about the camp, not about the store.
+ */
 export async function RecentActivity() {
-  // The E2E test store keeps no audit trail.
   if (usesTestStore()) return null;
   const [page, teams] = await Promise.all([
     listAuditLog({ limit: 6 }),
-    getTeamsConfig(),
+    overviewTeamsConfig(),
   ]);
   const labels = teamLabelMap(teams);
   const now = new Date();

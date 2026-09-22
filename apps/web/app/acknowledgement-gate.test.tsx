@@ -66,6 +66,30 @@ describe("AcknowledgementGate — board S22", () => {
     await waitFor(() => expect(document.body.style.overflow).toBe("hidden"));
   });
 
+  it("renders the captain's markdown, and the words before the renderer lands", async () => {
+    // The renderer is lazy — it is not in the root layout's chunk — so the
+    // takeover paints before it arrives. A member being asked to acknowledge
+    // something must read the message in both frames: plain first, rendered
+    // once the chunk is in.
+    fetchMock.mockResolvedValue(
+      ok({
+        pending: [
+          { ...ITEM, body: "**Gates** open at sundown.\nBring water." },
+        ],
+      }),
+    );
+    render(<AcknowledgementGate />);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("Gates open at sundown.");
+    expect(dialog.textContent).toContain("Bring water.");
+    await waitFor(() =>
+      expect(dialog.querySelector("strong")?.textContent).toBe("Gates"),
+    );
+    // The newline a captain typed survives the render, as it did when this
+    // card was whitespace-pre-wrap.
+    expect(dialog.querySelectorAll("br")).toHaveLength(1);
+  });
+
   it("POSTs the acknowledgement and refreshes server components", async () => {
     fetchMock.mockResolvedValue(ok({ pending: [ITEM] }));
     render(<AcknowledgementGate />);

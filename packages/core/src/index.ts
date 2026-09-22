@@ -21,6 +21,8 @@
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
 //     (./invites)
 //   - text utils: initialsFrom, slugify, humanizeKey (./text-utils)
+//   - markdown → plain text: plainPreview — the strip every plain-text
+//     boundary shares (push, email, Telegram, clipped rows) (./markdown-text)
 //   - text redaction: redactPii, sanitizeReportText (both return a
 //     RedactionResult: the text and the RedactionKind[] found),
 //     describeRedactions, redactSecrets + SECRET_ENV_KEYS (./text-redaction)
@@ -90,6 +92,7 @@ export * from "./approval-review";
 export * from "./family-tree";
 export * from "./invites";
 export * from "./text-utils";
+export * from "./markdown-text";
 export * from "./text-redaction";
 export * from "./report-screen";
 export * from "./github-labels";
