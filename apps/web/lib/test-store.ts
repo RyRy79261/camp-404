@@ -986,17 +986,33 @@ export const testStore = {
       }
     }
   },
-  /** Production's markAllRead: the caller's unread rows only, count returned. */
+  /**
+   * Production's markAllRead: the caller's unread rows only, count returned —
+   * and, like production, it leaves `presentation === "popup"` rows unread,
+   * because for a pop-up `readAt` is the "was shown" mark that claimPopups
+   * stamps, not a "was read" one.
+   */
   markAllRead(userId: string): number {
     const now = new Date();
     let cleared = 0;
     for (const d of deliveries) {
-      if (d.userId === userId && d.readAt === null) {
+      if (
+        d.userId === userId &&
+        d.readAt === null &&
+        d.presentation !== "popup"
+      ) {
         d.readAt = now;
         cleared += 1;
       }
     }
     return cleared;
+  },
+  /** Production's unreadClearableCount: what markAllRead would clear. */
+  unreadClearableCount(userId: string): number {
+    return deliveries.filter(
+      (d) =>
+        d.userId === userId && d.readAt === null && d.presentation !== "popup",
+    ).length;
   },
 
   // --- Team memberships (mirrors @camp404/db/team-memberships) -------------

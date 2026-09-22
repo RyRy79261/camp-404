@@ -138,4 +138,25 @@ describe("testStore.markAllRead — the db's UPDATE, mirrored", () => {
     // A second press has nothing left to clear and says so.
     expect(testStore.markAllRead(member.id)).toBe(0);
   });
+
+  it("leaves a pop-up the member has not been shown, exactly as the db does", () => {
+    const { captain, member } = seed();
+    announce(captain.id, "Gates open at noon");
+    // A "make captain" request is delivered as a pop-up; `readAt` on it is the
+    // "was shown" mark claimPopups stamps, so mark-all must not consume it.
+    testStore.sendCaptainPromotion({
+      targetUserId: member.id,
+      requestedByUserId: captain.id,
+    });
+
+    expect(testStore.countUnread(member.id)).toBe(2);
+    expect(testStore.unreadClearableCount(member.id)).toBe(1);
+    expect(testStore.markAllRead(member.id)).toBe(1);
+
+    // The pop-up is still owed and still claimable.
+    expect(testStore.countUnseenPopups(member.id)).toBe(1);
+    expect(testStore.claimPopups(member.id)).toHaveLength(1);
+    expect(testStore.countUnseenPopups(member.id)).toBe(0);
+    expect(testStore.countUnread(member.id)).toBe(0);
+  });
 });

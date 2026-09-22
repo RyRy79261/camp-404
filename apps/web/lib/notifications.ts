@@ -16,6 +16,7 @@ import {
   markAllRead as dbMarkAllRead,
   markRead as dbMarkRead,
   publishAnnouncement as dbPublish,
+  unreadClearableCount as dbUnreadClearableCount,
   updateAnnouncementDraft as dbUpdateDraft,
   type AnnouncementPresentation,
   type AnnouncementReading,
@@ -60,6 +61,7 @@ interface NotificationsBackend {
   ): Promise<InboxPage>;
   markRead(userId: string, ids: string[]): Promise<void>;
   markAllRead(userId: string): Promise<number>;
+  unreadClearableCount(userId: string): Promise<number>;
   getAnnouncementForMember(
     userId: string,
     broadcastId: string,
@@ -110,6 +112,7 @@ const realBackend: NotificationsBackend = {
   listInbox: dbListInbox,
   markRead: dbMarkRead,
   markAllRead: dbMarkAllRead,
+  unreadClearableCount: dbUnreadClearableCount,
   getAnnouncementForMember: dbGetAnnouncementForMember,
   getPendingAcknowledgements: dbGetPending,
   countUnseenPopups: dbCountUnseenPopups,
@@ -136,6 +139,9 @@ const testBackend: NotificationsBackend = {
   },
   async markAllRead(userId) {
     return testStore.markAllRead(userId);
+  },
+  async unreadClearableCount(userId) {
+    return testStore.unreadClearableCount(userId);
   },
   async getAnnouncementForMember(userId, broadcastId) {
     return testStore.getAnnouncementForMember(userId, broadcastId);
@@ -201,6 +207,14 @@ export function markRead(userId: string, ids: string[]): Promise<void> {
  */
 export function markAllRead(userId: string): Promise<number> {
   return backend().markAllRead(userId);
+}
+
+/**
+ * How many deliveries "Mark all read" would actually clear — the badge's count
+ * minus the pop-ups it leaves for the pop-up poller to show.
+ */
+export function unreadClearableCount(userId: string): Promise<number> {
+  return backend().unreadClearableCount(userId);
 }
 
 export function getPendingAcknowledgements(
