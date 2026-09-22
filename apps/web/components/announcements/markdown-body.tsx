@@ -1,5 +1,7 @@
 "use client";
 
+import { useDeferredValue } from "react";
+import { Eye } from "lucide-react";
 import Markdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import type { Options as SanitizeSchema } from "rehype-sanitize";
@@ -21,9 +23,14 @@ import { cn } from "@camp404/ui/lib/utils";
 //
 // SAFETY. A captain's markdown is read by every other member, so the renderer
 // is the boundary, not the composer:
-//   - raw HTML never reaches the DOM. react-markdown does not parse it (no
-//     rehype-raw), and the schema below drops what remark leaves behind, so a
-//     <script> or an onerror= shows as the text it was typed as.
+//   - raw HTML never reaches the DOM as markup. `remarkHtmlAsText` turns every
+//     html node remark found back into a text node BEFORE anything can become
+//     an element, so a <script> or an onerror= shows as the characters they
+//     were typed as (React escapes them) — and so does the "<sharps
+//     container>" a captain meant as an aside. Dropping those nodes instead,
+//     which is what an un-plugged react-markdown does, would delete the words
+//     silently on this surface while the email and the push still carried
+//     them. Same reading everywhere is the point.
 //   - the schema is an ALLOW-list built from nothing, not defaultSchema with
 //     holes patched: the tags markdown itself produces, and on them only href,
 //     src, alt and title.
@@ -35,6 +42,86 @@ import { cn } from "@camp404/ui/lib/utils";
 //   - a link keeps only http/https/mailto, or a path on this app. Anything
 //     else (javascript:, data:) loses its href and renders as plain text.
 // `markdown-body.test.tsx` holds each of those to a test.
+//
+// LINE BREAKS. `remarkLineBreaks` makes a single newline a <br>, which is not
+// CommonMark (CommonMark folds it into a space). It has to: every announcement
+// written before this renderer existed was typed as plain text, and the two
+// surfaces below used to be `whitespace-pre-wrap`. Without this, a shift list
+// published last week collapses into one run-on line HERE while the push, the
+// email and the inbox row — which go through `plainPreview`, which keeps its
+// newlines — still show it as a list. The two readings of one body must not
+// disagree. A blank line still starts a new paragraph, as it always did.
+
+/**
+ * Just enough of mdast to walk it. The real types live in `@types/mdast`,
+ * which is react-markdown's own transitive dependency and not ours to import.
+ */
+interface MdNode {
+  type: string;
+  value?: string;
+  children?: MdNode[];
+}
+
+/**
+ * Replace each child of every node, depth first. `fn` returns the node to keep
+ * in its place, or several. The walk descends into what it produced, which is
+ * safe here because both plugins below produce leaves.
+ */
+function replaceChildren(
+  node: MdNode,
+  fn: (child: MdNode, parent: MdNode) => MdNode | MdNode[],
+): void {
+  if (!node.children) return;
+  const next: MdNode[] = [];
+  for (const child of node.children) {
+    const replaced = fn(child, node);
+    if (Array.isArray(replaced)) next.push(...replaced);
+    else next.push(replaced);
+  }
+  node.children = next;
+  for (const child of node.children) replaceChildren(child, fn);
+}
+
+/** The nodes whose children are blocks, not prose. */
+const BLOCK_PARENTS = new Set(["root", "blockquote", "listItem"]);
+
+/**
+ * Raw HTML → the text it was typed as. See SAFETY above: this is what makes
+ * "Bring your own <sharps container>" read the same on this page as in the
+ * email, and it is strictly safer than leaving the nodes for rehype (they are
+ * `raw` by then, and only ever dropped or — with rehype-raw, which we do not
+ * use — parsed).
+ */
+function remarkHtmlAsText() {
+  return (tree: MdNode) => {
+    replaceChildren(tree, (child, parent) => {
+      if (child.type !== "html") return child;
+      const text: MdNode = { type: "text", value: child.value ?? "" };
+      // A block of raw HTML has no paragraph around it; give it one, or its
+      // words land loose beside the prose with no spacing of their own.
+      return BLOCK_PARENTS.has(parent.type)
+        ? { type: "paragraph", children: [text] }
+        : text;
+    });
+  };
+}
+
+/** A single newline → a hard break. See LINE BREAKS above. */
+function remarkLineBreaks() {
+  return (tree: MdNode) => {
+    replaceChildren(tree, (child, parent) => {
+      if (child.type !== "text" || BLOCK_PARENTS.has(parent.type)) return child;
+      const value = child.value ?? "";
+      if (!value.includes("\n")) return child;
+      const pieces: MdNode[] = [];
+      value.split("\n").forEach((line, i) => {
+        if (i > 0) pieces.push({ type: "break" });
+        if (line !== "") pieces.push({ type: "text", value: line });
+      });
+      return pieces;
+    });
+  };
+}
 
 /**
  * The tags markdown can produce, and nothing else. Anything outside the list
@@ -46,7 +133,6 @@ const ANNOUNCEMENT_SCHEMA: SanitizeSchema = {
     "br",
     "strong",
     "em",
-    "del",
     "code",
     "pre",
     "blockquote",
@@ -76,7 +162,11 @@ const ANNOUNCEMENT_SCHEMA: SanitizeSchema = {
   // cannot collide with (or overwrite) an element the page owns.
   clobber: ["id", "name"],
   clobberPrefix: "announcement-body",
-  // Dropped with their contents: what is inside them is not prose.
+  // Belt and braces, and today it cannot fire: `remarkHtmlAsText` has already
+  // turned every html node into text, so no <script> or <style> element ever
+  // reaches this schema. It stays for the day someone adds a plugin that
+  // produces one — a member who typed `<script>` reads it as the characters
+  // they typed, which is what the email and the push show them too.
   strip: ["script", "style"],
   ancestors: { li: ["ul", "ol"] },
 };
@@ -135,6 +225,7 @@ export function MarkdownBody({ children, className }: MarkdownBodyProps) {
   return (
     <div className={cn(PROSE, className)}>
       <Markdown
+        remarkPlugins={[remarkHtmlAsText, remarkLineBreaks]}
         rehypePlugins={[[rehypeSanitize, ANNOUNCEMENT_SCHEMA]]}
         urlTransform={announcementUrl}
         components={{
@@ -175,6 +266,53 @@ export function MarkdownBody({ children, className }: MarkdownBodyProps) {
       >
         {children}
       </Markdown>
+    </div>
+  );
+}
+
+/**
+ * What a composer tells the captain, and what it shows them. Both composers
+ * that write an announcement body use these — the announcements page and the
+ * year-rollover panel — so neither can end up asking for markdown without
+ * saying so, or saying so without showing the result.
+ */
+export const MARKDOWN_HINT =
+  "Markdown supported — headings, bold, italic, links, lists.";
+
+/** The hint line under a body field's label. Point the field's
+ * `aria-describedby` at the same `id`, or a captain using a screen reader is
+ * the one person not told. */
+export function MarkdownHint({ id }: { id: string }) {
+  return (
+    <p id={id} className="text-xs text-muted-foreground">
+      {MARKDOWN_HINT}
+    </p>
+  );
+}
+
+/**
+ * The composer's live preview: the body as a member will read it, through the
+ * very renderer they get. Mirrors AfrikaBurn's compose preview, which shows
+ * the bulletin the way its recipients see it.
+ *
+ * Both composers stay a plain Textarea deliberately — a rich-text editor would
+ * take the dictation pill's append point away from the announcements one — so
+ * this is where a captain checks that what they typed became what they meant.
+ *
+ * `useDeferredValue` keeps the parse off the keystroke: React renders the
+ * typed character first and re-renders the preview from the settled value, so
+ * a 5000-character body cannot make the textarea stutter.
+ */
+export function MarkdownPreview({ body }: { body: string }) {
+  const settled = useDeferredValue(body);
+  if (settled.trim() === "") return null;
+  return (
+    <div className="mt-1 flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
+      <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+        <Eye className="h-3 w-3" aria-hidden />
+        Preview
+      </p>
+      <MarkdownBody className="text-sm">{settled}</MarkdownBody>
     </div>
   );
 }

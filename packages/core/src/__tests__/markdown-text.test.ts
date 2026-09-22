@@ -19,11 +19,31 @@ describe("plainPreview — the whole body (no max)", () => {
     expect(plainPreview("###### Deep\n")).toBe("Deep");
   });
 
-  it("unwraps bold, italic and strikethrough", () => {
-    expect(plainPreview("**Water** is *not* provided, ~~yet~~.")).toBe(
-      "Water is not provided, yet.",
+  it("unwraps bold and italic", () => {
+    expect(plainPreview("**Water** is *not* provided.")).toBe(
+      "Water is not provided.",
     );
     expect(plainPreview("__Shifts__ are locked.")).toBe("Shifts are locked.");
+  });
+
+  it("leaves ~~strikethrough~~ alone, because the renderer does", () => {
+    // GFM is not switched on (no remark-gfm), so the announcement page shows
+    // those tildes. Stripping them here would have the push say the bar is
+    // "closed open" while the page says "~~closed~~ open".
+    expect(plainPreview("Bar is ~~closed~~ open from 18:00.")).toBe(
+      "Bar is ~~closed~~ open from 18:00.",
+    );
+  });
+
+  it("drops the underline of a setext heading", () => {
+    // The renderer reads this as a heading; the row of punctuation must not
+    // reach a lock screen.
+    expect(plainPreview("Burn night\n=========\n\nMeet at the effigy.")).toBe(
+      "Burn night\n\nMeet at the effigy.",
+    );
+    expect(plainPreview("Shifts\n---\n\nJo at 20:00.")).toBe(
+      "Shifts\n\nJo at 20:00.",
+    );
   });
 
   it("leaves underscores that belong to a word", () => {

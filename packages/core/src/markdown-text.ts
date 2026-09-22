@@ -25,6 +25,13 @@
 // Line-anchored patterns below all use `[ \t]`, never `\s`: with the `m` flag
 // `^\s*` happily eats the blank line BEFORE it, which silently welded a
 // captain's paragraphs together.
+//
+// IT STRIPS COMMONMARK, AND ONLY COMMONMARK — the same dialect the renderer
+// parses (react-markdown with no remark-gfm). So `~~closed~~` is NOT stripped:
+// the announcement page shows those tildes, and a push that quietly deleted
+// them would make the two channels say different things about the bar. If GFM
+// is ever switched on in the renderer, the strikethrough rule belongs back
+// here in the same change.
 
 /** The characters markdown lets a `\` escape. */
 const ESCAPED = /\\([\\`*_{}[\]()#+\-.!>~|])/g;
@@ -47,6 +54,16 @@ const THEMATIC_BREAK =
   /^[ \t]{0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/gm;
 
 /**
+ * A setext heading: a line of words with a row of `=` or `-` under it. The
+ * renderer turns it into a heading, so the row of punctuation has to go here
+ * too, or a push notification reads "Burn night ========". Runs BEFORE
+ * THEMATIC_BREAK, which is what CommonMark does: an underline wins over a
+ * rule when there are words above it.
+ */
+const SETEXT_HEADING =
+  /^(?=[ \t]{0,3}\S)([^\n]+)\n[ \t]{0,3}(?:=+|-+)[ \t]*$/gm;
+
+/**
  * Applied in order. Block markers first (they are anchored to line starts and
  * would be disturbed by inline edits), then links before emphasis so that
  * `[**Water**](…)` loses the link and then the bold.
@@ -59,13 +76,13 @@ const RULES: readonly [RegExp, string][] = [
   [/\[([^\]]*)\]\[[^\]]*\]/g, "$1"], // reference link → its text
   [/^[ \t]{0,3}\[[^\]]+\]:[ \t]*\S+[^\n]*$/gm, ""], // reference definition
   [/<((?:https?|mailto):[^>\s]+)>/g, "$1"], // autolink → the bare URL
+  [SETEXT_HEADING, "$1"],
   [THEMATIC_BREAK, ""],
   [/^[ \t]{0,3}#{1,6}(?:[ \t]+|[ \t]*$)/gm, ""], // ATX heading marker
   [/^(?:[ \t]{0,3}>[ \t]?)+/gm, ""], // block quote markers, however nested
   [/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm, ""], // list bullets and numbers
   [/\*\*(?=\S)([\s\S]*?\S)\*\*/g, "$1"], // **bold**
   [/__(?=\S)([\s\S]*?\S)__/g, "$1"], // __bold__
-  [/~~(?=\S)([\s\S]*?\S)~~/g, "$1"], // ~~strikethrough~~
   [/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?!\w)/g, "$1$2"], // *italic*
   // `_italic_` only when the underscores stand alone: `activation_id` and
   // `camp_404_rules` keep theirs, because a member reading a key needs it.
@@ -83,9 +100,14 @@ const RULES: readonly [RegExp, string][] = [
  * the result is squashed onto one line and cut to that many characters, with
  * an ellipsis when anything was dropped — the shape a clipped row wants.
  *
- * Text that is already plain comes back unchanged apart from whitespace
- * tidying, so it is safe to apply to every notification body, not only the
- * ones a captain wrote in markdown.
+ * Safe to apply to EVERY notification body, not only the ones a captain wrote
+ * in markdown — but "safe" is not "unchanged". Prose with no markers comes
+ * back as it went in, apart from whitespace tidying; text that merely looks
+ * like markdown ("1. Setup" on its own line, `_pending_`) loses those markers.
+ * That is the point rather than a cost: the same body is parsed as markdown by
+ * the renderer, so the page shows it as a list or an italic too, and the two
+ * readings agree. What must never diverge is this function and
+ * `apps/web/components/announcements/markdown-body.tsx`.
  */
 export function plainPreview(markdown: string, max?: number): string {
   const parked = markdown
