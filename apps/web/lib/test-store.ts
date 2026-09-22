@@ -123,10 +123,12 @@ interface TestBroadcast {
   presentation: TestPresentation;
   audience: Audience;
   publishedAt: Date | null;
-  /** The pin mark. NULL = not pinned; on a draft it is inert until published. */
+  /** The pin mark. NULL = not pinned; only a published row ever carries one. */
   pinnedAt: Date | null;
   /** Who set the mark — their rank breaks a tie in the banner's order. */
   pinnedBy: string | null;
+  /** The composer's "keep it at the top", spent when the draft publishes. */
+  pinOnPublish: boolean;
   createdAt: Date;
 }
 
@@ -652,8 +654,9 @@ export const testStore = {
       presentation: input.presentation,
       audience: input.audience ?? { scope: "everyone" },
       publishedAt: null,
-      pinnedAt: input.pinned ? new Date() : null,
-      pinnedBy: input.pinned ? input.senderId : null,
+      pinnedAt: null,
+      pinnedBy: null,
+      pinOnPublish: input.pinned === true,
       createdAt: new Date(),
     };
     broadcasts.push(row);
@@ -679,9 +682,9 @@ export const testStore = {
     row.body = input.body;
     row.presentation = input.presentation;
     row.audience = input.audience ?? { scope: "everyone" };
-    row.pinnedAt = input.pinned ? (row.pinnedAt ?? new Date()) : null;
-    row.pinnedBy =
-      row.pinnedAt === null ? null : (row.pinnedBy ?? input.senderId);
+    // A draft records the intent only. The real pin is set when it publishes,
+    // through the same audited path a later Pin press uses.
+    row.pinOnPublish = input.pinned === true;
     return true;
   },
   deleteBroadcastDraft(input: { id: string; senderId: string }): boolean {
@@ -711,6 +714,11 @@ export const testStore = {
       return { ok: false, error: testStore.explainDraftRefusal(input) };
     }
     row.publishedAt = new Date();
+    if (row.pinOnPublish) {
+      row.pinnedAt = new Date();
+      row.pinnedBy = input.senderId;
+      row.pinOnPublish = false;
+    }
     const recipients = testStore.announcementRecipients(
       input.senderId,
       row.audience,

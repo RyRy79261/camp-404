@@ -1,0 +1,1 @@
+ALTER TABLE "broadcasts" ADD COLUMN "pin_on_publish" boolean DEFAULT false NOT NULL;

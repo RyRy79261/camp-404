@@ -253,6 +253,13 @@
       "when": 1790103336212,
       "tag": "0035_announcement_pins",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790107769342,
+      "tag": "0036_announcement_pin_intent",
+      "breakpoints": true
     }
   ]
 }

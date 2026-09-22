@@ -4,6 +4,7 @@ import { useTestDb } from "./_harness";
 import { makeMembership, makeUser } from "./_factories";
 import {
   createAnnouncementDraft,
+  updateAnnouncementDraft,
   listAnnouncements,
   listPinnedForUser,
   PIN_ALREADY,
@@ -386,5 +387,99 @@ describe("announcement pins — who may set one", () => {
     ).toEqual({ ok: false, error: PIN_ALREADY });
     // One act, one receipt.
     expect(await auditRows(db, id)).toHaveLength(1);
+  });
+});
+
+describe("announcement pins — the composer's mark", () => {
+  const ctx = useTestDb();
+
+  /** The pin columns as the table holds them. */
+  async function pinRow(db: DB, id: string) {
+    const [row] = await db
+      .select({
+        pinnedAt: schema.broadcasts.pinnedAt,
+        pinnedBy: schema.broadcasts.pinnedBy,
+        pinOnPublish: schema.broadcasts.pinOnPublish,
+      })
+      .from(schema.broadcasts)
+      .where(eq(schema.broadcasts.id, id));
+    return row!;
+  }
+
+  it("a draft records the intent and no pin, however often it is edited", async () => {
+    const db = ctx.db();
+    const captain = await makeUser(db, { rank: "captain" });
+
+    const { id } = await createAnnouncementDraft({
+      senderId: captain.id,
+      ...DRAFT,
+      audience: { scope: "everyone" },
+      pinned: true,
+    });
+    expect(await pinRow(db, id)).toMatchObject({
+      pinnedAt: null,
+      pinnedBy: null,
+      pinOnPublish: true,
+    });
+
+    await updateAnnouncementDraft({
+      id,
+      senderId: captain.id,
+      ...DRAFT,
+      body: "Truck at 10.",
+      pinned: true,
+    });
+    // Still no pin, and nothing to audit: a draft is on nobody's screen.
+    expect(await pinRow(db, id)).toMatchObject({ pinnedAt: null });
+    expect(await auditRows(db, id)).toHaveLength(0);
+  });
+
+  it("publishing spends the intent, writes the pin, and records it", async () => {
+    const db = ctx.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    await makeUser(db, { rank: "member" });
+
+    const { id } = await createAnnouncementDraft({
+      senderId: captain.id,
+      ...DRAFT,
+      audience: { scope: "everyone" },
+      pinned: true,
+    });
+    const before = new Date();
+    expect((await publishAnnouncement({ id, senderId: captain.id })).ok).toBe(
+      true,
+    );
+
+    const row = await pinRow(db, id);
+    expect(row.pinnedBy).toBe(captain.id);
+    expect(row.pinOnPublish).toBe(false);
+    // The pin is stamped when it reaches screens, not when the draft was saved.
+    expect(row.pinnedAt!.getTime()).toBeGreaterThanOrEqual(before.getTime());
+
+    const audit = await auditRows(db, id);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      action: "announcement.pinned",
+      actorId: captain.id,
+    });
+  });
+
+  it("a draft saved without the mark publishes unpinned and unaudited", async () => {
+    const db = ctx.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    await makeUser(db, { rank: "member" });
+
+    const { id } = await createAnnouncementDraft({
+      senderId: captain.id,
+      ...DRAFT,
+      audience: { scope: "everyone" },
+    });
+    await publishAnnouncement({ id, senderId: captain.id });
+
+    expect(await pinRow(db, id)).toMatchObject({
+      pinnedAt: null,
+      pinOnPublish: false,
+    });
+    expect(await auditRows(db, id)).toHaveLength(0);
   });
 });

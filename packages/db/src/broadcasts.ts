@@ -313,11 +313,18 @@ export interface DraftInput {
   pinned?: boolean;
 }
 
-/** The pin columns for a draft carrying (or dropping) the composer's mark. */
-function pinColumns(senderId: string, pinned: boolean | undefined) {
-  return pinned
-    ? { pinnedAt: new Date(), pinnedBy: senderId }
-    : { pinnedAt: null, pinnedBy: null };
+/**
+ * The composer's "keep it at the top", recorded on a DRAFT as an intent.
+ *
+ * A draft must not write `pinned_at`: that column is a pin, and a pin belongs
+ * on every recipient's screen, so it is only ever set through the audited
+ * path (`setAnnouncementPinned`, or `publishAnnouncement` below, which writes
+ * the same audit row). Stamping it here also re-stamped its time on every
+ * later edit, which would have made "newest pin first" mean "most recently
+ * edited draft first".
+ */
+function pinIntentColumns(pinned: boolean | undefined) {
+  return { pinOnPublish: pinned === true };
 }
 
 /** Create a new announcement draft (unpublished). Returns its id. */
@@ -334,7 +341,7 @@ export async function createAnnouncementDraft(
       title: input.title,
       body: input.body,
       presentation: input.presentation,
-      ...pinColumns(input.senderId, input.pinned),
+      ...pinIntentColumns(input.pinned),
     })
     .returning({ id: schema.broadcasts.id });
   return { id: row!.id };
@@ -361,7 +368,7 @@ export async function updateAnnouncementDraft(input: {
       body: input.body,
       presentation: input.presentation,
       ...audienceColumns(input.audience ?? { scope: "everyone" }),
-      ...pinColumns(input.senderId, input.pinned),
+      ...pinIntentColumns(input.pinned),
     })
     .where(isOwnedAnnouncementDraft(input.id, input.senderId))
     .returning({ id: schema.broadcasts.id });
@@ -432,10 +439,33 @@ export async function publishAnnouncement(input: {
         presentation: schema.broadcasts.presentation,
         scope: schema.broadcasts.scope,
         team: schema.broadcasts.team,
+        pinOnPublish: schema.broadcasts.pinOnPublish,
       });
 
     const broadcast = claimed[0];
     if (!broadcast) return null;
+
+    // The composer asked for this one to stay at the top. Turn that intent
+    // into the real pin here, in the claim's own transaction and through the
+    // same audit row a later Pin press writes — a pin reaches every
+    // recipient's screen, so no path to one may go unrecorded. The intent is
+    // cleared as it is spent, so re-publishing cannot pin twice.
+    if (broadcast.pinOnPublish) {
+      await tx
+        .update(schema.broadcasts)
+        .set({
+          pinnedAt: new Date(),
+          pinnedBy: input.senderId,
+          pinOnPublish: false,
+        })
+        .where(eq(schema.broadcasts.id, broadcast.id));
+      await writeAuditEvent(tx, {
+        actorId: input.senderId,
+        action: "announcement.pinned",
+        target: broadcast.id,
+        metadata: { scope: broadcast.scope, team: broadcast.team },
+      });
+    }
 
     // Resolve the draft's own audience via the shared resolver. ON CONFLICT DO
     // NOTHING pairs with the (broadcast_id, user_id) dedupe index so a retry

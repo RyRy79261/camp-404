@@ -1073,17 +1073,22 @@ export const broadcasts = pgTable(
     // whoever may address this broadcast's audience may pin it to that
     // audience. `canSendToAudience` in @camp404/core decides, once.
     //
-    // A pin only ever SHOWS on a published broadcast: the reader-facing query
-    // (`listPinnedForUser`) joins `notification_deliveries`, which only a
-    // published, fanned-out broadcast has, and requires `published_at`. A
-    // draft may carry the mark — it is the composer's "keep it at the top",
-    // recorded before the send — and it stays inert until publishing.
+    // A pin exists only on a PUBLISHED broadcast. A draft carries the
+    // composer's intent instead (`pin_on_publish`), and publishing turns that
+    // intent into a real pin, audited, in the same transaction. Writing
+    // `pinned_at` at draft-save time would have put a pin on every member's
+    // screen through a path that logs nothing, and re-stamped its time on
+    // every later edit, so the newest-first order was the last edit's order.
     pinnedAt: timestamp("pinned_at", { mode: "date" }),
     // Who set the mark. `set null` rather than cascade: losing the captain
     // must not silently unpin the camp's standing notice.
     pinnedBy: uuid("pinned_by").references(() => users.id, {
       onDelete: "set null",
     }),
+    // The composer's "keep it at the top", recorded on the draft. It is an
+    // intent, not a pin: nothing reads it but `publishAnnouncement`, which
+    // clears it as it sets the real pin.
+    pinOnPublish: boolean("pin_on_publish").notNull().default(false),
   },
   (b) => ({
     senderIdx: index("broadcasts_sender_idx").on(b.senderId),
