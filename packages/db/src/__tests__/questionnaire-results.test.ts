@@ -299,7 +299,10 @@ describe("listOpenSendGates — the Overview's completion rail", () => {
       "Camp feedback",
     ]);
     expect(
-      rows.filter((r) => r.activationId === open.id).map((r) => r.status).sort(),
+      rows
+        .filter((r) => r.activationId === open.id)
+        .map((r) => r.status)
+        .sort(),
     ).toEqual(["completed", "pending"]);
     // The closed send is gone entirely — its expired gate is not outstanding
     // work and its send is not open.

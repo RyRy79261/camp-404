@@ -370,7 +370,11 @@ describe("getTeamCoverage", () => {
     const lead = await makeUser(db);
     const cook = await makeUser(db);
     const builder = await makeUser(db);
-    await makeMembership(db, { userId: lead.id, team: "kitchen", isLead: true });
+    await makeMembership(db, {
+      userId: lead.id,
+      team: "kitchen",
+      isLead: true,
+    });
     await makeMembership(db, { userId: cook.id, team: "kitchen" });
     // A member on two teams counts once on each.
     await makeMembership(db, { userId: cook.id, team: "structures" });

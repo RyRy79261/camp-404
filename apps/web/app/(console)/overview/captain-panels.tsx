@@ -1,3 +1,4 @@
+import { cache } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { listAuditLog } from "@camp404/db/audit";
@@ -36,6 +37,18 @@ import {
 // components that read their own data; the page renders them only for a
 // captain, and every number is a real query result.
 
+/**
+ * The camp's team config, read once per request.
+ *
+ * Both captain panels need the team labels, and they render on the same page in
+ * the same pass — two `camp_settings` selects on the stateless HTTP driver for
+ * one JSONB row that cannot change mid-render. Scoped to this module on purpose
+ * rather than applied to `getTeamsConfig` itself: `cache` lives for the whole
+ * request, which would hand a camp-settings server action its own pre-mutation
+ * config on the re-render that follows it. Nothing on the Overview mutates it.
+ */
+const overviewTeamsConfig = cache(getTeamsConfig);
+
 interface Kpi {
   label: string;
   value: number;
@@ -58,7 +71,7 @@ export async function CaptainStatusBoard() {
     getCampManagementRoster(),
     listOpenSendBlocking(),
     getTeamCoverage(),
-    getTeamsConfig(),
+    overviewTeamsConfig(),
     listOpenSendGates(),
   ]);
   const rows = members.map(toRosterRow);
@@ -167,7 +180,7 @@ export async function RecentActivity() {
   if (usesTestStore()) return null;
   const [page, teams] = await Promise.all([
     listAuditLog({ limit: 6 }),
-    getTeamsConfig(),
+    overviewTeamsConfig(),
   ]);
   const labels = teamLabelMap(teams);
   const now = new Date();
