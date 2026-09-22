@@ -97,6 +97,23 @@ describe("auditDetail", () => {
     }
   });
 
+  it("names whose screen a pin was put on, or taken off", () => {
+    // A pin's receipt is about the audience: that is what made the pin
+    // allowed, and what says how far the message carried.
+    expect(auditDetail("announcement.pinned", { scope: "everyone" })).toBe(
+      "The whole camp",
+    );
+    expect(
+      auditDetail(
+        "announcement.unpinned",
+        { scope: "team", team: "kitchen" },
+        teams,
+      ),
+    ).toBe("Kitchen");
+    // A team scope with no team says nothing rather than guessing.
+    expect(auditDetail("announcement.pinned", { scope: "team" })).toBeNull();
+  });
+
   it("shows nothing for a shape it does not know", () => {
     expect(auditDetail("member.rank_changed", { to: 42 })).toBeNull();
     expect(auditDetail("member.approval_decided", null)).toBeNull();

@@ -87,3 +87,36 @@ describe("canSendToAudience — plain members", () => {
     expect(canSendToAudience(member, { scope: "everyone" })).toBe(false);
   });
 });
+
+// Pinning an announcement asks this same function, against the broadcast's own
+// stored audience — the owner's ruling (2026-09-22): "If I am allowed to post
+// to everyone, then that means I'm also allowed to pin something that is posted
+// to everyone." These cases say that out loud, so the rule cannot drift into a
+// second, pin-shaped copy at a call site.
+describe("canSendToAudience — pinning follows posting", () => {
+  it("lets a captain pin anything they could have posted", () => {
+    expect(canSendToAudience(captain, { scope: "everyone" })).toBe(true);
+    expect(
+      canSendToAudience(captain, { scope: "team", team: "structures" }),
+    ).toBe(true);
+  });
+
+  it("lets a lead pin their own team's announcement and no other", () => {
+    expect(
+      canSendToAudience(kitchenLead, { scope: "team", team: "kitchen" }),
+    ).toBe(true);
+    expect(
+      canSendToAudience(kitchenLead, { scope: "team", team: "structures" }),
+    ).toBe(false);
+    // The camp-wide pin is the one that matters: a lead who could pin it would
+    // be one tap away from the whole camp's screen.
+    expect(canSendToAudience(kitchenLead, { scope: "everyone" })).toBe(false);
+  });
+
+  it("refuses a plain member every pin", () => {
+    expect(canSendToAudience(member, { scope: "everyone" })).toBe(false);
+    expect(canSendToAudience(member, { scope: "team", team: "kitchen" })).toBe(
+      false,
+    );
+  });
+});
