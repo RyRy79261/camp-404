@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import type {
+  Kpi,
   ReadinessFunnel,
   SendCompletion,
   TeamCoverageRow,
@@ -37,6 +38,46 @@ function LegendDot({ className }: { className: string }) {
       className={`h-2.5 w-2.5 shrink-0 rounded-full ${className}`}
       aria-hidden
     />
+  );
+}
+
+/**
+ * The board's top row: four headline figures, each card a link into the page
+ * that owns the number.
+ *
+ * A figure this deployment cannot read prints "not available here" where the
+ * number goes — the same sentence the funnel uses, rather than a 0 a captain
+ * would read as a fact. The card still links, because the page behind it is
+ * where the real answer lives.
+ */
+export function KpiCards({ kpis }: { kpis: Kpi[] }) {
+  return (
+    <section
+      aria-label="Camp at a glance"
+      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+    >
+      {kpis.map((kpi) => (
+        <Link key={kpi.key} href={kpi.href} className="group">
+          <Card className="h-full transition-colors group-hover:border-accent/60">
+            <CardContent className="flex flex-col gap-1 p-5">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {kpi.label}
+              </span>
+              {kpi.value === null ? (
+                <span className="text-sm text-muted-foreground">
+                  not available here
+                </span>
+              ) : (
+                <span className="text-3xl font-bold tabular-nums">
+                  {kpi.value}
+                </span>
+              )}
+              <span className="text-xs text-muted-foreground">{kpi.hint}</span>
+            </CardContent>
+          </Card>
+        </Link>
+      ))}
+    </section>
   );
 }
 

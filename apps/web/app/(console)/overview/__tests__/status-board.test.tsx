@@ -18,11 +18,13 @@ vi.mock("next/link", () => ({
 }));
 
 import {
+  KpiCards,
   ReadinessFunnelCard,
   SendCompletionCard,
   TeamCoverageCard,
 } from "../status-board";
 import type {
+  Kpi,
   ReadinessFunnel,
   SendCompletion,
   TeamCoverageRow,
@@ -30,10 +32,53 @@ import type {
 
 afterEach(cleanup);
 
-// The status board's three cards. What is under test is what a captain can
-// believe from them: a bar is only drawn where there is a number, a rung the
-// deployment cannot read says so, and every team — leaderless or empty —
-// keeps its row and its way into the roster.
+// The status board's four cards. What is under test is what a captain can
+// believe from them: a bar is only drawn where there is a number, a figure the
+// deployment cannot read says so instead of printing 0, and every team —
+// leaderless or empty — keeps its row and its way into the roster.
+
+describe("KpiCards", () => {
+  const kpis: Kpi[] = [
+    {
+      key: "members",
+      label: "Members",
+      value: 12,
+      hint: "2 captains",
+      href: "/captains/camp-management",
+    },
+    {
+      key: "dues",
+      label: "Dues paid",
+      value: null,
+      hint: "The ledger cannot be read here",
+      href: "/captains/payments",
+    },
+  ];
+
+  it("prints a figure it has, and says so where there is none", () => {
+    render(<KpiCards kpis={kpis} />);
+
+    const members = screen.getByText("Members").closest("a")!;
+    expect(within(members).getByText("12")).toBeTruthy();
+
+    const dues = screen.getByText("Dues paid").closest("a")!;
+    // No 0 anywhere on the card — that is the whole point of the null.
+    expect(dues.textContent).not.toMatch(/\d/);
+    expect(within(dues).getByText("not available here")).toBeTruthy();
+    expect(
+      within(dues).getByText("The ledger cannot be read here"),
+    ).toBeTruthy();
+  });
+
+  it("keeps every card's link, readable or not", () => {
+    render(<KpiCards kpis={kpis} />);
+    // The page behind an unreadable card is where the real answer lives, so
+    // the card must not become dead text.
+    expect(
+      screen.getByText("Dues paid").closest("a")!.getAttribute("href"),
+    ).toBe("/captains/payments");
+  });
+});
 
 function funnel(over: Partial<ReadinessFunnel> = {}): ReadinessFunnel {
   return {

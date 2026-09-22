@@ -97,6 +97,41 @@ describe("PasswordInput", () => {
     expect(document.getElementById(describedBy!)).not.toBeNull();
   });
 
+  it("describes the meter even when the caller gives the field no id", () => {
+    // Not every caller labels its field with an `id` — and the meter renders
+    // for all of them. Without an id of its own it was a paragraph no screen
+    // reader was ever pointed at.
+    const { container } = render(<PasswordInput value="hunter2" />);
+    const input = container.querySelector("input")!;
+    const describedBy = input.getAttribute("aria-describedby")!;
+    expect(describedBy).toBeTruthy();
+    const meter = document.getElementById(describedBy);
+    expect(meter).not.toBeNull();
+    expect(meter!.textContent).toContain("Too short");
+  });
+
+  it("keeps the caller's own description alongside the meter's", () => {
+    const { rerender } = render(
+      <>
+        <p id="pw-hint">Use a sentence you will remember.</p>
+        <PasswordInput id="pw" value="" aria-describedby="pw-hint" />
+      </>,
+    );
+    // No meter yet, so the caller's hint is the whole of it.
+    expect(field().getAttribute("aria-describedby")).toBe("pw-hint");
+
+    rerender(
+      <>
+        <p id="pw-hint">Use a sentence you will remember.</p>
+        <PasswordInput id="pw" value="hunter2" aria-describedby="pw-hint" />
+      </>,
+    );
+    const ids = field().getAttribute("aria-describedby")!.split(" ");
+    expect(ids).toEqual(["pw-hint", "pw-strength"]);
+    // Both references have to resolve, or the merge is decorative.
+    for (const id of ids) expect(document.getElementById(id)).not.toBeNull();
+  });
+
   it("forwards minLength to the input, and adds none when the caller passes none", () => {
     // Two attributes that read the same at the call site must behave the same:
     // `required` reaches the input, so `minLength` has to as well, or a caller

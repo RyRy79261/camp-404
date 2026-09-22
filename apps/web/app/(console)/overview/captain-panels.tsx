@@ -10,11 +10,7 @@ import {
 } from "@camp404/ui/components/card";
 import { auditEntry } from "@/lib/audit-format";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
-import {
-  deriveRosterStats,
-  toRosterRow,
-  type RosterRow,
-} from "@/lib/camp-roster";
+import { toRosterRow } from "@/lib/camp-roster";
 import {
   listOpenSendBlocking,
   listOpenSendGates,
@@ -22,11 +18,13 @@ import {
 import { getCampManagementRoster, getTeamCoverage } from "@/lib/roster";
 import { usesTestStore } from "@/lib/test-mode";
 import {
+  deriveKpis,
   deriveReadinessFunnel,
   deriveSendCompletion,
   deriveTeamCoverage,
 } from "./readiness";
 import {
+  KpiCards,
   ReadinessFunnelCard,
   SendCompletionCard,
   TeamCoverageCard,
@@ -35,7 +33,9 @@ import {
 // The captain-only panels of the Overview (the AfrikaBurn console's status
 // board: KPI cards, the funnel, the coverage rails, the activity feed). Server
 // components that read their own data; the page renders them only for a
-// captain, and every number is a real query result.
+// captain, and every number is a real query result — or says it is not
+// available here, which is the one thing a number must never quietly stand in
+// for.
 
 /**
  * The camp's team config, read once per request.
@@ -49,13 +49,6 @@ import {
  */
 const overviewTeamsConfig = cache(getTeamsConfig);
 
-interface Kpi {
-  label: string;
-  value: number;
-  hint: string;
-  href: string;
-}
-
 /**
  * The whole captain status board: the four KPI cards, the readiness funnel and
  * the two coverage rails.
@@ -65,8 +58,8 @@ interface Kpi {
  * second `getCampManagementRoster()` on one render would be a second answer.
  */
 export async function CaptainStatusBoard() {
-  // Five independent reads, issued together. The gate read is the only one of
-  // them the test store cannot answer, and it answers empty there.
+  // Five independent reads, issued together. The two send reads are the ones
+  // the test store cannot answer, and they answer empty there.
   const [members, openSends, coverage, teamsConfig, gates] = await Promise.all([
     getCampManagementRoster(),
     listOpenSendBlocking(),
@@ -88,10 +81,16 @@ export async function CaptainStatusBoard() {
   // under the label the captain gave it.
   const teams = deriveTeamCoverage(coverage, teamsConfig.teams);
   const sends = deriveSendCompletion(gates);
+  // The same two unknowns the funnel and the completion card respect, said in
+  // the KPI row's own shape: no open-send list and no ledger to read means
+  // those two cards have no figure, not a figure of 0.
+  const kpis = deriveKpis(rows, readable ? openSends.size : null, {
+    dues: readable,
+  });
 
   return (
     <>
-      <CaptainKpis rows={rows} openSends={openSends.size} />
+      <KpiCards kpis={kpis} />
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <ReadinessFunnelCard funnel={funnel} />
@@ -108,75 +107,15 @@ export async function CaptainStatusBoard() {
   );
 }
 
-function CaptainKpis({
-  rows,
-  openSends,
-}: {
-  /** The one roster projection the board shares — never mapped twice. */
-  rows: RosterRow[];
-  openSends: number;
-}) {
-  const stats = deriveRosterStats(rows);
-  const approved = rows.filter((m) => m.approvalStatus === "approved");
-  const duesPaid = approved.filter((m) => m.duesPaid).length;
-
-  const kpis: Kpi[] = [
-    {
-      label: "Members",
-      value: stats.approved,
-      hint: `${stats.captains} captain${stats.captains === 1 ? "" : "s"}`,
-      href: "/captains/camp-management",
-    },
-    {
-      label: "Awaiting approval",
-      value: stats.pending,
-      hint:
-        stats.pending === 0 ? "Nobody waiting" : "Open the roster to decide",
-      href: "/captains/camp-management",
-    },
-    {
-      label: "Dues paid",
-      value: duesPaid,
-      hint: `of ${approved.length} approved`,
-      href: "/captains/payments",
-    },
-    {
-      label: "Open sends",
-      value: openSends,
-      hint:
-        openSends === 0
-          ? "No questionnaire is open"
-          : "Questionnaires collecting answers",
-      href: "/captains/questionnaires",
-    },
-  ];
-
-  return (
-    <section
-      aria-label="Camp at a glance"
-      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-    >
-      {kpis.map((kpi) => (
-        <Link key={kpi.label} href={kpi.href} className="group">
-          <Card className="h-full transition-colors group-hover:border-accent/60">
-            <CardContent className="flex flex-col gap-1 p-5">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {kpi.label}
-              </span>
-              <span className="text-3xl font-bold tabular-nums">
-                {kpi.value}
-              </span>
-              <span className="text-xs text-muted-foreground">{kpi.hint}</span>
-            </CardContent>
-          </Card>
-        </Link>
-      ))}
-    </section>
-  );
-}
-
+/**
+ * The last handful of audit rows, in plain sentences — the console's "what has
+ * been happening" panel, and the way into the full audit log.
+ *
+ * It renders NOTHING rather than an empty card where there is no audit trail to
+ * read (the E2E test store keeps none): "Nothing recorded yet" would be a claim
+ * about the camp, not about the store.
+ */
 export async function RecentActivity() {
-  // The E2E test store keeps no audit trail.
   if (usesTestStore()) return null;
   const [page, teams] = await Promise.all([
     listAuditLog({ limit: 6 }),

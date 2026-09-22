@@ -58,10 +58,12 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
       value,
       defaultValue,
       onChange,
+      "aria-describedby": describedByProp,
       ...props
     },
     ref,
   ) => {
+    const reactId = React.useId();
     const [visible, setVisible] = React.useState(false);
     const [current, setCurrent] = React.useState(
       typeof value === "string"
@@ -75,12 +77,24 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
     const meterValue = typeof value === "string" ? value : current;
     const meterMin = minLength ?? PASSWORD_MIN_LENGTH;
     const strength = passwordStrength(meterValue, meterMin);
-    const meterId = id ? `${id}-strength` : undefined;
+    // The meter needs an id whether or not the caller gave the field one:
+    // `useId` covers the callers who label the field some other way, and
+    // without it the meter rendered with `id={undefined}` and was announced by
+    // nothing.
+    const meterId = id ? `${id}-strength` : `password-${reactId}-strength`;
     // Only point at the meter while the meter is on the page. An empty field
     // with the meter enabled renders no `#${id}-strength`, and a describedby
     // naming an element that does not exist is a broken reference for a screen
     // reader (and an aria-valid-attr-value failure) on every load of sign-up.
     const showMeter = !hideStrength && meterValue.length > 0;
+    // MERGED, not replaced, in either direction. A caller's own describedby (a
+    // field error, a "what this is for" line) has to survive the meter, and the
+    // meter has to survive the caller's — this used to be one `{...props}`
+    // spread away from silently dropping whichever came second.
+    const describedBy =
+      [describedByProp, showMeter ? meterId : undefined]
+        .filter(Boolean)
+        .join(" ") || undefined;
 
     return (
       <div className="space-y-1.5">
@@ -97,8 +111,8 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
             }}
             className={cn("pr-10", className)}
             minLength={minLength}
-            aria-describedby={showMeter ? meterId : undefined}
             {...props}
+            aria-describedby={describedBy}
           />
           <button
             type="button"

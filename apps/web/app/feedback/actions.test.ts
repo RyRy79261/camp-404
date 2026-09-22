@@ -20,7 +20,10 @@ import { isE2ETestMode } from "@/lib/test-mode";
 import { rateLimiter } from "@/lib/rate-limit";
 import { structureWithAi } from "@/lib/feedback-ai";
 
-const VALID = { kind: "bug" as const, description: "The publish button does nothing" };
+const VALID = {
+  kind: "bug" as const,
+  description: "The publish button does nothing",
+};
 
 function mockFetch(response: Partial<Response> & { status: number }) {
   const fn = vi.fn().mockResolvedValue({
@@ -40,9 +43,14 @@ describe("submitFeedbackAction", () => {
       primaryEmail: "m@example.com",
       displayName: "Member",
     } as never);
-    vi.mocked(findCampUserByAuthId).mockResolvedValue({ id: "camp-1" } as never);
+    vi.mocked(findCampUserByAuthId).mockResolvedValue({
+      id: "camp-1",
+    } as never);
     vi.mocked(isE2ETestMode).mockReturnValue(false);
-    vi.mocked(rateLimiter.limit).mockReturnValue({ ok: true, retryAfterSeconds: 0 });
+    vi.mocked(rateLimiter.limit).mockReturnValue({
+      ok: true,
+      retryAfterSeconds: 0,
+    });
     vi.mocked(structureWithAi).mockResolvedValue(null);
     process.env.GITHUB_FEEDBACK_TOKEN = "test-token";
     delete process.env.GITHUB_FEEDBACK_REPO;
@@ -58,11 +66,17 @@ describe("submitFeedbackAction", () => {
   it("rejects an unauthenticated caller", async () => {
     vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
     const res = await submitFeedbackAction(VALID);
-    expect(res).toEqual({ ok: false, error: expect.stringMatching(/sign in/i) });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringMatching(/sign in/i),
+    });
   });
 
   it("rejects when the burst rate limit trips", async () => {
-    vi.mocked(rateLimiter.limit).mockReturnValueOnce({ ok: false, retryAfterSeconds: 30 });
+    vi.mocked(rateLimiter.limit).mockReturnValueOnce({
+      ok: false,
+      retryAfterSeconds: 30,
+    });
     const res = await submitFeedbackAction(VALID);
     expect(res).toMatchObject({ ok: false });
     if (!res.ok) expect(res.error).toMatch(/give it a minute/i);
@@ -84,7 +98,10 @@ describe("submitFeedbackAction", () => {
   });
 
   it("rejects an HTML-only description that sanitizes to empty", async () => {
-    const res = await submitFeedbackAction({ kind: "bug", description: "<x></x>" });
+    const res = await submitFeedbackAction({
+      kind: "bug",
+      description: "<x></x>",
+    });
     expect(res).toMatchObject({ ok: false });
     if (!res.ok) expect(res.error).toMatch(/describe/i);
   });

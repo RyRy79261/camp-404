@@ -4,7 +4,7 @@ import {
 } from "@camp404/core";
 import type { TeamConfigEntry } from "@/lib/camp-config";
 import type { TeamCoverage } from "@/lib/roster";
-import type { RosterRow } from "@/lib/camp-roster";
+import { deriveRosterStats, type RosterRow } from "@/lib/camp-roster";
 import type { OpenSendGateRow } from "@camp404/db/questionnaire-results";
 
 // The pure derivations behind the captain Overview's status board — the shapes
@@ -117,6 +117,83 @@ export function deriveReadinessFunnel(
       },
     ],
   };
+}
+
+// --- The KPI row ----------------------------------------------------------
+
+/** One card on the board's top row: a headline figure and its way in. */
+export interface Kpi {
+  key: string;
+  label: string;
+  /**
+   * The figure — or NULL when this deployment cannot read the fact behind it,
+   * on the funnel's rule: a zero is a claim. "0 dues paid" reads as "nobody has
+   * paid", which is a different thing from "we cannot tell".
+   */
+  value: number | null;
+  /** The line under the figure: what it is over, or why there isn't one. */
+  hint: string;
+  href: string;
+}
+
+/**
+ * The four headline figures above the funnel: how big the camp is, who is
+ * waiting on a captain, how far the dues have come in, and what is collecting
+ * answers right now.
+ *
+ * `openSends` is null where the deployment cannot list open sends (the E2E test
+ * store returns an empty map whether or not a send is open), and `known.dues`
+ * covers the payments ledger, which the same store answers `false` for
+ * everyone. Both are marked unavailable rather than counted, for the reason the
+ * funnel marks its rungs unknown and the completion card withholds itself.
+ */
+export function deriveKpis(
+  rows: readonly RosterRow[],
+  openSends: number | null,
+  known: Pick<KnownFacts, "dues">,
+): Kpi[] {
+  const stats = deriveRosterStats(rows);
+  const approved = rows.filter((r) => r.approvalStatus === "approved");
+  const paid = approved.filter((r) => r.duesPaid).length;
+
+  return [
+    {
+      key: "members",
+      label: "Members",
+      value: stats.approved,
+      hint: `${stats.captains} captain${stats.captains === 1 ? "" : "s"}`,
+      href: "/captains/camp-management",
+    },
+    {
+      key: "pending",
+      label: "Awaiting approval",
+      value: stats.pending,
+      hint:
+        stats.pending === 0 ? "Nobody waiting" : "Open the roster to decide",
+      href: "/captains/camp-management",
+    },
+    {
+      key: "dues",
+      label: "Dues paid",
+      value: known.dues ? paid : null,
+      hint: known.dues
+        ? `of ${approved.length} approved`
+        : "The ledger cannot be read here",
+      href: "/captains/payments",
+    },
+    {
+      key: "sends",
+      label: "Open sends",
+      value: openSends,
+      hint:
+        openSends === null
+          ? "Open sends cannot be read here"
+          : openSends === 0
+            ? "No questionnaire is open"
+            : "Questionnaires collecting answers",
+      href: "/captains/questionnaires",
+    },
+  ];
 }
 
 // --- Per-team coverage ----------------------------------------------------

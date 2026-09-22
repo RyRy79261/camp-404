@@ -5,14 +5,15 @@ import type { TeamConfigEntry } from "@/lib/camp-config";
 import type { TeamCoverage } from "@/lib/roster";
 import { toRosterRow } from "@/lib/camp-roster";
 import {
+  deriveKpis,
   deriveReadinessFunnel,
   deriveSendCompletion,
   deriveTeamCoverage,
 } from "../readiness";
 
-// The three derivations behind the captain Overview's status board. They exist
-// to keep the board honest: a rung the deployment cannot read must not render a
-// zero, a leaderless or empty team must stay visible, and the completion
+// The four derivations behind the captain Overview's status board. They exist
+// to keep the board honest: a figure the deployment cannot read must not render
+// as a zero, a leaderless or empty team must stay visible, and the completion
 // figures must come from @camp404/core's tally rather than a second sum.
 
 function member(
@@ -160,6 +161,64 @@ function coverage(over: Partial<TeamCoverage> = {}): TeamCoverage {
     ...over,
   };
 }
+
+describe("deriveKpis", () => {
+  const kpi = (kpis: ReturnType<typeof deriveKpis>, key: string) => {
+    const found = kpis.find((k) => k.key === key);
+    if (!found) throw new Error(`no kpi ${key}`);
+    return found;
+  };
+
+  it("counts what it can read, over the approved members", () => {
+    const kpis = deriveKpis(
+      rowsOf(
+        member({ rank: "captain", duesPaid: true }),
+        member({ duesPaid: true }),
+        member(),
+        member({ approvalStatus: "pending", onboardingComplete: true }),
+      ),
+      2,
+      { dues: true },
+    );
+
+    expect(kpi(kpis, "members")).toMatchObject({ value: 3, hint: "1 captain" });
+    expect(kpi(kpis, "pending")).toMatchObject({
+      value: 1,
+      hint: "Open the roster to decide",
+    });
+    expect(kpi(kpis, "dues")).toMatchObject({
+      value: 2,
+      hint: "of 3 approved",
+    });
+    expect(kpi(kpis, "sends")).toMatchObject({
+      value: 2,
+      hint: "Questionnaires collecting answers",
+    });
+  });
+
+  it("has no figure at all where the fact cannot be read", () => {
+    // The E2E test store's shape: every roster row says `duesPaid: false` and
+    // the open-send list comes back empty, neither of which is a fact. A 0 here
+    // reads as "nobody has paid" and "no questionnaire is open".
+    const rows = rowsOf(member({ duesPaid: true }), member());
+    const known = deriveKpis(rows, 0, { dues: true });
+    const unknown = deriveKpis(rows, null, { dues: false });
+
+    expect(kpi(unknown, "dues").value).toBeNull();
+    expect(kpi(unknown, "dues").hint).toBe("The ledger cannot be read here");
+    expect(kpi(unknown, "sends").value).toBeNull();
+    expect(kpi(unknown, "sends").hint).toBe("Open sends cannot be read here");
+
+    // The same rows, readable: a real 0 is still a 0, and says the true thing.
+    expect(kpi(known, "dues").value).toBe(1);
+    expect(kpi(known, "sends").value).toBe(0);
+    expect(kpi(known, "sends").hint).toBe("No questionnaire is open");
+
+    // The two cards that do not depend on either read are unaffected.
+    expect(kpi(unknown, "members").value).toBe(2);
+    expect(kpi(unknown, "pending").value).toBe(0);
+  });
+});
 
 describe("deriveTeamCoverage", () => {
   it("keeps the camp's configured order and marks a team with no lead", () => {
