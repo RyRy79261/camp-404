@@ -40,6 +40,13 @@ export function MemberRoster({
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<PublicChip>("all");
   const [team, setTeam] = useState<string | null>(initialTeam);
+  // Same as the captain roster: a same-route `?team=` change keeps this
+  // component mounted, so the filter follows the prop rather than the mount.
+  const [urlTeam, setUrlTeam] = useState(initialTeam);
+  if (urlTeam !== initialTeam) {
+    setUrlTeam(initialTeam);
+    setTeam(initialTeam);
+  }
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const stats = useMemo(() => derivePublicRosterStats(rows), [rows]);

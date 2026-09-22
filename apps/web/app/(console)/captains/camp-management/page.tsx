@@ -23,9 +23,12 @@ export default async function CampManagementPage({
   searchParams,
 }: {
   // `?team=` opens the roster with that team already selected — the Overview's
-  // coverage rail links straight to a team's people. The key is checked against
-  // the camp's ACTIVE teams below, so a stale or invented one opens the full
-  // roster rather than an empty, silently-filtered one.
+  // coverage rail links straight to a team's people. The key is checked below
+  // against every team the config NAMES, archived ones included (the rail links
+  // to an archived team that still has members on it, and the block under the
+  // check adds that key to the filter dropdown so the select's value is one of
+  // its options). A stale or invented key opens the full roster rather than an
+  // empty, silently-filtered one.
   searchParams: Promise<{ team?: string }>;
 }) {
   // Every approved member may browse; the captain bar only picks the full or
