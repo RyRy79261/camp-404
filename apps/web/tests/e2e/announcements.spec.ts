@@ -22,7 +22,9 @@ test.describe("captain announcements (test-mode)", () => {
     request,
   }) => {
     // Regression guard: the home page reads the member's unread count, which
-    // must resolve through the test store rather than hitting Neon.
+    // must resolve through the test store rather than hitting Neon. The bell is
+    // a Popover trigger now, not a link to the inbox — the count still has to
+    // reach it, and its panel still has to open.
     await login(page, { id: "god-auth", email: "god@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
@@ -30,8 +32,23 @@ test.describe("captain announcements (test-mode)", () => {
 
     await page.goto("/");
     await expect(page).toHaveURL("/");
+    const bell = page.getByRole("button", { name: /^Notifications,/ });
+    await expect(bell).toBeVisible();
+
+    await bell.click();
+    // Assert something PRESENT in the panel before anything about it, so the
+    // checks cannot pass against a popover that never opened.
+    const panel = page.getByRole("dialog");
     await expect(
-      page.getByRole("link", { name: /Notifications/ }),
+      panel.getByRole("heading", { name: "Notifications" }),
+    ).toBeVisible();
+    // The panel fetches its rows on open; an empty inbox says so, and the way
+    // through to the inbox is always there.
+    await expect(panel.getByText(/Nothing here yet/)).toBeVisible();
+    await panel.getByRole("link", { name: /See all/ }).click();
+    await expect(page).toHaveURL(/\/notifications$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Notifications" }),
     ).toBeVisible();
   });
 
@@ -101,7 +118,31 @@ test.describe("captain announcements (test-mode)", () => {
     expect(pending.ok()).toBeTruthy();
     expect((await pending.json()).pending).toHaveLength(0);
 
-    // 6. The inbox row opens the whole announcement on its own page.
+    // 6. The inbox tabs are links: the filter lives in the URL, and it is
+    //    applied to the list rather than to the tab strip.
+    await page.goto("/notifications");
+    await page.getByRole("link", { name: "Announcements" }).click();
+    await expect(page).toHaveURL(/\/notifications\?filter=announcements$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Notifications" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Burn-night briefing/ }),
+    ).toBeVisible();
+
+    // The member acknowledged it in step 5, which read it — so the Unread tab
+    // is empty. Assert the page HAS rendered (the heading) before the absence.
+    await page.getByRole("link", { name: "Unread" }).click();
+    await expect(page).toHaveURL(/\/notifications\?filter=unread$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Notifications" }),
+    ).toBeVisible();
+    await expect(page.getByText("You're all caught up.")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Burn-night briefing/ }),
+    ).toHaveCount(0);
+
+    // 7. The inbox row opens the whole announcement on its own page.
     await page.goto("/notifications");
     await page.getByRole("link", { name: /Burn-night briefing/ }).click();
     await expect(page).toHaveURL(/\/announcements\/[0-9a-f-]{36}$/);
@@ -112,7 +153,7 @@ test.describe("captain announcements (test-mode)", () => {
     await expect(page.getByText(/You acknowledged this on/)).toBeVisible();
     const readPage = page.url();
 
-    // 7. The delivery is the permission: the author got no delivery, so the
+    // 8. The delivery is the permission: the author got no delivery, so the
     //    same link is a 404 for them.
     await login(page, {
       id: "captain-auth",
