@@ -1,3 +1,4 @@
+import { isValidElement, type ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -51,6 +52,26 @@ import NotificationsPage from "./page";
 /** Render the page on a tab (default: the All tab, i.e. no ?filter=). */
 function renderPage(filter?: string) {
   return NotificationsPage({ searchParams: Promise.resolve({ filter }) });
+}
+
+/**
+ * The key React would reconcile the feed by, dug out of the page's element
+ * tree. The feed keeps its rows and cursor in `useState`, so only the key
+ * decides whether a tab switch gets a fresh one — and a key is invisible to
+ * anything rendered, which is why this looks at the tree instead.
+ */
+function feedKey(node: ReactNode): string | null | undefined {
+  if (Array.isArray(node)) {
+    for (const child of node as ReactNode[]) {
+      const found = feedKey(child);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (!isValidElement(node)) return undefined;
+  const props = node.props as { initialItems?: unknown; children?: ReactNode };
+  if (props.initialItems !== undefined) return node.key;
+  return feedKey(props.children);
 }
 
 afterEach(cleanup);
@@ -148,6 +169,16 @@ describe("notifications page filters", () => {
     expect(markRead).not.toHaveBeenCalled();
     // The rows are still on screen — not marking read is not "show nothing".
     expect(screen.getByText("Gates open at noon")).toBeTruthy();
+  });
+
+  // Switching tabs is a navigation inside the same route, so React would keep
+  // the feed mounted and hand it new props — and the feed seeds its rows and
+  // cursor from props once, on mount. Without a key per tab, Announcements
+  // would open on the rows the All tab had loaded.
+  it("gives the feed a key per tab, so a tab switch starts it fresh", async () => {
+    expect(feedKey(await renderPage())).toBe("all");
+    expect(feedKey(await renderPage("announcements"))).toBe("announcements");
+    expect(feedKey(await renderPage("unread"))).toBe("unread");
   });
 
   it("opens the whole inbox for a stale ?filter= in a shared link", async () => {

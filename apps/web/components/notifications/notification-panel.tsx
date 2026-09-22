@@ -31,10 +31,11 @@ import {
 // never paint the last open's read state as if it were current.
 //
 // The panel lists only the newest few rows, so the list alone cannot account
-// for a badge — the unread TOTAL comes back with the rows and is written out
-// under the heading, which is what makes the number and the list agree. The
-// badge itself is still the server render's, so it is right before anyone
-// interacts.
+// for the badge. The count that "Mark all read" would clear comes back with
+// the rows and is written out under the heading — said as a clearable count,
+// because it is narrower than the badge: the badge also counts waiting
+// questionnaires and unshown pop-ups, and the button clears neither. The badge
+// itself is still the server render's, so it is right before anyone interacts.
 //
 // Opening the panel marks NOTHING read — that is the inbox's job, and a badge
 // that cleared itself on a peek would lose the member their unread list.
@@ -47,6 +48,11 @@ type PanelState =
   | { status: "ready"; data: NotificationPanelData }
   | { status: "error"; error: string };
 
+/**
+ * The bell in the console header and the panel it opens. Fetches on open, drops
+ * what it fetched on close, and marks nothing read — the badge is cleared by
+ * the inbox or by "Mark all read", never by a peek.
+ */
 export function NotificationPanel({
   count,
 }: {
@@ -71,14 +77,26 @@ export function NotificationPanel({
     let cancelled = false;
     setState({ status: "loading" });
     setNow(new Date());
-    void fetchNotificationPanelAction().then((result) => {
-      if (cancelled) return;
-      setState(
-        result.ok
-          ? { status: "ready", data: result.data }
-          : { status: "error", error: result.error },
-      );
-    });
+    void fetchNotificationPanelAction()
+      .then((result) => {
+        if (cancelled) return;
+        setState(
+          result.ok
+            ? { status: "ready", data: result.data }
+            : { status: "error", error: result.error },
+        );
+      })
+      // The action converts its own failures, but the CALL can still reject —
+      // an offline tab, a dropped request. A fulfilment-only handler would
+      // leave the panel saying "Loading…" for as long as it stayed open, with
+      // no way back; this lands it on the error state and its "Try again".
+      .catch(() => {
+        if (cancelled) return;
+        setState({
+          status: "error",
+          error: "Check your connection and try again.",
+        });
+      });
     return () => {
       cancelled = true;
     };
@@ -103,14 +121,17 @@ export function NotificationPanel({
             <h2 id={headingId} className="text-sm font-semibold">
               Notifications
             </h2>
-            {/* The unread total, not the number of rows below it: the panel is
-                a window on the inbox, and saying so is what stops a badge of 10
-                hanging over six rows that are all read. */}
+            {/* What "Mark all read" would clear, not the number of rows below
+                it: the panel is a window on the inbox, so a badge of 10 over
+                six rows that are all read still has to add up. It is NOT the
+                badge either — the badge counts waiting questionnaires and
+                unshown pop-ups, which this button cannot clear — so the line
+                says what the button does rather than claiming a total. */}
             {data && (
               <p className="text-xs text-muted-foreground">
                 {data.clearable === 0
-                  ? "Nothing unread"
-                  : `${data.clearable} unread`}
+                  ? "Nothing to mark read"
+                  : `${data.clearable} can be marked read`}
               </p>
             )}
           </div>

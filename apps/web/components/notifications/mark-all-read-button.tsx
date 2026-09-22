@@ -16,6 +16,11 @@ import { markAllNotificationsReadAction } from "@/app/(console)/notifications/ac
 // panel's fresh unread count, which `onDone` re-reads, so a delivery that lands
 // between the press and the refetch still finds the control live.
 
+/**
+ * The panel header's "Mark all read". Clears the signed-in member's own unread
+ * deliveries and tells the panel to re-read its count, so the control is armed
+ * by what is actually there rather than by its own last press.
+ */
 export function MarkAllReadButton({
   disabled,
   className,
@@ -38,7 +43,21 @@ export function MarkAllReadButton({
       disabled={disabled || pending}
       onClick={() =>
         startTransition(async () => {
-          const result = await markAllNotificationsReadAction();
+          // The action converts its own failures, but the CALL can still
+          // reject — an offline tab, a dropped request. That rejection never
+          // reaches `!result.ok`, so without this the press would end in
+          // silence and the member would not know nothing happened.
+          let result: Awaited<
+            ReturnType<typeof markAllNotificationsReadAction>
+          >;
+          try {
+            result = await markAllNotificationsReadAction();
+          } catch {
+            toast.error("Couldn't mark them read", {
+              description: "Check your connection and try again.",
+            });
+            return;
+          }
           if (!result.ok) {
             toast.error("Couldn't mark them read", {
               description: result.error,

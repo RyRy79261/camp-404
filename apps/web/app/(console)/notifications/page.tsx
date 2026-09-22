@@ -64,6 +64,11 @@ const EMPTY: Record<
   },
 };
 
+/**
+ * The inbox itself. Draws the first page on the server, clears the badge for
+ * exactly the rows it drew (except on the Unread tab), and hands the rest of
+ * the paging to `InboxFeed`.
+ */
 export default async function NotificationsPage({
   searchParams,
 }: {
@@ -177,6 +182,10 @@ export default async function NotificationsPage({
           )
         ) : (
           <InboxFeed
+            // A tab switch is a same-route navigation, so React would keep the
+            // feed's rows and cursor and only swap `filter` — Announcements
+            // would open on the All tab's rows. The key starts it fresh.
+            key={filter}
             initialItems={items}
             initialCursor={nextCursor}
             filter={filter}

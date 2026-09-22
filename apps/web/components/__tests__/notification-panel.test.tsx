@@ -37,6 +37,9 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("@camp404/ui/components/toast", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
 vi.mock("@/app/(console)/notifications/actions", () => ({
   fetchNotificationPanelAction: vi.fn(),
   markAllNotificationsReadAction: vi.fn(),
@@ -47,6 +50,7 @@ import {
   markAllNotificationsReadAction,
   type NotificationPanelData,
 } from "@/app/(console)/notifications/actions";
+import { toast } from "@camp404/ui/components/toast";
 import { NotificationPanel } from "@/components/notifications/notification-panel";
 
 const DELIVERY = {
@@ -96,6 +100,7 @@ const markAllButton = () =>
 beforeEach(() => {
   vi.mocked(fetchNotificationPanelAction).mockReset();
   vi.mocked(markAllNotificationsReadAction).mockReset();
+  vi.mocked(toast.error).mockReset();
   vi.mocked(fetchNotificationPanelAction).mockResolvedValue(loaded());
 });
 
@@ -141,9 +146,9 @@ describe("NotificationPanel", () => {
     expect(await screen.findByText(/Nothing here yet/)).toBeTruthy();
   });
 
-  // The list is a window on the inbox — six rows at most — so the unread TOTAL
-  // has to be written out, or a badge of 10 hangs over rows that are all read.
-  it("says the unread total, not the number of rows it happens to show", async () => {
+  // The list is a window on the inbox — six rows at most — so the count has to
+  // be written out, or a badge of 10 hangs over rows that are all read.
+  it("counts the whole inbox, not the rows it happens to show", async () => {
     vi.mocked(fetchNotificationPanelAction).mockResolvedValue(
       loaded({
         recent: [{ ...DELIVERY, readAt: new Date("2026-09-16T10:00:00Z") }],
@@ -155,17 +160,25 @@ describe("NotificationPanel", () => {
     openBell();
 
     // One row on screen, and none of it unread — the number still adds up.
-    expect(await screen.findByText("10 unread")).toBeTruthy();
+    expect(await screen.findByText("10 can be marked read")).toBeTruthy();
     expect(screen.queryAllByLabelText("Unread")).toHaveLength(0);
   });
 
-  it("says nothing is unread rather than leaving the badge unexplained", async () => {
+  // `clearable` counts what the button can clear, which is narrower than the
+  // badge: a waiting questionnaire is unread and stays unread, and so does a
+  // pop-up nobody has been shown. Calling it "Nothing unread" over a visibly
+  // unread row would be a plain untruth, so the line says what the button does.
+  it("says what Mark all read can clear, not what is unread", async () => {
     vi.mocked(fetchNotificationPanelAction).mockResolvedValue(
       loaded({ recent: [], clearable: 0 }),
     );
     render(panel(1));
     openBell();
-    expect(await screen.findByText("Nothing unread")).toBeTruthy();
+
+    // The questionnaire below it is drawn unread, and the heading agrees.
+    expect(await screen.findByText("Nothing to mark read")).toBeTruthy();
+    expect(screen.getAllByLabelText("Unread")).toHaveLength(1);
+    expect(screen.queryByText("Nothing unread")).toBeNull();
   });
 
   it("clears the inbox through Mark all read and refetches", async () => {
@@ -240,7 +253,7 @@ describe("NotificationPanel", () => {
     );
     render(panel(0));
     openBell();
-    await screen.findByText("3 unread");
+    await screen.findByText("3 can be marked read");
     expect(markAllButton()).toHaveProperty("disabled", false);
   });
 
@@ -263,6 +276,69 @@ describe("NotificationPanel", () => {
     vi.mocked(fetchNotificationPanelAction).mockResolvedValue(loaded());
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Gates open at noon")).toBeTruthy();
+  });
+
+  // The action converts its own failures, so `ok: false` is the tidy case. A
+  // rejected CALL — offline tab, dropped request — never reaches that branch,
+  // and a fulfilment-only handler would leave the panel on "Loading…" forever.
+  it("reports a fetch that never arrives instead of loading forever", async () => {
+    vi.mocked(fetchNotificationPanelAction).mockRejectedValue(
+      new Error("Failed to fetch"),
+    );
+    render(panel(2));
+    openBell();
+
+    expect(
+      await screen.findByText(/Couldn’t load your notifications/),
+    ).toBeTruthy();
+    expect(screen.queryByText("Loading…")).toBeNull();
+
+    // And the way back out is the same one a converted failure offers.
+    vi.mocked(fetchNotificationPanelAction).mockResolvedValue(loaded());
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Gates open at noon")).toBeTruthy();
+  });
+
+  // Same shape on the write side: a rejected call skips `!result.ok`, so
+  // without a local catch the press would end in silence.
+  it("toasts when the Mark all read call never arrives", async () => {
+    vi.mocked(markAllNotificationsReadAction).mockRejectedValue(
+      new Error("Failed to fetch"),
+    );
+    render(panel(2));
+    openBell();
+    await screen.findByText("Gates open at noon");
+
+    fireEvent.click(markAllButton());
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("Couldn't mark them read", {
+        description: "Check your connection and try again.",
+      }),
+    );
+    // Nothing was cleared, so the rows are left exactly as they were.
+    expect(screen.getAllByLabelText("Unread").length).toBe(2);
+  });
+
+  // An announcement body is markdown. The panel shows a glimpse of it, so the
+  // markers come off here the way they do on the inbox row — a member should
+  // never read "## Burn night" as its own heading marker.
+  it("strips markdown out of the body it previews", async () => {
+    vi.mocked(fetchNotificationPanelAction).mockResolvedValue(
+      loaded({
+        recent: [
+          { ...DELIVERY, body: "## Burn night\n\nMeet at the **effigy**." },
+        ],
+        pending: [],
+      }),
+    );
+    render(panel(1));
+    openBell();
+
+    expect(await screen.findByText(/Burn night/)).toBeTruthy();
+    expect(screen.queryByText(/##/)).toBeNull();
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+    expect(screen.getByText(/Meet at the effigy\./)).toBeTruthy();
   });
 
   it("drops the last open's rows, so a reopen never shows stale read state", async () => {

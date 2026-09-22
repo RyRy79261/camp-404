@@ -337,6 +337,27 @@ describe("loadOlderNotificationsAction", () => {
     expect(markRead).toHaveBeenCalledWith("user-1", ["d1", "d2"]);
   });
 
+  // The first page already behaves this way (page.tsx). A fetched page that a
+  // failed clear threw away would show the member "something went wrong" over
+  // notifications they in fact have, and retrying could not help.
+  it("still returns the older page when clearing its rows fails", async () => {
+    vi.mocked(listInbox).mockResolvedValue({
+      items: [{ id: "d1" }] as never,
+      nextCursor: "older-cursor",
+    });
+    vi.mocked(markRead).mockRejectedValue(new Error("connection reset"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await loadOlderNotificationsAction(CURSOR);
+
+    expect(result).toEqual({
+      ok: true,
+      data: { items: [{ id: "d1" }], nextCursor: "older-cursor" },
+    });
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+
   it("keeps an older page inside the tab being read", async () => {
     vi.mocked(listInbox).mockResolvedValue({ items: [], nextCursor: null });
     await loadOlderNotificationsAction(CURSOR, "announcements");

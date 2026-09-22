@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
-import { NOTIFICATION_FALLBACK_LINK } from "@camp404/core";
+import { NOTIFICATION_FALLBACK_LINK, plainPreview } from "@camp404/core";
 import { cn } from "@camp404/ui/lib/utils";
 import type { InboxItem } from "@/lib/notifications";
 import {
@@ -31,6 +31,10 @@ function dayAndTime(at: Date, now: Date): string {
   return `${formatRelativeTime(at, now)} · ${time}`;
 }
 
+/**
+ * The one row shape both kinds share, so a delivery and a questionnaire line up
+ * down the panel. It draws; deciding what goes in it is the caller's job.
+ */
 function Shell({
   href,
   icon,
@@ -90,7 +94,12 @@ function Shell({
   );
 }
 
-/** One delivered notification. */
+/**
+ * One delivered notification, as the panel lists it. The body is a glimpse, not
+ * the message: an announcement is written in markdown, so the markers are
+ * stripped here the way the inbox row strips them, and the whole thing is
+ * rendered only on the announcement page.
+ */
 export function PanelNotificationRow({
   item,
   now,
@@ -111,7 +120,7 @@ export function PanelNotificationRow({
         unread ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
       }
       title={item.title}
-      body={item.body}
+      body={item.body ? plainPreview(item.body) : null}
       meta={
         item.senderName
           ? `${dayAndTime(item.createdAt, now)} · ${item.senderName}`

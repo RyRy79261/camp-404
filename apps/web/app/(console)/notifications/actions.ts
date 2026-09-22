@@ -22,6 +22,7 @@ import {
 import { getPendingQuestionnaires } from "@/lib/users";
 import { feedIds, marksPageRead, parseInboxFilter } from "./filter";
 
+/** What accept/decline hand back: the error is copy the recipient can read. */
 export type PromotionDecisionResult =
   | { ok: true }
   | { ok: false; error: string };
@@ -180,7 +181,16 @@ export async function loadOlderNotificationsAction(
     // page filtered after the fact would be short and its cursor would skip.
     const page = await listInbox(campUser.id, { before: cursor, filter });
     if (marksPageRead(filter)) {
-      await markRead(campUser.id, feedIds(page.items));
+      try {
+        await markRead(campUser.id, feedIds(page.items));
+      } catch (err) {
+        // The page came back; a failed clear must not throw it away. The first
+        // page does the same (page.tsx), and for the same reason: the member
+        // gets their notifications, and the badge stays up until the next
+        // visit. Letting this reach `runAction` would blank the list instead,
+        // and retrying could not help while the write path is down.
+        console.error("notifications markRead failed", err);
+      }
     }
     return { ok: true, data: page };
   });
@@ -194,14 +204,17 @@ export interface PanelQuestionnaire {
   dueAt: Date | null;
 }
 
+/** Everything one open of the header panel draws, fetched in one round trip. */
 export interface NotificationPanelData {
   recent: InboxItem[];
   pending: PanelQuestionnaire[];
   /**
    * How many deliveries "Mark all read" would clear, read fresh with the rows.
    * NOT the same as the `recent` window: the panel shows the newest few, and
-   * the unread ones can all be older than that. The panel says this number out
-   * loud, so a badge of 10 over six already-read rows still adds up.
+   * the unread ones can all be older than that. Narrower than the badge, too —
+   * that counts waiting questionnaires and unshown pop-ups, which the button
+   * cannot clear — so the panel writes it out as a clearable count, not as a
+   * total unread.
    */
   clearable: number;
 }
@@ -216,11 +229,11 @@ const PANEL_LIMIT = 6;
  * or pressing "Mark all read" does.
  *
  * It returns both halves of what the bell counts — the latest deliveries and
- * the questionnaires still waiting — plus `clearable`, how many unread
- * deliveries there are IN ALL. The panel lists only the newest few, so the list
- * on its own cannot account for the badge; the number can, and the panel shows
- * it. The badge is `unread + pending`, so a panel that listed only deliveries
- * would read 2 over an empty list.
+ * the questionnaires still waiting — plus `clearable`, how many deliveries
+ * "Mark all read" would clear across the whole inbox. The panel lists only the
+ * newest few, so the list on its own cannot account for the badge; the number
+ * can, and the panel shows it for what it is. The badge is `unread + pending`,
+ * so a panel that listed only deliveries would read 2 over an empty list.
  *
  * Takes no user id — the inbox is always the signed-in member's own, resolved
  * here. A read that FAILS says so: it goes through `runAction` like its
