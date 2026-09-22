@@ -19,6 +19,7 @@ import {
   RoleBadge,
   RosterAvatar,
   RosterStatusBadge,
+  StandingBadge,
   countryFlag,
 } from "./roster-presentation";
 
@@ -31,8 +32,10 @@ import {
 // Not `ResponsiveDataTable`: the column headers sort (`aria-sort` lives on the
 // <th>), rows select, and a selected row is marked — none of which that
 // component carries. It uses the same kit table leaves, so it reads the same.
-// Serves both the captain view and the member view; a public row has no
-// `status`, so the member table has no status column at all.
+// Serves both the captain view and the member view. A public row has no
+// `status`, so the member table carries no triage column; instead the island
+// asks for `showStanding` when somebody on the roster is still an applicant,
+// and that column shows the one approval fact a member may read.
 
 /**
  * Ticking rows for a bulk decision (captain view, Pending filter). Reuses the
@@ -115,6 +118,7 @@ export function RosterTable({
   onSelect,
   selection,
   sort,
+  showStanding = false,
   className,
 }: {
   rows: RosterDisplayRow[];
@@ -122,10 +126,18 @@ export function RosterTable({
   onSelect: (id: string) => void;
   selection?: RosterSelection;
   sort?: RosterTableSort;
+  /**
+   * Member view: draw the Standing column. The island decides from the WHOLE
+   * roster, not the filtered rows, so the column does not appear and disappear
+   * as the member changes a filter — and a roster with no applicants on it
+   * keeps the table it has always had.
+   */
+  showStanding?: boolean;
   className?: string;
 }) {
   // Rows are either all captain rows or all public rows.
   const showStatus = rows.some((r) => r.status !== undefined);
+  const standingColumn = !showStatus && showStanding;
   return (
     <div
       className={cn(
@@ -152,6 +164,9 @@ export function RosterTable({
             <SortHeader label="Role" sortKey="role" sort={sort} />
             {showStatus && (
               <SortHeader label="Status" sortKey="status" sort={sort} />
+            )}
+            {standingColumn && (
+              <TableHead scope="col">Standing</TableHead>
             )}
             <TableHead scope="col" className="w-12 pr-4">
               <span className="sr-only">Open</span>
@@ -215,6 +230,15 @@ export function RosterTable({
                         status={r.status}
                         label={r.statusLabel}
                       />
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                )}
+                {standingColumn && (
+                  <TableCell>
+                    {r.standing ? (
+                      <StandingBadge standing={r.standing} />
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}

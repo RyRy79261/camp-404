@@ -1,6 +1,11 @@
 import "server-only";
 
-import { CSV_MIME, memberExportColumnsFor, toCsvFile } from "@camp404/core";
+import {
+  CSV_MIME,
+  hasClearance,
+  memberExportColumnsFor,
+  toCsvFile,
+} from "@camp404/core";
 import { appendAuditEvent } from "@camp404/db/audit";
 import { decryptField } from "@camp404/db/crypto";
 import {
@@ -13,6 +18,7 @@ import {
   type ViewerRank,
 } from "@camp404/types";
 import { getTeamsConfig, teamLabelMap } from "./camp-config";
+import { membersVisibleTo } from "./camp-roster";
 import {
   UNREADABLE_ID,
   memberExportCells,
@@ -109,7 +115,7 @@ export async function buildMemberExport(viewer: {
 
   const safety = has("emergency_contact_1") || has("allergies");
   const captain = has("id_number") || has("arrival");
-  const [members, config, questionnaire, extraRows] = await Promise.all([
+  const [everyone, config, questionnaire, extraRows] = await Promise.all([
     getCampManagementRoster({ includeEmail: has("email") }),
     getTeamsConfig(),
     getQuestionnaireForResponses(),
@@ -121,6 +127,15 @@ export async function buildMemberExport(viewer: {
         : getMemberExportExtras({ safety, captain })
       : Promise.resolve([]),
   ]);
+
+  // The file lists the people the SCREEN lists: a non-captain's roster leaves
+  // out declined sign-ups (MEMBERS_SEE_REJECTED), so their export does too —
+  // otherwise the Approval column, now member-readable, would hand a member the
+  // rejections the roster deliberately withholds.
+  const members = membersVisibleTo(
+    everyone,
+    hasClearance(viewer.rank, "captain"),
+  );
 
   const questions = flattenQuestions(questionnaire);
   const labels = {

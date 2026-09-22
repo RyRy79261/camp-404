@@ -40,8 +40,10 @@ const SORT_OPTIONS: { value: string; label: string; sort: RosterSort }[] = [
 // selects. Controlled: it owns no data, it reports query / chip / team changes
 // up to the island. The status toggles (All / Pending / Captains /
 // Outstanding) are single-select; Team is an independent narrowing filter. In
-// `publicOnly` mode (the member view) the approval-derived toggles (Pending /
-// Outstanding) are withheld — members filter by All / Captains / Team only.
+// `publicOnly` mode (the member view) only Outstanding is withheld — it counts
+// blocking required actions, which stay captain-only. Pending is offered to
+// every rank: the owner ruled (2026-09-22) that everyone may see who has
+// applied.
 //
 // Team and Sort stay native selects (keyboard and screen-reader safe, and the
 // E2E suites read their options), drawn as the kit's select trigger.
@@ -57,7 +59,7 @@ const STATUS_CHIPS: {
 ];
 
 /** The counts the toolbar reads; captains pass the full RosterStats, the member
- * view passes just members + captains (the approval counts are captain-only). */
+ * view passes members + captains + pending (`outstanding` stays captain-only). */
 interface ToolbarStats {
   members: number;
   captains: number;
@@ -162,30 +164,28 @@ export function RosterToolbar({
           aria-label="Filter the roster"
           className="flex flex-wrap items-center gap-1.5 sm:gap-0 sm:[&>*:not(:first-child)]:rounded-l-none sm:[&>*:not(:first-child)]:border-l-0 sm:[&>*:not(:last-child)]:rounded-r-none"
         >
-          {STATUS_CHIPS.filter((c) => !publicOnly || c.chip !== "pending").map(
-            ({ chip: value, label, key }) => {
-              const active = chip === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => onChipChange(value)}
-                  className={cn(TOGGLE, active && TOGGLE_ON)}
+          {STATUS_CHIPS.map(({ chip: value, label, key }) => {
+            const active = chip === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onChipChange(value)}
+                className={cn(TOGGLE, active && TOGGLE_ON)}
+              >
+                {label}{" "}
+                <span
+                  className={cn(
+                    "tabular-nums",
+                    active ? "text-foreground" : "text-muted-foreground",
+                  )}
                 >
-                  {label}{" "}
-                  <span
-                    className={cn(
-                      "tabular-nums",
-                      active ? "text-foreground" : "text-muted-foreground",
-                    )}
-                  >
-                    {stats[key] ?? 0}
-                  </span>
-                </button>
-              );
-            },
-          )}
+                  {stats[key] ?? 0}
+                </span>
+              </button>
+            );
+          })}
 
           {/* Outstanding — captain-only (an approval-derived facet). */}
           {!publicOnly && (

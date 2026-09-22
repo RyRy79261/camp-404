@@ -4,7 +4,11 @@ import { humanizeKey, initialsFrom } from "@camp404/core";
 import { Badge, type BadgeProps } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { cn } from "@camp404/ui/lib/utils";
-import type { RosterStatus } from "@/lib/camp-roster";
+import {
+  PUBLIC_STANDING_LABEL,
+  type PublicStanding,
+  type RosterStatus,
+} from "@/lib/camp-roster";
 import { COUNTRIES } from "@/lib/countries";
 
 // Shared presentational helpers for the roster (the AfrikaBurn console's
@@ -91,7 +95,35 @@ const STATUS_VARIANT: Record<RosterStatus, BadgeVariant> = {
   onboarding: "outline",
 };
 
-/** A roster status pill (captain view only — members never get a status). */
+/**
+ * The standing pill a MEMBER sees on someone who is not (yet) in camp: the
+ * primary tint for an applicant waiting on a captain, destructive for a
+ * declined one. It reads the same as the captain's equivalent status badge, by
+ * taking the same two variants — the member's version simply cannot express
+ * onboarding progress or outstanding actions, because `PublicStanding` has no
+ * value for them.
+ */
+const STANDING_VARIANT: Record<PublicStanding, BadgeVariant> = {
+  pending: STATUS_VARIANT.awaiting_approval,
+  rejected: STATUS_VARIANT.rejected,
+};
+
+/** A standing pill for the member roster ("Pending" / "Declined"). */
+export function StandingBadge({
+  standing,
+  className,
+}: {
+  standing: PublicStanding;
+  className?: string;
+}) {
+  return (
+    <Badge variant={STANDING_VARIANT[standing]} className={className}>
+      {PUBLIC_STANDING_LABEL[standing]}
+    </Badge>
+  );
+}
+
+/** A roster status pill (captain view — the full triage vocabulary). */
 export function RosterStatusBadge({
   status,
   label,

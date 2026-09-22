@@ -85,8 +85,38 @@ describe("buildMemberExport", () => {
     });
     expect(getMemberExportExtras).not.toHaveBeenCalled();
     expect(file.content).not.toContain("nova@example.com");
+    // Approval is a member column since the owner's 2026-09-22 ruling; the
+    // join date, email, dues and ID are still captain-only.
     expect(file.content.split("\r\n")[0]).toBe(
-      "\uFEFFName,Handle,Rank,Teams,Country",
+      "\uFEFFName,Handle,Rank,Teams,Country,Approval",
+    );
+  });
+
+  it("leaves declined sign-ups out of a non-captain's file, and keeps them in a captain's", async () => {
+    vi.mocked(getCampManagementRoster).mockResolvedValue([
+      MEMBER,
+      { ...MEMBER, id: "m2", displayName: "Rex", approvalStatus: "rejected" },
+    ] as never);
+
+    const member = await buildMemberExport({
+      userId: "u1",
+      rank: "camp_member",
+    });
+    expect(member.content).toContain("Nova");
+    expect(member.content).not.toContain("Rex");
+    // The audit row counts the rows that actually went in the file.
+    expect(appendAuditEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ rows: 1 }),
+      }),
+    );
+
+    const captain = await buildMemberExport({ userId: "c1", rank: "captain" });
+    expect(captain.content).toContain("Rex");
+    expect(appendAuditEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ rows: 2 }),
+      }),
     );
   });
 

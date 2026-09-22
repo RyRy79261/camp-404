@@ -62,17 +62,29 @@ function fileFor(
 }
 
 describe("memberExportCells", () => {
-  it("gives a member the roster's words and nothing else", () => {
+  it("gives a member the roster's words — approval standing included — and nothing else", () => {
     expect(fileFor("camp_member")).toEqual([
-      ["Name", "Handle", "Rank", "Teams", "Country"],
+      ["Name", "Handle", "Rank", "Teams", "Country", "Approval"],
       [
         "Nova Reyes",
         "@nova",
         "Team Lead",
         "Cuisine; Structures",
         "South Africa",
+        "Approved",
       ],
     ]);
+  });
+
+  it("says Pending for an applicant, in every rank's file", () => {
+    const applicant = memberExportCells({
+      columns: memberExportColumnsFor("camp_member"),
+      members: [member({ approvalStatus: "pending" })],
+      extras: new Map(),
+      teamLabels,
+    });
+    const [header, row] = applicant;
+    expect(row![header!.indexOf("Approval")]).toBe("Pending");
   });
 
   it("writes a team lead's safety columns as a person reads them", () => {

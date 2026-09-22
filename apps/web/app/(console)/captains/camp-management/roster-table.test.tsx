@@ -36,8 +36,12 @@ const memberRow: RosterDisplayRow = {
   teams: [],
   country: "South Africa",
   inSouthAfrica: true,
-  // no `status` → member projection (no approval signal)
+  standing: null,
+  // no `status` → member projection (no captain triage signal)
 };
+
+// A member-view row for somebody still waiting on a captain's decision.
+const applicantRow: RosterDisplayRow = { ...memberRow, standing: "pending" };
 
 const captainRow: RosterDisplayRow = {
   ...memberRow,
@@ -84,23 +88,67 @@ describe("RosterTable", () => {
     expect(screen.getByText("Awaiting approval")).toBeTruthy();
   });
 
-  it("renders NO approval signal for a row produced by toPublicRosterRow (projection→render seam)", () => {
+  it("renders NO captain triage signal for a row produced by toPublicRosterRow (projection→render seam)", () => {
     render(
       <RosterTable
         rows={[toPublicRosterRow(pendingMember())]}
         selectedId={null}
         onSelect={() => {}}
+        showStanding
       />,
     );
+    // Present first: the one standing a member may read.
+    expect(screen.getByText("Pending")).toBeTruthy();
+    // Then the absences — none of the captain's triage vocabulary.
     for (const label of [
       "Awaiting approval",
       "Onboarding",
       "Action needed",
-      "Rejected",
+      "Declined",
       "Ready",
     ]) {
       expect(screen.queryByText(label)).toBeNull();
     }
+  });
+
+  it("draws the Standing column only when the island asks for it", () => {
+    const { unmount } = render(
+      <RosterTable
+        rows={[applicantRow]}
+        selectedId={null}
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: "Member" })).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Standing" })).toBeNull();
+    expect(screen.queryByText("Pending")).toBeNull();
+    unmount();
+
+    render(
+      <RosterTable
+        rows={[applicantRow]}
+        selectedId={null}
+        onSelect={() => {}}
+        showStanding
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: "Standing" })).toBeTruthy();
+    expect(screen.getByText("Pending")).toBeTruthy();
+  });
+
+  it("never draws a standing beside a captain's status column", () => {
+    render(
+      <RosterTable
+        rows={[{ ...captainRow, standing: "pending" }]}
+        selectedId={null}
+        onSelect={() => {}}
+        showStanding
+      />,
+    );
+    // One column, one badge: the captain's, which already says as much.
+    expect(screen.getByText("Awaiting approval")).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Standing" })).toBeNull();
+    expect(screen.queryByText("Pending")).toBeNull();
   });
 });
 

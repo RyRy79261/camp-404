@@ -12,12 +12,13 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Camp management — Camp 404" };
 
 // Captains' camp-management roster. Every approved camp member may browse the
-// roster (names, handles, country, role, teams) and open a public member card;
-// the captain-only facets — approval status, join date, contact details,
-// government ID, and the approve/reject/assign actions — are withheld
+// roster (names, handles, country, role, teams), see who has applied — the
+// owner's 2026-09-22 ruling — and open a public member card; the captain-only
+// facets — join date, contact details, government ID, dues, captain notes, the
+// decision reason and the approve/reject/assign actions — are withheld
 // SERVER-SIDE for non-captains. Captains get the full triage surface, members a
-// privacy-redacted projection (`toPublicRosterRow`), so private fields never
-// cross the wire for a member.
+// privacy-redacted projection (`toPublicRosterRow`, over a roster that leaves
+// out declined sign-ups), so private fields never cross the wire for a member.
 
 export default async function CampManagementPage({
   searchParams,
@@ -36,8 +37,9 @@ export default async function CampManagementPage({
   const { cleared: isCaptain } = await captainPageGate("captain");
 
   // Fetch once; project to the captain (full) or member (public) row shape.
-  // The public projection carries no approval/onboarding/driver facets, so the
-  // member branch literally has no private data to leak.
+  // The public projection carries the applicant standing and nothing else off
+  // the approval/onboarding/driver/dues facets, so the member branch literally
+  // has no private data to leak.
   // The team data comes from the editable camp config (not a hardcoded const).
   // `teams` is the active-only, order-sorted list for the filter dropdown;
   // `teamLabels` is the full key→label map (incl. archived) for the profile
@@ -83,7 +85,7 @@ export default async function CampManagementPage({
         description={
           isCaptain
             ? "The full roster. Open a member to read their profile, approve or reject pending sign-ups, and — captain to captain — assign captain rank."
-            : "Browse who's at camp — names, teams, and what folks are bringing. Approval status and contact details stay captain-only."
+            : "Browse who's at camp and who's applied to join — names, teams, and what folks are bringing. Contact details and the captains' decisions stay captain-only."
         }
         actions={
           // One export for every rank; the file holds only what this viewer

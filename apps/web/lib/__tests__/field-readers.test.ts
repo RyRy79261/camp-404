@@ -21,6 +21,8 @@ const PUBLIC_ROSTER_SOURCES = {
   teams: ["teamMemberships.team"],
   country: ["answer:country"],
   inSouthAfrica: ["answer:country"],
+  // Owner's ruling, 2026-09-22: everyone may see who has applied.
+  standing: ["users.approvalStatus"],
 } satisfies Record<keyof PublicRosterRow, readonly string[]>;
 
 function readable(source: string): boolean {

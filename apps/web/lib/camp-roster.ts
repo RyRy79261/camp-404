@@ -12,11 +12,73 @@ export type RosterStatus =
   | "rejected"
   | "pending";
 
+// --- Who a member may see, and what of their standing ------------------------
+
 /**
- * The member-safe subset of a roster row: identity + team context that any
- * approved camp member may see. The page sends ONLY this shape to non-captains
- * (server-enforced redaction) — the captain-only facets on `RosterRow` never
- * cross the wire for a member.
+ * ─── THE OWNER'S FLIP. ONE LINE. ───────────────────────────────────────────
+ * Whether a DECLINED sign-up appears on the roster a non-captain browses.
+ *
+ * The owner ruled (2026-09-22) "I think everyone should be able to see the
+ * applicants" — applicants being the people still waiting on a captain. A
+ * rejection is a different thing: a captain's decision about somebody who is
+ * not in camp, and putting that in front of the whole camp is a social call
+ * nobody asked for. So by default a rejected person is not on a member's
+ * roster at all, and their "Declined" standing therefore cannot leak.
+ *
+ * Set this to `true` and rejected people appear to every rank wearing the
+ * "Declined" chip — nothing else has to change, because both the roster fork
+ * (`rosterForViewer`) and the member export read this one flag.
+ * ───────────────────────────────────────────────────────────────────────────
+ */
+export const MEMBERS_SEE_REJECTED: boolean = false;
+
+/**
+ * The ONLY approval facet a non-captain may read about someone else
+ * (`users.approvalStatus` is `camp_member` in MEMBER_FIELD_READERS). It is
+ * deliberately NOT `RosterStatus`: onboarding progress and outstanding
+ * required actions stay captain-only, and this type makes assigning one of
+ * them to a public row a typecheck error rather than a review question.
+ */
+export type PublicStanding = "pending" | "rejected";
+
+/** What each standing is called on a chip or badge. */
+export const PUBLIC_STANDING_LABEL: Record<PublicStanding, string> = {
+  pending: "Pending",
+  rejected: "Declined",
+};
+
+/**
+ * Whether one person belongs on the roster a NON-captain browses. Everyone who
+ * has applied or been approved does; a declined sign-up does only when the
+ * owner has flipped `MEMBERS_SEE_REJECTED`.
+ *
+ * `seeRejected` exists so the flip itself is testable from both sides —
+ * production callers pass one argument and take the constant.
+ */
+export function visibleToMembers(
+  member: Pick<CampManagementMember, "approvalStatus">,
+  seeRejected: boolean = MEMBERS_SEE_REJECTED,
+): boolean {
+  return seeRejected || member.approvalStatus !== "rejected";
+}
+
+/**
+ * The members a viewer of this rank may see AT ALL — the row-level half of the
+ * privacy rule, where `toPublicRosterRow` is the column-level half. A captain
+ * sees everyone. Used by the roster page and by the member export, so the file
+ * and the screen list the same people.
+ */
+export function membersVisibleTo<
+  T extends Pick<CampManagementMember, "approvalStatus">,
+>(members: readonly T[], isCaptain: boolean): T[] {
+  return isCaptain ? [...members] : members.filter((m) => visibleToMembers(m));
+}
+
+/**
+ * The member-safe subset of a roster row: identity, team context and the
+ * applicant standing that any approved camp member may see. The page sends
+ * ONLY this shape to non-captains (server-enforced redaction) — the
+ * captain-only facets on `RosterRow` never cross the wire for a member.
  */
 export interface PublicRosterRow {
   id: string;
@@ -31,6 +93,13 @@ export interface PublicRosterRow {
   /** Resolved home-country name, or NULL when unanswered. */
   country: string | null;
   inSouthAfrica: boolean;
+  /**
+   * Applicant standing: "pending" while a captain has not decided, "rejected"
+   * for a declined sign-up (which only reaches a non-captain when
+   * MEMBERS_SEE_REJECTED is on), and NULL for everyone already in camp. The
+   * owner's 2026-09-22 ruling, and the one approval fact on this row.
+   */
+  standing: PublicStanding | null;
 }
 
 /**
@@ -118,10 +187,11 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
 }
 
 /**
- * Map a member to the member-safe PUBLIC row — identity + team context only.
- * This is the projection the page sends to non-captain viewers; it carries none
- * of the approval / onboarding / driver facets, so those private fields are
- * impossible to leak to a member through the row. Single-sourced by `toRosterRow`
+ * Map a member to the member-safe PUBLIC row — identity, team context and the
+ * applicant `standing`. This is the projection the page sends to non-captain
+ * viewers; it carries none of the other approval facets and none of the
+ * onboarding / driver / dues ones, so those private fields are impossible to
+ * leak to a member through the row. Single-sourced by `toRosterRow`
  * (the captain row spreads this), so the public columns can never drift apart.
  */
 export function toPublicRosterRow(member: CampManagementMember): PublicRosterRow {
@@ -137,6 +207,14 @@ export function toPublicRosterRow(member: CampManagementMember): PublicRosterRow
       ? (COUNTRY_NAME.get(member.country) ?? member.country)
       : null,
     inSouthAfrica: member.country === "ZA",
+    // The one approval fact a member may read. "approved" carries no standing
+    // — being in camp is the ordinary case and wears no chip.
+    standing:
+      member.approvalStatus === "pending"
+        ? "pending"
+        : member.approvalStatus === "rejected"
+          ? "rejected"
+          : null,
   };
 }
 
@@ -183,6 +261,39 @@ export function matchesChip(row: RosterRow, chip: RosterChip): boolean {
       return row.rank === "captain";
     case "outstanding":
       return !row.requiredComplete;
+    default: {
+      const _exhaustive: never = chip;
+      return _exhaustive;
+    }
+  }
+}
+
+/**
+ * The filter chips a NON-captain gets: the same All / Pending / Captains
+ * toggles, minus Outstanding (a blocking-actions facet that stays captain-only).
+ * A subset of `RosterChip` so the shared toolbar takes either.
+ */
+export type PublicRosterChip = Extract<
+  RosterChip,
+  "all" | "pending" | "captains"
+>;
+
+/**
+ * Whether a public row belongs under a member's filter chip. `pending` reads
+ * the row's own `standing`, so the chip can only ever show people the member
+ * already has — the count and the list cannot disagree.
+ */
+export function matchesPublicChip(
+  row: PublicRosterRow,
+  chip: PublicRosterChip,
+): boolean {
+  switch (chip) {
+    case "all":
+      return true;
+    case "pending":
+      return row.standing === "pending";
+    case "captains":
+      return row.rank === "captain";
     default: {
       const _exhaustive: never = chip;
       return _exhaustive;
@@ -251,17 +362,26 @@ export function deriveRosterStats(rows: readonly RosterRow[]): RosterStats {
 }
 
 /**
- * The member-view chip counts: total members + captains only. The approval-
- * derived counts (approved / incomplete / pending / outstanding) are captain-
- * only, so they are deliberately absent here — a member's toolbar only shows the
- * All and Captains chips, computed from public fields.
+ * The member-view chip counts: total, captains and the people still waiting on
+ * a captain's decision (the owner's 2026-09-22 ruling). The remaining
+ * approval-derived counts — approved / incomplete / outstanding — stay
+ * captain-only and are deliberately absent.
+ *
+ * Counted over the rows the member ACTUALLY HAS, never over the full roster,
+ * so a "Pending 3" chip can never sit above a list of two.
  */
-export function derivePublicRosterStats(
-  rows: readonly PublicRosterRow[],
-): { members: number; captains: number } {
+export function derivePublicRosterStats(rows: readonly PublicRosterRow[]): {
+  members: number;
+  captains: number;
+  pending: number;
+} {
   let captains = 0;
-  for (const row of rows) if (row.rank === "captain") captains++;
-  return { members: rows.length, captains };
+  let pending = 0;
+  for (const row of rows) {
+    if (row.rank === "captain") captains++;
+    if (row.standing === "pending") pending++;
+  }
+  return { members: rows.length, captains, pending };
 }
 
 /** The viewer-scoped roster the page hands its island. */
@@ -274,6 +394,10 @@ export type RosterForViewer =
  * branch can ONLY ever carry the redacted public projection — the one place a
  * private field could reach a non-captain, made explicit and unit-testable. The
  * caller narrows on `isCaptain` to render the matching island.
+ *
+ * Two cuts, not one: `membersVisibleTo` decides WHO is on the member's roster
+ * (declined sign-ups are not, per MEMBERS_SEE_REJECTED), and
+ * `toPublicRosterRow` decides WHAT of each of them crosses the wire.
  */
 export function rosterForViewer(
   members: CampManagementMember[],
@@ -281,7 +405,10 @@ export function rosterForViewer(
 ): RosterForViewer {
   return isCaptain
     ? { isCaptain: true, rows: members.map(toRosterRow) }
-    : { isCaptain: false, rows: members.map(toPublicRosterRow) };
+    : {
+        isCaptain: false,
+        rows: membersVisibleTo(members, false).map(toPublicRosterRow),
+      };
 }
 
 // --- Sort ---------------------------------------------------------------

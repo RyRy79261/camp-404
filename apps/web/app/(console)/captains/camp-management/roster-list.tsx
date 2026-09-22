@@ -6,6 +6,7 @@ import {
   RoleBadge,
   RosterAvatar,
   RosterStatusBadge,
+  StandingBadge,
   countryFlag,
 } from "./roster-presentation";
 
@@ -13,8 +14,9 @@ import {
 // `ResponsiveDataTable` draws), one per member. Each card is a full-width
 // button — avatar, name + sub-line (@handle · flag · country), then the status
 // badge (captain view) and the role badge. Buttons make every card
-// keyboard-reachable. A public row has no `status`, so a member sees no
-// approval signal.
+// keyboard-reachable. A public row has no `status`; a member's card shows the
+// one approval fact they may read — the applicant standing — in the same slot,
+// and nothing at all for someone already in camp.
 
 export function RosterList({
   rows,
@@ -86,8 +88,10 @@ export function RosterList({
                 </span>
               </span>
               <span className="flex shrink-0 flex-col items-end gap-1.5">
-                {r.status && r.statusLabel && (
+                {r.status && r.statusLabel ? (
                   <RosterStatusBadge status={r.status} label={r.statusLabel} />
+                ) : (
+                  r.standing && <StandingBadge standing={r.standing} />
                 )}
                 <RoleBadge rank={r.rank} isLead={r.isLead} />
               </span>

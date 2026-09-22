@@ -28,6 +28,8 @@ test.describe("member export (test-mode)", () => {
       /^attachment; filename="camp-404-members-\d{4}-\d{2}-\d{2}\.csv"$/,
     );
     const [header] = (await res.text()).replace(/^\uFEFF/, "").split("\r\n");
-    expect(header).toBe("Name,Handle,Rank,Teams,Country");
+    // Approval is here on the owner's 2026-09-22 ruling \u2014 the file says what
+    // the roster says. Email, ID, dues and the join date stay captain-only.
+    expect(header).toBe("Name,Handle,Rank,Teams,Country,Approval");
   });
 });

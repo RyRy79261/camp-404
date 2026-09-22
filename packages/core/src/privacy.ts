@@ -96,9 +96,10 @@ export function isSafetyVisible(key: string): boolean {
 // names). A test in packages/db checks that every column of every member-data
 // table has an entry, so a new column cannot ship unlisted.
 //
-// Owner's rulings behind the rungs (2026-09-16):
+// Owner's rulings behind the rungs (2026-09-16, and the approval standing
+// 2026-09-22):
 // - Members see what the member roster shows: name, handle, rank, teams,
-//   country. Never email.
+//   country, and whether the person is still an applicant. Never email.
 // - Safety data (emergency contacts, dietary needs, allergies) is readable by
 //   the member, captains and any team lead, and every other-person read is
 //   audited.
@@ -130,7 +131,12 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "users.previousBurningMans": "captain",
   "users.firstTime": "captain",
   "users.inviteCode": "captain",
-  "users.approvalStatus": "captain",
+  // The owner ruled (2026-09-22) "I think everyone should be able to see the
+  // applicants", so whether someone is still waiting on a captain is ordinary
+  // roster information. Only the STANDING is open: who decided it, when, and
+  // what they said stay captain-only below, and a declined sign-up is kept off
+  // a member's roster entirely by MEMBERS_SEE_REJECTED in lib/camp-roster.ts.
+  "users.approvalStatus": "camp_member",
   "users.approvalDecidedByUserId": "captain",
   "users.approvalDecidedAt": "captain",
   "users.approvalDecisionReason": "captain",

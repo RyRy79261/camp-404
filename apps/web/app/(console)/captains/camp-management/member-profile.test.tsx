@@ -44,6 +44,7 @@ function row(over: Partial<RosterRow> = {}): RosterRow {
     teams: [],
     country: "South Africa",
     inSouthAfrica: true,
+    standing: "pending",
     email: null,
     status: "ready",
     statusLabel: "Ready",

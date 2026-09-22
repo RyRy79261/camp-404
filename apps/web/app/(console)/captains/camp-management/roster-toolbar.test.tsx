@@ -59,20 +59,29 @@ describe("RosterToolbar — captain view", () => {
 });
 
 describe("RosterToolbar — member view (publicOnly)", () => {
+  const publicStats = { members: 42, captains: 4, pending: 3 };
+
   it("never offers an email search to a member", () => {
-    setup({ publicOnly: true, stats: { members: 42, captains: 4 } });
+    setup({ publicOnly: true, stats: publicStats });
     expect(
       screen.getByPlaceholderText("Search by name, handle or team"),
     ).toBeTruthy();
   });
 
-  it("withholds the approval-derived chips but keeps search + team + captains", () => {
-    setup({ publicOnly: true, stats: { members: 42, captains: 4 } });
+  it("offers Pending to a member (owner's ruling) and withholds Outstanding", () => {
+    setup({ publicOnly: true, stats: publicStats });
     expect(screen.getByRole("button", { name: /All 42/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Captains 4/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Pending/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Pending 3/ })).toBeTruthy();
+    // Outstanding counts blocking required actions — captain-only.
     expect(screen.queryByRole("button", { name: /Outstanding/ })).toBeNull();
     expect(screen.getByLabelText("Filter by team")).toBeTruthy();
     expect(screen.getByLabelText("Search the roster")).toBeTruthy();
+  });
+
+  it("reports a Pending press to the member island", () => {
+    const { onChipChange } = setup({ publicOnly: true, stats: publicStats });
+    fireEvent.click(screen.getByRole("button", { name: /Pending 3/ }));
+    expect(onChipChange).toHaveBeenCalledWith("pending");
   });
 });
