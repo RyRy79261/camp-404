@@ -101,6 +101,7 @@ describe("the announcement composer", () => {
         body: "## Burn night\n\n**Everyone** meets at 20:00.",
         presentation: "feed",
         pinnedAt: null,
+        pinOnPublish: false,
         audience: { scope: "everyone" },
         senderId: "me",
         senderName: "Me",

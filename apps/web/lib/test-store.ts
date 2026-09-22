@@ -853,6 +853,7 @@ export const testStore = {
     senderName: string | null;
     publishedAt: Date | null;
     pinnedAt: Date | null;
+    pinOnPublish: boolean;
     createdAt: Date;
     recipientCount: number;
     acknowledgedCount: number;
@@ -875,6 +876,7 @@ export const testStore = {
             : null,
           publishedAt: b.publishedAt,
           pinnedAt: b.pinnedAt,
+          pinOnPublish: b.pinOnPublish,
           createdAt: b.createdAt,
           recipientCount: own.length,
           acknowledgedCount: own.filter((d) => d.acknowledgedAt !== null)

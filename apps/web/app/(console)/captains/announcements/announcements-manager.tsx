@@ -146,6 +146,18 @@ export function audienceValue(audience: Audience): string {
   return audience.scope === "team" ? `team:${audience.team}` : "everyone";
 }
 
+/**
+ * Whether an announcement carries the pin mark. A draft holds only the intent
+ * (`pinOnPublish`), which publishing turns into a pin; a published one is
+ * pinned when `pinnedAt` is set. Reading `pinnedAt` alone would show every
+ * marked draft as unmarked, and saving it would then clear the mark.
+ */
+export function markedPinned(
+  a: Pick<AnnouncementSummary, "publishedAt" | "pinnedAt" | "pinOnPublish">,
+): boolean {
+  return a.publishedAt === null ? a.pinOnPublish : a.pinnedAt !== null;
+}
+
 function audienceFromValue(value: string): Audience {
   return value.startsWith("team:")
     ? ({ scope: "team", team: value.slice(5) } as Audience)
@@ -265,7 +277,7 @@ export function AnnouncementsManager({
       body: a.body,
       presentation: a.presentation,
       audience: audienceValue(a.audience),
-      pinned: a.pinnedAt !== null,
+      pinned: markedPinned(a),
     });
   };
 
@@ -691,7 +703,7 @@ function AnnouncementHeader({
           {/* AfrikaBurn's bulletin card wears the pin in the kicker row. On a
               draft it is the composer's mark: the pin only reaches a screen
               once the announcement is published. */}
-          {a.pinnedAt !== null && (
+          {markedPinned(a) && (
             <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
               <Pin className="h-3.5 w-3.5" aria-hidden />
               {a.publishedAt === null ? "Will stay at top" : "Pinned"}

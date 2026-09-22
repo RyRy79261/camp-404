@@ -47,6 +47,7 @@ function sent(
     senderName: "Me",
     publishedAt: new Date("2026-09-01T10:00:00Z"),
     pinnedAt: null,
+    pinOnPublish: false,
     createdAt: new Date("2026-09-01T09:00:00Z"),
     recipientCount: 3,
     acknowledgedCount: 0,
@@ -95,6 +96,39 @@ describe("the composer's second axis", () => {
       screen.getByRole("switch", { name: "Keep it at the top" }).getAttribute("aria-checked"),
     ).toBe("true");
   });
+});
+
+describe("a draft keeps its mark", () => {
+  // A draft stores only the intent (`pinOnPublish`); `pinnedAt` stays NULL
+  // until publish. Reading `pinnedAt` showed a marked draft as unmarked, and
+  // the next save then cleared the mark. Seed both sides, so this cannot pass
+  // on a constant.
+  it.each([
+    [true, "true"],
+    [false, "false"],
+  ] as const)(
+    "reopens a draft marked %s with the switch at %s",
+    (pinOnPublish, checked) => {
+      renderAs(null, [
+        sent({
+          id: "d1",
+          title: "Water run",
+          publishedAt: null,
+          recipientCount: 0,
+          readCount: 0,
+          pinOnPublish,
+        }),
+      ]);
+      const card = within(cardFor("Water run"));
+      expect(card.queryByText("Will stay at top") !== null).toBe(pinOnPublish);
+      fireEvent.click(card.getByRole("button", { name: /Edit/ }));
+      expect(
+        screen
+          .getByRole("switch", { name: "Keep it at the top" })
+          .getAttribute("aria-checked"),
+      ).toBe(checked);
+    },
+  );
 });
 
 describe("pin controls on a published announcement", () => {

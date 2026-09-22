@@ -222,11 +222,14 @@ export interface AnnouncementSummary {
   senderName: string | null;
   /** NULL while a draft; the publish timestamp once sent. */
   publishedAt: Date | null;
-  /**
-   * NULL when not pinned. On a draft it is the composer's mark — the pin only
-   * reaches a screen once the announcement is published and delivered.
-   */
+  /** NULL when not pinned. Only a published announcement is ever pinned. */
   pinnedAt: Date | null;
+  /**
+   * The composer's "keep it at the top" on a DRAFT: publishing spends it into
+   * a pin. False once published. The editor reads it back, so reopening a
+   * marked draft keeps the mark instead of clearing it on the next save.
+   */
+  pinOnPublish: boolean;
   createdAt: Date;
   /** Recipients fanned out to (0 for drafts). */
   recipientCount: number;
@@ -260,6 +263,7 @@ export async function listAnnouncements(
       senderName: schema.users.displayName,
       publishedAt: schema.broadcasts.publishedAt,
       pinnedAt: schema.broadcasts.pinnedAt,
+      pinOnPublish: schema.broadcasts.pinOnPublish,
       createdAt: schema.broadcasts.createdAt,
       recipientCount: sql<number>`(
         select count(*)::int from notification_deliveries nd

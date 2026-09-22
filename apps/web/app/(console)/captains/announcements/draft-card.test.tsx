@@ -44,6 +44,7 @@ function draft(
     senderName: "Me",
     publishedAt: null,
     pinnedAt: null,
+    pinOnPublish: false,
     createdAt: new Date("2026-09-01T10:00:00Z"),
     recipientCount: 0,
     acknowledgedCount: 0,

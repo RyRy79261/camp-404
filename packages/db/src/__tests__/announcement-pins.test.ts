@@ -434,6 +434,30 @@ describe("announcement pins — the composer's mark", () => {
     expect(await auditRows(db, id)).toHaveLength(0);
   });
 
+  it("the captain's list hands the mark back, so reopening a draft keeps it", async () => {
+    const db = ctx.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const marked = await createAnnouncementDraft({
+      senderId: captain.id,
+      ...DRAFT,
+      audience: { scope: "everyone" },
+      pinned: true,
+    });
+    const plain = await createAnnouncementDraft({
+      senderId: captain.id,
+      ...DRAFT,
+      audience: { scope: "everyone" },
+      pinned: false,
+    });
+
+    const byId = new Map((await listAnnouncements()).map((a) => [a.id, a]));
+    expect(byId.get(marked.id)).toMatchObject({
+      pinnedAt: null,
+      pinOnPublish: true,
+    });
+    expect(byId.get(plain.id)).toMatchObject({ pinOnPublish: false });
+  });
+
   it("publishing spends the intent, writes the pin, and records it", async () => {
     const db = ctx.db();
     const captain = await makeUser(db, { rank: "captain" });
