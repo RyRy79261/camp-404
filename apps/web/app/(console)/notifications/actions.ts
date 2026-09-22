@@ -15,6 +15,7 @@ import {
   listInbox,
   markAllRead,
   markRead,
+  unreadClearableCount,
   type InboxItem,
   type InboxPage,
 } from "@/lib/notifications";
@@ -199,6 +200,13 @@ export interface PanelQuestionnaire {
 export interface NotificationPanelData {
   recent: InboxItem[];
   pending: PanelQuestionnaire[];
+  /**
+   * How many deliveries "Mark all read" would clear, read fresh with the rows.
+   * NOT the same as the `recent` window: the panel shows the newest few, and
+   * the unread ones can all be older than that. The panel says this number out
+   * loud, so a badge of 10 over six already-read rows still adds up.
+   */
+  clearable: number;
 }
 
 /** How many inbox rows the header panel shows before "See all". */
@@ -210,38 +218,55 @@ const PANEL_LIMIT = 6;
  * delivery read (AfrikaBurn's panel does not either) — only opening the inbox
  * or pressing "Mark all read" does.
  *
- * It returns BOTH halves of what the bell counts: the latest deliveries and the
- * questionnaires still waiting. The badge is `unread + pending`, so a panel
- * that listed only deliveries would read 2 over an empty list.
+ * It returns both halves of what the bell counts — the latest deliveries and
+ * the questionnaires still waiting — plus `clearable`, how many unread
+ * deliveries there are IN ALL. The panel lists only the newest few, so the list
+ * on its own cannot account for the badge; the number can, and the panel shows
+ * it. The badge is `unread + pending`, so a panel that listed only deliveries
+ * would read 2 over an empty list.
  *
  * Takes no user id — the inbox is always the signed-in member's own, resolved
- * here. A caller who is signed out or not camp-active gets empty lists, so the
- * panel degrades to its empty state rather than erroring the whole header.
+ * here. A read that FAILS says so: it goes through `runAction` like its
+ * neighbours and the panel reports the error, because painting the empty state
+ * over a failed read tells the member nothing was sent, which is the opposite
+ * of what happened. A caller who is signed out or not camp-active is not an
+ * error — they get empty lists, so the panel degrades rather than erroring the
+ * whole header.
  */
-export async function fetchNotificationPanelAction(): Promise<NotificationPanelData> {
-  const empty: NotificationPanelData = { recent: [], pending: [] };
-  try {
+export async function fetchNotificationPanelAction(): Promise<
+  ActionResult<NotificationPanelData>
+> {
+  return runAction("fetchNotificationPanelAction", async () => {
+    const empty: NotificationPanelData = {
+      recent: [],
+      pending: [],
+      clearable: 0,
+    };
     const authUser = await getAuthenticatedUser();
-    if (!authUser) return empty;
+    if (!authUser) return { ok: true, data: empty };
     const campUser = await ensureCampUser(authUser);
-    if (!hasCampAccess(campUser, authUser.primaryEmail)) return empty;
-    const [page, pending] = await Promise.all([
+    if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+      return { ok: true, data: empty };
+    }
+    const [page, pending, clearable] = await Promise.all([
       listInbox(campUser.id, { limit: PANEL_LIMIT }),
       getPendingQuestionnaires(campUser.id),
+      unreadClearableCount(campUser.id),
     ]);
     return {
-      recent: page.items,
-      pending: pending.map((q) => ({
-        activationId: q.activationId,
-        title: q.title,
-        blocking: q.blocking,
-        dueAt: q.dueAt,
-      })),
+      ok: true,
+      data: {
+        recent: page.items,
+        pending: pending.map((q) => ({
+          activationId: q.activationId,
+          title: q.title,
+          blocking: q.blocking,
+          dueAt: q.dueAt,
+        })),
+        clearable,
+      },
     };
-  } catch (err) {
-    console.error("[action:fetchNotificationPanelAction]", err);
-    return empty;
-  }
+  });
 }
 
 /**

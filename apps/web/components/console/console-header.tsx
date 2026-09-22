@@ -24,9 +24,10 @@ import { ConsoleNav } from "./console-nav";
  * destination exists that the viewer's rank cannot open.
  *
  * The bell opens the notification panel rather than jumping to the inbox
- * (AfrikaBurn's console header). The counts are still read here, on the server,
- * so the badge is right before anyone touches it; the panel fetches its own
- * rows when it opens.
+ * (AfrikaBurn's console header). The badge is still read here, on the server,
+ * so it is right before anyone touches it; the panel fetches its own rows AND
+ * its own unread total when it opens, so nothing it shows or offers is a stale
+ * copy of this render.
  */
 export async function ConsoleHeader({
   campUser,
@@ -76,7 +77,7 @@ export async function ConsoleHeader({
                 {rankLabel(campUser.rank, lead)}
               </Badge>
             </div>
-            <NotificationPanel count={count} unreadCount={unread} />
+            <NotificationPanel count={count} />
             <Button variant="ghost" size="sm" asChild>
               <Link href="/profile" aria-label="Your account">
                 <UserRound className="h-4 w-4" aria-hidden />

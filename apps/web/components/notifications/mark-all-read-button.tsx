@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCheck } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
@@ -11,6 +11,10 @@ import { markAllNotificationsReadAction } from "@/app/(console)/notifications/ac
 // "Mark all read" — own inbox only (the action resolves the member itself and
 // pins the UPDATE to them). A one-tap control on the panel's header row, so a
 // failure is a toast and only this control spins.
+//
+// It does NOT latch itself off after a press: `disabled` is driven by the
+// panel's fresh unread count, which `onDone` re-reads, so a delivery that lands
+// between the press and the refetch still finds the control live.
 
 export function MarkAllReadButton({
   disabled,
@@ -24,9 +28,6 @@ export function MarkAllReadButton({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  // A press that succeeded should not re-arm itself while the server-rendered
-  // count catches up on the refresh.
-  const [cleared, setCleared] = useState(false);
 
   return (
     <Button
@@ -34,7 +35,7 @@ export function MarkAllReadButton({
       variant="ghost"
       size="sm"
       className={className}
-      disabled={disabled || cleared || pending}
+      disabled={disabled || pending}
       onClick={() =>
         startTransition(async () => {
           const result = await markAllNotificationsReadAction();
@@ -44,7 +45,6 @@ export function MarkAllReadButton({
             });
             return;
           }
-          setCleared(true);
           onDone?.();
           router.refresh();
         })

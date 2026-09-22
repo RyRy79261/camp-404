@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { NotificationBell } from "@camp404/ui/components/notification-bell";
+import { Button } from "@camp404/ui/components/button";
 import {
   Popover,
   PopoverContent,
@@ -26,46 +27,65 @@ import {
 // Escape / outside-click dismissal.
 //
 // Rows load lazily on open through a read-only server action scoped to the
-// signed-in member's own inbox. The badge count still comes from the server
-// render (ConsoleHeader), so it is right before anyone interacts.
+// signed-in member's own inbox, and are dropped again on close: a reopen must
+// never paint the last open's read state as if it were current.
+//
+// The panel lists only the newest few rows, so the list alone cannot account
+// for a badge — the unread TOTAL comes back with the rows and is written out
+// under the heading, which is what makes the number and the list agree. The
+// badge itself is still the server render's, so it is right before anyone
+// interacts.
 //
 // Opening the panel marks NOTHING read — that is the inbox's job, and a badge
 // that cleared itself on a peek would lose the member their unread list.
 
 const PANEL = "flex w-[min(26rem,calc(100vw-1rem))] flex-col gap-0 p-0";
+const NOTE = "px-4 py-6 text-sm text-muted-foreground";
+
+type PanelState =
+  | { status: "loading" }
+  | { status: "ready"; data: NotificationPanelData }
+  | { status: "error"; error: string };
 
 export function NotificationPanel({
   count,
-  unreadCount,
 }: {
   /** What the badge shows: unread deliveries plus waiting questionnaires. */
   count: number;
-  /** Unread deliveries alone — the only half "Mark all read" can clear. */
-  unreadCount: number;
 }) {
   const [open, setOpen] = useState(false);
-  const [data, setData] = useState<NotificationPanelData | null>(null);
-  // Bumped to force a refetch, e.g. after "Mark all read".
+  const [state, setState] = useState<PanelState>({ status: "loading" });
+  // Bumped to force a refetch, e.g. after "Mark all read" or a retry.
   const [nonce, setNonce] = useState(0);
   const headingId = useId();
   // The server's clock, frozen per open so every row in one panel agrees.
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      // Drop the last open's rows, so reopening shows "Loading…" rather than a
+      // stale list whose unread dots the inbox may since have cleared.
+      setState({ status: "loading" });
+      return;
+    }
     let cancelled = false;
+    setState({ status: "loading" });
     setNow(new Date());
-    void fetchNotificationPanelAction().then((rows) => {
-      if (!cancelled) setData(rows);
+    void fetchNotificationPanelAction().then((result) => {
+      if (cancelled) return;
+      setState(
+        result.ok
+          ? { status: "ready", data: result.data }
+          : { status: "error", error: result.error },
+      );
     });
     return () => {
       cancelled = true;
     };
   }, [open, nonce]);
 
-  const rows = data
-    ? data.pending.length + data.recent.length
-    : /* not loaded yet */ -1;
+  const data = state.status === "ready" ? state.data : null;
+  const rows = data ? data.pending.length + data.recent.length : 0;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -79,21 +99,51 @@ export function NotificationPanel({
         aria-labelledby={headingId}
       >
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-          <h2 id={headingId} className="text-sm font-semibold">
-            Notifications
-          </h2>
+          <div className="flex flex-col">
+            <h2 id={headingId} className="text-sm font-semibold">
+              Notifications
+            </h2>
+            {/* The unread total, not the number of rows below it: the panel is
+                a window on the inbox, and saying so is what stops a badge of 10
+                hanging over six rows that are all read. */}
+            {data && (
+              <p className="text-xs text-muted-foreground">
+                {data.clearable === 0
+                  ? "Nothing unread"
+                  : `${data.clearable} unread`}
+              </p>
+            )}
+          </div>
           <MarkAllReadButton
-            disabled={unreadCount === 0}
+            // The fresh count from this open, never the header's server render:
+            // a row that arrived since must not find the control dead.
+            disabled={!data || data.clearable === 0}
             className="-mr-2"
             onDone={() => setNonce((n) => n + 1)}
           />
         </div>
 
         <div className="max-h-[60vh] overflow-y-auto">
-          {rows === -1 ? (
-            <p className="px-4 py-6 text-sm text-muted-foreground">Loading…</p>
+          {state.status === "loading" ? (
+            <p className={NOTE}>Loading…</p>
+          ) : state.status === "error" ? (
+            <div className={NOTE}>
+              {/* A failed read is reported as a failure. Telling the member
+                  their inbox is empty when it could not be read is worse than
+                  telling them nothing. */}
+              <p>Couldn&rsquo;t load your notifications. {state.error}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => setNonce((n) => n + 1)}
+              >
+                Try again
+              </Button>
+            </div>
           ) : rows === 0 ? (
-            <p className="px-4 py-6 text-sm text-muted-foreground">
+            <p className={NOTE}>
               Nothing here yet — announcements, captain requests and
               questionnaires land here as they are sent.
             </p>
