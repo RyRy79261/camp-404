@@ -26,6 +26,14 @@
 // `^\s*` happily eats the blank line BEFORE it, which silently welded a
 // captain's paragraphs together.
 //
+// CODE IS PARKED, NOT STRIPPED. Inside a fence or a code span markdown stops
+// being markdown: the renderer shows those characters exactly as typed. So the
+// scanners below lift that text out BEFORE any rule runs and put it back after.
+// Otherwise a fenced "1. Run **exactly**" reaches a lock screen as "Run
+// exactly" while the page still shows the line the captain wrote. Backslash
+// escapes are parked the same way and for the same reason — and they are parked
+// SECOND, because `\*` inside code is two literal characters, not an escape.
+//
 // IT STRIPS COMMONMARK, AND ONLY COMMONMARK — the same dialect the renderer
 // parses (react-markdown with no remark-gfm). So `~~closed~~` is NOT stripped:
 // the announcement page shows those tildes, and a push that quietly deleted
@@ -37,17 +45,131 @@
 const ESCAPED = /\\([\\`*_{}[\]()#+\-.!>~|])/g;
 
 /**
- * An escaped character, parked out of the way while the strip runs. A captain
- * who typed `\*` means a literal star, and the emphasis rules below must not
- * read it as one. The marker is a Unicode private-use character, which has no
- * meaning of its own and is cleared from the input first, so a body cannot
- * smuggle one in and steer the restore.
+ * A parked run of text, held out of the way while the strip runs. The marker
+ * is a Unicode private-use character, which has no meaning of its own and is
+ * cleared from the input first, so a body cannot smuggle one in and steer the
+ * restore.
  */
-const MARK = "\uE000";
-const PARKED = /\uE000(\d+)\uE000/g;
+const MARK = "";
+const PARKED = /(\d+)/g;
 
-/** Fence lines of a code block: the fence goes, the code inside stays. */
-const CODE_FENCE = /^[ \t]{0,3}(?:`{3,}|~{3,})[^\n]*$/gm;
+/**
+ * Set `value` aside and return the token that stands in its place. The token
+ * is inert to every rule in `RULES`, which is the whole point: what goes in
+ * comes back out character for character.
+ */
+function park(value: string, parked: string[]): string {
+  parked.push(value);
+  return `${MARK}${parked.length - 1}${MARK}`;
+}
+
+/** The opening line of a fenced code block: indent, fence, info string. */
+const FENCE_OPEN = /^([ \t]{0,3})(`{3,}|~{3,})([^\n]*)$/;
+
+/** A closing fence: the same character, at least as long, and nothing after. */
+const FENCE_CLOSE = /^[ \t]{0,3}(`{3,}|~{3,})[ \t]*$/;
+
+/**
+ * Drop up to `width` leading spaces or tabs — the indent an opening fence's
+ * own position hides from the code inside it, so a block written inside a list
+ * item does not arrive with that list item's indent baked in.
+ */
+function stripIndent(line: string, width: number): string {
+  let i = 0;
+  while (i < width && (line[i] === " " || line[i] === "\t")) i += 1;
+  return line.slice(i);
+}
+
+/**
+ * Park every fenced code block, leaving its contents on a line of their own.
+ * A fence that is never closed runs to the end of the body — what CommonMark
+ * says, and therefore what a member reads on the page.
+ */
+function parkFencedCode(text: string, parked: string[]): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] ?? "";
+    const open = FENCE_OPEN.exec(line);
+    const fence = open?.[2] ?? "";
+    // A backtick fence's info string may not hold a backtick; such a line is
+    // ordinary prose with code spans in it.
+    if (!open || (fence.startsWith("`") && (open[3] ?? "").includes("`"))) {
+      out.push(line);
+      continue;
+    }
+    const indent = (open[1] ?? "").length;
+    const body: string[] = [];
+    let j = i + 1;
+    for (; j < lines.length; j += 1) {
+      const close = FENCE_CLOSE.exec(lines[j] ?? "")?.[1];
+      if (close && close[0] === fence[0] && close.length >= fence.length) break;
+      body.push(stripIndent(lines[j] ?? "", indent));
+    }
+    out.push(park(body.join("\n"), parked));
+    i = j;
+  }
+  return out.join("\n");
+}
+
+/**
+ * Park every inline code span. A run of N backticks opens one and only a run
+ * of exactly N closes it, which is how ``` ``a ` b`` ``` keeps its inner
+ * backtick. A run with no partner is literal text and is left where it is.
+ */
+function parkCodeSpans(text: string, parked: string[]): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== "`") {
+      out += text.charAt(i);
+      i += 1;
+      continue;
+    }
+    let open = 0;
+    while (text[i + open] === "`") open += 1;
+
+    let j = i + open;
+    let close = -1;
+    while (j < text.length) {
+      if (text[j] === "`") {
+        let run = 0;
+        while (text[j + run] === "`") run += 1;
+        if (run === open) {
+          close = j;
+          break;
+        }
+        j += run;
+        continue;
+      }
+      // A blank line ends the paragraph, so it ends the search: an unmatched
+      // backtick must not swallow the rest of the announcement.
+      if (text[j] === "\n" && /^[ \t]*(?:\n|$)/.test(text.slice(j + 1))) break;
+      j += 1;
+    }
+
+    if (close === -1) {
+      out += text.slice(i, i + open);
+      i += open;
+      continue;
+    }
+
+    let content = text.slice(i + open, close).replace(/\n/g, " ");
+    // One space either side is the writer making room for a backtick of their
+    // own, not part of the code.
+    if (
+      content.length >= 2 &&
+      content.startsWith(" ") &&
+      content.endsWith(" ") &&
+      content.trim() !== ""
+    ) {
+      content = content.slice(1, -1);
+    }
+    out += park(content, parked);
+    i = close + open;
+  }
+  return out;
+}
 
 /** A thematic break: `---`, `***`, `___` (three or more, spaces allowed). */
 const THEMATIC_BREAK =
@@ -64,13 +186,12 @@ const SETEXT_HEADING =
   /^(?=[ \t]{0,3}\S)([^\n]+)\n[ \t]{0,3}(?:=+|-+)[ \t]*$/gm;
 
 /**
- * Applied in order. Block markers first (they are anchored to line starts and
- * would be disturbed by inline edits), then links before emphasis so that
- * `[**Water**](…)` loses the link and then the bold.
+ * Applied in order, and only to what the code scanners left behind. Block
+ * markers first (they are anchored to line starts and would be disturbed by
+ * inline edits), then links before emphasis so that `[**Water**](…)` loses the
+ * link and then the bold.
  */
 const RULES: readonly [RegExp, string][] = [
-  [CODE_FENCE, ""],
-  [/`+([^`\n]*)`+/g, "$1"], // inline code → its contents
   [/!\[([^\]]*)\]\([^)\s]*(?:[ \t]+[^)]*)?\)/g, "$1"], // image → its alt text
   [/\[([^\]]*)\]\([^)\s]*(?:[ \t]+[^)]*)?\)/g, "$1"], // link → its text
   [/\[([^\]]*)\]\[[^\]]*\]/g, "$1"], // reference link → its text
@@ -110,20 +231,17 @@ const RULES: readonly [RegExp, string][] = [
  * `apps/web/components/announcements/markdown-body.tsx`.
  */
 export function plainPreview(markdown: string, max?: number): string {
-  const parked = markdown
-    .replace(/\r\n?/g, "\n")
-    .replaceAll(MARK, "")
-    .replace(
-      ESCAPED,
-      (_match, ch: string) => `${MARK}${ch.charCodeAt(0)}${MARK}`,
-    );
+  const parked: string[] = [];
+  const source = markdown.replace(/\r\n?/g, "\n").replaceAll(MARK, "");
+  const withCode = parkCodeSpans(parkFencedCode(source, parked), parked);
+  const withEscapes = withCode.replace(ESCAPED, (_match, ch: string) =>
+    park(ch, parked),
+  );
 
   const stripped = RULES.reduce(
     (acc, [pattern, replacement]) => acc.replace(pattern, replacement),
-    parked,
-  ).replace(PARKED, (_match, code: string) =>
-    String.fromCharCode(Number(code)),
-  );
+    withEscapes,
+  ).replace(PARKED, (_match, index: string) => parked[Number(index)] ?? "");
 
   if (max === undefined) {
     return stripped.replace(/\n{3,}/g, "\n\n").trim();

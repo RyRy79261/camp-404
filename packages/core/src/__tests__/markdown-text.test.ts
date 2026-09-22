@@ -89,6 +89,71 @@ describe("plainPreview — the whole body (no max)", () => {
     );
   });
 
+  it("leaves markdown inside a fence exactly as the page shows it", () => {
+    // Inside a fence the renderer stops parsing, so every marker below is
+    // shown to a member as punctuation. Strip them here and the push says
+    // "Run exactly" while the page says "1. Run **exactly**".
+    const body = [
+      "```",
+      "1. Run **exactly**",
+      "# not a heading",
+      "*not* a list, _not_ italic",
+      "[not a link](/nowhere)",
+      "```",
+    ].join("\n");
+    expect(plainPreview(body)).toBe(
+      [
+        "1. Run **exactly**",
+        "# not a heading",
+        "*not* a list, _not_ italic",
+        "[not a link](/nowhere)",
+      ].join("\n"),
+    );
+  });
+
+  it("leaves markdown inside a code span alone too", () => {
+    expect(plainPreview("Use `**literal**` here.")).toBe(
+      "Use **literal** here.",
+    );
+    expect(plainPreview("See `[link](/x)` and `_id_`.")).toBe(
+      "See [link](/x) and _id_.",
+    );
+    // A backslash is not an escape inside code; the member reads both
+    // characters.
+    expect(plainPreview("Type `\\*` to get a star.")).toBe(
+      "Type \\* to get a star.",
+    );
+  });
+
+  it("carries a fence that was never closed to the end of the body", () => {
+    // CommonMark says an unclosed fence runs to the end, so that is what the
+    // page shows; the push has to agree.
+    expect(plainPreview("Steps:\n\n```\n1. **Sign in**")).toBe(
+      "Steps:\n\n1. **Sign in**",
+    );
+  });
+
+  it("closes a code span only on a backtick run of the same length", () => {
+    expect(plainPreview("Use ``a ` b`` here.")).toBe("Use a ` b here.");
+    expect(plainPreview("The ``` fence ``` marker.")).toBe(
+      "The fence marker.",
+    );
+  });
+
+  it("leaves a lone backtick where it was typed", () => {
+    // No partner, so it is not a code span — and it must not swallow the rest
+    // of the announcement looking for one.
+    expect(plainPreview("Costs R50 ` each.\n\n**Bring cash**.")).toBe(
+      "Costs R50 ` each.\n\nBring cash.",
+    );
+  });
+
+  it("clips a row through the code, not around it", () => {
+    expect(plainPreview("Run `pnpm db:local:up` before **dinner**.", 200)).toBe(
+      "Run pnpm db:local:up before dinner.",
+    );
+  });
+
   it("drops block-quote markers, however deep", () => {
     expect(plainPreview("> The captain said:\n> > no cars after dark.")).toBe(
       "The captain said:\nno cars after dark.",
