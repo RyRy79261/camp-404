@@ -43,7 +43,7 @@ The four gates, in order, are enforced on **every** protected page
 (`app/page.tsx` is the canonical chain; `tools/*`, `family-tree`,
 `onboarding/*` repeat it):
 
-1. **Authenticated?** — Neon Auth (Better Auth) session cookie. No session
+1. **Authenticated?** — Better Auth session cookie. No session
    → landing hero / sign-in.
 2. **Has camp access?** — `hasCampAccess()`: either a verified `GOD_EMAILS`
    address or an invite code redeemed onto the user's row. No access →
@@ -59,7 +59,7 @@ The four gates, in order, are enforced on **every** protected page
 
 ## 2. Access & authentication
 
-Neon Auth creates an identity the moment someone signs in — especially via
+Better Auth creates an identity the moment someone signs in — especially via
 Google — so the app **cannot** gate sign-up behind an invite code. Instead
 the invite check lives *after* auth: a signed-in user with no code on file
 is bounced to `/signup/required`, where they enter a code that is **claimed**
@@ -98,14 +98,14 @@ Key behaviours worth knowing:
   `requiresApproval` flag on the code, both applied at claim time; the latter
   routes the redeemer through the captain-approval gate (gate 4 in §1).
 - **God accounts** (`GOD_EMAILS`) bypass the invite *and* approval gates,
-  but only with an email Neon Auth has verified.
+  but only with an email Better Auth has verified.
 
 ### Sequence: redeeming an invite end-to-end
 
 ```mermaid
 sequenceDiagram
     actor U as New member
-    participant NA as Neon Auth
+    participant NA as Better Auth
     participant SR as /signup/required
     participant SA as submitInviteCode (server action)
     participant DB as Postgres (invites + users)
@@ -252,14 +252,14 @@ sequenceDiagram
 ### 5b. MCP connector — chat against your camp data
 
 A member adds the camp's MCP endpoint as a custom connector in Claude.ai,
-signs in through the same Neon Auth flow, approves a consent screen, and
+signs in through the same Better Auth flow, approves a consent screen, and
 the model gains read + write tools scoped to that user's in-app
 permissions (ID documents gated behind a per-user opt-in).
 
 ```mermaid
 flowchart LR
     M([Member in Claude.ai]) --> ADD[Add custom connector<br/>/api/mcp/mcp]
-    ADD --> OAUTH[Neon Auth sign-in<br/>DCR + PKCE]
+    ADD --> OAUTH[Better Auth sign-in<br/>DCR + PKCE]
     OAUTH --> CONSENT[Approve consent screen]
     CONSENT --> TOOLS[Scoped read+write tools<br/>per in-app permissions]
     TOOLS -.ID docs.-> OPTIN{Per-subject opt-in?}

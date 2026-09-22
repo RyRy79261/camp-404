@@ -104,4 +104,4 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
 - ~~**PII backfill**~~ — automatic: the daily `/api/cron/maintenance` job encrypts any leftover plaintext ID number.
 - ~~**Erased members' photos**~~ — automatic: the same job deletes avatar folders whose owner has no camp account (production only).
 - ~~**Invite bootstrap codes**~~ — no longer needed for safety: an `INVITE_CODES` value shorter than 20 characters now lands its redeemer as pending, for a captain to approve. A long random value still lets members straight in.
-- **Account erasure:** the app sanitises the camp row to "Lost Cat #N" and severs the auth link; deleting the upstream **Neon Auth** identity is a separate operator action.
+- **Account erasure:** ~~deleting the upstream Neon Auth identity is a separate operator action.~~ [CORRECTION 2026-09-23] Resolved by the move to self-hosted Better Auth: erasure now deletes the sign-in identity (email, password hash, sessions, passkeys) in the same transaction as the "Lost Cat #N" sanitise.

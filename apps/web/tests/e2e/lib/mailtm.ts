@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 // Programmatic disposable-inbox client for the real-DB preview E2E suite. It lets
 // the Playwright spec self-provision a fresh email address and read whatever the
-// auth provider sends (e.g. a Neon Auth verification link / OTP) with NO agent or
+// auth provider sends (e.g. a Better Auth verification link / OTP) with NO agent or
 // MCP in the loop — built on Node's global fetch, so it adds no dependency.
 //
 // Backend: mail.tm (https://docs.mail.tm). The API is keyless. mail.tm enforces a

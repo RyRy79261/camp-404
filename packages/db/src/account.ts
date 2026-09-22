@@ -16,7 +16,7 @@ export function lostCatName(n: number): string {
 
 /**
  * The `users`-row patch that anonymises an account. Pure (no DB) so it is
- * unit-tested. `authUserId` is severed to `deleted:<id>` so the Neon Auth login
+ * unit-tested. `authUserId` is severed to `deleted:<id>` so the old login id
  * no longer maps to this row — a re-login becomes a fresh, access-less user.
  * Keeps `id` and `inviteCode` (who invited them — lineage); drops rank to
  * `member`. Every other `users` column is either cleared here or kept on

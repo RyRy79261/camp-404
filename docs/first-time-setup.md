@@ -8,7 +8,7 @@ onboarded captain — with **no hand-run SQL**. Shipped in PR #98.
 On a **fresh system** (no captain exists yet), the first person to sign in is
 routed to the `/setup` wizard before any invite/onboarding gate:
 
-1. They sign in via Neon Auth.
+1. They sign in (email and password, a passkey, or Google if it is set up).
 2. `apps/web/app/page.tsx` sees the camp isn't bootstrapped and redirects to
    `/setup`. This is the **universal** bootstrap path — god-email accounts go
    through it too.
@@ -63,7 +63,7 @@ Members who already joined keep their place. The revoke writes an
 ## Resetting to a fresh start (testing)
 
 To re-test first launch, wipe all app data so the system looks brand-new. This
-leaves your Neon Auth login, the schema, and the migration history intact —
+leaves your login, the schema, and the migration history intact —
 only Camp 404 domain rows are cleared. **Run against a Neon branch/fork, not
 production, unless you really mean it.**
 
@@ -102,7 +102,7 @@ Then sign in → `/setup` runs again.
 ## Notes / follow-ups
 
 - **God-emails** (`GOD_EMAILS`) stay as a recovery path, but setup is the
-  universal bootstrap path. A god address only counts once Neon Auth has
+  universal bootstrap path. A god address only counts once the auth server has
   verified it (owner's call, 2026-09-16): an unverified session that claims
   one keeps its account but not the email (`apps/web/lib/session-user.ts`),
   so sign-up with the owner's address cannot walk past the gates.

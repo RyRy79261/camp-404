@@ -56,7 +56,7 @@ Four traps that already cost real time:
   test: pass the `tx` down, or read after the transaction returns. Green on
   PGlite is not proof of Neon pooling or cold starts.
 - **E2E runs on the in-memory test store.** Playwright starts `next dev` with
-  `E2E_TEST_MODE=1`, and `apps/web/lib/test-store.ts` stands in for Neon Auth
+  `E2E_TEST_MODE=1`, and `apps/web/lib/test-store.ts` stands in for the login
   and the database. A data function with no test-store twin cannot be driven
   by Playwright. Add the twin with the feature, or say in the PR that the flow
   has no E2E cover.
@@ -96,9 +96,27 @@ restyle only with tokens; do not invent a design.
 
 ## Database — read this before touching the schema
 
-The database is Neon Postgres + Drizzle ORM. Authentication/identity lives
-in Neon Auth (Better Auth); our `users` table joins to it via
-`auth_user_id` (the upstream `user.id`).
+The database is Neon Postgres + Drizzle ORM. Sign-in is self-hosted Better
+Auth (`packages/auth`, owner's call 2026-09-22, replacing managed Neon Auth):
+its tables (`user`, `session`, `account`, `verification`, `rate_limit`,
+`two_factor`, `passkey`) live in our schema, and our `users` table joins to
+them via `auth_user_id` (`user.id`). There is deliberately no foreign key
+between the two: erasure deletes the `user` row and keeps `users` as the
+"Lost Cat" stub.
+
+Sign-in rules worth knowing before you touch `packages/auth`:
+
+- **A Vercel deployment without `BETTER_AUTH_SECRET` fails closed** (sign-in
+  off, `/api/auth/*` answers 503), because the placeholder secret is in this
+  public repo and previews share the production database. `authMayServe` is
+  the one switch; do not add a second.
+- **Passkeys are bound to a domain for life.** `AUTH_APEX_DOMAIN`
+  (camp-404.com) scopes them so the bare domain and `www` share one. Changing
+  the domain means every member re-enrols their passkeys (passwords keep
+  working).
+- **Keep `changeEmail` unmounted** until a flow that notifies the CURRENT
+  address exists (AfrikaBurn's finding: the stock flow turns a stolen session
+  into an account takeover).
 
 **`packages/db/src/schema.ts` is the single hand-authored source of truth.**
 Everything under `packages/db/migrations/` — the `.sql` files,

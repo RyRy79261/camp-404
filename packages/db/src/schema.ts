@@ -30,11 +30,10 @@ import {
 // are absent on every existing row and resolve to their defaults.
 import type { CampConfig } from "./camp-config";
 
-// Camp 404 schema. Authentication is handled by Neon Auth (Better Auth) —
-// the managed auth service holds credentials, sessions, and identity. Our
-// `users` table below stores camp-specific profile data and joins to the
-// auth service via the `auth_user_id` column (the upstream Better Auth
-// user id).
+// Camp 404 schema. Authentication is self-hosted Better Auth (@camp404/auth):
+// its tables (`user`, `session`, `account`, …) are declared below and hold
+// credentials, sessions and identity. Our `users` table stores camp-specific
+// profile data and joins to them via `auth_user_id` (Better Auth's `user.id`).
 
 // --- Enums ---------------------------------------------------------------
 

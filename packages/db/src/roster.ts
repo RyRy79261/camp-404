@@ -39,7 +39,7 @@ export interface CampManagementMember {
   /** ISO alpha-2 country code from the burner profile (NULL if unanswered). */
   country: string | null;
   /**
-   * Sign-in email, from Neon Auth. Present ONLY when the caller passed
+   * Sign-in email, from the Better Auth `user` table. Present ONLY when the caller passed
    * `includeEmail: true` (a captain); members never see another's email.
    */
   email?: string | null;

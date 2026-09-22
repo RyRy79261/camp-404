@@ -20,7 +20,7 @@ import { QuestionnaireFill } from "@/components/questionnaire/fill";
 import { RunnerEdgeCard } from "./edge-states";
 import { RunnerFrame } from "./runner-frame";
 
-// Reads the Neon Auth session + the activation on every request.
+// Reads the sign-in session + the activation on every request.
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Questionnaire — Camp 404" };

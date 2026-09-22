@@ -12,7 +12,7 @@ import { ProfileSections } from "@/components/profile/profile-sections";
 import { ProfileEditForm } from "./edit-form";
 import { DeleteAccountForm } from "./delete-account";
 
-// Reads the Neon Auth session on every request.
+// Reads the sign-in session on every request.
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Edit profile — Camp 404" };

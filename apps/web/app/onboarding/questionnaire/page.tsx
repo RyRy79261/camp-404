@@ -20,7 +20,7 @@ import { QuestionnaireGate } from "./gate";
 import { BurnerProfileRunner } from "./burner-profile-runner";
 import type { QuestionnaireResponses } from "@camp404/types";
 
-// Reads the Neon Auth session on every request.
+// Reads the sign-in session on every request.
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Your burner profile — Camp 404" };

@@ -1,5 +1,12 @@
 # Brief — True E2E with a real Neon Auth login
 
+> **[CORRECTION 2026-09-23]** Sign-in is now self-hosted Better Auth
+> (`packages/auth`), not managed Neon Auth. Most of this brief's plumbing is
+> gone: there is no separate auth project or `NEON_AUTH_*` secret. A real
+> sign-in runs against the local stack (`pnpm db:local:up`) with only
+> `BETTER_AUTH_SECRET` set, and the real-database Playwright config can sign
+> members up through `/api/auth/*` directly. The goal below still stands.
+
 > Goal: stand up a second, smaller Playwright suite that drives **real Neon
 > Auth sign-in against a real Neon Postgres branch**, covering the credential
 > exchange (and the screens that need a real DB) that the fast in-memory

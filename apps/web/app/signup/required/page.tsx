@@ -5,7 +5,7 @@ import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 import { InviteGateForm } from "./invite-gate-form";
 
-// Pulls the Neon Auth session via cookies — can't be statically prerendered.
+// Pulls the sign-in session via cookies — can't be statically prerendered.
 export const dynamic = "force-dynamic";
 
 export const metadata = {
@@ -13,7 +13,7 @@ export const metadata = {
 };
 
 /**
- * The post-auth invite gate. We can't stop Neon Auth from creating an
+ * The post-auth invite gate. Sign-up is open, and Google creates an
  * identity when someone signs in (Google especially), so the invite check
  * lives here instead of before sign-up: a signed-in user with no code on
  * file lands on this screen and can't reach the questionnaire until they

@@ -11,7 +11,7 @@ import {
 } from "@/lib/users";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 
-// Reads the Neon Auth session on every request.
+// Reads the sign-in session on every request.
 export const dynamic = "force-dynamic";
 
 // Static export — Next can't branch this on the runtime approval status, so it

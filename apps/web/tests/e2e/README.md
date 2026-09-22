@@ -91,9 +91,9 @@ pnpm --filter @camp404/web test:e2e:db
 ### How auth bypass works
 
 In production, every page that needs a user calls
-`getAuthenticatedUser()` which reads the Neon Auth session cookie. In
+`getAuthenticatedUser()` which reads the Better Auth session cookie. In
 test mode, that same helper looks for the `camp404_test_user` cookie
-first and only falls back to Neon Auth if it's absent. Playwright specs
+first and only falls back to Better Auth if it's absent. Playwright specs
 POST to `/api/test/login` with a JSON body to set that cookie:
 
 ```ts
@@ -213,6 +213,11 @@ on `E2E_TEST_MODE` and so only run against the local dev server.
 > Neon branch per run, `storageState` reuse, CI job sketch, secrets
 > checklist, and the real-DB captain flows it unlocks).
 
+> **[CORRECTION 2026-09-23]** Neon Auth is gone: sign-in is self-hosted
+> Better Auth (`packages/auth`) in our own database. The steps below that
+> name a Neon Auth project or `NEON_AUTH_*` variables no longer apply; a real
+> sign-in needs only the local stack and `BETTER_AUTH_SECRET`.
+
 Once a Neon database and a Neon Auth project are wired up, the
 `E2E_TEST_MODE` harness can stay as the fast development inner loop and
 a parallel suite of "true" E2E specs can drive real Neon Auth signups
@@ -239,8 +244,8 @@ the job installs the Chromium browser (cached on `~/.cache/ms-playwright`,
 keyed by the lockfile) and runs `pnpm --filter @camp404/web test:e2e`, which
 auto-starts `next dev` with `E2E_TEST_MODE=1`. Because that flag routes auth
 and DB through the in-memory store, the job needs **no** Vercel preview, no
-`DATABASE_URL`, and no Neon Auth secrets — the build-time placeholder env in
-`lib/neon-auth.ts` / `packages/db/src/index.ts` carries module load. On
+`DATABASE_URL`, and no auth secret — the build-time placeholders in
+`packages/auth/src/config.ts` / `packages/db/src/index.ts` carry module load. On
 failure the Playwright HTML report is uploaded as a build artifact.
 
 The Vitest layer also runs on every PR (the `test` job). A future "true" E2E

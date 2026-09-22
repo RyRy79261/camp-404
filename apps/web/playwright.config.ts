@@ -69,7 +69,7 @@ export default defineConfig({
           // bootstrap code so the /signup spec can submit it; everything
           // else stays on the in-repo placeholder fallbacks. E2E_TEST_MODE
           // enables /api/test/login + the in-memory user store so we can
-          // drive authenticated flows without a real Neon Auth session.
+          // drive authenticated flows without a real Better Auth session.
           E2E_TEST_MODE: "1",
           // Lowercase, the one spelling codes have. The specs type it in
           // capitals on purpose, to prove redemption ignores case. At least

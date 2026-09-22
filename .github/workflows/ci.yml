@@ -187,11 +187,11 @@ jobs:
         run: pnpm audit --audit-level high
 
   # Playwright e2e suite. Self-contained: playwright.config.ts auto-starts
-  # `next dev` with E2E_TEST_MODE=1, which bypasses Neon Auth and the Neon
+  # `next dev` with E2E_TEST_MODE=1, which bypasses the login and the Neon
   # database with the in-memory test store (apps/web/lib/test-store.ts). So
-  # this job needs no Vercel preview, no DATABASE_URL, and no Neon Auth
-  # secrets — the app's build-time placeholder env (see lib/neon-auth.ts and
-  # packages/db/src/index.ts) carries module load, and every test-mode path
+  # this job needs no Vercel preview, no DATABASE_URL, and no auth secret —
+  # the build-time placeholders (packages/auth/src/config.ts and
+  # packages/db/src/index.ts) carry module load, and every test-mode path
   # reads/writes the in-memory store instead.
   e2e:
     needs: [changes]

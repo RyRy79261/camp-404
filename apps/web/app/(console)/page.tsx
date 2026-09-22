@@ -27,7 +27,7 @@ import { EnablePush } from "@/components/push/enable-push";
 import { LandingHero } from "../landing-hero";
 import { CaptainStatusBoard, RecentActivity } from "./overview/captain-panels";
 
-// Reads the Neon Auth session cookie on every request, so can't be
+// Reads the sign-in session cookie on every request, so can't be
 // statically prerendered.
 export const dynamic = "force-dynamic";
 

@@ -65,7 +65,7 @@ export interface CampUser {
 }
 
 /**
- * Resolve the camp user row for the given authenticated user (Neon Auth or
+ * Resolve the camp user row for the given authenticated user (Better Auth or
  * test). A row is only ever persisted for someone who has earned access: a
  * god account (auto-created, approved) or an existing row. An authenticated
  * user with no row and no invite yet gets a synthetic, non-persisted row
@@ -119,7 +119,7 @@ export type RedeemInviteResult = { ok: true } | { ok: false; error: string };
  * Claim an invite code for an already-authenticated user and stamp it onto
  * their camp row, creating the row if this is their first time through. This
  * is the post-auth invite gate (POSTed from /signup/required): the user has
- * signed in via Neon Auth but can't reach the questionnaire until a valid
+ * signed in but can't reach the questionnaire until a valid
  * code is on file.
  *
  * The claim is atomic — for a capped DB code, two racing redeemers can't both
