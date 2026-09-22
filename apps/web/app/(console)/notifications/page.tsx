@@ -15,7 +15,12 @@ import { getIncomingPromotionsForUser } from "@/lib/promotion";
 import { QueueCard } from "@/components/questionnaire/queue-card";
 import { InboxFeed } from "./inbox-feed";
 import { NotificationFilterTabs } from "./filter-tabs";
-import { marksPageRead, parseInboxFilter, type InboxFilter } from "./filter";
+import {
+  feedIds,
+  marksPageRead,
+  parseInboxFilter,
+  type InboxFilter,
+} from "./filter";
 import { PromotionRequestCard } from "./promotion-request-card";
 
 export const dynamic = "force-dynamic";
@@ -92,10 +97,7 @@ export default async function NotificationsPage({
   const { items, nextCursor } = await listInbox(campUser.id, { filter });
   if (marksPageRead(filter)) {
     try {
-      await markRead(
-        campUser.id,
-        items.map((i) => i.id),
-      );
+      await markRead(campUser.id, feedIds(items));
     } catch (err) {
       // The list is still worth showing. The badge stays until the next visit.
       console.error("notifications markRead failed", err);

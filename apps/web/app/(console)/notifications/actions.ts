@@ -20,7 +20,7 @@ import {
   type InboxPage,
 } from "@/lib/notifications";
 import { getPendingQuestionnaires } from "@/lib/users";
-import { marksPageRead, parseInboxFilter } from "./filter";
+import { feedIds, marksPageRead, parseInboxFilter } from "./filter";
 
 export type PromotionDecisionResult =
   | { ok: true }
@@ -180,10 +180,7 @@ export async function loadOlderNotificationsAction(
     // page filtered after the fact would be short and its cursor would skip.
     const page = await listInbox(campUser.id, { before: cursor, filter });
     if (marksPageRead(filter)) {
-      await markRead(
-        campUser.id,
-        page.items.map((i) => i.id),
-      );
+      await markRead(campUser.id, feedIds(page.items));
     }
     return { ok: true, data: page };
   });

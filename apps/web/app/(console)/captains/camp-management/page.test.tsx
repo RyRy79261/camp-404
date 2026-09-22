@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TeamsConfig } from "@camp404/db/camp-config";
+import type * as CampConfig from "@/lib/camp-config";
 
 // What the page does with `?team=` — the Overview's coverage rail links here
 // with a team key on the URL, and the page is the only thing that decides
@@ -13,7 +14,7 @@ import type { TeamsConfig } from "@camp404/db/camp-config";
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/roster", () => ({ getCampManagementRoster: vi.fn() }));
 vi.mock("@/lib/camp-config", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/camp-config")>()),
+  ...(await importOriginal<typeof CampConfig>()),
   getTeamsConfig: vi.fn(),
 }));
 // The islands are exercised in their own tests; here only the props matter.

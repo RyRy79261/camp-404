@@ -49,3 +49,16 @@ export function parseInboxFilter(raw: string | undefined): InboxFilter {
 export function marksPageRead(filter: InboxFilter): boolean {
   return filter !== "unread";
 }
+
+/**
+ * The ids a rendered inbox page may mark read: everything on it except a
+ * pop-up the member has not been shown. `read_at` on a `presentation="popup"`
+ * row is the "already shown" mark that `claimPopups` stamps, so clearing it
+ * here would spend a one-time pop-up — a captain-rank request, an approval —
+ * that no screen ever drew. "Mark all read" leaves them for the same reason.
+ */
+export function feedIds(
+  items: readonly { id: string; presentation: string }[],
+): string[] {
+  return items.filter((i) => i.presentation !== "popup").map((i) => i.id);
+}
