@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { ClipboardList, LifeBuoy, LogOut, Pencil } from "lucide-react";
+import { ClipboardList, LogOut, Pencil } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "@camp404/ui/components/avatar";
 import { Badge } from "@camp404/ui/components/badge";
-import { Button, buttonVariants } from "@camp404/ui/components/button";
+import { Button } from "@camp404/ui/components/button";
 import {
   Card,
   CardContent,
@@ -20,8 +20,9 @@ import { requireMemberPage } from "@/lib/member-gate";
 import { getMemberRefCode } from "@/lib/payments";
 import { isTeamLead } from "@/lib/users";
 import { initialsFrom } from "@/lib/initials";
+import { feedbackTracker } from "@/lib/integration-config";
 import { SignOutLink } from "@/components/auth/sign-out-link";
-import { ReportProblemLink } from "@/components/feedback/report-problem-link";
+import { ReportSettingsCard } from "@/components/feedback/report-settings-card";
 import { ProfileSections } from "@/components/profile/profile-sections";
 import { PaymentReference } from "./payment-reference";
 
@@ -44,6 +45,10 @@ export default async function ProfilePage() {
     getMemberRefCode(campUser.id),
   ]);
   const rank = rankLabel(campUser.rank, lead);
+  // Read on the server; only the repo name crosses to the browser — never the
+  // token. `ok: false` means a report has nowhere to go, and the card says so
+  // rather than offering a button that fails.
+  const tracker = feedbackTracker(process.env);
 
   return (
     <div className="flex flex-col">
@@ -117,23 +122,11 @@ export default async function ProfilePage() {
           </div>
 
           <div className="flex flex-col gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <LifeBuoy className="h-4 w-4 text-accent" aria-hidden />
-                  Bugs and feature requests
-                </CardTitle>
-                <CardDescription>
-                  Report a bug or ask for a feature. On a phone, shaking it
-                  opens the same reporter.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ReportProblemLink
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                />
-              </CardContent>
-            </Card>
+            <ReportSettingsCard
+              filingEnabled={tracker.ok}
+              repo={tracker.ok ? `${tracker.owner}/${tracker.name}` : null}
+              aiAvailable={!!process.env.ANTHROPIC_API_KEY}
+            />
 
             <Card>
               <CardHeader>

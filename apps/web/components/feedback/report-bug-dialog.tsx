@@ -26,6 +26,7 @@ import { cn } from "@camp404/ui/lib/utils";
 import { RecorderPanel } from "../voice/recorder-panel";
 import { useDictationToggle } from "../voice/use-dictation-toggle";
 import { useVoiceSupported } from "../voice/use-voice-recorder";
+import { ReportDiagnosticsPanel } from "./report-diagnostics";
 import {
   submitFeedbackAction,
   type FeedbackResult,
@@ -292,7 +293,9 @@ export function ReportBugDialog({
                     Helps find the fault. You see everything that is sent below.
                   </span>
                 </AckRow>
-                {attached && <DiagnosticsList diagnostics={attached} />}
+                {attached && (
+                  <ReportDiagnosticsPanel diagnostics={attached} defaultOpen />
+                )}
               </div>
 
               {error && (
@@ -390,43 +393,5 @@ function KindOption({
         {description}
       </span>
     </button>
-  );
-}
-
-/** Every line a report attaches, before it is sent. */
-function DiagnosticsList({ diagnostics }: { diagnostics: ReportDiagnostics }) {
-  return (
-    <div className="flex flex-col gap-2 text-xs">
-      <p className="text-muted-foreground">
-        This goes on a public GitHub issue. Your name, email and account are
-        never attached. Personal details found in these lines are removed first,
-        but that can miss things.
-      </p>
-      <dl className="flex flex-col gap-1 rounded-md bg-muted p-2">
-        {diagnostics.environment.map((field) => (
-          <div key={field.label} className="flex gap-2">
-            <dt className="w-20 shrink-0 font-semibold">{field.label}</dt>
-            <dd className="min-w-0 flex-1 break-all font-mono">
-              {field.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      {diagnostics.errors.length === 0 ? (
-        <p>No recent errors in this tab.</p>
-      ) : (
-        <ul
-          aria-label="Recent errors"
-          className="flex flex-col gap-1 rounded-md bg-muted p-2 font-mono"
-        >
-          {diagnostics.errors.map((e, i) => (
-            <li key={`${e.at}-${i}`} className="break-all">
-              {e.source}: {e.message}
-              {e.route ? ` (at ${e.route})` : ""}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }

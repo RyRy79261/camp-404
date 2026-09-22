@@ -13,6 +13,7 @@ import {
 } from "@/components/feedback/report-problem";
 import { authClient } from "@/lib/auth-client";
 import { installClientErrorCapture } from "@/lib/client-errors";
+import type { FeedbackKind } from "@/lib/github-feedback";
 
 /**
  * Mounted once in the root layout (sibling of AcknowledgementGate). Shaking the
@@ -31,6 +32,7 @@ export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
   const signedIn = !isPending && !!session;
   const [open, setOpen] = React.useState(false);
   const [prefill, setPrefill] = React.useState("");
+  const [kind, setKind] = React.useState<FeedbackKind>("bug");
 
   // Recent errors are kept from the first render, so a report made after
   // something broke can attach what happened before it.
@@ -40,6 +42,7 @@ export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
     enabled: signedIn && !open,
     onShake: () => {
       setPrefill("");
+      setKind("bug");
       setOpen(true);
     },
   });
@@ -49,6 +52,7 @@ export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
     const onRequest = (event: Event) => {
       const detail = (event as CustomEvent<ReportProblemRequest>).detail;
       setPrefill(detail?.description ?? "");
+      setKind(detail?.kind ?? "bug");
       setOpen(true);
     };
     window.addEventListener(REPORT_PROBLEM_EVENT, onRequest);
@@ -74,6 +78,7 @@ export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
       open={open}
       onOpenChange={setOpen}
       aiAvailable={aiAvailable}
+      defaultKind={kind}
       defaultDescription={prefill}
     />
   );
