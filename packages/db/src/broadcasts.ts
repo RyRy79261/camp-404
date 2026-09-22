@@ -6,6 +6,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -959,25 +960,56 @@ export async function markRead(userId: string, ids: string[]): Promise<void> {
 }
 
 /**
- * Mark every one of a member's unread deliveries read — the header panel's
- * "Mark all read", which clears the badge without opening the inbox.
+ * Mark a member's unread deliveries read — the header panel's "Mark all read",
+ * which clears the badge without opening the inbox.
  *
  * Same UPDATE as {@link markRead} without the id list, so it is scoped to the
  * caller's own rows by the very same `user_id` term: it can never touch
  * another member's inbox. `.returning()` gives the caller the number of rows
  * it actually cleared, so a second press reports 0 rather than pretending.
+ *
+ * `presentation = 'popup'` rows are LEFT UNREAD on purpose. For a pop-up,
+ * `read_at` is not "the member read this", it is "the member was shown this":
+ * {@link claimPopups} stamps it as it hands the pop-up to the screen, and
+ * {@link countUnseenPopups} counts the ones still owed. Clearing them here
+ * would consume a pop-up the member has never seen — exactly what the note on
+ * {@link markRead} warns against — and a questionnaire release that is meant
+ * to "shout until it's done" would never shout. They stay in the badge until
+ * the poller shows them, which takes seconds; the member loses nothing.
+ * {@link unreadClearableCount} is the same predicate, for the button's state.
  */
 export async function markAllRead(userId: string): Promise<number> {
   const db = createHttpDb();
   const rows = await db
     .update(schema.notificationDeliveries)
     .set({ readAt: new Date() })
-    .where(
-      and(
-        eq(schema.notificationDeliveries.userId, userId),
-        isNull(schema.notificationDeliveries.readAt),
-      ),
-    )
+    .where(clearableUnread(userId))
     .returning({ id: schema.notificationDeliveries.id });
   return rows.length;
+}
+
+/**
+ * The rows {@link markAllRead} would clear: a member's unread deliveries bar
+ * the pop-ups it deliberately leaves for the pop-up poller to show.
+ */
+function clearableUnread(userId: string) {
+  return and(
+    eq(schema.notificationDeliveries.userId, userId),
+    isNull(schema.notificationDeliveries.readAt),
+    ne(schema.notificationDeliveries.presentation, "popup"),
+  );
+}
+
+/**
+ * How many rows "Mark all read" would actually clear. The badge's
+ * {@link countUnread} is wider — it counts unshown pop-ups too — so the button
+ * asks this instead, or it would offer to clear a badge it cannot clear.
+ */
+export async function unreadClearableCount(userId: string): Promise<number> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.notificationDeliveries)
+    .where(clearableUnread(userId));
+  return row?.count ?? 0;
 }

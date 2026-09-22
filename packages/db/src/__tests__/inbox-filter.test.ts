@@ -3,7 +3,14 @@ import { sql } from "drizzle-orm";
 import type { NotificationKind } from "@camp404/types";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
-import { listInbox, markAllRead, markRead } from "../broadcasts";
+import {
+  claimPopups,
+  countUnseenPopups,
+  listInbox,
+  markAllRead,
+  markRead,
+  unreadClearableCount,
+} from "../broadcasts";
 import * as schema from "../schema";
 
 // The inbox tabs (All / Unread / Announcements) narrow the SQL, and
@@ -22,13 +29,14 @@ async function deliver(
   at: string,
   kind: NotificationKind = "announcement",
   readAt: string | null = null,
+  presentation: "feed" | "popup" | "acknowledge" = "feed",
 ) {
   await db.insert(schema.notificationDeliveries).values({
     userId,
     title,
     body: `${title} body`,
     channel: "in_app",
-    presentation: "feed",
+    presentation,
     kind,
     createdAt: sql`${at}::timestamp` as unknown as Date,
     readAt: readAt ? (sql`${readAt}::timestamp` as unknown as Date) : null,
@@ -129,6 +137,33 @@ describe("markAllRead", () => {
     // A second press has nothing left to clear, and says so rather than
     // re-stamping rows that were already read.
     expect(await markAllRead(member.id)).toBe(0);
+  });
+
+  it("never swallows a pop-up the member has not been shown", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    // `read_at` on a pop-up is the "was SHOWN" mark that claimPopups stamps —
+    // not a "was read" one. Clearing it here would mean the member never sees
+    // the pop-up at all, which for a questionnaire release is the whole point.
+    await deliver(db, member.id, "feed row", "2026-09-10 08:00:00");
+    await deliver(db, member.id, "your questionnaire is open", "2026-09-11 08:00:00", "questionnaire_release", null, "popup"); // prettier-ignore
+    await deliver(db, member.id, "please acknowledge", "2026-09-12 08:00:00", "announcement", null, "acknowledge"); // prettier-ignore
+
+    // Only the two non-pop-up rows are clearable, and only they are cleared.
+    expect(await unreadClearableCount(member.id)).toBe(2);
+    expect(await markAllRead(member.id)).toBe(2);
+
+    expect(await titles(member.id, { filter: "unread" })).toEqual([
+      "your questionnaire is open",
+    ]);
+    // The pop-up is still owed, and still claimable.
+    expect(await countUnseenPopups(member.id)).toBe(1);
+    expect((await claimPopups(member.id)).map((p) => p.title)).toEqual([
+      "your questionnaire is open",
+    ]);
+    // Once shown, it is read like anything else, and there is nothing left.
+    expect(await countUnseenPopups(member.id)).toBe(0);
+    expect(await titles(member.id, { filter: "unread" })).toEqual([]);
   });
 
   it("leaves the already-read timestamp alone", async () => {
