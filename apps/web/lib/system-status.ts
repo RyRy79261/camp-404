@@ -381,7 +381,8 @@ function bugReportsCheck(env: EnvBag): SystemCheck {
       ...base,
       value: `Files to ${tracker.owner}/${tracker.name}`,
       tone: "ok",
-      detail: "Report a problem opens a GitHub issue in this repository.",
+      detail:
+        'The profile\'s "Bugs and feature requests" card, and a shake, open a GitHub issue in this repository.',
     };
   }
   return tracker.reason === "no_token"
@@ -390,7 +391,7 @@ function bugReportsCheck(env: EnvBag): SystemCheck {
         value: "Off",
         tone: "degraded",
         detail:
-          "No GitHub token. Report a problem tells the member it is not set up yet.",
+          "No GitHub token. The reporter still opens and tells the member it is not set up yet.",
       }
     : {
         ...base,
