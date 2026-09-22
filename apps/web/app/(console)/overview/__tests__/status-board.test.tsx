@@ -104,6 +104,7 @@ function coverageRow(over: Partial<TeamCoverageRow> = {}): TeamCoverageRow {
     leads: 1,
     hasLead: true,
     archived: false,
+    unconfigured: false,
     href: "/captains/camp-management?team=kitchen",
     ...over,
   };
@@ -162,6 +163,32 @@ describe("TeamCoverageCard", () => {
     expect(screen.getByText("Archived")).toBeTruthy();
   });
 
+  it("does not link a team the config does not name, and does not call it archived", () => {
+    // There is no `?team=` the roster page would honour for this key, so a link
+    // would open the whole camp under a row that says "3 members".
+    render(
+      <TeamCoverageCard
+        rows={[
+          coverageRow({
+            key: "ministry_of_memes",
+            label: "ministry_of_memes",
+            members: 3,
+            unconfigured: true,
+            href: null,
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Not in camp settings")).toBeTruthy();
+    expect(screen.queryByText("Archived")).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /ministry_of_memes/ }),
+    ).toBeNull();
+    // The row itself is still there — hiding it would lose the three members.
+    expect(screen.getByText("3 members")).toBeTruthy();
+  });
+
   it("with no teams configured, points at camp settings rather than an empty bar", () => {
     const { container } = render(<TeamCoverageCard rows={[]} />);
     expect(screen.getByText(/No teams are set up yet/)).toBeTruthy();
@@ -178,7 +205,8 @@ function send(over: Partial<SendCompletion> = {}): SendCompletion {
     completed: 2,
     eligible: 3,
     completionPct: 67,
-    href: "/captains/questionnaires/gear-check/metrics",
+    cycle: 2027,
+    href: "/captains/questionnaires/gear-check/metrics?cycle=2027",
     ...over,
   };
 }
@@ -190,7 +218,7 @@ describe("SendCompletionCard", () => {
     expect(screen.getByText("2 / 3 · 67%")).toBeTruthy();
     expect(
       screen.getByRole("link", { name: "Gear check" }).getAttribute("href"),
-    ).toBe("/captains/questionnaires/gear-check/metrics");
+    ).toBe("/captains/questionnaires/gear-check/metrics?cycle=2027");
   });
 
   it("says a send reached nobody rather than printing 0 / 0 · 0%", () => {

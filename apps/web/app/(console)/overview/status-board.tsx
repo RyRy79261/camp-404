@@ -160,17 +160,29 @@ export function TeamCoverageCard({ rows }: { rows: TeamCoverageRow[] }) {
                   key={row.key}
                   className="flex items-center justify-between gap-3 py-2 first:pt-1 last:pb-0"
                 >
-                  <Link
-                    href={row.href}
-                    className="text-sm font-medium underline-offset-4 hover:text-accent hover:underline"
-                  >
-                    {row.label}
-                    {row.archived && (
+                  {/* No link for a team the camp config does not name: the
+                      roster has no filter for it, and a link that quietly
+                      opened the whole camp would read as that team's people. */}
+                  {row.href === null ? (
+                    <span className="text-sm font-medium">
+                      {row.label}
                       <span className="ml-1.5 text-[0.6rem] uppercase tracking-[0.18em] text-muted-foreground">
-                        Archived
+                        Not in camp settings
                       </span>
-                    )}
-                  </Link>
+                    </span>
+                  ) : (
+                    <Link
+                      href={row.href}
+                      className="text-sm font-medium underline-offset-4 hover:text-accent hover:underline"
+                    >
+                      {row.label}
+                      {row.archived && (
+                        <span className="ml-1.5 text-[0.6rem] uppercase tracking-[0.18em] text-muted-foreground">
+                          Archived
+                        </span>
+                      )}
+                    </Link>
+                  )}
                   <span className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span className="tabular-nums">
                       {row.members} member{row.members === 1 ? "" : "s"}
@@ -217,7 +229,10 @@ export function TeamCoverageCard({ rows }: { rows: TeamCoverageRow[] }) {
  *
  * "Answered out of reached" is reach NOW, not reach ever: `required_actions`
  * keeps one row per member per key, so a re-send overwrites the previous send's
- * gates. That is the same figure the results page prints.
+ * gates. Each row links to its results page FOR ITS OWN YEAR (`?cycle=`), which
+ * is where the same figure is printed — an open send can be stamped with a year
+ * the camp has already rolled past, and the results page defaults to the
+ * current one.
  */
 export function SendCompletionCard({ sends }: { sends: SendCompletion[] }) {
   return (

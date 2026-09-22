@@ -208,16 +208,29 @@ describe("deriveTeamCoverage", () => {
     expect(rows[0]).toMatchObject({ archived: true, members: 2 });
   });
 
-  it("still shows a team the config does not name at all", () => {
+  it("shows a team the config does not name, with no link and no archived chip", () => {
     // A `teamEnum` value with no config entry: people are on it, so hiding it
-    // would lose them.
+    // would lose them. But the roster page validates `?team=` against the
+    // configured teams, so a link would fall through to the UNFILTERED roster —
+    // the captain would read the whole camp as this team's three people. And
+    // nobody archived it, so it must not claim they did.
     const rows = deriveTeamCoverage(
       [coverage({ team: "ministry_of_memes" as TeamCoverage["team"] })],
       [team()],
     );
 
     expect(rows.map((r) => r.key)).toEqual(["kitchen", "ministry_of_memes"]);
-    expect(rows[1]).toMatchObject({ members: 3, archived: true });
+    expect(rows[1]).toMatchObject({
+      members: 3,
+      archived: false,
+      unconfigured: true,
+      href: null,
+    });
+    // The configured team keeps its link and is not flagged.
+    expect(rows[0]).toMatchObject({
+      unconfigured: false,
+      href: "/captains/camp-management?team=kitchen",
+    });
   });
 });
 
@@ -249,8 +262,25 @@ describe("deriveSendCompletion", () => {
       // 2 completed + 1 pending; the waived and the expired row left.
       eligible: 3,
       completionPct: 67,
-      href: "/captains/questionnaires/gear-check/metrics",
+      cycle: 2027,
+      href: "/captains/questionnaires/gear-check/metrics?cycle=2027",
     });
+  });
+
+  it("links a send to the results page FOR THE YEAR IT WAS SENT IN", () => {
+    // A carry-over questionnaire's open send survives a rollover untouched
+    // (advanceCycle's `carriesOver` bucket does nothing), so an open send
+    // stamped 2026 in a 2027 camp is ordinary. The results page defaults to the
+    // newest year, where that activation does not exist and no completion
+    // figure is printed at all — so the year has to travel with the link.
+    const [stale] = deriveSendCompletion([
+      gate({ cycle: 2026, status: "completed" }),
+    ]);
+
+    expect(stale!.cycle).toBe(2026);
+    expect(stale!.href).toBe(
+      "/captains/questionnaires/gear-check/metrics?cycle=2026",
+    );
   });
 
   it("keeps each open send apart", () => {

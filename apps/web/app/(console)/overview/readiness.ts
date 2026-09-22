@@ -136,8 +136,15 @@ export interface TeamCoverageRow {
    * would otherwise lose.
    */
   archived: boolean;
-  /** The roster, filtered to this team. */
-  href: string;
+  /**
+   * A team key the camp config does not name at all. The roster page validates
+   * `?team=` against the configured teams, so such a key has no filter to link
+   * to and no option in the filter dropdown — the row states the fact instead
+   * of pretending to a link that would quietly open the whole camp.
+   */
+  unconfigured: boolean;
+  /** The roster, filtered to this team — null when there is no filter for it. */
+  href: string | null;
 }
 
 /** The roster page, opened with its team filter already applied. */
@@ -173,12 +180,19 @@ export function deriveTeamCoverage(
       leads: found?.leads ?? 0,
       hasLead: (found?.leads ?? 0) > 0,
       archived: team.archived,
+      unconfigured: false,
       href: rosterTeamHref(team.key),
     });
   }
 
   // A team key that carries members but is missing from the config entirely
   // (an enum value no config entry names) is still a team people are on.
+  //
+  // It gets NO link and it is not called "Archived": nobody archived it. The
+  // roster page checks `?team=` against the configured teams and falls back to
+  // the unfiltered roster, so a link here would answer a row saying "3 members"
+  // with the entire camp — the captain would read the whole roster as that
+  // team's people.
   const known = new Set(configured.map((t) => t.key));
   for (const entry of coverage) {
     if (known.has(entry.team) || entry.members === 0) continue;
@@ -188,8 +202,9 @@ export function deriveTeamCoverage(
       members: entry.members,
       leads: entry.leads,
       hasLead: entry.leads > 0,
-      archived: true,
-      href: rosterTeamHref(entry.team),
+      archived: false,
+      unconfigured: true,
+      href: null,
     });
   }
 
@@ -203,6 +218,8 @@ export interface SendCompletion {
   activationId: string;
   questionnaireKey: string;
   title: string;
+  /** The burn year this send was stamped with — the year its results live in. */
+  cycle: number;
   /** Gates this send holds now — reach, not reach ever. */
   sent: number;
   completed: number;
@@ -213,9 +230,22 @@ export interface SendCompletion {
   href: string;
 }
 
-/** A send's results, the aggregate view. */
-export function sendResultsHref(questionnaireKey: string): string {
-  return `/captains/questionnaires/${encodeURIComponent(questionnaireKey)}/metrics`;
+/**
+ * A send's results, the aggregate view, FOR THE YEAR THAT SEND BELONGS TO.
+ *
+ * The `?cycle=` is not decoration. A questionnaire marked carry-over keeps its
+ * open activation across a rollover (`advanceCycle`'s `carriesOver` bucket does
+ * nothing to it), so an open send stamped with last year's cycle is an ordinary
+ * state. Without the year, `loadResults` falls back to `cycleOptions[0]` — the
+ * current year — and `listActivationsForCycle` finds no activation there, so the
+ * page the captain lands on prints no completion figure at all while the row
+ * they clicked said "8 / 12 · 67%".
+ */
+export function sendResultsHref(
+  questionnaireKey: string,
+  cycle: number,
+): string {
+  return `/captains/questionnaires/${encodeURIComponent(questionnaireKey)}/metrics?cycle=${cycle}`;
 }
 
 /**
@@ -248,11 +278,12 @@ export function deriveSendCompletion(
       activationId: row.activationId,
       questionnaireKey: row.questionnaireKey,
       title: row.title,
+      cycle: row.cycle,
       sent: tally.sent,
       completed: tally.completed,
       eligible: tally.eligible,
       completionPct: tally.completionPct,
-      href: sendResultsHref(row.questionnaireKey),
+      href: sendResultsHref(row.questionnaireKey, row.cycle),
     };
   });
 }
