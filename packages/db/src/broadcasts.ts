@@ -409,30 +409,21 @@ export type PublishResult =
 export async function publishAnnouncement(input: {
   id: string;
   senderId: string;
-  /**
-   * A team lead's teams, read at publish time. When given, only a draft
-   * addressed to one of these teams can be claimed, so a lead who has since
-   * lost a team cannot send to it from an old draft. A captain passes none.
-   */
-  allowedTeams?: readonly Team[];
 }): Promise<PublishResult> {
+  // Who the sender may reach, as the transaction saw it — kept for the refusal
+  // sentence, which is read after the transaction ends.
+  let reach: readonly Team[] | undefined;
   const published = await withTransaction(async (tx) => {
+    reach = await lockSenderReach(tx, input.senderId);
     // Claim the draft: only an unpublished row owned by this sender flips,
-    // and for a lead only one addressed to a team they lead.
+    // and for a lead only one addressed to a team they lead RIGHT NOW.
     const claimed = await tx
       .update(schema.broadcasts)
       .set({ publishedAt: new Date(), dispatchedAt: new Date() })
       .where(
         and(
           isOwnedAnnouncementDraft(input.id, input.senderId),
-          input.allowedTeams
-            ? and(
-                eq(schema.broadcasts.scope, "team"),
-                input.allowedTeams.length > 0
-                  ? inArray(schema.broadcasts.team, [...input.allowedTeams])
-                  : sql`false`,
-              )
-            : undefined,
+          reachClaim(reach),
         ),
       )
       .returning({
@@ -512,11 +503,7 @@ export async function publishAnnouncement(input: {
   return (
     published ?? {
       ok: false,
-      error: await explainDraftRefusal(
-        input.id,
-        input.senderId,
-        input.allowedTeams,
-      ),
+      error: await explainDraftRefusal(input.id, input.senderId, reach),
     }
   );
 }
@@ -532,9 +519,9 @@ export async function publishAnnouncement(input: {
 // am allowed to post to everyone, then that means I'm also allowed to pin
 // something that is posted to everyone." The rule itself is `canSendToAudience`
 // in @camp404/core, applied by the caller against this broadcast's own
-// audience; the claim below re-checks the audience in its WHERE the way
-// `publishAnnouncement` does, so a lead who has lost a team cannot pin to it
-// between the check and the write.
+// audience. The caller's answer is a snapshot, so the claim below does not
+// trust it: like `publishAnnouncement`, it reads the actor's rank and lead
+// teams again inside its own transaction and holds them (`lockSenderReach`).
 
 export const PIN_MISSING =
   "That announcement no longer exists. Reload the page.";
@@ -663,14 +650,65 @@ export async function getAnnouncementPinContext(
   };
 }
 
+/**
+ * Who this sender may address, read INSIDE the write's own transaction and held
+ * there until it commits.
+ *
+ * The action reads the sender's rank and lead teams first, to answer the screen
+ * fast. That read is a snapshot. Between it and the write, a captain could
+ * remove the lead or demote the captain, and a write that trusted the snapshot
+ * would still publish or pin on the old answer (CodeRabbit on #225; owner:
+ * "fix it now"). So the write asks again here, and `FOR SHARE` holds every row
+ * the answer rests on: the year (`camp_settings`), the rank (`users`) and the
+ * lead flags (`team_memberships`). A demotion, a lead removal or a year
+ * rollover that committed first is what this read sees. One that comes later
+ * waits until this transaction commits. The check and the write cannot fall
+ * out of step.
+ *
+ * Lock order is camp_settings, then users, then team_memberships. No cycle of
+ * waits can form, because every other writer of these rows either takes
+ * camp_settings first (the year rollover) or takes only one of the three
+ * (`setLead` / `removeTeam` touch team_memberships; `setUserRank` and
+ * `acceptCaptainPromotion` touch users).
+ *
+ * `undefined` means a captain: every audience. Otherwise the teams this sender
+ * leads this year, which may be none.
+ */
+async function lockSenderReach(
+  tx: DbOrTx,
+  senderId: string,
+): Promise<readonly Team[] | undefined> {
+  await tx
+    .select({ id: schema.campSettings.id })
+    .from(schema.campSettings)
+    .for("share");
+  const cycle = await currentCycleNumber(tx);
+  const [sender] = await tx
+    .select({ rank: schema.users.rank })
+    .from(schema.users)
+    .where(eq(schema.users.id, senderId))
+    .for("share");
+  if (sender?.rank === "captain") return undefined;
+  const led = await tx
+    .select({ team: schema.teamMemberships.team })
+    .from(schema.teamMemberships)
+    .where(
+      and(
+        eq(schema.teamMemberships.userId, senderId),
+        eq(schema.teamMemberships.cycle, cycle),
+        eq(schema.teamMemberships.isLead, true),
+      ),
+    )
+    .for("share");
+  return led.map((r) => r.team);
+}
+
 /** A lead's claim narrows the WHERE to the teams they lead; a captain's does not. */
-function pinTeamClaim(allowedTeams: readonly Team[] | undefined) {
-  if (!allowedTeams) return undefined;
+function reachClaim(reach: readonly Team[] | undefined) {
+  if (!reach) return undefined;
   return and(
     eq(schema.broadcasts.scope, "team"),
-    allowedTeams.length > 0
-      ? inArray(schema.broadcasts.team, [...allowedTeams])
-      : sql`false`,
+    reach.length > 0 ? inArray(schema.broadcasts.team, [...reach]) : sql`false`,
   );
 }
 
@@ -690,11 +728,13 @@ export async function setAnnouncementPinned(input: {
   id: string;
   actorId: string;
   pinned: boolean;
-  /** A team lead's teams, read now. A captain passes none. */
-  allowedTeams?: readonly Team[];
 }): Promise<PinResult> {
   if (!UUID.test(input.id)) return { ok: false, error: PIN_MISSING };
+  // Who the actor may reach, as the transaction saw it — kept for the refusal
+  // sentence, which is read after the transaction ends.
+  let reach: readonly Team[] | undefined;
   const done = await withTransaction(async (tx) => {
+    reach = await lockSenderReach(tx, input.actorId);
     const claimed = await tx
       .update(schema.broadcasts)
       .set(
@@ -712,7 +752,7 @@ export async function setAnnouncementPinned(input: {
           input.pinned
             ? isNull(schema.broadcasts.pinnedAt)
             : isNotNull(schema.broadcasts.pinnedAt),
-          pinTeamClaim(input.allowedTeams),
+          reachClaim(reach),
         ),
       )
       .returning({
@@ -734,7 +774,7 @@ export async function setAnnouncementPinned(input: {
   // which of the four reasons it was is a separate read.
   return {
     ok: false,
-    error: await explainPinRefusal(input.id, input.pinned, input.allowedTeams),
+    error: await explainPinRefusal(input.id, input.pinned, reach),
   };
 }
 

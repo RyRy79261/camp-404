@@ -217,8 +217,12 @@ Decisions baked into the schema — keep new code consistent with them:
     `apps/web/app/(console)/captains/questionnaires/actions.ts`) gate in two moves:
     `gateAuthor()` for the rank (>= `team_lead`), then this function for the
     specific audience. The Send page offers a lead only the team scope, for
-    the teams they lead. Team announcements let a lead publish only to a team
-    they lead, checked again in the publish `WHERE`. Both moves are the
+    the teams they lead. Team announcements let a lead publish (and pin) only
+    to a team they lead. The action's check answers the screen; the write
+    reads the sender's rank and lead teams again inside its own transaction
+    and locks those rows (`lockSenderReach` in `packages/db/src/broadcasts.ts`),
+    so a demotion between the check and the write cannot slip through. Never
+    pass the write a list of teams from the caller. Both moves are the
     safety property: the rank gate on its own would put every member one
     message away from the whole camp. Publishing, closing and reminding a
     questionnaire stay captain-only. Change the rule in that function, never

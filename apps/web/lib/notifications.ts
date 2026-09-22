@@ -114,19 +114,18 @@ interface DraftFields {
   pinned: boolean;
 }
 
+// Neither input carries the sender's rank or teams: the write reads them
+// itself, inside its own transaction, so a snapshot taken earlier cannot
+// authorise it.
 interface PublishInput {
   id: string;
   senderId: string;
-  /** A team lead's teams; a captain passes none. */
-  allowedTeams?: readonly Extract<Audience, { scope: "team" }>["team"][];
 }
 
 interface PinInput {
   id: string;
   actorId: string;
   pinned: boolean;
-  /** A team lead's teams; a captain passes none. */
-  allowedTeams?: readonly Extract<Audience, { scope: "team" }>["team"][];
 }
 
 const realBackend: NotificationsBackend = {

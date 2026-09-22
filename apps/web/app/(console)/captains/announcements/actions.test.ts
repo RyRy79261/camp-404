@@ -134,22 +134,20 @@ describe("announcement audiences", () => {
     });
   });
 
-  it("limits a lead's publish to their teams in the claim; a captain's is open", async () => {
-    signIn("member", ["kitchen"]);
-    await publishAction("draft-1");
-    expect(publishAnnouncement).toHaveBeenLastCalledWith({
-      id: "draft-1",
-      senderId: "user-1",
-      allowedTeams: ["kitchen"],
-    });
-
-    signIn("captain");
-    await publishAction("draft-1");
-    expect(publishAnnouncement).toHaveBeenLastCalledWith({
-      id: "draft-1",
-      senderId: "user-1",
-      allowedTeams: undefined,
-    });
+  // The gate's snapshot of rank and teams must not reach the write: the write
+  // reads them itself, under lock, so a stale answer cannot authorise it.
+  it("hands the publish write no snapshot of the sender's reach", async () => {
+    for (const [rank, teams] of [
+      ["member", ["kitchen"]],
+      ["captain", []],
+    ] as const) {
+      signIn(rank, [...teams]);
+      await publishAction("draft-1");
+      expect(publishAnnouncement).toHaveBeenLastCalledWith({
+        id: "draft-1",
+        senderId: "user-1",
+      });
+    }
   });
 
   it("counts the audience the draft is for", async () => {
@@ -184,11 +182,10 @@ describe("pinning an announcement", () => {
       id: "b1",
       actorId: "user-1",
       pinned: true,
-      allowedTeams: undefined,
     });
   });
 
-  it("lets a lead pin their own team's announcement, and passes their teams on", async () => {
+  it("lets a lead pin their own team's announcement, and leaves the teams to the write", async () => {
     signIn("member", ["kitchen"]);
     pinContext({ scope: "team", team: "kitchen" });
     expect(await setPinnedAction("b2", true)).toEqual({ ok: true });
@@ -196,7 +193,6 @@ describe("pinning an announcement", () => {
       id: "b2",
       actorId: "user-1",
       pinned: true,
-      allowedTeams: ["kitchen"],
     });
   });
 
@@ -259,7 +255,7 @@ describe("pinning an announcement", () => {
     pinContext({ scope: "team", team: "kitchen" });
     expect(await setPinnedAction("b5", false)).toEqual({ ok: true });
     expect(setAnnouncementPinned).toHaveBeenLastCalledWith(
-      expect.objectContaining({ pinned: false, allowedTeams: ["kitchen"] }),
+      { id: "b5", actorId: "user-1", pinned: false },
     );
   });
 });

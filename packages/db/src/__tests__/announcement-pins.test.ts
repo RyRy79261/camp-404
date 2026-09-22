@@ -214,7 +214,6 @@ describe("announcement pins — who sees one", () => {
       id: fromLead,
       actorId: lead.id,
       pinned: true,
-      allowedTeams: ["kitchen"],
     });
     await setAnnouncementPinned({
       id: fromCaptain,
@@ -322,6 +321,10 @@ describe("announcement pins — who may set one", () => {
 
   it("holds a team lead to the teams they lead", async () => {
     const db = h.db();
+    const captain = await makeUser(db, {
+      rank: "captain",
+      approvalStatus: "approved",
+    });
     const lead = await makeUser(db, { approvalStatus: "approved" });
     const cook = await makeUser(db, { approvalStatus: "approved" });
     await makeMembership(db, {
@@ -332,42 +335,63 @@ describe("announcement pins — who may set one", () => {
     await makeMembership(db, { userId: cook.id, team: "kitchen" });
 
     const kitchen = await publish(lead.id, { scope: "team", team: "kitchen" });
-    const camp = await publish(lead.id, { scope: "everyone" });
+    const camp = await publish(captain.id, { scope: "everyone" });
 
-    // Their own team: allowed.
+    // Their own team: allowed. Nothing tells the write who leads what; it
+    // reads the lead flag itself.
     expect(
-      await setAnnouncementPinned({
-        id: kitchen,
-        actorId: lead.id,
-        pinned: true,
-        allowedTeams: ["kitchen"],
-      }),
+      await setAnnouncementPinned({ id: kitchen, actorId: lead.id, pinned: true }),
     ).toEqual({ ok: true });
 
-    // A camp-wide announcement is outside a lead's reach, even one they wrote
-    // — the claim's WHERE refuses it, not only the screen.
+    // A camp-wide announcement is outside a lead's reach — the claim's WHERE
+    // refuses it, not only the screen.
     expect(
-      await setAnnouncementPinned({
-        id: camp,
-        actorId: lead.id,
-        pinned: true,
-        allowedTeams: ["kitchen"],
-      }),
+      await setAnnouncementPinned({ id: camp, actorId: lead.id, pinned: true }),
     ).toEqual({ ok: false, error: PIN_TEAM_NOT_LED });
     expect(await auditRows(db, camp)).toEqual([]);
 
-    // A lead who has since lost the team cannot pin to it any more.
+    // Stripped of the lead role: the write reads the flag as it is NOW, so
+    // the pin stays up and nothing is recorded in their name.
+    await db
+      .update(schema.teamMemberships)
+      .set({ isLead: false })
+      .where(eq(schema.teamMemberships.userId, lead.id));
     expect(
-      await setAnnouncementPinned({
-        id: kitchen,
-        actorId: lead.id,
-        pinned: false,
-        allowedTeams: [],
-      }),
+      await setAnnouncementPinned({ id: kitchen, actorId: lead.id, pinned: false }),
     ).toEqual({ ok: false, error: PIN_TEAM_NOT_LED });
     expect((await listPinnedForUser(cook.id)).map((p) => p.id)).toEqual([
       kitchen,
     ]);
+  });
+
+  it("reads the actor's rank inside the write: a demoted captain can no longer pin", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, {
+      rank: "captain",
+      approvalStatus: "approved",
+    });
+    await makeUser(db, { approvalStatus: "approved" });
+    const id = await publish(captain.id, { scope: "everyone" });
+
+    // Seed the opposite case first, so the refusal below is the demotion and
+    // not something else about this announcement.
+    expect(
+      await setAnnouncementPinned({ id, actorId: captain.id, pinned: true }),
+    ).toEqual({ ok: true });
+    expect(
+      await setAnnouncementPinned({ id, actorId: captain.id, pinned: false }),
+    ).toEqual({ ok: true });
+
+    await db
+      .update(schema.users)
+      .set({ rank: "member" })
+      .where(eq(schema.users.id, captain.id));
+    expect(
+      await setAnnouncementPinned({ id, actorId: captain.id, pinned: true }),
+    ).toEqual({ ok: false, error: PIN_TEAM_NOT_LED });
+    expect(
+      (await auditRows(db, id)).map((r) => r.action),
+    ).toEqual(["announcement.pinned", "announcement.unpinned"]);
   });
 
   it("is a compare-and-set: the second pin loses instead of overwriting", async () => {

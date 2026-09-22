@@ -701,17 +701,21 @@ export const testStore = {
   publishBroadcast(input: {
     id: string;
     senderId: string;
-    allowedTeams?: readonly string[];
   }): { ok: true; recipientCount: number } | { ok: false; error: string } {
+    // Like the real claim, the write reads the sender's reach itself.
+    const allowedTeams = testStore.senderReach(input.senderId);
     const row = broadcasts.find(
       (b) =>
         b.id === input.id &&
         b.senderId === input.senderId &&
         b.publishedAt === null &&
-        isAllowedAudience(b.audience, input.allowedTeams),
+        isAllowedAudience(b.audience, allowedTeams),
     );
     if (!row) {
-      return { ok: false, error: testStore.explainDraftRefusal(input) };
+      return {
+        ok: false,
+        error: testStore.explainDraftRefusal({ ...input, allowedTeams }),
+      };
     }
     row.publishedAt = new Date();
     if (row.pinOnPublish) {
@@ -818,18 +822,27 @@ export const testStore = {
     };
   },
 
+  /**
+   * Twin of `lockSenderReach` in @camp404/db/broadcasts: undefined for a
+   * captain (every audience), else the teams they lead this year. The store is
+   * one synchronous process, so there is no race to lock against.
+   */
+  senderReach(userId: string): readonly string[] | undefined {
+    if (findUserById(userId)?.rank === "captain") return undefined;
+    return testStore.getLeadTeams(userId);
+  },
+
   setBroadcastPinned(input: {
     id: string;
     actorId: string;
     pinned: boolean;
-    allowedTeams?: readonly string[];
   }): PinResult {
     const row = broadcasts.find((b) => b.id === input.id);
     if (!row) return { ok: false, error: PIN_MISSING };
     if (row.publishedAt === null) {
       return { ok: false, error: PIN_NOT_PUBLISHED };
     }
-    if (!isAllowedAudience(row.audience, input.allowedTeams)) {
+    if (!isAllowedAudience(row.audience, testStore.senderReach(input.actorId))) {
       return { ok: false, error: PIN_TEAM_NOT_LED };
     }
     // Compare-and-set, like the real claim: the loser of a race is told.
