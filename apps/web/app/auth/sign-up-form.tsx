@@ -16,7 +16,7 @@ import { authClient } from "@/lib/auth-client";
  * Camp 404's displayName is reconciled later from the burner profile if
  * we ever need a richer string.
  */
-export function SignUpForm() {
+export function SignUpForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,10 +37,9 @@ export function SignUpForm() {
       setError("Password is required");
       return;
     }
-    // The meter under the field says "use at least N characters". This is what
-    // makes that a rule the form keeps rather than advice it ignores. It is a
-    // BROWSER-side rule only — see PASSWORD_MIN_LENGTH's [UNRESOLVED] note:
-    // the hosted auth service's own floor is lower and is not set from here.
+    // The meter under the field says "use at least N characters". The auth
+    // server enforces the same number (@camp404/auth's minPasswordLength);
+    // checking here first just says so before the round trip.
     if (password.length < PASSWORD_MIN_LENGTH) {
       setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
       return;
@@ -75,10 +74,8 @@ export function SignUpForm() {
     setError(null);
     setLoading(true);
     try {
-      // Aim the return trip at /auth (not /) so Neon Auth's verifier
-      // exchange — which runs inside the proxy middleware on /auth/* —
-      // actually fires before we try to read the session. /auth/page.tsx
-      // then forwards us home, which routes onward to the questionnaire.
+      // The return trip lands on /auth, which forwards home; home routes a
+      // new member on to the invite gate and the questionnaire.
       await authClient.signIn.social({
         provider: "google",
         callbackURL: "/auth",
@@ -94,8 +91,9 @@ export function SignUpForm() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl">Create your account</h1>
         <p className="text-sm text-muted-foreground">
-          Set a password or continue with Google. We&apos;ll ask the rest in the
-          questionnaire.
+          {googleEnabled
+            ? "Set a password or continue with Google. We'll ask the rest in the questionnaire."
+            : "Set a password. We'll ask the rest in the questionnaire."}
         </p>
       </div>
 
@@ -157,23 +155,27 @@ export function SignUpForm() {
         {loading ? "Creating account…" : "Create account"}
       </Button>
 
-      <div className="flex items-center gap-3 py-1">
-        <span className="h-px flex-1 bg-border" />
-        <span className="text-xs uppercase tracking-widest text-muted-foreground">
-          or
-        </span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
+      {googleEnabled ? (
+        <>
+          <div className="flex items-center gap-3 py-1">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs uppercase tracking-widest text-muted-foreground">
+              or
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="lg"
-        onClick={handleGoogle}
-        disabled={loading}
-      >
-        Continue with Google
-      </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            onClick={handleGoogle}
+            disabled={loading}
+          >
+            Continue with Google
+          </Button>
+        </>
+      ) : null}
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}

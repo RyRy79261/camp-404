@@ -39,7 +39,7 @@ beforeEach(() => {
 describe("SignUpForm password rules", () => {
   it("refuses a password shorter than the minimum, and never calls sign-up", async () => {
     expect(SHORT.length).toBeLessThan(PASSWORD_MIN_LENGTH);
-    render(<SignUpForm />);
+    render(<SignUpForm googleEnabled />);
     fill(SHORT);
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toBe(
@@ -51,7 +51,7 @@ describe("SignUpForm password rules", () => {
 
   it("accepts one at the minimum", async () => {
     expect(LONG.length).toBeGreaterThanOrEqual(PASSWORD_MIN_LENGTH);
-    render(<SignUpForm />);
+    render(<SignUpForm googleEnabled />);
     fill(LONG);
     await waitFor(() => expect(signUpEmail).toHaveBeenCalledTimes(1));
     expect(signUpEmail.mock.calls[0]![0]).toMatchObject({
@@ -61,7 +61,7 @@ describe("SignUpForm password rules", () => {
   });
 
   it("still reports a mismatch on two long passwords", async () => {
-    render(<SignUpForm />);
+    render(<SignUpForm googleEnabled />);
     fill(LONG, `${LONG} not`);
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toBe(
@@ -72,7 +72,7 @@ describe("SignUpForm password rules", () => {
   });
 
   it("scores the password as it is typed, and only the password", () => {
-    render(<SignUpForm />);
+    render(<SignUpForm googleEnabled />);
     fireEvent.change(document.getElementById("signup-password")!, {
       target: { value: SHORT },
     });
@@ -95,7 +95,7 @@ describe("SignUpForm password rules", () => {
   });
 
   it("reveals each password field independently", () => {
-    render(<SignUpForm />);
+    render(<SignUpForm googleEnabled />);
     const [first, second] = screen.getAllByRole("button", {
       name: "Show password",
     });

@@ -60,8 +60,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   // Dark-first, wearing the Camp 404 accent skin over AfrikaBurn's surfaces.
-  // next-themes (via NeonAuthUIProvider) also sets class="dark" on <html> on
-  // the client; suppressHydrationWarning silences the attribute mismatch.
+  // The class is fixed here; nothing on the client changes it any more.
+  // suppressHydrationWarning stays for browser extensions that stamp
+  // attributes on <html> before React hydrates.
   return (
     <html
       lang="en"

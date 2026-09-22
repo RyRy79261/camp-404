@@ -1,13 +1,26 @@
 import { Suspense } from "react";
-import { AuthView } from "@neondatabase/auth/react/ui";
+import { redirect } from "next/navigation";
+import { isEmailProviderConfigured, isGoogleConfigured } from "@camp404/auth";
 import { AuthShell } from "@/components/auth-shell";
+import { ForgotPasswordForm } from "../forgot-password-form";
+import { ResetPasswordForm } from "../reset-password-form";
 import { SignInForm } from "../sign-in-form";
+import { SignOutView } from "../sign-out-view";
 import { SignUpForm } from "../sign-up-form";
 
-// `dynamicParams` is left at the default (true) so any auth subpath Neon
-// Auth ends up redirecting to (error states, provider-specific paths, …)
-// renders via the AuthView fallback rather than 404ing.
+// Every sign-in screen, drawn by us. Under Neon Auth any path we had no form
+// for fell through to Neon's hosted page; with self-hosted Better Auth there is
+// no hosted page, so forgot-password, reset-password and sign-out are ours too,
+// and any other path goes to sign-in instead of a blank.
 export const dynamic = "force-dynamic";
+
+const TITLES: Record<string, string> = {
+  "sign-in": "Sign in",
+  "sign-up": "Sign up",
+  "forgot-password": "Forgot password",
+  "reset-password": "Reset password",
+  "sign-out": "Signing out",
+};
 
 export async function generateMetadata({
   params,
@@ -15,45 +28,65 @@ export async function generateMetadata({
   params: Promise<{ path: string }>;
 }) {
   const { path } = await params;
-  const title =
-    path === "sign-up" ? "Sign up" : path === "sign-in" ? "Sign in" : "Account";
-  return { title: `${title} — Camp 404` };
+  return { title: `${TITLES[path] ?? "Account"} — Camp 404` };
 }
 
 export default async function AuthPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ path: string }>;
+  searchParams: Promise<{ token?: string; error?: string }>;
 }) {
   const { path } = await params;
+  // Offer Google only when this deployment has its keys; a button that can
+  // only fail is worse than none.
+  const googleEnabled = isGoogleConfigured(process.env);
 
-  if (path === "sign-up") {
-    // Sign-up is open — the invite check happens after auth at the
-    // /signup/required gate, since we can't stop Neon Auth (Google
-    // especially) from creating an identity at sign-in time.
-    return (
-      <AuthShell>
-        <SignUpForm />
-      </AuthShell>
-    );
+  switch (path) {
+    case "sign-up":
+      // Sign-up is open — the invite check happens after auth at the
+      // /signup/required gate, since Google can create an identity at
+      // sign-in time too.
+      return (
+        <AuthShell>
+          <SignUpForm googleEnabled={googleEnabled} />
+        </AuthShell>
+      );
+    case "sign-in":
+      return (
+        <AuthShell>
+          <Suspense fallback={null}>
+            <SignInForm googleEnabled={googleEnabled} />
+          </Suspense>
+        </AuthShell>
+      );
+    case "forgot-password":
+      return (
+        <AuthShell>
+          <ForgotPasswordForm
+            emailEnabled={isEmailProviderConfigured(process.env)}
+          />
+        </AuthShell>
+      );
+    case "reset-password": {
+      // Better Auth puts the token on the link, or `?error=` when it refused
+      // the token before redirecting here. Both without a usable token get
+      // the same honest dead end and a way to ask for a new link.
+      const { token, error } = await searchParams;
+      return (
+        <AuthShell>
+          <ResetPasswordForm token={error ? null : token?.trim() || null} />
+        </AuthShell>
+      );
+    }
+    case "sign-out":
+      return (
+        <AuthShell>
+          <SignOutView />
+        </AuthShell>
+      );
+    default:
+      redirect("/auth/sign-in");
   }
-
-  if (path === "sign-in") {
-    return (
-      <AuthShell>
-        <Suspense fallback={null}>
-          <SignInForm />
-        </Suspense>
-      </AuthShell>
-    );
-  }
-
-  // Forgot/reset password, callback, sign-out, magic-link — fall back to
-  // Neon Auth's hosted UI. Those flows are side trips we haven't (yet)
-  // built bespoke screens for.
-  return (
-    <main className="mx-auto flex min-h-svh w-full max-w-md flex-col items-center justify-center px-6 py-12">
-      <AuthView path={path} />
-    </main>
-  );
 }

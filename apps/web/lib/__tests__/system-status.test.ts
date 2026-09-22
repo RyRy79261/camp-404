@@ -25,7 +25,8 @@ function secretEnv(): EnvBag {
     // Short enough to count as pending, and still the marker.
     INVITE_CODES: `${MARKER}, x-${MARKER}-long-enough-to-preapprove`,
     GOD_EMAILS: `${MARKER}@example.com, second-${MARKER}@example.com`,
-    NEON_AUTH_BASE_URL: "https://ep-auth.neonauth.eu-central-1.aws.neon.tech",
+    BETTER_AUTH_URL: "https://www.camp-404.com",
+    AUTH_APEX_DOMAIN: "camp-404.com",
     RESEND_FROM_EMAIL: "Camp 404 <notices@camp-404.com>",
     GITHUB_FEEDBACK_REPO: "RyRy79261/camp-404",
     FIREBASE_PROJECT_ID: "camp-404",
@@ -155,7 +156,7 @@ describe("deriveSystemStatus", () => {
     const env = {
       ...secretEnv(),
       INVITE_CODES: undefined,
-      NEON_AUTH_COOKIE_SECRET: "c".repeat(40),
+      BETTER_AUTH_SECRET: "c".repeat(40),
     };
     const status = deriveSystemStatus(env, OK_PROBE);
     expect(status.headline).toEqual({
@@ -172,7 +173,7 @@ describe("deriveSystemStatus", () => {
   });
 
   it("uses the app's own length rules for the keys", () => {
-    const short = { PGCRYPTO_KEY: "short", NEON_AUTH_COOKIE_SECRET: "short" };
+    const short = { PGCRYPTO_KEY: "short", BETTER_AUTH_SECRET: "short" };
     expect(check(short, OK_PROBE, "encryption-key").value).toBe("Too short");
     expect(check(short, OK_PROBE, "encryption-key").detail).toContain(
       "This one is 5",

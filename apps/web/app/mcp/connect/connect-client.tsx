@@ -12,21 +12,20 @@ import { safeInternalPath } from "@/lib/safe-redirect";
  * Sign-in bridge for the MCP OAuth authorize flow, drawn as the auth card.
  *
  * `/api/mcp/oauth/authorize` redirects unauthenticated callers here with
- * `?next=<authorize-url>`. We sign the user in (Better Auth's `signIn`
- * returns the user to *this* page per the gotcha — not to the explicit
- * `callbackURL`), then a `useSession` effect detects the established
- * session and forwards to `next` via a hard navigation so the authorize
- * endpoint re-runs with the cookie set.
+ * `?next=<authorize-url>`. The member signs in — Google returns to this page,
+ * and the email sign-in form carries `next` and forwards to it — then a
+ * `useSession` effect sees the session and forwards to `next` with a hard
+ * navigation, so the authorize endpoint runs again with the cookie set.
  */
-export default function MCPConnectPage() {
+export function MCPConnect({ googleEnabled }: { googleEnabled: boolean }) {
   return (
     <Suspense fallback={<Shell>Loading…</Shell>}>
-      <MCPConnectInner />
+      <MCPConnectInner googleEnabled={googleEnabled} />
     </Suspense>
   );
 }
 
-function MCPConnectInner() {
+function MCPConnectInner({ googleEnabled }: { googleEnabled: boolean }) {
   const params = useSearchParams();
   const next = safeInternalPath(params.get("next"));
   const { data: session, isPending } = authClient.useSession();
@@ -72,29 +71,29 @@ function MCPConnectInner() {
             connects.
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          onClick={onGoogle}
-          disabled={loading}
-        >
-          Sign in with Google
+        {/* The sign-in form carries `next` through, and forwards to the
+            authorize step once the member is in (two-factor included). */}
+        <Button size="lg" asChild>
+          <a href={`/auth/sign-in?next=${encodeURIComponent(next)}`}>
+            Sign in to Camp 404
+          </a>
         </Button>
+        {googleEnabled ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            onClick={onGoogle}
+            disabled={loading}
+          >
+            Sign in with Google
+          </Button>
+        ) : null}
         {error && (
           <p role="alert" className="text-sm font-medium text-destructive">
             {error}
           </p>
         )}
-        <p className="text-center text-sm text-muted-foreground">
-          New to Camp 404?{" "}
-          <a
-            className="font-medium text-primary hover:underline"
-            href="/auth/sign-in"
-          >
-            Sign in
-          </a>
-        </p>
       </div>
     </AuthShell>
   );
