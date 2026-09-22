@@ -9,14 +9,32 @@ import {
 } from "@camp404/ui/components/card";
 import { auditEntry } from "@/lib/audit-format";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
-import { deriveRosterStats, toRosterRow } from "@/lib/camp-roster";
-import { listOpenSendBlocking } from "@/lib/questionnaire-definitions";
-import { getCampManagementRoster } from "@/lib/roster";
+import {
+  deriveRosterStats,
+  toRosterRow,
+  type RosterRow,
+} from "@/lib/camp-roster";
+import {
+  listOpenSendBlocking,
+  listOpenSendGates,
+} from "@/lib/questionnaire-definitions";
+import { getCampManagementRoster, getTeamCoverage } from "@/lib/roster";
 import { usesTestStore } from "@/lib/test-mode";
+import {
+  deriveReadinessFunnel,
+  deriveSendCompletion,
+  deriveTeamCoverage,
+} from "./readiness";
+import {
+  ReadinessFunnelCard,
+  SendCompletionCard,
+  TeamCoverageCard,
+} from "./status-board";
 
-// The captain-only panels of the Overview (the AfrikaBurn console's KPI cards
-// and activity feed). Server components that read their own data; the page
-// renders them only for a captain, and every number is a real query result.
+// The captain-only panels of the Overview (the AfrikaBurn console's status
+// board: KPI cards, the funnel, the coverage rails, the activity feed). Server
+// components that read their own data; the page renders them only for a
+// captain, and every number is a real query result.
 
 interface Kpi {
   label: string;
@@ -25,13 +43,68 @@ interface Kpi {
   href: string;
 }
 
-export async function CaptainKpis() {
-  const [members, openSends] = await Promise.all([
+/**
+ * The whole captain status board: the four KPI cards, the readiness funnel and
+ * the two coverage rails.
+ *
+ * One component because the funnel and the KPI cards are the SAME roster read —
+ * the counts would be a lie if the two halves of the page could disagree, and a
+ * second `getCampManagementRoster()` on one render would be a second answer.
+ */
+export async function CaptainStatusBoard() {
+  // Five independent reads, issued together. The gate read is the only one of
+  // them the test store cannot answer, and it answers empty there.
+  const [members, openSends, coverage, teamsConfig, gates] = await Promise.all([
     getCampManagementRoster(),
     listOpenSendBlocking(),
+    getTeamCoverage(),
+    getTeamsConfig(),
+    listOpenSendGates(),
   ]);
-  const stats = deriveRosterStats(members.map(toRosterRow));
-  const approved = members.filter((m) => m.approvalStatus === "approved");
+  const rows = members.map(toRosterRow);
+  // The test store models no payments ledger and no required_actions, so those
+  // two rungs of the ladder are unknown there rather than zero — the same
+  // guard RecentActivity makes for the audit trail it also cannot read.
+  const readable = !usesTestStore();
+  const funnel = deriveReadinessFunnel(rows, {
+    dues: readable,
+    actions: readable,
+  });
+  // The WHOLE configured list, archived entries included: `deriveTeamCoverage`
+  // drops an archived team nobody is on and keeps one that still has members,
+  // under the label the captain gave it.
+  const teams = deriveTeamCoverage(coverage, teamsConfig.teams);
+  const sends = deriveSendCompletion(gates);
+
+  return (
+    <>
+      <CaptainKpis rows={rows} openSends={openSends.size} />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ReadinessFunnelCard funnel={funnel} />
+        </div>
+        <div className="flex flex-col gap-4">
+          <TeamCoverageCard rows={teams} />
+          {/* No send is modelled in the test store, so "no questionnaires are
+              open" would be this panel's only possible sentence there, true or
+              not. It withholds itself instead. */}
+          {readable && <SendCompletionCard sends={sends} />}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CaptainKpis({
+  rows,
+  openSends,
+}: {
+  /** The one roster projection the board shares — never mapped twice. */
+  rows: RosterRow[];
+  openSends: number;
+}) {
+  const stats = deriveRosterStats(rows);
+  const approved = rows.filter((m) => m.approvalStatus === "approved");
   const duesPaid = approved.filter((m) => m.duesPaid).length;
 
   const kpis: Kpi[] = [
@@ -56,9 +129,9 @@ export async function CaptainKpis() {
     },
     {
       label: "Open sends",
-      value: openSends.size,
+      value: openSends,
       hint:
-        openSends.size === 0
+        openSends === 0
           ? "No questionnaire is open"
           : "Questionnaires collecting answers",
       href: "/captains/questionnaires",

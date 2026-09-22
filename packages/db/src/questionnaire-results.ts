@@ -214,3 +214,57 @@ export async function listResultCycles(
   for (const row of [...answered, ...sent]) cycles.add(row.cycle);
   return [...cycles].sort((a, b) => b - a);
 }
+
+/** One gate belonging to a send that is open right now. */
+export interface OpenSendGateRow {
+  activationId: string;
+  questionnaireKey: string;
+  title: string;
+  cycle: number;
+  /**
+   * The status of one member's gate for that send, or NULL when the send holds
+   * no gates at all — a send that reached nobody still has to be listed, with
+   * nothing behind it, rather than vanish from the board.
+   */
+  status: RequiredActionStatus | null;
+}
+
+/**
+ * Every OPEN send's gates, one row per gate — the captain Overview's
+ * questionnaire-completion rail.
+ *
+ * Statuses, not counts: the arithmetic that turns them into "answered out of
+ * reached" is `tallyActivationCompletion` in @camp404/core, and it has exactly
+ * one implementation (waived and expired leave the denominator there, and that
+ * rule must not be re-derived in SQL). The volume is bounded by the camp size
+ * times the handful of sends the one-open-per-key invariant permits.
+ *
+ * Reach is per-ACTIVATION, which is why this joins on `activation_id` rather
+ * than the questionnaire key: `required_actions` keeps one row per
+ * `(user, action_key)`, so a re-send overwrites the previous send's gates in
+ * place and only the rows pointing at THIS activation describe this send.
+ */
+export async function listOpenSendGates(): Promise<OpenSendGateRow[]> {
+  const db = createHttpDb();
+  return db
+    .select({
+      activationId: schema.questionnaireActivations.id,
+      questionnaireKey: schema.questionnaireActivations.questionnaireKey,
+      title: schema.questionnaireActivations.title,
+      cycle: schema.questionnaireActivations.cycle,
+      status: schema.requiredActions.status,
+    })
+    .from(schema.questionnaireActivations)
+    .leftJoin(
+      schema.requiredActions,
+      eq(
+        schema.requiredActions.activationId,
+        schema.questionnaireActivations.id,
+      ),
+    )
+    .where(eq(schema.questionnaireActivations.status, "open"))
+    .orderBy(
+      asc(schema.questionnaireActivations.title),
+      asc(schema.questionnaireActivations.id),
+    );
+}

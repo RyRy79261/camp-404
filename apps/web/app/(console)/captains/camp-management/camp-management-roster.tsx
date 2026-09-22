@@ -74,16 +74,23 @@ export function CampManagementRoster({
   rows,
   teams,
   teamLabels = {},
+  initialTeam = null,
 }: {
   rows: RosterRow[];
   teams: readonly { key: string; label: string }[];
   /** key → configured label for the profile team chips. */
   teamLabels?: Record<string, string>;
+  /**
+   * The team filter to open with — `?team=` on the URL, already checked
+   * against the active teams by the page. The Overview's coverage rail links
+   * here that way.
+   */
+  initialTeam?: string | null;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<RosterChip>("all");
-  const [team, setTeam] = useState<string | null>(null);
+  const [team, setTeam] = useState<string | null>(initialTeam);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sort, setSort] = useState<RosterSort>(DEFAULT_ROSTER_SORT);
   // Members decided since the filters last changed.

@@ -28,15 +28,18 @@ export function MemberRoster({
   rows,
   teams,
   teamLabels = {},
+  initialTeam = null,
 }: {
   rows: PublicRosterRow[];
   teams: readonly { key: string; label: string }[];
   /** key → configured label for the profile team chips. */
   teamLabels?: Record<string, string>;
+  /** The team filter to open with — `?team=`, checked by the page. */
+  initialTeam?: string | null;
 }) {
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<PublicChip>("all");
-  const [team, setTeam] = useState<string | null>(null);
+  const [team, setTeam] = useState<string | null>(initialTeam);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const stats = useMemo(() => derivePublicRosterStats(rows), [rows]);

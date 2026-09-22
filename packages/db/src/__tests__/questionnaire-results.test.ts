@@ -5,6 +5,7 @@ import { makeActivation, makeUser } from "./_factories";
 import {
   listActivationResponses,
   listActivationsForCycle,
+  listOpenSendGates,
   listResultCycles,
 } from "../questionnaire-results";
 import * as schema from "../schema";
@@ -48,12 +49,14 @@ async function gate(
     userId: string;
     activationId: string | null;
     status?: (typeof schema.requiredActionStatusEnum.enumValues)[number];
+    /** `required_actions` is unique on (user, actionKey). */
+    actionKey?: string;
   },
 ): Promise<void> {
   await db.insert(schema.requiredActions).values({
     userId: input.userId,
     type: "questionnaire",
-    actionKey: KEY,
+    actionKey: input.actionKey ?? KEY,
     version: "1",
     activationId: input.activationId,
     title: "Camp feedback",
@@ -246,5 +249,104 @@ describe("listResultCycles / listActivationsForCycle", () => {
       team: "kitchen",
       blocking: false,
     });
+  });
+});
+
+describe("listOpenSendGates — the Overview's completion rail", () => {
+  const h = useTestDb();
+
+  it("returns one row per gate of every open send, and nothing from a closed one", async () => {
+    const db = h.db();
+    const ada = await makeUser(db, { displayName: "Ada" });
+    const grace = await makeUser(db, { displayName: "Grace" });
+    const open = await makeActivation(db, { status: "open", cycle: 1 });
+    // A second open send must carry another key: the one-open-per-key partial
+    // unique index forbids two open sends of the same questionnaire.
+    const other = await makeActivation(db, {
+      status: "open",
+      questionnaireKey: "shifts",
+      title: "Build week shifts",
+    });
+    const closed = await makeActivation(db, {
+      status: "closed",
+      questionnaireKey: "old",
+      title: "Last year",
+    });
+
+    await gate(db, {
+      userId: ada.id,
+      activationId: open.id,
+      status: "completed",
+    });
+    await gate(db, { userId: grace.id, activationId: open.id });
+    await gate(db, {
+      userId: ada.id,
+      activationId: other.id,
+      actionKey: "shifts",
+    });
+    await gate(db, {
+      userId: grace.id,
+      activationId: closed.id,
+      actionKey: "old",
+      status: "expired",
+    });
+
+    const rows = await listOpenSendGates();
+
+    expect(rows.map((r) => r.title).sort()).toEqual([
+      "Build week shifts",
+      "Camp feedback",
+      "Camp feedback",
+    ]);
+    expect(
+      rows.filter((r) => r.activationId === open.id).map((r) => r.status).sort(),
+    ).toEqual(["completed", "pending"]);
+    // The closed send is gone entirely — its expired gate is not outstanding
+    // work and its send is not open.
+    expect(rows.some((r) => r.questionnaireKey === "old")).toBe(false);
+  });
+
+  it("does NOT count a gate that belongs to an earlier send of the same questionnaire", async () => {
+    // A re-send overwrites `required_actions` in place for the members it
+    // reaches; a member the re-send missed keeps a row pointing at the old
+    // activation, and that row says nothing about the send now open.
+    const db = h.db();
+    const ada = await makeUser(db, { displayName: "Ada" });
+    const grace = await makeUser(db, { displayName: "Grace" });
+    const first = await makeActivation(db, { status: "closed", cycle: 1 });
+    const second = await makeActivation(db, { status: "open", cycle: 1 });
+
+    await gate(db, {
+      userId: ada.id,
+      activationId: first.id,
+      status: "completed",
+    });
+    await gate(db, { userId: grace.id, activationId: second.id });
+
+    const rows = await listOpenSendGates();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      activationId: second.id,
+      questionnaireKey: KEY,
+      status: "pending",
+    });
+  });
+
+  it("still lists an open send that reached nobody, with a null status", async () => {
+    const db = h.db();
+    const open = await makeActivation(db, { status: "open", cycle: 1 });
+
+    const rows = await listOpenSendGates();
+
+    expect(rows).toEqual([
+      {
+        activationId: open.id,
+        questionnaireKey: KEY,
+        title: "Camp feedback",
+        cycle: 1,
+        status: null,
+      },
+    ]);
   });
 });

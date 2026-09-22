@@ -36,6 +36,7 @@ import {
 // green e2e run over a broken app.
 import type {
   SetLeadResult,
+  TeamCoverage,
   TeamMembership,
 } from "@camp404/db/team-memberships";
 import type {
@@ -1160,6 +1161,31 @@ export const testStore = {
     return this.getTeamMemberships(userId)
       .filter((m) => m.isLead)
       .map((m) => m.team);
+  },
+
+  /**
+   * Head count and lead count per team for THIS year, team-ordered — the twin
+   * of @camp404/db/team-memberships.getTeamCoverage, so the Overview's coverage
+   * rail renders under Playwright. Year-scoped like every other read here: a
+   * membership seeded into another year is not part of this year's coverage.
+   * Teams nobody is on are absent, exactly as the grouped query leaves them.
+   */
+  getTeamCoverage(): TeamCoverage[] {
+    const cycle = currentCycleNumber();
+    const byTeam = new Map<Team, { members: number; leads: number }>();
+    for (const m of teamMemberships) {
+      if (m.cycle !== cycle) continue;
+      // The production query joins `users`, so a membership whose member is
+      // gone is not counted; the store's writers keep the same invariant.
+      if (!findUserById(m.userId)) continue;
+      const entry = byTeam.get(m.team) ?? { members: 0, leads: 0 };
+      entry.members += 1;
+      if (m.isLead) entry.leads += 1;
+      byTeam.set(m.team, entry);
+    }
+    return [...byTeam.entries()]
+      .map(([team, counts]) => ({ team, ...counts, cycle }))
+      .sort((a, b) => a.team.localeCompare(b.team));
   },
 
   // The family tree's referral list: every user with the id of whoever made

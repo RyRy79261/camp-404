@@ -19,7 +19,15 @@ export const metadata = { title: "Camp management — Camp 404" };
 // privacy-redacted projection (`toPublicRosterRow`), so private fields never
 // cross the wire for a member.
 
-export default async function CampManagementPage() {
+export default async function CampManagementPage({
+  searchParams,
+}: {
+  // `?team=` opens the roster with that team already selected — the Overview's
+  // coverage rail links straight to a team's people. The key is checked against
+  // the camp's ACTIVE teams below, so a stale or invented one opens the full
+  // roster rather than an empty, silently-filtered one.
+  searchParams: Promise<{ team?: string }>;
+}) {
   // Every approved member may browse; the captain bar only picks the full or
   // the public projection.
   const { cleared: isCaptain } = await captainPageGate("captain");
@@ -32,13 +40,37 @@ export default async function CampManagementPage() {
   // `teamLabels` is the full key→label map (incl. archived) for the profile
   // chips, so a captain's relabel shows on the chips too — not just the filter.
   // The two reads are independent, so they run together.
-  const [members, config] = await Promise.all([
+  const [members, config, { team: requestedTeam }] = await Promise.all([
     getCampManagementRoster({ includeEmail: isCaptain }),
     getTeamsConfig(),
+    searchParams,
   ]);
   const roster = rosterForViewer(members, isCaptain);
-  const teams = activeTeams(config);
+  const active = activeTeams(config);
   const teamLabels = teamLabelMap(config);
+  // A team the config actually names — archived ones included, because the
+  // Overview's coverage rail links to an archived team that still has members
+  // on it. Anything else (a stale bookmark, a made-up key) opens the full
+  // roster rather than one filtered to nothing.
+  const initialTeam =
+    requestedTeam && config.teams.some((t) => t.key === requestedTeam)
+      ? requestedTeam
+      : null;
+  // The filter dropdown offers the active teams, plus the archived one the URL
+  // arrived on — a select whose value is not one of its options shows blank
+  // while the list below it is filtered.
+  const teams =
+    initialTeam && !active.some((t) => t.key === initialTeam)
+      ? [
+          ...active,
+          {
+            key: initialTeam,
+            label: teamLabels[initialTeam] ?? initialTeam,
+            order: active.length,
+            archived: true,
+          },
+        ]
+      : active;
 
   return (
     <div className="flex flex-col">
@@ -62,12 +94,14 @@ export default async function CampManagementPage() {
           rows={roster.rows}
           teams={teams}
           teamLabels={teamLabels}
+          initialTeam={initialTeam}
         />
       ) : (
         <MemberRoster
           rows={roster.rows}
           teams={teams}
           teamLabels={teamLabels}
+          initialTeam={initialTeam}
         />
       )}
     </div>

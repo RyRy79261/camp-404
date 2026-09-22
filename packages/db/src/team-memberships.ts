@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { writeAuditEvent } from "./audit";
@@ -237,4 +237,55 @@ export async function setLead(
     });
     return { ok: true as const, changed: true };
   });
+}
+
+/** One team's standing in the camp's CURRENT year. */
+export interface TeamCoverage {
+  team: Team;
+  /** Members on the team this year. */
+  members: number;
+  /** How many of them carry the lead flag. A team may have none, or several. */
+  leads: number;
+  /** The burn year these counts were read for. */
+  cycle: number;
+}
+
+/**
+ * Every team that has anyone on it THIS YEAR, with its head count and how many
+ * of those members lead it — the captain Overview's coverage rail.
+ *
+ * One grouped query, year-scoped like every other read in this module: at a
+ * rollover it comes back empty and fills back in as captains re-establish the
+ * teams. A team nobody is on has no row at all; the caller holds the camp's
+ * configured team list and renders the empty ones from that, so a team that
+ * exists and has nobody on it is visible rather than missing.
+ *
+ * Joined to `users` so the head count counts the same population the roster
+ * does: the AI / voice actors are `is_system`, and although account deletion
+ * removes a member's memberships outright (`account.ts`), the filter states
+ * that rule here rather than depending on it from a distance.
+ */
+export async function getTeamCoverage(): Promise<TeamCoverage[]> {
+  const db = createHttpDb();
+  const cycle = await currentCycleNumber();
+  const rows = await db
+    .select({
+      team: schema.teamMemberships.team,
+      members: sql<number>`count(*)::int`,
+      // Parenthesised on purpose: `count(*) filter (where …)::int` casts the
+      // FILTER clause, not the aggregate.
+      leads: sql<number>`(count(*) filter (where ${schema.teamMemberships.isLead}))::int`,
+    })
+    .from(schema.teamMemberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.teamMemberships.userId))
+    .where(
+      and(
+        eq(schema.teamMemberships.cycle, cycle),
+        eq(schema.users.isSystem, false),
+        eq(schema.users.sanitised, false),
+      ),
+    )
+    .groupBy(schema.teamMemberships.team)
+    .orderBy(asc(schema.teamMemberships.team));
+  return rows.map((row) => ({ ...row, cycle }));
 }
