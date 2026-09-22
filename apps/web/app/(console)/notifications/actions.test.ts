@@ -22,14 +22,16 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/notifications", () => ({
   listInbox: vi.fn(),
   markRead: vi.fn(),
+  markAllRead: vi.fn(),
 }));
 
 import {
   acceptCaptainPromotionAction,
   declineCaptainPromotionAction,
   loadOlderNotificationsAction,
+  markAllNotificationsReadAction,
 } from "./actions";
-import { listInbox, markRead } from "@/lib/notifications";
+import { listInbox, markAllRead, markRead } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
@@ -319,8 +321,41 @@ describe("loadOlderNotificationsAction", () => {
       ok: true,
       data: { items: [{ id: "d1" }, { id: "d2" }], nextCursor: null },
     });
-    expect(listInbox).toHaveBeenCalledWith("user-1", { before: CURSOR });
+    expect(listInbox).toHaveBeenCalledWith("user-1", {
+      before: CURSOR,
+      filter: "all",
+    });
     expect(markRead).toHaveBeenCalledWith("user-1", ["d1", "d2"]);
+  });
+
+  it("keeps an older page inside the tab being read", async () => {
+    vi.mocked(listInbox).mockResolvedValue({ items: [], nextCursor: null });
+    await loadOlderNotificationsAction(CURSOR, "announcements");
+    expect(listInbox).toHaveBeenCalledWith("user-1", {
+      before: CURSOR,
+      filter: "announcements",
+    });
+  });
+
+  it("reads the whole inbox for a filter it does not know", async () => {
+    vi.mocked(listInbox).mockResolvedValue({ items: [], nextCursor: null });
+    await loadOlderNotificationsAction(CURSOR, "bulletins");
+    expect(listInbox).toHaveBeenCalledWith("user-1", {
+      before: CURSOR,
+      filter: "all",
+    });
+  });
+
+  it("does not empty the Unread tab as the member scrolls it", async () => {
+    vi.mocked(listInbox).mockResolvedValue({
+      items: [{ id: "d1" }] as never,
+      nextCursor: null,
+    });
+    const result = await loadOlderNotificationsAction(CURSOR, "unread");
+    expect(result.ok).toBe(true);
+    // The rows came back, and none of them were marked read — an Unread tab
+    // that cleared what it drew would delete the list under the member.
+    expect(markRead).not.toHaveBeenCalled();
   });
 
   it("reads nothing for a signed-out caller, no camp access, or a junk cursor", async () => {
@@ -339,5 +374,45 @@ describe("loadOlderNotificationsAction", () => {
 
     expect(listInbox).not.toHaveBeenCalled();
     expect(markRead).not.toHaveBeenCalled();
+  });
+});
+
+describe("markAllNotificationsReadAction", () => {
+  beforeEach(() => {
+    vi.mocked(markAllRead).mockReset();
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-1",
+      primaryEmail: "m@example.com",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ id: "user-1" } as never);
+  });
+
+  it("clears the signed-in member's own inbox and says how many", async () => {
+    vi.mocked(markAllRead).mockResolvedValue(3);
+    const result = await markAllNotificationsReadAction();
+    expect(result).toEqual({ ok: true, data: { cleared: 3 } });
+    // The id is resolved from the session, never taken from the caller.
+    expect(markAllRead).toHaveBeenCalledWith("user-1");
+    expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
+  });
+
+  it("clears nothing for a signed-out caller or one with no camp access", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
+    expect((await markAllNotificationsReadAction()).ok).toBe(false);
+
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: "a" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(false);
+    expect((await markAllNotificationsReadAction()).ok).toBe(false);
+
+    expect(markAllRead).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed clear rather than throwing past the contract", async () => {
+    vi.mocked(markAllRead).mockRejectedValue(new Error("connection reset"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await markAllNotificationsReadAction()).ok).toBe(false);
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });

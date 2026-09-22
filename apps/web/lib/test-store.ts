@@ -19,7 +19,11 @@ import {
   type Audience,
 } from "@camp404/db/broadcasts";
 import type { CampManagementMember } from "@camp404/db/roster";
-import type { ReferralUser } from "@camp404/types";
+import {
+  ANNOUNCEMENT_NOTIFICATION_KINDS,
+  type InboxFilter,
+  type ReferralUser,
+} from "@camp404/types";
 import {
   currentCycle,
   DEFAULT_CAMP_CONFIG,
@@ -173,7 +177,10 @@ interface TestRequiredAction {
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
-  idDocsByUserId: Map<string, { idType: string | null; idNumber: string | null }>;
+  idDocsByUserId: Map<
+    string,
+    { idType: string | null; idNumber: string | null }
+  >;
   emergencyContactsByUserId: Map<string, EmergencyContact[]>;
   inviteCodes: Map<string, TestInviteCode>;
   questionnaireEdits: TestQuestionnaireEdit[];
@@ -857,7 +864,11 @@ export const testStore = {
   },
   listInbox(
     userId: string,
-    options: { before?: string | null; limit?: number } = {},
+    options: {
+      before?: string | null;
+      limit?: number;
+      filter?: InboxFilter;
+    } = {},
   ): {
     items: Array<{
       id: string;
@@ -878,8 +889,21 @@ export const testStore = {
     const cursorOf = (d: TestDelivery) =>
       `${d.createdAt.toISOString().slice(0, 23)}000~${d.id}`;
     const limit = options.limit ?? 30;
+    // The tab narrows the SET the cursor walks, exactly as the SQL WHERE does,
+    // so a page is a full page of matching rows rather than a page of anything
+    // with the non-matching rows dropped.
+    const filter = options.filter ?? "all";
     const sorted = deliveries
-      .filter((d) => d.userId === userId)
+      .filter(
+        (d) =>
+          d.userId === userId &&
+          (filter === "all" ||
+            (filter === "unread"
+              ? d.readAt === null
+              : ANNOUNCEMENT_NOTIFICATION_KINDS.includes(
+                  d.kind as (typeof ANNOUNCEMENT_NOTIFICATION_KINDS)[number],
+                ))),
+      )
       .sort(
         (a, b) =>
           b.createdAt.getTime() - a.createdAt.getTime() ||
@@ -962,6 +986,18 @@ export const testStore = {
       }
     }
   },
+  /** Production's markAllRead: the caller's unread rows only, count returned. */
+  markAllRead(userId: string): number {
+    const now = new Date();
+    let cleared = 0;
+    for (const d of deliveries) {
+      if (d.userId === userId && d.readAt === null) {
+        d.readAt = now;
+        cleared += 1;
+      }
+    }
+    return cleared;
+  },
 
   // --- Team memberships (mirrors @camp404/db/team-memberships) -------------
   // The three production operations, with production's semantics — not an
@@ -998,10 +1034,10 @@ export const testStore = {
   },
 
   /** Put a member on a team for THIS year. Idempotent; never sets the lead flag. */
-  assignTeam(input: {
-    userId: string;
-    team: Team;
-  }): { created: boolean; cycle: number } {
+  assignTeam(input: { userId: string; team: Team }): {
+    created: boolean;
+    cycle: number;
+  } {
     const cycle = currentCycleNumber();
     // Mirrors the row's foreign key to `users`: a membership for a member who
     // does not exist is a failed write in production, not a silent success.
@@ -1010,9 +1046,7 @@ export const testStore = {
     }
     const existing = teamMemberships.find(
       (m) =>
-        m.userId === input.userId &&
-        m.team === input.team &&
-        m.cycle === cycle,
+        m.userId === input.userId && m.team === input.team && m.cycle === cycle,
     );
     if (existing) return { created: false, cycle };
     teamMemberships.push({
@@ -1025,16 +1059,14 @@ export const testStore = {
   },
 
   /** Take a member off a team for THIS year. Idempotent; prior years survive. */
-  removeTeam(input: {
-    userId: string;
-    team: Team;
-  }): { removed: boolean; cycle: number } {
+  removeTeam(input: { userId: string; team: Team }): {
+    removed: boolean;
+    cycle: number;
+  } {
     const cycle = currentCycleNumber();
     const idx = teamMemberships.findIndex(
       (m) =>
-        m.userId === input.userId &&
-        m.team === input.team &&
-        m.cycle === cycle,
+        m.userId === input.userId && m.team === input.team && m.cycle === cycle,
     );
     if (idx === -1) return { removed: false, cycle };
     teamMemberships.splice(idx, 1);
@@ -1050,9 +1082,7 @@ export const testStore = {
     const cycle = currentCycleNumber();
     const existing = teamMemberships.find(
       (m) =>
-        m.userId === input.userId &&
-        m.team === input.team &&
-        m.cycle === cycle,
+        m.userId === input.userId && m.team === input.team && m.cycle === cycle,
     );
     // Leading a team is a modifier on a membership, not a membership of its
     // own: a wrong id must not mint `team_lead` clearance through this control.
@@ -1084,9 +1114,7 @@ export const testStore = {
     };
     const idx = teamMemberships.findIndex(
       (m) =>
-        m.userId === row.userId &&
-        m.team === row.team &&
-        m.cycle === row.cycle,
+        m.userId === row.userId && m.team === row.team && m.cycle === row.cycle,
     );
     // (user_id, team, cycle) is the primary key: seeding the same triple twice
     // replaces the row rather than duplicating it.
@@ -1173,9 +1201,7 @@ export const testStore = {
           createdAt: u.createdAt,
         };
       })
-      .sort((a, b) =>
-        (a.displayName ?? "").localeCompare(b.displayName ?? ""),
-      );
+      .sort((a, b) => (a.displayName ?? "").localeCompare(b.displayName ?? ""));
   },
 
   // --- captain-promotion handshake (mirrors @camp404/db/captain-promotion) ---
@@ -1212,7 +1238,8 @@ export const testStore = {
     pushDelivery(
       captainPromotionNotification({
         requestId: row.id,
-        requesterName: findUserById(input.requestedByUserId)?.displayName ?? null,
+        requesterName:
+          findUserById(input.requestedByUserId)?.displayName ?? null,
       }),
       { userId: input.targetUserId, broadcastId: null, presentation: "popup" },
     );

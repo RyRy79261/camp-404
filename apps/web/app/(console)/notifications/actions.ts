@@ -11,7 +11,15 @@ import {
   getPromotionRequestById,
 } from "@/lib/promotion";
 import { runAction, type ActionResult } from "@/lib/action-result";
-import { listInbox, markRead, type InboxPage } from "@/lib/notifications";
+import {
+  listInbox,
+  markAllRead,
+  markRead,
+  type InboxItem,
+  type InboxPage,
+} from "@/lib/notifications";
+import { getPendingQuestionnaires } from "@/lib/users";
+import { marksPageRead, parseInboxFilter } from "./filter";
 
 export type PromotionDecisionResult =
   | { ok: true }
@@ -145,25 +153,117 @@ const InboxCursor = z.string().min(1).max(100);
  * load-more as they scroll. The rows it returns are about to be on screen, so
  * they are marked read here, the same as the first page is on load. Each item
  * keeps the read state it had before, so the list can still show "New".
+ *
+ * `rawFilter` is the tab the member is on, so an older page stays inside the
+ * filter they are reading — and, on the Unread tab, is NOT marked read
+ * (`marksPageRead`), or scrolling would delete the list under them.
  */
 export async function loadOlderNotificationsAction(
   cursor: string,
+  rawFilter?: string,
 ): Promise<ActionResult<InboxPage>> {
   return runAction("loadOlderNotificationsAction", async () => {
     if (!InboxCursor.safeParse(cursor).success) {
       return { ok: false, error: "Couldn't load older notifications." };
     }
+    // An unknown filter reads the whole inbox rather than throwing — the same
+    // fallback the page applies to a stale `?filter=` in a shared link.
+    const filter = parseInboxFilter(rawFilter);
     const authUser = await getAuthenticatedUser();
     if (!authUser) return { ok: false, error: "Not signed in." };
     const campUser = await ensureCampUser(authUser);
     if (!hasCampAccess(campUser, authUser.primaryEmail)) {
       return { ok: false, error: "Your account isn't camp-active yet." };
     }
-    const page = await listInbox(campUser.id, { before: cursor });
-    await markRead(
-      campUser.id,
-      page.items.map((i) => i.id),
-    );
+    // The filter goes into the query, never onto the page that comes back: a
+    // page filtered after the fact would be short and its cursor would skip.
+    const page = await listInbox(campUser.id, { before: cursor, filter });
+    if (marksPageRead(filter)) {
+      await markRead(
+        campUser.id,
+        page.items.map((i) => i.id),
+      );
+    }
     return { ok: true, data: page };
+  });
+}
+
+/** One questionnaire still waiting on the member, as the panel lists it. */
+export interface PanelQuestionnaire {
+  activationId: string;
+  title: string;
+  blocking: boolean;
+  dueAt: Date | null;
+}
+
+export interface NotificationPanelData {
+  recent: InboxItem[];
+  pending: PanelQuestionnaire[];
+}
+
+/** How many inbox rows the header panel shows before "See all". */
+const PANEL_LIMIT = 6;
+
+/**
+ * What the header panel shows, fetched when it opens. READ-ONLY on purpose:
+ * peeking at the panel must not clear the badge, so nothing here marks a
+ * delivery read (AfrikaBurn's panel does not either) — only opening the inbox
+ * or pressing "Mark all read" does.
+ *
+ * It returns BOTH halves of what the bell counts: the latest deliveries and the
+ * questionnaires still waiting. The badge is `unread + pending`, so a panel
+ * that listed only deliveries would read 2 over an empty list.
+ *
+ * Takes no user id — the inbox is always the signed-in member's own, resolved
+ * here. A caller who is signed out or not camp-active gets empty lists, so the
+ * panel degrades to its empty state rather than erroring the whole header.
+ */
+export async function fetchNotificationPanelAction(): Promise<NotificationPanelData> {
+  const empty: NotificationPanelData = { recent: [], pending: [] };
+  try {
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) return empty;
+    const campUser = await ensureCampUser(authUser);
+    if (!hasCampAccess(campUser, authUser.primaryEmail)) return empty;
+    const [page, pending] = await Promise.all([
+      listInbox(campUser.id, { limit: PANEL_LIMIT }),
+      getPendingQuestionnaires(campUser.id),
+    ]);
+    return {
+      recent: page.items,
+      pending: pending.map((q) => ({
+        activationId: q.activationId,
+        title: q.title,
+        blocking: q.blocking,
+        dueAt: q.dueAt,
+      })),
+    };
+  } catch (err) {
+    console.error("[action:fetchNotificationPanelAction]", err);
+    return empty;
+  }
+}
+
+/**
+ * Clear every unread delivery in the signed-in member's inbox — the panel's
+ * "Mark all read". Own inbox only: the id never comes from the caller, and the
+ * UPDATE is pinned to it in SQL. Questionnaires still waiting are untouched;
+ * only answering one clears it ("shout until it's done").
+ */
+export async function markAllNotificationsReadAction(): Promise<
+  ActionResult<{ cleared: number }>
+> {
+  return runAction("markAllNotificationsReadAction", async () => {
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) return { ok: false, error: "Not signed in." };
+    const campUser = await ensureCampUser(authUser);
+    if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+      return { ok: false, error: "Your account isn't camp-active yet." };
+    }
+    const cleared = await markAllRead(campUser.id);
+    revalidatePath("/notifications");
+    // The badge is drawn by the console layout, so the whole shell refreshes.
+    revalidatePath("/", "layout");
+    return { ok: true, data: { cleared } };
   });
 }

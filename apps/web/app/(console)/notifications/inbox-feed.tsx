@@ -7,6 +7,7 @@ import { Card, CardContent } from "@camp404/ui/components/card";
 import { Spinner } from "@camp404/ui/components/spinner";
 import type { InboxItem } from "@/lib/notifications";
 import { loadOlderNotificationsAction } from "./actions";
+import type { InboxFilter } from "./filter";
 import { NotificationRow } from "./notification-row";
 
 // The inbox list: notifications under camp-day headings, newest first, each
@@ -23,10 +24,17 @@ function linkFor(item: InboxItem) {
 export function InboxFeed({
   initialItems,
   initialCursor,
+  filter,
   now,
 }: {
   initialItems: InboxItem[];
   initialCursor: string | null;
+  /**
+   * The tab being read. Older pages stay inside it — a cursor means nothing
+   * against a different WHERE — and the server re-validates it, so this is a
+   * hint to the action, never the authority.
+   */
+  filter: InboxFilter;
   /** The server's clock, so "Today" matches between server and client. */
   now: Date;
 }) {
@@ -43,7 +51,7 @@ export function InboxFeed({
     setLoading(true);
     setError(null);
     try {
-      const result = await loadOlderNotificationsAction(cursor);
+      const result = await loadOlderNotificationsAction(cursor, filter);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -62,7 +70,7 @@ export function InboxFeed({
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [cursor]);
+  }, [cursor, filter]);
 
   // Load the next page as the end of the list comes within a screen of view.
   // After a failure it waits for the Retry button instead of looping.

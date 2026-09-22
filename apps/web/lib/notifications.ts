@@ -13,6 +13,7 @@ import {
   getPendingAcknowledgements as dbGetPending,
   listAnnouncements as dbListAnnouncements,
   listInbox as dbListInbox,
+  markAllRead as dbMarkAllRead,
   markRead as dbMarkRead,
   publishAnnouncement as dbPublish,
   updateAnnouncementDraft as dbUpdateDraft,
@@ -26,6 +27,7 @@ import {
   type PendingAcknowledgement,
   type PublishResult,
 } from "@camp404/db/broadcasts";
+import type { InboxFilter } from "@camp404/types";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -35,6 +37,8 @@ import { testStore } from "./test-store";
 // split `lib/users.ts` uses so the app renders without a database during
 // Playwright runs. App code (pages, actions, route handlers) imports from
 // here, never from `@camp404/db/broadcasts` directly.
+
+export type { InboxFilter };
 
 export type {
   Audience,
@@ -52,9 +56,10 @@ interface NotificationsBackend {
   countUnread(userId: string): Promise<number>;
   listInbox(
     userId: string,
-    options?: { before?: string | null; limit?: number },
+    options?: { before?: string | null; limit?: number; filter?: InboxFilter },
   ): Promise<InboxPage>;
   markRead(userId: string, ids: string[]): Promise<void>;
+  markAllRead(userId: string): Promise<number>;
   getAnnouncementForMember(
     userId: string,
     broadcastId: string,
@@ -70,7 +75,9 @@ interface NotificationsBackend {
     senderId?: string;
   }): Promise<AnnouncementSummary[]>;
   createAnnouncementDraft(input: DraftFields): Promise<{ id: string }>;
-  updateAnnouncementDraft(input: DraftFields & { id: string }): Promise<boolean>;
+  updateAnnouncementDraft(
+    input: DraftFields & { id: string },
+  ): Promise<boolean>;
   deleteAnnouncementDraft(input: {
     id: string;
     senderId: string;
@@ -102,6 +109,7 @@ const realBackend: NotificationsBackend = {
   countUnread: dbCountUnread,
   listInbox: dbListInbox,
   markRead: dbMarkRead,
+  markAllRead: dbMarkAllRead,
   getAnnouncementForMember: dbGetAnnouncementForMember,
   getPendingAcknowledgements: dbGetPending,
   countUnseenPopups: dbCountUnseenPopups,
@@ -125,6 +133,9 @@ const testBackend: NotificationsBackend = {
   },
   async markRead(userId, ids) {
     testStore.markRead(userId, ids);
+  },
+  async markAllRead(userId) {
+    return testStore.markAllRead(userId);
   },
   async getAnnouncementForMember(userId, broadcastId) {
     return testStore.getAnnouncementForMember(userId, broadcastId);
@@ -174,13 +185,22 @@ export function countUnread(userId: string): Promise<number> {
 
 export function listInbox(
   userId: string,
-  options?: { before?: string | null; limit?: number },
+  options?: { before?: string | null; limit?: number; filter?: InboxFilter },
 ): Promise<InboxPage> {
   return backend().listInbox(userId, options);
 }
 
 export function markRead(userId: string, ids: string[]): Promise<void> {
   return backend().markRead(userId, ids);
+}
+
+/**
+ * Clear every unread delivery in this member's inbox, and say how many that
+ * was. The panel's "Mark all read" — the one way to clear the badge without
+ * opening the inbox.
+ */
+export function markAllRead(userId: string): Promise<number> {
+  return backend().markAllRead(userId);
 }
 
 export function getPendingAcknowledgements(
