@@ -121,4 +121,27 @@ describe("planPushDrain", () => {
     expect(seen[0]).toMatchObject({ link: `/questionnaires/${activation}` });
     expect(seen[1]).toMatchObject({ link: "/notifications" });
   });
+
+  it("sends the body as plain words, so a lock screen shows no markdown", async () => {
+    const seen: { title: string; body: string }[] = [];
+    const send: PushSend = async (toks, notification) => {
+      seen.push(notification);
+      return toks.map((t) => ({ token: t, success: true, errorCode: null }));
+    };
+    await planPushDrain(
+      [
+        {
+          ...delivery("d1", "u1"),
+          title: "Burn night briefing",
+          body: "## Burn night\n\n**Everyone** meets at *20:00*.\n\n- Bring [water](https://camp-404.com/water)",
+        },
+      ],
+      new Map([["u1", ["tA"]]]),
+      send,
+    );
+    expect(seen[0]?.title).toBe("Burn night briefing");
+    expect(seen[0]?.body).toBe(
+      "Burn night\n\nEveryone meets at 20:00.\n\nBring water",
+    );
+  });
 });

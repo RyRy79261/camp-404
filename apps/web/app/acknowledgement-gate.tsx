@@ -8,6 +8,8 @@ import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { toast } from "@camp404/ui/components/toast";
+import { plainPreview } from "@camp404/core";
+import { MarkdownBody } from "@/components/announcements/markdown-body";
 
 // App-wide gate for the full-screen "acknowledge" notification variant. It
 // polls for the signed-in member's unacknowledged acknowledge-deliveries and,
@@ -96,8 +98,10 @@ export function AcknowledgementGate() {
       if (!res.ok) return;
       const { popups } = (await res.json()) as { popups: Popup[] };
       for (const popup of popups ?? []) {
+        // A toast is a one-line glimpse, not the message: markdown markers
+        // would show as punctuation, so it reads as plain text.
         toast.info(popup.title, {
-          description: popup.body,
+          description: plainPreview(popup.body, 200),
           duration: POPUP_DURATION_MS,
           action: { label: "Open", onClick: () => router.push(popup.link) },
         });
@@ -267,8 +271,10 @@ export function AcknowledgementGate() {
         </div>
 
         <Card>
-          <CardContent className="whitespace-pre-wrap p-6 text-sm leading-relaxed">
-            {current.body}
+          {/* The takeover is the whole message, so the body renders the
+              markdown the captain wrote. */}
+          <CardContent className="p-6">
+            <MarkdownBody className="text-sm">{current.body}</MarkdownBody>
           </CardContent>
         </Card>
 

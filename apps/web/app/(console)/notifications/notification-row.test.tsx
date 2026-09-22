@@ -62,6 +62,23 @@ describe("NotificationRow", () => {
     expect(screen.queryByRole("link")).toBeNull();
   });
 
+  it("shows a markdown body as plain words — the row is a glimpse, not the message", () => {
+    const { container } = renderRow({
+      body: "## Burn night\n\n**Everyone** meets at *20:00*.",
+      href: "/announcements/3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44",
+    });
+    expect(
+      screen.getByText("Burn night Everyone meets at 20:00.", {
+        collapseWhitespace: true,
+      }),
+    ).toBeTruthy();
+    // No rendering, and no markers left behind either.
+    expect(container.querySelector("h2")).toBeNull();
+    expect(container.querySelector("strong")).toBeNull();
+    expect(container.textContent).not.toContain("**");
+    expect(container.textContent).not.toContain("##");
+  });
+
   it("clips the body only when the row opens the whole message", () => {
     const { unmount } = renderRow({
       href: "/announcements/3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44",

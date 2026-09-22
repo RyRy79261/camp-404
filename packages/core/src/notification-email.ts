@@ -9,6 +9,7 @@
 // and team chatter stay in the app.
 
 import type { NotificationKind, NotificationPayload } from "@camp404/types";
+import { plainPreview } from "./markdown-text";
 import { payloadLink } from "./notifications";
 
 type Presentation = "acknowledge" | "popup" | "feed";
@@ -58,6 +59,12 @@ const FOOTER =
  * The email for one notification: the notice's own title and body, and a link
  * to open it in the app. Everything a member wrote is escaped in the HTML part,
  * so an announcement cannot inject markup into someone's inbox.
+ *
+ * Email is a PLAIN-TEXT boundary, both halves of it. The text part has no
+ * renderer at all, and the HTML part escapes what it is handed — which is the
+ * only safe thing to do with a member's markup in someone else's inbox, and
+ * which would print `**Water**` verbatim. So a body written in markdown is
+ * stripped to its words here; the rendered version waits behind the link.
  */
 export function renderNotificationEmail(
   payload: NotificationPayload,
@@ -66,11 +73,12 @@ export function renderNotificationEmail(
   // payloadLink is always an in-app path ("/..."); core has no URL global.
   const url = `${siteUrl.replace(/\/+$/, "")}${payloadLink(payload)}`;
   const subject = `Camp 404: ${payload.title}`.slice(0, 200);
-  const text = `${payload.title}\n\n${payload.body}\n\nOpen in Camp 404: ${url}\n\n${FOOTER}\n`;
+  const body = plainPreview(payload.body);
+  const text = `${payload.title}\n\n${body}\n\nOpen in Camp 404: ${url}\n\n${FOOTER}\n`;
   const html = [
     '<div style="font-family:system-ui,sans-serif;line-height:1.5;max-width:560px">',
     `<h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(payload.title)}</h1>`,
-    `<p style="white-space:pre-wrap;margin:0 0 20px">${escapeHtml(payload.body)}</p>`,
+    `<p style="white-space:pre-wrap;margin:0 0 20px">${escapeHtml(body)}</p>`,
     `<p style="margin:0 0 24px"><a href="${escapeHtml(url)}">Open in Camp 404</a></p>`,
     `<p style="font-size:12px;color:#666;margin:0">${escapeHtml(FOOTER)}</p>`,
     "</div>",

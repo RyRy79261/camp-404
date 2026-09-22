@@ -83,7 +83,10 @@ test.describe("captain announcements (test-mode)", () => {
     // 3. Compose a draft (presentation defaults to the acknowledge variant)
     //    and publish it to the camp.
     await page.getByLabel("Title").fill("Burn-night briefing");
-    await page.getByLabel("Message").fill("Meet at the effigy at 20:00.");
+    // Written in markdown: a member reads it rendered where they read the
+    // whole message, and plain everywhere it is clipped.
+    await page.getByLabel("Message").fill("Meet at the **effigy** at 20:00.");
+    await expect(page.getByText(/Markdown supported/)).toBeVisible();
     await page.getByRole("button", { name: "Save draft" }).click();
     await page.getByRole("button", { name: "Publish to camp" }).click();
     // Publishing cannot be taken back, so a confirmation names the audience
@@ -107,6 +110,8 @@ test.describe("captain announcements (test-mode)", () => {
       gate.getByRole("heading", { name: "Burn-night briefing" }),
     ).toBeVisible();
     await expect(gate.getByText("Meet at the effigy at 20:00.")).toBeVisible();
+    // The takeover is the whole message, so it renders the markdown.
+    await expect(gate.locator("strong")).toHaveText("effigy");
     await expect(gate.getByText(/From Captain Jo/)).toBeVisible();
 
     // 5. Acknowledge dismisses it and it doesn't come back.
@@ -151,12 +156,18 @@ test.describe("captain announcements (test-mode)", () => {
 
     // 7. The inbox row opens the whole announcement on its own page.
     await page.goto("/notifications");
-    await page.getByRole("link", { name: /Burn-night briefing/ }).click();
+    // A row is a glimpse: it carries the words, never the markers.
+    const row = page.getByRole("link", { name: /Burn-night briefing/ });
+    await expect(row).toContainText("Meet at the effigy at 20:00.");
+    await expect(row.locator("strong")).toHaveCount(0);
+    await row.click();
     await expect(page).toHaveURL(/\/announcements\/[0-9a-f-]{36}$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Burn-night briefing" }),
     ).toBeVisible();
     await expect(page.getByText("Meet at the effigy at 20:00.")).toBeVisible();
+    // The page is the whole message, so here the markdown is rendered.
+    await expect(page.locator("article strong")).toHaveText("effigy");
     await expect(page.getByText(/You acknowledged this on/)).toBeVisible();
     const readPage = page.url();
 

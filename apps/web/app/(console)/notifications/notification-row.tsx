@@ -1,3 +1,4 @@
+import { plainPreview } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { cn } from "@camp404/ui/lib/utils";
 import { formatRelativeTime, presentationIcon } from "./presentation-meta";
@@ -75,14 +76,19 @@ export function NotificationRow({
             {formatRelativeTime(createdAt)}
           </time>
         </div>
-        {/* Clipped only when the row opens the whole message. */}
+        {/* A row is a glimpse, never the message: an announcement body is
+            markdown, and the rendering of it belongs on the surfaces that
+            show the whole thing (the announcement page, the acknowledgement
+            takeover). Here the markers are stripped, so a row cannot read as
+            asterisks and hashes. Clipped only when the row opens the whole
+            message. */}
         <p
           className={cn(
             "whitespace-pre-wrap text-sm text-muted-foreground",
             href && "line-clamp-3",
           )}
         >
-          {body}
+          {plainPreview(body)}
         </p>
         {attribution ? (
           <p className="text-xs text-muted-foreground">{attribution}</p>

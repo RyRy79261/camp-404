@@ -1,3 +1,4 @@
+import { plainPreview } from "@camp404/core";
 import {
   enqueueAnnouncement,
   findInviteByLink,
@@ -149,6 +150,13 @@ export interface DispatchResult {
  * Drain the announcement queue: send each due row, mark it sent / failed.
  * Safe to call from a cron — bounded by `limit` per invocation so a
  * thundering herd doesn't exhaust the function's wall-clock budget.
+ *
+ * The send is a PLAIN-TEXT boundary. `sendMessage` carries no `parse_mode`,
+ * which is the right call — Telegram's markdown is not the markdown a captain
+ * writes, and a stray `_` or `[` in a real announcement would make the whole
+ * message fail to send rather than merely look wrong. So the body is stripped
+ * to its words on the way out. Stripping HERE rather than at `queueAnnouncement`
+ * also covers rows that were queued before this existed.
  */
 export async function dispatchPendingAnnouncements(input: {
   client: TelegramClient;
@@ -163,7 +171,7 @@ export async function dispatchPendingAnnouncements(input: {
     try {
       const message = await input.client.sendMessage({
         chatId: row.chatId,
-        text: row.body,
+        text: plainPreview(row.body),
       });
       await markAnnouncementSent({
         id: row.id,

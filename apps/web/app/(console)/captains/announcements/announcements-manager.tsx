@@ -8,7 +8,7 @@ import {
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
-import { CAMP_TIME_ZONE, readRate } from "@camp404/core";
+import { CAMP_TIME_ZONE, plainPreview, readRate } from "@camp404/core";
 import {
   CheckCircle2,
   Eye,
@@ -50,6 +50,7 @@ import {
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
+import { MarkdownBody } from "@/components/announcements/markdown-body";
 import { RecorderPanel } from "@/components/voice/recorder-panel";
 import { useDictationToggle } from "@/components/voice/use-dictation-toggle";
 import { useVoiceSupported } from "@/components/voice/use-voice-recorder";
@@ -404,12 +405,19 @@ export function AnnouncementsManager({
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="announcement-body">Message</Label>
+            <p
+              id="announcement-body-hint"
+              className="text-xs text-muted-foreground"
+            >
+              Markdown supported &mdash; headings, bold, italic, links, lists.
+            </p>
             <Textarea
               id="announcement-body"
               value={form.body}
               maxLength={5000}
               rows={6}
               placeholder="What does everyone need to know?"
+              aria-describedby="announcement-body-hint"
               onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
               disabled={pending}
             />
@@ -428,6 +436,7 @@ export function AnnouncementsManager({
                 className="self-end"
               />
             )}
+            <BodyPreview body={form.body} />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -621,6 +630,29 @@ function AnnouncementHeader({
 }
 
 /**
+ * The composer's live preview: the body as a member will read it on the
+ * announcement page and in the acknowledgement takeover, through the very
+ * renderer they get. Mirrors AfrikaBurn's compose preview, which shows the
+ * bulletin the way its recipients see it.
+ *
+ * The composer above stays a plain Textarea deliberately — a rich-text editor
+ * would take the dictation pill's append point away from it — so this is
+ * where a captain checks that what they typed became what they meant.
+ */
+function BodyPreview({ body }: { body: string }) {
+  if (body.trim() === "") return null;
+  return (
+    <div className="mt-1 flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
+      <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+        <Eye className="h-3 w-3" aria-hidden />
+        Preview
+      </p>
+      <MarkdownBody className="text-sm">{body}</MarkdownBody>
+    </div>
+  );
+}
+
+/**
  * A card body clipped to three lines, with "Show all" when the text runs past
  * them. A captain can always read the whole of what they wrote: the read page
  * is for recipients, and the author is not one.
@@ -636,6 +668,10 @@ function ClampedBody({ body }: { body: string }) {
     setOverflows(el.scrollHeight > el.clientHeight + 1);
   }, [body, expanded]);
 
+  // A card is a glimpse of the message, not the message. The body is
+  // markdown; rendering it belongs on the surfaces that show the whole thing.
+  const text = plainPreview(body);
+
   return (
     <div className="space-y-1">
       <p
@@ -645,7 +681,7 @@ function ClampedBody({ body }: { body: string }) {
           !expanded && "line-clamp-3",
         )}
       >
-        {body}
+        {text}
       </p>
       {(overflows || expanded) && (
         <button
