@@ -72,6 +72,9 @@ export default async function AnnouncementsPage() {
           currentUserId={campUser.id}
           audienceOptions={audienceOptions}
           teamLabels={teamLabels}
+          // Null for a captain: they may address anything, and so pin to
+          // anything. A lead gets their own teams, and no pin elsewhere.
+          leadTeams={isCaptain ? null : leadTeams}
         />
       ) : (
         <CaptainLock

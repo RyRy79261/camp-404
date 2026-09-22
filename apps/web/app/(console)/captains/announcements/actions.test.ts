@@ -25,19 +25,32 @@ vi.mock("@/lib/notifications", () => ({
   createAnnouncementDraft: vi.fn(async () => ({ id: "draft-1" })),
   deleteAnnouncementDraft: vi.fn(),
   explainDraftRefusal: vi.fn(),
+  getAnnouncementPinContext: vi.fn(async () => ({
+    audience: { scope: "everyone" },
+    published: true,
+    pinned: false,
+  })),
   publishAnnouncement: vi.fn(async () => ({ ok: true, recipientCount: 4 })),
+  setAnnouncementPinned: vi.fn(async () => ({ ok: true })),
   updateAnnouncementDraft: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { previewPublishAction, publishAction, saveDraftAction } from "./actions";
-import { NOT_YOUR_TEAM } from "./audience-copy";
+import {
+  previewPublishAction,
+  publishAction,
+  saveDraftAction,
+  setPinnedAction,
+} from "./actions";
+import { NOT_YOUR_PIN, NOT_YOUR_TEAM } from "./audience-copy";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getLeadTeams, isTeamLead } from "@/lib/users";
 import {
   countAnnouncementAudience,
   createAnnouncementDraft,
+  getAnnouncementPinContext,
   publishAnnouncement,
+  setAnnouncementPinned,
 } from "@/lib/notifications";
 
 const DRAFT = { title: "Prep", body: "Knives out at 4.", presentation: "feed" };
@@ -148,5 +161,83 @@ describe("announcement audiences", () => {
     });
     expect(countAnnouncementAudience).toHaveBeenCalledWith("user-1", audience);
     expect((await previewPublishAction({ scope: "nobody" })).ok).toBe(false);
+  });
+});
+
+// Pinning authority follows posting authority (owner's call, 2026-09-22). The
+// audience the action asks about is the one STORED on the announcement, never
+// one the browser sent, and a lead's teams ride into the write so the claim can
+// re-check them.
+describe("pinning an announcement", () => {
+  const pinContext = (audience: unknown) =>
+    vi.mocked(getAnnouncementPinContext).mockResolvedValue({
+      audience,
+      published: true,
+      pinned: false,
+    } as never);
+
+  it("lets a captain pin anything they could have posted", async () => {
+    signIn("captain");
+    pinContext({ scope: "everyone" });
+    expect(await setPinnedAction("b1", true)).toEqual({ ok: true });
+    expect(setAnnouncementPinned).toHaveBeenLastCalledWith({
+      id: "b1",
+      actorId: "user-1",
+      pinned: true,
+      allowedTeams: undefined,
+    });
+  });
+
+  it("lets a lead pin their own team's announcement, and passes their teams on", async () => {
+    signIn("member", ["kitchen"]);
+    pinContext({ scope: "team", team: "kitchen" });
+    expect(await setPinnedAction("b2", true)).toEqual({ ok: true });
+    expect(setAnnouncementPinned).toHaveBeenLastCalledWith({
+      id: "b2",
+      actorId: "user-1",
+      pinned: true,
+      allowedTeams: ["kitchen"],
+    });
+  });
+
+  it("refuses a lead a camp-wide pin, or another team's — before any write", async () => {
+    signIn("member", ["kitchen"]);
+    for (const audience of [
+      { scope: "everyone" },
+      { scope: "team", team: "structures" },
+    ]) {
+      pinContext(audience);
+      expect(await setPinnedAction("b3", true)).toEqual({
+        ok: false,
+        error: NOT_YOUR_PIN,
+      });
+    }
+    expect(setAnnouncementPinned).not.toHaveBeenCalled();
+  });
+
+  it("refuses a member who leads nothing, and an announcement that is gone", async () => {
+    signIn("member", []);
+    pinContext({ scope: "everyone" });
+    expect(await setPinnedAction("b4", true)).toEqual({
+      ok: false,
+      error: "Captains and team leads only.",
+    });
+
+    signIn("captain");
+    vi.mocked(getAnnouncementPinContext).mockResolvedValue(null);
+    expect(await setPinnedAction("b4", true)).toEqual({
+      ok: false,
+      error: "That announcement no longer exists.",
+    });
+    expect(setAnnouncementPinned).not.toHaveBeenCalled();
+  });
+
+  it("unpins through the same gate", async () => {
+    signIn("member", ["kitchen"]);
+    pinContext({ scope: "team", team: "kitchen" });
+    expect(await setPinnedAction("b5", false)).toEqual({ ok: true });
+    expect(setAnnouncementPinned).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pinned: false, allowedTeams: ["kitchen"] }),
+    );
   });
 });

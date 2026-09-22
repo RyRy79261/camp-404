@@ -7,6 +7,7 @@ import {
   captainPromotionNotification,
   normalizeInviteCode,
   notificationLink,
+  sortPinned,
   type NotificationKind,
   type NotificationPayload,
 } from "@camp404/core";
@@ -16,7 +17,15 @@ import {
   DRAFT_PUBLISHED,
   DRAFT_TEAM_NOT_LED,
   isAllowedAudience,
+  PIN_ALREADY,
+  PIN_ALREADY_OFF,
+  PIN_MISSING,
+  PIN_NOT_PUBLISHED,
+  PIN_TEAM_NOT_LED,
   type Audience,
+  type AnnouncementPinContext,
+  type PinnedAnnouncement,
+  type PinResult,
 } from "@camp404/db/broadcasts";
 import type { CampManagementMember } from "@camp404/db/roster";
 import {
@@ -114,6 +123,10 @@ interface TestBroadcast {
   presentation: TestPresentation;
   audience: Audience;
   publishedAt: Date | null;
+  /** The pin mark. NULL = not pinned; on a draft it is inert until published. */
+  pinnedAt: Date | null;
+  /** Who set the mark — their rank breaks a tie in the banner's order. */
+  pinnedBy: string | null;
   createdAt: Date;
 }
 
@@ -629,6 +642,7 @@ export const testStore = {
     body: string;
     presentation: TestPresentation;
     audience?: Audience;
+    pinned?: boolean;
   }): { id: string } {
     const row: TestBroadcast = {
       id: crypto.randomUUID(),
@@ -638,6 +652,8 @@ export const testStore = {
       presentation: input.presentation,
       audience: input.audience ?? { scope: "everyone" },
       publishedAt: null,
+      pinnedAt: input.pinned ? new Date() : null,
+      pinnedBy: input.pinned ? input.senderId : null,
       createdAt: new Date(),
     };
     broadcasts.push(row);
@@ -650,6 +666,7 @@ export const testStore = {
     body: string;
     presentation: TestPresentation;
     audience?: Audience;
+    pinned?: boolean;
   }): boolean {
     const row = broadcasts.find(
       (b) =>
@@ -662,6 +679,9 @@ export const testStore = {
     row.body = input.body;
     row.presentation = input.presentation;
     row.audience = input.audience ?? { scope: "everyone" };
+    row.pinnedAt = input.pinned ? (row.pinnedAt ?? new Date()) : null;
+    row.pinnedBy =
+      row.pinnedAt === null ? null : (row.pinnedBy ?? input.senderId);
     return true;
   },
   deleteBroadcastDraft(input: { id: string; senderId: string }): boolean {
@@ -747,6 +767,74 @@ export const testStore = {
   ): number {
     return testStore.announcementRecipients(senderId, audience).length;
   },
+
+  // --- Pins --------------------------------------------------------------
+  // Mirrors `listPinnedForUser` / `setAnnouncementPinned` in
+  // @camp404/db/broadcasts, including the part that matters: the audience is
+  // the DELIVERY, never a fresh resolution. A member with no delivery row for
+  // a broadcast never sees its pin here either.
+
+  listPinnedForUser(userId: string): PinnedAnnouncement[] {
+    const mine = new Set(
+      deliveries
+        .filter((d) => d.userId === userId && d.broadcastId !== null)
+        .map((d) => d.broadcastId as string),
+    );
+    // Every pin, not a top few, and ordered by the same `sortPinned` the real
+    // read uses — a second ordering here is how the twin and the thing it
+    // stands in for drift apart.
+    return sortPinned(
+      broadcasts
+        .filter(
+          (b) =>
+            b.pinnedAt !== null && b.publishedAt !== null && mine.has(b.id),
+        )
+        .map((b) => ({
+          id: b.id,
+          title: b.title,
+          publishedAt: b.publishedAt!,
+          pinnedAt: b.pinnedAt!,
+          pinnedByCaptain:
+            b.pinnedBy !== null && findUserById(b.pinnedBy)?.rank === "captain",
+        })),
+    );
+  },
+
+  getAnnouncementPinContext(id: string): AnnouncementPinContext | null {
+    const row = broadcasts.find((b) => b.id === id);
+    if (!row) return null;
+    return {
+      audience: row.audience,
+      published: row.publishedAt !== null,
+      pinned: row.pinnedAt !== null,
+    };
+  },
+
+  setBroadcastPinned(input: {
+    id: string;
+    actorId: string;
+    pinned: boolean;
+    allowedTeams?: readonly string[];
+  }): PinResult {
+    const row = broadcasts.find((b) => b.id === input.id);
+    if (!row) return { ok: false, error: PIN_MISSING };
+    if (row.publishedAt === null) {
+      return { ok: false, error: PIN_NOT_PUBLISHED };
+    }
+    if (!isAllowedAudience(row.audience, input.allowedTeams)) {
+      return { ok: false, error: PIN_TEAM_NOT_LED };
+    }
+    // Compare-and-set, like the real claim: the loser of a race is told.
+    if ((row.pinnedAt !== null) === input.pinned) {
+      return {
+        ok: false,
+        error: input.pinned ? PIN_ALREADY : PIN_ALREADY_OFF,
+      };
+    }
+    row.pinnedAt = input.pinned ? new Date() : null;
+    row.pinnedBy = input.pinned ? input.actorId : null;
+    return { ok: true };
+  },
   listBroadcasts(options: { senderId?: string } = {}): Array<{
     id: string;
     title: string;
@@ -756,6 +844,7 @@ export const testStore = {
     senderId: string | null;
     senderName: string | null;
     publishedAt: Date | null;
+    pinnedAt: Date | null;
     createdAt: Date;
     recipientCount: number;
     acknowledgedCount: number;
@@ -777,6 +866,7 @@ export const testStore = {
             ? (findUserById(b.senderId)?.displayName ?? null)
             : null,
           publishedAt: b.publishedAt,
+          pinnedAt: b.pinnedAt,
           createdAt: b.createdAt,
           recipientCount: own.length,
           acknowledgedCount: own.filter((d) => d.acknowledgedAt !== null)

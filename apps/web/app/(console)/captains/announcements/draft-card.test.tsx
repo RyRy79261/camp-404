@@ -16,6 +16,7 @@ vi.mock("./actions", () => ({
   previewPublishAction: vi.fn(),
   publishAction: vi.fn(),
   saveDraftAction: vi.fn(),
+  setPinnedAction: vi.fn(),
   updateDraftAction: vi.fn(),
 }));
 vi.mock("@/components/voice/use-voice-recorder", () => ({
@@ -42,6 +43,7 @@ function draft(
     senderId: "me",
     senderName: "Me",
     publishedAt: null,
+    pinnedAt: null,
     createdAt: new Date("2026-09-01T10:00:00Z"),
     recipientCount: 0,
     acknowledgedCount: 0,
@@ -61,6 +63,7 @@ describe("DraftCard", () => {
         currentUserId="me"
         audienceOptions={[{ value: "everyone", label: "The whole camp" }]}
         teamLabels={{}}
+        leadTeams={null}
         announcements={[
           draft({ id: "d1", title: "My draft" }),
           draft({
@@ -95,6 +98,7 @@ describe("draft actions", () => {
         currentUserId="me"
         audienceOptions={[{ value: "everyone", label: "The whole camp" }]}
         teamLabels={{}}
+        leadTeams={null}
         announcements={[
           draft({ id: "d1", title: "First" }),
           draft({ id: "d2", title: "Second" }),

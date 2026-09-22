@@ -10,6 +10,7 @@ vi.mock("./actions", () => ({
   previewPublishAction: vi.fn(),
   publishAction: vi.fn(),
   saveDraftAction: vi.fn(),
+  setPinnedAction: vi.fn(),
   updateDraftAction: vi.fn(),
 }));
 vi.mock("@/components/voice/use-voice-recorder", () => ({
@@ -31,6 +32,7 @@ function renderComposer(announcements: AnnouncementSummary[] = []) {
       currentUserId="me"
       audienceOptions={[{ value: "everyone", label: "The whole camp" }]}
       teamLabels={{}}
+      leadTeams={null}
       announcements={announcements}
     />,
   );
@@ -98,6 +100,7 @@ describe("the announcement composer", () => {
         title: "Burn night briefing",
         body: "## Burn night\n\n**Everyone** meets at 20:00.",
         presentation: "feed",
+        pinnedAt: null,
         audience: { scope: "everyone" },
         senderId: "me",
         senderName: "Me",
