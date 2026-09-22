@@ -10,29 +10,22 @@ import { deliveryValues } from "../deliveries";
 import { drainQueuedEmail, type EmailSend } from "../email";
 import * as schema from "../schema";
 
-// The email drain against real rows. Neon Auth's users live in the neon_auth
-// schema, which Camp 404 does not migrate, so each test creates the part the
-// drain reads.
+// The email drain against real rows: each member's address is read from the
+// sign-in identity table (`user`), joined on users.auth_user_id.
 
 type DB = ReturnType<ReturnType<typeof useTestDb>["db"]>;
 const ID = "3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44";
 const SITE = "https://camp-404.com";
 
-async function neonAuthUser(
-  h: ReturnType<typeof useTestDb>,
+async function authIdentity(
+  db: DB,
   id: string,
-  email: string | null,
+  email: string,
   verified: boolean,
 ) {
-  const client = h.client();
-  await client.exec(
-    `create schema if not exists neon_auth;
-     create table if not exists neon_auth."user" (id text primary key, email text, "emailVerified" boolean);`,
-  );
-  await client.query(
-    `insert into neon_auth."user" (id, email, "emailVerified") values ($1, $2, $3)`,
-    [id, email, verified],
-  );
+  await db
+    .insert(schema.user)
+    .values({ id, name: email, email, emailVerified: verified });
 }
 
 async function statuses(db: DB) {
@@ -79,7 +72,6 @@ describe("drainQueuedEmail", () => {
 
   it("emails verified members one at a time and skips the rest", async () => {
     const db = h.db();
-    await h.client().exec(`drop schema if exists neon_auth cascade;`);
     const verified = await makeUser(db, { authUserId: "auth-verified" });
     const unverified = await makeUser(db, { authUserId: "auth-unverified" });
     const noAuthRow = await makeUser(db, { authUserId: "auth-missing" });
@@ -87,9 +79,9 @@ describe("drainQueuedEmail", () => {
       authUserId: "auth-erased",
       sanitised: true,
     });
-    await neonAuthUser(h, "auth-verified", "ada@example.com", true);
-    await neonAuthUser(h, "auth-unverified", "bo@example.com", false);
-    await neonAuthUser(h, "auth-erased", "gone@example.com", true);
+    await authIdentity(db, "auth-verified", "ada@example.com", true);
+    await authIdentity(db, "auth-unverified", "bo@example.com", false);
+    await authIdentity(db, "auth-erased", "gone@example.com", true);
 
     const payload = questionnaireReleaseNotification({
       activationId: ID,
@@ -137,11 +129,10 @@ describe("drainQueuedEmail", () => {
 
   it("records a refused or throwing send as failed and leaves quiet notices alone", async () => {
     const db = h.db();
-    await h.client().exec(`drop schema if exists neon_auth cascade;`);
     const a = await makeUser(db, { authUserId: "auth-a" });
     const b = await makeUser(db, { authUserId: "auth-b" });
-    await neonAuthUser(h, "auth-a", "a@example.com", true);
-    await neonAuthUser(h, "auth-b", "b@example.com", true);
+    await authIdentity(db, "auth-a", "a@example.com", true);
+    await authIdentity(db, "auth-b", "b@example.com", true);
     const loud = announcementNotification({
       broadcastId: ID,
       title: "Burn night",

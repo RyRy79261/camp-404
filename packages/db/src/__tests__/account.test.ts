@@ -103,6 +103,44 @@ describe("sanitiseAccount", () => {
     return row!;
   }
 
+  it("deletes the login itself: email, password, sessions and passkeys", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const bystander = await makeUser(db);
+    for (const m of [member, bystander]) {
+      await db.insert(schema.user).values({
+        id: m.authUserId,
+        name: m.authUserId,
+        email: `${m.authUserId}@example.com`,
+      });
+      await db.insert(schema.account).values({
+        id: `acc-${m.authUserId}`,
+        accountId: m.authUserId,
+        providerId: "credential",
+        userId: m.authUserId,
+        password: "salt:hash",
+      });
+      await db.insert(schema.session).values({
+        id: `ses-${m.authUserId}`,
+        token: `tok-${m.authUserId}`,
+        userId: m.authUserId,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+    }
+
+    expect(await sanitiseAccount(member.id)).toMatchObject({ ok: true });
+
+    const left = await db.select({ id: schema.user.id }).from(schema.user);
+    expect(left).toEqual([{ id: bystander.authUserId }]);
+    // The cascade took the password hash and the live session with it.
+    expect(
+      (await db.select().from(schema.account)).map((a) => a.userId),
+    ).toEqual([bystander.authUserId]);
+    expect(
+      (await db.select().from(schema.session)).map((a) => a.userId),
+    ).toEqual([bystander.authUserId]);
+  });
+
   it("removes every questionnaire answer the member ever gave", async () => {
     // The defect: erasure deleted the bespoke questionnaire tables but left
     // the generic builder store, so "erase my account" kept the answers.

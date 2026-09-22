@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { Column, SQL, StringChunk, getTableColumns, is } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import { MEMBER_FIELD_READERS } from "@camp404/core";
-import { neonAuthUsers } from "../neon-auth";
 import * as schema from "../schema";
 
 // The rules a careless column or index change can break without any other test
@@ -207,8 +206,8 @@ describe("every member-data column has a reader in the field-access list", () =>
     carMembers: schema.carMembers,
     teamMemberships: schema.teamMemberships,
     payments: schema.payments,
-    // Not in schema.ts (Neon Auth owns it), but it holds member email.
-    neonAuthUsers,
+    // The sign-in identity: it holds member email.
+    user: schema.user,
   };
 
   const columns = Object.entries(MEMBER_TABLES).flatMap(([table, t]) =>

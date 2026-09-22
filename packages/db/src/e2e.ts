@@ -1,6 +1,5 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { createHttpDb, LOCAL_PROXY_HOST, withTransaction } from "./index";
-import { neonAuthUsers } from "./neon-auth";
 import * as schema from "./schema";
 
 // Helpers for the real-database e2e run (apps/web playwright.db.config.ts).
@@ -32,7 +31,7 @@ export async function resetDatabaseForE2E(): Promise<void> {
     const tables = await tx.execute<{ name: string }>(sql`
       select quote_ident(schemaname) || '.' || quote_ident(tablename) as name
       from pg_tables
-      where schemaname in ('public', 'neon_auth')
+      where schemaname = 'public'
     `);
     const names = tables.rows.map((row) => row.name);
     if (names.length > 0) {
@@ -47,21 +46,34 @@ export async function resetDatabaseForE2E(): Promise<void> {
 }
 
 /**
- * The sign-in record Neon Auth would hold for a test login, so reads that join
- * a member's email (the roster, the email drain) find it.
+ * The sign-in identity a test login stands for, so reads that join a member's
+ * email (the roster, the email drain) find it. An email names one identity
+ * (`user.email` is unique), so a login that reuses an address takes it over,
+ * as the newest sign-up for that address would. A login with no email has no
+ * identity row, and every email join reads null for it.
  */
 export async function upsertE2EAuthUser(input: {
   id: string;
   email: string | null;
 }): Promise<void> {
   assertLocalE2EDatabase();
-  await createHttpDb()
-    .insert(neonAuthUsers)
-    .values({ id: input.id, email: input.email, emailVerified: true })
-    .onConflictDoUpdate({
-      target: neonAuthUsers.id,
-      set: { email: input.email, emailVerified: true },
-    });
+  const email = input.email?.trim().toLowerCase() || null;
+  await withTransaction(async (tx) => {
+    if (!email) {
+      await tx.delete(schema.user).where(eq(schema.user.id, input.id));
+      return;
+    }
+    await tx
+      .delete(schema.user)
+      .where(and(eq(schema.user.email, email), ne(schema.user.id, input.id)));
+    await tx
+      .insert(schema.user)
+      .values({ id: input.id, name: email, email, emailVerified: true })
+      .onConflictDoUpdate({
+        target: schema.user.id,
+        set: { email, emailVerified: true },
+      });
+  });
 }
 
 /** Force a member's approval status, as /api/test/set-approval does in the store. */

@@ -219,23 +219,17 @@ describe("getCampManagementRoster is asked of the camp's current year", () => {
 describe("captain-only columns are selected only when asked for", () => {
   const h = useTestDb();
 
-  async function withNeonAuthEmail(authUserId: string, email: string) {
-    await h.client().exec(
-      `create schema if not exists neon_auth;
-       create table if not exists neon_auth."user" (id text primary key, email text, "emailVerified" boolean);`,
-    );
+  async function withAuthEmail(authUserId: string, email: string) {
     await h
-      .client()
-      .query(
-        `insert into neon_auth."user" (id, email, "emailVerified") values ($1, $2, true)`,
-        [authUserId, email],
-      );
+      .db()
+      .insert(schema.user)
+      .values({ id: authUserId, name: email, email, emailVerified: true });
   }
 
-  it("reads the member's email from Neon Auth for a captain, and not otherwise", async () => {
+  it("reads the member's email from the sign-in identity for a captain, and not otherwise", async () => {
     const db = h.db();
     const member = await makeUser(db, { displayName: "Nova" });
-    await withNeonAuthEmail(member.authUserId, "nova@example.com");
+    await withAuthEmail(member.authUserId, "nova@example.com");
 
     const plain = await getCampMemberDetail(member.id);
     expect(Object.keys(plain!)).not.toContain("email");

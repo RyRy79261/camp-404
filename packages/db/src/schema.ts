@@ -268,12 +268,177 @@ export const telegramAnnouncementStatusEnum = pgEnum(
   ["queued", "sent", "failed"],
 );
 
+// --- Sign-in identity (Better Auth) --------------------------------------
+// Self-hosted Better Auth (@camp404/auth) owns these tables; they replace the
+// managed Neon Auth service (owner's call, 2026-09-22: "I would like
+// two-factor and passkeys"). Copied from the AfrikaBurn contributors app, whose
+// login this is. Two identities, by design:
+//   - `user`  — the sign-in identity: email, verification, password hash via
+//               `account`, sessions via `session`, second factors.
+//   - `users` — the camp member (below), and the target of every camp foreign
+//               key, joined by `users.auth_user_id` → `user.id`.
+// The join stays LOGICAL — deliberately no foreign key from `users` to `user`.
+// Account erasure deletes the `user` row (email, password hash, sessions,
+// passkeys go with it) and keeps the `users` row as the "Lost Cat #N" stub,
+// so camp history keeps its references. A foreign key would force either
+// cascading that stub away or blocking the erasure.
+//
+// The JS keys are Better Auth's field names (the drizzle adapter reads them);
+// the columns are snake_case like the rest of this file.
+
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  // Added by the twoFactor plugin: true once a TOTP enrolment is verified,
+  // which is what makes sign-in ask for the code. The secret and the backup
+  // codes live in `two_factor`, never on this row.
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export const session = pgTable(
+  "session",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (s) => ({ userIdx: index("session_user_id_idx").on(s.userId) }),
+);
+
+export const account = pgTable(
+  "account",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      mode: "date",
+    }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+      mode: "date",
+    }),
+    scope: text("scope"),
+    // The password hash, on the `credential` account. Never read by the app.
+    password: text("password"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (a) => ({ userIdx: index("account_user_id_idx").on(a.userId) }),
+);
+
+export const verification = pgTable(
+  "verification",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (v) => ({
+    identifierIdx: index("verification_identifier_idx").on(v.identifier),
+  }),
+);
+
+// Better Auth's rate-limit counters, in the database so every serverless
+// instance shares them (in-memory storage is per-instance: no limit at all).
+// BETTER AUTH OWNS THIS TABLE OUTRIGHT, INCLUDING DELETING FROM IT: after a
+// window rolls it sweeps every row older than about a minute, not only its
+// own. Nothing of ours may live here; our counters are `action_rate_limit`.
+export const rateLimit = pgTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
+
+// The twoFactor plugin's per-user secret and backup codes, both ENCRYPTED
+// (the plugin encrypts the secret; @camp404/auth sets
+// `storeBackupCodes: "encrypted"`). One row per user who has started TOTP
+// enrolment; `user.twoFactorEnabled` is the "actually on" flag.
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean("verified").notNull().default(true),
+    failedVerificationCount: integer("failed_verification_count")
+      .notNull()
+      .default(0),
+    lockedUntil: timestamp("locked_until", { mode: "date" }),
+  },
+  (t) => ({
+    userIdx: index("two_factor_user_id_idx").on(t.userId),
+    secretIdx: index("two_factor_secret_idx").on(t.secret),
+  }),
+);
+
+// One row per registered passkey (the @better-auth/passkey plugin). A passkey
+// is an extra way in, never the only one: password (or Google) stays, so a
+// lost device is never a lockout. `counter` is the WebAuthn signature counter.
+export const passkey = pgTable(
+  "passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow(),
+    aaguid: text("aaguid"),
+  },
+  (t) => ({
+    userIdx: index("passkey_user_id_idx").on(t.userId),
+    credentialIdx: index("passkey_credential_id_idx").on(t.credentialID),
+  }),
+);
+
 // --- Users ---------------------------------------------------------------
-// Camp-specific profile. Identity (email, password, OAuth, MFA, sessions)
-// lives in Neon Auth (Better Auth); this table joins to it via
-// `auth_user_id`, which mirrors the upstream `user.id`. Account + history
-// persist across the yearly camp reset; per-burn data in other tables is
-// cleared.
+// Camp-specific profile. Identity (email, password, second factors, sessions)
+// is the Better Auth `user` above; this table joins to it via
+// `auth_user_id`, which holds `user.id`. Account + history persist across the
+// yearly camp reset; per-burn data in other tables is cleared.
 
 export const users = pgTable(
   "users",

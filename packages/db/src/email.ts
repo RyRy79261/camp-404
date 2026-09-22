@@ -1,7 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { renderNotificationEmail, type NotificationEmail } from "@camp404/core";
 import { withTransaction } from "./index";
-import { neonAuthUsers } from "./neon-auth";
 import * as schema from "./schema";
 
 // The email drain: sends each queued delivery to its member's verified address,
@@ -45,15 +44,15 @@ export async function drainQueuedEmail(
         refId: schema.notificationDeliveries.refId,
         isSystem: schema.users.isSystem,
         sanitised: schema.users.sanitised,
-        email: neonAuthUsers.email,
-        emailVerified: neonAuthUsers.emailVerified,
+        email: schema.user.email,
+        emailVerified: schema.user.emailVerified,
       })
       .from(schema.notificationDeliveries)
       .innerJoin(
         schema.users,
         eq(schema.users.id, schema.notificationDeliveries.userId),
       )
-      .leftJoin(neonAuthUsers, eq(neonAuthUsers.id, schema.users.authUserId))
+      .leftJoin(schema.user, eq(schema.user.id, schema.users.authUserId))
       .where(eq(schema.notificationDeliveries.emailStatus, "queued"))
       .orderBy(asc(schema.notificationDeliveries.createdAt))
       .limit(options.limit ?? EMAIL_DRAIN_LIMIT)
