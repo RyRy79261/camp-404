@@ -205,7 +205,8 @@ export async function publishAction(
  * something that is posted to everyone." So the gate is two moves, the same two
  * the send path makes: the rank (>= team_lead, via `requireSender`), and then
  * `canSendToAudience` against THIS announcement's stored audience — never the
- * one the browser claimed. A lead's teams then ride into the write, which
+ * one the browser claimed — plus, for a new pin, the active-team check a send
+ * makes. A lead's teams then ride into the write, which
  * re-checks them in its own WHERE, so a team lost between the check and the
  * write cannot be pinned to.
  *
@@ -226,6 +227,18 @@ export async function setPinnedAction(
     }
     if (!canSendToAudience(audienceActor(gate), context.audience)) {
       return { ok: false, error: NOT_YOUR_PIN };
+    }
+    // Putting a pin UP answers every question a send answers, so a captain
+    // cannot pin to a team that is no longer active, just as they cannot post
+    // to one. Taking a pin DOWN skips this: a pin must always be removable.
+    if (pinned) {
+      const refusal = await audienceRefusal(gate, context.audience);
+      if (refusal) {
+        return {
+          ok: false,
+          error: refusal === NOT_YOUR_TEAM ? NOT_YOUR_PIN : refusal,
+        };
+      }
     }
 
     const result = await setAnnouncementPinned({

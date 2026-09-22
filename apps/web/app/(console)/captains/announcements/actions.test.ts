@@ -232,6 +232,28 @@ describe("pinning an announcement", () => {
     expect(setAnnouncementPinned).not.toHaveBeenCalled();
   });
 
+  it("refuses a captain a new pin on a team that is no longer active, and still lets them take one down", async () => {
+    signIn("captain");
+    pinContext({ scope: "team", team: "ministry_of_memes" });
+    expect(await setPinnedAction("b6", true)).toEqual({
+      ok: false,
+      error: "That team isn't active any more. Pick another audience.",
+    });
+    expect(setAnnouncementPinned).not.toHaveBeenCalled();
+
+    // An active team goes through, so the refusal above is the team, not the
+    // captain.
+    pinContext({ scope: "team", team: "kitchen" });
+    expect(await setPinnedAction("b6", true)).toEqual({ ok: true });
+
+    // A pin must always be removable, whatever became of its team.
+    pinContext({ scope: "team", team: "ministry_of_memes" });
+    expect(await setPinnedAction("b6", false)).toEqual({ ok: true });
+    expect(setAnnouncementPinned).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: "b6", pinned: false }),
+    );
+  });
+
   it("unpins through the same gate", async () => {
     signIn("member", ["kitchen"]);
     pinContext({ scope: "team", team: "kitchen" });
