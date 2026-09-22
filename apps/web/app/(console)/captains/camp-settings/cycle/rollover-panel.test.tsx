@@ -387,7 +387,44 @@ describe("RolloverPanel — the year's name", () => {
     fireEvent.change(screen.getByLabelText("Name for 2026 (optional)"), {
       target: { value: "" },
     });
-    expect(screen.getByRole("button", { name: "Remove the name" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Remove the name" }),
+    ).toBeTruthy();
+  });
+});
+
+describe("RolloverPanel — the rollover announcement", () => {
+  // This body is delivered as a full-screen acknowledge broadcast
+  // (packages/db/src/cycle-rollover.ts), so every member reads it through
+  // MarkdownBody. A composer that asks for it without saying markdown is on,
+  // and without showing what it becomes, sends a captain's asterisks to the
+  // whole camp sight unseen.
+  function openAnnouncement() {
+    render(<RolloverPanel plan={plan} />);
+    openConfirm();
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Also post an announcement/ }),
+    );
+  }
+
+  it("says markdown is supported, to a screen reader too", () => {
+    openAnnouncement();
+    const body = screen.getByLabelText("What it says");
+    const describedBy = body.getAttribute("aria-describedby");
+    expect(describedBy).toBe("announce-body-hint");
+    expect(document.getElementById(describedBy!)?.textContent).toMatch(
+      /Markdown supported/,
+    );
+  });
+
+  it("shows the captain what the camp will read, once there is something", () => {
+    openAnnouncement();
+    expect(screen.queryByText("Preview")).toBeNull();
+
+    type("What it says", "## New year\n\n**Everyone** re-answers arrival.");
+    const panel = screen.getByText("Preview").parentElement!;
+    expect(panel.querySelector("h2")?.textContent).toBe("New year");
+    expect(panel.querySelector("strong")?.textContent).toBe("Everyone");
   });
 });
 

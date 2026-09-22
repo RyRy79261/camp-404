@@ -26,6 +26,10 @@ import { Label } from "@camp404/ui/components/label";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import {
+  MarkdownHint,
+  MarkdownPreview,
+} from "@/components/announcements/markdown-body";
+import {
   advanceCycleAction,
   setCycleNameAction,
   setFoundingYearAction,
@@ -675,17 +679,26 @@ function AdvanceYearPanel({
                           setAnnounceTitle(event.target.value)
                         }
                       />
+                      {/* This body lands as a full-screen acknowledge
+                          takeover for the whole camp, rendered by the same
+                          MarkdownBody as any other announcement. So it says
+                          so, and shows the result — a captain must not be
+                          writing markdown they were never told about, with no
+                          way to see it before it goes out. */}
                       <div className="flex flex-col gap-1.5">
                         <Label htmlFor="announce-body">What it says</Label>
+                        <MarkdownHint id="announce-body-hint" />
                         <Textarea
                           id="announce-body"
                           value={announceBody}
                           maxLength={2000}
+                          aria-describedby="announce-body-hint"
                           placeholder="We've started a new year. A few questionnaires will ask you again — everything else is as you left it."
                           onChange={(event) =>
                             setAnnounceBody(event.target.value)
                           }
                         />
+                        <MarkdownPreview body={announceBody} />
                       </div>
                     </div>
                   )}
