@@ -10,6 +10,7 @@
     "./styles.css": "./src/styles/globals.css",
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
+    "./lib/form-logic": "./src/lib/form-logic.ts",
     "./lib/utils": "./src/lib/utils.ts"
   },
   "scripts": {

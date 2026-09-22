@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@camp404/ui/components/button";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
+import { PasswordInput } from "@camp404/ui/components/password-input";
 import { authClient } from "@/lib/auth-client";
 import { safeInternalPath } from "@/lib/safe-redirect";
 
@@ -127,11 +128,15 @@ export function SignInForm() {
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="signin-password">Password</Label>
-        <Input
+        {/* No strength meter here: the password already exists, and an
+            account made before the minimum was introduced must still get in,
+            so scoring it would only scold someone who can do nothing about it
+            on this screen. */}
+        <PasswordInput
           id="signin-password"
-          type="password"
           placeholder="••••••••"
           autoComplete="current-password"
+          hideStrength
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
