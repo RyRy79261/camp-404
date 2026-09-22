@@ -108,6 +108,35 @@ describe("notifications page filters", () => {
     expect(screen.getByTestId("tabs").textContent).toBe("all/4");
   });
 
+  // The count beside the Unread tab is read AFTER the page is marked read, or
+  // the All tab would advertise "Unread · 4" on a tab this very render emptied.
+  it("counts the Unread tab after the page it drew is cleared, not before", async () => {
+    let cleared = false;
+    vi.mocked(markRead).mockImplementation(async () => {
+      cleared = true;
+    });
+    vi.mocked(countUnread).mockImplementation(async () => (cleared ? 0 : 4));
+
+    render(await renderPage());
+
+    expect(markRead).toHaveBeenCalled();
+    expect(screen.getByTestId("tabs").textContent).toBe("all/0");
+  });
+
+  // The Unread tab clears nothing, so its count is what the member arrived to.
+  it("keeps the count the member arrived to on the tab that clears nothing", async () => {
+    let cleared = false;
+    vi.mocked(markRead).mockImplementation(async () => {
+      cleared = true;
+    });
+    vi.mocked(countUnread).mockImplementation(async () => (cleared ? 0 : 4));
+
+    render(await renderPage("unread"));
+
+    expect(markRead).not.toHaveBeenCalled();
+    expect(screen.getByTestId("tabs").textContent).toBe("unread/4");
+  });
+
   it("filters in the query, so paging still works", async () => {
     render(await renderPage("announcements"));
     expect(listInbox).toHaveBeenCalledWith("u1", { filter: "announcements" });

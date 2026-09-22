@@ -88,13 +88,8 @@ export default async function NotificationsPage({
 
   // Snapshot the first page (with pre-read state), then clear the badge for
   // exactly those rows — a delivery that arrives after the snapshot stays
-  // unread, and so do older ones until they are scrolled into view. The count
-  // beside the Unread tab is read before that clear, so it is what the member
-  // arrived to rather than 0.
-  const [{ items, nextCursor }, unreadCount] = await Promise.all([
-    listInbox(campUser.id, { filter }),
-    countUnread(campUser.id),
-  ]);
+  // unread, and so do older ones until they are scrolled into view.
+  const { items, nextCursor } = await listInbox(campUser.id, { filter });
   if (marksPageRead(filter)) {
     try {
       await markRead(
@@ -106,6 +101,10 @@ export default async function NotificationsPage({
       console.error("notifications markRead failed", err);
     }
   }
+  // The number beside the Unread tab is read AFTER that clear, so it is what
+  // the Unread tab would actually list. Reading it first would put "Unread · 5"
+  // on a tab that this very render just emptied.
+  const unreadCount = await countUnread(campUser.id);
 
   return (
     <div className="flex flex-col">
