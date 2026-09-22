@@ -120,8 +120,15 @@ test.describe("captain announcements (test-mode)", () => {
 
     // 6. The inbox tabs are links: the filter lives in the URL, and it is
     //    applied to the list rather than to the tab strip.
+    //
+    //    Both locators are scoped to the tab strip's own nav landmark. The tab
+    //    labels are not unique on the page — "Announcements" is also the
+    //    console nav's composer link for a lead or captain, and the Unread tab
+    //    grows a "· n" the moment anything is unread — so an unscoped
+    //    getByRole would either hit strict mode or match the wrong link.
     await page.goto("/notifications");
-    await page.getByRole("link", { name: "Announcements" }).click();
+    const tabs = page.getByRole("navigation", { name: "Filter notifications" });
+    await tabs.getByRole("link", { name: /^Announcements/ }).click();
     await expect(page).toHaveURL(/\/notifications\?filter=announcements$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Notifications" }),
@@ -132,7 +139,7 @@ test.describe("captain announcements (test-mode)", () => {
 
     // The member acknowledged it in step 5, which read it — so the Unread tab
     // is empty. Assert the page HAS rendered (the heading) before the absence.
-    await page.getByRole("link", { name: "Unread" }).click();
+    await tabs.getByRole("link", { name: /^Unread/ }).click();
     await expect(page).toHaveURL(/\/notifications\?filter=unread$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Notifications" }),

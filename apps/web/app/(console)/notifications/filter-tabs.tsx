@@ -19,6 +19,31 @@ import {
 // can be handed to the kit component: `SegmentedLinks` takes the anchor as a
 // prop because `@camp404/ui` must not depend on next.
 
+/**
+ * A tab's visible text and, where they differ, the text it is announced as.
+ *
+ * The console nav already carries a link called "Announcements" (the captain
+ * composer) for a team lead and above, and on this page both are on screen. So
+ * the filter keeps AfrikaBurn's visible label and says "Announcements only" to
+ * a screen reader. It is spelled out in full in a sr-only span, with the
+ * visible copy `aria-hidden`, rather than appended as a sr-only " only":
+ * accessible-name computation trims each node, so an appended word runs into
+ * the one before it and is announced as "Announcementsonly".
+ */
+function label(tab: InboxFilter, unreadCount: number): React.ReactNode {
+  const visible =
+    tab === "unread" && unreadCount > 0
+      ? `${INBOX_TAB_LABEL[tab]} · ${unreadCount}`
+      : INBOX_TAB_LABEL[tab];
+  if (tab !== "announcements") return visible;
+  return (
+    <>
+      <span aria-hidden>{visible}</span>
+      <span className="sr-only">{`${visible} only`}</span>
+    </>
+  );
+}
+
 export function NotificationFilterTabs({
   filter,
   unreadCount,
@@ -36,10 +61,7 @@ export function NotificationFilterTabs({
       options={INBOX_TAB_ORDER.map((tab) => ({
         value: tab,
         href: notificationsHref(tab),
-        label:
-          tab === "unread" && unreadCount > 0
-            ? `${INBOX_TAB_LABEL[tab]} · ${unreadCount}`
-            : INBOX_TAB_LABEL[tab],
+        label: label(tab, unreadCount),
       }))}
     />
   );

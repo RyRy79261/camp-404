@@ -35,8 +35,26 @@ describe("NotificationFilterTabs", () => {
       screen.getByRole("link", { name: "Unread" }).getAttribute("href"),
     ).toBe("/notifications?filter=unread");
     expect(
-      screen.getByRole("link", { name: "Announcements" }).getAttribute("href"),
+      screen
+        .getByRole("link", { name: "Announcements only" })
+        .getAttribute("href"),
     ).toBe("/notifications?filter=announcements");
+  });
+
+  // The console nav carries a link called "Announcements" (the captain
+  // composer) for a team lead and above, and on this page both are on screen.
+  // The filter keeps AfrikaBurn's visible label and takes its own accessible
+  // name from an sr-only word, so the two are not read out identically.
+  it("does not share its accessible name with the nav's Announcements link", () => {
+    render(<NotificationFilterTabs filter="all" unreadCount={0} />);
+    const tab = screen.getByRole("link", { name: "Announcements only" });
+    // Visibly it still says just "Announcements" — the rest is sr-only. And it
+    // is a WORD apart: an appended " only" would be announced as one run-on
+    // word, because accessible-name computation trims each node it joins.
+    expect(tab.querySelector("[aria-hidden]")?.textContent).toBe(
+      "Announcements",
+    );
+    expect(screen.queryByRole("link", { name: "Announcements" })).toBeNull();
   });
 
   it("says how much is unread, and only when something is", () => {
@@ -51,7 +69,7 @@ describe("NotificationFilterTabs", () => {
     render(<NotificationFilterTabs filter="announcements" unreadCount={0} />);
     expect(
       screen
-        .getByRole("link", { name: "Announcements" })
+        .getByRole("link", { name: "Announcements only" })
         .getAttribute("aria-current"),
     ).toBe("page");
     expect(
