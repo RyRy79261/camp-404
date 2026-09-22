@@ -36,7 +36,15 @@ export interface PasswordInputProps extends Omit<
 > {
   /** Hide the strength meter (e.g. on a sign-IN field where it is noise). */
   hideStrength?: boolean;
-  /** Minimum length for the "too short" feedback (default 15). */
+  /**
+   * The HTML `minLength` constraint, and the length the meter calls "too
+   * short". It is FORWARDED to the input, so it means exactly what it means on
+   * any other field — pass it and the browser enforces it too.
+   *
+   * Omitted, the input carries no constraint (sign-in must still accept an
+   * account made before the minimum existed) and the meter falls back to
+   * PASSWORD_MIN_LENGTH for its wording.
+   */
   minLength?: number;
 }
 
@@ -45,7 +53,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
     {
       className,
       hideStrength = false,
-      minLength = PASSWORD_MIN_LENGTH,
+      minLength,
       id,
       value,
       defaultValue,
@@ -65,8 +73,14 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
 
     // Track value for the meter whether controlled or uncontrolled.
     const meterValue = typeof value === "string" ? value : current;
-    const strength = passwordStrength(meterValue, minLength);
+    const meterMin = minLength ?? PASSWORD_MIN_LENGTH;
+    const strength = passwordStrength(meterValue, meterMin);
     const meterId = id ? `${id}-strength` : undefined;
+    // Only point at the meter while the meter is on the page. An empty field
+    // with the meter enabled renders no `#${id}-strength`, and a describedby
+    // naming an element that does not exist is a broken reference for a screen
+    // reader (and an aria-valid-attr-value failure) on every load of sign-up.
+    const showMeter = !hideStrength && meterValue.length > 0;
 
     return (
       <div className="space-y-1.5">
@@ -82,7 +96,8 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
               onChange?.(e);
             }}
             className={cn("pr-10", className)}
-            aria-describedby={!hideStrength ? meterId : undefined}
+            minLength={minLength}
+            aria-describedby={showMeter ? meterId : undefined}
             {...props}
           />
           <button
@@ -106,7 +121,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
             )}
           </button>
         </div>
-        {!hideStrength && meterValue.length > 0 ? (
+        {showMeter ? (
           <div id={meterId} className="space-y-1">
             <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
               <div
@@ -132,7 +147,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
             >
               {strength.meetsMin
                 ? strength.label
-                : `${strength.label} — use at least ${minLength} characters`}
+                : `${strength.label} — use at least ${meterMin} characters`}
             </p>
           </div>
         ) : null}

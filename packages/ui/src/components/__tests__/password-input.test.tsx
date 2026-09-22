@@ -84,6 +84,37 @@ describe("PasswordInput", () => {
     expect(screen.getByText("Fair")).toBeTruthy();
   });
 
+  it("never points at a meter that is not on the page", () => {
+    // The empty-field case: the meter is ENABLED but renders nothing, so a
+    // describedby here would name an id no element carries.
+    const { rerender } = render(<PasswordInput id="pw" value="" />);
+    expect(document.getElementById("pw-strength")).toBeNull();
+    expect(field().getAttribute("aria-describedby")).toBeNull();
+
+    rerender(<PasswordInput id="pw" value="hunter2" />);
+    const describedBy = field().getAttribute("aria-describedby");
+    expect(describedBy).toBe("pw-strength");
+    expect(document.getElementById(describedBy!)).not.toBeNull();
+  });
+
+  it("forwards minLength to the input, and adds none when the caller passes none", () => {
+    // Two attributes that read the same at the call site must behave the same:
+    // `required` reaches the input, so `minLength` has to as well, or a caller
+    // relying on the browser's own check silently gets no check at all.
+    const { rerender } = render(<PasswordInput id="pw" minLength={12} />);
+    expect(field().getAttribute("minlength")).toBe("12");
+
+    rerender(<PasswordInput id="pw" />);
+    expect(field().hasAttribute("minlength")).toBe(false);
+  });
+
+  it("words the meter with the caller's minimum, not the default", () => {
+    render(<PasswordInput id="pw" value={"x".repeat(10)} minLength={12} />);
+    expect(
+      screen.getByText("Too short — use at least 12 characters"),
+    ).toBeTruthy();
+  });
+
   it("shows no meter when the field is empty or hideStrength is set", () => {
     const { rerender } = render(<PasswordInput id="pw" value="" />);
     expect(screen.queryByRole("progressbar")).toBeNull();

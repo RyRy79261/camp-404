@@ -25,17 +25,19 @@ import {
 } from "@camp404/ui/components/card";
 import { cn } from "@camp404/ui/lib/utils";
 import type { FeedbackKind } from "@/lib/github-feedback";
+import { FEEDBACK_UNAVAILABLE_MESSAGE } from "@/lib/integration-config";
 import { openReportProblem } from "./report-problem";
 import { ReportDiagnosticsPanel } from "./report-diagnostics";
 
 export interface ReportSettingsCardProps {
   /**
-   * False when the deployment has no `GITHUB_FEEDBACK_TOKEN`, or its
-   * `GITHUB_FEEDBACK_REPO` is malformed. The two buttons are replaced by a
-   * plain statement: there is nowhere for a report to go, and the honest place
-   * to say so is the page somebody opens to ask why reporting does nothing.
+   * Why a report has nowhere to go, or `"ok"`. The two reasons say different
+   * things to the member and need different fixes from a captain, so the card
+   * carries the reason rather than a bare boolean: it quotes the message the
+   * send would ACTUALLY come back with, straight from the constant the server
+   * action returns.
    */
-  filingEnabled?: boolean;
+  filing?: "ok" | "no_token" | "bad_repo";
   /** `owner/name` of the tracker reports land on, when it is configured. */
   repo?: string | null;
   /** True when the server has an ANTHROPIC_API_KEY, so the AI pass can run. */
@@ -43,10 +45,11 @@ export interface ReportSettingsCardProps {
 }
 
 export function ReportSettingsCard({
-  filingEnabled = true,
+  filing = "ok",
   repo = null,
   aiAvailable = false,
 }: ReportSettingsCardProps = {}) {
+  const filingEnabled = filing === "ok";
   function start(kind: FeedbackKind) {
     openReportProblem({ kind });
   }
@@ -70,12 +73,24 @@ export function ReportSettingsCard({
             />
             <span>
               <span className="font-semibold">
-                Reporting isn&rsquo;t switched on for this deployment.
+                {filing === "bad_repo"
+                  ? "Reporting is switched on but pointed at nothing."
+                  : "Reporting isn’t switched on for this deployment."}
               </span>{" "}
               The reporter still opens — shaking your phone still works — but
-              sending will come back with &ldquo;Feedback isn&rsquo;t set up
-              yet.&rdquo; Everything below still describes what a report would
-              attach once it is.
+              sending comes back with{" "}
+              <span className="italic">
+                &ldquo;
+                {filing === "bad_repo"
+                  ? FEEDBACK_UNAVAILABLE_MESSAGE.bad_repo
+                  : FEEDBACK_UNAVAILABLE_MESSAGE.no_token}
+                &rdquo;
+              </span>{" "}
+              {filing === "bad_repo"
+                ? "— the tracker setting is not in owner/name form, which is the thing to tell a captain."
+                : "— there is no GitHub token set, which is the thing to tell a captain."}{" "}
+              Everything below still describes what a report would attach once
+              it is fixed.
             </span>
           </p>
         )}
@@ -133,19 +148,25 @@ export function ReportSettingsCard({
             A report becomes a GitHub issue on{" "}
             <span className="font-mono">{repo ?? "the camp's tracker"}</span>,
             filed by the camp&rsquo;s GitHub account rather than yours, and
-            labelled <span className="font-mono">needs-triage</span>. The camp
-            repo is public, so anyone can read it. Nothing is kept in Camp
-            404&rsquo;s own database. Your name and email are never in the
-            issue; your camp account id is, so a captain can work out who to ask
-            — but nobody is notified, and nobody is watching it on your behalf.
+            labelled <span className="font-mono">needs-triage</span>. Anyone who
+            can read that repository can read your report, and the camp&rsquo;s
+            own is a public one. Nothing is kept in Camp 404&rsquo;s own
+            database. Your name and email are never in the issue; your camp
+            account id is, so a captain can work out who to ask — but nobody is
+            notified, and nobody is watching it on your behalf.
             {aiAvailable ? (
               <>
                 {" "}
                 With &ldquo;Improve with AI&rdquo; left ticked, the stripped
                 text of your report is sent to Claude first, to be rewritten as
-                a title and steps — unless it reads as though it holds somebody
-                else&rsquo;s details, which holds the whole report for a person
-                instead.
+                a title and steps. That step is skipped if your report speaks to
+                whoever reads it, asks for data to be sent on, or looks like it
+                holds somebody else&rsquo;s details: the issue is then filed as
+                you wrote it, labelled{" "}
+                <span className="font-mono">needs-human</span> for a person to
+                read. It is still filed straight away — nothing is held back and
+                waited on. In the last case the device details are left off it
+                too.
               </>
             ) : null}
           </span>

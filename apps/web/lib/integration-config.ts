@@ -87,6 +87,20 @@ export function isWebPushConfigured(config: WebPushConfig): boolean {
 
 export const DEFAULT_FEEDBACK_REPO = "RyRy79261/camp-404";
 
+/**
+ * What a member is told when a report has nowhere to go. One copy, read by the
+ * server action that returns it AND by the profile card that warns about it in
+ * advance — the card used to quote the no-token wording for both reasons, so a
+ * malformed repo sent the member to a captain with the wrong symptom.
+ */
+export const FEEDBACK_UNAVAILABLE_MESSAGE: Record<
+  "no_token" | "bad_repo",
+  string
+> = {
+  no_token: "Feedback isn't set up yet. Let a camp captain know.",
+  bad_repo: "Feedback isn't configured correctly. Let a camp captain know.",
+};
+
 export type FeedbackTracker =
   | { ok: true; token: string; owner: string; name: string }
   | { ok: false; reason: "no_token" | "bad_repo" };

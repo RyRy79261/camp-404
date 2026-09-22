@@ -18,9 +18,10 @@ import type { FeedbackKind } from "@/lib/github-feedback";
 /**
  * Mounted once in the root layout (sibling of AcknowledgementGate). Shaking the
  * device opens the bug/feature dialog; shake detection pauses while it's open.
- * The "Report a problem" item on /profile and the error page's Report button
- * open it too, through openReportProblem (owner's call, 2026-09-16: shake is
- * not the only way, but there is no floating button).
+ * The profile's "Bugs and feature requests" card ("Report a bug" / "Request a
+ * feature") and the error page's Report button open it too, through
+ * openReportProblem (owner's call, 2026-09-16: shake is not the only way, but
+ * there is no floating button). `kind` decides which type it opens on.
  *
  * Gated on the LIVE client session: the shake listener is only attached while a
  * user is actually signed in (and detaches immediately on sign-out), so the

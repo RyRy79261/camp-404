@@ -8,6 +8,7 @@ import { rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
 import {
   DEFAULT_FEEDBACK_REPO,
+  FEEDBACK_UNAVAILABLE_MESSAGE,
   feedbackTracker,
   type FeedbackTracker,
 } from "@/lib/integration-config";
@@ -83,16 +84,10 @@ function resolveTracker():
   if (tracker.ok) return tracker;
   if (tracker.reason === "no_token") {
     console.error("submitFeedbackAction: GITHUB_FEEDBACK_TOKEN is not set");
-    return {
-      ok: false,
-      error: "Feedback isn't set up yet. Let a camp captain know.",
-    };
+    return { ok: false, error: FEEDBACK_UNAVAILABLE_MESSAGE.no_token };
   }
   console.error("submitFeedbackAction: GITHUB_FEEDBACK_REPO is misconfigured");
-  return {
-    ok: false,
-    error: "Feedback isn't configured correctly. Let a camp captain know.",
-  };
+  return { ok: false, error: FEEDBACK_UNAVAILABLE_MESSAGE.bad_repo };
 }
 
 /**
@@ -142,7 +137,8 @@ export async function submitFeedbackAction(
       error: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
   }
-  const { kind, description, dictated, route, useAi, diagnostics } = parsed.data;
+  const { kind, description, dictated, route, useAi, diagnostics } =
+    parsed.data;
 
   // Sanitize once: reject input that's empty after PII/HTML stripping (e.g.
   // HTML-only) so we never file a blank issue, and use the clean text as the
@@ -161,7 +157,11 @@ export async function submitFeedbackAction(
 
   // E2E mode exercises auth + validation but never calls the AI or GitHub.
   if (isE2ETestMode()) {
-    return { ok: true, number: 0, url: `https://github.com/${DEFAULT_FEEDBACK_REPO}/issues` };
+    return {
+      ok: true,
+      number: 0,
+      url: `https://github.com/${DEFAULT_FEEDBACK_REPO}/issues`,
+    };
   }
 
   // Screen before anything reads the report. A flagged report is held for a
@@ -199,7 +199,7 @@ export async function submitFeedbackAction(
 
   if (!tracker?.ok) {
     // Unreachable: E2E returned above, and a failed config returned first.
-    return { ok: false, error: "Feedback isn't set up yet. Let a camp captain know." };
+    return { ok: false, error: FEEDBACK_UNAVAILABLE_MESSAGE.no_token };
   }
   const { token, owner, name } = tracker;
 
@@ -231,30 +231,48 @@ export async function submitFeedbackAction(
         await res.json().catch(() => null),
       );
       if (!parsed.success) {
-        console.error("submitFeedbackAction: unexpected GitHub 201 response shape");
+        console.error(
+          "submitFeedbackAction: unexpected GitHub 201 response shape",
+        );
         return {
           ok: false,
           error: "Your report was filed, but we couldn't read GitHub's reply.",
         };
       }
-      return { ok: true, number: parsed.data.number, url: parsed.data.html_url };
+      return {
+        ok: true,
+        number: parsed.data.number,
+        url: parsed.data.html_url,
+      };
     }
 
     // The status only. GitHub's error body can echo the request, which holds
     // the member's report, so it never goes to the log.
     console.error(`submitFeedbackAction: GitHub responded ${res.status}`);
     if (res.status === 401) {
-      return { ok: false, error: "GitHub rejected the token — a captain needs to refresh it." };
+      return {
+        ok: false,
+        error: "GitHub rejected the token — a captain needs to refresh it.",
+      };
     }
     if (res.status === 403 || res.status === 404) {
-      return { ok: false, error: "The feedback tracker is unreachable right now." };
+      return {
+        ok: false,
+        error: "The feedback tracker is unreachable right now.",
+      };
     }
     if (res.status === 410) {
       return { ok: false, error: "Issues are turned off on the tracker repo." };
     }
-    return { ok: false, error: "Couldn't file your report just now. Please try again." };
+    return {
+      ok: false,
+      error: "Couldn't file your report just now. Please try again.",
+    };
   } catch (err) {
     console.error("submitFeedbackAction: GitHub request failed", err);
-    return { ok: false, error: "Couldn't reach the feedback tracker. Please try again." };
+    return {
+      ok: false,
+      error: "Couldn't reach the feedback tracker. Please try again.",
+    };
   }
 }

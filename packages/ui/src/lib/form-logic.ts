@@ -9,10 +9,26 @@
  * The minimum a new Camp 404 password may be.
  *
  * AfrikaBurn's number, and AfrikaBurn's reasoning: one long passphrase, no
- * composition rules, paste allowed. It is enforced where Camp 404 actually
- * chooses a password — the sign-up form — so the meter's "use at least N
- * characters" is a rule the app keeps, not advice it ignores. Sign-in does
- * not apply it: an account made before this exists and must still get in.
+ * composition rules, paste allowed.
+ *
+ * WHERE IT ACTUALLY BITES: the sign-up form only, and only in the browser (a
+ * length check plus the input's own `minLength`). It is NOT the floor the
+ * account really has.
+ *
+ * [UNRESOLVED 2026-09-22] Two places are outside it and neither is ours to
+ * set from this file:
+ *  - Nothing in this repo sets Better Auth's `minPasswordLength` (grep
+ *    `minPasswordLength` — no hit), so the server floor is whatever the hosted
+ *    service defaults to, not 15. Better Auth's own documented default is 8.
+ *  - `apps/web/app/auth/[path]/page.tsx` hands `forgot-password` /
+ *    `reset-password` to Neon Auth's hosted AuthView, which applies its own
+ *    rules — a member can reset to a password sign-up would have refused.
+ * The choice for the owner: either configure the hosted floor to match this
+ * number, or drop this to whatever the hosted floor is. Until then, treat this
+ * as guidance the sign-up form enforces, not a guarantee about any account.
+ *
+ * Sign-in applies nothing: an account made before this existed must still get
+ * in.
  */
 export const PASSWORD_MIN_LENGTH = 15;
 

@@ -38,7 +38,9 @@ export function SignUpForm() {
       return;
     }
     // The meter under the field says "use at least N characters". This is what
-    // makes that a rule the form keeps rather than advice it ignores.
+    // makes that a rule the form keeps rather than advice it ignores. It is a
+    // BROWSER-side rule only — see PASSWORD_MIN_LENGTH's [UNRESOLVED] note:
+    // the hosted auth service's own floor is lower and is not set from here.
     if (password.length < PASSWORD_MIN_LENGTH) {
       setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
       return;

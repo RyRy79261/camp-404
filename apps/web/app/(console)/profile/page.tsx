@@ -123,7 +123,7 @@ export default async function ProfilePage() {
 
           <div className="flex flex-col gap-6">
             <ReportSettingsCard
-              filingEnabled={tracker.ok}
+              filing={tracker.ok ? "ok" : tracker.reason}
               repo={tracker.ok ? `${tracker.owner}/${tracker.name}` : null}
               aiAvailable={!!process.env.ANTHROPIC_API_KEY}
             />
