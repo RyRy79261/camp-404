@@ -165,9 +165,7 @@ export function RosterTable({
             {showStatus && (
               <SortHeader label="Status" sortKey="status" sort={sort} />
             )}
-            {standingColumn && (
-              <TableHead scope="col">Standing</TableHead>
-            )}
+            {standingColumn && <TableHead scope="col">Standing</TableHead>}
             <TableHead scope="col" className="w-12 pr-4">
               <span className="sr-only">Open</span>
             </TableHead>

@@ -34,13 +34,13 @@ describe("memberExportColumnsFor", () => {
       "rank",
       "teams",
       "country",
+      "approval",
       "emergency_contact_1",
       "emergency_contact_2",
       "allergies",
       "anaphylactic",
       "food_dislikes",
       "dietary_notes",
-      "approval",
     ]);
   });
 

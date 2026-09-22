@@ -175,11 +175,17 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
       page.getByRole("heading", { name: "Camp management" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Open Pia Applicant's profile" }).first(),
+      page
+        .getByRole("button", { name: "Open Pia Applicant's profile" })
+        .first(),
     ).toBeVisible();
     // She is marked as an applicant, and the chip counts exactly her.
-    await expect(page.getByRole("button", { name: /^Pending 1/ })).toBeVisible();
-    await expect(page.getByText("Pending", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /^Pending 1/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Pending", { exact: true }).first(),
+    ).toBeVisible();
 
     // The declined sign-up is not on a member's roster at all — the default of
     // MEMBERS_SEE_REJECTED in apps/web/lib/camp-roster.ts.

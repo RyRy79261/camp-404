@@ -97,9 +97,9 @@ describe("toPublicRosterRow", () => {
   });
 
   it("keeps an applicant's standing, and gives a camp member none", () => {
-    expect(toPublicRosterRow(member({ approvalStatus: "pending" })).standing).toBe(
-      "pending",
-    );
+    expect(
+      toPublicRosterRow(member({ approvalStatus: "pending" })).standing,
+    ).toBe("pending");
     expect(
       toPublicRosterRow(member({ approvalStatus: "approved" })).standing,
     ).toBeNull();
@@ -211,9 +211,26 @@ describe("MEMBERS_SEE_REJECTED (the owner's one-line flip)", () => {
     expect(visibleToMembers({ approvalStatus: "rejected" }, true)).toBe(true);
     const rejected = member({ id: "r", approvalStatus: "rejected" });
     expect(membersVisibleTo([rejected], false)).toEqual([]);
-    expect([rejected].filter((m) => visibleToMembers(m, true))).toEqual([
-      rejected,
-    ]);
+    expect(membersVisibleTo([rejected], false, true)).toEqual([rejected]);
+  });
+
+  // The flip is only worth one line if that line actually reaches the page.
+  // Drive it through the REAL fork, both ways, so nobody can hardcode the
+  // exclusion inside `rosterForViewer` and leave the constant a decoration.
+  it("is honoured by the page fork itself, not just by the predicate", () => {
+    const roster = [
+      member({ id: "ok", approvalStatus: "approved" }),
+      member({ id: "no", approvalStatus: "rejected" }),
+    ];
+    expect(rosterForViewer(roster, false, false).rows.map((r) => r.id)).toEqual(
+      ["ok"],
+    );
+    const flipped = rosterForViewer(roster, false, true);
+    expect(flipped.rows.map((r) => r.id)).toEqual(["ok", "no"]);
+    // …and the declined row then wears its standing, nothing more.
+    const row = flipped.rows[1] as PublicRosterRow;
+    expect(row.standing).toBe("rejected");
+    expect(Object.keys(row).sort()).toEqual([...PUBLIC_KEYS].sort());
   });
 
   it("never hides anyone from a captain", () => {

@@ -85,9 +85,7 @@ describe("MemberRoster — member view", () => {
 
   it("marks the applicant, and only the applicant, with a standing badge", () => {
     render(<MemberRoster rows={withApplicant} teams={teams} />);
-    expect(
-      screen.getByRole("columnheader", { name: "Standing" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Standing" })).toBeTruthy();
     // The badge is a <span>; the Pending chip is a <button>, so this counts
     // badges only. Table + card list each draw one, so two per applicant.
     expect(screen.getAllByText("Pending", { selector: "span" }).length).toBe(2);

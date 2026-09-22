@@ -38,6 +38,11 @@ export const MEMBER_EXPORT_COLUMNS: readonly MemberExportColumn[] = [
   },
   { key: "teams", header: "Teams", sources: ["teamMemberships.team"] },
   { key: "country", header: "Country", sources: ["answer:country"] },
+  // Whether the person is still an applicant. Member-readable since the owner's
+  // 2026-09-22 ruling ("everyone should be able to see the applicants"), so it
+  // belongs up here and not down with the captain-only REST of the approval
+  // lifecycle — who decided, when, and what they said.
+  { key: "approval", header: "Approval", sources: ["users.approvalStatus"] },
   // Safety data: team leads and captains.
   {
     key: "emergency_contact_1",
@@ -75,7 +80,6 @@ export const MEMBER_EXPORT_COLUMNS: readonly MemberExportColumn[] = [
   { key: "id_number", header: "ID number", sources: ID_SOURCES },
   { key: "arrival", header: "Arrival", sources: ["driverProfiles.arrivalAt"] },
   { key: "dues_paid", header: "Dues paid", sources: ["payments.status"] },
-  { key: "approval", header: "Approval", sources: ["users.approvalStatus"] },
   { key: "joined", header: "Joined", sources: ["users.createdAt"] },
 ];
 

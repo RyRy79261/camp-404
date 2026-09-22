@@ -67,11 +67,21 @@ export function visibleToMembers(
  * privacy rule, where `toPublicRosterRow` is the column-level half. A captain
  * sees everyone. Used by the roster page and by the member export, so the file
  * and the screen list the same people.
+ *
+ * `seeRejected` defaults to the constant, so production passes two arguments
+ * and cannot drift from it; a test passes the third to drive BOTH sides of the
+ * owner's flip without editing the module.
  */
 export function membersVisibleTo<
   T extends Pick<CampManagementMember, "approvalStatus">,
->(members: readonly T[], isCaptain: boolean): T[] {
-  return isCaptain ? [...members] : members.filter((m) => visibleToMembers(m));
+>(
+  members: readonly T[],
+  isCaptain: boolean,
+  seeRejected: boolean = MEMBERS_SEE_REJECTED,
+): T[] {
+  return isCaptain
+    ? [...members]
+    : members.filter((m) => visibleToMembers(m, seeRejected));
 }
 
 /**
@@ -194,7 +204,9 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
  * leak to a member through the row. Single-sourced by `toRosterRow`
  * (the captain row spreads this), so the public columns can never drift apart.
  */
-export function toPublicRosterRow(member: CampManagementMember): PublicRosterRow {
+export function toPublicRosterRow(
+  member: CampManagementMember,
+): PublicRosterRow {
   return {
     id: member.id,
     displayName: member.displayName?.trim() || "Unnamed burner",
@@ -398,16 +410,22 @@ export type RosterForViewer =
  * Two cuts, not one: `membersVisibleTo` decides WHO is on the member's roster
  * (declined sign-ups are not, per MEMBERS_SEE_REJECTED), and
  * `toPublicRosterRow` decides WHAT of each of them crosses the wire.
+ *
+ * `seeRejected` defaults to the constant; only a test passes it, so that the
+ * owner's flip is exercised through the REAL fork rather than trusted.
  */
 export function rosterForViewer(
   members: CampManagementMember[],
   isCaptain: boolean,
+  seeRejected: boolean = MEMBERS_SEE_REJECTED,
 ): RosterForViewer {
   return isCaptain
     ? { isCaptain: true, rows: members.map(toRosterRow) }
     : {
         isCaptain: false,
-        rows: membersVisibleTo(members, false).map(toPublicRosterRow),
+        rows: membersVisibleTo(members, false, seeRejected).map(
+          toPublicRosterRow,
+        ),
       };
 }
 
@@ -422,9 +440,15 @@ export interface RosterSort {
 }
 
 /** The order the server sends, and the order the roster opens in. */
-export const DEFAULT_ROSTER_SORT: RosterSort = { key: "name", direction: "asc" };
+export const DEFAULT_ROSTER_SORT: RosterSort = {
+  key: "name",
+  direction: "asc",
+};
 
-const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+const collator = new Intl.Collator("en", {
+  sensitivity: "base",
+  numeric: true,
+});
 
 // Ascending role order puts the people who run the camp first.
 const ROLE_ORDER = { captain: 0, lead: 1, member: 2 } as const;
@@ -438,7 +462,10 @@ const STATUS_ORDER: Record<RosterStatus, number> = {
   ready: 4,
 };
 
-function sortValue(row: RosterDisplayRow, key: RosterSortKey): string | number | null {
+function sortValue(
+  row: RosterDisplayRow,
+  key: RosterSortKey,
+): string | number | null {
   switch (key) {
     case "name":
       return row.displayName;

@@ -100,9 +100,7 @@ export function MemberRoster({
         onQueryChange={setQuery}
         chip={chip}
         onChipChange={(next) =>
-          setChip(
-            next === "captains" || next === "pending" ? next : "all",
-          )
+          setChip(next === "captains" || next === "pending" ? next : "all")
         }
         team={team}
         onTeamChange={setTeam}
