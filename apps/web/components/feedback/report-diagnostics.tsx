@@ -102,11 +102,12 @@ export function ReportDiagnosticsPanel({
 
       <div id={bodyId} hidden={!open} className="flex flex-col gap-2 px-3 pb-3">
         <p className="text-xs text-muted-foreground">
-          This goes on a GitHub issue in the camp&rsquo;s tracker, which is a
-          public repository — treat it as readable by anyone. Your name and
-          email are never attached — only what you write, these facts about the
-          device you&rsquo;re on, and your camp account id, which means nothing
-          outside the camp but lets a captain work out who to follow up with.
+          This goes on a GitHub issue in the camp&rsquo;s tracker. Treat it as
+          readable by anyone who can read that repository — the camp&rsquo;s own
+          is a public one. Your name and email are never attached — only what
+          you write, these facts about the device you&rsquo;re on, and your camp
+          account id, which means nothing outside the camp but lets a captain
+          work out who to follow up with.
         </p>
 
         {shown === null ? (

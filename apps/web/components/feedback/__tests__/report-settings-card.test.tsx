@@ -127,6 +127,16 @@ describe("ReportSettingsCard", () => {
       /Anyone who can read that repository can read your report/,
     );
     expect(info.textContent).not.toMatch(/The camp repo is public/);
+
+    // The same rule inside the disclosure panel, which is the text somebody
+    // actually consents to: it may warn, but it may not assert that a repo it
+    // has never seen is public.
+    fireEvent.click(disclosure());
+    const consent = screen.getByText(/Your name and email are never attached/);
+    expect(consent.textContent).toMatch(
+      /readable by anyone who can read that repository/,
+    );
+    expect(consent.textContent).not.toMatch(/goes on a public GitHub issue/);
   });
 
   it("mentions the AI pass only where it can happen", () => {
