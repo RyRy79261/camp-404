@@ -25,9 +25,17 @@ export type RosterStatus =
  * nobody asked for. So by default a rejected person is not on a member's
  * roster at all, and their "Declined" standing therefore cannot leak.
  *
- * Set this to `true` and rejected people appear to every rank wearing the
- * "Declined" chip — nothing else has to change, because both the roster fork
- * (`rosterForViewer`) and the member export read this one flag.
+ * Set this to `true` and rejected people reach a member's roster and export,
+ * because the two row filters (`rosterForViewer` and the member export) read
+ * this one flag. THREE things do not follow by themselves, and whoever flips it
+ * owns them:
+ *   1. There is no "Declined" filter chip — `PublicRosterChip` is
+ *      all / pending / captains — so a declined row appears only under All,
+ *      wearing the "Declined" badge from `PUBLIC_STANDING_LABEL`.
+ *   2. `derivePublicRosterStats` counts members, captains and pending. It does
+ *      not count declined, so the strip will not report them.
+ *   3. The e2e case "a member sees who applied, and not who was declined"
+ *      asserts the default, and has to be rewritten to assert the flip.
  * ───────────────────────────────────────────────────────────────────────────
  */
 export const MEMBERS_SEE_REJECTED: boolean = false;

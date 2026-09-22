@@ -18,12 +18,13 @@ import { RosterTable } from "./roster-table";
 import { RosterToolbar } from "./roster-toolbar";
 
 // Member-facing roster (revived per the owner's call), in the same console
-// composition as the captain's minus the captain chrome. Any approved camp member may browse who's at camp — names,
-// handles, country, role, teams — and open a PUBLIC card (bio + what they bring).
-// and see who has applied. Join date, contact details, government ID, dues,
-// captain notes and the admin actions are withheld SERVER-SIDE: this island
-// only ever receives PublicRosterRow, so it has no private data to render.
-// Filters are All / Pending / Captains / Team.
+// composition as the captain's minus the captain chrome. Any approved camp
+// member may browse who is at camp — names, handles, country, role, teams —
+// see who has applied, and open a PUBLIC card (bio + what they bring). Join
+// date, contact details, government ID, dues, captain notes and the admin
+// actions are withheld SERVER-SIDE: this island only ever receives
+// PublicRosterRow, so it has no private data to render. Filters are
+// All / Pending / Captains / Team.
 //
 // Pending is here on the owner's 2026-09-22 ruling ("everyone should be able to
 // see the applicants"). Declined sign-ups never arrive in `rows` at all
