@@ -121,3 +121,4 @@ export * from "./notification-days";
 export * from "./notification-email";
 export * from "./time-zone";
 export * from "./questionnaire-status";
+export * from "./password";
