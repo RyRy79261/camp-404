@@ -5,6 +5,8 @@
 
 export const AUDIT_ACTION_LABELS = {
   "account.sanitized": "Erased their account",
+  "announcement.pinned": "Pinned an announcement",
+  "announcement.unpinned": "Unpinned an announcement",
   "car.rider_added": "Put a member in a car",
   "car.rider_removed": "Took a member out of a car",
   "camp.cycle.advanced": "Moved the camp to a new year",
@@ -163,6 +165,16 @@ export function auditDetail(
     case "document.updated": {
       const version = count(metadata, "version");
       return version === null ? null : `Now version ${version}`;
+    }
+    // A pin puts a message on every recipient's screen and leaves it there, so
+    // the receipt names WHO it is on the screen of — the audience is the whole
+    // point of the rule that allowed the pin.
+    case "announcement.pinned":
+    case "announcement.unpinned": {
+      const scope = text(metadata, "scope");
+      if (scope === "everyone") return "The whole camp";
+      const team = text(metadata, "team");
+      return scope === "team" && team ? teamLabel(team) : null;
     }
     case "camp.cycle.renamed": {
       const to = text(metadata, "to");

@@ -81,8 +81,9 @@ describe("team announcements", () => {
     const db = h.db();
     const lead = await makeUser(db, { approvalStatus: "approved" });
     const cook = await makeUser(db, { approvalStatus: "approved" });
+    // The write reads the lead flag from this row itself; nothing is passed in.
+    await makeMembership(db, { userId: lead.id, team: "kitchen", isLead: true });
     await makeMembership(db, { userId: cook.id, team: "kitchen" });
-    const leadTeams = ["kitchen"] as const;
 
     const toKitchen = await createAnnouncementDraft({
       senderId: lead.id,
@@ -100,34 +101,28 @@ describe("team announcements", () => {
     });
 
     for (const id of [toStructures.id, toEveryone.id]) {
-      expect(
-        await publishAnnouncement({
-          id,
-          senderId: lead.id,
-          allowedTeams: leadTeams,
-        }),
-      ).toEqual({ ok: false, error: DRAFT_TEAM_NOT_LED });
+      expect(await publishAnnouncement({ id, senderId: lead.id })).toEqual({
+        ok: false,
+        error: DRAFT_TEAM_NOT_LED,
+      });
     }
     expect(
-      await publishAnnouncement({
-        id: toKitchen.id,
-        senderId: lead.id,
-        allowedTeams: leadTeams,
-      }),
+      await publishAnnouncement({ id: toKitchen.id, senderId: lead.id }),
     ).toEqual({ ok: true, recipientCount: 1 });
 
-    // A lead who has since lost every team can publish nothing.
+    // Stripped of the lead role after the draft was written: the publish reads
+    // the flag as it is NOW, so the kitchen draft no longer goes out.
     const another = await createAnnouncementDraft({
       senderId: lead.id,
       ...DRAFT,
       audience: { scope: "team", team: "kitchen" },
     });
+    await db
+      .update(schema.teamMemberships)
+      .set({ isLead: false })
+      .where(eq(schema.teamMemberships.userId, lead.id));
     expect(
-      await publishAnnouncement({
-        id: another.id,
-        senderId: lead.id,
-        allowedTeams: [],
-      }),
+      await publishAnnouncement({ id: another.id, senderId: lead.id }),
     ).toEqual({ ok: false, error: DRAFT_TEAM_NOT_LED });
   });
 

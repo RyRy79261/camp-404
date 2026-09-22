@@ -103,6 +103,7 @@ export * from "./privacy";
 export * from "./member-export";
 export * from "./payment-references";
 export * from "./audience-authz";
+export * from "./pinned-order";
 export * from "./csv";
 export * from "./questionnaire-csv";
 export * from "./questionnaire-results";

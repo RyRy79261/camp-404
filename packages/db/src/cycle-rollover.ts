@@ -68,6 +68,24 @@ import {
 // and deleting would defy rule 1. The one write is setFoundingYear() moving
 // pre-namespace rows off the sentinel, which is the same adoption it already
 // does for sends and answers.
+//
+// PINNED ANNOUNCEMENTS are likewise NOT touched, and that is a decision, not an
+// omission. This module does nothing at all to an existing broadcast — it only
+// inserts the new year's own announcement — and `broadcasts` carries no
+// `cycle`, so there is no year-scoped read to fall out of the way. The owner
+// ruled pinning "pinned means pinned: it stays until a captain unpins it", with
+// no expiry and no auto-hide, and a rollover is not a captain unpinning. So a
+// pin survives the new year by construction.
+//
+// [UNRESOLVED 2026-09-22] The owner may want the opposite: last year's "water
+// truck at 09:00" greeting the camp in the new year is the failure case, and
+// rolling over is the one moment when clearing the board is plausibly what a
+// captain means. Reversing it is small and belongs HERE, not in the banner —
+// one `update(broadcasts).set({ pinnedAt: null, pinnedBy: null })` inside
+// advanceCycle's transaction, with its own audit row, so the clearing is
+// recorded like every other privileged write. It is left undone because
+// silently unpinning is a write this module makes nowhere else, and a captain
+// who wants a clean board can unpin from the announcements page today.
 
 /**
  * The RESERVED code questionnaires (RESERVED_DEFINITION_KEYS). They can never
@@ -366,10 +384,7 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.users)
       .where(
-        and(
-          eq(schema.users.isSystem, false),
-          eq(schema.users.duesPaid, true),
-        ),
+        and(eq(schema.users.isSystem, false), eq(schema.users.duesPaid, true)),
       ),
   ]);
 
@@ -475,8 +490,7 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
     plan: {
       from,
       // Offered, not decided — see RolloverPlan.suggestedYear.
-      suggestedYear:
-        from && from.year < MAX_CYCLE_YEAR ? from.year + 1 : null,
+      suggestedYear: from && from.year < MAX_CYCLE_YEAR ? from.year + 1 : null,
       reGate: reGate.sort(byTitle),
       carriesOver: carriesOver.sort(byTitle),
       notSent: notSent.sort(byTitle),

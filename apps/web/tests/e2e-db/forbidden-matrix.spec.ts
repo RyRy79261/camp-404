@@ -27,9 +27,12 @@ const ROUTES: Route[] = [
     open: (p) => p.getByLabel("Title", { exact: true }),
   },
   {
+    // Not the Pending chip any more: the owner ruled (2026-09-22) that every
+    // rank may see who has applied, so Pending is on the member toolbar too.
+    // Outstanding counts blocking required actions and is still captain-only.
     path: "/captains/camp-management",
     bar: "captain",
-    open: (p) => p.getByRole("button", { name: /^Pending/ }),
+    open: (p) => p.getByRole("button", { name: /^Outstanding/ }),
   },
   {
     path: "/captains/camp-settings",

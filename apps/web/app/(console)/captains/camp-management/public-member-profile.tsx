@@ -11,15 +11,15 @@ import {
 import { SkeletonRegion, SkeletonText } from "@camp404/ui/components/skeleton";
 import type { PublicRosterRow } from "@/lib/camp-roster";
 import { getPublicMemberProfileAction } from "./actions";
-import { ProfileHead } from "./roster-presentation";
+import { ProfileHead, StandingBadge } from "./roster-presentation";
 
 // Inline PUBLIC member profile (member view), in the same review layout as the
 // captain's: the header, the public record in the main column and a locked
 // card where the captain-only controls would be. Identity (name, @handle,
-// country, role, teams) comes from the already-public roster row; the bio +
-// this-year ideas load via getPublicMemberProfileAction — an allowlist, so
-// approval status, contact details, government ID and admin actions never
-// reach a member.
+// country, role, teams) and the applicant standing come from the already-public
+// roster row; the bio + this-year ideas load via getPublicMemberProfileAction —
+// an allowlist, so contact details, government ID, the decision reason and the
+// admin actions never reach a member.
 
 type State =
   | { state: "loading" }
@@ -82,6 +82,9 @@ export function PublicMemberProfile({
         row={row}
         index={index}
         teamLabels={teamLabels}
+        badges={
+          row.standing ? <StandingBadge standing={row.standing} /> : undefined
+        }
         onClose={onClose}
       />
 
@@ -133,8 +136,8 @@ export function PublicMemberProfile({
           <Lock aria-hidden className="h-6 w-6 text-muted-foreground" />
           <p className="max-w-xs text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Captains only.</span>{" "}
-            Approval status, contact details and admin actions are visible to
-            captains.
+            Contact details, ID documents and the approve or reject controls are
+            visible to captains.
           </p>
         </aside>
       </div>

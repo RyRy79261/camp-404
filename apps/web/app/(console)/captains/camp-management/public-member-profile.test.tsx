@@ -21,6 +21,7 @@ const row: PublicRosterRow = {
   teams: ["kitchen"],
   country: "South Africa",
   inSouthAfrica: true,
+  standing: null,
 };
 
 describe("PublicMemberProfile", () => {

@@ -182,6 +182,109 @@ test.describe("captain announcements (test-mode)", () => {
     expect(denied?.status()).toBe(404);
   });
 
+  test("a pinned announcement rides above every console page until it is unpinned", async ({
+    page,
+    request,
+  }) => {
+    // Pinning is the second axis beside "how it lands" (owner's call,
+    // 2026-09-22): a QUIET announcement — no takeover, no pop-up — can still be
+    // kept at the top. That is what this drives, so nothing the member sees is
+    // the acknowledge gate.
+
+    // 1. A member who is all the way through the ladder: the banner lives in
+    //    the console shell, which a gated member never gets.
+    await login(page, { id: "member-auth", email: "member@example.com" });
+    await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+    await completeOnboarding(request, "member-auth");
+
+    // 2. The captain publishes a quiet announcement to the camp.
+    await login(page, {
+      id: "captain-auth",
+      email: "god@example.com",
+      displayName: "Captain Jo",
+    });
+    await page.goto("/");
+    await completeOnboarding(request, "captain-auth");
+    await setRank(request, "captain-auth", "captain");
+
+    await page.goto("/captains/announcements");
+    await page.getByLabel("Title").fill("Water points moved");
+    await page.getByLabel("Message").fill("They're behind the kitchen now.");
+    await page.getByLabel("How it lands").click();
+    await page.getByRole("option", { name: /Quiet/ }).click();
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await page.getByRole("button", { name: "Publish to camp" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Publish to 1 member" })
+      .click();
+    await expect(page.getByText(/Published to 1 member/)).toBeVisible();
+
+    // 3. Pin it from the published card — a one-tap control on a list row.
+    const card = page
+      .getByRole("listitem")
+      .filter({ hasText: "Water points moved" });
+    await expect(card.getByText(/Not at the top/)).toBeVisible();
+    await card.getByRole("button", { name: "Pin to top" }).click();
+    await expect(page.getByText("Pinned to the top")).toBeVisible();
+
+    // 4. The member finds it above the page, on more than one console page,
+    //    with no way to dismiss it themselves.
+    await login(page, { id: "member-auth", email: "member@example.com" });
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Overview" }),
+    ).toBeVisible();
+    const banner = page.getByRole("region", { name: "Pinned announcements" });
+    await expect(banner.getByText("Water points moved")).toBeVisible();
+    expect(await banner.getByRole("button").count()).toBe(0);
+
+    await page.goto("/notifications");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Notifications" }),
+    ).toBeVisible();
+    await expect(banner.getByText("Water points moved")).toBeVisible();
+
+    // The banner's link is the way through to the whole announcement.
+    await banner.getByRole("link", { name: /Read/ }).click();
+    await expect(page).toHaveURL(/\/announcements\/[0-9a-f-]{36}$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Water points moved" }),
+    ).toBeVisible();
+
+    // 5. The captain unpins, and it goes.
+    await login(page, {
+      id: "captain-auth",
+      email: "god@example.com",
+      displayName: "Captain Jo",
+    });
+    await page.goto("/captains/announcements");
+    const pinnedCard = page
+      .getByRole("listitem")
+      .filter({ hasText: "Water points moved" });
+    await expect(pinnedCard.getByText(/Sitting at the top/)).toBeVisible();
+    await pinnedCard.getByRole("button", { name: "Unpin" }).click();
+    await expect(page.getByText("Unpinned", { exact: true })).toBeVisible();
+
+    await login(page, { id: "member-auth", email: "member@example.com" });
+    await page.goto("/");
+    // Assert the page HAS rendered before asserting the banner's absence —
+    // toHaveURL resolves before paint, and an empty document has no banner
+    // either.
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Overview" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Pinned announcements" }),
+    ).toHaveCount(0);
+    // It is unpinned, not unsent: the inbox still has it.
+    await page.goto("/notifications");
+    await expect(
+      page.getByRole("link", { name: /Water points moved/ }),
+    ).toBeVisible();
+  });
+
   test("a pop-up announcement shows once as a toast that opens it", async ({
     page,
     request,

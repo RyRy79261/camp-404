@@ -8,6 +8,9 @@ import {
   countUnread as dbCountUnread,
   explainDraftRefusal as dbExplainDraftRefusal,
   createAnnouncementDraft as dbCreateDraft,
+  getAnnouncementPinContext as dbGetPinContext,
+  listPinnedForUser as dbListPinnedForUser,
+  setAnnouncementPinned as dbSetPinned,
   deleteAnnouncementDraft as dbDeleteDraft,
   getAnnouncementForMember as dbGetAnnouncementForMember,
   getPendingAcknowledgements as dbGetPending,
@@ -24,8 +27,11 @@ import {
   type Audience,
   type ClaimedPopup,
   type InboxItem,
+  type AnnouncementPinContext,
   type InboxPage,
   type PendingAcknowledgement,
+  type PinnedAnnouncement,
+  type PinResult,
   type PublishResult,
 } from "@camp404/db/broadcasts";
 import type { InboxFilter } from "@camp404/types";
@@ -43,9 +49,12 @@ export type { InboxFilter };
 
 export type {
   Audience,
+  AnnouncementPinContext,
   AnnouncementPresentation,
   AnnouncementReading,
   AnnouncementSummary,
+  PinnedAnnouncement,
+  PinResult,
   ClaimedPopup,
   InboxItem,
   InboxPage,
@@ -90,6 +99,9 @@ interface NotificationsBackend {
     senderId: string,
     audience: Audience,
   ): Promise<number>;
+  listPinnedForUser(userId: string): Promise<PinnedAnnouncement[]>;
+  getAnnouncementPinContext(id: string): Promise<AnnouncementPinContext | null>;
+  setAnnouncementPinned(input: PinInput): Promise<PinResult>;
 }
 
 interface DraftFields {
@@ -98,13 +110,22 @@ interface DraftFields {
   body: string;
   presentation: AnnouncementPresentation;
   audience: Audience;
+  /** The composer's "keep it at the top"; inert until the draft is published. */
+  pinned: boolean;
 }
 
+// Neither input carries the sender's rank or teams: the write reads them
+// itself, inside its own transaction, so a snapshot taken earlier cannot
+// authorise it.
 interface PublishInput {
   id: string;
   senderId: string;
-  /** A team lead's teams; a captain passes none. */
-  allowedTeams?: readonly Extract<Audience, { scope: "team" }>["team"][];
+}
+
+interface PinInput {
+  id: string;
+  actorId: string;
+  pinned: boolean;
 }
 
 const realBackend: NotificationsBackend = {
@@ -125,6 +146,9 @@ const realBackend: NotificationsBackend = {
   publishAnnouncement: dbPublish,
   explainDraftRefusal: dbExplainDraftRefusal,
   countAnnouncementAudience: dbCountAnnouncementAudience,
+  listPinnedForUser: (userId) => dbListPinnedForUser(userId),
+  getAnnouncementPinContext: dbGetPinContext,
+  setAnnouncementPinned: dbSetPinned,
 };
 
 const testBackend: NotificationsBackend = {
@@ -178,6 +202,15 @@ const testBackend: NotificationsBackend = {
   },
   async countAnnouncementAudience(senderId, audience) {
     return testStore.countAnnouncementAudience(senderId, audience);
+  },
+  async listPinnedForUser(userId) {
+    return testStore.listPinnedForUser(userId);
+  },
+  async getAnnouncementPinContext(id) {
+    return testStore.getAnnouncementPinContext(id);
+  },
+  async setAnnouncementPinned(input) {
+    return testStore.setBroadcastPinned(input);
   },
 };
 
@@ -285,6 +318,32 @@ export function getAnnouncementForMember(
 
 export function countUnseenPopups(userId: string): Promise<number> {
   return backend().countUnseenPopups(userId);
+}
+
+/**
+ * The pinned announcements this member received, newest first — what the
+ * console banner draws. The audience is the delivery join, never a fresh
+ * resolution, so nothing here can widen who sees a pin.
+ */
+export function listPinnedForUser(
+  userId: string,
+): Promise<PinnedAnnouncement[]> {
+  return backend().listPinnedForUser(userId);
+}
+
+/**
+ * One announcement's stored audience, so the pin action can ask
+ * `canSendToAudience` about it before it writes.
+ */
+export function getAnnouncementPinContext(
+  id: string,
+): Promise<AnnouncementPinContext | null> {
+  return backend().getAnnouncementPinContext(id);
+}
+
+/** Pin or unpin a published announcement. Gate the caller. */
+export function setAnnouncementPinned(input: PinInput): Promise<PinResult> {
+  return backend().setAnnouncementPinned(input);
 }
 
 export function claimPopups(userId: string): Promise<ClaimedPopup[]> {

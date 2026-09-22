@@ -120,6 +120,15 @@ describe("partial unique and queue indexes keep their predicates", () => {
         columns: ["ref_code"],
         where: "ref_code IS NOT NULL",
       },
+      // The console banner's read: "the announcements that are pinned", on
+      // every console page load. The PREDICATE is what earns this index — the
+      // pinned rows are a handful out of the whole broadcast table. It is NOT
+      // unique: any number of announcements may be pinned at once, and the
+      // owner ruled the banner carries all of them.
+      broadcasts_pinned_idx: {
+        columns: ["published_at"],
+        where: "pinned_at is not null",
+      },
     };
 
   const partial = configs.flatMap((config) =>

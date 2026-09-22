@@ -246,6 +246,20 @@
       "when": 1789591121775,
       "tag": "0034_team_budget_and_adoptee_years",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790103336212,
+      "tag": "0035_announcement_pins",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790107769342,
+      "tag": "0036_announcement_pin_intent",
+      "breakpoints": true
     }
   ]
 }

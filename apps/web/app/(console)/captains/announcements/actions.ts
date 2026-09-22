@@ -6,12 +6,15 @@ import {
   ComposeAnnouncementInput,
   Team,
 } from "@camp404/types";
+import { canSendToAudience, type AudienceActor } from "@camp404/core";
 import {
   countAnnouncementAudience,
   createAnnouncementDraft,
   deleteAnnouncementDraft,
   explainDraftRefusal,
+  getAnnouncementPinContext,
   publishAnnouncement,
+  setAnnouncementPinned,
   updateAnnouncementDraft,
   type Audience,
 } from "@/lib/notifications";
@@ -19,7 +22,7 @@ import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainActionGate } from "@/lib/captain-gate";
 import { getLeadTeams } from "@/lib/users";
 import { runAction, type ActionResult } from "@/lib/action-result";
-import { NOT_YOUR_TEAM } from "./audience-copy";
+import { NOT_YOUR_PIN, NOT_YOUR_TEAM } from "./audience-copy";
 
 type TeamKey = Extract<Audience, { scope: "team" }>["team"];
 
@@ -52,15 +55,28 @@ async function requireSender(): Promise<Sender | { ok: false; error: string }> {
 }
 
 /**
+ * The sender as the audience rule sees them: a rung plus the teams they lead.
+ * `canSendToAudience` in @camp404/core owns the rule; nothing here re-derives
+ * it.
+ */
+function audienceActor(sender: Sender): AudienceActor {
+  return sender.isCaptain
+    ? { rank: "captain", leadTeams: [] }
+    : { rank: "team_lead", leadTeams: sender.leadTeams };
+}
+
+/**
  * Whether this sender may address this audience. A captain may pick the whole
- * camp or any active team; a lead only a team they lead.
+ * camp or any active team; a lead only a team they lead. The lead half is
+ * `canSendToAudience`'s answer verbatim; the captain half adds the one thing
+ * that rule does not know, which team keys the camp still has switched on.
  */
 async function audienceRefusal(
   sender: Sender,
   audience: Audience,
 ): Promise<string | null> {
   if (!sender.isCaptain) {
-    return audience.scope === "team" && sender.leadTeams.includes(audience.team)
+    return canSendToAudience(audienceActor(sender), audience)
       ? null
       : NOT_YOUR_TEAM;
   }
@@ -69,11 +85,6 @@ async function audienceRefusal(
   return active.includes(audience.team)
     ? null
     : "That team isn't active any more. Pick another audience.";
-}
-
-/** A lead's publish is limited to their teams in the claim itself. */
-function allowedTeams(sender: Sender): TeamKey[] | undefined {
-  return sender.isCaptain ? undefined : sender.leadTeams;
 }
 
 /** Save a new announcement draft. */
@@ -158,9 +169,10 @@ export async function deleteDraftAction(id: string): Promise<ActionResult> {
 
 /**
  * Publish a draft to its audience: the camp or one team, everyone in it except
- * the author. Returns how many recipients it reached. A lead's teams are read
- * now, not when the draft was saved, so a lead who has lost a team cannot send
- * to it.
+ * the author. Returns how many recipients it reached. The write reads the
+ * sender's rank and lead teams again inside its own transaction and holds them
+ * there, so a lead removed a moment ago — even between this gate and the
+ * write — cannot send to the team.
  */
 export async function publishAction(
   id: string,
@@ -169,14 +181,69 @@ export async function publishAction(
     const gate = await requireSender();
     if (!gate.ok) return gate;
 
-    const result = await publishAnnouncement({
-      id,
-      senderId: gate.senderId,
-      allowedTeams: allowedTeams(gate),
-    });
+    const result = await publishAnnouncement({ id, senderId: gate.senderId });
     if (!result.ok) return result;
     revalidatePath("/captains/announcements");
     return { ok: true, data: { recipientCount: result.recipientCount } };
+  });
+}
+
+/**
+ * Pin a published announcement to the top of its recipients' console, or take
+ * it down.
+ *
+ * PINNING AUTHORITY FOLLOWS POSTING AUTHORITY (owner's call, 2026-09-22): "If I
+ * am allowed to post to everyone, then that means I'm also allowed to pin
+ * something that is posted to everyone." So the gate is two moves, the same two
+ * the send path makes: the rank (>= team_lead, via `requireSender`), and then
+ * `canSendToAudience` against THIS announcement's stored audience — never the
+ * one the browser claimed — plus, for a new pin, the active-team check a send
+ * makes. The gate answers the screen; it does not authorise the write. The
+ * write reads the actor's rank and lead teams again inside its own
+ * transaction and holds them, so a lead removed or a captain demoted between
+ * this check and the write cannot pin.
+ *
+ * Pinning is the second axis beside `presentation`, not a louder presentation:
+ * a pinned announcement may be quiet, a pop-up, or a full-screen takeover.
+ */
+export async function setPinnedAction(
+  id: string,
+  pinned: boolean,
+): Promise<ActionResult> {
+  return runAction("setPinnedAction", async () => {
+    const gate = await requireSender();
+    if (!gate.ok) return gate;
+
+    const context = await getAnnouncementPinContext(id);
+    if (!context) {
+      return { ok: false, error: "That announcement no longer exists." };
+    }
+    if (!canSendToAudience(audienceActor(gate), context.audience)) {
+      return { ok: false, error: NOT_YOUR_PIN };
+    }
+    // Putting a pin UP answers every question a send answers, so a captain
+    // cannot pin to a team that is no longer active, just as they cannot post
+    // to one. Taking a pin DOWN skips this: a pin must always be removable.
+    if (pinned) {
+      const refusal = await audienceRefusal(gate, context.audience);
+      if (refusal) {
+        return {
+          ok: false,
+          error: refusal === NOT_YOUR_TEAM ? NOT_YOUR_PIN : refusal,
+        };
+      }
+    }
+
+    const result = await setAnnouncementPinned({
+      id,
+      actorId: gate.senderId,
+      pinned,
+    });
+    if (!result.ok) return result;
+    revalidatePath("/captains/announcements");
+    // The banner rides in the console layout, so every console page is stale.
+    revalidatePath("/", "layout");
+    return { ok: true };
   });
 }
 

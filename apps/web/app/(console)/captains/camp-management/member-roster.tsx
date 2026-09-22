@@ -5,8 +5,10 @@ import { Search } from "lucide-react";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import {
   derivePublicRosterStats,
+  matchesPublicChip,
   matchesRosterQuery,
   matchesTeam,
+  type PublicRosterChip,
   type PublicRosterRow,
 } from "@/lib/camp-roster";
 import { PublicMemberProfile } from "./public-member-profile";
@@ -16,13 +18,17 @@ import { RosterTable } from "./roster-table";
 import { RosterToolbar } from "./roster-toolbar";
 
 // Member-facing roster (revived per the owner's call), in the same console
-// composition as the captain's minus the captain chrome. Any approved camp member may browse who's at camp — names,
-// handles, country, role, teams — and open a PUBLIC card (bio + what they bring).
-// Approval status, join date, contact details, government ID and admin actions
-// are withheld SERVER-SIDE: this island only ever receives PublicRosterRow, so it
-// has no private data to render. Filters are All / Captains / Team only.
-
-type PublicChip = "all" | "captains";
+// composition as the captain's minus the captain chrome. Any approved camp
+// member may browse who is at camp — names, handles, country, role, teams —
+// see who has applied, and open a PUBLIC card (bio + what they bring). Join
+// date, contact details, government ID, dues, captain notes and the admin
+// actions are withheld SERVER-SIDE: this island only ever receives
+// PublicRosterRow, so it has no private data to render. Filters are
+// All / Pending / Captains / Team.
+//
+// Pending is here on the owner's 2026-09-22 ruling ("everyone should be able to
+// see the applicants"). Declined sign-ups never arrive in `rows` at all
+// (MEMBERS_SEE_REJECTED), so there is no chip for them.
 
 export function MemberRoster({
   rows,
@@ -38,7 +44,7 @@ export function MemberRoster({
   initialTeam?: string | null;
 }) {
   const [query, setQuery] = useState("");
-  const [chip, setChip] = useState<PublicChip>("all");
+  const [chip, setChip] = useState<PublicRosterChip>("all");
   const [team, setTeam] = useState<string | null>(initialTeam);
   // Same as the captain roster: a same-route `?team=` change keeps this
   // component mounted, so the filter follows the prop rather than the mount.
@@ -49,14 +55,22 @@ export function MemberRoster({
   }
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Counted over every row this member HAS, so each chip's badge is exactly
+  // how many rows pressing it shows.
   const stats = useMemo(() => derivePublicRosterStats(rows), [rows]);
+  // The Standing column appears only when somebody on the roster is an
+  // applicant — decided over the full roster so a filter never moves it.
+  const showStanding = useMemo(
+    () => rows.some((r) => r.standing !== null),
+    [rows],
+  );
 
   const filtered = useMemo(
     () =>
       rows.filter(
         (r) =>
           matchesRosterQuery(r, query, teamLabels) &&
-          (chip === "all" || r.rank === "captain") &&
+          matchesPublicChip(r, chip) &&
           (team === null || matchesTeam(r, team)),
       ),
     [rows, query, chip, team, teamLabels],
@@ -87,7 +101,7 @@ export function MemberRoster({
         onQueryChange={setQuery}
         chip={chip}
         onChipChange={(next) =>
-          setChip(next === "captains" ? "captains" : "all")
+          setChip(next === "captains" || next === "pending" ? next : "all")
         }
         team={team}
         onTeamChange={setTeam}
@@ -111,6 +125,7 @@ export function MemberRoster({
             rows={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            showStanding={showStanding}
           />
           <RosterList
             className="md:hidden"

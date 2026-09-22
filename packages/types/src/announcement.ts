@@ -32,5 +32,10 @@ export const ComposeAnnouncementInput = z.object({
   body: z.string().trim().min(1, "Write the announcement.").max(5000),
   presentation: AnnouncementPresentation.default("acknowledge"),
   audience: AnnouncementAudience.default({ scope: "everyone" }),
+  // "Keep it at the top" — the second axis beside `presentation`. Presentation
+  // is how loudly it LANDS; this is whether it STAYS, in a banner above every
+  // console page for the members it reached. Any presentation may be pinned.
+  // Marked here on the draft, inert until the announcement is published.
+  pinned: z.boolean().default(false),
 });
 export type ComposeAnnouncementInput = z.infer<typeof ComposeAnnouncementInput>;

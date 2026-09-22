@@ -1,3 +1,4 @@
+import { PinnedAnnouncements } from "@/components/console/pinned-announcements";
 import { ConsoleHeader } from "@/components/console/console-header";
 import { isCampBootstrapped } from "@/lib/bootstrap";
 import { resolveMemberState } from "@/lib/member-gate";
@@ -46,7 +47,18 @@ export default async function ConsoleLayout({
         campUser={state.campUser}
         email={state.authUser.primaryEmail}
       />
-      <div className={CONTENT}>{children}</div>
+      <div className={CONTENT}>
+        {/* A pinned announcement rides above every console page — that is what
+            a pin IS. It is drawn here and not per page so it cannot be
+            forgotten on the next surface someone adds.
+
+            It reaches only this branch: a signed-out visitor and a member held
+            by a gate both return above, and an applicant waiting on approval
+            gets the bare content column. Nobody sees a pin before they are
+            through the door. */}
+        <PinnedAnnouncements userId={state.campUser.id} />
+        {children}
+      </div>
     </div>
   );
 }

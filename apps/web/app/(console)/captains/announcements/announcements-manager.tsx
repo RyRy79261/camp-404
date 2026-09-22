@@ -20,6 +20,8 @@ import {
   Megaphone,
   MessageSquare,
   Pencil,
+  Pin,
+  PinOff,
   Send,
   Trash2,
   TriangleAlert,
@@ -49,6 +51,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@camp404/ui/components/select";
+import { Switch } from "@camp404/ui/components/switch";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
@@ -65,6 +68,7 @@ import {
   previewPublishAction,
   publishAction,
   saveDraftAction,
+  setPinnedAction,
   updateDraftAction,
 } from "./actions";
 import { appendTranscript } from "./transcript";
@@ -128,6 +132,8 @@ interface FormState {
   presentation: AnnouncementPresentation;
   /** The picked audience, as an option value ("everyone" or "team:<key>"). */
   audience: string;
+  /** "Keep it at the top" — the second axis beside presentation. */
+  pinned: boolean;
 }
 
 /** One choice in "Who it's for". The page offers only what the sender may pick. */
@@ -138,6 +144,18 @@ export interface AudienceOption {
 
 export function audienceValue(audience: Audience): string {
   return audience.scope === "team" ? `team:${audience.team}` : "everyone";
+}
+
+/**
+ * Whether an announcement carries the pin mark. A draft holds only the intent
+ * (`pinOnPublish`), which publishing turns into a pin; a published one is
+ * pinned when `pinnedAt` is set. Reading `pinnedAt` alone would show every
+ * marked draft as unmarked, and saving it would then clear the mark.
+ */
+export function markedPinned(
+  a: Pick<AnnouncementSummary, "publishedAt" | "pinnedAt" | "pinOnPublish">,
+): boolean {
+  return a.publishedAt === null ? a.pinOnPublish : a.pinnedAt !== null;
 }
 
 function audienceFromValue(value: string): Audience {
@@ -151,6 +169,7 @@ export function AnnouncementsManager({
   currentUserId,
   audienceOptions,
   teamLabels,
+  leadTeams,
 }: {
   announcements: AnnouncementSummary[];
   currentUserId: string;
@@ -158,6 +177,11 @@ export function AnnouncementsManager({
   audienceOptions: AudienceOption[];
   /** Team key to display name, for naming a draft's audience. */
   teamLabels: Record<string, string>;
+  /**
+   * The teams this viewer leads, or null for a captain (who may address, and
+   * so pin to, anything). Decides which published cards offer a pin.
+   */
+  leadTeams: string[] | null;
 }) {
   const router = useRouter();
   const emptyForm: FormState = {
@@ -166,6 +190,7 @@ export function AnnouncementsManager({
     body: "",
     presentation: "acknowledge",
     audience: audienceOptions[0]?.value ?? "everyone",
+    pinned: false,
   };
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
@@ -193,6 +218,15 @@ export function AnnouncementsManager({
   const drafts = announcements.filter((a) => a.publishedAt === null);
   const published = announcements.filter((a) => a.publishedAt !== null);
 
+  // Pinning authority follows posting authority (owner's call, 2026-09-22), so
+  // the screen offers a pin exactly where a send would have been allowed: a
+  // captain anywhere, a lead only on a team they still lead. This is the
+  // screen's copy of the rule; `setPinnedAction` asks `canSendToAudience`
+  // again and the write re-checks the team in its own WHERE.
+  const canPin = (audience: Audience) =>
+    leadTeams === null ||
+    (audience.scope === "team" && leadTeams.includes(audience.team));
+
   // "the camp" / "Kitchen", for the cards and the publish confirmation.
   const audienceName = (audience: Audience) =>
     audience.scope === "team"
@@ -219,6 +253,7 @@ export function AnnouncementsManager({
       body: form.body,
       presentation: form.presentation,
       audience: audienceFromValue(form.audience),
+      pinned: form.pinned,
     };
     startTransition(async () => {
       const result = editing
@@ -242,6 +277,7 @@ export function AnnouncementsManager({
       body: a.body,
       presentation: a.presentation,
       audience: audienceValue(a.audience),
+      pinned: markedPinned(a),
     });
   };
 
@@ -268,6 +304,21 @@ export function AnnouncementsManager({
       }
       if (form.editingId === id) reset();
       toast.success("Draft deleted");
+      router.refresh();
+    });
+  };
+
+  // A one-tap control on a published card. It reports a failure as a toast and
+  // only this card's pin button spins — the same rule delete and publish keep.
+  const handlePin = (id: string, pinned: boolean) => {
+    setBusy({ id, action: "pin" });
+    startRowAction(async () => {
+      const result = await setPinnedAction(id, pinned);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(pinned ? "Pinned to the top" : "Unpinned");
       router.refresh();
     });
   };
@@ -370,6 +421,10 @@ export function AnnouncementsManager({
                   announcement={a}
                   audienceName={audienceName(a.audience)}
                   currentUserId={currentUserId}
+                  canPin={canPin(a.audience)}
+                  disabled={pending || rowPending || publishing}
+                  busy={rowPending && busy?.id === a.id && busy.action === "pin"}
+                  onPin={handlePin}
                 />
               ))}
             </ul>
@@ -504,6 +559,32 @@ export function AnnouncementsManager({
             </p>
           </div>
 
+          {/* The second axis, from the AfrikaBurn composer's pin row. "How it
+              lands" is how loudly it arrives; this is whether it stays. The
+              copy says exactly what the pin does and no more — the banner has
+              no ✕, and only a captain or the team's lead takes it down. */}
+          <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/30 p-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="announcement-pinned">Keep it at the top</Label>
+              <p
+                id="announcement-pinned-hint"
+                className="text-xs text-muted-foreground"
+              >
+                Separate from how it lands: any of the three can be kept at the
+                top. It sits in a banner above every page for the people who
+                got it, until you unpin it — they can&apos;t dismiss it.
+              </p>
+            </div>
+            <Switch
+              id="announcement-pinned"
+              checked={form.pinned}
+              onCheckedChange={(pinned) => setForm((f) => ({ ...f, pinned }))}
+              aria-describedby="announcement-pinned-hint"
+              disabled={pending}
+              className="mt-1"
+            />
+          </div>
+
           {error && (
             <Alert variant="error">
               <TriangleAlert aria-hidden />
@@ -540,7 +621,7 @@ export function AnnouncementsManager({
   );
 }
 
-type DraftAction = "delete" | "publish";
+type DraftAction = "delete" | "publish" | "pin";
 
 function members(n: number): string {
   return `${n} member${n === 1 ? "" : "s"}`;
@@ -618,9 +699,20 @@ function AnnouncementHeader({
           <Icon className="h-3.5 w-3.5 text-accent" aria-hidden />
           {meta.short}
         </span>
-        <Badge variant="outline" className="shrink-0">
-          {a.audience.scope === "team" ? audienceName : "Everyone"}
-        </Badge>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* AfrikaBurn's bulletin card wears the pin in the kicker row. On a
+              draft it is the composer's mark: the pin only reaches a screen
+              once the announcement is published. */}
+          {markedPinned(a) && (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+              <Pin className="h-3.5 w-3.5" aria-hidden />
+              {a.publishedAt === null ? "Will stay at top" : "Pinned"}
+            </span>
+          )}
+          <Badge variant="outline">
+            {a.audience.scope === "team" ? audienceName : "Everyone"}
+          </Badge>
+        </div>
       </div>
       <h3 className="text-base font-semibold leading-snug tracking-tight [overflow-wrap:anywhere]">
         {a.title}
@@ -765,11 +857,23 @@ function PublishedCard({
   announcement: a,
   audienceName,
   currentUserId,
+  canPin,
+  disabled,
+  busy,
+  onPin,
 }: {
   announcement: AnnouncementSummary;
   audienceName: string;
   currentUserId: string;
+  /** Whether this viewer may address — and so pin to — this audience. */
+  canPin: boolean;
+  /** Another write is running, so no new one may start. */
+  disabled: boolean;
+  /** This card's pin control is the one that is running. */
+  busy: boolean;
+  onPin: (id: string, pinned: boolean) => void;
 }) {
+  const pinned = a.pinnedAt !== null;
   // The AfrikaBurn read-rate bar. An acknowledge announcement counts who
   // acknowledged it; the kinds nobody acknowledges count who has seen it.
   const acknowledge = a.presentation === "acknowledge";
@@ -818,6 +922,25 @@ function PublishedCard({
               />
             </div>
           </div>
+          {canPin && (
+            <div className="flex items-center justify-between gap-2 border-t pt-3">
+              <p className="text-xs text-muted-foreground">
+                {pinned
+                  ? `Sitting at the top of ${a.audience.scope === "team" ? audienceName : "everyone"}’s pages.`
+                  : "Not at the top of anyone’s pages."}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onPin(a.id, !pinned)}
+                disabled={disabled}
+              >
+                <BusyIcon busy={busy} icon={pinned ? PinOff : Pin} />{" "}
+                {pinned ? "Unpin" : "Pin to top"}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </li>
