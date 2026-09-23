@@ -6,6 +6,13 @@
 > sign-in runs against the local stack (`pnpm db:local:up`) with only
 > `BETTER_AUTH_SECRET` set, and the real-database Playwright config can sign
 > members up through `/api/auth/*` directly. The goal below still stands.
+>
+> **[CORRECTION 2026-09-24]** The credential half of this goal is done:
+> `apps/web/tests/e2e-db/sign-in.spec.ts` runs in the `e2e-db` CI job and
+> drives real sign-up, sign-out, sign-in, a refused wrong password and a full
+> password reset through Better Auth, with auth mail captured to a file
+> (`AUTH_EMAIL_CAPTURE_FILE`). Google sign-in is still uncovered (no keys in
+> test).
 
 > Goal: stand up a second, smaller Playwright suite that drives **real Neon
 > Auth sign-in against a real Neon Postgres branch**, covering the credential

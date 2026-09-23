@@ -5,7 +5,11 @@ vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));
 
 import { consumeRateLimit } from "@camp404/db/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
-import { rateLimit, rateLimiter } from "@/lib/rate-limit";
+import {
+  rateLimit,
+  rateLimiter,
+  resetRateLimitsForE2E,
+} from "@/lib/rate-limit";
 
 describe("rateLimit", () => {
   it("allows up to N requests within the window", () => {
@@ -85,5 +89,46 @@ describe("rateLimiter", () => {
     expect((await rateLimiter.limit(key, { limit: 1 })).ok).toBe(true);
     expect((await rateLimiter.limit(key, { limit: 1 })).ok).toBe(false);
     expect(consumeRateLimit).not.toHaveBeenCalled();
+  });
+});
+
+describe("resetRateLimitsForE2E", () => {
+  beforeEach(() => vi.mocked(isE2ETestMode).mockReturnValue(false));
+
+  it("refills a drained bucket in E2E test mode", () => {
+    const key = `reset-${Math.random()}`;
+    rateLimit(key, { limit: 1 });
+    expect(rateLimit(key, { limit: 1 }).ok).toBe(false);
+
+    vi.mocked(isE2ETestMode).mockReturnValue(true);
+    resetRateLimitsForE2E();
+
+    expect(rateLimit(key, { limit: 1 }).ok).toBe(true);
+  });
+
+  it("does nothing outside E2E test mode", () => {
+    const key = `noreset-${Math.random()}`;
+    rateLimit(key, { limit: 1 });
+
+    resetRateLimitsForE2E();
+
+    expect(rateLimit(key, { limit: 1 }).ok).toBe(false);
+  });
+});
+
+describe("one set of buckets per process", () => {
+  it("is shared by a second copy of the module, as Next.js loads one per module graph", async () => {
+    const key = `graph-${Math.random()}`;
+    rateLimit(key, { limit: 1 });
+
+    vi.resetModules();
+    const second = await import("@/lib/rate-limit");
+
+    // The route handler's copy sees the action's drained bucket...
+    expect(second.rateLimit(key, { limit: 1 }).ok).toBe(false);
+    // ...and a reset through it refills the bucket the action reads.
+    vi.mocked(isE2ETestMode).mockReturnValue(true);
+    second.resetRateLimitsForE2E();
+    expect(rateLimit(key, { limit: 1 }).ok).toBe(true);
   });
 });

@@ -20,6 +20,7 @@ import { passkey } from "@better-auth/passkey";
 import { createHttpDb, schema } from "@camp404/db";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@camp404/core";
 import { sendAuthEmail } from "./email";
+import { emailProofGuards } from "./email-proof";
 import {
   AUTH_RP_NAME,
   AUTH_SESSION,
@@ -106,6 +107,8 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
       // path needs a verified email) without blocking sign-in, unless the env
       // turns the gate on.
       sendOnSignUp: canDeliverAuthEmail(env),
+      // A fresh session from a link is taken back for an account with
+      // two-factor on (emailProofGuards), so the link never skips the code.
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
         await sendAuthEmail(env, { to: user.email, kind: "verify", url });
@@ -193,6 +196,10 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
           userVerification: "preferred",
         },
       }),
+      // What an unconfirmed account may not do: enrol a passkey or two-factor
+      // (a squatter's would outlive the owner's reset), keep the ones enrolled
+      // once the owner resets, or skip two-factor through a verification link.
+      emailProofGuards(),
     ],
 
     advanced: {

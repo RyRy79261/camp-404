@@ -14,8 +14,9 @@ import { authClient } from "@/lib/auth-client";
 // Confirm-your-email, for an account the auth server has not seen prove its
 // address. Members moved from Neon Auth with a password were never asked, so
 // they arrive unverified, and until they confirm: camp emails skip them,
-// Google sign-in refuses to join their account (on purpose, see
-// @camp404/auth's config), and a GOD_EMAILS owner has no recovery path.
+// Google sign-in refuses to join their account and passkeys and two-factor
+// cannot be added (on purpose, see @camp404/auth's config and email-proof),
+// and a GOD_EMAILS owner has no recovery path.
 //
 // There is no AfrikaBurn equivalent, so this is composed exactly like the
 // Password card on Sign-in and security: a title, a sentence, one button.
@@ -32,6 +33,8 @@ export interface ConfirmEmailProps {
   callbackURL: string;
   /** Overrides the sentence under the title, for a screen with its own context. */
   description?: React.ReactNode;
+  /** Overrides the sentence shown when the camp cannot send email. */
+  undeliverable?: React.ReactNode;
 }
 
 export function ConfirmEmail({
@@ -39,6 +42,7 @@ export function ConfirmEmail({
   deliverable,
   callbackURL,
   description,
+  undeliverable,
 }: ConfirmEmailProps) {
   const [sent, setSent] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -80,10 +84,11 @@ export function ConfirmEmail({
                 <>
                   Confirm that <span className="text-foreground">{email}</span>{" "}
                   is yours. Camp emails only go to a confirmed address, and
-                  Google sign-in only joins an account whose email is confirmed.
+                  Google sign-in, passkeys and two-factor need one too.
                 </>
               ))
-            : "This camp has not set up email yet, so your address can't be confirmed. Ask a captain."}
+            : (undeliverable ??
+              "This camp has not set up email yet, so your address can't be confirmed. Ask a captain.")}
         </CardDescription>
       </CardHeader>
       {deliverable ? (

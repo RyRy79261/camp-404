@@ -27,8 +27,9 @@ describe("buildAuthOptions", () => {
     expect(options.rateLimit.storage).toBe("database");
   });
 
-  it("offers two-factor and passkeys", () => {
+  it("offers two-factor and passkeys, guarded until the email is confirmed", () => {
     expect(options.plugins.map((p) => p.id).sort()).toEqual([
+      "camp404-email-proof",
       "passkey",
       "two-factor",
     ]);

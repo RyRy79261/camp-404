@@ -110,3 +110,35 @@ describe("SignUpForm password rules", () => {
     expect(second!.getAttribute("aria-label")).toBe("Show password");
   });
 });
+
+describe("SignUpForm, an address that already has an account", () => {
+  it("points to sign-in and reset instead of Better Auth's raw message", async () => {
+    signUpEmail.mockResolvedValue({
+      data: null,
+      error: {
+        status: 422,
+        code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+        message: "User already exists. Use another email.",
+      },
+    });
+    render(<SignUpForm googleEnabled />);
+    fill(LONG);
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toBe(
+        "There's already an account with that email. Sign in instead, or reset your password if you've forgotten it.",
+      ),
+    );
+  });
+
+  it("passes any other refusal through as the server wrote it", async () => {
+    signUpEmail.mockResolvedValue({
+      data: null,
+      error: { status: 400, code: "INVALID_EMAIL", message: "Invalid email" },
+    });
+    render(<SignUpForm googleEnabled />);
+    fill(LONG);
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toBe("Invalid email"),
+    );
+  });
+});

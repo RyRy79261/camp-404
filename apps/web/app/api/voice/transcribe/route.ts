@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { transcribeAudio } from "@/lib/groq";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { QUESTIONNAIRE_PROMPT } from "@/lib/voice-prompts";
 
 // 10 MB hard cap. webm/opus at typical mobile bitrates is ~16 KB/s, so this
@@ -10,7 +10,18 @@ import { QUESTIONNAIRE_PROMPT } from "@/lib/voice-prompts";
 const MAX_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_PROMPT_KEYS = new Set(["questionnaire"]);
 
+// Clips a day for an account a captain has not approved yet: the onboarding
+// questionnaire has a few dozen voice fields at most.
+const PENDING_DAILY_CLIPS = 40;
+
 export const runtime = "nodejs";
+
+function tooMany(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: "Rate limit exceeded", retryAfterSeconds },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
+  );
+}
 
 export async function POST(req: Request) {
   const user = await getAuthenticatedUser();
@@ -26,24 +37,32 @@ export async function POST(req: Request) {
   if (!hasCampAccess(campUser, user.primaryEmail)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  // A captain turned them down: they keep their redeemed code, but not the
+  // camp's Groq key.
+  if (campUser.approvalStatus === "rejected") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // Not yet approved means anyone who redeemed a code, and the root code is a
+  // fixed word in this public repo. They get enough for the onboarding
+  // questionnaire, not the 30-a-minute budget an approved member has.
+  if (!isApproved(campUser, user.primaryEmail)) {
+    const daily = await rateLimiter.limit(
+      `voice-transcribe-pending:${user.id}`,
+      {
+        limit: PENDING_DAILY_CLIPS,
+        windowMs: 24 * 60 * 60_000,
+      },
+    );
+    if (!daily.ok) return tooMany(daily.retryAfterSeconds);
+  }
 
   // Explicit windows: 30 clips a minute per member, 60 per address.
   const limit = await rateLimiter.limit(`voice-transcribe:${user.id}`, {
     limit: 30,
     windowMs: 60_000,
   });
-  if (!limit.ok) {
-    return NextResponse.json(
-      {
-        error: "Rate limit exceeded",
-        retryAfterSeconds: limit.retryAfterSeconds,
-      },
-      {
-        status: 429,
-        headers: { "Retry-After": String(limit.retryAfterSeconds) },
-      },
-    );
-  }
+  if (!limit.ok) return tooMany(limit.retryAfterSeconds);
 
   // Defence in depth — rate-limit by IP too, since user.id can be cheap to
   // mint via repeated signups.

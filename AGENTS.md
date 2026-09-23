@@ -129,6 +129,17 @@ Sign-in rules worth knowing before you touch `packages/auth`:
   link to an unverified local account on purpose (pre-account takeover), and
   the refusal lands on our sign-in form with a sentence
   (`app/auth/oauth-error.ts`). Never relax `requireLocalEmailVerified`.
+- **An unconfirmed account cannot add a passkey or two-factor**
+  (`packages/auth/src/email-proof.ts`). Sign-up is open, so it may belong to
+  someone who signed up with another person's address first, and a passkey or
+  TOTP secret would outlive the owner's password reset. The same plugin clears
+  them when a reset link is used on an unconfirmed account, and takes back the
+  session a verification link opens for an account with two-factor on, so the
+  link never skips the code.
+- **Sign-up says when an address already has an account** (accepted, owner's
+  default 2026-09-24). With open sign-up and automatic sign-in, hiding it would
+  mean every new member signs up and then signs in again. Sign-in and
+  forgot-password stay enumeration-safe; keep them that way.
 
 **`packages/db/src/schema.ts` is the single hand-authored source of truth.**
 Everything under `packages/db/migrations/` — the `.sql` files,

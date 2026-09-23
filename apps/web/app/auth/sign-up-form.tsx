@@ -16,6 +16,23 @@ import { authClient } from "@/lib/auth-client";
  * Camp 404's displayName is reconciled later from the burner profile if
  * we ever need a richer string.
  */
+/**
+ * The sentence for a refused sign-up. An address that already has an account
+ * says so, with the way in: this does tell anyone which addresses are
+ * registered, a cost accepted with open sign-up and automatic sign-in (see
+ * AGENTS.md, "Sign-in rules"). The alternative, a neutral "check your email",
+ * would mean every new member signs up and then signs in again.
+ */
+export function signUpErrorSentence(error: {
+  code?: string;
+  message?: string;
+}): string {
+  if (error.code?.startsWith("USER_ALREADY_EXISTS")) {
+    return "There's already an account with that email. Sign in instead, or reset your password if you've forgotten it.";
+  }
+  return error.message ?? "Sign up failed";
+}
+
 export function SignUpForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -58,7 +75,7 @@ export function SignUpForm({ googleEnabled }: { googleEnabled: boolean }) {
         callbackURL: "/",
       });
       if (result && "error" in result && result.error) {
-        setError(result.error.message ?? "Sign up failed");
+        setError(signUpErrorSentence(result.error));
         setLoading(false);
         return;
       }

@@ -12,7 +12,15 @@ interface Bucket {
   updatedAt: number;
 }
 
-const buckets = new Map<string, Bucket>();
+// On globalThis, not a module binding: Next.js gives route handlers and server
+// actions separate module graphs in one process, so a plain module-level Map
+// is duplicated, and `/api/test/reset` would clear a copy the invite action
+// never reads (the same trick as lib/test-store.ts). One process still has one
+// set of buckets, as before.
+const BUCKETS_KEY = "__camp404RateLimitBuckets__";
+const buckets: Map<string, Bucket> = ((globalThis as Record<string, unknown>)[
+  BUCKETS_KEY
+] ??= new Map<string, Bucket>()) as Map<string, Bucket>;
 
 const DEFAULT_WINDOW_MS = 60_000;
 
@@ -72,6 +80,18 @@ export function rateLimit(
 
   buckets.set(key, { tokens: tokens - 1, updatedAt: now });
   return { ok: true, retryAfterSeconds: 0 };
+}
+
+/**
+ * Empties every in-memory bucket, so each Playwright spec starts with a full
+ * budget. The whole run comes from one address, so an IP bucket otherwise
+ * drains across specs and a later spec meets "Too many attempts". Called by
+ * `/api/test/reset`; does nothing outside E2E test mode, so no deployment can
+ * reset its own limits.
+ */
+export function resetRateLimitsForE2E(): void {
+  if (!isE2ETestMode()) return;
+  buckets.clear();
 }
 
 /**
