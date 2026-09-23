@@ -15,7 +15,14 @@ export interface HomeInput {
   approval: "pending" | "approved";
   firstName: string | null;
   isCaptain: boolean;
-  teams: readonly { key: string; label: string; isLead: boolean }[];
+  /** Every team they are on this year — there may be several, led or not. */
+  teams: readonly {
+    key: string;
+    label: string;
+    isLead: boolean;
+    /** Unread announcements sent to this team. */
+    unread: number;
+  }[];
   pending: readonly {
     activationId: string;
     title: string;
@@ -50,12 +57,30 @@ export interface HomeUpcoming {
   sortKey: string;
 }
 
-export interface HomeShortcut {
+/** The module tiles. `icon` is a key the view maps to a picture. */
+export type HomeModuleIcon =
+  | "announcements"
+  | "forms"
+  | "message"
+  | "send-form"
+  | "overview";
+
+export interface HomeModule {
   id: string;
   href: string;
   label: string;
-  detail: string | null;
+  icon: HomeModuleIcon;
+  /** A count of new things, or null for none. */
   badge: number | null;
+}
+
+/** One of the member's teams, as an icon with a "new" dot. */
+export interface HomeTeam {
+  key: string;
+  label: string;
+  isLead: boolean;
+  unread: number;
+  href: string;
 }
 
 export interface HomeLift {
@@ -72,7 +97,8 @@ export interface HomeModel {
   /** Why "coming up" may be short: the calendar is off or unreachable. */
   calendarState: CalendarResult["status"] | null;
   lift: HomeLift | null;
-  shortcuts: HomeShortcut[];
+  modules: HomeModule[];
+  teams: HomeTeam[];
   checklist: { label: string; done: boolean }[];
   allDone: boolean;
 }
@@ -218,9 +244,8 @@ export function buildHome(input: HomeInput): HomeModel {
   if (!approved) chips.push("Waiting for approval");
   else if (input.isCaptain) chips.push("Captain");
   else chips.push("Member");
-  for (const team of input.teams) {
-    chips.push(team.isLead ? `${team.label} lead` : team.label);
-  }
+  // Teams are not chips: they have their own icons below.
+  if (approved && input.teams.some((t) => t.isLead)) chips.push("Team lead");
   if (input.lift?.role === "driver") chips.push("Driver");
 
   // To do: only what this person must act on. Soonest deadline first; a form
@@ -256,61 +281,73 @@ export function buildHome(input: HomeInput): HomeModel {
         .slice(0, 6)
     : [];
 
-  const shortcuts: HomeShortcut[] = [
+  const leads = input.teams.some((t) => t.isLead);
+  const modules: HomeModule[] = [
     {
       id: "announcements",
       href: "/notifications",
       label: "Announcements",
-      detail: input.unread > 0 ? null : "Nothing new",
+      icon: "announcements",
       badge: input.unread > 0 ? input.unread : null,
     },
   ];
   if (approved) {
-    shortcuts.push({
+    modules.push({
       id: "forms",
       href: "/tools/forms",
       label: "My forms",
-      detail: "Your answers",
-      badge: null,
+      icon: "forms",
+      badge: input.pending.length > 0 ? input.pending.length : null,
     });
-    for (const team of input.teams) {
-      shortcuts.push({
-        id: `team:${team.key}`,
-        href: `/captains/camp-management?team=${encodeURIComponent(team.key)}`,
-        label: team.isLead ? `Your team: ${team.label}` : team.label,
-        detail: team.isLead ? "You lead this team" : "Your team",
-        badge: null,
-      });
-    }
     // A lead may post and send forms, but only to a team they lead; a captain
     // to anyone (canSendToAudience in @camp404/core). The pages enforce the
-    // scope; these only say where to start.
-    if (input.teams.some((t) => t.isLead) || input.isCaptain) {
-      shortcuts.push({
-        id: "message",
-        href: "/captains/announcements",
-        label: input.isCaptain ? "Post an announcement" : "Message your team",
-        detail: null,
-        badge: null,
-      });
-      shortcuts.push({
-        id: "form",
-        href: "/captains/questionnaires",
-        label: input.isCaptain ? "Send a form" : "Send your team a form",
-        detail: null,
-        badge: null,
-      });
+    // scope; these tiles only say where to start.
+    if (leads || input.isCaptain) {
+      modules.push(
+        {
+          id: "message",
+          href: "/captains/announcements",
+          label: input.isCaptain ? "Announce" : "Message team",
+          icon: "message",
+          badge: null,
+        },
+        {
+          id: "form",
+          href: "/captains/questionnaires",
+          label: "Send form",
+          icon: "send-form",
+          badge: null,
+        },
+      );
     }
     if (input.isCaptain) {
-      shortcuts.push({
+      modules.push({
         id: "overview",
         href: "/captains/overview",
         label: "Camp overview",
-        detail: "The whole camp at a glance",
+        icon: "overview",
         badge: null,
       });
     }
   }
+
+  // Led teams first, then by name, so the teams someone is responsible for
+  // are where the eye lands.
+  const teams: HomeTeam[] = approved
+    ? [...input.teams]
+        .sort(
+          (a, b) =>
+            Number(b.isLead) - Number(a.isLead) ||
+            a.label.localeCompare(b.label),
+        )
+        .map((t) => ({
+          key: t.key,
+          label: t.label,
+          isLead: t.isLead,
+          unread: t.unread,
+          href: `/captains/camp-management?team=${encodeURIComponent(t.key)}`,
+        }))
+    : [];
 
   const checklist = [
     { label: "Burner bio", done: true },
@@ -331,7 +368,8 @@ export function buildHome(input: HomeInput): HomeModel {
     upcoming,
     calendarState: approved ? (input.calendar?.status ?? null) : null,
     lift: approved ? liftCard(input.lift) : null,
-    shortcuts,
+    modules,
+    teams,
     checklist,
     allDone: checklist.every((c) => c.done),
   };

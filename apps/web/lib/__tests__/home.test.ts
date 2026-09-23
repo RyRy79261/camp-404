@@ -56,7 +56,8 @@ describe("buildHome", () => {
     expect(home.chips).toEqual(["Waiting for approval"]);
     expect(home.todos).toEqual([]);
     expect(home.upcoming).toEqual([]);
-    expect(ids(home.shortcuts)).toEqual(["announcements"]);
+    expect(ids(home.modules)).toEqual(["announcements"]);
+    expect(home.teams).toEqual([]);
     expect(home.checklist).toContainEqual({
       label: "Approved by a captain",
       done: false,
@@ -69,7 +70,7 @@ describe("buildHome", () => {
     expect(home.waitingForApproval).toBe(false);
     expect(home.todos).toEqual([]);
     expect(home.allDone).toBe(true);
-    expect(ids(home.shortcuts)).toEqual(["announcements", "forms"]);
+    expect(ids(home.modules)).toEqual(["announcements", "forms"]);
   });
 
   it("lists forms to answer, soonest deadline first, and says how long is left", () => {
@@ -169,30 +170,53 @@ describe("buildHome", () => {
     ).toBe("unavailable");
   });
 
-  it("gives a team lead their team and a way to message it; a member only their team", () => {
+  it("gives a team lead the tiles to message and send a form to their team; a member neither", () => {
     const lead = buildHome(
-      member({ teams: [{ key: "kitchen", label: "Cuisine", isLead: true }] }),
+      member({
+        teams: [{ key: "kitchen", label: "Cuisine", isLead: true, unread: 0 }],
+      }),
     );
-    expect(lead.chips).toEqual(["Member", "Cuisine lead"]);
-    expect(ids(lead.shortcuts)).toEqual([
+    expect(lead.chips).toEqual(["Member", "Team lead"]);
+    expect(ids(lead.modules)).toEqual([
       "announcements",
       "forms",
-      "team:kitchen",
       "message",
       "form",
     ]);
-    expect(lead.shortcuts.find((s) => s.id === "team:kitchen")?.href).toBe(
-      "/captains/camp-management?team=kitchen",
-    );
 
     const crew = buildHome(
-      member({ teams: [{ key: "kitchen", label: "Cuisine", isLead: false }] }),
+      member({
+        teams: [{ key: "kitchen", label: "Cuisine", isLead: false, unread: 0 }],
+      }),
     );
-    expect(ids(crew.shortcuts)).toEqual([
-      "announcements",
-      "forms",
-      "team:kitchen",
+    expect(crew.chips).toEqual(["Member"]);
+    expect(ids(crew.modules)).toEqual(["announcements", "forms"]);
+  });
+
+  it("shows every team someone is on, the ones they lead first, each with its own count", () => {
+    const home = buildHome(
+      member({
+        teams: [
+          { key: "structures", label: "Structures", isLead: false, unread: 0 },
+          {
+            key: "sanitation_and_water",
+            label: "Water",
+            isLead: true,
+            unread: 3,
+          },
+          { key: "kitchen", label: "Cuisine", isLead: true, unread: 1 },
+        ],
+      }),
+    );
+    expect(
+      home.teams.map((t) => [t.label, t.isLead, t.unread, t.href]),
+    ).toEqual([
+      ["Cuisine", true, 1, "/captains/camp-management?team=kitchen"],
+      ["Water", true, 3, "/captains/camp-management?team=sanitation_and_water"],
+      ["Structures", false, 0, "/captains/camp-management?team=structures"],
     ]);
+    // Leading two teams is still one set of tiles, not one per team.
+    expect(ids(home.modules).filter((id) => id === "message")).toHaveLength(1);
   });
 
   it("shows a driver their car, riders and seats", () => {
@@ -223,7 +247,7 @@ describe("buildHome", () => {
   it("gives a captain the camp overview as one shortcut, not the whole board", () => {
     const home = buildHome(member({ isCaptain: true }));
     expect(home.chips[0]).toBe("Captain");
-    expect(ids(home.shortcuts)).toEqual([
+    expect(ids(home.modules)).toEqual([
       "announcements",
       "forms",
       "message",
@@ -232,9 +256,24 @@ describe("buildHome", () => {
     ]);
   });
 
-  it("counts unread announcements on the shortcut", () => {
-    const home = buildHome(member({ unread: 3 }));
-    expect(home.shortcuts[0]).toMatchObject({ badge: 3, detail: null });
+  it("puts new announcements and waiting forms on their tiles, and nothing when there are none", () => {
+    const busy = buildHome(
+      member({
+        unread: 3,
+        pending: [
+          { activationId: "a", title: "A", blocking: false, dueAt: null },
+          { activationId: "b", title: "B", blocking: false, dueAt: null },
+        ],
+      }),
+    );
+    expect(busy.modules.map((m) => [m.id, m.badge])).toEqual([
+      ["announcements", 3],
+      ["forms", 2],
+    ]);
+    expect(buildHome(member()).modules.map((m) => m.badge)).toEqual([
+      null,
+      null,
+    ]);
   });
 
   it("only lists sign-in security when it could be read", () => {

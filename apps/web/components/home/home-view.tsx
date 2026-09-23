@@ -3,10 +3,26 @@ import {
   ArrowRight,
   CalendarDays,
   Car,
+  ChefHat,
   CheckCircle2,
   Circle,
+  ClipboardList,
+  Crown,
+  Droplets,
+  FileText,
+  Hammer,
+  HeartPulse,
   Hourglass,
+  LayoutDashboard,
+  Laugh,
   ListTodo,
+  Megaphone,
+  Music,
+  Palette,
+  Send,
+  Users,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@camp404/ui/components/badge";
 import {
@@ -17,7 +33,7 @@ import {
 } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { cn } from "@camp404/ui/lib/utils";
-import type { HomeModel } from "@/lib/home";
+import type { HomeModel, HomeModuleIcon } from "@/lib/home";
 
 // A member's own home: what to do, what's coming, and the few places that are
 // theirs. Built for someone easily overwhelmed (owner, 2026-09-23): short
@@ -234,37 +250,159 @@ function LiftCard({ lift }: { lift: NonNullable<HomeModel["lift"]> }) {
   );
 }
 
-function ShortcutsCard({ shortcuts }: { shortcuts: HomeModel["shortcuts"] }) {
+/**
+ * Where a long tile name may break on a phone-width tile. A soft hyphen shows
+ * a "-" only if the word actually breaks, and screen readers ignore it.
+ */
+function breakable(label: string): string {
+  return label.replace("Announcements", "Announce\u00ADments");
+}
+
+const MODULE_ICONS: Record<HomeModuleIcon, LucideIcon> = {
+  announcements: Megaphone,
+  forms: FileText,
+  message: Send,
+  "send-form": ClipboardList,
+  overview: LayoutDashboard,
+};
+
+/** A small count in the corner of a tile or icon. */
+function CountBadge({
+  count,
+  className,
+}: {
+  count: number;
+  className?: string;
+}) {
   return (
-    <Card>
-      <CardContent className="p-5">
-        <nav aria-label="Your shortcuts">
-          <ul className="-my-3 divide-y divide-border">
-            {shortcuts.map((s) => (
-              <li key={s.id}>
-                <Row href={s.href}>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {s.label}
-                    </span>
-                    {s.detail ? (
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {s.detail}
-                      </span>
-                    ) : null}
-                  </span>
-                  {s.badge ? <Badge>{s.badge} new</Badge> : null}
-                  <ArrowRight
-                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                    aria-hidden
+    <span
+      aria-hidden
+      className={cn(
+        "flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground ring-2 ring-background",
+        className,
+      )}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+/**
+ * The member's modules as square tiles (owner, 2026-09-23: "a more square grid
+ * of icons with indicators … not like a settings menu"). Each tile is one place
+ * to go, with a count when something there is new.
+ */
+function ModuleGrid({ modules }: { modules: HomeModel["modules"] }) {
+  return (
+    <nav aria-label="Your modules">
+      <ul className="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-6">
+        {modules.map((m) => {
+          const Icon = MODULE_ICONS[m.icon];
+          return (
+            <li key={m.id}>
+              <Link
+                href={m.href}
+                aria-label={m.badge ? `${m.label}, ${m.badge} new` : m.label}
+                className="group relative flex h-full flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-1 py-3 text-center transition-colors hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:aspect-square sm:py-2"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/15 text-accent">
+                  <Icon className="h-5 w-5" aria-hidden />
+                </span>
+                <span className="line-clamp-2 w-full hyphens-manual text-[11px] font-medium leading-tight sm:text-xs">
+                  {breakable(m.label)}
+                </span>
+                {m.badge ? (
+                  <CountBadge
+                    count={m.badge}
+                    className="absolute right-1.5 top-1.5"
                   />
-                </Row>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </CardContent>
-    </Card>
+                ) : null}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+/** A picture per team. Configurable labels, fixed keys: an unknown key gets a group. */
+const TEAM_ICONS: Record<string, LucideIcon> = {
+  kitchen: ChefHat,
+  structures: Hammer,
+  power_and_lighting: Zap,
+  sanitation_and_water: Droplets,
+  health_and_safety: HeartPulse,
+  art_and_activities: Palette,
+  ministry_of_memes: Laugh,
+  ministry_of_vibes: Music,
+};
+
+/**
+ * The member's teams as icons. Several teams, several icons, and a team they
+ * lead wears an accent ring with a crown set into it — the crown's background
+ * cuts the ring, so it reads as a badge on the icon, not a second icon. A count
+ * sits on any team with unread announcements.
+ */
+function TeamIcons({ teams }: { teams: HomeModel["teams"] }) {
+  return (
+    <section aria-labelledby="my-teams" className="flex flex-col gap-3">
+      <h2
+        id="my-teams"
+        className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+      >
+        {teams.length === 1 ? "My team" : "My teams"}
+      </h2>
+      <ul className="flex flex-wrap gap-4">
+        {teams.map((team) => {
+          const Icon = TEAM_ICONS[team.key] ?? Users;
+          const said = [
+            team.label,
+            team.isLead ? "you lead this team" : null,
+            team.unread ? `${team.unread} new` : null,
+          ]
+            .filter(Boolean)
+            .join(", ");
+          return (
+            <li key={team.key}>
+              <Link
+                href={team.href}
+                aria-label={said}
+                className="group flex w-20 flex-col items-center gap-1.5 focus-visible:outline-none"
+              >
+                <span
+                  className={cn(
+                    "relative flex h-14 w-14 items-center justify-center rounded-full bg-card text-foreground transition-colors group-hover:text-accent group-focus-visible:ring-2 group-focus-visible:ring-ring",
+                    team.isLead
+                      ? "border-2 border-accent"
+                      : "border border-border",
+                  )}
+                >
+                  <Icon className="h-6 w-6" aria-hidden />
+                  {team.isLead ? (
+                    <span
+                      aria-hidden
+                      className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-background text-accent"
+                    >
+                      <Crown className="h-4 w-4" />
+                    </span>
+                  ) : null}
+                  {team.unread ? (
+                    <CountBadge
+                      count={team.unread}
+                      className="absolute -bottom-1 -right-1"
+                    />
+                  ) : null}
+                </span>
+                <span className="line-clamp-2 w-full text-center text-xs leading-tight text-muted-foreground group-hover:text-foreground">
+                  {team.label}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -282,6 +420,7 @@ export function HomeView({ home }: { home: HomeModel }) {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
+          <ModuleGrid modules={home.modules} />
           {home.waitingForApproval ? (
             <WaitingCard />
           ) : (
@@ -295,9 +434,9 @@ export function HomeView({ home }: { home: HomeModel }) {
           )}
         </div>
         <div className="flex flex-col gap-6">
-          <ChecklistCard checklist={home.checklist} allDone={home.allDone} />
+          {home.teams.length > 0 ? <TeamIcons teams={home.teams} /> : null}
           {home.lift ? <LiftCard lift={home.lift} /> : null}
-          <ShortcutsCard shortcuts={home.shortcuts} />
+          <ChecklistCard checklist={home.checklist} allDone={home.allDone} />
         </div>
       </div>
     </div>

@@ -7,7 +7,7 @@ import { getUpcomingEvents } from "@/lib/google-calendar";
 import { buildHome } from "@/lib/home";
 import { getMyLift } from "@/lib/lifts";
 import { resolveMemberState } from "@/lib/member-gate";
-import { countUnread } from "@/lib/notifications";
+import { countUnread, countUnreadByTeam } from "@/lib/notifications";
 import { isSignInSecured } from "@/lib/sign-in-security";
 import { getMyTeams, getPendingQuestionnaires } from "@/lib/users";
 import { HomeView } from "@/components/home/home-view";
@@ -49,16 +49,27 @@ export default async function HomePage() {
   if (block && !waiting) redirect(block.href);
 
   const approval = waiting ? "pending" : "approved";
-  const [memberships, pending, unread, lift, secured, teamsConfig, calendar] =
-    await Promise.all([
-      waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
-      waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
-      countUnread(campUser.id),
-      waiting ? Promise.resolve(null) : getMyLift(campUser.id),
-      isSignInSecured(),
-      getTeamsConfig(),
-      waiting ? Promise.resolve(null) : getUpcomingEvents(),
-    ]);
+  const [
+    memberships,
+    pending,
+    unread,
+    unreadByTeam,
+    lift,
+    secured,
+    teamsConfig,
+    calendar,
+  ] = await Promise.all([
+    waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
+    waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
+    countUnread(campUser.id),
+    waiting
+      ? Promise.resolve({} as Partial<Record<string, number>>)
+      : countUnreadByTeam(campUser.id),
+    waiting ? Promise.resolve(null) : getMyLift(campUser.id),
+    isSignInSecured(),
+    getTeamsConfig(),
+    waiting ? Promise.resolve(null) : getUpcomingEvents(),
+  ]);
   const labels = teamLabelMap(teamsConfig);
   const isCaptain =
     deriveViewerRank(
@@ -75,6 +86,7 @@ export default async function HomePage() {
       key: m.team,
       label: labels[m.team] ?? m.team,
       isLead: m.isLead,
+      unread: unreadByTeam[m.team] ?? 0,
     })),
     pending,
     unread,

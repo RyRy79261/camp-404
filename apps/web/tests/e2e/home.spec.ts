@@ -47,7 +47,7 @@ test.describe("a member's own home", () => {
     await expect(
       page.getByText("The camp calendar isn't connected yet."),
     ).toBeVisible();
-    const shortcuts = page.getByRole("navigation", { name: "Your shortcuts" });
+    const shortcuts = page.getByRole("navigation", { name: "Your modules" });
     await expect(
       shortcuts.getByRole("link", { name: /Announcements/ }),
     ).toHaveAttribute("href", "/notifications");
@@ -71,7 +71,7 @@ test.describe("a member's own home", () => {
     await setRank(request, "home-captain", "captain");
 
     await page.goto("/");
-    const shortcuts = page.getByRole("navigation", { name: "Your shortcuts" });
+    const shortcuts = page.getByRole("navigation", { name: "Your modules" });
     await shortcuts.getByRole("link", { name: /Camp overview/ }).click();
     await expect(page).toHaveURL("/captains/overview");
     await expect(

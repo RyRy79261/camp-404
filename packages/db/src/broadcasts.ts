@@ -1274,6 +1274,40 @@ export async function countUnread(userId: string): Promise<number> {
 }
 
 /**
+ * The member's unread announcements per team: how many of the deliveries
+ * {@link countUnread} counts came from a broadcast addressed to one team. Home
+ * puts this on each team's icon, so "something new for Kitchen" is visible
+ * without opening the inbox. Teams with nothing unread are absent.
+ */
+export async function countUnreadByTeam(
+  userId: string,
+): Promise<Partial<Record<Team, number>>> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      team: schema.broadcasts.team,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(schema.notificationDeliveries)
+    .innerJoin(
+      schema.broadcasts,
+      eq(schema.broadcasts.id, schema.notificationDeliveries.broadcastId),
+    )
+    .where(
+      and(
+        eq(schema.notificationDeliveries.userId, userId),
+        isNull(schema.notificationDeliveries.readAt),
+        eq(schema.broadcasts.scope, "team"),
+        isNotNull(schema.broadcasts.team),
+      ),
+    )
+    .groupBy(schema.broadcasts.team);
+  const out: Partial<Record<Team, number>> = {};
+  for (const row of rows) if (row.team) out[row.team] = row.count;
+  return out;
+}
+
+/**
  * Mark a user's deliveries as read. Pass the exact `ids` the caller just
  * snapshotted (e.g. from {@link listInbox}) so a delivery that arrives between
  * the snapshot and this write isn't silently marked read without being shown.
