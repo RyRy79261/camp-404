@@ -282,11 +282,21 @@ export function buildHome(input: HomeInput): HomeModel {
         badge: null,
       });
     }
+    // A lead may post and send forms, but only to a team they lead; a captain
+    // to anyone (canSendToAudience in @camp404/core). The pages enforce the
+    // scope; these only say where to start.
     if (input.teams.some((t) => t.isLead) || input.isCaptain) {
       shortcuts.push({
         id: "message",
         href: "/captains/announcements",
         label: input.isCaptain ? "Post an announcement" : "Message your team",
+        detail: null,
+        badge: null,
+      });
+      shortcuts.push({
+        id: "form",
+        href: "/captains/questionnaires",
+        label: input.isCaptain ? "Send a form" : "Send your team a form",
         detail: null,
         badge: null,
       });

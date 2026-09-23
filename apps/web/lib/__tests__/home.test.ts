@@ -179,6 +179,7 @@ describe("buildHome", () => {
       "forms",
       "team:kitchen",
       "message",
+      "form",
     ]);
     expect(lead.shortcuts.find((s) => s.id === "team:kitchen")?.href).toBe(
       "/captains/camp-management?team=kitchen",
@@ -226,6 +227,7 @@ describe("buildHome", () => {
       "announcements",
       "forms",
       "message",
+      "form",
       "overview",
     ]);
   });
