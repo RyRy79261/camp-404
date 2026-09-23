@@ -50,6 +50,26 @@ export function firebaseAdminCredentials(
   return { projectId, clientEmail, privateKey: rawKey.replace(/\\n/g, "\n") };
 }
 
+/** The service account that reads the camp calendar. */
+export interface CalendarCredentials {
+  clientEmail: string;
+  privateKey: string;
+}
+
+/**
+ * The calendar's own service account, or null when either half is unset. Its
+ * own, not Firebase's (owner, 2026-09-23: "Why would we rely on firebase at
+ * all?"): the calendar keeps working if push moves off Firebase or its key is
+ * replaced.
+ */
+export function calendarCredentials(env: EnvBag): CalendarCredentials | null {
+  const clientEmail = env.GOOGLE_CALENDAR_CLIENT_EMAIL?.trim();
+  const rawKey = env.GOOGLE_CALENDAR_PRIVATE_KEY;
+  if (!clientEmail || !rawKey?.trim()) return null;
+  // Env stores the PEM with literal `\n`; signing needs real newlines.
+  return { clientEmail, privateKey: rawKey.replace(/\\n/g, "\n") };
+}
+
 /** The browser push settings. All are public by design. */
 export interface WebPushConfig {
   apiKey: string | undefined;

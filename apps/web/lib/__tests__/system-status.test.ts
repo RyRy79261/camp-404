@@ -191,6 +191,18 @@ describe("deriveSystemStatus", () => {
       check(
         {
           GOOGLE_CALENDAR_ID: "cal",
+          GOOGLE_CALENDAR_CLIENT_EMAIL: "e",
+        },
+        OK_PROBE,
+        "calendar",
+      ).tone,
+    ).toBe("attention");
+    // Firebase's push account no longer reads the calendar.
+    expect(
+      check(
+        {
+          GOOGLE_CALENDAR_ID: "cal",
+          FIREBASE_PROJECT_ID: "p",
           FIREBASE_CLIENT_EMAIL: "e",
           FIREBASE_PRIVATE_KEY: "k",
         },
@@ -202,9 +214,8 @@ describe("deriveSystemStatus", () => {
       check(
         {
           GOOGLE_CALENDAR_ID: "cal",
-          FIREBASE_PROJECT_ID: "p",
-          FIREBASE_CLIENT_EMAIL: "e",
-          FIREBASE_PRIVATE_KEY: "k",
+          GOOGLE_CALENDAR_CLIENT_EMAIL: "e",
+          GOOGLE_CALENDAR_PRIVATE_KEY: "k",
         },
         OK_PROBE,
         "calendar",
