@@ -341,6 +341,18 @@ export async function isTeamLead(userId: string): Promise<boolean> {
  * Year-scoped like `isTeamLead`: at a rollover it empties for everyone until
  * captains reappoint leads.
  */
+/**
+ * The teams this member is on THIS year, and whether they lead each — for
+ * their own home page. Year-scoped like every team read: at a rollover it
+ * empties until captains assign teams again.
+ */
+export async function getMyTeams(
+  userId: string,
+): Promise<{ team: string; isLead: boolean }[]> {
+  const store = usesTestStore() ? testBackend : realBackend;
+  return store.getMyTeams(userId);
+}
+
 export async function getLeadTeams(userId: string): Promise<string[]> {
   const store = usesTestStore() ? testBackend : realBackend;
   return store.getLeadTeams(userId);
@@ -405,6 +417,7 @@ interface UserBackend {
   getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null>;
   isTeamLead(userId: string): Promise<boolean>;
   getLeadTeams(userId: string): Promise<string[]>;
+  getMyTeams(userId: string): Promise<{ team: string; isLead: boolean }[]>;
   upsertBurnerProfile(input: {
     userId: string;
     version: string;
@@ -571,6 +584,10 @@ const realBackend: UserBackend = {
   async isTeamLead(userId) {
     return dbIsTeamLead(userId);
   },
+  async getMyTeams(userId) {
+    const memberships = await dbGetTeamMemberships(userId);
+    return memberships.map((m) => ({ team: m.team, isLead: m.isLead }));
+  },
   async getLeadTeams(userId) {
     // The same year-scoped read the roster's lead column aggregates, narrowed
     // to the rows whose lead flag is set.
@@ -662,6 +679,11 @@ const testBackend: UserBackend = {
   // written by the same three operations production has.
   async isTeamLead(userId) {
     return testStore.isTeamLead(userId);
+  },
+  async getMyTeams(userId) {
+    return testStore
+      .getTeamMemberships(userId)
+      .map((m) => ({ team: m.team, isLead: m.isLead }));
   },
   async getLeadTeams(userId) {
     return testStore.getLeadTeams(userId);

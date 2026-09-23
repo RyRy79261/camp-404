@@ -6,6 +6,7 @@ import {
   countUnseenPopups as dbCountUnseenPopups,
   countAnnouncementAudience as dbCountAnnouncementAudience,
   countUnread as dbCountUnread,
+  countUnreadByTeam as dbCountUnreadByTeam,
   explainDraftRefusal as dbExplainDraftRefusal,
   createAnnouncementDraft as dbCreateDraft,
   getAnnouncementPinContext as dbGetPinContext,
@@ -64,6 +65,7 @@ export type {
 
 interface NotificationsBackend {
   countUnread(userId: string): Promise<number>;
+  countUnreadByTeam(userId: string): Promise<Partial<Record<string, number>>>;
   listInbox(
     userId: string,
     options?: { before?: string | null; limit?: number; filter?: InboxFilter },
@@ -130,6 +132,7 @@ interface PinInput {
 
 const realBackend: NotificationsBackend = {
   countUnread: dbCountUnread,
+  countUnreadByTeam: dbCountUnreadByTeam,
   listInbox: dbListInbox,
   markRead: dbMarkRead,
   markAllRead: dbMarkAllRead,
@@ -152,6 +155,9 @@ const realBackend: NotificationsBackend = {
 };
 
 const testBackend: NotificationsBackend = {
+  async countUnreadByTeam(userId) {
+    return testStore.countUnreadByTeam(userId);
+  },
   async countUnread(userId) {
     return testStore.countUnread(userId);
   },
@@ -216,6 +222,13 @@ const testBackend: NotificationsBackend = {
 
 function backend(): NotificationsBackend {
   return usesTestStore() ? testBackend : realBackend;
+}
+
+/** Unread announcements per team, for the team icons on Home. */
+export function countUnreadByTeam(
+  userId: string,
+): Promise<Partial<Record<string, number>>> {
+  return backend().countUnreadByTeam(userId);
 }
 
 export function countUnread(userId: string): Promise<number> {

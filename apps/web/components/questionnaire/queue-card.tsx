@@ -7,8 +7,8 @@ import { BlockingBadge } from "./blocking-chrome";
 
 // One questionnaire in a member's queue, as a card row like the AfrikaBurn
 // app's pending-questionnaires rows: the title, the Required/Optional badge and
-// the date, and the way in. Used by the Overview's and the inbox's "needs your
-// answer" lists and the completion screen.
+// the date, and the way in. Used by the inbox's "needs your answer" list and
+// the completion screen. (Home lists the same forms as compact to-do rows.)
 //
 // Status drives everything: a `next-up` row is a link to the form, the others
 // are inert, and a locked row is dimmed.

@@ -1056,6 +1056,17 @@ export const testStore = {
     return deliveries.filter((d) => d.userId === userId && d.readAt === null)
       .length;
   },
+  /** Twin of countUnreadByTeam in @camp404/db/broadcasts. */
+  countUnreadByTeam(userId: string): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const d of deliveries) {
+      if (d.userId !== userId || d.readAt !== null || !d.broadcastId) continue;
+      const b = broadcasts.find((x) => x.id === d.broadcastId);
+      if (b?.audience.scope !== "team") continue;
+      out[b.audience.team] = (out[b.audience.team] ?? 0) + 1;
+    }
+    return out;
+  },
   getAnnouncementForMember(
     userId: string,
     broadcastId: string,

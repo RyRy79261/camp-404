@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { useTestDb } from "./_harness";
 import { makeMembership, makeUser } from "./_factories";
 import {
+  countUnreadByTeam,
   countAnnouncementAudience,
   createAnnouncementDraft,
   DRAFT_TEAM_NOT_LED,
@@ -82,7 +83,11 @@ describe("team announcements", () => {
     const lead = await makeUser(db, { approvalStatus: "approved" });
     const cook = await makeUser(db, { approvalStatus: "approved" });
     // The write reads the lead flag from this row itself; nothing is passed in.
-    await makeMembership(db, { userId: lead.id, team: "kitchen", isLead: true });
+    await makeMembership(db, {
+      userId: lead.id,
+      team: "kitchen",
+      isLead: true,
+    });
     await makeMembership(db, { userId: cook.id, team: "kitchen" });
 
     const toKitchen = await createAnnouncementDraft({
@@ -147,6 +152,56 @@ describe("team announcements", () => {
       [id, { scope: "team", team: "structures" }],
     ]);
     expect(await listAnnouncements()).toHaveLength(2);
+  });
+});
+
+describe("countUnreadByTeam", () => {
+  const h = useTestDb();
+
+  it("counts a member's unread announcements per team, for each team they are on", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, {
+      rank: "captain",
+      approvalStatus: "approved",
+    });
+    const cook = await makeUser(db, { approvalStatus: "approved" });
+    await makeMembership(db, { userId: cook.id, team: "kitchen" });
+    await makeMembership(db, {
+      userId: cook.id,
+      team: "structures",
+      isLead: true,
+    });
+
+    const send = async (audience?: {
+      scope: "team";
+      team: "kitchen" | "structures";
+    }) => {
+      const { id } = await createAnnouncementDraft({
+        senderId: captain.id,
+        ...DRAFT,
+        ...(audience ? { audience } : {}),
+      });
+      await publishAnnouncement({ id, senderId: captain.id });
+      return id;
+    };
+    await send({ scope: "team", team: "kitchen" });
+    await send({ scope: "team", team: "kitchen" });
+    const read = await send({ scope: "team", team: "structures" });
+    // The whole camp's announcements are not any one team's.
+    await send();
+
+    expect(await countUnreadByTeam(cook.id)).toEqual({
+      kitchen: 2,
+      structures: 1,
+    });
+
+    await db
+      .update(schema.notificationDeliveries)
+      .set({ readAt: new Date() })
+      .where(eq(schema.notificationDeliveries.broadcastId, read));
+    expect(await countUnreadByTeam(cook.id)).toEqual({ kitchen: 2 });
+    // Someone else's inbox is not counted.
+    expect(await countUnreadByTeam(captain.id)).toEqual({});
   });
 });
 

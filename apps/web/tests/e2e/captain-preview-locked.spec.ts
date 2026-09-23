@@ -34,8 +34,9 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await page.goto("/");
 
     const nav = page.getByRole("navigation", { name: "Console" });
-    await expect(nav.getByRole("link", { name: "Overview" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Home" })).toBeVisible();
     for (const name of [
+      "Camp overview",
       "Questionnaires",
       "Payments",
       "Camp settings",
@@ -66,17 +67,14 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     }
   });
 
-  test("/captains/tools now leads to the Overview", async ({
-    page,
-    request,
-  }) => {
+  test("/captains/tools now leads to Home", async ({ page, request }) => {
     await asRank(page, request, "tools-captain", "captain");
 
     await page.goto("/captains/tools");
 
     await expect(page).toHaveURL(/\/$/);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Overview" }),
+      page.getByRole("heading", { level: 1, name: /^Hi\b/ }),
     ).toBeVisible();
   });
 

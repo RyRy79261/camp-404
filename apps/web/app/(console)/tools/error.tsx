@@ -4,7 +4,7 @@ import { ErrorRecovery } from "@/components/error-recovery";
 
 // An error in a tools page is caught here, not at the root, so the recovery sits in
 // the page area, under the console header. The tools hub is gone (the nav leads
-// to each tool), so the way back is the Overview.
+// to each tool), so the way back is Home.
 export default function SectionError({
   error,
   reset,

@@ -241,7 +241,7 @@ describe("the camp-management roster reads the memberships", () => {
   });
 });
 
-describe("testStore.getTeamCoverage — the Overview rail, mirrored", () => {
+describe("testStore.getTeamCoverage — the camp overview rail, mirrored", () => {
   it("counts each team's members and leads, this year only", () => {
     // The mirror of the PGlite suite's getTeamCoverage cases: last year's lead
     // must not carry over, or a rolled-over camp reads as already staffed.

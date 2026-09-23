@@ -4,7 +4,7 @@ import { ErrorRecovery } from "@/components/error-recovery";
 
 // An error in a captain page is caught here, not at the root, so the recovery sits in
 // the page area, under the console header. The camp tools hub is gone (the nav
-// leads to each page), so the way back is the Overview.
+// leads to each page), so the way back is Home.
 export default function SectionError({
   error,
   reset,

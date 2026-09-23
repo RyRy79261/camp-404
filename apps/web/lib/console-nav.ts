@@ -17,7 +17,10 @@ export interface ConsoleNavEntry {
 }
 
 export const CONSOLE_NAV: readonly ConsoleNavEntry[] = [
-  { href: "/", label: "Overview", rank: "camp_member" },
+  // Every member's own page: their to-dos, what's coming up, their places.
+  { href: "/", label: "Home", rank: "camp_member" },
+  // The whole camp at a glance, which used to be home (split 2026-09-23).
+  { href: "/captains/overview", label: "Camp overview", rank: "captain" },
   // Every approved member browses the roster; captains get the full triage
   // view (captains/camp-management/page.tsx picks the projection).
   { href: "/captains/camp-management", label: "Roster", rank: "camp_member" },

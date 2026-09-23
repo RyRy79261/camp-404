@@ -31,6 +31,26 @@ describe("canSendToAudience — captains", () => {
 });
 
 describe("canSendToAudience — team leads", () => {
+  it("lets a lead of several teams address each of them, one at a time, and no other", () => {
+    const twoTeamLead: AudienceActor = {
+      rank: "team_lead",
+      leadTeams: ["kitchen", "structures"],
+    };
+    for (const team of ["kitchen", "structures"] as const) {
+      expect(canSendToAudience(twoTeamLead, { scope: "team", team })).toBe(
+        true,
+      );
+    }
+    expect(
+      canSendToAudience(twoTeamLead, {
+        scope: "team",
+        team: "ministry_of_vibes",
+      }),
+    ).toBe(false);
+    expect(canSendToAudience(twoTeamLead, { scope: "everyone" })).toBe(false);
+    expect(canSendToAudience(twoTeamLead, { scope: "team_leads" })).toBe(false);
+  });
+
   it("allows a send to a team they lead", () => {
     expect(
       canSendToAudience(kitchenLead, { scope: "team", team: "kitchen" }),

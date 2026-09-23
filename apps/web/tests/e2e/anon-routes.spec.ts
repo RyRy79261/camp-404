@@ -46,7 +46,7 @@ test.describe("signed-out visitor", () => {
   ];
 
   // The old hubs are gone: the console nav replaced them, and they send
-  // everyone to the Overview at /, which is the landing page when signed out.
+  // everyone to Home at /, which is the landing page when signed out.
   for (const path of ["/tools", "/captains/tools"]) {
     test(`${path} now leads to the home page`, async ({ page }) => {
       await page.goto(path);
@@ -62,7 +62,9 @@ test.describe("signed-out visitor", () => {
   }) => {
     await page.goto("/auth/settings");
     await expect(page).toHaveURL(/\/auth\/sign-in/);
-    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Welcome back" }),
+    ).toBeVisible();
   });
 
   test("sign-in offers a passkey, and no Google button without Google keys", async ({
