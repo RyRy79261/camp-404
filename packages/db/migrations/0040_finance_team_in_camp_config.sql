@@ -3,7 +3,8 @@
 -- team"). 0039 added the enum value and the column default; this appends the
 -- team to the config a camp already has, after its last team. It runs once per
 -- camp and only when Finance is not there yet, so a re-run changes nothing. A
--- config with no team list falls back to the code default, which has Finance.
+-- config with no team list, or an empty one, falls back to the code default,
+-- which has Finance; it is left alone, or it would become Finance alone.
 UPDATE "camp_settings"
 SET "config" = jsonb_set(
   "config",
@@ -19,6 +20,7 @@ SET "config" = jsonb_set(
   ))
 )
 WHERE jsonb_typeof("config" -> 'teams') = 'array'
+  AND jsonb_array_length("config" -> 'teams') > 0
   AND NOT EXISTS (
     SELECT 1 FROM jsonb_array_elements("config" -> 'teams') AS t
     WHERE t ->> 'key' = 'finance'

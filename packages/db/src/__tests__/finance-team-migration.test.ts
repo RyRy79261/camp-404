@@ -79,6 +79,16 @@ describe("0040_finance_team_in_camp_config", () => {
     expect(await storedConfig()).toEqual(withFinance);
   });
 
+  it("leaves an empty team list alone, so it still reads as the default teams", async () => {
+    await storeConfig({ teams: [] });
+
+    await h.client().exec(MIGRATION_SQL);
+
+    expect(await storedConfig()).toEqual({ teams: [] });
+    const teams = await getTeamsConfig();
+    expect(teams).toEqual(DEFAULT_CAMP_CONFIG);
+  });
+
   it("stores Finance under the team enum", async () => {
     expect(schema.teamEnum.enumValues).toContain("finance");
   });
