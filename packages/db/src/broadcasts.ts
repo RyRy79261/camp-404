@@ -682,8 +682,11 @@ export async function getAnnouncementPinContext(
  *
  * `undefined` means a captain: every audience. Otherwise the teams this sender
  * leads this year, which may be none.
+ *
+ * The task board asks the same question with the same locks: which teams may
+ * this person add tasks to, or manage tasks for (`packages/db/src/tasks.ts`).
  */
-async function lockSenderReach(
+export async function lockSenderReach(
   tx: DbOrTx,
   senderId: string,
 ): Promise<readonly Team[] | undefined> {

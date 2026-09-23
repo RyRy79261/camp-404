@@ -36,6 +36,7 @@
     "./email": "./src/email.ts",
     "./questionnaire-results": "./src/questionnaire-results.ts",
     "./broadcasts": "./src/broadcasts.ts",
+    "./tasks": "./src/tasks.ts",
     "./audience": "./src/audience.ts",
     "./push": "./src/push.ts",
     "./push-status": "./src/push-status.ts",
