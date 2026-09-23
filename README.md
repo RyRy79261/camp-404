@@ -82,25 +82,36 @@ front of whatever command you use.
 
 ## Cron jobs
 
-Scheduled from `apps/web/vercel.json`:
+`apps/web/vercel.json` is the source of truth. It schedules seven jobs, each
+once a day:
 
-| Path | Schedule | Phase |
-|---|---|---|
-| `/api/cron/recipes/analyse` | daily 08:00 UTC | 3 |
-| `/api/cron/manuals/generate` | daily 08:30 UTC | 4 |
-| `/api/cron/notifications/reminders` | daily 09:00 UTC | 2 |
+| Path                                | Schedule (UTC)             | What it does                                                                                                                                                                  |
+| ----------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/cron/maintenance`             | `30 7 * * *` (daily 07:30) | Encrypts any government ID number still stored as plaintext and, on the production deployment only, deletes profile photos and image answers of members with no camp account. |
+| `/api/cron/recipes/analyse`         | `0 8 * * *` (daily 08:00)  | Not built: answers `status: "stub"` and does nothing. Will normalise pending recipes with Claude.                                                                             |
+| `/api/cron/manuals/generate`        | `30 8 * * *` (daily 08:30) | Not built: answers `status: "stub"` and does nothing. Will generate camp manuals.                                                                                             |
+| `/api/cron/notifications/reminders` | `0 9 * * *` (daily 09:00)  | Reminds members still pending on any open questionnaire send due within the next 48 hours, with the same 24-hour dedup as a captain's manual reminder.                        |
+| `/api/cron/notifications/dispatch`  | `15 9 * * *` (daily 09:15) | Fans out scheduled broadcasts whose `send_at` has arrived into per-member `notification_deliveries`. Immediate announcements still fan out at publish time.                   |
+| `/api/cron/notifications/push`      | `25 9 * * *` (daily 09:25) | Sends queued push deliveries to FCM through firebase-admin. Answers 503 without Firebase config.                                                                              |
+| `/api/cron/notifications/email`     | `35 9 * * *` (daily 09:35) | Emails the notices that must not be missed, through Resend. Answers 503 and touches nothing without Resend config.                                                            |
 
-> **[CORRECTION 2026-09-09]** The table above is stale: `apps/web/vercel.json`
-> declares **five** crons, not three. The two missing rows are
-> `/api/cron/notifications/dispatch` (daily 09:15 UTC) and
-> `/api/cron/notifications/push` (daily 09:25 UTC), both added with the
-> notifications work. `vercel.json` is the source of truth.
+- Every job needs `Authorization: Bearer ${CRON_SECRET}`.
+- `/api/cron/telegram/dispatch` exists but is deliberately not scheduled:
+  Telegram outbound stays off until the owner turns it on (see
+  `DEFERRED.md`). Without a bot it answers `status: "not_configured"`.
+- `apps/web/lib/__tests__/cron-stub.test.ts` checks the routes against
+  `vercel.json`: it fails when a scheduled path has no route or a route is
+  not scheduled (telegram excepted), and when the `SCHEDULED_JOBS` list in
+  `apps/web/lib/cron-schedule.ts` drifts from it path by path and time by
+  time.
+- Captains can read the schedule at `/captains/system`. The app keeps no
+  record of when a job last ran; Vercel's Cron Jobs tab for the project lists
+  each run.
+- A run with failures answers non-2xx, so the cron dashboard shows it.
 
-All cron endpoints require `Authorization: Bearer ${CRON_SECRET}`.
-
-> Vercel's Hobby plan caps cron jobs at one run per day. Upgrade to Pro
-> to run the recipe / manual jobs on a tighter schedule (e.g. every
-> 15 min during the planning window) if needed.
+> Vercel's Hobby plan caps cron jobs at one run per day. A tighter schedule
+> (for example the recipe or manual jobs every 15 minutes during the planning
+> window, once they are built) needs Pro.
 
 ## Security / POPIA
 

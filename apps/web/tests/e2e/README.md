@@ -25,11 +25,11 @@ This is the fast feedback layer — sub-second, runs on every PR.
 `apps/web/tests/e2e/*.spec.ts`. Auto-starts `next dev` on port 3000 with
 the following fixture env (see `playwright.config.ts`):
 
-| Var | Value | Purpose |
-|---|---|---|
-| `E2E_TEST_MODE` | `1` | Enables `/api/test/{login,logout,reset,seed-invite,seed-team,inspect,complete-onboarding,set-approval,set-rank}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
-| `INVITE_CODES` | `test-invite-e2e-only-code` | One known bootstrap (env-list) code for redemption specs. The specs type it in capitals to prove redemption ignores case. It is at least 20 characters, so it lets a member in without approval. |
-| `GOD_EMAILS` | `god@example.com` | One whitelisted god account that bypasses the invite gate. |
+| Var             | Value                       | Purpose                                                                                                                                                                                                                                         |
+| --------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `E2E_TEST_MODE` | `1`                         | Enables `/api/test/{login,logout,reset,seed-invite,seed-team,inspect,complete-onboarding,set-approval,set-rank}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
+| `INVITE_CODES`  | `test-invite-e2e-only-code` | One known bootstrap (env-list) code for redemption specs. The specs type it in capitals to prove redemption ignores case. It is at least 20 characters, so it lets a member in without approval.                                                |
+| `GOD_EMAILS`    | `god@example.com`           | One whitelisted god account that bypasses the invite gate.                                                                                                                                                                                      |
 
 Run with:
 
@@ -123,7 +123,7 @@ Neon-backed reads/writes in this mode.
 
 #### Reaching post-onboarding gates
 
-The burner-profile questionnaire is a 13-page wizard. Its page-by-page
+The burner-profile questionnaire is a multi-page wizard. Its page-by-page
 navigation, validation and submission contract are covered at the
 component layer (`components/__tests__/runner.test.tsx`), so e2e specs
 don't re-drive every field — they call `completeOnboarding(request,
@@ -132,19 +132,20 @@ complete and jump straight to the gates that follow it (home vs.
 `/pending-approval`). The user row must exist first, so hit a gated page
 (e.g. `/`) once after login before calling it.
 
-> **[CORRECTION 2026-09-09]** "13-page" is stale (here and in the "Not
-> covered" list below): the catalogue in `apps/web/lib/questionnaire.ts`
-> builds **11** pages — `profile_photo`, `about_you`, `bio`, `burn_ideas`,
+> **[CORRECTION 2026-09-24]** This section and the "Not covered" list below
+> said "13-page", and a 2026-09-09 correction said 11. The code template
+> (`BURNER_PROFILE_TEMPLATE` in `apps/web/lib/questionnaire.ts`) now builds
+> **12** pages: `profile_photo`, `about_you`, `bio`, `burn_ideas`,
 > `team_interests_intro`, `team_interests`, `cooking_competency`,
-> `leadership_logistics`, `burn_history`, `burn_intent`, `dietary` (matching
-> the design's OB Step 01–11). Nothing else in this section changes: the
-> count is descriptive, and the specs still jump the wizard via the
-> `complete-onboarding` seam.
+> `leadership_logistics`, `burn_history`, `burn_intent`,
+> `emergency_contacts`, `dietary`. The text no longer names a count, because
+> it keeps changing. Nothing else in this section changes: the specs still
+> jump the wizard via the `complete-onboarding` seam.
 
 > Note: the captains' camp-management roster (`getCampManagementRoster` /
 > `getCampMemberDetail`) reads the **real** Neon DB, not the in-memory
 > store, so the approve/reject UI isn't drivable under `E2E_TEST_MODE`.
-> The approval *gate* (pending users blocked at `/pending-approval`) and
+> The approval _gate_ (pending users blocked at `/pending-approval`) and
 > the `users.approval_status` stamping on redemption are, since those go
 > through the test-backed `users` helpers.
 
@@ -187,15 +188,15 @@ The flows below are intentionally out of scope for the `E2E_TEST_MODE`
 suite — covered elsewhere, or only coverable by the future real-auth suite:
 
 - **Real sign-in / account creation, in THIS suite.** `E2E_TEST_MODE` with
-  the store *bypasses* the auth server — `/api/test/login` just drops the
-  synthetic session cookie that `getAuthenticatedUser()` reads. What *is*
+  the store _bypasses_ the auth server — `/api/test/login` just drops the
+  synthetic session cookie that `getAuthenticatedUser()` reads. What _is_
   covered here is everything around auth: the invite gate, the sign-up cookie
   guard, and the unauthenticated → sign-in redirect. **[CORRECTION
   2026-09-24]** Real email-and-password sign-up, sign-in, sign-out and
   password reset against Better Auth are now covered by the real-database run
   (`tests/e2e-db/sign-in.spec.ts`, above). Google is still not covered: there
   are no Google keys in test.
-- **Questionnaire field-by-field validation.** The 13-page wizard's
+- **Questionnaire field-by-field validation.** The multi-page wizard's
   navigation, required-field blocking and submission contract are covered at
   the component layer in `components/__tests__/runner.test.tsx` (jsdom). E2E
   jumps past it via the `complete-onboarding` seam, so it only asserts the
@@ -203,7 +204,7 @@ suite — covered elsewhere, or only coverable by the future real-auth suite:
 - **Captain approve / reject from the UI.** The camp-management roster
   (`getCampManagementRoster` / `getCampMemberDetail`) reads the real Neon DB,
   not the in-memory store, so the modal + action aren't drivable under
-  `E2E_TEST_MODE`. The approval *gate* it controls is covered: pending and
+  `E2E_TEST_MODE`. The approval _gate_ it controls is covered: pending and
   rejected members are driven via the `set-approval` seam and asserted at
   `/pending-approval`.
 
