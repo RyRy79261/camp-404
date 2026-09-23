@@ -38,4 +38,12 @@ describe("oauthErrorSentence", () => {
       "Google sign-in didn't finish. Try again.",
     );
   });
+
+  it("ignores codes that name a built-in object key", () => {
+    for (const code of ["__proto__", "constructor", "toString"]) {
+      expect(oauthErrorSentence(code)).toBe(
+        "Google sign-in didn't finish. Try again.",
+      );
+    }
+  });
 });

@@ -32,5 +32,6 @@ export function oauthErrorSentence(
   code: string | null | undefined,
 ): string | null {
   if (!code) return null;
-  return SENTENCES[code] ?? GENERIC;
+  // Own keys only: a code like "__proto__" must not reach Object.prototype.
+  return Object.hasOwn(SENTENCES, code) ? SENTENCES[code]! : GENERIC;
 }

@@ -166,7 +166,7 @@ The full cold-start path. Every gate is crossed exactly once, in order.
 ▣ Invite gate (/signup/required)  [G1, INVITE-GATED]
    "Camp 404 is invite-only — drop your code below."
    ├─ type code (slug, e.g. neon-toaster-mongoose) → ✎ submitInviteCode
-   │     ├─ rate-limit (10 / 10min per user) → "Too many attempts…"   (stay)
+   │     ├─ rate-limit (10 / 10min per user, 30 / 10min per IP) → "Too many attempts…"   (stay)
    │     ├─ invalid/expired/revoked/exhausted/race-loser → "That invite code isn't valid." (stay)
    │     └─ OK → atomic consume → stamp users.inviteCode (+ rank if assigned,
    │            + approval=pending if requiresApproval) → seed burner_profile action → redirect("/") ⟳

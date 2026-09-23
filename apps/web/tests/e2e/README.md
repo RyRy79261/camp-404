@@ -83,8 +83,10 @@ pnpm --filter @camp404/web test:e2e:db
   `AUTH_EMAIL_CAPTURE_FILE` to `apps/web/.e2e-mail/auth-mail.jsonl` (git
   ignored), and each auth email is appended there as one JSON line with its
   link; `_mail.ts`'s `waitForAuthMail(to, kind, since)` reads it. The file is
-  honoured only with `E2E_TEST_MODE=1` and `VERCEL_ENV` unset, so no
-  deployment can write mail to disk, whatever the variable says.
+  honoured only with `E2E_TEST_MODE=1` and `VERCEL_ENV` unset, so no Vercel
+  deployment can write mail to disk, whatever the variable says. Off Vercel
+  nothing stops it: never set `E2E_TEST_MODE=1` and `AUTH_EMAIL_CAPTURE_FILE`
+  together on a server real people use.
 - `/api/test/reset` also refills the in-memory rate-limit buckets. The whole
   run comes from one address, so a per-IP bucket (the invite gate has one)
   would otherwise drain across specs.
