@@ -139,6 +139,19 @@ describe("saveBurnerProfile persistence error handling", () => {
     expect(setTelegramHandle).not.toHaveBeenCalled();
   });
 
+  it("refuses a bad Telegram answer on a draft save instead of clearing the handle", async () => {
+    vi.mocked(setIdDocuments).mockResolvedValue(undefined);
+
+    const result = await saveBurnerProfile(
+      { ...responsesWithId, telegram: "nova-reyes" },
+      false,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.telegram).toMatch(/Telegram/);
+    expect(setTelegramHandle).not.toHaveBeenCalled();
+    expect(upsertBurnerProfile).not.toHaveBeenCalled();
+  });
+
   it("returns ok on a successful non-final save", async () => {
     vi.mocked(setIdDocuments).mockResolvedValue(undefined);
 

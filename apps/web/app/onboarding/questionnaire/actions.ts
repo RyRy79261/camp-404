@@ -8,6 +8,7 @@ import {
   questionsWithRole,
   splitEmergencyContacts,
   telegramHandleFromResponses,
+  validateOne,
   validateResponses,
   type SaveResult,
 } from "@camp404/types";
@@ -98,6 +99,16 @@ export async function saveBurnerProfile(
       };
     }
     responses = draft.responses;
+    // A draft keeps answers unchecked, but the Telegram answer is copied to
+    // the roster on every save. A bad one would clear the stored handle, so
+    // refuse it here, beside the field.
+    const telegram = questionsWithRole(questionnaire, "telegram_handle")[0];
+    if (telegram && telegram.id in responses) {
+      const checked = validateOne(telegram, responses[telegram.id]);
+      if (!checked.ok) {
+        return { ok: false, errors: { [telegram.id]: checked.error } };
+      }
+    }
   }
 
   try {
@@ -150,7 +161,9 @@ export async function saveBurnerProfile(
 
     // The Telegram username goes to the roster's handle column. Only a save
     // that carries its page touches it, like the contacts above.
-    const telegram = telegramHandleFromResponses(questionnaire, cleaned);
+    const telegram = telegramHandleFromResponses(questionnaire, cleaned, {
+      complete: final,
+    });
     if (telegram !== undefined) {
       await setTelegramHandle(campUser.id, telegram);
     }

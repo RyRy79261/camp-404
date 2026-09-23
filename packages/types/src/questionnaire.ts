@@ -68,7 +68,8 @@ export type TextFormat = z.infer<typeof TextFormat>;
  * is optional. Returns the bare username (no `@`), or null when it is not one.
  * The roster shows it as `@name` and links it to t.me/name.
  */
-const TELEGRAM_RE = /^[A-Za-z][A-Za-z0-9_]{4,31}$/;
+// Telegram's rule: 5 to 32 characters, starts with a letter, no trailing _.
+const TELEGRAM_RE = /^[A-Za-z][A-Za-z0-9_]{3,30}[A-Za-z0-9]$/;
 export function telegramUsername(raw: string): string | null {
   const name = raw.trim().replace(/^@/, "");
   return TELEGRAM_RE.test(name) ? name : null;

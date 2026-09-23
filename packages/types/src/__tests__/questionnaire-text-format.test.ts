@@ -40,7 +40,15 @@ const CASES: Record<
   // the leading @ is optional.
   telegram: {
     accepts: ["@nova_reyes", "nova_reyes", " @Camp404crew ", "abcde"],
-    rejects: ["@abcd", "4nova", "nova-reyes", "@", "a".repeat(33), "t.me/nova"],
+    rejects: [
+      "@abcd",
+      "4nova",
+      "nova-reyes",
+      "nova_",
+      "@",
+      "a".repeat(33),
+      "t.me/nova",
+    ],
     error:
       "Enter a Telegram username, like @nova_reyes: 5 to 32 letters, numbers or _",
   },

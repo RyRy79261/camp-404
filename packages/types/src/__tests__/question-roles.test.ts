@@ -229,4 +229,16 @@ describe("telegramHandleFromResponses", () => {
       telegramHandleFromResponses(questionnaire, { photo: "x" }),
     ).toBeUndefined();
   });
+
+  it("clears the handle when a whole validated form has no Telegram answer", () => {
+    // Validation drops a blank optional answer, so on a complete form a
+    // missing answer is the member clearing it.
+    expect(
+      telegramHandleFromResponses(
+        questionnaire,
+        { photo: "x" },
+        { complete: true },
+      ),
+    ).toBeNull();
+  });
 });

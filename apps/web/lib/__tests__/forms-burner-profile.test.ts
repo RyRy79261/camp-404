@@ -66,7 +66,9 @@ describe("burner profile replay", () => {
 
   it("clears the roster's Telegram when the answer is emptied", async () => {
     const form = await getReplayableForm("burner_profile");
-    await form!.save("user-1", { telegram: "" }, null);
+    // The replay action validates first, and validation drops a blank
+    // optional answer: an emptied field arrives as no key at all.
+    await form!.save("user-1", {}, null);
 
     expect(saveBurnerProfileReplay).toHaveBeenCalledWith(
       expect.objectContaining({ telegramHandle: null }),
@@ -122,6 +124,8 @@ describe("burner profile replay", () => {
       responses: { "bio.statement": "Hi", "id.type": "passport" },
       id: { idType: "passport", idNumber: "A1234567" },
       emergencyContacts: [ADA],
+      // No Telegram answer on a whole form: the member left it blank.
+      telegramHandle: null,
       edit: {
         questionnaireKey: "burner_profile",
         editedByUserId: "user-1",

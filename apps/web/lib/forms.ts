@@ -116,7 +116,9 @@ const BURNER_PROFILE: ReplayableFormDef = {
       id: idNumber ? { idType, idNumber } : null,
       emergencyContacts: contacts,
       // The answer stays in the profile too; this copies it to the roster.
-      telegramHandle: telegramHandleFromResponses(questionnaire, cleaned),
+      telegramHandle: telegramHandleFromResponses(questionnaire, cleaned, {
+        complete: true,
+      }),
       edit: edit ? { questionnaireKey: "burner_profile", ...edit } : null,
     });
   },
