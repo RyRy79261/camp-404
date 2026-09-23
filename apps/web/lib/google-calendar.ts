@@ -1,16 +1,16 @@
 import "server-only";
 
 import { createSign } from "node:crypto";
-import { firebaseAdminCredentials, type EnvBag } from "./integration-config";
+import { calendarCredentials, type EnvBag } from "./integration-config";
 
 // The camp's shared Google Calendar, read for the member home page's "coming
 // up" list (owner, 2026-09-23: "we have a shared Google Calendar. It would be
 // nice to manage or integrate that from here"). Read-only for now.
 //
-// HOW IT SIGNS IN. The app already holds a Google service account for push
-// (FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY). A captain shares the camp
-// calendar with that account's email ("See all event details") and sets
-// GOOGLE_CALENDAR_ID; nothing else is needed. The token exchange is the
+// HOW IT SIGNS IN. A Google service account made for the calendar alone
+// (GOOGLE_CALENDAR_CLIENT_EMAIL / GOOGLE_CALENDAR_PRIVATE_KEY), not Firebase's
+// push account. A captain shares the camp calendar with that account's email
+// ("See all event details") and sets GOOGLE_CALENDAR_ID. The token exchange is the
 // service-account JWT flow, signed with node:crypto, so no Google SDK is
 // added for one GET.
 //
@@ -55,7 +55,7 @@ export interface CalendarConfig {
 /** The calendar and the account that reads it, or null when either is unset. */
 export function calendarConfig(env: EnvBag): CalendarConfig | null {
   const calendarId = env.GOOGLE_CALENDAR_ID?.trim();
-  const credentials = firebaseAdminCredentials(env);
+  const credentials = calendarCredentials(env);
   if (!calendarId || !credentials) return null;
   return {
     calendarId,

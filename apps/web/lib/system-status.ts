@@ -23,6 +23,7 @@ import { redactSecrets } from "@camp404/core";
 import { CRON_STUBS } from "./cron-stub";
 import { PGCRYPTO_KEY_MIN_LENGTH } from "./env";
 import {
+  calendarCredentials,
   envList,
   feedbackTracker,
   firebaseAdminCredentials,
@@ -363,9 +364,8 @@ function calendarCheck(env: EnvBag): SystemCheck {
     label: "Camp calendar",
     env: [
       "GOOGLE_CALENDAR_ID",
-      "FIREBASE_PROJECT_ID",
-      "FIREBASE_CLIENT_EMAIL",
-      "FIREBASE_PRIVATE_KEY",
+      "GOOGLE_CALENDAR_CLIENT_EMAIL",
+      "GOOGLE_CALENDAR_PRIVATE_KEY",
     ],
   };
   if (!env.GOOGLE_CALENDAR_ID?.trim()) {
@@ -374,22 +374,18 @@ function calendarCheck(env: EnvBag): SystemCheck {
       value: "Not connected",
       tone: "degraded",
       detail:
-        'Home\'s "Coming up" shows no camp events. Share the Google Calendar with the Firebase service account (its FIREBASE_CLIENT_EMAIL address), then set GOOGLE_CALENDAR_ID.',
+        "Home's \"Coming up\" shows no camp events. Share the Google Calendar with the calendar's service account (its GOOGLE_CALENDAR_CLIENT_EMAIL address), then set GOOGLE_CALENDAR_ID.",
     };
   }
-  // The same three values the calendar read itself needs
-  // (firebaseAdminCredentials), so "Set" here means it can actually sign in.
-  if (
-    !env.FIREBASE_PROJECT_ID ||
-    !env.FIREBASE_CLIENT_EMAIL ||
-    !env.FIREBASE_PRIVATE_KEY
-  ) {
+  // The same answer the calendar read itself gets (calendarCredentials), so
+  // "Set" here means it can actually sign in.
+  if (!calendarCredentials(env)) {
     return {
       ...base,
       value: "No account to read it",
       tone: "attention",
       detail:
-        "GOOGLE_CALENDAR_ID is set, but the calendar is read with the Firebase service account, and its project ID, email or key is missing.",
+        "GOOGLE_CALENDAR_ID is set, but the calendar's service account is not: set GOOGLE_CALENDAR_CLIENT_EMAIL and GOOGLE_CALENDAR_PRIVATE_KEY.",
     };
   }
   return {

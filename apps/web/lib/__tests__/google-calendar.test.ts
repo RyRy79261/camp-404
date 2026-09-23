@@ -23,10 +23,9 @@ const { privateKey, publicKey } = generateKeyPairSync("rsa", {
 
 const ENV = {
   GOOGLE_CALENDAR_ID: "camp@group.calendar.google.com",
-  FIREBASE_PROJECT_ID: "camp-404",
-  FIREBASE_CLIENT_EMAIL: "push@camp-404.iam.gserviceaccount.com",
+  GOOGLE_CALENDAR_CLIENT_EMAIL: "calendar@camp-404.iam.gserviceaccount.com",
   // Stored the way Vercel keeps it: literal \n.
-  FIREBASE_PRIVATE_KEY: privateKey.replace(/\n/g, "\\n"),
+  GOOGLE_CALENDAR_PRIVATE_KEY: privateKey.replace(/\n/g, "\\n"),
 };
 
 describe("toCalendarEvents", () => {
@@ -88,7 +87,7 @@ describe("toCalendarEvents", () => {
 describe("signAssertion", () => {
   it("signs a read-only calendar request Google can verify with the account's key", () => {
     const token = signAssertion(
-      { clientEmail: ENV.FIREBASE_CLIENT_EMAIL, privateKey },
+      { clientEmail: ENV.GOOGLE_CALENDAR_CLIENT_EMAIL, privateKey },
       1_790_000_000,
     );
     const [header, claims, signature] = token.split(".");
@@ -98,7 +97,7 @@ describe("signAssertion", () => {
       verifier.verify(publicKey, Buffer.from(signature!, "base64url")),
     ).toBe(true);
     expect(JSON.parse(Buffer.from(claims!, "base64url").toString())).toEqual({
-      iss: ENV.FIREBASE_CLIENT_EMAIL,
+      iss: ENV.GOOGLE_CALENDAR_CLIENT_EMAIL,
       scope: "https://www.googleapis.com/auth/calendar.events.readonly",
       aud: "https://oauth2.googleapis.com/token",
       iat: 1_790_000_000,
@@ -121,7 +120,23 @@ describe("getUpcomingEvents", () => {
     expect(calendarConfig(ENV)).not.toBeNull();
     expect(calendarConfig({ ...ENV, GOOGLE_CALENDAR_ID: " " })).toBeNull();
     expect(
-      calendarConfig({ ...ENV, FIREBASE_PRIVATE_KEY: undefined }),
+      calendarConfig({ ...ENV, GOOGLE_CALENDAR_PRIVATE_KEY: undefined }),
+    ).toBeNull();
+  });
+
+  it("reads its own account, with the key's newlines restored, and never Firebase's", () => {
+    expect(calendarConfig(ENV)).toEqual({
+      calendarId: ENV.GOOGLE_CALENDAR_ID,
+      clientEmail: ENV.GOOGLE_CALENDAR_CLIENT_EMAIL,
+      privateKey,
+    });
+    expect(
+      calendarConfig({
+        GOOGLE_CALENDAR_ID: ENV.GOOGLE_CALENDAR_ID,
+        FIREBASE_PROJECT_ID: "camp-404",
+        FIREBASE_CLIENT_EMAIL: "push@camp-404.iam.gserviceaccount.com",
+        FIREBASE_PRIVATE_KEY: ENV.GOOGLE_CALENDAR_PRIVATE_KEY,
+      }),
     ).toBeNull();
   });
 
