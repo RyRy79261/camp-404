@@ -281,7 +281,7 @@ describe("buildHome", () => {
     ]);
   });
 
-  it("shows the inbox total on the Announcements tile, the bell's number, not the notices alone", () => {
+  it("shows the inbox total on the Notifications tile, the bell's number, not the notices alone", () => {
     const home = buildHome(
       member({
         inbox: inbox(5, 1),
@@ -290,7 +290,13 @@ describe("buildHome", () => {
         ],
       }),
     );
-    expect(home.modules.find((m) => m.id === "announcements")?.badge).toBe(6);
+    // Named as the inbox it opens, and the count is said to be "waiting", not
+    // "new": part of it may be forms, not announcements.
+    expect(home.modules.find((m) => m.id === "announcements")).toMatchObject({
+      label: "Notifications",
+      badge: 6,
+      badgeSays: "waiting",
+    });
     // Waiting for approval, the tile still counts the waiting form.
     const waiting = buildHome(
       member({ approval: "pending", inbox: inbox(2, 1) }),

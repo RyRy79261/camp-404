@@ -22,7 +22,7 @@ import { ConsoleNav } from "./console-nav";
  * The bell opens the notification panel rather than jumping to the inbox
  * (AfrikaBurn's console header). The badge is still read here, on the server,
  * so it is right before anyone touches it, and from `getInboxBadge`, the one
- * definition the Announcements tile on Home shows too; the panel fetches its own rows AND
+ * definition the Notifications tile on Home shows too; the panel fetches its own rows AND
  * its own unread total when it opens, so nothing it shows or offers is a stale
  * copy of this render.
  */

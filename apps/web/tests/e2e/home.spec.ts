@@ -49,7 +49,7 @@ test.describe("a member's own home", () => {
     ).toBeVisible();
     const shortcuts = page.getByRole("navigation", { name: "Your modules" });
     await expect(
-      shortcuts.getByRole("link", { name: /Announcements/ }),
+      shortcuts.getByRole("link", { name: /^Notifications/ }),
     ).toHaveAttribute("href", "/notifications");
     await expect(
       shortcuts.getByRole("link", { name: /My forms/ }),

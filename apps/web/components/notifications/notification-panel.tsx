@@ -59,7 +59,7 @@ export function NotificationPanel({
   /**
    * What the badge shows: `getInboxBadge(...).total` (lib/inbox-badge.ts),
    * unread deliveries plus waiting questionnaires — the same number as the
-   * Announcements tile on Home.
+   * Notifications tile on Home.
    */
   count: number;
 }) {

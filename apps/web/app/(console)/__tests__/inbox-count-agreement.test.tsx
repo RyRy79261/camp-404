@@ -4,7 +4,7 @@ import type * as CampConfig from "@/lib/camp-config";
 import type * as Notifications from "@/lib/notifications";
 import type * as Users from "@/lib/users";
 
-// The bell in the console header and the Announcements tile on Home both open
+// The bell in the console header and the Notifications tile on Home both open
 // the inbox, and both show a count of what is new there. They are drawn in the
 // same request, so a member who sees two different numbers is being told two
 // different things about the same inbox. These render the real header and the
@@ -121,7 +121,7 @@ async function renderBoth(campUser: CampUser) {
     </>,
   );
   const bell = screen.getByRole("button", { name: /^Notifications,/ });
-  const tile = screen.getByRole("link", { name: /^Announcements/ });
+  const tile = screen.getByRole("link", { name: /^Notifications/ });
   return {
     bell: countIn(bell.getAttribute("aria-label") ?? ""),
     tile: countIn(tile.getAttribute("aria-label") ?? ""),
@@ -139,7 +139,7 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
-describe("the bell and the Announcements tile", () => {
+describe("the bell and the Notifications tile", () => {
   it("show the same count for a member with unread notices and an open form", async () => {
     vi.mocked(countUnread).mockResolvedValue(5);
     vi.mocked(countUnreadByTeam).mockResolvedValue({});
@@ -164,6 +164,27 @@ describe("the bell and the Announcements tile", () => {
 
     expect(tile).toBe(bell);
     expect(bell).toBe(3);
+  });
+
+  it("count a waiting form once, not again for its own unread notice", async () => {
+    // The member's one unread delivery is the notice that announced OPEN_FORM:
+    // a count that leaves out the waiting forms' notices sees none.
+    vi.mocked(countUnread).mockImplementation(async (_userId, options) =>
+      options?.exceptActivationIds?.includes(OPEN_FORM.activationId) ? 0 : 1,
+    );
+    vi.mocked(countUnreadByTeam).mockResolvedValue({});
+    vi.mocked(getPendingQuestionnaires).mockResolvedValue([OPEN_FORM]);
+    const campUser = campMember();
+    signedInAs(campUser);
+
+    const { bell, tile } = await renderBoth(campUser);
+
+    expect(tile).toBe(bell);
+    expect(bell).toBe(1);
+    // The tile says what the 1 is: something waiting, not a new announcement.
+    expect(
+      screen.getByRole("link", { name: "Notifications, 1 waiting" }),
+    ).toBeTruthy();
   });
 
   it("count an acknowledged announcement on neither (test backend)", async () => {

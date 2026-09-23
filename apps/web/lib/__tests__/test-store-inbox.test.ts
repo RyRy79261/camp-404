@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // test-store.ts is server-only; neutralize the import guard under vitest.
 vi.mock("server-only", () => ({}));
 
+import { QUESTIONNAIRE_REF_TYPE } from "@camp404/core";
 import { testStore } from "../test-store";
 
 // The E2E backend routes the inbox tabs and "Mark all read" to this store, so
@@ -158,5 +159,37 @@ describe("testStore.markAllRead — the db's UPDATE, mirrored", () => {
     expect(testStore.claimPopups(member.id)).toHaveLength(1);
     expect(testStore.countUnseenPopups(member.id)).toBe(0);
     expect(testStore.countUnread(member.id)).toBe(0);
+  });
+
+  it("leaves out a waiting questionnaire's notice, as countUnread in the db does", () => {
+    const { captain, member } = seed();
+    announce(captain.id, "Gates open at noon");
+    // The store has no questionnaire sends, so no public write makes this
+    // notice; it is placed in the shared state the way pushDelivery would.
+    const state = (globalThis as Record<string, unknown>)[
+      "__camp404TestStore__"
+    ] as { deliveries: Record<string, unknown>[] };
+    state.deliveries.push({
+      id: "qn-1",
+      broadcastId: null,
+      userId: member.id,
+      kind: "system",
+      title: "New questionnaire",
+      body: "Please answer",
+      refType: QUESTIONNAIRE_REF_TYPE,
+      refId: "act-1",
+      presentation: "feed",
+      readAt: null,
+      acknowledgedAt: null,
+      createdAt: new Date(),
+    });
+
+    expect(testStore.countUnread(member.id)).toBe(2);
+    expect(
+      testStore.countUnread(member.id, { exceptActivationIds: ["act-1"] }),
+    ).toBe(1);
+    expect(
+      testStore.countUnread(member.id, { exceptActivationIds: ["act-2"] }),
+    ).toBe(2);
   });
 });

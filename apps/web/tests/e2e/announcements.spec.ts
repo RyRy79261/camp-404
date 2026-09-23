@@ -124,7 +124,7 @@ test.describe("captain announcements (test-mode)", () => {
     expect(pending.ok()).toBeTruthy();
     expect((await pending.json()).pending).toHaveLength(0);
 
-    // The bell and Home's Announcements tile both open the inbox, so they must
+    // The bell and Home's Notifications tile both open the inbox, so they must
     // show one count (getInboxBadge). The acknowledged announcement was read,
     // so it is counted by neither. The member finishes onboarding and is
     // approved, so Home draws the header with the bell and the tiles.
@@ -137,14 +137,14 @@ test.describe("captain announcements (test-mode)", () => {
     expect(approved.ok()).toBeTruthy();
     await page.goto("/");
     await expect(page).toHaveURL("/");
-    const announcementsTile = page.getByRole("link", {
-      name: /^Announcements/,
-    });
-    await expect(announcementsTile).toBeVisible();
+    const inboxTile = page
+      .getByRole("navigation", { name: "Your modules" })
+      .getByRole("link", { name: /^Notifications/ });
+    await expect(inboxTile).toBeVisible();
     const bellName = await page
       .getByRole("button", { name: /^Notifications,/ })
       .getAttribute("aria-label");
-    const tileName = await announcementsTile.getAttribute("aria-label");
+    const tileName = await inboxTile.getAttribute("aria-label");
     const countIn = (name: string | null) =>
       Number(/(\d+)/.exec(name ?? "")?.[1] ?? 0);
     expect(countIn(tileName)).toBe(countIn(bellName));

@@ -232,8 +232,10 @@ const PANEL_LIMIT = 6;
  * the questionnaires still waiting — plus `clearable`, how many deliveries
  * "Mark all read" would clear across the whole inbox. The panel lists only the
  * newest few, so the list on its own cannot account for the badge; the number
- * can, and the panel shows it for what it is. The badge is `unread + pending`,
- * so a panel that listed only deliveries would read 2 over an empty list.
+ * can, and the panel shows it for what it is. The badge is `getInboxBadge`'s
+ * total (unread notices, less a waiting form's own notice, plus the waiting
+ * forms), so a panel that listed only deliveries would read 2 over an empty
+ * list.
  *
  * Takes no user id — the inbox is always the signed-in member's own, resolved
  * here. A read that FAILS says so: it goes through `runAction` like its

@@ -31,7 +31,7 @@ export interface HomeInput {
     dueAt: Date | null;
   }[];
   /**
-   * The inbox count from `getInboxBadge`: the Announcements tile shows its
+   * The inbox count from `getInboxBadge`: the Notifications tile shows its
    * total, the same number as the bell.
    */
   inbox: InboxBadge;
@@ -77,6 +77,11 @@ export interface HomeModule {
   icon: HomeModuleIcon;
   /** A count of new things, or null for none. */
   badge: number | null;
+  /**
+   * What the count is, after the number in the tile's accessible name
+   * ("Notifications, 2 waiting"). Absent means "new".
+   */
+  badgeSays?: string;
 }
 
 /** One of the member's teams, as an icon with a "new" dot. */
@@ -288,12 +293,17 @@ export function buildHome(input: HomeInput): HomeModel {
 
   const leads = input.teams.some((t) => t.isLead);
   const modules: HomeModule[] = [
+    // The inbox, named as the page it opens and the bell it mirrors: its count
+    // (getInboxBadge) holds unread notices of every kind and forms still
+    // waiting for an answer, so "Announcements, 1 new" would name the wrong
+    // thing when the 1 is a form.
     {
       id: "announcements",
       href: "/notifications",
-      label: "Announcements",
+      label: "Notifications",
       icon: "announcements",
       badge: input.inbox.total > 0 ? input.inbox.total : null,
+      badgeSays: "waiting",
     },
   ];
   if (approved) {

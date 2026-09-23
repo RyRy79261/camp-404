@@ -62,7 +62,7 @@ export default async function HomePage() {
   ] = await Promise.all([
     waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
     waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
-    // The Announcements tile shows the bell's own count, for every member,
+    // The Notifications tile shows the bell's own count, for every member,
     // waiting for approval or not: both come from getInboxBadge.
     getInboxBadge(campUser.id),
     waiting

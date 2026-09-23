@@ -256,7 +256,7 @@ function LiftCard({ lift }: { lift: NonNullable<HomeModel["lift"]> }) {
  * a "-" only if the word actually breaks, and screen readers ignore it.
  */
 function breakable(label: string): string {
-  return label.replace("Announcements", "Announce\u00ADments");
+  return label.replace("Notifications", "Notifi\u00ADcations");
 }
 
 const MODULE_ICONS: Record<HomeModuleIcon, LucideIcon> = {
@@ -303,7 +303,11 @@ function ModuleGrid({ modules }: { modules: HomeModel["modules"] }) {
             <li key={m.id}>
               <Link
                 href={m.href}
-                aria-label={m.badge ? `${m.label}, ${m.badge} new` : m.label}
+                aria-label={
+                  m.badge
+                    ? `${m.label}, ${m.badge} ${m.badgeSays ?? "new"}`
+                    : m.label
+                }
                 className="group relative flex h-full flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-1 py-3 text-center transition-colors hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:aspect-square sm:py-2"
               >
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/15 text-accent">

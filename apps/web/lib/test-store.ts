@@ -7,6 +7,7 @@ import {
   captainPromotionNotification,
   normalizeInviteCode,
   notificationLink,
+  QUESTIONNAIRE_REF_TYPE,
   sortPinned,
   type NotificationKind,
   type NotificationPayload,
@@ -1113,9 +1114,26 @@ export const testStore = {
       nextCursor: hasMore && page.length ? cursorOf(page.at(-1)!) : null,
     };
   },
-  countUnread(userId: string): number {
-    return deliveries.filter((d) => d.userId === userId && d.readAt === null)
-      .length;
+  /**
+   * Twin of countUnread in @camp404/db/broadcasts, including its
+   * `exceptActivationIds`: the notice of a questionnaire the caller already
+   * counts as waiting is left out.
+   */
+  countUnread(
+    userId: string,
+    options: { exceptActivationIds?: readonly string[] } = {},
+  ): number {
+    const except = new Set(options.exceptActivationIds ?? []);
+    return deliveries.filter(
+      (d) =>
+        d.userId === userId &&
+        d.readAt === null &&
+        !(
+          d.refType === QUESTIONNAIRE_REF_TYPE &&
+          d.refId !== null &&
+          except.has(d.refId)
+        ),
+    ).length;
   },
   /** Twin of countUnreadByTeam in @camp404/db/broadcasts. */
   countUnreadByTeam(userId: string): Record<string, number> {
