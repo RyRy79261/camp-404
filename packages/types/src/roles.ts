@@ -16,6 +16,7 @@ export const Team = z.enum([
   "art_and_activities",
   "ministry_of_memes",
   "ministry_of_vibes",
+  "finance",
 ]);
 export type Team = z.infer<typeof Team>;
 
