@@ -4,6 +4,7 @@ import { useTestDb } from "./_harness";
 import { makeDriverProfile, makeUser } from "./_factories";
 import {
   addCarRider,
+  getMyLift,
   listCarRiders,
   listDrivers,
   removeCarRider,
@@ -114,5 +115,59 @@ describe("lifts", () => {
       ["car.rider_added", rider.id],
       ["car.rider_removed", rider.id],
     ]);
+  });
+});
+
+describe("my lift", () => {
+  const h = useTestDb();
+
+  it("tells a driver their car and riders, a rider whose car they are in, and nobody else anything", async () => {
+    const db = h.db();
+    const ada = await makeUser(db, {
+      displayName: "Ada",
+      approvalStatus: "approved",
+    });
+    const rider = await makeUser(db, {
+      displayName: "Ren",
+      approvalStatus: "approved",
+    });
+    const walker = await makeUser(db, { approvalStatus: "approved" });
+    await makeDriverProfile(db, { userId: ada.id });
+    await db
+      .update(schema.driverProfiles)
+      .set({
+        seatsOffered: 3,
+        vehicleMake: "Toyota",
+        vehicleModel: "Hilux",
+        departureCity: "Cape Town",
+      })
+      .where(eq(schema.driverProfiles.userId, ada.id));
+    await addCarRider({
+      driverUserId: ada.id,
+      memberUserId: rider.id,
+      actorId: ada.id,
+    });
+
+    expect(await getMyLift(ada.id)).toMatchObject({
+      role: "driver",
+      vehicle: "Toyota Hilux",
+      seatsOffered: 3,
+      riders: ["Ren"],
+      departureCity: "Cape Town",
+    });
+    expect(await getMyLift(rider.id)).toMatchObject({
+      role: "rider",
+      driverName: "Ada",
+      vehicle: "Toyota Hilux",
+      departureCity: "Cape Town",
+    });
+    expect(await getMyLift(walker.id)).toBeNull();
+  });
+
+  it("ignores last year's car", async () => {
+    const db = h.db();
+    const old = await makeUser(db, { approvalStatus: "approved" });
+    await makeDriverProfile(db, { userId: old.id, cycle: 2020 });
+    expect(await getMyLift(old.id)).toBeNull();
   });
 });
