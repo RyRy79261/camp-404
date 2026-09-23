@@ -80,7 +80,9 @@ async function audienceRefusal(
       ? null
       : NOT_YOUR_TEAM;
   }
-  if (audience.scope === "everyone") return null;
+  // The camp and the team leads are always addressable; only a team can have
+  // been switched off.
+  if (audience.scope !== "team") return null;
   const active = activeTeams(await getTeamsConfig()).map((t) => t.key);
   return active.includes(audience.team)
     ? null

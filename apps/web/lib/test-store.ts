@@ -766,12 +766,20 @@ export const testStore = {
     );
     if (audience.scope === "everyone") return everyone;
     const cycle = currentCycleNumber();
-    const onTeam = new Set(
+    // This year's leads of any team, or this year's members of one team —
+    // the same year-scoped reads @camp404/db's resolveAudience makes.
+    const chosen = new Set(
       teamMemberships
-        .filter((m) => m.team === audience.team && m.cycle === cycle)
+        .filter(
+          (m) =>
+            m.cycle === cycle &&
+            (audience.scope === "team_leads"
+              ? m.isLead
+              : m.team === audience.team),
+        )
         .map((m) => m.userId),
     );
-    return everyone.filter((u) => onTeam.has(u.id));
+    return everyone.filter((u) => chosen.has(u.id));
   },
   countAnnouncementAudience(
     senderId: string,
@@ -842,7 +850,9 @@ export const testStore = {
     if (row.publishedAt === null) {
       return { ok: false, error: PIN_NOT_PUBLISHED };
     }
-    if (!isAllowedAudience(row.audience, testStore.senderReach(input.actorId))) {
+    if (
+      !isAllowedAudience(row.audience, testStore.senderReach(input.actorId))
+    ) {
       return { ok: false, error: PIN_TEAM_NOT_LED };
     }
     // Compare-and-set, like the real claim: the loser of a race is told.
