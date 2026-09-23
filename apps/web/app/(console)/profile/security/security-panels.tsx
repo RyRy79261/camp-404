@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@camp404/ui/components/card";
 import { authClient } from "@/lib/auth-client";
+import { SetFirstPassword } from "./set-first-password";
 
 export interface SecurityData {
   twoFactorEnabled: boolean;
@@ -32,10 +33,16 @@ export interface SecurityData {
 /** The server enforces the same numbers; this only says so first. */
 function assessPassword(password: string) {
   if (password.length < PASSWORD_MIN_LENGTH) {
-    return { ok: false, error: `Use at least ${PASSWORD_MIN_LENGTH} characters.` };
+    return {
+      ok: false,
+      error: `Use at least ${PASSWORD_MIN_LENGTH} characters.`,
+    };
   }
   if (password.length > PASSWORD_MAX_LENGTH) {
-    return { ok: false, error: `Use at most ${PASSWORD_MAX_LENGTH} characters.` };
+    return {
+      ok: false,
+      error: `Use at most ${PASSWORD_MAX_LENGTH} characters.`,
+    };
   }
   return { ok: true, error: null };
 }
@@ -58,7 +65,7 @@ export function SecurityPanels({ data }: { data: SecurityData }) {
           <CardDescription>
             {data.hasPassword
               ? "Change the password you sign in with."
-              : "You sign in with Google or a passkey. To add a password, sign out and use “Forgot your password?” with your email."}
+              : "You sign in with Google or a passkey. Add a password to sign in with your email as well."}
           </CardDescription>
         </CardHeader>
         {data.hasPassword ? (
@@ -80,7 +87,11 @@ export function SecurityPanels({ data }: { data: SecurityData }) {
               }}
             />
           </CardContent>
-        ) : null}
+        ) : (
+          <CardContent>
+            <SetFirstPassword onSet={refresh} />
+          </CardContent>
+        )}
       </Card>
 
       <AccountTwoFactor
@@ -111,13 +122,19 @@ export function SecurityPanels({ data }: { data: SecurityData }) {
             onRevoke={async (token) => {
               const result = await authClient.revokeSession({ token });
               return result.error
-                ? { ok: false, error: "Couldn't sign that device out. Try again." }
+                ? {
+                    ok: false,
+                    error: "Couldn't sign that device out. Try again.",
+                  }
                 : { ok: true, message: "That device is signed out." };
             }}
             onRevokeOthers={async () => {
               const result = await authClient.revokeOtherSessions();
               return result.error
-                ? { ok: false, error: "Couldn't sign the other devices out. Try again." }
+                ? {
+                    ok: false,
+                    error: "Couldn't sign the other devices out. Try again.",
+                  }
                 : { ok: true };
             }}
           />
