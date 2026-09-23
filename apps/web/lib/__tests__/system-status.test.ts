@@ -26,6 +26,7 @@ function secretEnv(): EnvBag {
     INVITE_CODES: `${MARKER}, x-${MARKER}-long-enough-to-preapprove`,
     GOD_EMAILS: `${MARKER}@example.com, second-${MARKER}@example.com`,
     BETTER_AUTH_URL: "https://www.camp-404.com",
+    GOOGLE_CALENDAR_ID: "camp@group.calendar.google.com",
     AUTH_APEX_DOMAIN: "camp-404.com",
     RESEND_FROM_EMAIL: "Camp 404 <notices@camp-404.com>",
     GITHUB_FEEDBACK_REPO: "RyRy79261/camp-404",
@@ -179,6 +180,24 @@ describe("deriveSystemStatus", () => {
       "This one is 5",
     );
     expect(check(short, OK_PROBE, "sign-in").tone).toBe("attention");
+  });
+
+  it("says whether Home can read the camp calendar", () => {
+    expect(check({}, OK_PROBE, "calendar").value).toBe("Not connected");
+    expect(
+      check({ GOOGLE_CALENDAR_ID: "cal" }, OK_PROBE, "calendar").tone,
+    ).toBe("attention");
+    expect(
+      check(
+        {
+          GOOGLE_CALENDAR_ID: "cal",
+          FIREBASE_CLIENT_EMAIL: "e",
+          FIREBASE_PRIVATE_KEY: "k",
+        },
+        OK_PROBE,
+        "calendar",
+      ).tone,
+    ).toBe("ok");
   });
 
   it("flags half-set push as attention", () => {

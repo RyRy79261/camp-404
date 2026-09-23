@@ -357,6 +357,43 @@ function emailCheck(env: EnvBag): SystemCheck {
       };
 }
 
+function calendarCheck(env: EnvBag): SystemCheck {
+  const base = {
+    id: "calendar",
+    label: "Camp calendar",
+    env: [
+      "GOOGLE_CALENDAR_ID",
+      "FIREBASE_CLIENT_EMAIL",
+      "FIREBASE_PRIVATE_KEY",
+    ],
+  };
+  if (!env.GOOGLE_CALENDAR_ID?.trim()) {
+    return {
+      ...base,
+      value: "Not connected",
+      tone: "degraded",
+      detail:
+        'Home\'s "Coming up" shows no camp events. Share the Google Calendar with the Firebase service account (its FIREBASE_CLIENT_EMAIL address), then set GOOGLE_CALENDAR_ID.',
+    };
+  }
+  if (!env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY) {
+    return {
+      ...base,
+      value: "No account to read it",
+      tone: "attention",
+      detail:
+        "GOOGLE_CALENDAR_ID is set, but the calendar is read with the Firebase service account, and its email or key is missing.",
+    };
+  }
+  return {
+    ...base,
+    value: "Set",
+    tone: "ok",
+    detail:
+      'Home reads the next events from the camp calendar. If "Coming up" says it couldn\'t reach the calendar, check the calendar is shared with the service account.',
+  };
+}
+
 function uploadsCheck(env: EnvBag): SystemCheck {
   const base = {
     id: "uploads",
@@ -544,6 +581,7 @@ export function deriveSystemStatus(
   const optional = [
     pushCheck(env),
     emailCheck(env),
+    calendarCheck(env),
     uploadsCheck(env),
     bugReportsCheck(env),
     aiCheck(env),
