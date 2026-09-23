@@ -142,12 +142,18 @@ complete and jump straight to the gates that follow it (home vs.
 > it keeps changing. Nothing else in this section changes: the specs still
 > jump the wizard via the `complete-onboarding` seam.
 
-> Note: the captains' camp-management roster (`getCampManagementRoster` /
-> `getCampMemberDetail`) reads the **real** Neon DB, not the in-memory
-> store, so the approve/reject UI isn't drivable under `E2E_TEST_MODE`.
-> The approval _gate_ (pending users blocked at `/pending-approval`) and
-> the `users.approval_status` stamping on redemption are, since those go
-> through the test-backed `users` helpers.
+> Note **[CORRECTION 2026-09-24]**: the captains' camp-management roster and
+> member panel now read through `lib/roster.ts`, which answers from the
+> in-memory store under `E2E_TEST_MODE` (`getCampManagementRoster`,
+> `getCampMemberDetail`, `getTeamMemberships`, `listMemberNotes`,
+> `listMemberQuestionnaireGates`). So a spec can open a member's panel:
+> `captain-preview-locked.spec.ts` checks its Outstanding line. Captain
+> notes are not modelled and come back empty. The approve/reject action
+> writes through the test-backed `users` helpers (`findCampUserById`,
+> `decideUserApproval`), but no spec drives the modal yet. The approval
+> _gate_ (pending users blocked at `/pending-approval`) and the
+> `users.approval_status` stamping on redemption are covered, since those go
+> through the same helpers.
 
 ### Spec coverage
 
@@ -201,12 +207,13 @@ suite — covered elsewhere, or only coverable by the future real-auth suite:
   the component layer in `components/__tests__/runner.test.tsx` (jsdom). E2E
   jumps past it via the `complete-onboarding` seam, so it only asserts the
   gates on either side, not each field.
-- **Captain approve / reject from the UI.** The camp-management roster
-  (`getCampManagementRoster` / `getCampMemberDetail`) reads the real Neon DB,
-  not the in-memory store, so the modal + action aren't drivable under
-  `E2E_TEST_MODE`. The approval _gate_ it controls is covered: pending and
-  rejected members are driven via the `set-approval` seam and asserted at
-  `/pending-approval`.
+- **Captain approve / reject from the UI.** **[CORRECTION 2026-09-24]** The
+  roster and the member panel now have test-store twins (`lib/roster.ts`), so
+  the panel opens under `E2E_TEST_MODE`, and its decision action writes
+  through the test-backed `decideUserApproval`. No spec drives the modal yet;
+  that is a gap, not a blocker. The approval _gate_ it controls is covered:
+  pending and rejected members are driven via the `set-approval` seam and
+  asserted at `/pending-approval`.
 
 ### Running against a deployed preview
 

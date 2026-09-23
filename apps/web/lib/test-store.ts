@@ -208,6 +208,8 @@ interface TestRequiredAction {
   blocking: boolean;
   dueAt: null;
   status: "pending" | "completed";
+  /** Set when the gate is satisfied, as `required_actions.completed_at` is. */
+  completedAt: Date | null;
   createdAt: Date;
 }
 
@@ -561,6 +563,7 @@ export const testStore = {
       blocking: true,
       dueAt: null,
       status: "pending",
+      completedAt: null,
       createdAt: new Date(),
     });
   },
@@ -577,6 +580,7 @@ export const testStore = {
     );
     if (!action) return false;
     action.status = "completed";
+    action.completedAt = new Date();
     return true;
   },
   /** Twin of getPendingRequiredActions: pending and blocking, oldest first. */
@@ -1497,7 +1501,9 @@ export const testStore = {
   /**
    * Twin of listMemberQuestionnaireGates: the member's questionnaire gates,
    * oldest first. Every store row is a questionnaire gate with no send behind
-   * it, which the real query keeps whatever its status.
+   * it, which the real query keeps whatever its status. Ties on `createdAt`
+   * keep insertion order (the sort is stable), which stands in for the real
+   * query's `id` tie-break.
    */
   listMemberQuestionnaireGates(userId: string) {
     return requiredActions
@@ -1509,7 +1515,7 @@ export const testStore = {
         status: a.status,
         blocking: a.blocking,
         dueAt: a.dueAt,
-        completedAt: null,
+        completedAt: a.completedAt,
         createdAt: a.createdAt,
       }));
   },

@@ -95,7 +95,31 @@ describe("testStore roster — what a member still owes", () => {
     expect(testStore.getCampMemberDetail("nobody")).toBeNull();
 
     expect(testStore.listMemberQuestionnaireGates(member.id)).toMatchObject([
-      { actionKey: "burner_profile", status: "pending", blocking: true },
+      {
+        actionKey: "burner_profile",
+        status: "pending",
+        blocking: true,
+        completedAt: null,
+      },
     ]);
+  });
+  it("gives a satisfied gate its completion time, as the real read does", () => {
+    const member = testStore.createUser({
+      authUserId: "auth-done",
+      displayName: "Done",
+      inviteCode: "seeded",
+      rank: "member",
+    });
+    testStore.ensureRequiredAction({ userId: member.id, ...GATE });
+    const before = Date.now();
+
+    expect(testStore.satisfyRequiredAction(member.id, "burner_profile")).toBe(
+      true,
+    );
+
+    const [gate] = testStore.listMemberQuestionnaireGates(member.id);
+    expect(gate).toMatchObject({ status: "completed" });
+    expect(gate!.completedAt).toBeInstanceOf(Date);
+    expect(gate!.completedAt!.getTime()).toBeGreaterThanOrEqual(before);
   });
 });
