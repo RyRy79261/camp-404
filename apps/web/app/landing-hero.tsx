@@ -1,80 +1,92 @@
-import Link from "next/link";
-import { Tent } from "lucide-react";
+import type { CSSProperties } from "react";
+import { Inter } from "next/font/google";
 import { Button } from "@camp404/ui/components/button";
 
-// The signed-out `/`, in the AfrikaBurn landing page's composition: a header
-// with the brand mark, a hero (eyebrow, heading, copy, one call to action) and
-// a footer. The glitched "404" is Camp 404's identity motif, standing where the
-// AfrikaBurn page puts its quilt band.
+// The landing page keeps Camp 404's own look (owner's call, 2026-09-23): the
+// AfrikaBurn restyle was for the console — its components and dashboards —
+// not this page. The site-wide theme is now AfrikaBurn's, so the landing sets
+// its original palette and face on itself; nothing outside this page changes.
+const inter = Inter({ subsets: ["latin"], display: "swap" });
+
+// The pre-restyle Camp 404 palette (packages/ui globals.css before #221):
+// midnight-violet base, magenta primary, electric-blue accent.
+const CAMP_404_PALETTE = {
+  "--color-background": "oklch(0.15 0.05 295)",
+  "--color-foreground": "oklch(0.97 0.02 330)",
+  "--color-primary": "oklch(0.65 0.27 340)",
+  "--color-primary-foreground": "oklch(0.99 0.005 340)",
+  "--color-muted-foreground": "oklch(0.7 0.05 325)",
+  "--color-accent": "oklch(0.62 0.18 255)",
+  "--color-ring": "oklch(0.65 0.27 340)",
+  "--radius": "0.625rem",
+} as CSSProperties;
+
 export function LandingHero() {
   return (
-    <div className="flex min-h-svh flex-col">
-      <header className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <Link href="/" className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-accent-foreground">
-              <Tent className="h-4 w-4" aria-hidden />
-            </span>
-            <span className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold tracking-tight">
-                Camp 404
-              </span>
-              <span className="font-mono text-[0.65rem] uppercase tracking-[0.25em] text-accent">
-                Camp console
-              </span>
-            </span>
-          </Link>
+    <main
+      style={CAMP_404_PALETTE}
+      className={`${inter.className} relative min-h-[100dvh] overflow-hidden bg-[color:var(--color-background)] text-[color:var(--color-foreground)]`}
+    >
+      <div
+        aria-hidden
+        className="camp404-scanlines pointer-events-none absolute inset-0 z-0"
+      />
+      <div
+        aria-hidden
+        className="camp404-noise pointer-events-none absolute inset-0 z-0 opacity-[0.06]"
+      />
+      <div
+        aria-hidden
+        className="camp404-scanbeam pointer-events-none absolute inset-x-0 top-0 z-0 h-24"
+      />
+
+      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-md flex-col items-center justify-between gap-10 px-6 pb-10 pt-14 sm:max-w-xl sm:pt-20">
+        <div className="flex flex-col items-center gap-3">
+          <h1 className="text-[10px] uppercase tracking-[0.5em] text-[color:var(--color-muted-foreground)]">
+            Camp 404
+          </h1>
+          <p className="camp404-chromatic font-mono text-[11px] uppercase tracking-[0.3em] text-[color:var(--color-foreground)]">
+            Error 404 — Camp not found
+          </p>
         </div>
-      </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 py-12 sm:px-6">
-        <section className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="flex flex-col gap-5">
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-accent">
-              Error 404 — Camp not found
-            </p>
-            <h1 className="max-w-3xl text-4xl tracking-tight sm:text-6xl">
-              Camp 404
-            </h1>
-            <p className="max-w-xl text-base text-muted-foreground sm:text-lg">
-              A calm command centre for a chaotic desert.
-            </p>
-            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Button asChild size="lg">
-                <a href="/auth/sign-in">Are you lost?</a>
-              </Button>
-            </div>
-          </div>
+        <Glitch404 />
 
-          <Glitch404 />
-        </section>
-      </main>
-
-      <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-1 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="text-sm font-medium text-foreground">Camp 404</p>
-          <div className="flex items-center gap-4">
-            <Link
+        <div className="flex w-full max-w-xs flex-col items-center gap-2">
+          <Button asChild size="lg" className="w-full">
+            <a href="/auth/sign-in">Are you lost?</a>
+          </Button>
+          <p
+            aria-hidden
+            className="camp404-cursor mt-4 font-mono text-[10px] uppercase tracking-[0.3em] text-[color:var(--color-muted-foreground)]"
+          >
+            $ awaiting input_
+          </p>
+          {/* Google requires the home page to link to the privacy policy
+              before it offers "Sign in with Google". Set in the page's own
+              terminal type so it stays part of the landing, not a footer. */}
+          <nav
+            aria-label="Policies"
+            className="mt-2 flex gap-4 font-mono text-[10px] uppercase tracking-[0.3em] text-[color:var(--color-muted-foreground)]"
+          >
+            <a
               href="/privacy"
-              className="text-sm text-muted-foreground hover:text-foreground"
+              className="hover:text-[color:var(--color-foreground)]"
             >
               Privacy
-            </Link>
-            <Link
+            </a>
+            <a
               href="/terms"
-              className="text-sm text-muted-foreground hover:text-foreground"
+              className="hover:text-[color:var(--color-foreground)]"
             >
               Terms
-            </Link>
-            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-              Invite-only
-            </p>
-          </div>
+            </a>
+          </nav>
         </div>
-      </footer>
+      </div>
 
       <style>{glitchStyles}</style>
-    </div>
+    </main>
   );
 }
 
@@ -104,10 +116,52 @@ function Glitch404() {
   );
 }
 
-/* The glitch's CSS lives here so the rest of the design system stays clean.
-   Colours are the theme tokens: the foreground and the Camp 404 magenta and
-   blue. */
+/* All bespoke glitch CSS lives here so the rest of the design system
+   stays clean. References --color-foreground / accent / primary tokens. */
 const glitchStyles = `
+  .camp404-chromatic {
+    text-shadow:
+      -1.5px 0 0 rgba(255, 0, 128, 0.8),
+       1.5px 0 0 rgba(0, 200, 255, 0.8);
+  }
+
+  .camp404-scanlines {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 2px,
+      rgba(255, 255, 255, 0.045) 2px,
+      rgba(255, 255, 255, 0.045) 3px
+    );
+  }
+
+  .camp404-noise {
+    background-image:
+      radial-gradient(rgba(255,255,255,0.6) 0.5px, transparent 0.5px),
+      radial-gradient(rgba(255,255,255,0.4) 0.5px, transparent 0.5px);
+    background-size: 3px 3px, 7px 7px;
+    background-position: 0 0, 1px 1px;
+    mix-blend-mode: overlay;
+  }
+
+  .camp404-scanbeam {
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(180, 100, 255, 0.05) 40%,
+      rgba(255, 0, 200, 0.1) 50%,
+      rgba(180, 100, 255, 0.05) 60%,
+      transparent 100%
+    );
+    animation: camp404-scanbeam 7s linear infinite;
+  }
+  @keyframes camp404-scanbeam {
+    0%   { transform: translateY(-100%); }
+    100% { transform: translateY(2200%); }
+  }
+
+  /* ---- Giant glitched "404" ---- */
+
   .camp404-glitch-shake {
     animation: camp404-shake 5s steps(1) infinite;
   }
@@ -124,8 +178,8 @@ const glitchStyles = `
   .camp404-glitch-rgb,
   .camp404-glitch-tear {
     display: block;
-    font-family: inherit;
-    font-weight: 800;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 900;
     font-size: clamp(7rem, 30vw, 14rem);
     letter-spacing: -0.05em;
     line-height: 0.9;
@@ -142,11 +196,10 @@ const glitchStyles = `
     inset: 0;
     pointer-events: none;
     mix-blend-mode: screen;
-    opacity: 0.85;
   }
 
   .camp404-glitch-rgb-magenta {
-    color: var(--color-camp-magenta);
+    color: rgba(255, 0, 140, 0.85);
     animation: camp404-rgb-magenta 3.7s steps(1) infinite;
   }
   @keyframes camp404-rgb-magenta {
@@ -160,7 +213,7 @@ const glitchStyles = `
   }
 
   .camp404-glitch-rgb-cyan {
-    color: var(--color-camp-blue);
+    color: rgba(0, 220, 255, 0.85);
     animation: camp404-rgb-cyan 3.7s steps(1) infinite;
   }
   @keyframes camp404-rgb-cyan {
@@ -209,12 +262,24 @@ const glitchStyles = `
     69%  { clip-path: inset(100% 0 0 0); transform: translate(0, 0); }
   }
 
+  /* Blinking terminal cursor underscore. */
+  .camp404-cursor::after { content: ""; }
+  .camp404-cursor {
+    animation: camp404-cursor-blink 1.05s steps(1) infinite;
+  }
+  @keyframes camp404-cursor-blink {
+    0%, 49%   { opacity: 1; }
+    50%, 100% { opacity: 0.35; }
+  }
+
   /* Reduced motion: a still glitch. The global rule would stop each loop on
-     its last frame; these pick the frame worth keeping instead: the tears
-     hidden, the colour fringes held a little apart. */
+     its last frame; these pick the frame worth keeping instead: the beam and
+     the tears hidden, the colour fringes held a little apart. */
   @media (prefers-reduced-motion: reduce) {
+    .camp404-scanbeam,
     .camp404-glitch-tear { display: none; }
-    .camp404-glitch-shake { animation: none; }
+    .camp404-glitch-shake,
+    .camp404-cursor { animation: none; }
     .camp404-glitch-rgb-magenta { animation: none; transform: translate(-3px, 0); }
     .camp404-glitch-rgb-cyan { animation: none; transform: translate(3px, 0); }
   }
