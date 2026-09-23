@@ -215,7 +215,7 @@ Aggregated from every per-unit "Low-confidence / could-not-verify" section.
 - Whether `/members`, `/meals` are known-future routes vs oversight. *(Unit 06.)*
 - Absence of `prefers-reduced-motion` on the landing glitch — deliberate vs oversight. *(Unit 01.)*
 - The action-vs-page gating asymmetry on `/profile/edit` (re-gate only auth+invite). *(Unit 08.)*
-- "No onboarding gate" on `/tools/invite` and `/api/voice/transcribe` (gate only auth) — intent. *(Units 11, 21.)*
+- "No onboarding gate" on `/tools/invite` and `/api/voice/transcribe` (gate only auth) — intent. *(Units 11, 21.)* [CORRECTION 2026-09-23] The route now also requires camp access (`hasCampAccess`: an invite redeemed, or a god address) and answers 403 without it, because sign-up is open and every clip spends the paid Groq key. It still does not require captain approval, since the onboarding questionnaire offers voice.
 - `boolean` in the response union (vestigial/future), ScaleField empty-gutter "reserved for future labels," `Date.parse` leniency. *(Unit 20.)*
 - `completedAt`-overwrite-on-replay intended vs latent bug. *(Unit 12.)*
 - `max-w-lg` "global/north-star shell" framing — contradicted by the codebase (`max-w-2xl` is the dominant content width); already self-flagged across units 09, 10, 11, 13, 15, 16. *(Units 09–16.)*

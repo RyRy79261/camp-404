@@ -8,6 +8,7 @@ import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { CodeDisplay } from "@camp404/ui/components/code-display";
 import { GateScreen } from "@/components/auth-shell";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 import { completeSetupAction } from "./actions";
 
 /**
@@ -84,6 +85,33 @@ export function SetupWizard({
           }
         >
           {pending ? "Setting up…" : "Set up camp & become captain"}
+        </Button>
+      </div>
+    </GateScreen>
+  );
+}
+
+/**
+ * What /setup shows an account that may not found the camp (see
+ * `mayFoundCamp`): the wizard's own gate and card, with the reason in place of
+ * the root code, and a way out to sign in with the founding address.
+ */
+export function SetupRefused({ message }: { message: string }) {
+  return (
+    <GateScreen
+      icon={<Tent aria-hidden />}
+      eyebrow="First-time setup"
+      title="Set up Camp 404"
+    >
+      <Card>
+        <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
+          <p className="text-sm text-muted-foreground">{message}</p>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center justify-center">
+        <Button asChild variant="outline">
+          <SignOutLink />
         </Button>
       </div>
     </GateScreen>

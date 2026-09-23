@@ -419,7 +419,7 @@ question (onboarding, the runner, My-forms replay) and the bug dialog.
   sliced to `maxLength`.
 - **Auth at the route checks truthiness only** (no rank/approval check on `/api/voice/transcribe`)
   — gating is upstream at the already-gated host surface. Voice has NO rank awareness and no
-  preview-but-locked variant.
+  preview-but-locked variant. [CORRECTION 2026-09-23] The route now also requires camp access (`hasCampAccess`: an invite redeemed, or a god address) and answers 403 without it, because sign-up is open and every clip spends the paid Groq key. It still does not require captain approval, since the onboarding questionnaire offers voice.
 - **Review step is the one divergence from live code** (live fired `onTranscript` immediately);
   board wins, build the review step.
 

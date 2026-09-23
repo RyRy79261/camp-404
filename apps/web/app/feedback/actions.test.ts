@@ -10,7 +10,9 @@ vi.mock("@/lib/users", () => ({ findCampUserByAuthId: vi.fn() }));
 vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));
 vi.mock("@/lib/rate-limit", () => ({
   rateLimiter: { limit: vi.fn(() => ({ ok: true, retryAfterSeconds: 0 })) },
+  getClientIp: vi.fn(() => "1.2.3.4"),
 }));
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock("@/lib/feedback-ai", () => ({ structureWithAi: vi.fn() }));
 
 import { submitFeedbackAction } from "./actions";
@@ -82,10 +84,33 @@ describe("submitFeedbackAction", () => {
     if (!res.ok) expect(res.error).toMatch(/give it a minute/i);
   });
 
+  /** Refuse only the bucket whose key starts with `prefix`. */
+  function refuseBucket(prefix: string) {
+    vi.mocked(rateLimiter.limit).mockImplementation(((key: string) => ({
+      ok: !key.startsWith(prefix),
+      retryAfterSeconds: 30,
+    })) as never);
+  }
+
+  it("rejects when the per-address limit trips, and files nothing", async () => {
+    // Sign-up is open, so the per-account budget is per throwaway account:
+    // the address bucket is what stops one person minting accounts to spam
+    // the public tracker.
+    refuseBucket("feedback-ip:");
+    const fetchFn = mockFetch({ status: 201 });
+    const res = await submitFeedbackAction({ ...VALID, useAi: true });
+    expect(res).toMatchObject({ ok: false });
+    if (!res.ok) expect(res.error).toMatch(/sending these quickly/i);
+    expect(rateLimiter.limit).toHaveBeenCalledWith("feedback-ip:1.2.3.4", {
+      limit: 10,
+      windowMs: 60_000,
+    });
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(structureWithAi).not.toHaveBeenCalled();
+  });
+
   it("rejects when the daily cap trips", async () => {
-    vi.mocked(rateLimiter.limit)
-      .mockReturnValueOnce({ ok: true, retryAfterSeconds: 0 })
-      .mockReturnValueOnce({ ok: false, retryAfterSeconds: 0 });
+    refuseBucket("feedback-day:");
     const res = await submitFeedbackAction(VALID);
     expect(res).toMatchObject({ ok: false });
     if (!res.ok) expect(res.error).toMatch(/lot of reports today/i);

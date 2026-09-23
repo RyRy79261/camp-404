@@ -111,7 +111,27 @@ export async function GET(req: Request) {
 // POST — approve / deny
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether a form post came from another site. The consent approve issues an
+ * auth code for the signed-in member, and SameSite=Lax cookies are otherwise
+ * its only CSRF defence, so a present Origin must name this host. A missing
+ * Origin is let through, because older browsers omit it on a same-origin
+ * form post; an Origin that does not parse (for example `null`) is foreign.
+ */
+function isCrossSiteSubmission(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  if (origin === null) return false;
+  try {
+    return new URL(origin).host !== new URL(req.url).host;
+  } catch {
+    return true;
+  }
+}
+
 export async function POST(req: Request) {
+  if (isCrossSiteSubmission(req)) {
+    return errorPage(403, "invalid_request", "Cross-site submission refused.");
+  }
   const form = await req.formData().catch(() => null);
   if (!form) {
     return errorPage(400, "invalid_request", "Form body required.");

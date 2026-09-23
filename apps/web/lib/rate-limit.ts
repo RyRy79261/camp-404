@@ -46,14 +46,20 @@ export interface RateLimitResult {
  * Reserve one token for `key`. Returns `{ok: true}` if the request is
  * allowed, otherwise `{ok: false, retryAfterSeconds}`.
  */
-export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult {
+export function rateLimit(
+  key: string,
+  opts: RateLimitOptions,
+): RateLimitResult {
   const windowMs = opts.windowMs ?? DEFAULT_WINDOW_MS;
   maybeSweep(windowMs);
   const refillPerMs = opts.limit / windowMs;
   const now = Date.now();
   const existing = buckets.get(key);
   const tokens = existing
-    ? Math.min(opts.limit, existing.tokens + (now - existing.updatedAt) * refillPerMs)
+    ? Math.min(
+        opts.limit,
+        existing.tokens + (now - existing.updatedAt) * refillPerMs,
+      )
     : opts.limit;
 
   if (tokens < 1) {
@@ -96,8 +102,11 @@ export const rateLimiter: RateLimiter = {
   },
 };
 
-/** Best-effort IP extraction from a Next.js request. */
-export function getClientIp(headers: Headers): string {
+/**
+ * Best-effort IP extraction from a Next.js request. Takes anything with
+ * `get`, so a server action can pass `await headers()` (a read-only bag).
+ */
+export function getClientIp(headers: Pick<Headers, "get">): string {
   const fwd = headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0]!.trim();
   return headers.get("x-real-ip") ?? "unknown";

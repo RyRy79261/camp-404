@@ -127,7 +127,7 @@ Derived flags: `isRecording = state === "recording"` · `isBusy = state === "pro
 | **Onboarding-incomplete** | No | Not expressed inside the pipeline |
 | **Pending / Rejected approval** | No | Not expressed inside the pipeline |
 | **Captain-locked (preview-but-locked)** | No | Not expressed inside the pipeline; RecorderPanel has no rank awareness |
-| **Auth gate asymmetry** | Implicit | `/api/voice/transcribe` checks `getAuthenticatedUser()` truthiness only — no rank/approval check on the route; any authenticated user who reaches the endpoint can transcribe. Gating is upstream at the host surface, not in RecorderPanel. |
+| **Auth gate asymmetry** | Implicit | `/api/voice/transcribe` checks `getAuthenticatedUser()` truthiness only — no rank/approval check on the route; any authenticated user who reaches the endpoint can transcribe. Gating is upstream at the host surface, not in RecorderPanel. [CORRECTION 2026-09-23] The route now also requires camp access (`hasCampAccess`: an invite redeemed, or a god address) and answers 403 without it, because sign-up is open and every clip spends the paid Groq key. It still does not require captain approval, since the onboarding questionnaire offers voice. |
 
 ---
 
@@ -211,7 +211,7 @@ This surface introduces no new tables, columns, or enums.
 
 ## Validation & edge cases
 
-- **Auth required:** `/api/voice/transcribe` returns 401 for unauthenticated callers. No rank or approval check on the route — gating is upstream at the host surface.
+- **Auth required:** `/api/voice/transcribe` returns 401 for unauthenticated callers. No rank or approval check on the route — gating is upstream at the host surface. [CORRECTION 2026-09-23] The route now also requires camp access (`hasCampAccess`: an invite redeemed, or a god address) and answers 403 without it, because sign-up is open and every clip spends the paid Groq key. It still does not require captain approval, since the onboarding questionnaire offers voice.
 - **Empty/silent clip:** blob `size === 0` after recording stop → no upload, silent return to `idle`. `onTranscript` is never called.
 - **Empty transcript:** `onTranscript` only fires when `data.text.trim()` is non-empty; consumers' `appendTranscript` also guards on empty.
 - **Transcript append semantics:** newline joiner inserted only when existing value is non-empty AND does not already end in `\n\s*`; result sliced to host `maxLength`. Transcript is APPENDED, never replaces.
@@ -287,7 +287,7 @@ This surface introduces no new tables, columns, or enums.
 
 4. **Capacitor / native recording.** The `TODO(capacitor)` block in `use-voice-recorder.ts` is unimplemented. If the app ships as a native PWA or Capacitor shell, `MediaRecorder` is unavailable on some platforms and `@capgo/capacitor-voice-recorder` must be wired up. Flag as a prerequisite before any native distribution.
 
-5. **Auth asymmetry at the route.** `/api/voice/transcribe` checks `getAuthenticatedUser()` truthiness only — it does not check `approval_status`, `required_actions`, or rank. Any authenticated user (including one mid-onboarding or pending approval) who can POST to the route can transcribe. This is likely intentional (the route is only reachable from already-gated host surfaces), but should be confirmed as an explicit security decision rather than an oversight.
+5. **Auth asymmetry at the route.** `/api/voice/transcribe` checks `getAuthenticatedUser()` truthiness only — it does not check `approval_status`, `required_actions`, or rank. Any authenticated user (including one mid-onboarding or pending approval) who can POST to the route can transcribe. This is likely intentional (the route is only reachable from already-gated host surfaces), but should be confirmed as an explicit security decision rather than an oversight. [CORRECTION 2026-09-23] The route now also requires camp access (`hasCampAccess`: an invite redeemed, or a god address) and answers 403 without it, because sign-up is open and every clip spends the paid Groq key. It still does not require captain approval, since the onboarding questionnaire offers voice.
 
 6. **`prefers-reduced-motion`.** The animated waveform bars and the `Loader2` spinner have no motion-reduction fallback. On mobile in harsh environments (sun, dust) motion sensitivity is real. Low-effort fix: `@media (prefers-reduced-motion: reduce)` hides bars and substitutes a static amplitude number or simple pulse.
 
