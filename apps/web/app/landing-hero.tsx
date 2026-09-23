@@ -60,6 +60,12 @@ export function LandingHero() {
             >
               Privacy
             </Link>
+            <Link
+              href="/terms"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Terms
+            </Link>
             <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
               Invite-only
             </p>

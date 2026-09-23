@@ -22,6 +22,7 @@ test.describe("signed-out visitor", () => {
     { path: "/auth/reset-password", heading: /This link can.t be used/ },
     // Public, because Google will not offer its sign-in without it.
     { path: "/privacy", heading: "Privacy" },
+    { path: "/terms", heading: "Terms of use" },
   ];
 
   for (const { path, heading } of publicPages) {
