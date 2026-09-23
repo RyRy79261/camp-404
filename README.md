@@ -12,7 +12,7 @@ See [`docs/brief.md`](docs/brief.md) for the full project brief (vision, archite
 - **Web:** Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui
 - **Mobile:** Capacitor 8 wrapping the same Next.js static export
 - **Database:** Neon Postgres + Drizzle ORM (HTTP + WebSocket drivers)
-- **Auth:** Neon Auth (Better Auth) — handler at `/api/auth/*`, UI at `/auth/*`
+- **Auth:** self-hosted Better Auth (`packages/auth`) with two-factor and passkeys — handler at `/api/auth/*`, screens at `/auth/*`, security settings at `/profile/security`
 - **AI:** Anthropic Claude Opus 4.8 (reasoning) + Haiku 4.5 (intent) + Groq Whisper Large v3 Turbo (voice)
 - **Push:** Firebase Cloud Messaging (iOS, Android, Web Push)
 - **Storage:** Vercel Blob — used for [profile photos](docs/profile-photos.md), receipts, and voice memos

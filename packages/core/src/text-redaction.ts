@@ -330,6 +330,7 @@ export function describeRedactions(kinds: readonly RedactionKind[]): string {
  */
 export const SECRET_ENV_KEYS = [
   "ANTHROPIC_API_KEY",
+  "BETTER_AUTH_SECRET",
   "BLOB_READ_WRITE_TOKEN",
   "CRON_SECRET",
   "DATABASE_URL",
@@ -337,9 +338,9 @@ export const SECRET_ENV_KEYS = [
   "FIREBASE_PRIVATE_KEY",
   "GITHUB_FEEDBACK_TOKEN",
   "GOD_EMAILS",
+  "GOOGLE_CLIENT_SECRET",
   "GROQ_API_KEY",
   "INVITE_CODES",
-  "NEON_AUTH_COOKIE_SECRET",
   "PGCRYPTO_KEY",
   "RESEND_API_KEY",
   "TELEGRAM_BOT_TOKEN",

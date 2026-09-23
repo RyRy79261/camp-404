@@ -9,7 +9,7 @@ import { rateLimiter } from "@/lib/rate-limit";
 export type SubmitInviteResult = { ok: false; error: string };
 
 /**
- * Post-auth invite gate. The user is already signed in via Neon Auth; this
+ * Post-auth invite gate. The user is already signed in; this
  * claims the code they entered and stamps it onto their camp row (creating
  * the row on first redemption). On success we send them home, which routes
  * onward to the questionnaire / approval gates. On failure we return the

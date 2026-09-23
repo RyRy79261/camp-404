@@ -81,7 +81,7 @@ export async function backfillIdEncryption(): Promise<{
 }
 
 /**
- * The Neon Auth ids of every account that still has a camp row. Erasure
+ * The sign-in (Better Auth) ids of every account that still has a camp row. Erasure
  * rewrites `auth_user_id` to `deleted:<id>`, so an erased member is not here.
  */
 export async function listLiveAuthUserIds(): Promise<Set<string>> {

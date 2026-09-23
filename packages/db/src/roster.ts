@@ -1,7 +1,6 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { createHttpDb } from "./index";
-import { neonAuthUsers } from "./neon-auth";
 import { duesSettledSql } from "./payments";
 import * as schema from "./schema";
 import { currentCycleNumber } from "./cycles";
@@ -40,7 +39,7 @@ export interface CampManagementMember {
   /** ISO alpha-2 country code from the burner profile (NULL if unanswered). */
   country: string | null;
   /**
-   * Sign-in email, from Neon Auth. Present ONLY when the caller passed
+   * Sign-in email, from the Better Auth `user` table. Present ONLY when the caller passed
    * `includeEmail: true` (a captain); members never see another's email.
    */
   email?: string | null;
@@ -105,18 +104,15 @@ export async function getCampManagementRoster(
         where ra.user_id = ${schema.users.id}
           and ra.status = 'pending' and ra.blocking = true
       )`,
-      ...(includeEmail ? { email: neonAuthUsers.email } : {}),
+      ...(includeEmail ? { email: schema.user.email } : {}),
       createdAt: schema.users.createdAt,
     })
     .from(schema.users)
     .$dynamic();
-  // Neon Auth's user table is joined only when email was asked for, so a
+  // The sign-in identity table is joined only when email was asked for, so a
   // member-facing read never touches it.
   const withEmail = includeEmail
-    ? query.leftJoin(
-        neonAuthUsers,
-        eq(neonAuthUsers.id, schema.users.authUserId),
-      )
+    ? query.leftJoin(schema.user, eq(schema.user.id, schema.users.authUserId))
     : query;
   const rows = await withEmail
     .leftJoin(
@@ -239,7 +235,7 @@ export async function getCampMemberDetail(
             saIdEncrypted: schema.users.saIdEncrypted,
           }
         : {}),
-      ...(includeEmail ? { email: neonAuthUsers.email } : {}),
+      ...(includeEmail ? { email: schema.user.email } : {}),
       ...(includeArrival ? { arrivalAt: schema.driverProfiles.arrivalAt } : {}),
       inviteCode: schema.users.inviteCode,
       inviteNote: schema.inviteCodes.note,
@@ -248,12 +244,9 @@ export async function getCampMemberDetail(
     })
     .from(schema.users)
     .$dynamic();
-  // Neon Auth's user table is joined only when email was asked for.
+  // The sign-in identity table is joined only when email was asked for.
   const withEmail = includeEmail
-    ? query.leftJoin(
-        neonAuthUsers,
-        eq(neonAuthUsers.id, schema.users.authUserId),
-      )
+    ? query.leftJoin(schema.user, eq(schema.user.id, schema.users.authUserId))
     : query;
   const rows = await withEmail
     .leftJoin(

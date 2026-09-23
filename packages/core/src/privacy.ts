@@ -200,11 +200,18 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "carMembers.cycle": "captain",
   "carMembers.createdAt": "captain",
 
-  // neon_auth.user — the sign-in identity. Captains read email to assign DDT
-  // tickets; members never see another member's email.
-  "neonAuthUsers.id": "captain",
-  "neonAuthUsers.email": "captain",
-  "neonAuthUsers.emailVerified": "captain",
+  // user — the sign-in identity (Better Auth). Captains read email to assign
+  // DDT tickets; members never see another member's email. The credential
+  // tables beside it (account, session, two_factor, passkey) hold secrets no
+  // rank reads, and the app never selects them.
+  "user.id": "captain",
+  "user.name": "captain",
+  "user.email": "captain",
+  "user.emailVerified": "captain",
+  "user.image": "captain",
+  "user.twoFactorEnabled": "captain",
+  "user.createdAt": "captain",
+  "user.updatedAt": "captain",
 
   // payments — the dues ledger, captain-only
   "payments.id": "captain",

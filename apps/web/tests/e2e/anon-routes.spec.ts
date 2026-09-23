@@ -14,6 +14,15 @@ test.describe("signed-out visitor", () => {
   const publicPages: { path: string; heading: string | RegExp }[] = [
     { path: "/", heading: "Camp 404" },
     { path: "/auth/sign-in", heading: "Welcome back" },
+    { path: "/auth/sign-up", heading: "Create your account" },
+    // Neon Auth drew these two; self-hosted, they are ours. The e2e server has
+    // no email provider, so the forgot page says reset is off rather than
+    // offering a link that cannot arrive.
+    { path: "/auth/forgot-password", heading: "Password reset is off" },
+    { path: "/auth/reset-password", heading: /This link can.t be used/ },
+    // Public, because Google will not offer its sign-in without it.
+    { path: "/privacy", heading: "Privacy" },
+    { path: "/terms", heading: "Terms of use" },
   ];
 
   for (const { path, heading } of publicPages) {
@@ -29,6 +38,7 @@ test.describe("signed-out visitor", () => {
     "/tools/invite",
     "/profile",
     "/profile/edit",
+    "/profile/security",
     "/family-tree",
     "/notifications",
     "/pending-approval",
@@ -46,6 +56,26 @@ test.describe("signed-out visitor", () => {
       ).toBeVisible();
     });
   }
+
+  test("an unknown auth path goes to sign-in rather than a blank page", async ({
+    page,
+  }) => {
+    await page.goto("/auth/settings");
+    await expect(page).toHaveURL(/\/auth\/sign-in/);
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  });
+
+  test("sign-in offers a passkey, and no Google button without Google keys", async ({
+    page,
+  }) => {
+    await page.goto("/auth/sign-in");
+    await expect(
+      page.getByRole("button", { name: /Sign in with a passkey/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Continue with Google" }),
+    ).toHaveCount(0);
+  });
 
   for (const path of memberPages) {
     test(`${path} sends a signed-out visitor to sign in`, async ({ page }) => {

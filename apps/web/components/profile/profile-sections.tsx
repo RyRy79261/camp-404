@@ -6,7 +6,7 @@ import { cn } from "@camp404/ui/lib/utils";
 // own route, so the active state survives a full page load and every entry is a
 // real, shareable URL.
 
-export type ProfileSection = "profile" | "edit";
+export type ProfileSection = "profile" | "edit" | "security";
 
 const SECTIONS: readonly {
   key: ProfileSection;
@@ -15,6 +15,7 @@ const SECTIONS: readonly {
 }[] = [
   { key: "profile", label: "Profile", href: "/profile" },
   { key: "edit", label: "Edit profile", href: "/profile/edit" },
+  { key: "security", label: "Sign-in and security", href: "/profile/security" },
 ];
 
 export function ProfileSections({ active }: { active: ProfileSection }) {

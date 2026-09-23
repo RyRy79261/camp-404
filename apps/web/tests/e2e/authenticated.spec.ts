@@ -41,7 +41,7 @@ test.describe("authenticated flow (test-mode)", () => {
   test("an invite entered at the gate unlocks the questionnaire", async ({
     page,
   }) => {
-    // Signed in via Neon Auth but no code on file → bounced to the gate.
+    // Signed in but no code on file → bounced to the gate.
     await login(page, { id: "redeemer-auth", email: "redeemer@example.com" });
     await page.goto("/");
     await expect(page).toHaveURL(/\/signup\/required/);
@@ -75,6 +75,38 @@ test.describe("authenticated flow (test-mode)", () => {
         .getByRole("navigation", { name: "Console" })
         .getByRole("link", { name: "My forms" }),
     ).toHaveAttribute("href", "/tools/forms");
+  });
+
+  test("a member reaches their sign-in and security page from the profile", async ({
+    page,
+    request,
+  }) => {
+    await login(page, { id: "secure-auth", email: "god@example.com" });
+    await page.goto("/");
+    await completeOnboarding(request, "secure-auth");
+
+    await page.goto("/profile");
+    await page
+      .getByRole("navigation", { name: "Account sections" })
+      .getByRole("link", { name: "Sign-in and security" })
+      .click();
+    await expect(page).toHaveURL("/profile/security");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Sign-in and security" }),
+    ).toBeVisible();
+    for (const panel of [
+      "Password",
+      "Two-factor authentication",
+      "Passkeys",
+      "Signed-in devices",
+    ]) {
+      await expect(page.getByRole("heading", { name: panel })).toBeVisible();
+    }
+    // The test store has no Better Auth session to list, and the page says it
+    // could not read the devices rather than showing an empty list.
+    await expect(
+      page.getByText(/couldn.t read your active sessions/),
+    ).toBeVisible();
   });
 
   test("a pending member is held at /pending-approval after onboarding", async ({

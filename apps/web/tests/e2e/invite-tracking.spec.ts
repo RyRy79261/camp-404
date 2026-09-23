@@ -3,7 +3,7 @@ import { login, redeemInviteAtGate, resetTestState } from "./_helpers";
 import { appAlerts } from "./lib/dom";
 
 // Invite codes are redeemed at the post-auth gate (/signup/required): the
-// user signs in via Neon Auth first, then enters a code to come aboard.
+// user signs in first, then enters a code to come aboard.
 // Bootstrap (env) codes and DB-backed codes follow slightly different paths
 // through `claimInviteCode`. These specs assert the user ends up with the
 // code recorded on their camp user row in both cases, and that provenance is
@@ -120,7 +120,7 @@ test.describe("invite-code redemption", () => {
     page,
     request,
   }) => {
-    // A non-god user signs in via Neon Auth without redeeming an invite.
+    // A non-god user signs in without redeeming an invite.
     await login(page, { id: "stray-auth", email: "stray@example.com" });
 
     // Hitting / runs ensureCampUser. With no code on file they're bounced to

@@ -75,7 +75,7 @@ export const MEMBER_EXPORT_COLUMNS: readonly MemberExportColumn[] = [
     sources: ["answer:dietary.notes", "dietaryRequirements.notes"],
   },
   // Captains.
-  { key: "email", header: "Email", sources: ["neonAuthUsers.email"] },
+  { key: "email", header: "Email", sources: ["user.email"] },
   { key: "id_type", header: "ID type", sources: ID_SOURCES },
   { key: "id_number", header: "ID number", sources: ID_SOURCES },
   { key: "arrival", header: "Arrival", sources: ["driverProfiles.arrivalAt"] },

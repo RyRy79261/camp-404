@@ -8,7 +8,7 @@ import { listAnsweredQuestionnaires, listCompletedForms } from "@/lib/forms";
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
 import { FormCard } from "./form-card";
 
-// Reads the Neon Auth session on every request.
+// Reads the sign-in session on every request.
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "My forms — Camp 404" };

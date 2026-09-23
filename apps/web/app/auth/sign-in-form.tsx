@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { Fingerprint } from "lucide-react";
+import { AccountTwoFactorChallenge } from "@camp404/ui/components/account-two-factor-challenge";
 import { Button } from "@camp404/ui/components/button";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
@@ -11,12 +13,16 @@ import { authClient } from "@/lib/auth-client";
 import { safeInternalPath } from "@/lib/safe-redirect";
 
 /**
- * Email/password + Google sign-in form, in the AfrikaBurn auth form's
- * markup. No invite-code field — invite-only enforcement lives
- * after auth at the /signup/required gate.
+ * Email/password sign-in, plus a passkey and (when configured) Google, in the
+ * AfrikaBurn auth form's markup. No invite-code field — invite-only
+ * enforcement lives after auth at the /signup/required gate.
+ *
+ * With two-factor on, a correct password answers with a challenge instead of
+ * a session, and the form becomes the code step in place (AfrikaBurn's
+ * pattern): an authenticator code, or a backup code if the phone is gone.
  */
 
-export function SignInForm() {
+export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   // `next` is what the auth middleware carries over when it sends a signed-out
@@ -31,6 +37,8 @@ export function SignInForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Set when a correct password returns a two-factor challenge.
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
 
   // Auto-forward when a social sign-in lands the user back here with an
   // active session and a non-default callbackURL. Mirrors the
@@ -69,16 +77,54 @@ export function SignInForm() {
         setLoading(false);
         return;
       }
-      if (callbackURL.startsWith("/api/")) {
-        // An API route (the Claude authorize step) is not a page the App
-        // Router can navigate to, so leave with a full navigation.
-        window.location.assign(callbackURL);
+      if (
+        result?.data &&
+        "twoFactorRedirect" in result.data &&
+        result.data.twoFactorRedirect
+      ) {
+        setNeedsTwoFactor(true);
+        setLoading(false);
         return;
       }
-      router.replace(callbackURL);
-      router.refresh();
+      goOnward();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
+      setLoading(false);
+    }
+  }
+
+  /** Leave for wherever the member was going, once a session exists. */
+  function goOnward() {
+    if (callbackURL.startsWith("/api/")) {
+      // An API route (the Claude authorize step) is not a page the App
+      // Router can navigate to, so leave with a full navigation.
+      window.location.assign(callbackURL);
+      return;
+    }
+    router.replace(callbackURL);
+    router.refresh();
+  }
+
+  async function handlePasskey() {
+    setError(null);
+    setLoading(true);
+    try {
+      // The browser asks for a fingerprint, face or device PIN. A passkey is
+      // already two factors (the device and the person), so no code follows.
+      const result = await authClient.signIn.passkey();
+      if (result?.error) {
+        setError(
+          result.error.message ??
+            "That didn't complete. Your device may have cancelled it — try again.",
+        );
+        setLoading(false);
+        return;
+      }
+      goOnward();
+    } catch {
+      setError(
+        "That didn't complete. Your device may have cancelled it — try again.",
+      );
       setLoading(false);
     }
   }
@@ -87,9 +133,9 @@ export function SignInForm() {
     setError(null);
     setLoading(true);
     try {
-      // Always route the social return-trip through /auth so Neon Auth's
-      // verifier exchange (proxy middleware on /auth/*) fires before we
-      // read the session. /auth/page.tsx then forwards to `next`, or home.
+      // The return trip lands on /auth, which forwards to `next` (checked to
+      // be an internal path) or home. Better Auth keeps this callback in its
+      // own server-side state; it never travels to Google.
       await authClient.signIn.social({
         provider: "google",
         callbackURL:
@@ -101,6 +147,10 @@ export function SignInForm() {
       setError(err instanceof Error ? err.message : "Google sign in failed");
       setLoading(false);
     }
+  }
+
+  if (needsTwoFactor) {
+    return <AccountTwoFactorChallenge client={authClient} onVerified={goOnward} />;
   }
 
   return (
@@ -175,11 +225,33 @@ export function SignInForm() {
         type="button"
         variant="outline"
         size="lg"
-        onClick={handleGoogle}
+        onClick={handlePasskey}
         disabled={loading}
       >
-        Continue with Google
+        <Fingerprint aria-hidden /> Sign in with a passkey
       </Button>
+
+      {googleEnabled ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          onClick={handleGoogle}
+          disabled={loading}
+        >
+          Continue with Google
+        </Button>
+      ) : null}
+
+      <p className="text-center text-sm text-muted-foreground">
+        New here?{" "}
+        <Link
+          className="font-medium text-primary hover:underline"
+          href="/auth/sign-up"
+        >
+          Create an account
+        </Link>
+      </p>
     </form>
   );
 }

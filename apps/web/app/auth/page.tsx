@@ -2,19 +2,16 @@ import { redirect } from "next/navigation";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { safeInternalPath } from "@/lib/safe-redirect";
 
-// Reads the session cookie set moments earlier by the proxy verifier
-// exchange; cannot be statically prerendered.
+// Reads the session cookie the Google callback set moments earlier; cannot
+// be statically prerendered.
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Signing in — Camp 404" };
 
 /**
- * Bare /auth landing — the path Neon Auth's social callback returns to
- * after Google OAuth (with `?neon_auth_session_verifier=…`). The proxy
- * middleware (`auth.middleware`) runs on /auth before this page does,
- * exchanges the verifier for a real session cookie, and only then is
- * this server component called. Without this page sitting at /auth,
- * Next would 404 the post-OAuth landing.
+ * Bare /auth landing — where the Google sign-in returns. Better Auth's callback
+ * (/api/auth/callback/google) sets the session cookie and then sends the
+ * browser here.
  *
  * We forward authenticated users to `?next=` when the sign-in form set one
  * (for example the Claude authorize step), otherwise home, which routes them

@@ -16,7 +16,7 @@ export function lostCatName(n: number): string {
 
 /**
  * The `users`-row patch that anonymises an account. Pure (no DB) so it is
- * unit-tested. `authUserId` is severed to `deleted:<id>` so the Neon Auth login
+ * unit-tested. `authUserId` is severed to `deleted:<id>` so the old login id
  * no longer maps to this row — a re-login becomes a fresh, access-less user.
  * Keeps `id` and `inviteCode` (who invited them — lineage); drops rank to
  * `member`. Every other `users` column is either cleared here or kept on
@@ -99,6 +99,13 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       return { ok: false as const, reason: "sole_captain" as const };
     }
 
+    // The login this member signs in with. Read before the patch below
+    // rewrites `auth_user_id` to its `deleted:` tombstone.
+    const [identity] = await tx
+      .select({ authUserId: schema.users.authUserId })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId));
+
     const [row] = await tx
       .select({
         max: sql<number | null>`max(${schema.users.lostCatNumber})`,
@@ -111,6 +118,16 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .update(schema.users)
       .set(sanitisedUserPatch(userId, lostCatNumber, now))
       .where(eq(schema.users.id, userId));
+
+    // The sign-in identity goes entirely: email, password hash, sessions,
+    // second factors and passkeys (the last four cascade from `user`). Under
+    // Neon Auth this lived on a service erasure could not reach, so an erased
+    // member's email and login outlived them.
+    if (identity) {
+      await tx
+        .delete(schema.user)
+        .where(eq(schema.user.id, identity.authUserId));
+    }
 
     // Personal owned rows — explicit deletes (the kept users row means the
     // CASCADE never fires).

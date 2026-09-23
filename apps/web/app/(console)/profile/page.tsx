@@ -26,7 +26,7 @@ import { ReportSettingsCard } from "@/components/feedback/report-settings-card";
 import { ProfileSections } from "@/components/profile/profile-sections";
 import { PaymentReference } from "./payment-reference";
 
-// Reads the Neon Auth session on every request.
+// Reads the sign-in session on every request.
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Your profile — Camp 404" };

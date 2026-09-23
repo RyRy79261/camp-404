@@ -30,8 +30,8 @@ export async function POST(req: Request) {
     displayName: body.displayName ?? body.email ?? null,
   };
 
-  // In the real-database run, give the login the sign-in record Neon Auth
-  // would hold, so reads that join a member's email find it.
+  // In the real-database run, give the login the sign-in identity (`user`
+  // row) a real sign-up would make, so reads that join a member's email find it.
   if (!usesTestStore()) {
     await upsertE2EAuthUser({ id: user.id, email: user.primaryEmail });
   }

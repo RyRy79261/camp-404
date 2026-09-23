@@ -218,9 +218,16 @@ describe("redactSecrets", () => {
     );
   });
 
-  it("covers Camp 404's fifteen secret-bearing env names", () => {
-    expect(SECRET_ENV_KEYS).toHaveLength(15);
-    expect(new Set(SECRET_ENV_KEYS).size).toBe(15);
+  it("covers Camp 404's sixteen secret-bearing env names", () => {
+    expect(SECRET_ENV_KEYS).toHaveLength(16);
+    expect(new Set(SECRET_ENV_KEYS).size).toBe(16);
+    // The sign-in signing secret replaced Neon Auth's cookie secret; the old
+    // name is read by nothing, so listing it would hide nothing.
+    expect(SECRET_ENV_KEYS).toContain("BETTER_AUTH_SECRET");
+    expect(SECRET_ENV_KEYS).toContain("GOOGLE_CLIENT_SECRET");
+    expect(SECRET_ENV_KEYS as readonly string[]).not.toContain(
+      "NEON_AUTH_COOKIE_SECRET",
+    );
   });
 
   it("returns empty for empty input", () => {

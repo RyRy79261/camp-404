@@ -156,38 +156,49 @@ function setupCheck(probe: DatabaseProbe): SystemCheck {
   };
 }
 
-/** Neon Auth refuses a shorter cookie secret when the app starts. */
-const NEON_AUTH_COOKIE_SECRET_MIN_LENGTH = 32;
+/** Below this a signing secret is guessable; Better Auth's docs ask for 32+. */
+const AUTH_SECRET_MIN_LENGTH = 32;
 
 function signInCheck(env: EnvBag): SystemCheck {
   const base = {
     id: "sign-in",
     label: "Sign-in",
-    env: ["NEON_AUTH_BASE_URL", "NEON_AUTH_COOKIE_SECRET"],
+    env: ["BETTER_AUTH_SECRET", "BETTER_AUTH_URL", "AUTH_APEX_DOMAIN"],
   };
-  const secret = env.NEON_AUTH_COOKIE_SECRET;
-  if (!env.NEON_AUTH_BASE_URL || !secret) {
+  const secret = env.BETTER_AUTH_SECRET?.trim();
+  if (!secret) {
     return {
       ...base,
       value: "Not set",
       tone: "attention",
       detail:
-        "Neon Auth runs on a build placeholder. The app starts, but nobody can sign in.",
+        "BETTER_AUTH_SECRET is missing, so sign-in is switched off on this deployment. Nobody can sign in until it is set.",
     };
   }
-  if (secret.length < NEON_AUTH_COOKIE_SECRET_MIN_LENGTH) {
+  if (secret.length < AUTH_SECRET_MIN_LENGTH) {
     return {
       ...base,
-      value: "Cookie secret too short",
+      value: "Secret too short",
       tone: "attention",
-      detail: `The cookie secret must be at least ${NEON_AUTH_COOKIE_SECRET_MIN_LENGTH} characters. This one is ${secret.length}.`,
+      detail: `The signing secret must be at least ${AUTH_SECRET_MIN_LENGTH} characters. This one is ${secret.length}.`,
+    };
+  }
+  if (!env.BETTER_AUTH_URL?.trim()) {
+    return {
+      ...base,
+      value: "Address not set",
+      tone: "attention",
+      detail:
+        "BETTER_AUTH_URL is missing, so reset links and the Google return use Vercel's production host. Set it to the address members visit.",
     };
   }
   return {
     ...base,
     value: "Set",
     tone: "ok",
-    detail: "Neon Auth has its URL and a cookie secret of a safe length.",
+    detail: env.AUTH_APEX_DOMAIN?.trim()
+      ? `Sign-in has its secret and address. Passkeys are tied to ${env.AUTH_APEX_DOMAIN.trim()}.`
+      : "Sign-in has its secret and address. Set AUTH_APEX_DOMAIN so a passkey works on the bare domain and www alike.",
   };
 }
 

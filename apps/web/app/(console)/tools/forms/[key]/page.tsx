@@ -11,7 +11,7 @@ import { getReplayableForm, listFormEdits } from "@/lib/forms";
 import { FormReplay } from "./form-replay";
 import { ChangeLog } from "./change-log";
 
-// Reads the Neon Auth session on every request.
+// Reads the sign-in session on every request.
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Update your answers — Camp 404" };

@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Uploads are for people in the camp. Sign-up is open, so a Neon Auth
+  // Uploads are for people in the camp. Sign-up is open, so a signed-in
   // account alone could otherwise store files that nothing ever sweeps (there
   // is no camp row to erase). Every page that uploads is past the invite gate.
   const campUser = await ensureCampUser(user);

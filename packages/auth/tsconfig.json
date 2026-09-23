@@ -1,0 +1,18 @@
+{
+  "extends": "@camp404/typescript-config/base.json",
+  "include": ["src/**/*.ts"],
+  "compilerOptions": {
+    "outDir": "dist",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "lib": ["ES2022", "DOM"],
+    // Consumed as SOURCE (`main`/`types` → ./src/index.ts), so no .d.ts is
+    // ever emitted or read. Declaration emit is off ONLY to avoid TS2883: the
+    // passkey plugin's inferred types reference @simplewebauthn/server through
+    // pnpm's store path, which a .d.ts cannot name portably. Consumers keep
+    // full inference. (AfrikaBurn's @quagga/auth makes the same call.)
+    "declaration": false,
+    "declarationMap": false
+  }
+}

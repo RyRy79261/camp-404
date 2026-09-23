@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { toAuthenticatedUser } from "../session-user";
 import { hasCampAccess, isApproved } from "../users";
 
-// GOD_EMAILS bypasses the invite and approval gates. Neon Auth sign-up is open,
+// GOD_EMAILS bypasses the invite and approval gates. Sign-up is open,
 // so an address in that list must only count once it is verified: otherwise
 // anyone could sign up with the owner's address and walk in.
 

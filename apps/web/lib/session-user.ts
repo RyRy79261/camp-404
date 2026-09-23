@@ -1,7 +1,7 @@
 import type { AuthenticatedUser } from "./auth";
 import { isGodEmail } from "./access-control";
 
-/** Loosely-typed slice of the Neon Auth session user we map onto AuthenticatedUser. */
+/** Loosely-typed slice of the Better Auth session user we map onto AuthenticatedUser. */
 export type SessionUser = {
   id: string;
   email?: string | null;
@@ -10,10 +10,10 @@ export type SessionUser = {
 };
 
 /**
- * Map a Neon Auth session user onto the app's AuthenticatedUser.
+ * Map a Better Auth session user onto the app's AuthenticatedUser.
  *
  * A GOD_EMAILS address gets past the invite and approval gates, so it only
- * counts once Neon Auth has proven the person owns it (owner's call,
+ * counts once the auth server has proven the person owns it (owner's call,
  * 2026-09-16: keep GOD_EMAILS as a recovery path, but only for a verified
  * email). Every god check in the app reads `primaryEmail`, so this is the one
  * place to enforce it: an unverified session that claims a god address keeps

@@ -260,6 +260,20 @@
       "when": 1790107769342,
       "tag": "0036_announcement_pin_intent",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790115364532,
+      "tag": "0037_better_auth_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790115373960,
+      "tag": "0038_copy_neon_auth_identities",
+      "breakpoints": true
     }
   ]
 }
