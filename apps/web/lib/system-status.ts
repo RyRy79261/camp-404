@@ -363,6 +363,7 @@ function calendarCheck(env: EnvBag): SystemCheck {
     label: "Camp calendar",
     env: [
       "GOOGLE_CALENDAR_ID",
+      "FIREBASE_PROJECT_ID",
       "FIREBASE_CLIENT_EMAIL",
       "FIREBASE_PRIVATE_KEY",
     ],
@@ -376,13 +377,19 @@ function calendarCheck(env: EnvBag): SystemCheck {
         'Home\'s "Coming up" shows no camp events. Share the Google Calendar with the Firebase service account (its FIREBASE_CLIENT_EMAIL address), then set GOOGLE_CALENDAR_ID.',
     };
   }
-  if (!env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY) {
+  // The same three values the calendar read itself needs
+  // (firebaseAdminCredentials), so "Set" here means it can actually sign in.
+  if (
+    !env.FIREBASE_PROJECT_ID ||
+    !env.FIREBASE_CLIENT_EMAIL ||
+    !env.FIREBASE_PRIVATE_KEY
+  ) {
     return {
       ...base,
       value: "No account to read it",
       tone: "attention",
       detail:
-        "GOOGLE_CALENDAR_ID is set, but the calendar is read with the Firebase service account, and its email or key is missing.",
+        "GOOGLE_CALENDAR_ID is set, but the calendar is read with the Firebase service account, and its project ID, email or key is missing.",
     };
   }
   return {

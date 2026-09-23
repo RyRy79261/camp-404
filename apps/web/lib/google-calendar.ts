@@ -26,6 +26,11 @@ export const CALENDAR_WINDOW_DAYS = 60;
 export const CALENDAR_MAX_EVENTS = 6;
 /** How long one read is reused, per server instance. */
 const CACHE_MS = 5 * 60 * 1000;
+/**
+ * How long each Google request may take. Home waits for this read, so a
+ * stalled token or events call must end as "unavailable", not hold the page.
+ */
+export const CALENDAR_TIMEOUT_MS = 5000;
 
 export interface CalendarEvent {
   id: string;
@@ -130,6 +135,7 @@ let cached: { at: number; result: CalendarResult } | null = null;
 export async function getUpcomingEvents(
   env: EnvBag = process.env,
   now: Date = new Date(),
+  timeoutMs: number = CALENDAR_TIMEOUT_MS,
 ): Promise<CalendarResult> {
   const config = calendarConfig(env);
   if (!config) return { status: "not_configured" };
@@ -139,6 +145,7 @@ export async function getUpcomingEvents(
   try {
     const tokenRes = await fetch(TOKEN_URL, {
       method: "POST",
+      signal: AbortSignal.timeout(timeoutMs),
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
@@ -168,6 +175,7 @@ export async function getUpcomingEvents(
     );
     const eventsRes = await fetch(url, {
       headers: { Authorization: `Bearer ${access_token}` },
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!eventsRes.ok) throw new Error(`events ${eventsRes.status}`);
     const body = (await eventsRes.json()) as { items?: GoogleEvent[] };

@@ -164,6 +164,32 @@ describe("my lift", () => {
     expect(await getMyLift(walker.id)).toBeNull();
   });
 
+  it("shows a rider no lift once the driver stops driving", async () => {
+    const db = h.db();
+    const ada = await makeUser(db, {
+      displayName: "Ada",
+      approvalStatus: "approved",
+    });
+    const rider = await makeUser(db, { approvalStatus: "approved" });
+    await makeDriverProfile(db, { userId: ada.id });
+    await db
+      .update(schema.driverProfiles)
+      .set({ seatsOffered: 2 })
+      .where(eq(schema.driverProfiles.userId, ada.id));
+    await addCarRider({
+      driverUserId: ada.id,
+      memberUserId: rider.id,
+      actorId: ada.id,
+    });
+    expect(await getMyLift(rider.id)).toMatchObject({ role: "rider" });
+
+    await db
+      .update(schema.driverProfiles)
+      .set({ intendsToDrive: false })
+      .where(eq(schema.driverProfiles.userId, ada.id));
+    expect(await getMyLift(rider.id)).toBeNull();
+  });
+
   it("ignores last year's car", async () => {
     const db = h.db();
     const old = await makeUser(db, { approvalStatus: "approved" });

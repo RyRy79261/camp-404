@@ -197,6 +197,18 @@ describe("deriveSystemStatus", () => {
         OK_PROBE,
         "calendar",
       ).tone,
+    ).toBe("attention");
+    expect(
+      check(
+        {
+          GOOGLE_CALENDAR_ID: "cal",
+          FIREBASE_PROJECT_ID: "p",
+          FIREBASE_CLIENT_EMAIL: "e",
+          FIREBASE_PRIVATE_KEY: "k",
+        },
+        OK_PROBE,
+        "calendar",
+      ).tone,
     ).toBe("ok");
   });
 

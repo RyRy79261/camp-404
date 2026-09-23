@@ -179,6 +179,9 @@ export async function getMyLift(userId: string): Promise<MyLift | null> {
       and(
         eq(schema.driverProfiles.userId, schema.carMembers.driverUserId),
         eq(schema.driverProfiles.cycle, schema.carMembers.cycle),
+        // A driver who has since switched off driving keeps their seat rows
+        // (nothing deletes them), but there is no car to ride in.
+        eq(schema.driverProfiles.intendsToDrive, true),
       ),
     )
     .innerJoin(

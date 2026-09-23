@@ -169,6 +169,26 @@ describe("getUpcomingEvents", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it("gives up on a stalled request and reports unavailable, so Home is not held", async () => {
+    // A fetch that never answers on its own; it ends only when aborted.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string | URL, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () =>
+              reject(new Error("aborted")),
+            );
+          }),
+      ),
+    );
+    const started = Date.now();
+    expect(await getUpcomingEvents(ENV, new Date(), 50)).toEqual({
+      status: "unavailable",
+    });
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
   it("is unavailable, not an error page, when Google refuses (calendar not shared)", async () => {
     vi.stubGlobal(
       "fetch",
