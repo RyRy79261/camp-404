@@ -80,6 +80,7 @@ export const teamEnum = pgEnum("team", [
   "art_and_activities",
   "ministry_of_memes",
   "ministry_of_vibes",
+  "finance",
 ]);
 
 export const membershipTierEnum = pgEnum("membership_tier", [
@@ -1880,7 +1881,7 @@ export const campSettings = pgTable(
       .$type<CampConfig>()
       .notNull()
       .default(
-        sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and Water","order":3,"archived":false},{"key":"health_and_safety","label":"Health and Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false}]}'::jsonb`,
+        sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and Water","order":3,"archived":false},{"key":"health_and_safety","label":"Health and Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false},{"key":"finance","label":"Finance","order":8,"archived":false}]}'::jsonb`,
       ),
   },
   (t) => ({

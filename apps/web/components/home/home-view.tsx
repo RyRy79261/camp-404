@@ -21,6 +21,7 @@ import {
   Palette,
   Send,
   Users,
+  Wallet,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -336,6 +337,7 @@ const TEAM_ICONS: Record<string, LucideIcon> = {
   art_and_activities: Palette,
   ministry_of_memes: Laugh,
   ministry_of_vibes: Music,
+  finance: Wallet,
 };
 
 /**

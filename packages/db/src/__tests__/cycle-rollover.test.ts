@@ -21,7 +21,11 @@ import { openActivation, completeBuilderResponse } from "../activations";
 import { isTeamLead } from "../roster";
 import { closeActivation } from "../questionnaire-lifecycle";
 import { loadQuestionnaireResponse } from "../questionnaire-responses";
-import { UNSET_CYCLE, type CampConfig } from "../camp-config";
+import {
+  DEFAULT_TEAMS,
+  UNSET_CYCLE,
+  type CampConfig,
+} from "../camp-config";
 import * as schema from "../schema";
 
 type DB = ReturnType<ReturnType<typeof useTestDb>["db"]>;
@@ -381,7 +385,7 @@ describe("advanceCycle", () => {
     expect(config?.cycles?.[0]!.endedAt).not.toBeNull();
     expect(config?.cycles?.[1]!.year).toBe(2027);
     // The spread kept the rest of the JSONB column — the seeded team list.
-    expect(config?.teams).toHaveLength(8);
+    expect(config?.teams).toEqual(DEFAULT_TEAMS);
 
     // --- the fresh questionnaire: closed, then re-opened blank --------------
     const dietary = await activationsFor(db, "dietary_survey");
@@ -822,7 +826,7 @@ describe("setFoundingYear", () => {
       { year: 2026, startedAt: expect.any(String), endedAt: null },
     ]);
     // The spread kept the rest of the JSONB column — the seeded team list.
-    expect(config?.teams).toHaveLength(8);
+    expect(config?.teams).toEqual(DEFAULT_TEAMS);
 
     const audit = await db.select().from(schema.auditLog);
     expect(audit).toHaveLength(1);

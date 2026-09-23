@@ -118,9 +118,11 @@ describe("the seeded column default", () => {
     return JSON.parse(json ?? "{}");
   }
 
-  it("migration 0015 matches DEFAULT_CAMP_CONFIG", () => {
+  // 0015 seeded the eight founding teams; 0039 is the newest migration that
+  // sets the default (it added Finance). The newest one is what a new camp gets.
+  it("migration 0039 matches DEFAULT_CAMP_CONFIG", () => {
     expect(
-      extractSeed("packages/db/migrations/0015_chemical_spiral.sql"),
+      extractSeed("packages/db/migrations/0039_finance_team.sql"),
     ).toEqual(DEFAULT_CAMP_CONFIG);
   });
 
