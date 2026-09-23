@@ -288,6 +288,13 @@
       "when": 1790159970633,
       "tag": "0040_finance_team_in_camp_config",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790165988424,
+      "tag": "0041_task_board_doing",
+      "breakpoints": true
     }
   ]
 }

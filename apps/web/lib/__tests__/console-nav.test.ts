@@ -5,6 +5,7 @@ describe("consoleNavFor", () => {
   it("shows a member only the member destinations", () => {
     expect(consoleNavFor("camp_member").map((i) => i.label)).toEqual([
       "Home",
+      "Tasks",
       "Roster",
       "My forms",
       "Family tree",

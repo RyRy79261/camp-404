@@ -227,8 +227,12 @@ export const broadcastPresentationEnum = pgEnum("broadcast_presentation", [
   "feed",
 ]);
 
+// A task's column on the shared task board: To do (`open`), Doing
+// (`in_progress`), Done. `cancelled` is a removed task, kept for the record and
+// shown nowhere.
 export const taskStatusEnum = pgEnum("task_status", [
   "open",
+  "in_progress",
   "done",
   "cancelled",
 ]);
@@ -1364,8 +1368,10 @@ export const notificationDeliveries = pgTable(
 );
 
 // --- Tasks ---------------------------------------------------------------
-// Non-blocking to-dos with deadlines. Assigned to a member or a whole team;
-// the reminders cron nudges via broadcasts as `due_at` approaches.
+// Non-blocking to-dos with deadlines, shown on the shared task board
+// (`packages/db/src/tasks.ts`). Assigned to a member, a team, or both.
+// [CORRECTION 2026-09-23] No reminder nudges a task yet; the reminders cron
+// covers questionnaires only.
 
 export const tasks = pgTable(
   "tasks",

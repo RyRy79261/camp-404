@@ -29,6 +29,21 @@ import {
 } from "@camp404/db/broadcasts";
 import type { CampManagementMember } from "@camp404/db/roster";
 import {
+  CANNOT_MOVE,
+  CANNOT_REMOVE,
+  DONE_VISIBLE_DAYS,
+  NOT_A_MEMBER,
+  NOT_A_TASK_AUTHOR,
+  NOT_YOUR_TEAM,
+  PICK_YOUR_TEAM,
+  TASK_GONE,
+  TASK_MOVED,
+  type AssignableMember,
+  type BoardTask,
+  type TaskBoardStatus,
+  type TaskWriteResult,
+} from "@camp404/db/tasks";
+import {
   ANNOUNCEMENT_NOTIFICATION_KINDS,
   type InboxFilter,
   type ReferralUser,
@@ -190,6 +205,19 @@ interface TestRequiredAction {
   createdAt: Date;
 }
 
+interface TestTask {
+  id: string;
+  title: string;
+  description: string | null;
+  team: Team | null;
+  status: TaskBoardStatus | "cancelled";
+  assigneeId: string | null;
+  createdById: string;
+  dueAt: Date | null;
+  createdAt: Date;
+  completedAt: Date | null;
+}
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -205,6 +233,7 @@ interface TestStoreState {
   promotionRequests: TestPromotionRequest[];
   teamMemberships: TestTeamMembership[];
   requiredActions: TestRequiredAction[];
+  tasks: TestTask[];
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -241,6 +270,7 @@ function globalState(): TestStoreState {
       promotionRequests: [] as TestPromotionRequest[],
       teamMemberships: [] as TestTeamMembership[],
       requiredActions: [] as TestRequiredAction[],
+      tasks: [] as TestTask[],
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -287,6 +317,7 @@ function pushDelivery(
 const promotionRequests = S.promotionRequests;
 const teamMemberships = S.teamMemberships;
 const requiredActions = S.requiredActions;
+const tasks = S.tasks;
 
 /**
  * The camp's current year, resolved the way `currentCycleNumber()` resolves it
@@ -1482,6 +1513,130 @@ export const testStore = {
       }));
   },
 
+  // --- The task board: twins of @camp404/db/tasks, same rules, same words ---
+
+  listBoardTasks(now: Date): BoardTask[] {
+    const doneSince = now.getTime() - DONE_VISIBLE_DAYS * 86_400_000;
+    const name = (id: string | null) =>
+      id ? (findUserById(id)?.displayName ?? null) : null;
+    return tasks
+      .filter(
+        (t) =>
+          t.status === "open" ||
+          t.status === "in_progress" ||
+          (t.status === "done" && (t.completedAt?.getTime() ?? 0) >= doneSince),
+      )
+      .sort(
+        (a, b) =>
+          (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity) ||
+          a.createdAt.getTime() - b.createdAt.getTime(),
+      )
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        team: t.team,
+        status: t.status as TaskBoardStatus,
+        assigneeId: t.assigneeId,
+        assigneeName: name(t.assigneeId),
+        createdById: t.createdById,
+        createdByName: name(t.createdById),
+        dueAt: t.dueAt,
+        createdAt: t.createdAt,
+        completedAt: t.completedAt,
+      }));
+  },
+
+  listAssignableMembers(): AssignableMember[] {
+    return [...usersByAuthId.values()]
+      .filter((u) => u.approvalStatus === "approved")
+      .map((u) => ({
+        id: u.id,
+        displayName: u.displayName ?? "Unnamed member",
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  },
+
+  addTask(input: {
+    creatorId: string;
+    title: string;
+    description: string | null;
+    team: Team | null;
+    assigneeId: string | null;
+    dueAt: Date | null;
+  }): TaskWriteResult<{ id: string }> {
+    const reach = testStore.senderReach(input.creatorId);
+    if (reach !== undefined) {
+      if (reach.length === 0) return { ok: false, error: NOT_A_TASK_AUTHOR };
+      if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
+      if (!reach.includes(input.team)) {
+        return { ok: false, error: NOT_YOUR_TEAM };
+      }
+    }
+    if (
+      input.assigneeId &&
+      findUserById(input.assigneeId)?.approvalStatus !== "approved"
+    ) {
+      return { ok: false, error: NOT_A_MEMBER };
+    }
+    const id = `test-task-${S.nextSerial++}`;
+    tasks.push({
+      id,
+      title: input.title,
+      description: input.description,
+      team: input.team,
+      status: "open",
+      assigneeId: input.assigneeId,
+      createdById: input.creatorId,
+      dueAt: input.dueAt,
+      createdAt: new Date(),
+      completedAt: null,
+    });
+    return { ok: true, id };
+  },
+
+  moveTask(input: {
+    taskId: string;
+    actorId: string;
+    from: TaskBoardStatus;
+    to: TaskBoardStatus;
+  }): TaskWriteResult {
+    const task = tasks.find(
+      (t) => t.id === input.taskId && t.status !== "cancelled",
+    );
+    if (!task) return { ok: false, error: TASK_GONE };
+    const reach = testStore.senderReach(input.actorId);
+    const leads =
+      reach === undefined || (task.team !== null && reach.includes(task.team));
+    if (
+      !leads &&
+      task.assigneeId !== input.actorId &&
+      task.createdById !== input.actorId
+    ) {
+      return { ok: false, error: CANNOT_MOVE };
+    }
+    if (input.from === input.to) return { ok: true };
+    if (task.status !== input.from) return { ok: false, error: TASK_MOVED };
+    task.status = input.to;
+    task.completedAt = input.to === "done" ? new Date() : null;
+    return { ok: true };
+  },
+
+  removeTask(input: { taskId: string; actorId: string }): TaskWriteResult {
+    const task = tasks.find(
+      (t) => t.id === input.taskId && t.status !== "cancelled",
+    );
+    if (!task) return { ok: false, error: TASK_GONE };
+    const reach = testStore.senderReach(input.actorId);
+    const leads =
+      reach === undefined || (task.team !== null && reach.includes(task.team));
+    if (!leads && task.createdById !== input.actorId) {
+      return { ok: false, error: CANNOT_REMOVE };
+    }
+    task.status = "cancelled";
+    return { ok: true };
+  },
+
   reset(): void {
     usersByAuthId.clear();
     profilesByUserId.clear();
@@ -1494,6 +1649,7 @@ export const testStore = {
     promotionRequests.length = 0;
     teamMemberships.length = 0;
     requiredActions.length = 0;
+    tasks.length = 0;
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },
