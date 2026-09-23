@@ -143,7 +143,8 @@ export interface AudienceOption {
 }
 
 export function audienceValue(audience: Audience): string {
-  return audience.scope === "team" ? `team:${audience.team}` : "everyone";
+  if (audience.scope === "team") return `team:${audience.team}`;
+  return audience.scope;
 }
 
 /**
@@ -159,9 +160,11 @@ export function markedPinned(
 }
 
 function audienceFromValue(value: string): Audience {
-  return value.startsWith("team:")
-    ? ({ scope: "team", team: value.slice(5) } as Audience)
-    : { scope: "everyone" };
+  if (value.startsWith("team:")) {
+    return { scope: "team", team: value.slice(5) } as Audience;
+  }
+  if (value === "team_leads") return { scope: "team_leads" };
+  return { scope: "everyone" };
 }
 
 export function AnnouncementsManager({
@@ -227,11 +230,14 @@ export function AnnouncementsManager({
     leadTeams === null ||
     (audience.scope === "team" && leadTeams.includes(audience.team));
 
-  // "the camp" / "Kitchen", for the cards and the publish confirmation.
+  // "the camp" / "the team leads" / "Kitchen", for the cards and the publish
+  // confirmation.
   const audienceName = (audience: Audience) =>
     audience.scope === "team"
       ? (teamLabels[audience.team] ?? audience.team)
-      : "the camp";
+      : audience.scope === "team_leads"
+        ? "the team leads"
+        : "the camp";
 
   const reset = () => {
     setForm(emptyForm);
@@ -423,7 +429,9 @@ export function AnnouncementsManager({
                   currentUserId={currentUserId}
                   canPin={canPin(a.audience)}
                   disabled={pending || rowPending || publishing}
-                  busy={rowPending && busy?.id === a.id && busy.action === "pin"}
+                  busy={
+                    rowPending && busy?.id === a.id && busy.action === "pin"
+                  }
                   onPin={handlePin}
                 />
               ))}
@@ -571,8 +579,8 @@ export function AnnouncementsManager({
                 className="text-xs text-muted-foreground"
               >
                 Separate from how it lands: any of the three can be kept at the
-                top. It sits in a banner above every page for the people who
-                got it, until you unpin it — they can&apos;t dismiss it.
+                top. It sits in a banner above every page for the people who got
+                it, until you unpin it — they can&apos;t dismiss it.
               </p>
             </div>
             <Switch
@@ -657,8 +665,10 @@ function PublishConfirm({
         recipientCount === 0
           ? a.audience.scope === "team"
             ? `No members would get it. Nobody else is on ${audienceName} this year.`
-            : "No members would get it. Nobody else is in the camp yet."
-          : `It goes to ${members(recipientCount)}${a.audience.scope === "team" ? ` of ${audienceName}` : ""} now. You can't edit or recall it after. To fix a mistake, publish a correction.`
+            : a.audience.scope === "team_leads"
+              ? "No members would get it. Nobody else leads a team this year."
+              : "No members would get it. Nobody else is in the camp yet."
+          : `It goes to ${members(recipientCount)}${a.audience.scope === "team" ? ` of ${audienceName}` : a.audience.scope === "team_leads" ? (recipientCount === 1 ? " who leads a team" : " who lead teams") : ""} now. You can't edit or recall it after. To fix a mistake, publish a correction.`
       }
       confirmLabel={`Publish to ${members(recipientCount)}`}
       pending={pending}
@@ -710,7 +720,11 @@ function AnnouncementHeader({
             </span>
           )}
           <Badge variant="outline">
-            {a.audience.scope === "team" ? audienceName : "Everyone"}
+            {a.audience.scope === "team"
+              ? audienceName
+              : a.audience.scope === "team_leads"
+                ? "Team leads"
+                : "Everyone"}
           </Badge>
         </div>
       </div>
@@ -835,7 +849,9 @@ function DraftCard({
                 <BusyIcon busy={busyAction === "publish"} icon={Send} />{" "}
                 {a.audience.scope === "team"
                   ? `Publish to ${audienceName}`
-                  : "Publish to camp"}
+                  : a.audience.scope === "team_leads"
+                    ? "Publish to team leads"
+                    : "Publish to camp"}
               </Button>
             </div>
           )}

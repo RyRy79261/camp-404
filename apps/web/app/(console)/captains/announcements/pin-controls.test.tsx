@@ -93,7 +93,9 @@ describe("the composer's second axis", () => {
 
     fireEvent.click(toggle);
     expect(
-      screen.getByRole("switch", { name: "Keep it at the top" }).getAttribute("aria-checked"),
+      screen
+        .getByRole("switch", { name: "Keep it at the top" })
+        .getAttribute("aria-checked"),
     ).toBe("true");
   });
 });
@@ -152,19 +154,22 @@ describe("pin controls on a published announcement", () => {
   });
 
   it("shows a lead a pin only where they could have posted", () => {
-    renderAs(["kitchen"], [
-      sent({
-        id: "b1",
-        title: "Kitchen only",
-        audience: { scope: "team", team: "kitchen" },
-      }),
-      sent({
-        id: "b2",
-        title: "Structures only",
-        audience: { scope: "team", team: "structures" },
-      }),
-      sent({ id: "b3", title: "Camp wide" }),
-    ]);
+    renderAs(
+      ["kitchen"],
+      [
+        sent({
+          id: "b1",
+          title: "Kitchen only",
+          audience: { scope: "team", team: "kitchen" },
+        }),
+        sent({
+          id: "b2",
+          title: "Structures only",
+          audience: { scope: "team", team: "structures" },
+        }),
+        sent({ id: "b3", title: "Camp wide" }),
+      ],
+    );
     // Assert the card that HAS the control first, so the absences below cannot
     // pass against a list that never rendered.
     expect(

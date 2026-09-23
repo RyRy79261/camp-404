@@ -61,19 +61,28 @@ function isOwnedAnnouncementDraft(id: string, senderId: string) {
 type Team = (typeof schema.teamEnum.enumValues)[number];
 
 /** Who an announcement goes to. Mirrors AnnouncementAudience in @camp404/types. */
-export type Audience = { scope: "everyone" } | { scope: "team"; team: Team };
+export type Audience =
+  | { scope: "everyone" }
+  | { scope: "team"; team: Team }
+  | { scope: "team_leads" };
 
 function audienceColumns(audience: Audience) {
-  return audience.scope === "team"
-    ? { scope: "team" as const, team: audience.team }
-    : { scope: "everyone" as const, team: null };
+  switch (audience.scope) {
+    case "team":
+      return { scope: "team" as const, team: audience.team };
+    case "team_leads":
+      return { scope: "team_leads" as const, team: null };
+    default:
+      return { scope: "everyone" as const, team: null };
+  }
 }
 
 /** Read an announcement row's audience back. Anything else reads as everyone. */
 function audienceOf(row: { scope: string; team: Team | null }): Audience {
-  return row.scope === "team" && row.team
-    ? { scope: "team", team: row.team }
-    : { scope: "everyone" };
+  if (row.scope === "team" && row.team)
+    return { scope: "team", team: row.team };
+  if (row.scope === "team_leads") return { scope: "team_leads" };
+  return { scope: "everyone" };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

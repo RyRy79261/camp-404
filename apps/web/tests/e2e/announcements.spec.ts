@@ -4,6 +4,7 @@ import {
   login,
   redeemInviteAtGate,
   resetTestState,
+  seedTeam,
   setRank,
 } from "./_helpers";
 
@@ -338,5 +339,55 @@ test.describe("captain announcements (test-mode)", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Water run" }),
     ).toBeVisible();
+  });
+
+  // Owner, 2026-09-23: a captain "can send announcements to just specific
+  // teams or just the team leaders".
+  test("an announcement to the team leads reaches a lead and not a member", async ({
+    page,
+    request,
+  }) => {
+    // Both recipients must exist before fan-out.
+    for (const [id, email] of [
+      ["leads-lead", "lead@example.com"],
+      ["leads-member", "crew@example.com"],
+    ] as const) {
+      await login(page, { id, email });
+      await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
+      await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+      await completeOnboarding(request, id);
+    }
+    await seedTeam(request, "leads-lead", "kitchen", true);
+    await seedTeam(request, "leads-member", "kitchen", false);
+
+    await login(page, { id: "leads-cap", email: "god@example.com" });
+    await page.goto("/");
+    await completeOnboarding(request, "leads-cap");
+    await setRank(request, "leads-cap", "captain");
+
+    await page.goto("/captains/announcements");
+    await page.getByLabel("Title").fill("Leads sync Tuesday");
+    await page.getByLabel("Message").fill("Bring your team's numbers.");
+    await page.locator("#announcement-audience").click();
+    await page.getByRole("option", { name: "Team leads" }).click();
+    await page.locator("#announcement-presentation").click();
+    await page.getByRole("option", { name: /Quiet/ }).click();
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await page.getByRole("button", { name: "Publish to team leads" }).click();
+    const confirm = page.getByRole("dialog");
+    await expect(confirm.getByText(/1 member who leads a team/)).toBeVisible();
+    await confirm.getByRole("button", { name: "Publish to 1 member" }).click();
+    await expect(page.getByText(/Published to 1 member/)).toBeVisible();
+
+    await login(page, { id: "leads-lead", email: "lead@example.com" });
+    await page.goto("/notifications");
+    await expect(page.getByText("Leads sync Tuesday")).toBeVisible();
+
+    await login(page, { id: "leads-member", email: "crew@example.com" });
+    await page.goto("/notifications");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Notifications" }),
+    ).toBeVisible();
+    await expect(page.getByText("Leads sync Tuesday")).toHaveCount(0);
   });
 });

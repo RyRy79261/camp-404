@@ -86,6 +86,24 @@ describe("announcement audiences", () => {
     ).toBe(true);
   });
 
+  it("lets a captain address just the team leads, and refuses a lead the same", async () => {
+    signIn("captain");
+    expect(
+      (await saveDraftAction({ ...DRAFT, audience: { scope: "team_leads" } }))
+        .ok,
+    ).toBe(true);
+    expect(createAnnouncementDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ audience: { scope: "team_leads" } }),
+    );
+
+    vi.mocked(createAnnouncementDraft).mockClear();
+    signIn("member", ["kitchen"]);
+    expect(
+      await saveDraftAction({ ...DRAFT, audience: { scope: "team_leads" } }),
+    ).toEqual({ ok: false, error: NOT_YOUR_TEAM });
+    expect(createAnnouncementDraft).not.toHaveBeenCalled();
+  });
+
   it("refuses a captain a team that is no longer active", async () => {
     signIn("captain");
     expect(

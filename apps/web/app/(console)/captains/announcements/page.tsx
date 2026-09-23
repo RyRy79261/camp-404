@@ -43,6 +43,7 @@ export default async function AnnouncementsPage() {
   const audienceOptions: AudienceOption[] = isCaptain
     ? [
         { value: "everyone", label: "Everyone in camp" },
+        { value: "team_leads", label: "Team leads" },
         ...teams.map((t) => ({ value: `team:${t.key}`, label: t.label })),
       ]
     : leadTeams.map((key) => ({
@@ -61,7 +62,7 @@ export default async function AnnouncementsPage() {
         title="Announcements & notifications"
         description={`${
           isCaptain
-            ? "Compose a message, save it as a draft, then publish it to the whole camp or one team. Everyone in it but you receives it."
+            ? "Compose a message, save it as a draft, then publish it to the whole camp, one team, or the team leads. Everyone in it but you receives it."
             : "Compose a message for a team you lead, save it as a draft, then publish it. Everyone on the team but you receives it."
         } A full-screen announcement takes over each member's screen until they acknowledge it.`}
       />

@@ -78,6 +78,59 @@ describe("team announcements", () => {
     expect(seen).toMatchObject({ recipientCount: 1, readCount: 1 });
   });
 
+  it("reach every team's leads this year, and nobody else, when sent to the team leads", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, {
+      rank: "captain",
+      approvalStatus: "approved",
+    });
+    const kitchenLead = await makeUser(db, { approvalStatus: "approved" });
+    const structuresLead = await makeUser(db, { approvalStatus: "approved" });
+    const cook = await makeUser(db, { approvalStatus: "approved" });
+    const lastYearsLead = await makeUser(db, { approvalStatus: "approved" });
+    await makeMembership(db, {
+      userId: kitchenLead.id,
+      team: "kitchen",
+      isLead: true,
+    });
+    await makeMembership(db, {
+      userId: structuresLead.id,
+      team: "structures",
+      isLead: true,
+    });
+    await makeMembership(db, { userId: cook.id, team: "kitchen" });
+    await makeMembership(db, {
+      userId: lastYearsLead.id,
+      team: "kitchen",
+      isLead: true,
+      cycle: 2020,
+    });
+    // The captain leads a team too, and is still not sent their own message.
+    await makeMembership(db, {
+      userId: captain.id,
+      team: "structures",
+      isLead: true,
+    });
+
+    const audience = { scope: "team_leads" } as const;
+    expect(await countAnnouncementAudience(captain.id, audience)).toBe(2);
+    const { id } = await createAnnouncementDraft({
+      senderId: captain.id,
+      ...DRAFT,
+      audience,
+    });
+    expect(await publishAnnouncement({ id, senderId: captain.id })).toEqual({
+      ok: true,
+      recipientCount: 2,
+    });
+    expect((await recipients(db, id)).sort()).toEqual(
+      [kitchenLead.id, structuresLead.id].sort(),
+    );
+    // Stored and read back as the team leads, not as "everyone".
+    const [listed] = await listAnnouncements();
+    expect(listed?.audience).toEqual(audience);
+  });
+
   it("let a lead send to a team they lead, and nowhere else", async () => {
     const db = h.db();
     const lead = await makeUser(db, { approvalStatus: "approved" });
@@ -105,7 +158,12 @@ describe("team announcements", () => {
       ...DRAFT,
     });
 
-    for (const id of [toStructures.id, toEveryone.id]) {
+    const toLeads = await createAnnouncementDraft({
+      senderId: lead.id,
+      ...DRAFT,
+      audience: { scope: "team_leads" },
+    });
+    for (const id of [toStructures.id, toEveryone.id, toLeads.id]) {
       expect(await publishAnnouncement({ id, senderId: lead.id })).toEqual({
         ok: false,
         error: DRAFT_TEAM_NOT_LED,
