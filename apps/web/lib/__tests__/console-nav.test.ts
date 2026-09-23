@@ -20,6 +20,17 @@ describe("consoleNavFor", () => {
     expect(labels).not.toContain("Payments");
     expect(labels).not.toContain("Audit");
     expect(labels).not.toContain("Camp overview");
+    expect(labels).not.toContain("System status");
+  });
+
+  it("gives the System status page to captains only", () => {
+    expect(consoleNavFor("camp_member").map((i) => i.href)).not.toContain(
+      "/captains/system",
+    );
+    expect(consoleNavFor("captain")).toContainEqual({
+      href: "/captains/system",
+      label: "System status",
+    });
   });
 
   it("shows a captain everything, in bar order", () => {

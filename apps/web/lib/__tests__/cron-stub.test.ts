@@ -14,6 +14,7 @@ vi.mock("@/lib/telegram", () => ({
 vi.mock("@camp404/telegram", () => ({ dispatchPendingAnnouncements: vi.fn() }));
 
 import { CRON_STUBS, type CronStubJob } from "@/lib/cron-stub";
+import { SCHEDULED_JOBS } from "@/lib/cron-schedule";
 import { GET as manualsGenerate } from "@/app/api/cron/manuals/generate/route";
 import { GET as recipesAnalyse } from "@/app/api/cron/recipes/analyse/route";
 import { GET as telegramDispatch } from "@/app/api/cron/telegram/dispatch/route";
@@ -60,6 +61,17 @@ describe("the cron schedule", () => {
         .filter((job) => !scheduled.includes(job))
         .sort(),
     ).toEqual([...UNSCHEDULED].sort());
+  });
+
+  // The System status page lists SCHEDULED_JOBS, not vercel.json, so the two
+  // must be the same list: same paths, same times, same order.
+  it("matches the list the System status page shows, job for job", () => {
+    expect(
+      SCHEDULED_JOBS.map((j) => ({
+        path: `/api/cron/${j.job}`,
+        schedule: j.schedule,
+      })),
+    ).toEqual(vercel.crons.map(({ path, schedule }) => ({ path, schedule })));
   });
 
   it("lists each stub at the schedule vercel.json runs it on", () => {

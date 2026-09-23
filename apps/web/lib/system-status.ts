@@ -1,6 +1,6 @@
 // What this deployment is set up with, derived from its env and one database
-// probe. A library only: the owner chose no /captains/system page
-// (2026-09-16, no Pencil board draws one).
+// probe. Shown to captains on /captains/system (added 2026-09-24, reversing
+// the 2026-09-16 call to keep this a library with no page).
 //
 // Three rules:
 //

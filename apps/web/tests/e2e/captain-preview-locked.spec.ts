@@ -41,6 +41,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
       "Payments",
       "Camp settings",
       "Audit",
+      "System status",
     ]) {
       await expect(nav.getByRole("link", { name })).toHaveCount(0);
     }
@@ -62,6 +63,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
       "Payments",
       "Camp settings",
       "Audit",
+      "System status",
     ]) {
       await expect(nav.getByRole("link", { name })).toBeVisible();
     }

@@ -395,6 +395,14 @@ export const testStore = {
   findUserById(userId: string): TestUser | null {
     return findUserById(userId);
   },
+  /** How many captains there are (the system-status probe's twin). */
+  countCaptains(): number {
+    let count = 0;
+    for (const user of usersByAuthId.values()) {
+      if (user.rank === "captain") count++;
+    }
+    return count;
+  },
   setUserInviteCode(userId: string, code: string): void {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
