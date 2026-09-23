@@ -23,7 +23,7 @@ export const metadata = { title: "Camp management — Camp 404" };
 export default async function CampManagementPage({
   searchParams,
 }: {
-  // `?team=` opens the roster with that team already selected — the Overview's
+  // `?team=` opens the roster with that team already selected — the camp overview's
   // coverage rail links straight to a team's people. The key is checked below
   // against every team the config NAMES, archived ones included (the rail links
   // to an archived team that still has members on it, and the block under the

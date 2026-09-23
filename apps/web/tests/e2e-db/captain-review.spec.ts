@@ -35,8 +35,10 @@ async function applicant(
     },
   });
   expect(res.ok()).toBe(true);
+  // Home tells an applicant they are waiting (every other page holds them at
+  // /pending-approval).
   await page.goto("/");
-  await expect(page).toHaveURL(/\/pending-approval/);
+  await expect(page.getByText("Waiting for a captain")).toBeVisible();
   return page;
 }
 

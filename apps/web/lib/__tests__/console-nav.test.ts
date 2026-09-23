@@ -4,7 +4,7 @@ import { CONSOLE_NAV, consoleNavFor } from "../console-nav";
 describe("consoleNavFor", () => {
   it("shows a member only the member destinations", () => {
     expect(consoleNavFor("camp_member").map((i) => i.label)).toEqual([
-      "Overview",
+      "Home",
       "Roster",
       "My forms",
       "Family tree",
@@ -18,6 +18,7 @@ describe("consoleNavFor", () => {
     expect(labels).toContain("Announcements");
     expect(labels).not.toContain("Payments");
     expect(labels).not.toContain("Audit");
+    expect(labels).not.toContain("Camp overview");
   });
 
   it("shows a captain everything, in bar order", () => {

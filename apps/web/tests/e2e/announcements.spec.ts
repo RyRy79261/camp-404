@@ -234,7 +234,7 @@ test.describe("captain announcements (test-mode)", () => {
     await login(page, { id: "member-auth", email: "member@example.com" });
     await page.goto("/");
     await expect(
-      page.getByRole("heading", { level: 1, name: "Overview" }),
+      page.getByRole("heading", { level: 1, name: /^Hi\b/ }),
     ).toBeVisible();
     const banner = page.getByRole("region", { name: "Pinned announcements" });
     await expect(banner.getByText("Water points moved")).toBeVisible();
@@ -273,7 +273,7 @@ test.describe("captain announcements (test-mode)", () => {
     // toHaveURL resolves before paint, and an empty document has no banner
     // either.
     await expect(
-      page.getByRole("heading", { level: 1, name: "Overview" }),
+      page.getByRole("heading", { level: 1, name: /^Hi\b/ }),
     ).toBeVisible();
     await expect(
       page.getByRole("region", { name: "Pinned announcements" }),

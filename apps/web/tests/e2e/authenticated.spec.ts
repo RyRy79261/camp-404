@@ -65,10 +65,10 @@ test.describe("authenticated flow (test-mode)", () => {
 
     await page.goto("/");
     await expect(page).toHaveURL("/");
-    // Home is now the console Overview instead of the sign-in CTA: the
-    // heading, and the console nav with a member destination in it.
+    // Home is now the member's own page instead of the sign-in CTA: the
+    // greeting, and the console nav with a member destination in it.
     await expect(
-      page.getByRole("heading", { level: 1, name: "Overview" }),
+      page.getByRole("heading", { level: 1, name: /^Hi\b/ }),
     ).toBeVisible();
     await expect(
       page
@@ -109,7 +109,7 @@ test.describe("authenticated flow (test-mode)", () => {
     ).toBeVisible();
   });
 
-  test("a pending member is held at /pending-approval after onboarding", async ({
+  test("a pending member lands on Home, told they are waiting, and is held everywhere else", async ({
     page,
     request,
   }) => {
@@ -121,14 +121,18 @@ test.describe("authenticated flow (test-mode)", () => {
     await redeemInviteAtGate(page, "GATEKEEP");
     await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
 
-    // Finish onboarding — now the approval gate is the only thing left, and
-    // it blocks the app with the "application submitted" screen.
+    // Finish onboarding — now approval is the only thing left. Home says so
+    // (owner, 2026-09-23: after the Burner Bio "I land on my dashboard. It
+    // will give me information about the fact that I still need to be
+    // approved"), and shows nothing they cannot act on yet.
     await completeOnboarding(request, "pending-auth");
     await page.goto("/");
-    await expect(page).toHaveURL(/\/pending-approval/);
-    await expect(page.getByText("Application submitted")).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByText("Waiting for a captain")).toBeVisible();
+    await expect(page.getByRole("list", { name: "To do" })).toHaveCount(0);
+    await expect(page.getByText("Coming up")).toHaveCount(0);
 
-    // The gate holds on other protected routes too, not just home.
+    // Every other member page still holds at the approval screen.
     await page.goto("/tools/forms");
     await expect(page).toHaveURL(/\/pending-approval/);
   });

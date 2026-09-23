@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TeamsConfig } from "@camp404/db/camp-config";
 import type * as CampConfig from "@/lib/camp-config";
 
-// What the page does with `?team=` — the Overview's coverage rail links here
+// What the page does with `?team=` — the camp overview's coverage rail links here
 // with a team key on the URL, and the page is the only thing that decides
 // whether that key is honoured. Three cases matter: an active team filters, an
 // ARCHIVED team the config still names filters AND gains an option in the

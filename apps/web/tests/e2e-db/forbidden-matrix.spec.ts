@@ -17,6 +17,13 @@ interface Route {
 
 const ROUTES: Route[] = [
   {
+    // The whole-camp board, which was home until members got their own
+    // (2026-09-23).
+    path: "/captains/overview",
+    bar: "captain",
+    open: (p) => p.getByText("Is camp ready?"),
+  },
+  {
     path: "/captains/questionnaires",
     bar: "team_lead",
     open: (p) => p.getByRole("button", { name: "New questionnaire" }),
