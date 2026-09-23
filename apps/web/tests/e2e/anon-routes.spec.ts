@@ -20,6 +20,8 @@ test.describe("signed-out visitor", () => {
     // offering a link that cannot arrive.
     { path: "/auth/forgot-password", heading: "Password reset is off" },
     { path: "/auth/reset-password", heading: /This link can.t be used/ },
+    // Public, because Google will not offer its sign-in without it.
+    { path: "/privacy", heading: "Privacy" },
   ];
 
   for (const { path, heading } of publicPages) {
