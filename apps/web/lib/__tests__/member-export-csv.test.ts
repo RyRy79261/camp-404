@@ -64,7 +64,7 @@ function fileFor(
 describe("memberExportCells", () => {
   it("gives a member the roster's words — approval standing included — and nothing else", () => {
     expect(fileFor("camp_member")).toEqual([
-      ["Name", "Handle", "Rank", "Teams", "Country", "Approval"],
+      ["Name", "Telegram", "Rank", "Teams", "Country", "Approval"],
       [
         "Nova Reyes",
         "@nova",

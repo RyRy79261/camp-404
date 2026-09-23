@@ -63,6 +63,27 @@ describe("saveBurnerProfileReplay", () => {
       .where(eq(schema.questionnaireEdits.userId, userId));
   }
 
+  it("sets the Telegram handle, leaves it when not given, and clears it on null", async () => {
+    const member = await seed();
+    const replay = (telegramHandle?: string | null) =>
+      saveBurnerProfileReplay({
+        userId: member.id,
+        version: "v10",
+        responses: {},
+        idColumns: null,
+        emergencyContacts: [],
+        edit: null,
+        ...(telegramHandle === undefined ? {} : { telegramHandle }),
+      });
+
+    await replay("nova_reyes");
+    expect((await userOf(member.id)).telegramHandle).toBe("nova_reyes");
+    await replay();
+    expect((await userOf(member.id)).telegramHandle).toBe("nova_reyes");
+    await replay(null);
+    expect((await userOf(member.id)).telegramHandle).toBeNull();
+  });
+
   it("writes the answers, contacts, gate and change log together", async () => {
     const member = await seed();
 

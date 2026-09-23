@@ -101,6 +101,7 @@ const OTHER_ROLE_LABELS: Record<QuestionRole, string> = {
   emergency_contact_name: "Emergency contact name",
   emergency_contact_phone: "Emergency contact phone",
   emergency_contact_relationship: "Emergency contact relationship",
+  telegram_handle: "Telegram username",
   ...Object.fromEntries(
     Object.entries(BUILDER_ROLES).map(([role, meta]) => [role, meta.label]),
   ),
@@ -1012,6 +1013,7 @@ function ShortTextBody({
               <SelectItem value="email">An email address</SelectItem>
               <SelectItem value="url">A link</SelectItem>
               <SelectItem value="phone">A phone number</SelectItem>
+              <SelectItem value="telegram">A Telegram username</SelectItem>
               <SelectItem value="number">A number</SelectItem>
               <SelectItem value="integer">A whole number</SelectItem>
               <SelectItem value="alphanumeric">Letters and numbers</SelectItem>

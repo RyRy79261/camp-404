@@ -16,6 +16,7 @@ import {
   setIdDocumentColumns,
   getEmergencyContactsColumn,
   setEmergencyContactsColumn,
+  setTelegramHandleColumn,
   saveBurnerProfileReplay as dbSaveBurnerProfileReplay,
 } from "@camp404/db/burner-profile";
 import type {
@@ -413,6 +414,7 @@ interface UserBackend {
     reason?: string | null;
   }): Promise<boolean>;
   setUserProfileImage(userId: string, url: string | null): Promise<void>;
+  setTelegramHandle(userId: string, handle: string | null): Promise<void>;
   setUserDisplayName(userId: string, name: string | null): Promise<void>;
   getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null>;
   isTeamLead(userId: string): Promise<boolean>;
@@ -447,6 +449,8 @@ export interface BurnerProfileReplayInput {
   /** The ID number to store, or null to leave it alone. */
   id: { idType: string | null; idNumber: string } | null;
   emergencyContacts: readonly EmergencyContact[];
+  /** The Telegram username, or null to clear it; undefined leaves it alone. */
+  telegramHandle?: string | null;
   /** The change-log row, or null when nothing changed. */
   edit: {
     questionnaireKey: string;
@@ -475,6 +479,15 @@ export async function upsertBurnerProfile(input: {
 }): Promise<void> {
   const store = usesTestStore() ? testBackend : realBackend;
   await store.upsertBurnerProfile(input);
+}
+
+/** Persist the member's Telegram username (bare, or null to clear it). */
+export async function setTelegramHandle(
+  userId: string,
+  handle: string | null,
+): Promise<void> {
+  const store = usesTestStore() ? testBackend : realBackend;
+  await store.setTelegramHandle(userId, handle);
 }
 
 /** Persist the member's profile photo URL (or null to clear it). */
@@ -568,6 +581,9 @@ const realBackend: UserBackend = {
   async setUserProfileImage(userId, url) {
     await setUserProfileImage(userId, url);
   },
+  async setTelegramHandle(userId, handle) {
+    await setTelegramHandleColumn(userId, handle);
+  },
   async setUserDisplayName(userId, name) {
     await setUserDisplayName(userId, name);
   },
@@ -620,6 +636,7 @@ const realBackend: UserBackend = {
         ? idColumnsFor(input.id.idType, encrypt(input.id.idNumber))
         : null,
       emergencyContacts: input.emergencyContacts,
+      telegramHandle: input.telegramHandle,
       edit: input.edit,
     });
   },
@@ -661,6 +678,9 @@ const testBackend: UserBackend = {
   },
   async setUserProfileImage(userId, url) {
     testStore.setProfileImage(userId, url);
+  },
+  async setTelegramHandle(userId, handle) {
+    testStore.setTelegramHandle(userId, handle);
   },
   async setUserDisplayName(userId, name) {
     testStore.setDisplayName(userId, name);
@@ -714,6 +734,9 @@ const testBackend: UserBackend = {
     });
     if (input.id) testStore.setIdDocuments(input.userId, input.id);
     testStore.setEmergencyContacts(input.userId, input.emergencyContacts);
+    if (input.telegramHandle !== undefined) {
+      testStore.setTelegramHandle(input.userId, input.telegramHandle);
+    }
     // A re-submit also re-satisfies the gate, as in the real backend.
     testStore.satisfyRequiredAction(input.userId, "burner_profile");
     if (input.edit && input.edit.changes.length > 0) {

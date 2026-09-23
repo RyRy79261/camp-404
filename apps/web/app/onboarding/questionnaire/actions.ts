@@ -7,6 +7,7 @@ import {
   questionIdForRole,
   questionsWithRole,
   splitEmergencyContacts,
+  telegramHandleFromResponses,
   validateResponses,
   type SaveResult,
 } from "@camp404/types";
@@ -20,6 +21,7 @@ import {
   setEmergencyContacts,
   setIdDocuments,
   setProfileImage,
+  setTelegramHandle,
   upsertBurnerProfile,
 } from "@/lib/users";
 import { splitIdNumber } from "@camp404/db/id-documents";
@@ -144,6 +146,13 @@ export async function saveBurnerProfile(
       await setProfileImage(campUser.id, saved);
       // Only now is the old photo unreferenced.
       await pruneReplacedProfilePhotos(authUser.id, saved);
+    }
+
+    // The Telegram username goes to the roster's handle column. Only a save
+    // that carries its page touches it, like the contacts above.
+    const telegram = telegramHandleFromResponses(questionnaire, cleaned);
+    if (telegram !== undefined) {
+      await setTelegramHandle(campUser.id, telegram);
     }
 
     await upsertBurnerProfile({

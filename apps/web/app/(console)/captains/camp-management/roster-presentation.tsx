@@ -274,7 +274,17 @@ export function ProfileHead({
         </div>
         {(row.handle || row.country) && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            {row.handle && <span>@{row.handle}</span>}
+            {row.handle && (
+              // The handle is a Telegram username: open the chat with them.
+              <a
+                href={`https://t.me/${row.handle}`}
+                target="_blank"
+                rel="noreferrer"
+                className="underline-offset-4 hover:text-foreground hover:underline"
+              >
+                @{row.handle}
+              </a>
+            )}
             {row.handle && row.country && <span aria-hidden>·</span>}
             {row.country && (
               <span className="inline-flex items-center gap-1.5">

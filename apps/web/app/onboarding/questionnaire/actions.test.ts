@@ -17,6 +17,7 @@ vi.mock("@/lib/users", () => ({
   setIdDocuments: vi.fn(),
   setEmergencyContacts: vi.fn(),
   setProfileImage: vi.fn(),
+  setTelegramHandle: vi.fn(),
   satisfyBurnerProfileAction: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
@@ -35,6 +36,7 @@ import {
   setEmergencyContacts,
   setIdDocuments,
   setProfileImage,
+  setTelegramHandle,
   upsertBurnerProfile,
 } from "@/lib/users";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
@@ -120,6 +122,23 @@ describe("saveBurnerProfile persistence error handling", () => {
     expect(upsertBurnerProfile).not.toHaveBeenCalled();
   });
 
+  it("copies a Telegram answer to the roster, and leaves it alone on a save without one", async () => {
+    vi.mocked(setIdDocuments).mockResolvedValue(undefined);
+
+    await saveBurnerProfile(
+      { ...responsesWithId, telegram: " @Nova_Reyes " },
+      false,
+    );
+    expect(setTelegramHandle).toHaveBeenCalledExactlyOnceWith(
+      "camp-1",
+      "Nova_Reyes",
+    );
+
+    vi.mocked(setTelegramHandle).mockClear();
+    await saveBurnerProfile(responsesWithId, false);
+    expect(setTelegramHandle).not.toHaveBeenCalled();
+  });
+
   it("returns ok on a successful non-final save", async () => {
     vi.mocked(setIdDocuments).mockResolvedValue(undefined);
 
@@ -136,7 +155,8 @@ describe("saveBurnerProfile persistence error handling", () => {
     const result = await saveBurnerProfile(responsesWithId, true);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(Object.keys(result.errors).length).toBeGreaterThan(0);
+    if (!result.ok)
+      expect(Object.keys(result.errors).length).toBeGreaterThan(0);
     expect(upsertBurnerProfile).not.toHaveBeenCalled();
   });
 });
@@ -153,7 +173,12 @@ describe("saveBurnerProfile response bounds", () => {
         kind: "questions",
         title: "Basics",
         questions: [
-          { id: "birthday", kind: "date", prompt: "Date of birth", required: true },
+          {
+            id: "birthday",
+            kind: "date",
+            prompt: "Date of birth",
+            required: true,
+          },
         ],
       },
     ],
@@ -206,10 +231,14 @@ describe("saveBurnerProfile response bounds", () => {
   it("rejects a structurally malformed draft without persisting", async () => {
     // REFUSED CASE: nested objects aren't a legal response value; the draft
     // path had no Zod parse at all before this.
-    const result = await saveBurnerProfile({ birthday: { nested: true } }, false);
+    const result = await saveBurnerProfile(
+      { birthday: { nested: true } },
+      false,
+    );
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.errors._form).toMatch(/unreadable or too large/i);
+    if (!result.ok)
+      expect(result.errors._form).toMatch(/unreadable or too large/i);
     expect(upsertBurnerProfile).not.toHaveBeenCalled();
   });
 

@@ -58,8 +58,21 @@ export const TextFormat = z.enum([
   "number",
   "integer",
   "alphanumeric",
+  "telegram",
 ]);
 export type TextFormat = z.infer<typeof TextFormat>;
+
+/**
+ * A Telegram username as Telegram allows it: 5 to 32 characters of letters,
+ * digits and underscores, starting with a letter. The leading `@` people type
+ * is optional. Returns the bare username (no `@`), or null when it is not one.
+ * The roster shows it as `@name` and links it to t.me/name.
+ */
+const TELEGRAM_RE = /^[A-Za-z][A-Za-z0-9_]{4,31}$/;
+export function telegramUsername(raw: string): string | null {
+  const name = raw.trim().replace(/^@/, "");
+  return TELEGRAM_RE.test(name) ? name : null;
+}
 
 /** Bounds a numeric text format checks against (a short text's `min`/`max`). */
 export interface TextFormatBounds {
@@ -94,11 +107,16 @@ export function checkTextFormat(
         : "Enter a link starting with http:// or https://";
     case "phone": {
       const digits = value.replace(/\D/g, "");
-      const ok = PHONE_RE.test(value) && digits.length >= 7 && digits.length <= 15;
+      const ok =
+        PHONE_RE.test(value) && digits.length >= 7 && digits.length <= 15;
       return ok ? null : "Enter a valid phone number";
     }
     case "alphanumeric":
       return ALNUM_RE.test(value) ? null : "Letters and numbers only";
+    case "telegram":
+      return telegramUsername(value) !== null
+        ? null
+        : "Enter a Telegram username, like @nova_reyes: 5 to 32 letters, numbers or _";
     case "number":
     case "integer": {
       const n = Number(value);
@@ -215,6 +233,9 @@ export const QUESTION_ROLES = [
   "emergency_contact_name",
   "emergency_contact_phone",
   "emergency_contact_relationship",
+  // The member's Telegram username, mirrored onto users.telegram_handle (the
+  // roster's handle), since the camp talks on Telegram.
+  "telegram_handle",
   // Builder questionnaires: copied into dietary_requirements / driver_profiles
   // on submit, so a camp-authored Dietary or Transport questionnaire feeds the
   // roster, the export and the drivers audience (see BUILDER_ROLES in
@@ -316,6 +337,7 @@ export const ShortTextQuestion = z.object({
       "emergency_contact_relationship",
       "dietary_allergies",
       "dietary_notes",
+      "telegram_handle",
     ])
     .optional(),
 });

@@ -88,7 +88,7 @@ describe("buildMemberExport", () => {
     // Approval is a member column since the owner's 2026-09-22 ruling; the
     // join date, email, dues and ID are still captain-only.
     expect(file.content.split("\r\n")[0]).toBe(
-      "\uFEFFName,Handle,Rank,Teams,Country,Approval",
+      "\uFEFFName,Telegram,Rank,Teams,Country,Approval",
     );
   });
 

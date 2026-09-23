@@ -52,6 +52,27 @@ beforeEach(() => {
 });
 
 describe("burner profile replay", () => {
+  it("copies the Telegram username to the roster, and keeps the answer", async () => {
+    const form = await getReplayableForm("burner_profile");
+    await form!.save("user-1", { telegram: "@nova_reyes" }, null);
+
+    expect(saveBurnerProfileReplay).toHaveBeenCalledWith(
+      expect.objectContaining({
+        responses: { telegram: "@nova_reyes" },
+        telegramHandle: "nova_reyes",
+      }),
+    );
+  });
+
+  it("clears the roster's Telegram when the answer is emptied", async () => {
+    const form = await getReplayableForm("burner_profile");
+    await form!.save("user-1", { telegram: "" }, null);
+
+    expect(saveBurnerProfileReplay).toHaveBeenCalledWith(
+      expect.objectContaining({ telegramHandle: null }),
+    );
+  });
+
   it("merges the stored contacts back into the member's own form", async () => {
     vi.mocked(getBurnerProfile).mockResolvedValue({
       responses: { "bio.statement": "Hi" },

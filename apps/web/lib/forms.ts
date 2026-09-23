@@ -3,13 +3,12 @@ import "server-only";
 import {
   mergeEmergencyContacts,
   splitEmergencyContacts,
+  telegramHandleFromResponses,
   type Questionnaire,
   type QuestionnaireFieldChange,
   type QuestionnaireResponses,
 } from "@camp404/types";
-import {
-  listQuestionnaireEdits as listEditsDb,
-} from "@camp404/db/questionnaire-edits";
+import { listQuestionnaireEdits as listEditsDb } from "@camp404/db/questionnaire-edits";
 import { splitIdNumber, mergeIdNumber } from "@camp404/db/id-documents";
 import {
   listCompletedQuestionnaireAnswers as listCompletedAnswersDb,
@@ -102,8 +101,9 @@ const BURNER_PROFILE: ReplayableFormDef = {
   async save(userId, responses, edit) {
     const split = splitIdNumber(responses);
     const { idType, idNumber } = split;
+    const questionnaire = await getQuestionnaireForResponses();
     const { cleaned, contacts } = splitEmergencyContacts(
-      await getQuestionnaireForResponses(),
+      questionnaire,
       split.cleaned,
     );
     // One transaction: the answers, the ID number, the contacts (a replay is a
@@ -115,6 +115,8 @@ const BURNER_PROFILE: ReplayableFormDef = {
       responses: cleaned,
       id: idNumber ? { idType, idNumber } : null,
       emergencyContacts: contacts,
+      // The answer stays in the profile too; this copies it to the roster.
+      telegramHandle: telegramHandleFromResponses(questionnaire, cleaned),
       edit: edit ? { questionnaireKey: "burner_profile", ...edit } : null,
     });
   },

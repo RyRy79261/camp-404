@@ -39,7 +39,7 @@ describe("RosterToolbar — captain view", () => {
     expect(screen.getByLabelText("Search the roster")).toBeTruthy();
     // Board S17's copy: a captain can search by email.
     expect(
-      screen.getByPlaceholderText("Search by name, handle or email"),
+      screen.getByPlaceholderText("Search by name, Telegram or email"),
     ).toBeTruthy();
   });
 
@@ -64,7 +64,7 @@ describe("RosterToolbar — member view (publicOnly)", () => {
   it("never offers an email search to a member", () => {
     setup({ publicOnly: true, stats: publicStats });
     expect(
-      screen.getByPlaceholderText("Search by name, handle or team"),
+      screen.getByPlaceholderText("Search by name, Telegram or team"),
     ).toBeTruthy();
   });
 

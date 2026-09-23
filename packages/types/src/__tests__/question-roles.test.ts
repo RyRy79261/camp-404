@@ -5,6 +5,7 @@ import {
   mergeEmergencyContacts,
   questionIdForRole,
   splitEmergencyContacts,
+  telegramHandleFromResponses,
 } from "../question-roles";
 import { Questionnaire } from "../questionnaire";
 
@@ -20,6 +21,14 @@ const questionnaire = Questionnaire.parse({
       questions: [
         { id: "photo", kind: "image", prompt: "Photo", role: "profile_photo" },
         { id: "about", kind: "long_text", prompt: "About", role: "bio" },
+        {
+          id: "tg",
+          kind: "short_text",
+          prompt: "Telegram",
+          format: "telegram",
+          required: false,
+          role: "telegram_handle",
+        },
       ],
     },
     {
@@ -204,5 +213,20 @@ describe("incompleteContactErrors", () => {
         "b.name": "  ",
       }),
     ).toEqual({});
+  });
+});
+
+describe("telegramHandleFromResponses", () => {
+  it("gives the bare username, whatever the member typed around it", () => {
+    expect(
+      telegramHandleFromResponses(questionnaire, { tg: " @nova_reyes " }),
+    ).toBe("nova_reyes");
+  });
+
+  it("clears the handle for a blank answer, and leaves it alone when the save has no Telegram answer", () => {
+    expect(telegramHandleFromResponses(questionnaire, { tg: "" })).toBeNull();
+    expect(
+      telegramHandleFromResponses(questionnaire, { photo: "x" }),
+    ).toBeUndefined();
   });
 });
