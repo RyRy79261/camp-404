@@ -36,6 +36,22 @@ const CASES: Record<
     rejects: ["camp-404", "hello!", "@handle"],
     error: "Letters and numbers only",
   },
+  // Telegram's own rule: 5 to 32 letters, digits or _, starting with a letter;
+  // the leading @ is optional.
+  telegram: {
+    accepts: ["@nova_reyes", "nova_reyes", " @Camp404crew ", "abcde"],
+    rejects: [
+      "@abcd",
+      "4nova",
+      "nova-reyes",
+      "nova_",
+      "@",
+      "a".repeat(33),
+      "t.me/nova",
+    ],
+    error:
+      "Enter a Telegram username, like @nova_reyes: 5 to 32 letters, numbers or _",
+  },
   // AB's numeric presets. Unbounded here; `min`/`max` are exercised below.
   number: {
     accepts: ["12", " 1.5 ", "-3"],
@@ -278,11 +294,15 @@ describe("text format — the numeric presets", () => {
   });
 
   it("min and max carry the bound in the message", () => {
-    expect(validateOne(textQuestion({ format: "number", min: 2 }), "1")).toEqual({
+    expect(
+      validateOne(textQuestion({ format: "number", min: 2 }), "1"),
+    ).toEqual({
       ok: false,
       error: "Must be at least 2",
     });
-    expect(validateOne(textQuestion({ format: "number", max: 2 }), "3")).toEqual({
+    expect(
+      validateOne(textQuestion({ format: "number", max: 2 }), "3"),
+    ).toEqual({
       ok: false,
       error: "Must be at most 2",
     });

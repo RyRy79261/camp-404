@@ -30,7 +30,7 @@ const ID_SOURCES = ["users.passportEncrypted", "users.saIdEncrypted"];
 /** Every column, in file order. */
 export const MEMBER_EXPORT_COLUMNS: readonly MemberExportColumn[] = [
   { key: "name", header: "Name", sources: ["users.displayName"] },
-  { key: "handle", header: "Handle", sources: ["users.telegramHandle"] },
+  { key: "handle", header: "Telegram", sources: ["users.telegramHandle"] },
   {
     key: "rank",
     header: "Rank",

@@ -52,6 +52,29 @@ beforeEach(() => {
 });
 
 describe("burner profile replay", () => {
+  it("copies the Telegram username to the roster, and keeps the answer", async () => {
+    const form = await getReplayableForm("burner_profile");
+    await form!.save("user-1", { telegram: "@nova_reyes" }, null);
+
+    expect(saveBurnerProfileReplay).toHaveBeenCalledWith(
+      expect.objectContaining({
+        responses: { telegram: "@nova_reyes" },
+        telegramHandle: "nova_reyes",
+      }),
+    );
+  });
+
+  it("clears the roster's Telegram when the answer is emptied", async () => {
+    const form = await getReplayableForm("burner_profile");
+    // The replay action validates first, and validation drops a blank
+    // optional answer: an emptied field arrives as no key at all.
+    await form!.save("user-1", {}, null);
+
+    expect(saveBurnerProfileReplay).toHaveBeenCalledWith(
+      expect.objectContaining({ telegramHandle: null }),
+    );
+  });
+
   it("merges the stored contacts back into the member's own form", async () => {
     vi.mocked(getBurnerProfile).mockResolvedValue({
       responses: { "bio.statement": "Hi" },
@@ -101,6 +124,8 @@ describe("burner profile replay", () => {
       responses: { "bio.statement": "Hi", "id.type": "passport" },
       id: { idType: "passport", idNumber: "A1234567" },
       emergencyContacts: [ADA],
+      // No Telegram answer on a whole form: the member left it blank.
+      telegramHandle: null,
       edit: {
         questionnaireKey: "burner_profile",
         editedByUserId: "user-1",

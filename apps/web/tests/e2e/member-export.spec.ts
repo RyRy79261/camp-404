@@ -30,6 +30,6 @@ test.describe("member export (test-mode)", () => {
     const [header] = (await res.text()).replace(/^\uFEFF/, "").split("\r\n");
     // Approval is here on the owner's 2026-09-22 ruling \u2014 the file says what
     // the roster says. Email, ID, dues and the join date stay captain-only.
-    expect(header).toBe("Name,Handle,Rank,Teams,Country,Approval");
+    expect(header).toBe("Name,Telegram,Rank,Teams,Country,Approval");
   });
 });

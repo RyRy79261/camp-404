@@ -82,6 +82,7 @@ interface TestUser {
   authUserId: string;
   displayName: string | null;
   profileImageUrl: string | null;
+  telegramHandle: string | null;
   inviteCode: string | null;
   rank: TestRank;
   approvalStatus: TestApprovalStatus;
@@ -378,6 +379,7 @@ export const testStore = {
       authUserId: input.authUserId,
       displayName: input.displayName,
       profileImageUrl: null,
+      telegramHandle: null,
       inviteCode: input.inviteCode,
       rank: input.rank ?? "member",
       approvalStatus: input.approvalStatus ?? "approved",
@@ -475,6 +477,12 @@ export const testStore = {
     return false;
   },
 
+  setTelegramHandle(userId: string, handle: string | null): void {
+    const user = findUserById(userId);
+    if (!user) return;
+    user.telegramHandle = handle;
+    user.updatedAt = new Date();
+  },
   setProfileImage(userId: string, url: string | null): void {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
@@ -1391,7 +1399,7 @@ export const testStore = {
         return {
           id: u.id,
           displayName: u.displayName,
-          handle: null,
+          handle: u.telegramHandle,
           rank: u.rank,
           approvalStatus: u.approvalStatus,
           isLead: mine.some((m) => m.isLead),

@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { login, resetTestState, redeemInviteAtGate } from "./_helpers";
+import {
+  completeOnboarding,
+  login,
+  resetTestState,
+  redeemInviteAtGate,
+} from "./_helpers";
 
 // The questionnaire wizard previously had ZERO e2e coverage — specs only ever
 // reached its landing page or shortcut completion via a test seam. The
@@ -67,6 +72,52 @@ test.describe("onboarding questionnaire wizard", () => {
     // the ID-document page that used to block onboarding.
     await expect(
       page.getByRole("heading", { name: "A bit about you", exact: true }),
+    ).toBeVisible();
+  });
+
+  test("a Telegram username is checked, then shows on the roster as the member's handle", async ({
+    page,
+    request,
+  }) => {
+    await login(page, {
+      id: "tg-user",
+      email: "tg@example.com",
+      displayName: "Nova Reyes",
+    });
+    await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
+    await page.getByRole("link", { name: "Start questionnaire" }).click();
+    await page.getByRole("button", { name: "Skip" }).click();
+    await expect(
+      page.getByRole("heading", { name: "About you", exact: true }),
+    ).toBeVisible();
+
+    await page.locator("#q-birthday").fill("1990-04-12");
+    await page.locator("#q-phone").fill("+27 82 555 1234");
+    await page.getByRole("combobox").click();
+    await page.getByPlaceholder(/Search countries/).fill("South Africa");
+    await page.getByRole("option", { name: /South Africa/ }).click();
+    await page.getByRole("radio", { name: "Passport" }).click();
+    await page.locator("#q-id\\.number").fill("A1234567");
+
+    // Not a Telegram username (a hyphen): the page says so and stays.
+    await page.locator("#q-telegram").fill("nova-reyes");
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(page.getByText(/Enter a Telegram username/)).toBeVisible();
+
+    await page.locator("#q-telegram").fill("@nova_reyes");
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "A bit about you", exact: true }),
+    ).toBeVisible();
+
+    await completeOnboarding(request, "tg-user");
+    await page.goto("/captains/camp-management");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Camp management" }),
+    ).toBeVisible();
+    // Phone and desktop draw the roster differently; one of them is visible.
+    await expect(
+      page.getByText("@nova_reyes").filter({ visible: true }).first(),
     ).toBeVisible();
   });
 });

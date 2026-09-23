@@ -159,7 +159,7 @@ export function RosterTable({
               sort={sort}
               className={cn(!selection && "pl-4")}
             />
-            <SortHeader label="Handle" sortKey="handle" sort={sort} />
+            <SortHeader label="Telegram" sortKey="handle" sort={sort} />
             <SortHeader label="Country" sortKey="country" sort={sort} />
             <SortHeader label="Role" sortKey="role" sort={sort} />
             {showStatus && (

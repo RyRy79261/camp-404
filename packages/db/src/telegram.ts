@@ -149,17 +149,6 @@ export async function recordTelegramUserId(input: {
     .where(eq(schema.users.id, input.userId));
 }
 
-export async function setUserTelegramHandle(input: {
-  userId: string;
-  handle: string;
-}): Promise<void> {
-  const db = createHttpDb();
-  await db
-    .update(schema.users)
-    .set({ telegramHandle: input.handle, updatedAt: new Date() })
-    .where(eq(schema.users.id, input.userId));
-}
-
 export async function enqueueAnnouncement(input: {
   chatId: string;
   body: string;

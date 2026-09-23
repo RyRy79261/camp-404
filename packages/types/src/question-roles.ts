@@ -1,6 +1,7 @@
 import type { EmergencyContact } from "./member";
 import {
   flattenQuestions,
+  telegramUsername,
   type Question,
   type QuestionRole,
   type Questionnaire,
@@ -28,6 +29,28 @@ export function questionIdForRole(
   role: QuestionRole,
 ): string | null {
   return questionsWithRole(questionnaire, role)[0]?.id ?? null;
+}
+
+/**
+ * The Telegram username a response map carries, for users.telegram_handle:
+ * the bare username, null when the answer is blank (which clears it), or
+ * undefined when this save does not carry the question at all (a progress save
+ * from another page), so the column is left alone.
+ *
+ * `complete` says the map is a whole validated form (a final submit or a My
+ * forms re-submit). Validation drops a blank optional answer, so there a
+ * missing answer means the member cleared it, and the handle is cleared too.
+ */
+export function telegramHandleFromResponses(
+  questionnaire: Questionnaire,
+  responses: Record<string, unknown>,
+  options: { complete?: boolean } = {},
+): string | null | undefined {
+  const id = questionIdForRole(questionnaire, "telegram_handle");
+  if (!id) return undefined;
+  if (!(id in responses)) return options.complete ? null : undefined;
+  const value = responses[id];
+  return typeof value === "string" ? telegramUsername(value) : null;
 }
 
 /** The questionnaire's emergency contact slots: the Nth name, phone and relationship questions make contact N. */

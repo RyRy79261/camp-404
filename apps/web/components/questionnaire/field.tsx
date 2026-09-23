@@ -1043,6 +1043,8 @@ const FORMAT_INPUT: Record<
   number: { inputMode: "decimal" },
   integer: { inputMode: "numeric" },
   alphanumeric: {},
+  // A username: nothing the browser could autofill.
+  telegram: { autoComplete: "off" },
 };
 
 function selectionHint(

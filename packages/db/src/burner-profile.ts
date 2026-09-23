@@ -48,9 +48,7 @@ export async function createCampUser(input: {
       displayName: input.displayName,
       inviteCode: input.inviteCode,
       ...(input.rank ? { rank: input.rank } : {}),
-      ...(input.approvalStatus
-        ? { approvalStatus: input.approvalStatus }
-        : {}),
+      ...(input.approvalStatus ? { approvalStatus: input.approvalStatus } : {}),
     })
     .returning();
   if (!created) throw new Error("Failed to insert camp user row");
@@ -321,6 +319,21 @@ export async function setEmergencyContactsColumn(
     .where(eq(schema.users.id, userId));
 }
 
+/**
+ * The member's Telegram username (bare, no `@`), or null to clear it. The
+ * roster reads it as the member's handle.
+ */
+export async function setTelegramHandleColumn(
+  userId: string,
+  handle: string | null,
+  db: DbOrTx = createHttpDb(),
+) {
+  await db
+    .update(schema.users)
+    .set({ telegramHandle: handle, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+}
+
 /** Raw text write of the two ID-number ciphertext columns. */
 export async function setIdDocumentColumns(
   userId: string,
@@ -345,6 +358,8 @@ export interface BurnerProfileReplay {
   } | null;
   /** The whole list; an empty list clears the column. */
   emergencyContacts: readonly EmergencyContact[];
+  /** The Telegram username, or null to clear it; undefined leaves it alone. */
+  telegramHandle?: string | null;
   /** The change-log row, or null when the replay changed nothing. */
   edit: {
     questionnaireKey: string;
@@ -377,6 +392,9 @@ export async function saveBurnerProfileReplay(
       await setIdDocumentColumns(input.userId, input.idColumns, tx);
     }
     await setEmergencyContactsColumn(input.userId, input.emergencyContacts, tx);
+    if (input.telegramHandle !== undefined) {
+      await setTelegramHandleColumn(input.userId, input.telegramHandle, tx);
+    }
     // A re-submit also re-satisfies the gate (e.g. after a new version).
     await satisfyRequiredAction(
       input.userId,

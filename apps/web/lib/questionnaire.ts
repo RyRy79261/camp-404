@@ -63,7 +63,11 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 
 // The questionnaire version. Bump ONLY when the SHAPE changes (a question
 // added/removed, or a required flag flipped) — that re-opens the required-action
-// gate for every member and forces a re-submit. Relabelling / reordering /
+// gate for every member and forces a re-submit.
+// [CORRECTION 2026-09-23] Only a change to what is REQUIRED needs the bump. An
+// optional question (Telegram) or a new team (Finance: the team sliders are
+// optional) leaves every submitted profile complete, and a bump would make
+// every member re-submit for nothing; members add the new answer in My forms. Relabelling / reordering /
 // archiving a team is interpretation, not shape (the response keys are the
 // stable enum), so it must NOT bump this. (Adding a brand-new team key is a
 // shape change — that's Phase 4, with an enum migration + a version bump.)
@@ -193,6 +197,22 @@ export function buildQuestionnaire(
             helper: "Include the country code, e.g. +27 82 555 1234.",
             maxLength: 40,
             required: true,
+          },
+          {
+            // The camp talks on Telegram (owner, 2026-09-23: "we need Telegram
+            // contact details"). Optional: not everyone has a username, and
+            // Telegram also finds people by the phone number above.
+            id: "telegram",
+            kind: "short_text",
+            prompt: "Telegram username",
+            shortLabel: "Telegram",
+            helper:
+              "The camp talks on Telegram. Your username, like @nova_reyes. No username? Leave it blank and we'll find you by your phone number.",
+            placeholder: "@username",
+            maxLength: 33,
+            format: "telegram",
+            role: "telegram_handle",
+            required: false,
           },
           {
             id: "country",
@@ -345,7 +365,8 @@ export function buildQuestionnaire(
           {
             id: "logistics.onsite_after",
             kind: "single_select",
-            prompt: "Can you stay on-site AFTER the burn for strike / clean-up?",
+            prompt:
+              "Can you stay on-site AFTER the burn for strike / clean-up?",
             shortLabel: "Strike",
             options: [
               { value: "yes_full", label: "Yes — through to MOOP sweep" },
