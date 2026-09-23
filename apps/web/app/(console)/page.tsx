@@ -5,9 +5,10 @@ import { isCampBootstrapped } from "@/lib/bootstrap";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { getUpcomingEvents } from "@/lib/google-calendar";
 import { buildHome } from "@/lib/home";
+import { getInboxBadge } from "@/lib/inbox-badge";
 import { getMyLift } from "@/lib/lifts";
 import { resolveMemberState } from "@/lib/member-gate";
-import { countUnread, countUnreadByTeam } from "@/lib/notifications";
+import { countUnreadByTeam } from "@/lib/notifications";
 import { isSignInSecured } from "@/lib/sign-in-security";
 import { getMyTeams, getPendingQuestionnaires } from "@/lib/users";
 import { HomeView } from "@/components/home/home-view";
@@ -52,7 +53,7 @@ export default async function HomePage() {
   const [
     memberships,
     pending,
-    unread,
+    inbox,
     unreadByTeam,
     lift,
     secured,
@@ -61,7 +62,9 @@ export default async function HomePage() {
   ] = await Promise.all([
     waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
     waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
-    countUnread(campUser.id),
+    // The Announcements tile shows the bell's own count, for every member,
+    // waiting for approval or not: both come from getInboxBadge.
+    getInboxBadge(campUser.id),
     waiting
       ? Promise.resolve({} as Partial<Record<string, number>>)
       : countUnreadByTeam(campUser.id),
@@ -89,7 +92,7 @@ export default async function HomePage() {
       unread: unreadByTeam[m.team] ?? 0,
     })),
     pending,
-    unread,
+    inbox,
     lift,
     calendar,
     secured,

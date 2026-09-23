@@ -279,7 +279,8 @@ export async function syncOpenGates(userId: string): Promise<void> {
 /**
  * Every questionnaire the member still has to answer from an open send,
  * blocking or optional (empty under E2E test mode, like the gate spine). The
- * inbox's "Needs your answer" section and the bell count read this.
+ * inbox's "Needs your answer" section reads this, and so does getInboxBadge
+ * (lib/inbox-badge.ts), the count on the bell and the Announcements tile.
  */
 export async function getPendingQuestionnaires(
   userId: string,

@@ -1,6 +1,7 @@
 import { CAMP_TIME_ZONE, campDayKey } from "@camp404/core";
 import type { MyLift } from "@camp404/db/cars";
 import type { CalendarResult } from "./google-calendar";
+import type { InboxBadge } from "./inbox-badge";
 
 // What a member's home page shows, decided from their own profile and status
 // and nothing else (owner, 2026-09-23: "The dashboard should be built off of
@@ -29,7 +30,11 @@ export interface HomeInput {
     blocking: boolean;
     dueAt: Date | null;
   }[];
-  unread: number;
+  /**
+   * The inbox count from `getInboxBadge`: the Announcements tile shows its
+   * total, the same number as the bell.
+   */
+  inbox: InboxBadge;
   lift: MyLift | null;
   calendar: CalendarResult | null;
   /** Two-factor or a passkey is on. Null when it could not be read. */
@@ -288,7 +293,7 @@ export function buildHome(input: HomeInput): HomeModel {
       href: "/notifications",
       label: "Announcements",
       icon: "announcements",
-      badge: input.unread > 0 ? input.unread : null,
+      badge: input.inbox.total > 0 ? input.inbox.total : null,
     },
   ];
   if (approved) {

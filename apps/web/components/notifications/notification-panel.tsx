@@ -56,7 +56,11 @@ type PanelState =
 export function NotificationPanel({
   count,
 }: {
-  /** What the badge shows: unread deliveries plus waiting questionnaires. */
+  /**
+   * What the badge shows: `getInboxBadge(...).total` (lib/inbox-badge.ts),
+   * unread deliveries plus waiting questionnaires — the same number as the
+   * Announcements tile on Home.
+   */
   count: number;
 }) {
   const [open, setOpen] = useState(false);

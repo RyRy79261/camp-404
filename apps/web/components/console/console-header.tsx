@@ -7,12 +7,8 @@ import { SignOutLink } from "@/components/auth/sign-out-link";
 import { NotificationPanel } from "@/components/notifications/notification-panel";
 import { rankLabel } from "@/lib/camp-roster";
 import { consoleNavFor } from "@/lib/console-nav";
-import { countUnread } from "@/lib/notifications";
-import {
-  getPendingQuestionnaires,
-  isTeamLead,
-  type CampUser,
-} from "@/lib/users";
+import { getInboxBadge } from "@/lib/inbox-badge";
+import { isTeamLead, type CampUser } from "@/lib/users";
 import { ConsoleNav } from "./console-nav";
 
 /**
@@ -25,7 +21,8 @@ import { ConsoleNav } from "./console-nav";
  *
  * The bell opens the notification panel rather than jumping to the inbox
  * (AfrikaBurn's console header). The badge is still read here, on the server,
- * so it is right before anyone touches it; the panel fetches its own rows AND
+ * so it is right before anyone touches it, and from `getInboxBadge`, the one
+ * definition the Announcements tile on Home shows too; the panel fetches its own rows AND
  * its own unread total when it opens, so nothing it shows or offers is a stale
  * copy of this render.
  */
@@ -36,14 +33,10 @@ export async function ConsoleHeader({
   campUser: CampUser;
   email: string | null;
 }) {
-  // The bell counts unread inbox items plus every questionnaire still waiting
-  // on this member: reading the inbox clears the first, not the second.
-  const [lead, unread, pending] = await Promise.all([
+  const [lead, badge] = await Promise.all([
     isTeamLead(campUser.id),
-    countUnread(campUser.id),
-    getPendingQuestionnaires(campUser.id),
+    getInboxBadge(campUser.id),
   ]);
-  const count = unread + pending.length;
   const viewerRank = deriveViewerRank(campUser.rank, lead);
   const navItems = consoleNavFor(viewerRank);
 
@@ -77,7 +70,7 @@ export async function ConsoleHeader({
                 {rankLabel(campUser.rank, lead)}
               </Badge>
             </div>
-            <NotificationPanel count={count} />
+            <NotificationPanel count={badge.total} />
             <Button variant="ghost" size="sm" asChild>
               <Link href="/profile" aria-label="Your account">
                 <UserRound className="h-4 w-4" aria-hidden />

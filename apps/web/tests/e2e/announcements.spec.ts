@@ -124,6 +124,32 @@ test.describe("captain announcements (test-mode)", () => {
     expect(pending.ok()).toBeTruthy();
     expect((await pending.json()).pending).toHaveLength(0);
 
+    // The bell and Home's Announcements tile both open the inbox, so they must
+    // show one count (getInboxBadge). The acknowledged announcement was read,
+    // so it is counted by neither. The member finishes onboarding and is
+    // approved, so Home draws the header with the bell and the tiles.
+    // (Waiting questionnaires, the other half of the count, have no cover
+    // here: the test store models no questionnaire sends.)
+    await completeOnboarding(request, "member-auth");
+    const approved = await request.post("/api/test/set-approval", {
+      data: { authUserId: "member-auth", status: "approved" },
+    });
+    expect(approved.ok()).toBeTruthy();
+    await page.goto("/");
+    await expect(page).toHaveURL("/");
+    const announcementsTile = page.getByRole("link", {
+      name: /^Announcements/,
+    });
+    await expect(announcementsTile).toBeVisible();
+    const bellName = await page
+      .getByRole("button", { name: /^Notifications,/ })
+      .getAttribute("aria-label");
+    const tileName = await announcementsTile.getAttribute("aria-label");
+    const countIn = (name: string | null) =>
+      Number(/(\d+)/.exec(name ?? "")?.[1] ?? 0);
+    expect(countIn(tileName)).toBe(countIn(bellName));
+    expect(bellName).toBe("Notifications, none unread");
+
     // 6. The inbox tabs are links: the filter lives in the URL, and it is
     //    applied to the list rather than to the tab strip.
     //
