@@ -416,4 +416,37 @@ test.describe("captain announcements (test-mode)", () => {
     ).toBeVisible();
     await expect(page.getByText("Leads sync Tuesday")).toHaveCount(0);
   });
+  test("deleting a draft asks first, and Cancel keeps it", async ({
+    page,
+    request,
+  }) => {
+    await login(page, { id: "del-cap", email: "god@example.com" });
+    await page.goto("/");
+    await completeOnboarding(request, "del-cap");
+    await setRank(request, "del-cap", "captain");
+
+    await page.goto("/captains/announcements");
+    await page.getByLabel("Title").fill("Ice run rota");
+    await page.getByLabel("Message").fill("Who fetches ice on Tuesday?");
+    await page.getByRole("button", { name: "Save draft" }).click();
+
+    const drafts = page.getByRole("region", { name: /^Drafts/ });
+    const draftTitle = drafts.getByRole("heading", { name: "Ice run rota" });
+    await expect(draftTitle).toBeVisible();
+
+    // One misclick on Delete used to lose the draft; now it asks.
+    await drafts.getByRole("button", { name: "Delete" }).click();
+    const confirm = page.getByRole("dialog", { name: "Delete this draft?" });
+    await expect(confirm).toBeVisible();
+    await expect(confirm.getByText(/"Ice run rota" is deleted/)).toBeVisible();
+    await confirm.getByRole("button", { name: "Cancel" }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(draftTitle).toBeVisible();
+
+    await drafts.getByRole("button", { name: "Delete" }).click();
+    await confirm.getByRole("button", { name: "Delete draft" }).click();
+    await expect(page.getByText("Draft deleted")).toBeVisible();
+    await expect(drafts.getByText("No drafts.")).toBeVisible();
+    await expect(draftTitle).toHaveCount(0);
+  });
 });
