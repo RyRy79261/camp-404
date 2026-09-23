@@ -85,9 +85,14 @@ layout because a board drew one. For a new surface, copy the composition of
 AfrikaBurn's nearest equivalent (`apps/org/app/(console)/**` in that repo) and
 restyle only with tokens; do not invent a design.
 
+- **The signed-out landing page (`apps/web/app/landing-hero.tsx`) is NOT part
+  of the restyle** (owner, 2026-09-23: the AfrikaBurn look is for "the
+  components and the dashboards, not the landing page"). It keeps Camp 404's
+  own glitch design and sets its original palette and font on itself. Do not
+  recompose it after an AfrikaBurn page.
 - Tokens: `packages/ui/src/styles/globals.css` (AfrikaBurn's file plus the
-  `.camp-accent` skin on `<html>`). Montserrat, dark-first; `providers.tsx`
-  holds next-themes on dark.
+  `.camp-accent` skin on `<html>`). Montserrat, dark-first: `<html>` carries
+  the `dark` class in `app/layout.tsx`.
 - Shell: `apps/web/app/(console)/layout.tsx` draws the header and a nav bar
   filtered by rank on the server (`lib/console-nav.ts`). A page starts with
   `PageHeading` (`@camp404/ui/components/page-heading`) and owns no container.
