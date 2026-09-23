@@ -66,6 +66,12 @@ describe("auth email", () => {
     expect(email.text).toContain("https://www.camp-404.com/reset?token=abc");
   });
 
+  it("tells the member a password was added, and how to undo it", () => {
+    const email = buildAuthEmail({ to: "a@example.com", kind: "password-set" });
+    expect(email.subject).toContain("password was added");
+    expect(email.text).toContain("Forgot your password?");
+  });
+
   it("keeps a working reset link out of a deployment's logs", async () => {
     const log = vi.spyOn(console, "info").mockImplementation(() => {});
     const url = "https://www.camp-404.com/reset?token=secret-token";

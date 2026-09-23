@@ -15,7 +15,11 @@ const RESEND_ENDPOINT = "https://api.resend.com/emails";
 /** Reset and verification links expire after Better Auth's default, 1 hour. */
 const TOKEN_EXPIRY_HOURS = 1;
 
-export type AuthEmailKind = "reset" | "verify" | "password-reset-completed";
+export type AuthEmailKind =
+  | "reset"
+  | "verify"
+  | "password-reset-completed"
+  | "password-set";
 
 export interface AuthEmailInput {
   to: string;
@@ -65,6 +69,18 @@ export function buildAuthEmail(input: AuthEmailInput): AuthEmailBody {
           "If this was you, there is nothing to do.\n\n" +
           "If it wasn't, reset your password again straight away from the " +
           "sign-in page, and tell a captain." +
+          SIGN_OFF,
+      };
+    case "password-set":
+      return {
+        subject: "A password was added to your Camp 404 account",
+        text:
+          "A password was just added to this Camp 404 account. You can now " +
+          "sign in with your email and that password, as well as the way you " +
+          "signed in before.\n\n" +
+          "If this was you, there is nothing to do.\n\n" +
+          'If it wasn\'t, use "Forgot your password?" on the sign-in page ' +
+          "straight away to replace it, and tell a captain." +
           SIGN_OFF,
       };
   }
