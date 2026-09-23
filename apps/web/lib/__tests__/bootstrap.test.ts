@@ -29,6 +29,7 @@ const authUser = {
   id: "auth-1",
   primaryEmail: "ada@example.com",
   displayName: "Ada",
+  emailVerified: true,
 };
 
 beforeEach(() => {

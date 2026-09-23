@@ -41,6 +41,8 @@ interface AuthShellProps {
   className?: string;
   /** Short wide-tracked line under the card. */
   footer?: ReactNode;
+  /** A second card under the main one (the invite gate's confirm-email). */
+  aside?: ReactNode;
   /** Eyebrow over the card. @default "Camp 404" */
   eyebrow?: ReactNode;
   /** Glyph in the circle over the card. @default Tent */
@@ -55,6 +57,7 @@ export function AuthShell({
   children,
   className,
   footer,
+  aside,
   eyebrow = "Camp 404",
   icon = <Tent aria-hidden />,
 }: AuthShellProps) {
@@ -72,6 +75,7 @@ export function AuthShell({
       <Card className="overflow-hidden">
         <CardContent className="p-6">{children}</CardContent>
       </Card>
+      {aside}
       {footer && (
         <p className="text-center font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
           {footer}

@@ -134,9 +134,23 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
     // Google may link to an existing account with the same email: Google
     // proves the address, and a member who signed up with a password and
     // later presses "Continue with Google" means the same person.
+    //
+    // Linking still refuses when the LOCAL account has not confirmed its email
+    // (Better Auth's `requireLocalEmailVerified`, left at its default, true).
+    // Never relax it: otherwise someone could sign up with a member's address
+    // and a password before the member ever does, and the member's later
+    // Google sign-in would join that account (pre-account takeover). Members
+    // moved from Neon Auth with a password are unverified, and confirm on
+    // Sign-in and security or on the invite gate before Google will link.
     account: {
       accountLinking: { enabled: true, trustedProviders: ["google"] },
     },
+
+    // Every OAuth callback failure (a refused link, a cancelled consent, an
+    // expired state) lands on our sign-in form with `?error=<code>`, which
+    // says what happened in a sentence, instead of Better Auth's bare
+    // built-in error page, which is a dead end.
+    onAPIError: { errorURL: "/auth/sign-in" },
 
     ...(isGoogleConfigured(env)
       ? {

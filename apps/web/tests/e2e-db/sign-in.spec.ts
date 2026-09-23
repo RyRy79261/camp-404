@@ -122,3 +122,44 @@ test("sign up, sign out, a wrong password, sign in, and reset the password", asy
 
   await context.close();
 });
+
+// A GOD_EMAILS address only counts once it is confirmed (lib/session-user.ts),
+// so the owner of one who is unconfirmed (a password member moved from Neon
+// Auth) is held at the invite gate like a stranger. The gate's Email card is
+// their way back in: confirm the address, and the same account walks on to
+// onboarding without an invite.
+test("an unconfirmed god address confirms its email at the invite gate and gets in", async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const email = "god@example.com"; // GOD_EMAILS in playwright.db.config.ts
+  const password = "owner-password-".padEnd(PASSWORD_MIN_LENGTH + 2, "z");
+
+  await page.goto("/auth/sign-up");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password").fill(password);
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  // Unconfirmed, the god address is not trusted: the gate holds it.
+  await expectInviteGate(page);
+  await expect(
+    page.getByRole("heading", { name: "Email", exact: true }),
+  ).toBeVisible();
+
+  const since = new Date();
+  await page.getByRole("button", { name: "Confirm my email" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    `We’ve sent a link to ${email}.`,
+  );
+
+  // Better Auth's /api/auth/verify-email marks the address confirmed, signs
+  // this browser in afresh (autoSignInAfterVerification) and follows the
+  // card's callbackURL home, which now routes the god account to onboarding.
+  const link = await waitForAuthMail(email, "verify", since);
+  await page.goto(link);
+  await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+
+  await context.close();
+});

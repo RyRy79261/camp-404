@@ -17,6 +17,8 @@ interface LoginBody {
   id?: string;
   email?: string;
   displayName?: string;
+  /** Defaults to true; false shows the confirm-email card. */
+  emailVerified?: boolean;
 }
 
 export async function POST(req: Request) {
@@ -28,6 +30,7 @@ export async function POST(req: Request) {
     id: body.id ?? `test-stack-${Date.now()}`,
     primaryEmail: body.email ?? null,
     displayName: body.displayName ?? body.email ?? null,
+    emailVerified: body.emailVerified !== false,
   };
 
   // In the real-database run, give the login the sign-in identity (`user`

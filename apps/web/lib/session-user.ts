@@ -30,5 +30,6 @@ export function toAuthenticatedUser(
     id: user.id,
     primaryEmail: unprovenGod ? null : email,
     displayName: user.name ?? null,
+    emailVerified: user.emailVerified === true,
   };
 }

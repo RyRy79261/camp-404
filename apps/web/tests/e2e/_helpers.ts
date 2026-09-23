@@ -20,6 +20,9 @@ export interface LoginUser {
   id?: string;
   email?: string;
   displayName?: string;
+  /** Defaults to true. False signs in as a member who has not confirmed
+   * their email yet (a password member moved from Neon Auth). */
+  emailVerified?: boolean;
 }
 
 /**

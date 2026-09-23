@@ -133,6 +133,7 @@ describe("requireMemberPage", () => {
       id: "auth-1",
       primaryEmail: "a@example.com",
       displayName: "A",
+      emailVerified: true,
     });
     vi.mocked(ensureCampUser).mockResolvedValue(campUser);
   });
@@ -143,6 +144,7 @@ describe("requireMemberPage", () => {
         id: "auth-1",
         primaryEmail: "a@example.com",
         displayName: "A",
+        emailVerified: true,
       },
       campUser,
     });
@@ -178,6 +180,7 @@ describe("resolveMemberState", () => {
       id: "auth-1",
       primaryEmail: null,
       displayName: null,
+      emailVerified: false,
     });
     vi.mocked(ensureCampUser).mockResolvedValue(campUser);
     vi.mocked(isApproved).mockReturnValue(false);

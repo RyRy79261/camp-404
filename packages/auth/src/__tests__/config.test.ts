@@ -45,6 +45,19 @@ describe("buildAuthOptions", () => {
     ).toBe(false);
   });
 
+  it("sends an OAuth failure to our sign-in form, not Better Auth's error page", () => {
+    expect(options.onAPIError.errorURL).toBe("/auth/sign-in");
+  });
+
+  it("never links Google to an account whose email is unconfirmed", () => {
+    // Better Auth refuses such a link unless this is set to false. Leaving it
+    // out keeps that refusal (the pre-account-takeover guard).
+    const linking: { enabled?: boolean; requireLocalEmailVerified?: boolean } =
+      options.account.accountLinking;
+    expect(linking.requireLocalEmailVerified).not.toBe(false);
+    expect(linking.enabled).toBe(true);
+  });
+
   it("sends a verification mail on sign-up only when one can be delivered", () => {
     expect(options.emailVerification.sendOnSignUp).toBe(false);
     expect(

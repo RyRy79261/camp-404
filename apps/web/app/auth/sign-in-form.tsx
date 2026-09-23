@@ -11,6 +11,7 @@ import { Label } from "@camp404/ui/components/label";
 import { PasswordInput } from "@camp404/ui/components/password-input";
 import { authClient } from "@/lib/auth-client";
 import { safeInternalPath } from "@/lib/safe-redirect";
+import { oauthErrorSentence } from "./oauth-error";
 
 /**
  * Email/password sign-in, plus a passkey and (when configured) Google, in the
@@ -35,7 +36,11 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // A Google sign-in that failed comes back here with `?error=<code>` (Better
+  // Auth's `onAPIError.errorURL`); say what happened, never the raw code.
+  const [error, setError] = useState<string | null>(() =>
+    oauthErrorSentence(searchParams.get("error")),
+  );
   const [loading, setLoading] = useState(false);
   // Set when a correct password returns a two-factor challenge.
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
@@ -150,7 +155,9 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   }
 
   if (needsTwoFactor) {
-    return <AccountTwoFactorChallenge client={authClient} onVerified={goOnward} />;
+    return (
+      <AccountTwoFactorChallenge client={authClient} onVerified={goOnward} />
+    );
   }
 
   return (
