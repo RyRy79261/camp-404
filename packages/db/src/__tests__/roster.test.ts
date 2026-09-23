@@ -272,3 +272,104 @@ describe("captain-only columns are selected only when asked for", () => {
     ).toEqual(new Date("2026-04-26T08:00:00Z"));
   });
 });
+
+// --- What a member still owes ----------------------------------------------
+// The captain's member panel names each outstanding action, not just a count.
+// The names come from the same predicate as the count (pending AND blocking),
+// oldest first, so the panel and the "Outstanding" chip cannot disagree.
+
+describe("getCampManagementRoster names the blocking actions a member owes", () => {
+  const h = useTestDb();
+
+  async function owe(
+    userId: string,
+    input: {
+      actionKey: string;
+      title: string;
+      createdAt: string;
+      status?: "pending" | "completed";
+      blocking?: boolean;
+    },
+  ) {
+    await h
+      .db()
+      .insert(schema.requiredActions)
+      .values({
+        userId,
+        type: "questionnaire",
+        actionKey: input.actionKey,
+        title: input.title,
+        status: input.status ?? "pending",
+        blocking: input.blocking ?? true,
+        createdAt: new Date(input.createdAt),
+      });
+  }
+
+  it("lists only pending blocking actions, oldest first, and counts the same ones", async () => {
+    const db = h.db();
+    const member = await makeUser(db, { displayName: "Ada" });
+    const other = await makeUser(db, { displayName: "Bo" });
+    // Inserted newest first, so the order has to come from created_at.
+    await owe(member.id, {
+      actionKey: "dietary_requirements",
+      title: "Dietary questionnaire",
+      createdAt: "2026-09-10T10:00:00Z",
+    });
+    await owe(member.id, {
+      actionKey: "burner_profile",
+      title: "Complete your burner profile",
+      createdAt: "2026-09-01T10:00:00Z",
+    });
+    await owe(member.id, {
+      actionKey: "driver_profile",
+      title: "Driver questionnaire",
+      createdAt: "2026-09-02T10:00:00Z",
+      status: "completed",
+    });
+    await owe(member.id, {
+      actionKey: "packing_list",
+      title: "Packing list",
+      createdAt: "2026-09-03T10:00:00Z",
+      blocking: false,
+    });
+    await owe(other.id, {
+      actionKey: "burner_profile",
+      title: "Complete your burner profile",
+      createdAt: "2026-09-01T10:00:00Z",
+    });
+
+    const row = (await getCampManagementRoster()).find(
+      (m) => m.id === member.id,
+    )!;
+    expect(row.pendingRequiredActionItems).toEqual([
+      { key: "burner_profile", title: "Complete your burner profile" },
+      { key: "dietary_requirements", title: "Dietary questionnaire" },
+    ]);
+    expect(row.pendingRequiredActions).toBe(
+      row.pendingRequiredActionItems.length,
+    );
+  });
+
+  it("names nothing once every action is completed", async () => {
+    const db = h.db();
+    const member = await makeUser(db, { displayName: "Cy" });
+    await owe(member.id, {
+      actionKey: "burner_profile",
+      title: "Complete your burner profile",
+      createdAt: "2026-09-01T10:00:00Z",
+      status: "completed",
+    });
+    await owe(member.id, {
+      actionKey: "dietary_requirements",
+      title: "Dietary questionnaire",
+      createdAt: "2026-09-10T10:00:00Z",
+      status: "completed",
+    });
+
+    const row = (await getCampManagementRoster()).find(
+      (m) => m.id === member.id,
+    )!;
+    expect(row.pendingRequiredActionItems).toEqual([]);
+    expect(row.pendingRequiredActions).toBe(0);
+  });
+});

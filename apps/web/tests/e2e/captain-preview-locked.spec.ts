@@ -216,4 +216,38 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
       page.getByRole("button", { name: /^Outstanding/ }),
     ).toBeVisible();
   });
+  // #129: a captain chasing a member needs to say WHAT to finish, not how
+  // many. A member who signs in and stops before the questionnaire still owes
+  // the burner-profile gate (seedBurnerProfileAction), and the captain's panel
+  // names it.
+  test("/captains/camp-management: a captain sees which actions a member still owes", async ({
+    page,
+    request,
+  }) => {
+    await login(page, {
+      id: "roster-owes",
+      email: "god@example.com",
+      displayName: "Nia Owes",
+    });
+    await page.goto("/"); // lazily creates the row and its pending gate
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+
+    await asRank(page, request, "roster-chaser", "captain");
+    await page.goto("/captains/camp-management");
+    await expect(
+      page.getByRole("heading", { name: "Camp management" }),
+    ).toBeVisible();
+
+    // The table (desktop) and the card list (phone) both render every row, so
+    // take whichever copy this viewport shows.
+    await page
+      .getByRole("button", { name: "Open Nia Owes's profile" })
+      .filter({ visible: true })
+      .click();
+    const panel = page.getByRole("region", { name: "Nia Owes profile" });
+    const outstanding = panel.locator(
+      'xpath=.//dt[normalize-space()="Outstanding"]/following-sibling::dd[1]',
+    );
+    await expect(outstanding).toHaveText("Burner profile");
+  });
 });

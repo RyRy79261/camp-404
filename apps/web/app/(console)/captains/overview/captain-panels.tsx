@@ -68,8 +68,9 @@ export async function CaptainStatusBoard() {
     listOpenSendGates(),
   ]);
   const rows = members.map(toRosterRow);
-  // The test store models no payments ledger and no required_actions, so those
-  // two rungs of the ladder are unknown there rather than zero — the same
+  // The test store models no payments ledger, and no required_actions beyond
+  // the burner-profile gate, so those two rungs of the ladder are unknown
+  // there rather than a figure that misses most of it — the same
   // guard RecentActivity makes for the audit trail it also cannot read.
   const readable = !usesTestStore();
   const funnel = deriveReadinessFunnel(rows, {

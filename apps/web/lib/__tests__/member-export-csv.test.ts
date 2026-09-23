@@ -25,6 +25,7 @@ function member(
     membershipTier: null,
     onboardingComplete: true,
     pendingRequiredActions: 0,
+    pendingRequiredActionItems: [],
     intendsToDrive: false,
     driverProfileComplete: false,
     country: "ZA",
@@ -82,7 +83,9 @@ describe("memberExportCells", () => {
   it.each(["camp_member", "team_lead", "captain"] as const)(
     "says Pending for an applicant and Approved for a member, in a %s's file",
     (rank) => {
-      const wordFor = (approvalStatus: CampManagementMember["approvalStatus"]) => {
+      const wordFor = (
+        approvalStatus: CampManagementMember["approvalStatus"],
+      ) => {
         const [header, row] = memberExportCells({
           columns: memberExportColumnsFor(rank),
           members: [member({ approvalStatus })],

@@ -19,6 +19,7 @@ function pendingMember(): CampManagementMember {
     membershipTier: null,
     onboardingComplete: false,
     pendingRequiredActions: 3,
+    pendingRequiredActionItems: [],
     intendsToDrive: false,
     driverProfileComplete: false,
     country: "ZA",

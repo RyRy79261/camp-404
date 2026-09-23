@@ -52,6 +52,7 @@ function row(over: Partial<RosterRow> = {}): RosterRow {
     awaitingApproval: true,
     onboardingComplete: true,
     pendingRequiredActions: 0,
+    outstanding: [],
     requiredComplete: true,
     isDriver: false,
     driverProfileComplete: false,
@@ -297,5 +298,31 @@ describe("MemberProfile — the decision panel", () => {
     expect(
       screen.getAllByText("A captain can't be taken out of camp here."),
     ).toHaveLength(1);
+  });
+});
+
+describe("MemberProfile — what the member still owes", () => {
+  function outstandingValue() {
+    const term = screen.getByText("Outstanding", { selector: "dt" });
+    return term.nextElementSibling?.textContent;
+  }
+
+  it("names each outstanding action, so the captain can say what to finish", async () => {
+    vi.mocked(getMemberDetailAction).mockResolvedValue(detail("approved"));
+    renderProfile({
+      approvalStatus: "approved",
+      pendingRequiredActions: 2,
+      outstanding: ["Burner profile", "Dietary questionnaire"],
+      requiredComplete: false,
+    });
+    await screen.findByText("Outstanding", { selector: "dt" });
+    expect(outstandingValue()).toBe("Burner profile, Dietary questionnaire");
+  });
+
+  it("says All complete when nothing is owed", async () => {
+    vi.mocked(getMemberDetailAction).mockResolvedValue(detail("approved"));
+    renderProfile({ approvalStatus: "approved" });
+    await screen.findByText("Outstanding", { selector: "dt" });
+    expect(outstandingValue()).toBe("All complete");
   });
 });

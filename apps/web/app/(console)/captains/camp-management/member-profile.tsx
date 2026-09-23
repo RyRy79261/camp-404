@@ -344,9 +344,10 @@ export function MemberProfile({
         ...member.overview,
         {
           label: "Outstanding",
+          // Named, so a captain chasing a member can say what to finish.
           value:
-            row.pendingRequiredActions > 0
-              ? `${row.pendingRequiredActions} to complete`
+            row.outstanding.length > 0
+              ? row.outstanding.join(", ")
               : "All complete",
         },
         // From the payments ledger: a received or waived payment this year.

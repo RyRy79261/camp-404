@@ -27,7 +27,11 @@ import {
   type PinnedAnnouncement,
   type PinResult,
 } from "@camp404/db/broadcasts";
-import type { CampManagementMember } from "@camp404/db/roster";
+import type {
+  CampManagementMember,
+  CampMemberDetail,
+  CampMemberDetailOptions,
+} from "@camp404/db/roster";
 import {
   CANNOT_MOVE,
   CANNOT_REMOVE,
@@ -1386,9 +1390,12 @@ export const testStore = {
   },
 
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
-  // The test store models users, burner profiles and team memberships, but not
-  // driver profiles / required-actions, so those facets still default (false /
-  // 0) — enough for the captain roster to render in E2E without touching Neon.
+  // The test store models users, burner profiles, team memberships and the
+  // required_actions twin, but not driver profiles or the payments ledger, so
+  // those facets still default (false) — enough for the captain roster to
+  // render in E2E without touching Neon. What a member still owes comes from
+  // `requiredActions` with the real query's predicate (pending AND blocking,
+  // oldest first), so the count and the named list agree.
   // `isLead` and `teams` come from the membership rows and are year-scoped, the
   // same two facts the real query aggregates out of `team_memberships`.
   getCampManagementRoster(
@@ -1399,6 +1406,7 @@ export const testStore = {
     return Array.from(usersByAuthId.values())
       .map((u): CampManagementMember => {
         const mine = thisYear.filter((m) => m.userId === u.id);
+        const owed = this.getPendingRequiredActions(u.id);
         const profile = profilesByUserId.get(u.id) ?? null;
         const country =
           profile && typeof profile.responses["country"] === "string"
@@ -1415,7 +1423,11 @@ export const testStore = {
           duesPaid: false,
           membershipTier: null,
           onboardingComplete: profile?.completedAt != null,
-          pendingRequiredActions: 0,
+          pendingRequiredActions: owed.length,
+          pendingRequiredActionItems: owed.map((a) => ({
+            key: a.actionKey,
+            title: a.title,
+          })),
           intendsToDrive: false,
           driverProfileComplete: false,
           country,
@@ -1425,6 +1437,63 @@ export const testStore = {
         };
       })
       .sort((a, b) => (a.displayName ?? "").localeCompare(b.displayName ?? ""));
+  },
+
+  // The captain member panel's detail read (mirrors
+  // @camp404/db/roster.getCampMemberDetail), so Playwright can open a member.
+  // The store keeps no ID ciphertext, sign-in email or driver profile, so those
+  // come back null when asked for, never absent: the shape a captain gets.
+  getCampMemberDetail(
+    userId: string,
+    options: CampMemberDetailOptions = {},
+  ): CampMemberDetail | null {
+    const u = this.findUserById(userId);
+    if (!u) return null;
+    const profile = profilesByUserId.get(u.id) ?? null;
+    const invite = u.inviteCode
+      ? (inviteCodes.get(u.inviteCode) ?? null)
+      : null;
+    const nameOf = (id: string | null) =>
+      id ? (this.findUserById(id)?.displayName ?? null) : null;
+    return {
+      id: u.id,
+      displayName: u.displayName,
+      rank: u.rank,
+      approvalStatus: u.approvalStatus,
+      approvalDecidedAt: u.approvalDecidedAt,
+      approvalDecidedByName: nameOf(u.approvalDecidedByUserId),
+      onboardingComplete: profile?.completedAt != null,
+      onboardingVersion: profile?.version ?? null,
+      responses: profile?.responses ?? {},
+      ...(options.includeIdDocuments
+        ? { passportEncrypted: null, saIdEncrypted: null }
+        : {}),
+      ...(options.includeEmail ? { email: null } : {}),
+      ...(options.includeArrival ? { arrivalAt: null } : {}),
+      inviteCode: u.inviteCode,
+      inviteNote: invite?.note ?? null,
+      invitedByName: nameOf(invite?.createdByUserId ?? null),
+      createdAt: u.createdAt,
+    };
+  },
+  /**
+   * Twin of listMemberQuestionnaireGates: the member's questionnaire gates,
+   * oldest first. Every store row is a questionnaire gate with no send behind
+   * it, which the real query keeps whatever its status.
+   */
+  listMemberQuestionnaireGates(userId: string) {
+    return requiredActions
+      .filter((a) => a.userId === userId && a.type === "questionnaire")
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((a) => ({
+        actionKey: a.actionKey,
+        title: a.title,
+        status: a.status,
+        blocking: a.blocking,
+        dueAt: a.dueAt,
+        completedAt: null,
+        createdAt: a.createdAt,
+      }));
   },
 
   // --- captain-promotion handshake (mirrors @camp404/db/captain-promotion) ---

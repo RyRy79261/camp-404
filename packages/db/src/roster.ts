@@ -32,6 +32,12 @@ export interface CampManagementMember {
   onboardingComplete: boolean;
   /** Outstanding blocking required_actions (0 = all caught up). */
   pendingRequiredActions: number;
+  /**
+   * The same outstanding blocking actions, oldest first: each one's
+   * `action_key` and stored `title`, so a captain can tell the member WHICH
+   * to finish. Captain-only, like the count.
+   */
+  pendingRequiredActionItems: PendingRequiredActionItem[];
   /** Derived driver facet: registered intent to drive. */
   intendsToDrive: boolean;
   /** Driver questionnaire finished (vehicle + proficiency captured). */
@@ -44,6 +50,12 @@ export interface CampManagementMember {
    */
   email?: string | null;
   createdAt: Date;
+}
+
+/** One outstanding blocking required action: its key and stored title. */
+export interface PendingRequiredActionItem {
+  key: string;
+  title: string;
 }
 
 export interface CampManagementRosterOptions {
@@ -104,6 +116,15 @@ export async function getCampManagementRoster(
         where ra.user_id = ${schema.users.id}
           and ra.status = 'pending' and ra.blocking = true
       )`,
+      // The same predicate as the count, so the two cannot disagree. json, not
+      // an array of rows: the Neon driver parses json (a built-in type) the
+      // same way PGlite does, which a record array would not be (see `teams`).
+      pendingRequiredActionItems: sql<PendingRequiredActionItem[]>`coalesce((
+        select json_agg(json_build_object('key', ra.action_key, 'title', ra.title) order by ra.created_at, ra.id)
+        from required_actions ra
+        where ra.user_id = ${schema.users.id}
+          and ra.status = 'pending' and ra.blocking = true
+      ), '[]'::json)`,
       ...(includeEmail ? { email: schema.user.email } : {}),
       createdAt: schema.users.createdAt,
     })
@@ -146,6 +167,7 @@ export async function getCampManagementRoster(
     membershipTier: r.membershipTier,
     onboardingComplete: r.onboardingCompletedAt != null,
     pendingRequiredActions: r.pendingRequiredActions ?? 0,
+    pendingRequiredActionItems: r.pendingRequiredActionItems ?? [],
     intendsToDrive: r.intendsToDrive,
     driverProfileComplete: r.driverCompletedAt != null,
     country: r.country,

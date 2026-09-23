@@ -44,6 +44,7 @@ const MEMBER = {
   membershipTier: null,
   onboardingComplete: true,
   pendingRequiredActions: 0,
+  pendingRequiredActionItems: [],
   intendsToDrive: false,
   driverProfileComplete: false,
   country: null,
