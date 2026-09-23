@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   authConfigWarnings,
   authMayServe,
+  canDeliverAuthEmail,
   isEmailProviderConfigured,
+  resolveAuthEmailCaptureFile,
   resolveBaseURL,
   resolvePasskeyOrigins,
   resolvePasskeyRpID,
@@ -25,11 +27,14 @@ describe("authMayServe", () => {
   it("fails closed on a deployment without the secret, and nowhere else", () => {
     expect(authMayServe({ VERCEL_ENV: "production" })).toBe(false);
     expect(authMayServe({ VERCEL_ENV: "preview" })).toBe(false);
-    expect(authMayServe({ VERCEL_ENV: "preview", BETTER_AUTH_SECRET: " " })).toBe(
-      false,
-    );
     expect(
-      authMayServe({ VERCEL_ENV: "production", BETTER_AUTH_SECRET: "s".repeat(32) }),
+      authMayServe({ VERCEL_ENV: "preview", BETTER_AUTH_SECRET: " " }),
+    ).toBe(false);
+    expect(
+      authMayServe({
+        VERCEL_ENV: "production",
+        BETTER_AUTH_SECRET: "s".repeat(32),
+      }),
     ).toBe(true);
     // Local dev and CI: no Vercel, the placeholder is allowed.
     expect(authMayServe({})).toBe(true);
@@ -124,9 +129,9 @@ describe("email verification", () => {
 
 describe("secure cookies", () => {
   it("turns Secure off only for an explicit http origin", () => {
-    expect(resolveUseSecureCookies({ BETTER_AUTH_URL: "http://localhost:3000" })).toBe(
-      false,
-    );
+    expect(
+      resolveUseSecureCookies({ BETTER_AUTH_URL: "http://localhost:3000" }),
+    ).toBe(false);
     expect(resolveUseSecureCookies(PROD)).toBeUndefined();
     expect(resolveUseSecureCookies({})).toBeUndefined();
   });
@@ -160,5 +165,75 @@ describe("authConfigWarnings", () => {
         RESEND_FROM_EMAIL: "n@x",
       }),
     ).toEqual([]);
+  });
+});
+
+describe("resolveAuthEmailCaptureFile", () => {
+  const FILE = "/tmp/e2e-mail/auth-mail.jsonl";
+  const E2E = { E2E_TEST_MODE: "1", AUTH_EMAIL_CAPTURE_FILE: FILE };
+
+  it("is honoured in a local e2e run, and only there", () => {
+    expect(resolveAuthEmailCaptureFile(E2E)).toBe(FILE);
+    expect(
+      resolveAuthEmailCaptureFile({
+        ...E2E,
+        AUTH_EMAIL_CAPTURE_FILE: `  ${FILE} `,
+      }),
+    ).toBe(FILE);
+    // A blank VERCEL_ENV is not a deployment.
+    expect(resolveAuthEmailCaptureFile({ ...E2E, VERCEL_ENV: " " })).toBe(FILE);
+  });
+
+  it("is refused on any Vercel deployment, even with the e2e switch on", () => {
+    expect(
+      resolveAuthEmailCaptureFile({ ...E2E, VERCEL_ENV: "preview" }),
+    ).toBeUndefined();
+    expect(
+      resolveAuthEmailCaptureFile({ ...E2E, VERCEL_ENV: "production" }),
+    ).toBeUndefined();
+    expect(
+      resolveAuthEmailCaptureFile({ ...E2E, VERCEL_ENV: "development" }),
+    ).toBeUndefined();
+  });
+
+  it("is refused without the e2e switch", () => {
+    expect(
+      resolveAuthEmailCaptureFile({ AUTH_EMAIL_CAPTURE_FILE: FILE }),
+    ).toBeUndefined();
+    expect(
+      resolveAuthEmailCaptureFile({ ...E2E, E2E_TEST_MODE: "true" }),
+    ).toBeUndefined();
+    expect(
+      resolveAuthEmailCaptureFile({ ...E2E, E2E_TEST_MODE: "0" }),
+    ).toBeUndefined();
+  });
+
+  it("treats a blank path as unset", () => {
+    expect(
+      resolveAuthEmailCaptureFile({ ...E2E, AUTH_EMAIL_CAPTURE_FILE: "   " }),
+    ).toBeUndefined();
+    expect(resolveAuthEmailCaptureFile({ E2E_TEST_MODE: "1" })).toBeUndefined();
+  });
+});
+
+describe("canDeliverAuthEmail", () => {
+  it("is true with a provider or a usable capture file, and false otherwise", () => {
+    expect(canDeliverAuthEmail({})).toBe(false);
+    expect(
+      canDeliverAuthEmail({ RESEND_API_KEY: "re_x", RESEND_FROM_EMAIL: "n@x" }),
+    ).toBe(true);
+    expect(
+      canDeliverAuthEmail({
+        E2E_TEST_MODE: "1",
+        AUTH_EMAIL_CAPTURE_FILE: "/f",
+      }),
+    ).toBe(true);
+    expect(
+      canDeliverAuthEmail({
+        E2E_TEST_MODE: "1",
+        AUTH_EMAIL_CAPTURE_FILE: "/f",
+        VERCEL_ENV: "preview",
+      }),
+    ).toBe(false);
   });
 });

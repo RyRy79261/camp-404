@@ -24,7 +24,7 @@ import {
   AUTH_RP_NAME,
   AUTH_SESSION,
   authConfigWarnings,
-  isEmailProviderConfigured,
+  canDeliverAuthEmail,
   isGoogleConfigured,
   resolveBaseURL,
   resolvePasskeyOrigins,
@@ -51,7 +51,6 @@ const PLACEHOLDER_SECRET =
  */
 export function buildAuthOptions(env: AuthEnv = process.env) {
   const baseURL = resolveBaseURL(env);
-  const emailProvider = isEmailProviderConfigured(env);
   const passkeyRpID = resolvePasskeyRpID(env);
   const passkeyOrigins = resolvePasskeyOrigins(env);
   const useSecureCookies = resolveUseSecureCookies(env);
@@ -102,10 +101,11 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
     },
 
     emailVerification: {
-      // Sent on sign-up only when there is a provider to send it with. It
-      // proves ownership (the GOD_EMAILS recovery path needs a verified email)
-      // without blocking sign-in, unless the env turns the gate on.
-      sendOnSignUp: emailProvider,
+      // Sent on sign-up only when there is a way to deliver it: a provider,
+      // or the e2e capture file. It proves ownership (the GOD_EMAILS recovery
+      // path needs a verified email) without blocking sign-in, unless the env
+      // turns the gate on.
+      sendOnSignUp: canDeliverAuthEmail(env),
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
         await sendAuthEmail(env, { to: user.email, kind: "verify", url });

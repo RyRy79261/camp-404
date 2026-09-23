@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { AUTH_EMAIL_CAPTURE_FILE } from "./tests/e2e-db/_mail";
 
 // The real-database e2e run (owner's call E2E-DB, 2026-09-16: "a real Postgres
 // per run"). The test login and the outside-service stubs stay on, but every
@@ -49,6 +50,8 @@ export default defineConfig({
       PGCRYPTO_KEY: "e2e-local-only-pgcrypto-key-0123456789",
       INVITE_CODES: "test-invite-e2e-only-code",
       GOD_EMAILS: "god@example.com",
+      // Auth emails land in a file instead of being sent (tests/e2e-db/_mail.ts).
+      AUTH_EMAIL_CAPTURE_FILE,
     },
   },
 });

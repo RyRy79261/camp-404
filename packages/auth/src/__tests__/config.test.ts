@@ -10,7 +10,9 @@ describe("buildAuthOptions", () => {
   const options = buildAuthOptions({});
 
   it("enforces the form's password rule on the server", () => {
-    expect(options.emailAndPassword.minPasswordLength).toBe(PASSWORD_MIN_LENGTH);
+    expect(options.emailAndPassword.minPasswordLength).toBe(
+      PASSWORD_MIN_LENGTH,
+    );
   });
 
   it("signs every device out on a password reset", () => {
@@ -40,6 +42,25 @@ describe("buildAuthOptions", () => {
     ).toBe(true);
     expect(
       "socialProviders" in buildAuthOptions({ GOOGLE_CLIENT_ID: "id" }),
+    ).toBe(false);
+  });
+
+  it("sends a verification mail on sign-up only when one can be delivered", () => {
+    expect(options.emailVerification.sendOnSignUp).toBe(false);
+    expect(
+      buildAuthOptions({ RESEND_API_KEY: "re_x", RESEND_FROM_EMAIL: "n@x" })
+        .emailVerification.sendOnSignUp,
+    ).toBe(true);
+    expect(
+      buildAuthOptions({ E2E_TEST_MODE: "1", AUTH_EMAIL_CAPTURE_FILE: "/f" })
+        .emailVerification.sendOnSignUp,
+    ).toBe(true);
+    expect(
+      buildAuthOptions({
+        E2E_TEST_MODE: "1",
+        AUTH_EMAIL_CAPTURE_FILE: "/f",
+        VERCEL_ENV: "production",
+      }).emailVerification.sendOnSignUp,
     ).toBe(false);
   });
 
@@ -76,11 +97,14 @@ describe("auth email", () => {
     const log = vi.spyOn(console, "info").mockImplementation(() => {});
     const url = "https://www.camp-404.com/reset?token=secret-token";
 
-    await sendAuthEmail({ VERCEL_ENV: "production" }, {
-      to: "a@example.com",
-      kind: "reset",
-      url,
-    });
+    await sendAuthEmail(
+      { VERCEL_ENV: "production" },
+      {
+        to: "a@example.com",
+        kind: "reset",
+        url,
+      },
+    );
     expect(log.mock.calls.flat().join(" ")).not.toContain("secret-token");
 
     // Locally the link is the point of the log.
@@ -94,7 +118,11 @@ describe("auth email", () => {
     const env = { RESEND_API_KEY: "re_x", RESEND_FROM_EMAIL: "Camp <n@x>" };
 
     expect(
-      await sendAuthEmail(env, { to: "a@example.com", kind: "verify", url: "u" }),
+      await sendAuthEmail(env, {
+        to: "a@example.com",
+        kind: "verify",
+        url: "u",
+      }),
     ).toBe(true);
     const body = JSON.parse(
       (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1]
@@ -106,7 +134,11 @@ describe("auth email", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     fetchMock.mockRejectedValueOnce(new Error("network down"));
     expect(
-      await sendAuthEmail(env, { to: "a@example.com", kind: "verify", url: "u" }),
+      await sendAuthEmail(env, {
+        to: "a@example.com",
+        kind: "verify",
+        url: "u",
+      }),
     ).toBe(false);
   });
 });
