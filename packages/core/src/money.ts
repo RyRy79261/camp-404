@@ -142,7 +142,7 @@ export function sumByCurrency(
   const totals = new Map<Currency, number>();
   for (const row of rows) {
     if (!isCurrency(row.currency)) throw new UnknownCurrencyError(row.currency);
-    // Checked per row: two halves (0.5 + 0.5) would add up to a whole number.
+    // Checked per row as well as on the total, so the error names the amount.
     if (!Number.isSafeInteger(row.amountMinor)) {
       throw new RangeError(
         "sumByCurrency: an amount is not whole minor units.",
