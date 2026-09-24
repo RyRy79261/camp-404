@@ -2,7 +2,11 @@ import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { recipePlatesPrompt, recipeSourcePrompt } from "@camp404/ai-prompts";
+import {
+  recipePlatesPrompt,
+  recipeSourcePrompt,
+  recipeSourceRevisionPrompt,
+} from "@camp404/ai-prompts";
 import {
   PlateProofread,
   SourceProofread,
@@ -31,8 +35,11 @@ import { isE2ETestMode } from "@/lib/test-mode";
 // It only ever works on a run a reviewer queued (a captain or a Kitchen lead,
 // the owner's decision 2A; claimSourceRun and claimPlateRun return nothing
 // else), sends Claude the source as text, the name, how many the source
-// serves, the plates to write for, the kitchen's size and meal counts, the
-// sender's note and every earlier round of questions and answers, and stores
+// serves, the plates to write for, the kitchen's size and meal counts (the
+// meal plan's largest day at each meal), the sender's note and every earlier
+// round of questions and answers (and, for a recipe already in the book, its
+// accepted version and the answers that settled it, so Claude revises
+// instead of starting from zero: recipeSourceRevisionPrompt), and stores
 // the answer or the failure. There is no cron: a reviewer's click queues the
 // run and after() runs it; a run stuck over ten minutes is reset when a
 // Kitchen page loads.
@@ -58,11 +65,8 @@ import { isE2ETestMode } from "@/lib/test-mode";
 // default, so the call sets maxRetries: 0. A model error, a timeout or a
 // reply that does not match the contract hands the recipe back to where it
 // stood with a short sentence, and a reviewer decides whether to send it
-// again; a plate-count run that fails changes only its own row. The run still
-// counts toward the daily cap: it may have cost money. So does every
-// questions round. The cap is a silent server-side cost guard: no screen
-// shows it or counts it down, and a send over it is told to try again
-// tomorrow, with no number.
+// again; a plate-count run that fails changes only its own row. There is no
+// daily limit on runs (the owner removed it, 2026-09-24).
 //
 // Under E2E_TEST_MODE (the in-memory run and the real-database run alike) no
 // request leaves the machine: a fixed, valid answer stands in for Claude, and
@@ -332,9 +336,34 @@ async function callTool(request: {
   return { ok: true, result: block.input, usage };
 }
 
-/** The source prompt's message for one claimed run. */
-function sourceMessage(claim: ClaimedSourceRun): string {
-  return recipeSourcePrompt.user({
+/**
+ * What one claimed source run sends: a recipe in the book is revised from its
+ * accepted version and the questions and answers that settled it (the
+ * revision prompt, the one the run was queued under); any other is written
+ * from its source alone.
+ */
+export function sourceRequest(claim: ClaimedSourceRun): {
+  system: string;
+  user: string;
+} {
+  if (claim.previous) {
+    return {
+      system: recipeSourceRevisionPrompt.system,
+      user: recipeSourceRevisionPrompt.user({
+        ...sourceInput(claim),
+        previous: claim.previous,
+      }),
+    };
+  }
+  return {
+    system: recipeSourcePrompt.system,
+    user: recipeSourcePrompt.user(sourceInput(claim)),
+  };
+}
+
+/** The source prompt's input for one claimed run. */
+function sourceInput(claim: ClaimedSourceRun) {
+  return {
     title: claim.title,
     source: claim.sourceText,
     serves: claim.serves,
@@ -348,7 +377,7 @@ function sourceMessage(claim: ClaimedSourceRun): string {
     },
     note: claim.note,
     exchange: claim.exchange,
-  });
+  };
 }
 
 /**
@@ -461,8 +490,7 @@ export async function proofreadSourceClaim(
     const call: Attempt<unknown> = isE2ETestMode()
       ? { ok: true, result: testModeSource(claim), usage: TEST_MODE_USAGE }
       : await callTool({
-          system: recipeSourcePrompt.system,
-          user: sourceMessage(claim),
+          ...sourceRequest(claim),
           tool: SOURCE_TOOL,
           maxTokens: 16_000,
         });
@@ -575,8 +603,8 @@ export interface ProcessReport {
  * (240 s): one after another, the second call of a batch would be killed
  * halfway, its tokens spent and never stored, and its recipe left
  * `analysing` until the stale-run reset. Together, the batch takes as long as
- * its slowest call. A batch is at most MAX_PROOFREAD_BATCH runs and the daily
- * cap, so this never floods Anthropic; a rate-limited call fails like any
+ * its slowest call. A batch is at most MAX_PROOFREAD_BATCH runs, so this
+ * never floods Anthropic; a rate-limited call fails like any
  * other, and is not retried.
  */
 export async function processRuns(options: {

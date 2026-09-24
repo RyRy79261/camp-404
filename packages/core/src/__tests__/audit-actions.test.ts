@@ -193,6 +193,9 @@ describe("recipe audit rows", () => {
     expect(auditActionLabel("camp.kitchen_settings.changed")).toBe(
       "Changed the kitchen settings",
     );
+    expect(auditActionLabel("camp.kitchen_meal_plan.changed")).toBe(
+      "Changed the kitchen's meal plan",
+    );
   });
 
   it("name the recipe, and the version where one was written", () => {

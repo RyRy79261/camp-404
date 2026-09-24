@@ -16,8 +16,9 @@ import {
 // Recipes (#243, test-mode). A member imports a recipe by pasting its text,
 // with no name, and agrees that a captain or a Kitchen lead may send it to
 // Claude; a Kitchen lead approves it, and is offered the picker too (the owner's decision 2A);
-// a captain sets the plates at breakfast in Camp settings, and on the review
-// page that count is offered for the run (E2E mode stands in for Anthropic).
+// a captain sets the plates at breakfast on the Kitchen's meal plan, and on
+// the review page that count is offered for the run (E2E mode stands in for
+// Anthropic).
 // The run writes version 1 straight into the book after the response, with no
 // accept step, and the member finds it there, written for those plates. No
 // screen counts runs down or names a daily limit. A lead of another team
@@ -138,7 +139,8 @@ test.describe("recipes (test-mode)", () => {
     ).toBeVisible();
     await expect(page.getByText(RUN_COUNT)).toHaveCount(0);
 
-    // A captain sets the plates at breakfast.
+    // A captain sets the plates at breakfast on the meal plan, reached from
+    // the recipe book.
     await login(page, {
       id: "rcp-cap",
       email: "god@example.com",
@@ -147,21 +149,16 @@ test.describe("recipes (test-mode)", () => {
     await page.goto("/");
     await completeOnboarding(request, "rcp-cap");
     await setRank(request, "rcp-cap", "captain");
-    await page.goto("/captains/camp-settings");
+    await page.goto("/kitchen/recipes");
+    await page.getByRole("link", { name: "Meal plan" }).click();
+    await expect(page).toHaveURL("/kitchen/meal-plan");
     await expect(
-      page.getByRole("heading", { name: "Camp settings" }),
-    ).toBeVisible();
-    // The daily cap is a silent guard: the card neither shows nor sets it.
-    await expect(
-      page.getByRole("button", { name: "Save kitchen settings" }),
+      page.getByRole("heading", { level: 1, name: "Meal plan" }),
     ).toBeVisible();
     await expect(page.getByText(RUN_COUNT)).toHaveCount(0);
-    await page
-      .getByRole("group", { name: "Plates per meal" })
-      .getByLabel("Breakfast")
-      .fill("50");
-    await page.getByRole("button", { name: "Save kitchen settings" }).click();
-    await expect(page.getByText("Kitchen settings saved")).toBeVisible();
+    await page.getByLabel("Day 1 breakfast").fill("50");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Meal plan saved")).toBeVisible();
 
     // On the review page, breakfast's 50 plates are chosen for the run.
     await page.goto("/kitchen/recipes/review");

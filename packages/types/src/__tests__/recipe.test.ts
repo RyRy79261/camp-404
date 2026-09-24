@@ -5,6 +5,9 @@ import {
   DecideRecipeInput,
   KitchenRecipe,
   KitchenSettingsInput,
+  MEAL_PLAN_DEFAULT_DAYS,
+  MEAL_PLAN_MAX_DAYS,
+  MealPlanInput,
   QueuePlateProofreadInput,
   QueueProofreadInput,
   RecipeDraft,
@@ -477,6 +480,13 @@ describe("KitchenSettingsInput", () => {
     const parsed = KitchenSettingsInput.safeParse(noCap);
     expect(parsed.success).toBe(true);
     expect(parsed.data).not.toHaveProperty("recipeProofreadDailyCap");
+    // Nor the plates at each meal: the meal plan holds them now.
+    const potOnly = KitchenSettingsInput.safeParse({
+      kitchenLargestPotLitres: 50,
+      kitchenBurnerCount: 3,
+    });
+    expect(potOnly.success).toBe(true);
+    expect(potOnly.data).not.toHaveProperty("kitchenPlatesBreakfast");
     for (const bad of [
       { recipeProofreadDailyCap: 51 },
       { recipeProofreadDailyCap: -1 },
@@ -561,5 +571,46 @@ describe("the review inputs", () => {
     expect(
       StartVariationInput.safeParse({ recipeId: "abc", title: "GF" }).success,
     ).toBe(false);
+  });
+});
+
+describe("MealPlanInput", () => {
+  const day = { breakfast: 20, lunch: 0, dinner: 25 };
+
+  it("takes one row of whole plates, 0 to 500, for each day on site", () => {
+    expect(
+      MealPlanInput.safeParse({
+        daysOnSite: 2,
+        days: [day, { breakfast: 500, lunch: 0, dinner: 0 }],
+        expectedVersion: 0,
+      }).success,
+    ).toBe(true);
+    expect(MEAL_PLAN_DEFAULT_DAYS).toBe(11);
+  });
+
+  it("refuses plates outside 0 to 500, a part plate, and rows that do not match the days", () => {
+    for (const bad of [
+      { daysOnSite: 1, days: [{ ...day, lunch: -1 }] },
+      { daysOnSite: 1, days: [{ ...day, dinner: 501 }] },
+      { daysOnSite: 1, days: [{ ...day, breakfast: 2.5 }] },
+      { daysOnSite: 2, days: [day] },
+      { daysOnSite: 0, days: [] },
+      {
+        daysOnSite: MEAL_PLAN_MAX_DAYS + 1,
+        days: Array.from({ length: MEAL_PLAN_MAX_DAYS + 1 }, () => day),
+      },
+    ]) {
+      expect(
+        MealPlanInput.safeParse({ ...bad, expectedVersion: 0 }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
+    }
+    expect(
+      MealPlanInput.safeParse({
+        daysOnSite: 2,
+        days: [day],
+        expectedVersion: 0,
+      }).error?.issues[0]?.message,
+    ).toBe("Give the plates for every day on site.");
   });
 });

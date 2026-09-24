@@ -10,7 +10,8 @@ import type {
 // The source editor page decides on the server who may edit, and what the
 // editor opens with: the newest source (or the pasted text, when there is
 // none), the four sections in order, the Send button only while no run is
-// open, and Claude's questions when the newest run asked them. Anyone else
+// open, and Claude's questions when the newest run asked them (with "Claude
+// needs more details — answer here" where Send was). Anyone else
 // reads the refusal and not a word of the recipe.
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
@@ -242,13 +243,21 @@ describe("recipe source editor page", () => {
         questions: ["How much coconut milk?", "Ground or whole cumin?"],
       }),
     });
-    // The dialog hides the rest of the page from assistive technology.
+    // Read on the server, so it holds after leaving and coming back: the
+    // heading asks for the answer instead of sending again. The dialog hides
+    // the rest of the page from assistive technology.
     expect(
       screen.getByRole("button", {
-        name: "Send for proofreading",
+        name: "Claude needs more details — answer here",
         hidden: true,
       }),
     ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", {
+        name: "Send for proofreading",
+        hidden: true,
+      }),
+    ).toBeNull();
     const dialog = screen.getByRole("dialog", {
       name: "Claude needs more before it can write this recipe",
     });

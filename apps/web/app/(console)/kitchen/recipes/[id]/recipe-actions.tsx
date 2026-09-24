@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Check, GitBranch, Loader2, MessageSquare, Type } from "lucide-react";
+import { Check, GitBranch, Loader2, Type } from "lucide-react";
 import { RECIPE_LESSON_MAX, RECIPE_TEXT_MAX } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
@@ -21,7 +21,6 @@ import { recipePath } from "@/lib/recipe-copy";
 import {
   acceptProofreadAction,
   addLessonAction,
-  requestRerunAction,
   retypeRecipeTextAction,
   startVariationAction,
 } from "../actions";
@@ -110,109 +109,6 @@ export function RetypeText({
             <Button disabled={pending} onClick={save}>
               {pending && <Loader2 className="animate-spin" aria-hidden />}
               Save text
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-/**
- * A Kitchen lead asks a captain to run proofreading again (or for the first
- * time), saying what Claude should do differently. It costs nothing: the note
- * waits for the captains in their Ready to proofread list.
- */
-export function RequestRerun({
-  recipeId,
-  rerun,
-}: {
-  recipeId: string;
-  /** Proofread before: ask for a re-run rather than a first run. */
-  rerun: boolean;
-}) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [open, setOpen] = useState(false);
-  const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  function send() {
-    if (!note.trim()) {
-      setError("Say what Claude should do differently.");
-      return;
-    }
-    setError(null);
-    startTransition(async () => {
-      const result = await requestRerunAction({ recipeId, note });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      toast.success("The captains can see your request");
-      setOpen(false);
-      router.refresh();
-    });
-  }
-
-  const label = rerun
-    ? "Ask a captain to re-run"
-    : "Ask a captain to proofread";
-
-  return (
-    <>
-      <div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setNote("");
-            setError(null);
-            setOpen(true);
-          }}
-        >
-          <MessageSquare aria-hidden />
-          {label}
-        </Button>
-      </div>
-      <Dialog open={open} onOpenChange={(o) => !o && !pending && setOpen(o)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{label}</DialogTitle>
-            <DialogDescription>
-              A captain decides whether to run it, because each run costs money.
-              Your note shows beside the recipe in their list and goes to Claude
-              with the text if they run it.
-            </DialogDescription>
-          </DialogHeader>
-          <Field
-            label="What should Claude do differently?"
-            htmlFor="rerun-note"
-            error={error}
-          >
-            <Textarea
-              id="rerun-note"
-              value={note}
-              rows={4}
-              maxLength={1000}
-              disabled={pending}
-              onChange={(e) => {
-                setNote(e.target.value);
-                setError(null);
-              }}
-            />
-          </Field>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              disabled={pending}
-              onClick={() => setOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button disabled={pending} onClick={send}>
-              {pending && <Loader2 className="animate-spin" aria-hidden />}
-              Send to the captains
             </Button>
           </DialogFooter>
         </DialogContent>

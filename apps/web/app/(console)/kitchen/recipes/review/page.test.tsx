@@ -12,20 +12,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // a Kitchen lead gets the suggestions, the recipes ready for Claude with the
 // picker and the plate counts (2A), and the drafts to check, but never the
 // captain's token usage, which is not even read for them. Whoever sends picks
-// the plates from the meals Camp settings holds, or types another count. No
-// one sees a run counter.
+// the plates from the meals in this year's meal plan (each at its largest
+// day), or types another count. No one sees a run counter.
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn() }));
-vi.mock("@/lib/recipes", () => ({
-  getKitchenSettings: vi.fn(async () => ({
-    recipeProofreadDailyCap: 5,
-    kitchenLargestPotLitres: null,
-    kitchenBurnerCount: null,
-    kitchenPlatesBreakfast: null,
-    kitchenPlatesLunch: 55,
-    kitchenPlatesDinner: 45,
+vi.mock("@/lib/meal-plan", () => ({
+  getMealPlan: vi.fn(async () => ({
+    cycle: 2026,
+    daysOnSite: 2,
+    days: [
+      { breakfast: 0, lunch: 55, dinner: 40 },
+      { breakfast: 0, lunch: 30, dinner: 45 },
+    ],
+    version: 1,
+    updatedAt: null,
   })),
+}));
+vi.mock("@/lib/recipes", () => ({
   listReviewQueue: vi.fn(),
   listAwaitingAcceptance: vi.fn(),
   listReadyToProofread: vi.fn(),
@@ -43,8 +47,8 @@ vi.mock("next/navigation", () => ({
 
 import { toast } from "@camp404/ui/components/toast";
 import { captainPageGate } from "@/lib/captain-gate";
+import { getMealPlan } from "@/lib/meal-plan";
 import {
-  getKitchenSettings,
   listAwaitingAcceptance,
   listProofreadRuns,
   listReadyToProofread,
@@ -200,7 +204,7 @@ describe("recipe review page", () => {
 
     expect(screen.queryByText("Proofreading usage")).toBeNull();
     expect(document.body.textContent).not.toMatch(/runs? left|per day/i);
-    expect(getKitchenSettings).toHaveBeenCalledTimes(1);
+    expect(getMealPlan).toHaveBeenCalledTimes(1);
     expect(listProofreadRuns).not.toHaveBeenCalled();
     expect(proofreadTokenTotals).not.toHaveBeenCalled();
   });
@@ -323,13 +327,12 @@ describe("recipe review page", () => {
   });
 
   it("offers only Other, at 40 plates, when no meal is set", async () => {
-    vi.mocked(getKitchenSettings).mockResolvedValueOnce({
-      recipeProofreadDailyCap: 5,
-      kitchenLargestPotLitres: null,
-      kitchenBurnerCount: null,
-      kitchenPlatesBreakfast: null,
-      kitchenPlatesLunch: null,
-      kitchenPlatesDinner: null,
+    vi.mocked(getMealPlan).mockResolvedValueOnce({
+      cycle: 2026,
+      daysOnSite: 1,
+      days: [{ breakfast: 0, lunch: 0, dinner: 0 }],
+      version: 0,
+      updatedAt: null,
     });
     await renderAs("captain");
     const ready = screen.getByRole("article", { name: "Ready for Claude" });

@@ -1510,6 +1510,59 @@ export const recipeLessons = pgTable(
   }),
 );
 
+// The kitchen's meal plan for one year (the owner's sketch, 2026-09-24): how
+// many days the camp is on site, and the plates at breakfast, lunch and dinner
+// on each day. A recipe in the book is shown at each distinct count in it,
+// and the largest is what Claude writes a new recipe for. It replaces the
+// three per-meal numbers on camp_settings, which stay stored and unread.
+// Anyone approved reads it; a captain or a Kitchen lead saves it, audited and
+// compare-and-set on `version`. No row means the defaults (11 empty days).
+export const kitchenMealPlans = pgTable(
+  "kitchen_meal_plans",
+  {
+    cycle: integer("cycle").primaryKey(),
+    daysOnSite: integer("days_on_site").notNull().default(11),
+    version: integer("version").notNull().default(1),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (p) => ({
+    // The bounds mirror MEAL_PLAN_MAX_DAYS in @camp404/types.
+    daysCheck: check(
+      "kitchen_meal_plans_days_check",
+      sql`${p.daysOnSite} between 1 and 30`,
+    ),
+  }),
+);
+
+// One day of a year's meal plan: the plates at each meal, 0 for no meal.
+// Days 1 to days_on_site; a save replaces the year's rows.
+export const kitchenMealPlanDays = pgTable(
+  "kitchen_meal_plan_days",
+  {
+    cycle: integer("cycle")
+      .notNull()
+      .references(() => kitchenMealPlans.cycle, { onDelete: "cascade" }),
+    day: integer("day").notNull(),
+    breakfast: integer("breakfast").notNull().default(0),
+    lunch: integer("lunch").notNull().default(0),
+    dinner: integer("dinner").notNull().default(0),
+  },
+  (d) => ({
+    pk: primaryKey({ columns: [d.cycle, d.day] }),
+    dayCheck: check(
+      "kitchen_meal_plan_days_day_check",
+      sql`${d.day} between 1 and 30`,
+    ),
+    platesCheck: check(
+      "kitchen_meal_plan_days_plates_check",
+      sql`${d.breakfast} between 0 and 500 and ${d.lunch} between 0 and 500 and ${d.dinner} between 0 and 500`,
+    ),
+  }),
+);
+
 // --- Documents / manuals -------------------------------------------------
 
 export const documents = pgTable(

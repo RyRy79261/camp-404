@@ -807,6 +807,10 @@ export type AcceptProofreadInput = z.infer<typeof AcceptProofreadInput>;
  * of plates. A count that already has a result is not run again unless
  * `rerun` says so.
  */
+/** An action on one recipe that takes nothing else. */
+export const RecipeIdInput = z.object({ recipeId: RowId });
+export type RecipeIdInput = z.infer<typeof RecipeIdInput>;
+
 export const QueuePlateProofreadInput = z.object({
   recipeId: RowId,
   versionId: RowId,
@@ -829,9 +833,9 @@ const L = KITCHEN_SETTING_LIMITS;
 
 export const KitchenSettingsInput = z.object({
   /**
-   * Proofreading runs a day; 0 turns proofreading off. A silent cost guard:
-   * no screen shows or sets it, so Camp settings leaves it out and the write
-   * keeps the stored value when it is absent.
+   * The old daily proofreading cap. Nothing reads it any more (the owner
+   * removed the limit, 2026-09-24) and no screen sets it; the column stays,
+   * and the write keeps the stored value when it is absent.
    */
   recipeProofreadDailyCap: z
     .number()
@@ -860,12 +864,64 @@ export const KitchenSettingsInput = z.object({
       `Count at most ${L.kitchenBurnerCount.max} burners.`,
     )
     .nullable(),
-  /** Plates at each meal; mornings usually feed more than evenings. */
-  kitchenPlatesBreakfast: PlateCount.nullable(),
-  kitchenPlatesLunch: PlateCount.nullable(),
-  kitchenPlatesDinner: PlateCount.nullable(),
+  /**
+   * The old plates at each meal. The year's meal plan (MealPlanInput) holds
+   * them now, so Camp settings leaves them out and the write keeps the stored
+   * values when they are absent.
+   */
+  kitchenPlatesBreakfast: PlateCount.nullable().optional(),
+  kitchenPlatesLunch: PlateCount.nullable().optional(),
+  kitchenPlatesDinner: PlateCount.nullable().optional(),
 });
 export type KitchenSettingsInput = z.infer<typeof KitchenSettingsInput>;
+
+// --- Meal plan -------------------------------------------------------------
+// The year's plates at each meal, day by day on site (the owner's sketch,
+// 2026-09-24). It replaces the three per-meal numbers Camp settings held: a
+// recipe's plate counts are the distinct counts in it, and the largest one is
+// what Claude writes a recipe for.
+
+/** The camp is usually on site 11 days. */
+export const MEAL_PLAN_DEFAULT_DAYS = 11;
+/** The most days on site a meal plan holds. */
+export const MEAL_PLAN_MAX_DAYS = 30;
+
+/** Plates at one meal on one day: 0 (no meal) to MAX_PLATES. */
+const MealPlates = z
+  .number({ error: "Give a number of plates." })
+  .int("Use a whole number of plates.")
+  .min(0, "Plates cannot be below 0.")
+  .max(MAX_PLATES, `Give at most ${MAX_PLATES} plates.`);
+
+export const MealPlanDay = z.object({
+  breakfast: MealPlates,
+  lunch: MealPlates,
+  dinner: MealPlates,
+});
+export type MealPlanDay = z.infer<typeof MealPlanDay>;
+
+export const MEALS_OF_THE_DAY = ["breakfast", "lunch", "dinner"] as const;
+export type MealOfTheDay = (typeof MEALS_OF_THE_DAY)[number];
+
+/**
+ * A save of the year's meal plan: the days on site, one row of plates for
+ * each, and the version the editor opened (0 when there was no plan yet).
+ */
+export const MealPlanInput = z
+  .object({
+    daysOnSite: z
+      .number({ error: "Give the days on site." })
+      .int("Count whole days.")
+      .min(1, "Count at least 1 day.")
+      .max(MEAL_PLAN_MAX_DAYS, `Count at most ${MEAL_PLAN_MAX_DAYS} days.`),
+    days: z.array(MealPlanDay).max(MEAL_PLAN_MAX_DAYS),
+    expectedVersion: z.number().int().min(0),
+  })
+  .refine((plan) => plan.days.length === plan.daysOnSite, {
+    message: "Give the plates for every day on site.",
+    path: ["days"],
+  });
+export type MealPlanInput = z.infer<typeof MealPlanInput>;
 
 // --- Legacy ----------------------------------------------------------------
 // The first recipe design (the normalisation prompt and recipes.normalised).

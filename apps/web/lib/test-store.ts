@@ -24,6 +24,7 @@ import {
   sortPinned,
   canApproveRecipe,
   canRunProofread,
+  mealPlanPeaks,
   sameSections,
   sourceFromText,
   sourceText,
@@ -128,13 +129,12 @@ import {
   PLATES_OUT_OF_RANGE,
   VERSION_CHANGED,
   baseLines,
-  campDayStartOf,
   campMonthStartOf,
-  capRefusal,
   draftPlatesMismatch,
   failedPlateCounts,
   forRecipe,
   handBackTo,
+  keep,
   plateCountIsBase,
   plateCountReady,
   plateRunOpen,
@@ -142,6 +142,7 @@ import {
   readQuestions,
   runDetail,
   sourceBlockedReason,
+  sourcePromptVersion,
   suggestionTitle,
   textBlockedReason,
   versionInvalid,
@@ -157,6 +158,8 @@ import {
   type RecipeBookEntry,
   type RecipeDecision,
   type RecipeDetail,
+  type PreviousVersion,
+  type RecipeSourceHistoryEntry,
   type RecipeSourceVersion,
   type RecipeVersionDetail,
   type RecipeWriteResult,
@@ -166,6 +169,14 @@ import {
   type TokenTotals,
 } from "@camp404/db/recipes";
 import {
+  CHECK_MEAL_PLAN,
+  MEAL_PLAN_CHANGED,
+  NOT_A_MEAL_PLAN_EDITOR,
+  defaultMealPlan,
+  type MealPlan,
+  type MealPlanWriteResult,
+} from "@camp404/db/meal-plan";
+import {
   calendarEventRefusal,
   type AddCalendarEventResult,
 } from "@camp404/db/calendar-events";
@@ -173,6 +184,7 @@ import {
   ANNOUNCEMENT_NOTIFICATION_KINDS,
   DEFAULT_PLATES,
   KitchenRecipe,
+  MealPlanInput,
   PROOFREAD_ANSWER_MAX,
   PlateProofread,
   RECIPE_TEXT_MAX,
@@ -553,6 +565,8 @@ interface TestStoreState {
   recipeHistory: TestRecipeEvent[];
   /** The kitchen's settings. Reassigned on every edit, so it lives on `S`. */
   kitchenSettings: KitchenSettings;
+  /** `kitchen_meal_plans` with their days, keyed by year. */
+  mealPlans: Map<number, MealPlan>;
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -606,6 +620,7 @@ function globalState(): TestStoreState {
       recipeLessons: [] as TestRecipeLesson[],
       recipeHistory: [] as TestRecipeEvent[],
       kitchenSettings: { ...DEFAULT_KITCHEN_SETTINGS },
+      mealPlans: new Map<number, MealPlan>(),
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -678,6 +693,7 @@ S.ingredientCatalogue ??= [];
 S.recipeLessons ??= [];
 S.recipeHistory ??= [];
 S.kitchenSettings ??= { ...DEFAULT_KITCHEN_SETTINGS };
+S.mealPlans ??= new Map<number, MealPlan>();
 const recipes = S.recipes;
 const recipeRuns = S.recipeRuns;
 const recipeSources = S.recipeSources;
@@ -891,11 +907,6 @@ function handBackStore(
   recipe.updatedAt = now;
 }
 
-function runsSince(since: Date): number {
-  return recipeRuns.filter((r) => r.requestedAt.getTime() >= since.getTime())
-    .length;
-}
-
 function recordRecipeEvent(
   recipe: TestRecipe,
   action: AuditAction,
@@ -926,6 +937,30 @@ function sourceVersionOf(row: TestRecipeSource): RecipeSourceVersion {
     sections: structuredClone(row.sections),
     authorId: row.authorId,
   };
+}
+
+/** The accepted version a revision starts from (the twin of readPreviousVersion). */
+function storePreviousVersion(
+  acceptedVersionId: string | null,
+): PreviousVersion | null {
+  const version = recipeVersions.find((v) => v.id === acceptedVersionId);
+  if (!version) return null;
+  const run = recipeRuns.find(
+    (r) => r.id === version.runId && r.kind === "source",
+  );
+  return {
+    version: version.version,
+    recipe: version.body,
+    exchange: storeExchange(run?.exchange),
+  };
+}
+
+/** A year's meal plan, or the defaults (the twin of readMealPlan). */
+function storeMealPlan(cycle: number): MealPlan {
+  const plan = S.mealPlans.get(cycle);
+  return plan
+    ? { ...plan, days: plan.days.map((d) => ({ ...d })) }
+    : defaultMealPlan(cycle);
 }
 
 /** A recipe's newest source version, or null (the twin of latestSource). */
@@ -3015,8 +3050,7 @@ export const testStore = {
   // The store is one synchronous process, so every check runs before the
   // first change and a refusal leaves nothing behind, as the real rollback
   // does. The rules come from the same places: canApproveRecipe and
-  // canRunProofread in core, and textBlockedReason, capRefusal and the camp
-  // day from @camp404/db/recipes.
+  // canRunProofread in core, and textBlockedReason from @camp404/db/recipes.
 
   getKitchenSettings(): KitchenSettings {
     return { ...S.kitchenSettings };
@@ -3035,9 +3069,19 @@ export const testStore = {
         input.recipeProofreadDailyCap ?? before.recipeProofreadDailyCap,
       kitchenLargestPotLitres: input.kitchenLargestPotLitres,
       kitchenBurnerCount: input.kitchenBurnerCount,
-      kitchenPlatesBreakfast: input.kitchenPlatesBreakfast,
-      kitchenPlatesLunch: input.kitchenPlatesLunch,
-      kitchenPlatesDinner: input.kitchenPlatesDinner,
+      // The meal plan holds the plates now; absent keeps the stored ones.
+      kitchenPlatesBreakfast: keep(
+        input.kitchenPlatesBreakfast,
+        before.kitchenPlatesBreakfast,
+      ),
+      kitchenPlatesLunch: keep(
+        input.kitchenPlatesLunch,
+        before.kitchenPlatesLunch,
+      ),
+      kitchenPlatesDinner: keep(
+        input.kitchenPlatesDinner,
+        before.kitchenPlatesDinner,
+      ),
     };
     S.kitchenSettings = after;
     recipeHistory.push({
@@ -3048,6 +3092,57 @@ export const testStore = {
       createdAt: new Date(),
     });
     return { ok: true, settings: { ...after } };
+  },
+
+  /** This year's meal plan, or a given year's (the twin of getMealPlan). */
+  getMealPlan(cycle?: number): MealPlan {
+    return storeMealPlan(cycle ?? currentCycleNumber());
+  },
+
+  /**
+   * Save this year's meal plan (the twin of setMealPlan): a captain or a
+   * Kitchen lead, compare-and-set on version, audited.
+   */
+  setMealPlan(
+    input: { actorId: string } & MealPlanInput,
+  ): MealPlanWriteResult<{ version: number }> {
+    const parsed = MealPlanInput.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? CHECK_MEAL_PLAN,
+      };
+    }
+    if (!isKitchenReviewer(input.actorId)) {
+      return { ok: false, error: NOT_A_MEAL_PLAN_EDITOR };
+    }
+    const { daysOnSite, days, expectedVersion } = parsed.data;
+    const cycle = currentCycleNumber();
+    const before = storeMealPlan(cycle);
+    if (before.version !== expectedVersion) {
+      return { ok: false, error: MEAL_PLAN_CHANGED };
+    }
+    const version = expectedVersion + 1;
+    S.mealPlans.set(cycle, {
+      cycle,
+      daysOnSite,
+      days: days.map((d) => ({ ...d })),
+      version,
+      updatedAt: new Date(),
+    });
+    recipeHistory.push({
+      recipeId: null,
+      action: "camp.kitchen_meal_plan.changed",
+      actorId: input.actorId,
+      metadata: {
+        cycle,
+        version,
+        before: { daysOnSite: before.daysOnSite, days: before.days },
+        after: { daysOnSite, days },
+      },
+      createdAt: new Date(),
+    });
+    return { ok: true, version };
   },
 
   suggestRecipe(input: {
@@ -3265,6 +3360,7 @@ export const testStore = {
     plates: number;
     now: Date;
     promptVersion: string;
+    revisionPromptVersion?: string;
     model: string;
   }): RecipeWriteResult<{ runIds: string[] }> {
     if (!mayRunProofread(input.actorId)) {
@@ -3272,12 +3368,6 @@ export const testStore = {
     }
     const ids = [...new Set(input.recipeIds)];
     if (ids.length === 0) return { ok: false, error: NOT_READY_TO_PROOFREAD };
-    const overCap = capRefusal(
-      S.kitchenSettings.recipeProofreadDailyCap,
-      runsSince(campDayStartOf(input.now)),
-      ids.length,
-    );
-    if (overCap) return { ok: false, error: overCap };
     if (
       !Number.isInteger(input.plates) ||
       input.plates < 1 ||
@@ -3316,14 +3406,14 @@ export const testStore = {
         plates: input.plates,
         exchange: [],
         previousRunId: recipe.latestRunId,
-        promptVersion: input.promptVersion,
+        promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
         model: input.model,
       });
       recordRecipeEvent(recipe, "recipe.proofread_queued", input.actorId, {
         runId,
         plates: input.plates,
         sourceVersion: source.version,
-        promptVersion: input.promptVersion,
+        promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
         model: input.model,
       });
       runIds.push(runId);
@@ -3346,17 +3436,12 @@ export const testStore = {
     plates: number;
     now: Date;
     promptVersion: string;
+    revisionPromptVersion?: string;
     model: string;
   }): RecipeWriteResult<{ runId: string; sourceId: string }> {
     if (!mayRunProofread(input.actorId)) {
       return { ok: false, error: ONLY_A_REVIEWER_SENDS };
     }
-    const overCap = capRefusal(
-      S.kitchenSettings.recipeProofreadDailyCap,
-      runsSince(campDayStartOf(input.now)),
-      1,
-    );
-    if (overCap) return { ok: false, error: overCap };
     if (
       !Number.isInteger(input.plates) ||
       input.plates < 1 ||
@@ -3429,14 +3514,14 @@ export const testStore = {
       plates: input.plates,
       exchange: [],
       previousRunId: recipe.latestRunId,
-      promptVersion: input.promptVersion,
+      promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
       model: input.model,
     });
     recordRecipeEvent(recipe, "recipe.proofread_queued", input.actorId, {
       runId,
       plates: input.plates,
       sourceVersion: source.version,
-      promptVersion: input.promptVersion,
+      promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
       model: input.model,
     });
     return { ok: true, runId, sourceId: source.id };
@@ -3445,7 +3530,7 @@ export const testStore = {
   /**
    * A reviewer answers Claude's questions (the twin of
    * answerProofreadQuestions): the next round, on the same source and plates,
-   * carrying the whole exchange. Every round counts toward the cap.
+   * carrying the whole exchange.
    */
   answerProofreadQuestions(input: {
     recipeId: string;
@@ -3454,17 +3539,12 @@ export const testStore = {
     answer: string;
     now: Date;
     promptVersion: string;
+    revisionPromptVersion?: string;
     model: string;
   }): RecipeWriteResult<{ runId: string }> {
     if (!mayRunProofread(input.actorId)) {
       return { ok: false, error: ONLY_A_REVIEWER_SENDS };
     }
-    const overCap = capRefusal(
-      S.kitchenSettings.recipeProofreadDailyCap,
-      runsSince(campDayStartOf(input.now)),
-      1,
-    );
-    if (overCap) return { ok: false, error: overCap };
     const answer = input.answer.trim();
     if (!answer) return { ok: false, error: ANSWER_NEEDED };
     if (answer.length > PROOFREAD_ANSWER_MAX) {
@@ -3506,7 +3586,7 @@ export const testStore = {
       plates: asked.plates ?? DEFAULT_PLATES,
       exchange,
       previousRunId: input.runId,
-      promptVersion: input.promptVersion,
+      promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
       model: input.model,
     });
     recordRecipeEvent(recipe, "recipe.questions_answered", input.actorId, {
@@ -3555,7 +3635,11 @@ export const testStore = {
       plates: run.plates ?? DEFAULT_PLATES,
       exchange: storeExchange(run.exchange),
       note: run.note,
-      kitchen: { ...S.kitchenSettings },
+      kitchen: {
+        ...S.kitchenSettings,
+        ...mealPlanPeaks(storeMealPlan(currentCycleNumber()).days),
+      },
+      previous: storePreviousVersion(recipe.acceptedVersionId),
     };
   },
 
@@ -3722,12 +3806,6 @@ export const testStore = {
     if (!mayRunProofread(input.actorId)) {
       return { ok: false, error: ONLY_A_REVIEWER_SENDS };
     }
-    const overCap = capRefusal(
-      S.kitchenSettings.recipeProofreadDailyCap,
-      runsSince(campDayStartOf(input.now)),
-      1,
-    );
-    if (overCap) return { ok: false, error: overCap };
     const plates = input.plates;
     if (!Number.isInteger(plates) || plates < 1 || plates > 500) {
       return { ok: false, error: PLATES_OUT_OF_RANGE };
@@ -4098,6 +4176,18 @@ export const testStore = {
     return row ? sourceVersionOf(row) : null;
   },
 
+  /** Every source version, newest first (the twin of listRecipeSources). */
+  listRecipeSources(recipeId: string): RecipeSourceHistoryEntry[] {
+    return recipeSources
+      .filter((row) => row.recipeId === recipeId)
+      .sort((a, b) => b.version - a.version)
+      .map((row) => ({
+        ...sourceVersionOf(row),
+        authorName: userName(row.authorId),
+        createdAt: row.createdAt,
+      }));
+  },
+
   getProofreadProgress(
     recipeId: string,
     runId?: string | null,
@@ -4321,6 +4411,10 @@ export const testStore = {
       versions: versions.map((v) => ({
         id: v.id,
         version: v.version,
+        plates: v.body.plates,
+        recipe: v.body,
+        report: v.report,
+        scalingNotes: v.scalingNotes,
         reason: v.reason,
         runId: v.runId,
         authorName: userName(v.authorId),
@@ -4429,6 +4523,7 @@ export const testStore = {
     recipeLessons.length = 0;
     recipeHistory.length = 0;
     S.kitchenSettings = { ...DEFAULT_KITCHEN_SETTINGS };
+    S.mealPlans.clear();
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },

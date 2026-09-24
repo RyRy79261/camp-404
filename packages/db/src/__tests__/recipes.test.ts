@@ -23,8 +23,6 @@ import {
   ONLY_A_CAPTAIN_SETS_KITCHEN,
   ONLY_A_REVIEWER_SENDS,
   PLATE_RUN_VERSION_GONE,
-  PROOFREAD_CAP_REACHED,
-  PROOFREAD_OFF,
   RECIPE_CHANGED,
   RECIPE_DECIDED,
   RERUN_NOTE_NEEDED,
@@ -71,7 +69,9 @@ import {
   setRunStage,
   startVariation,
   suggestRecipe,
+  listRecipeSources,
 } from "../recipes";
+import { setMealPlan } from "../meal-plan";
 import { setLead } from "../team-memberships";
 import { useTestDb } from "./_harness";
 import { makeMembership, makeUser, seedAcceptedVersion } from "./_factories";
@@ -750,69 +750,21 @@ describe("recipes", () => {
       expect(await runCount()).toBe(0);
     });
 
-    it("holds to the daily cap: two runs pass, the third is refused and nothing is written", async () => {
-      const { captain, member } = await people();
-      expect(
-        (
-          await setKitchenSettings({
-            actorId: captain.id,
-            recipeProofreadDailyCap: 2,
-            kitchenLargestPotLitres: 50,
-            kitchenBurnerCount: 3,
-            kitchenPlatesBreakfast: null,
-            kitchenPlatesLunch: null,
-            kitchenPlatesDinner: null,
-          })
-        ).ok,
-      ).toBe(true);
-      const a = await approved(member.id, captain.id);
-      const b = await approved(member.id, captain.id);
-      const c = await approved(member.id, captain.id);
-
-      // A batch that would go over is refused whole.
-      expect(await queue(captain.id, [a, b, c])).toEqual({
-        ok: false,
-        error: PROOFREAD_CAP_REACHED,
-      });
-      expect(await runCount()).toBe(0);
-      expect(await statusOf(a)).toBe("approved");
-
-      expect((await queue(captain.id, [a])).ok).toBe(true);
-      const second = await queue(captain.id, [b]);
-      if (!second.ok) throw new Error(second.error);
-      // A failed run still counts: it spent tokens.
-      await claimSourceRun(second.runIds[0]!);
-      await failRun({ runId: second.runIds[0]!, error: "Timed out." });
-
-      const third = await queue(captain.id, [c]);
-      expect(third.ok).toBe(false);
-      expect(third).toEqual({ ok: false, error: PROOFREAD_CAP_REACHED });
-      // The sentence never names a number.
-      expect(PROOFREAD_CAP_REACHED).not.toMatch(/\d|left/);
-      expect(await runCount()).toBe(2);
-      expect(await statusOf(c)).toBe("approved");
-
-      // Tomorrow, in camp time, the count starts again.
-      const tomorrow = new Date("2026-09-24T22:30:00Z");
-      expect((await queue(captain.id, [c], tomorrow)).ok).toBe(true);
-    });
-
-    it("says proofreading is off when the cap is 0", async () => {
+    it("has no daily limit: a stored cap, even 0, refuses nothing", async () => {
       const { captain, member } = await people();
       await setKitchenSettings({
         actorId: captain.id,
         recipeProofreadDailyCap: 0,
         kitchenLargestPotLitres: null,
         kitchenBurnerCount: null,
-        kitchenPlatesBreakfast: null,
-        kitchenPlatesLunch: null,
-        kitchenPlatesDinner: null,
       });
-      const id = await approved(member.id, captain.id);
-      expect(await queue(captain.id, [id])).toEqual({
-        ok: false,
-        error: PROOFREAD_OFF,
-      });
+      const ids = [];
+      for (let i = 0; i < 4; i++)
+        ids.push(await approved(member.id, captain.id));
+      // A batch, then one more on its own, all on the same camp day.
+      expect((await queue(captain.id, ids.slice(0, 3))).ok).toBe(true);
+      expect((await queue(captain.id, [ids[3]!])).ok).toBe(true);
+      expect(await runCount()).toBe(4);
     });
 
     it("refuses text its author did not agree to send, until a reviewer retypes it", async () => {
@@ -1479,36 +1431,36 @@ describe("recipes", () => {
       });
     });
 
-    it("keeps the stored daily cap when a save leaves it out, as Camp settings does", async () => {
+    it("keeps the stored cap and per-meal plates when a save leaves them out, as Camp settings does", async () => {
       const { captain } = await people();
-      const base = {
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-        kitchenPlatesBreakfast: null,
-        kitchenPlatesLunch: null,
-        kitchenPlatesDinner: null,
-      };
       expect(
         (
           await setKitchenSettings({
             actorId: captain.id,
-            ...base,
+            kitchenLargestPotLitres: null,
+            kitchenBurnerCount: null,
             recipeProofreadDailyCap: 2,
+            kitchenPlatesDinner: 45,
           })
         ).ok,
       ).toBe(true);
-      // The card sends no cap: the silent guard stays where it was.
+      // The card sends only the pot and the burners now.
       const saved = await setKitchenSettings({
         actorId: captain.id,
-        ...base,
-        kitchenPlatesDinner: 45,
+        kitchenLargestPotLitres: 60,
+        kitchenBurnerCount: 4,
       });
       expect(saved).toMatchObject({
         ok: true,
-        settings: { recipeProofreadDailyCap: 2, kitchenPlatesDinner: 45 },
+        settings: {
+          recipeProofreadDailyCap: 2,
+          kitchenLargestPotLitres: 60,
+          kitchenPlatesDinner: 45,
+        },
       });
       expect(await getKitchenSettings()).toMatchObject({
         recipeProofreadDailyCap: 2,
+        kitchenBurnerCount: 4,
         kitchenPlatesDinner: 45,
       });
     });
@@ -1694,32 +1646,20 @@ describe("recipes", () => {
       });
     });
 
-    it("counts plate runs toward the one daily cap", async () => {
+    it("has no daily limit on plate runs either", async () => {
       const { captain, member } = await people();
       const target = await accepted(captain.id, member.id);
       await setKitchenSettings({
         actorId: captain.id,
-        recipeProofreadDailyCap: 2,
+        recipeProofreadDailyCap: 1,
         kitchenLargestPotLitres: null,
         kitchenBurnerCount: null,
-        kitchenPlatesBreakfast: null,
-        kitchenPlatesLunch: null,
-        kitchenPlatesDinner: null,
       });
       const other = await approved(member.id, captain.id);
       expect((await queue(captain.id, [other])).ok).toBe(true);
       expect((await plates(captain.id, target, 45)).ok).toBe(true);
-      expect(await runCount()).toBe(2);
-
-      expect(await plates(captain.id, target, 60)).toEqual({
-        ok: false,
-        error: PROOFREAD_CAP_REACHED,
-      });
-      // A plate run fills the cap for a text run too.
-      const third = await approved(member.id, captain.id);
-      expect((await queue(captain.id, [third])).ok).toBe(false);
-      expect(await runCount()).toBe(2);
-      expect(await auditRows(PLATES_QUEUED)).toHaveLength(1);
+      expect((await plates(captain.id, target, 60)).ok).toBe(true);
+      expect(await auditRows(PLATES_QUEUED)).toHaveLength(2);
     });
 
     it("refuses a Structures lead and a member inside the transaction, writing nothing, and lets a Kitchen lead", async () => {
@@ -1989,6 +1929,7 @@ describe("recipes", () => {
         serves?: number | null;
         plates?: number;
         now?: Date;
+        revisionPromptVersion?: string;
       },
     ) {
       return sendSourceForProofreading({
@@ -2000,6 +1941,7 @@ describe("recipes", () => {
         plates: input.plates ?? 40,
         now: input.now ?? NOW,
         promptVersion: PROMPT,
+        revisionPromptVersion: input.revisionPromptVersion,
         model: MODEL,
       });
     }
@@ -2349,32 +2291,28 @@ describe("recipes", () => {
       expect(await runCount()).toBe(0);
     });
 
-    it("refuses silently at the daily cap, with no number, and writes nothing", async () => {
+    it("has no daily limit on a send", async () => {
       const { captain, kitchenLead, member } = await people();
       await setKitchenSettings({
         actorId: captain.id,
         recipeProofreadDailyCap: 1,
         kitchenLargestPotLitres: null,
         kitchenBurnerCount: null,
-        kitchenPlatesBreakfast: null,
-        kitchenPlatesLunch: null,
-        kitchenPlatesDinner: null,
       });
       const a = await approved(member.id, captain.id);
       const b = await approved(member.id, captain.id);
       expect((await sendAsIs(kitchenLead.id, a)).ok).toBe(true);
       const bSource = (await getRecipeSource(b))!;
       expect(
-        await send(kitchenLead.id, b, {
-          basedOnSourceId: bSource.id,
-          sections: sourceFromText("Changed, but over the cap."),
-        }),
-      ).toEqual({ ok: false, error: PROOFREAD_CAP_REACHED });
-      expect(PROOFREAD_CAP_REACHED).toBe(
-        "Claude has done as much proofreading as the camp allows today. Try again tomorrow.",
-      );
-      expect(await sourceRows(b)).toHaveLength(1);
-      expect(await runCount()).toBe(1);
+        (
+          await send(kitchenLead.id, b, {
+            basedOnSourceId: bSource.id,
+            sections: sourceFromText("Changed, and sent the same day."),
+          })
+        ).ok,
+      ).toBe(true);
+      expect(await sourceRows(b)).toHaveLength(2);
+      expect(await runCount()).toBe(2);
     });
 
     it("hands the worker the source text and nothing private, starting at `sending`", async () => {
@@ -2400,6 +2338,8 @@ describe("recipes", () => {
         exchange: [],
         note: null,
         kitchen: expect.objectContaining({ recipeProofreadDailyCap: 5 }),
+        // Not in the book yet: nothing to revise.
+        previous: null,
       });
       expect(JSON.stringify(claimed)).not.toContain("Cheap and vegan");
       expect(JSON.stringify(claimed)).not.toContain(member.displayName);
@@ -2409,6 +2349,129 @@ describe("recipes", () => {
         stage: "sending",
       });
       expect(await claimSourceRun(sent.runId)).toBeNull();
+    });
+
+    it("revises a recipe in the book from its accepted version and the exchange that settled it", async () => {
+      const { captain, kitchenLead, member } = await people();
+      const REVISION = "revision-2026-09-24.1";
+      const id = await approved(member.id, captain.id);
+      const v1 = (await getRecipeSource(id))!;
+
+      // First round: questions, answered; then the recipe, into the book.
+      const first = await send(kitchenLead.id, id, {
+        basedOnSourceId: v1.id,
+        sections: v1.sections,
+        revisionPromptVersion: REVISION,
+      });
+      if (!first.ok) throw new Error(first.error);
+      // Not in the book yet: the source prompt, whatever the caller offered.
+      expect((await runRow(first.runId))?.promptVersion).toBe(PROMPT);
+      await claimSourceRun(first.runId);
+      await completeSourceRun({
+        runId: first.runId,
+        result: QUESTIONS,
+        usage: USAGE,
+      });
+      const answered = await answerProofreadQuestions({
+        recipeId: id,
+        runId: first.runId,
+        actorId: kitchenLead.id,
+        answer: "Four, and dry lentils.",
+        now: NOW,
+        promptVersion: PROMPT,
+        revisionPromptVersion: REVISION,
+        model: MODEL,
+      });
+      if (!answered.ok) throw new Error(answered.error);
+      expect((await runRow(answered.runId))?.promptVersion).toBe(PROMPT);
+      await claimSourceRun(answered.runId);
+      const book = await completeSourceRun({
+        runId: answered.runId,
+        result: written(),
+        usage: USAGE,
+      });
+      expect(book.ok).toBe(true);
+      // Every version carries its whole recipe, for the History tab.
+      expect((await getRecipeDetail(id))?.versions).toEqual([
+        expect.objectContaining({
+          version: 1,
+          plates: written().recipe!.plates,
+          recipe: written().recipe,
+          report: written().report,
+          scalingNotes: written().scalingNotes,
+        }),
+      ]);
+
+      // The year's meal plan gives the kitchen its plates at each meal.
+      expect(
+        await setMealPlan({
+          actorId: captain.id,
+          daysOnSite: 2,
+          days: [
+            { breakfast: 45, lunch: 0, dinner: 50 },
+            { breakfast: 45, lunch: 0, dinner: 60 },
+          ],
+          expectedVersion: 0,
+        }),
+      ).toEqual({ ok: true, version: 1 });
+
+      // Sent again: the revision prompt, and the claim carries version 1
+      // and the round that settled it.
+      const again = await sendAsIs(kitchenLead.id, id);
+      if (!again.ok) throw new Error(again.error);
+      expect((await runRow(again.runId))?.promptVersion).toBe(PROMPT);
+      const revised = await send(kitchenLead.id, id, {
+        basedOnSourceId: (await getRecipeSource(id))!.id,
+        sections: sourceFromText("Red lentils, more cumin.\nSimmer."),
+        revisionPromptVersion: REVISION,
+      });
+      // The first re-send is still queued: the second is refused, as ever.
+      expect(revised.ok).toBe(false);
+      await claimSourceRun(again.runId);
+      await failRun({ runId: again.runId, error: "Timed out." });
+      const resend = await send(kitchenLead.id, id, {
+        basedOnSourceId: (await getRecipeSource(id))!.id,
+        sections: sourceFromText("Red lentils, more cumin.\nSimmer."),
+        revisionPromptVersion: REVISION,
+      });
+      if (!resend.ok) throw new Error(resend.error);
+      expect((await runRow(resend.runId))?.promptVersion).toBe(REVISION);
+      const claimed = await claimSourceRun(resend.runId);
+      expect(claimed?.previous).toEqual({
+        version: 1,
+        recipe: written().recipe,
+        exchange: [
+          {
+            questions: QUESTIONS.questions,
+            answer: "Four, and dry lentils.",
+          },
+        ],
+      });
+      // The new round starts its own exchange.
+      expect(claimed?.exchange).toEqual([]);
+      expect(claimed?.kitchen).toMatchObject({
+        kitchenPlatesBreakfast: 45,
+        kitchenPlatesLunch: null,
+        kitchenPlatesDinner: 60,
+      });
+    });
+
+    it("lists every source version, newest first, with its author", async () => {
+      const { captain, kitchenLead, member } = await people();
+      const id = await approved(member.id, captain.id);
+      const v1 = (await getRecipeSource(id))!;
+      const sent = await send(kitchenLead.id, id, {
+        basedOnSourceId: v1.id,
+        sections: sourceFromText("Retyped by the lead."),
+      });
+      if (!sent.ok) throw new Error(sent.error);
+      const sources = await listRecipeSources(id);
+      expect(sources.map((s) => [s.version, s.authorName])).toEqual([
+        [2, kitchenLead.displayName],
+        [1, member.displayName],
+      ]);
+      expect(sources[1]?.sections).toEqual(v1.sections);
+      expect(await listRecipeSources("not-a-uuid")).toEqual([]);
     });
 
     it("fails, unsent, a queued source run whose words lost their consent", async () => {
@@ -2633,16 +2696,13 @@ describe("recipes", () => {
       expect(await getProofreadProgress(other, sent.runId)).toBeNull();
     });
 
-    it("counts every round of questions toward the cap", async () => {
+    it("answers a round of questions with no daily limit", async () => {
       const { captain, kitchenLead, member } = await people();
       await setKitchenSettings({
         actorId: captain.id,
         recipeProofreadDailyCap: 1,
         kitchenLargestPotLitres: null,
         kitchenBurnerCount: null,
-        kitchenPlatesBreakfast: null,
-        kitchenPlatesLunch: null,
-        kitchenPlatesDinner: null,
       });
       const id = await approved(member.id, captain.id);
       const sent = await sendAsIs(kitchenLead.id, id);
@@ -2654,17 +2714,19 @@ describe("recipes", () => {
         usage: USAGE,
       });
       expect(
-        await answerProofreadQuestions({
-          recipeId: id,
-          runId: sent.runId,
-          actorId: kitchenLead.id,
-          answer: "Four.",
-          now: NOW,
-          promptVersion: PROMPT,
-          model: MODEL,
-        }),
-      ).toEqual({ ok: false, error: PROOFREAD_CAP_REACHED });
-      expect(await runCount()).toBe(1);
+        (
+          await answerProofreadQuestions({
+            recipeId: id,
+            runId: sent.runId,
+            actorId: kitchenLead.id,
+            answer: "Four.",
+            now: NOW,
+            promptVersion: PROMPT,
+            model: MODEL,
+          })
+        ).ok,
+      ).toBe(true);
+      expect(await runCount()).toBe(2);
     });
 
     it("refuses an answer once the source changed under the questions", async () => {

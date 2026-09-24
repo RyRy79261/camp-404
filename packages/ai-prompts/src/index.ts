@@ -4,6 +4,10 @@ export { voiceIntentPrompt } from "./voice-intent";
 export { recipeImportPrompt, type RecipeImportInput } from "./recipe-import";
 export { recipePlatesPrompt, type RecipePlatesInput } from "./recipe-plates";
 export { recipeSourcePrompt, type RecipeSourceInput } from "./recipe-source";
+export {
+  recipeSourceRevisionPrompt,
+  type RecipeSourceRevisionInput,
+} from "./recipe-source-revision";
 
 /**
  * Versioned prompt templates. Bump the `version` whenever the template
@@ -17,4 +21,5 @@ export const PROMPT_VERSIONS = {
   recipeImport: "2026-09-25.1",
   recipePlates: "2026-09-25.1",
   recipeSource: "2026-09-24.1",
+  recipeSourceRevision: "2026-09-24.1",
 } as const;

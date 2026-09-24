@@ -33,6 +33,7 @@ import { writeAuditEvent, type DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
+import { readMealPlanPeaks } from "./meal-plan";
 import { reachRank } from "./power";
 import * as schema from "./schema";
 
@@ -44,12 +45,12 @@ import * as schema from "./schema";
 //    retypes the text, accepts a proofread version and starts a variation
 //    (canApproveRecipe).
 //  - A captain or a Kitchen lead sends recipes to Claude (the owner's
-//    decision 2A; lockKitchenReviewer). The camp's daily cap counts every
-//    run, failed ones and each questions round too, and is silent: no screen
-//    shows or sets it, and a send over it is refused with no number, only
-//    "try again tomorrow". The kitchen settings stay a captain's
-//    (canSetKitchenSettings); a save that leaves the cap out, as the Camp
-//    settings card does, keeps the stored one (setKitchenSettings).
+//    decision 2A; lockKitchenReviewer), with no daily limit (the owner's
+//    call, 2026-09-24: the old cap column stays stored, and nothing reads
+//    it). The kitchen settings stay a captain's (canSetKitchenSettings); a
+//    save that leaves the cap or the old per-meal plates out, as the Camp
+//    settings card does, keeps the stored ones (setKitchenSettings). The
+//    plates per meal now come from the year's meal plan (./meal-plan).
 //  - A recipe's source (recipe_sources) is what a reviewer edits and Claude
 //    reads: one Tiptap document per section, versioned. Every suggestion,
 //    resubmission, retype and variation writes a version, and "Send for
@@ -96,9 +97,10 @@ export type RecipeWriteResult<T = object> =
   | { ok: false; error: string };
 
 /**
- * What the kitchen settings hold. The Camp settings card edits all of it but
- * the daily cap, a silent cost guard that no screen shows (KitchenSettingsInput
- * leaves it optional, and setKitchenSettings keeps the stored one).
+ * What the kitchen settings hold. The Camp settings card edits the pot and
+ * the burners. The daily cap is no longer read, and the per-meal plates gave
+ * way to the meal plan (./meal-plan): KitchenSettingsInput leaves all four
+ * optional, and setKitchenSettings keeps the stored ones.
  */
 export type KitchenSettings = Required<KitchenSettingsInput>;
 
@@ -133,12 +135,6 @@ export const ONLY_A_REVIEWER_SENDS =
   "Only a Kitchen lead or a captain can send a recipe to Claude.";
 export const ONLY_A_CAPTAIN_SETS_KITCHEN =
   "Only a captain can change the kitchen settings.";
-/** Only a stored cap of 0 says this; no screen sets the cap any more. */
-export const PROOFREAD_OFF =
-  "Sending recipes to Claude is switched off for now.";
-/** The daily cap is a silent cost guard: it never says a number. */
-export const PROOFREAD_CAP_REACHED =
-  "Claude has done as much proofreading as the camp allows today. Try again tomorrow.";
 export const SOURCE_CHANGED =
   "Someone else changed this recipe's source. Reload the page.";
 export const SOURCE_INVALID =
@@ -187,21 +183,6 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** A refusal for one recipe of a batch names the recipe. */
 export function forRecipe(title: string | null, sentence: string): string {
   return `${title ?? UNTITLED_RECIPE}: ${sentence}`;
-}
-
-/**
- * Why a batch of `asked` runs is refused under a daily `cap` with `used` runs
- * already started today, or null when it fits. The cap is a silent cost
- * guard, so the sentence never names a number or the runs left.
- */
-export function capRefusal(
-  cap: number,
-  used: number,
-  asked: number,
-): string | null {
-  if (cap <= 0) return PROOFREAD_OFF;
-  if (used + asked <= cap) return null;
-  return PROOFREAD_CAP_REACHED;
 }
 
 /**
@@ -260,11 +241,6 @@ export function handBackTo(input: {
     status: input.acceptedVersionId !== null ? "accepted" : "approved",
     runId: input.failedRunId,
   };
-}
-
-/** The instant today's camp day began, for the daily cap. */
-export function campDayStartOf(now: Date): Date {
-  return campDayStart(campDayKey(now));
 }
 
 /** The instant this camp month began, for the monthly token total. */
@@ -561,6 +537,39 @@ async function insertSource(
     })
     .returning({ id: schema.recipeSources.id });
   return { id: row!.id, version };
+}
+
+/** One source version in a recipe's history. */
+export interface RecipeSourceHistoryEntry extends RecipeSourceVersion {
+  authorName: string | null;
+  createdAt: Date;
+}
+
+/**
+ * Every version of a recipe's source, newest first, for the recipe page's
+ * History tab. The member's words: the caller shows them only to the
+ * submitter and the Kitchen's reviewers.
+ */
+export async function listRecipeSources(
+  recipeId: string,
+): Promise<RecipeSourceHistoryEntry[]> {
+  if (!UUID.test(recipeId)) return [];
+  const author = alias(schema.users, "source_author");
+  const rows = await createHttpDb()
+    .select({
+      ...SOURCE_COLUMNS,
+      authorName: author.displayName,
+      createdAt: schema.recipeSources.createdAt,
+    })
+    .from(schema.recipeSources)
+    .leftJoin(author, eq(author.id, schema.recipeSources.authorId))
+    .where(eq(schema.recipeSources.recipeId, recipeId))
+    .orderBy(desc(schema.recipeSources.version));
+  return rows.map(({ authorName, createdAt, ...row }) => ({
+    ...sourceOf(row),
+    authorName,
+    createdAt,
+  }));
 }
 
 /** A recipe's newest source, for the editor. Null when it has none. */
@@ -912,8 +921,8 @@ async function readKitchenSettings(db: DbOrTx): Promise<KitchenSettings> {
 }
 
 /**
- * The kitchen's settings: the daily run cap, the largest pot, the burners and
- * the plates at each meal.
+ * The kitchen's settings: the largest pot and the burners (and the stored
+ * cap and per-meal plates, which no screen sets any more).
  */
 export async function getKitchenSettings(): Promise<KitchenSettings> {
   return readKitchenSettings(createHttpDb());
@@ -921,8 +930,7 @@ export async function getKitchenSettings(): Promise<KitchenSettings> {
 
 /**
  * Lock the camp_settings singleton FOR UPDATE, creating it first when a fresh
- * database has none. Every proofreading queue and settings change takes this
- * lock first, so they serialise and the daily count cannot be read twice.
+ * database has none. A settings change takes this lock first.
  */
 async function lockSettingsForUpdate(tx: Tx): Promise<KitchenSettings> {
   await tx
@@ -949,6 +957,11 @@ async function lockActorRank(tx: Tx, actorId: string): Promise<string> {
   return row.rank === "captain" ? "captain" : "camp_member";
 }
 
+/** A value the input left out keeps the stored one; null clears it. */
+export function keep<T>(value: T | undefined, stored: T): T {
+  return value === undefined ? stored : value;
+}
+
 /** A captain changes the kitchen settings; the change is audited. */
 export async function setKitchenSettings(
   input: { actorId: string } & KitchenSettingsInput,
@@ -956,7 +969,7 @@ export async function setKitchenSettings(
   return write(async (tx) => {
     const before = await lockSettingsForUpdate(tx);
     // Captains only: the owner let Kitchen leads send recipes to Claude
-    // (2A), not change the cap that holds the spending back.
+    // (2A), not change the kitchen's settings.
     if (!canSetKitchenSettings(await lockActorRank(tx, input.actorId))) {
       refuse(ONLY_A_CAPTAIN_SETS_KITCHEN);
     }
@@ -966,9 +979,19 @@ export async function setKitchenSettings(
         input.recipeProofreadDailyCap ?? before.recipeProofreadDailyCap,
       kitchenLargestPotLitres: input.kitchenLargestPotLitres,
       kitchenBurnerCount: input.kitchenBurnerCount,
-      kitchenPlatesBreakfast: input.kitchenPlatesBreakfast,
-      kitchenPlatesLunch: input.kitchenPlatesLunch,
-      kitchenPlatesDinner: input.kitchenPlatesDinner,
+      // The meal plan holds the plates now; absent keeps the stored ones.
+      kitchenPlatesBreakfast: keep(
+        input.kitchenPlatesBreakfast,
+        before.kitchenPlatesBreakfast,
+      ),
+      kitchenPlatesLunch: keep(
+        input.kitchenPlatesLunch,
+        before.kitchenPlatesLunch,
+      ),
+      kitchenPlatesDinner: keep(
+        input.kitchenPlatesDinner,
+        before.kitchenPlatesDinner,
+      ),
     };
     await tx
       .update(schema.campSettings)
@@ -995,17 +1018,9 @@ function platesOrRefuse(plates: number): number {
     : refuse(PLATES_OUT_OF_RANGE);
 }
 
-async function runsStartedSince(tx: DbOrTx, since: Date): Promise<number> {
-  const [row] = await tx
-    .select({ n: sql<number>`count(*)::int` })
-    .from(schema.recipeProofreadRuns)
-    .where(gte(schema.recipeProofreadRuns.requestedAt, since));
-  return row?.n ?? 0;
-}
-
 /**
  * A reviewer (a captain or a Kitchen lead) sends a batch of recipes to Claude.
- * In ONE transaction: the reviewer check, the daily cap, and for each recipe
+ * In ONE transaction: the reviewer check, and for each recipe
  * its newest source and the consent check on it, the move to `queued` and a
  * `source` run row. Any refusal rolls the whole batch back.
  */
@@ -1017,24 +1032,16 @@ export async function queueProofread(input: {
   plates: number;
   now: Date;
   promptVersion: string;
+  /** Recorded instead when the recipe already has an accepted version. */
+  revisionPromptVersion?: string;
   model: string;
 }): Promise<RecipeWriteResult<{ runIds: string[] }>> {
   return write(async (tx) => {
-    // camp_settings first, FOR UPDATE: two reviewers pressing Send at once
-    // queue one after the other, so the count below cannot be read twice.
-    const settings = await lockSettingsForUpdate(tx);
     if (!(await lockKitchenReviewer(tx, input.actorId))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
     const ids = [...new Set(input.recipeIds)];
     if (ids.length === 0) refuse(NOT_READY_TO_PROOFREAD);
-    const used = await runsStartedSince(tx, campDayStartOf(input.now));
-    const overCap = capRefusal(
-      settings.recipeProofreadDailyCap,
-      used,
-      ids.length,
-    );
-    if (overCap) refuse(overCap);
     const plates = platesOrRefuse(input.plates);
 
     const note = input.note?.trim() || null;
@@ -1058,7 +1065,7 @@ export async function queueProofread(input: {
         plates,
         exchange: [],
         previousRunId: recipe.latestRunId,
-        promptVersion: input.promptVersion,
+        promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
         model: input.model,
       });
       await writeAuditEvent(tx, {
@@ -1070,7 +1077,7 @@ export async function queueProofread(input: {
           runId,
           plates,
           sourceVersion: source.version,
-          promptVersion: input.promptVersion,
+          promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
           model: input.model,
         },
       });
@@ -1078,6 +1085,21 @@ export async function queueProofread(input: {
     }
     return { runIds };
   });
+}
+
+/**
+ * The prompt a `source` run is recorded under. A recipe that already has an
+ * accepted version is revised from it (the revision prompt, which carries
+ * that version and the questions and answers that settled it); any other is
+ * written from its source alone.
+ */
+export function sourcePromptVersion(
+  acceptedVersionId: string | null,
+  input: { promptVersion: string; revisionPromptVersion?: string },
+): string {
+  return acceptedVersionId !== null && input.revisionPromptVersion
+    ? input.revisionPromptVersion
+    : input.promptVersion;
 }
 
 /**
@@ -1148,8 +1170,8 @@ async function insertSourceRun(
 
 /**
  * "Send for proofreading" from the source editor. In ONE transaction:
- *  1. the settings lock, the reviewer check, the silent daily cap, the
- *     plates, and the recipe lock on a status a run may be queued from;
+ *  1. the reviewer check, the plates, and the recipe lock on a status a run
+ *     may be queued from;
  *  2. the editor must have opened the newest source (`basedOnSourceId`);
  *  3. a source that differs from it is saved as the next version (no longer
  *     than pasted text may be). When the words changed, the reviewer becomes
@@ -1168,16 +1190,14 @@ export async function sendSourceForProofreading(input: {
   plates: number;
   now: Date;
   promptVersion: string;
+  /** Recorded instead when the recipe already has an accepted version. */
+  revisionPromptVersion?: string;
   model: string;
 }): Promise<RecipeWriteResult<{ runId: string; sourceId: string }>> {
   return write(async (tx) => {
-    const settings = await lockSettingsForUpdate(tx);
     if (!(await lockKitchenReviewer(tx, input.actorId))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
-    const used = await runsStartedSince(tx, campDayStartOf(input.now));
-    const overCap = capRefusal(settings.recipeProofreadDailyCap, used, 1);
-    if (overCap) refuse(overCap);
     const plates = platesOrRefuse(input.plates);
     const serves = servesOrRefuse(input.serves);
     const sections = checkSections(input.sections);
@@ -1250,7 +1270,7 @@ export async function sendSourceForProofreading(input: {
       plates,
       exchange: [],
       previousRunId: recipe.latestRunId,
-      promptVersion: input.promptVersion,
+      promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
       model: input.model,
     });
     await writeAuditEvent(tx, {
@@ -1262,7 +1282,7 @@ export async function sendSourceForProofreading(input: {
         runId,
         plates,
         sourceVersion: source!.version,
-        promptVersion: input.promptVersion,
+        promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
         model: input.model,
       },
     });
@@ -1273,8 +1293,8 @@ export async function sendSourceForProofreading(input: {
 /**
  * A reviewer answers the questions Claude asked, which queues the next round:
  * a `source` run on the same source and plates that carries the whole
- * exchange so far. The same transaction shape as a send (settings lock,
- * reviewer check, the cap: every round counts, the recipe lock), then
+ * exchange so far. The same transaction shape as a send (the reviewer
+ * check, the recipe lock), then
  * compare-and-set: the recipe still points at the question run, and that run
  * succeeded with questions. A second answer to the same run is refused.
  */
@@ -1285,16 +1305,14 @@ export async function answerProofreadQuestions(input: {
   answer: string;
   now: Date;
   promptVersion: string;
+  /** Recorded instead when the recipe already has an accepted version. */
+  revisionPromptVersion?: string;
   model: string;
 }): Promise<RecipeWriteResult<{ runId: string }>> {
   return write(async (tx) => {
-    const settings = await lockSettingsForUpdate(tx);
     if (!(await lockKitchenReviewer(tx, input.actorId))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
-    const used = await runsStartedSince(tx, campDayStartOf(input.now));
-    const overCap = capRefusal(settings.recipeProofreadDailyCap, used, 1);
-    if (overCap) refuse(overCap);
     const answer = input.answer.trim();
     if (!answer) refuse(ANSWER_NEEDED);
     if (answer.length > PROOFREAD_ANSWER_MAX) refuse(ANSWER_TOO_LONG);
@@ -1344,7 +1362,7 @@ export async function answerProofreadQuestions(input: {
       plates,
       exchange,
       previousRunId: input.runId,
-      promptVersion: input.promptVersion,
+      promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
       model: input.model,
     });
     await writeAuditEvent(tx, {
@@ -1436,7 +1454,64 @@ export interface ClaimedSourceRun {
   /** Every earlier round of Claude's questions and the answers. */
   exchange: ProofreadExchange;
   note: string | null;
+  /**
+   * The kitchen's size, with the plates at each meal from this year's meal
+   * plan (its largest day at each), not the old Camp settings numbers.
+   */
   kitchen: KitchenSettings;
+  /**
+   * The recipe's accepted version, when it has one, so Claude revises it
+   * instead of starting from zero: the recipe as the book has it, and the
+   * questions and answers that settled it (the exchange on the run that
+   * wrote it; none for a version written any other way). Null for a recipe
+   * not yet in the book.
+   */
+  previous: PreviousVersion | null;
+}
+
+/** The accepted version a revision run starts from. */
+export interface PreviousVersion {
+  version: number;
+  recipe: KitchenRecipe;
+  exchange: ProofreadExchange;
+}
+
+/** A recipe's accepted version and the exchange that settled it, or null. */
+async function readPreviousVersion(
+  tx: DbOrTx,
+  acceptedVersionId: string | null,
+): Promise<PreviousVersion | null> {
+  if (acceptedVersionId === null) return null;
+  const [row] = await tx
+    .select({
+      version: schema.recipeVersions.version,
+      plates: schema.recipeVersions.servingsBasis,
+      body: schema.recipeVersions.body,
+      title: schema.recipes.title,
+      exchange: schema.recipeProofreadRuns.exchange,
+    })
+    .from(schema.recipeVersions)
+    .innerJoin(
+      schema.recipes,
+      eq(schema.recipes.id, schema.recipeVersions.recipeId),
+    )
+    .leftJoin(
+      schema.recipeProofreadRuns,
+      and(
+        eq(schema.recipeProofreadRuns.id, schema.recipeVersions.runId),
+        eq(schema.recipeProofreadRuns.kind, "source"),
+      ),
+    )
+    .where(eq(schema.recipeVersions.id, acceptedVersionId));
+  if (!row) return null;
+  return {
+    version: row.version,
+    recipe: versionRecipe(row.body, {
+      title: row.title ?? UNTITLED_RECIPE,
+      plates: row.plates,
+    }),
+    exchange: readExchange(row.exchange),
+  };
 }
 
 type SourceClaim = { claimed: ClaimedSourceRun } | { claimed: null };
@@ -1461,6 +1536,7 @@ export async function claimSourceRun(
         title: schema.recipes.title,
         submitterId: schema.recipes.submitterId,
         aiConsentAt: schema.recipes.aiConsentAt,
+        acceptedVersionId: schema.recipes.acceptedVersionId,
         note: schema.recipeProofreadRuns.note,
         plates: schema.recipeProofreadRuns.plates,
         exchange: schema.recipeProofreadRuns.exchange,
@@ -1539,7 +1615,11 @@ export async function claimSourceRun(
         plates: row.plates ?? DEFAULT_PLATES,
         exchange: readExchange(row.exchange),
         note: row.note,
-        kitchen: await readKitchenSettings(tx),
+        kitchen: {
+          ...(await readKitchenSettings(tx)),
+          ...(await readMealPlanPeaks(tx)),
+        },
+        previous: await readPreviousVersion(tx, row.acceptedVersionId),
       } satisfies ClaimedSourceRun,
     };
   });
@@ -1598,7 +1678,7 @@ export async function completeSourceRun(input: {
     if (!parsed.success) refuse(versionInvalid(parsed.error));
     const answer = parsed.data;
     // The sender's clearance first, in the lock order every send takes
-    // (settings, then the sender, then the recipe), so the two never wait on
+    // (the sender, then the recipe), so the two never wait on
     // each other.
     const [sent] = await tx
       .select({ requestedBy: schema.recipeProofreadRuns.requestedBy })
@@ -1889,7 +1969,7 @@ export async function resetStaleRuns(
 // already has a result is shown with no new run, and is run again only when a
 // captain asks for a re-run. The run sends Claude the kitchen's accepted
 // recipe alone, never the member's text or note, so it needs no consent
-// check; it shares the one daily cap with the text runs.
+// check.
 
 const plateWord = (n: number) => `${n} plate${n === 1 ? "" : "s"}`;
 
@@ -1938,9 +2018,8 @@ export function isOpenPlateRunConflict(err: unknown): boolean {
 
 /**
  * A captain asks Claude to proofread the accepted version for `plates`
- * plates. In ONE transaction: the settings lock (so the daily count cannot be
- * read twice), the captain check, the cap, the recipe lock, the refusals, the
- * run row and its audit row. A refusal writes nothing.
+ * plates. In ONE transaction: the reviewer check, the recipe lock, the
+ * refusals, the run row and its audit row. A refusal writes nothing.
  */
 export async function queuePlateProofread(input: {
   recipeId: string;
@@ -1954,13 +2033,9 @@ export async function queuePlateProofread(input: {
   model: string;
 }): Promise<RecipeWriteResult<{ runId: string }>> {
   return write(async (tx) => {
-    const settings = await lockSettingsForUpdate(tx);
     if (!(await lockKitchenReviewer(tx, input.actorId))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
-    const used = await runsStartedSince(tx, campDayStartOf(input.now));
-    const overCap = capRefusal(settings.recipeProofreadDailyCap, used, 1);
-    if (overCap) refuse(overCap);
     const plates = platesOrRefuse(input.plates);
 
     const recipe = await lockRecipe(tx, input.recipeId);
@@ -2886,9 +2961,16 @@ export interface RecipeDetail {
    * have no result and no run open: why the paid run gave nothing.
    */
   failedPlateRuns: FailedPlateRun[];
+  /** Every version, newest first, each readable on the History tab. */
   versions: {
     id: string;
     version: number;
+    /** The plates the version is written for. */
+    plates: number;
+    recipe: KitchenRecipe;
+    /** Claude's report; the page shows it to the Kitchen's reviewers only. */
+    report: DraftReport | null;
+    scalingNotes: string[];
     reason: string | null;
     runId: string | null;
     authorName: string | null;
@@ -3140,6 +3222,13 @@ export async function getRecipeDetail(
     versions: versionRows.map((v) => ({
       id: v.id,
       version: v.version,
+      plates: v.servingsBasis,
+      recipe: versionRecipe(v.body, {
+        title: r.title ?? UNTITLED_RECIPE,
+        plates: v.servingsBasis,
+      }),
+      report: readReport(v.report),
+      scalingNotes: v.scalingNotes,
       reason: v.reason,
       runId: v.runId,
       authorName: v.authorName,

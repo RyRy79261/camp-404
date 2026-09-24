@@ -29,7 +29,11 @@ vi.mock("@/lib/test-mode", () => ({
   usesTestStore: vi.fn(() => true),
 }));
 
-import { recipePlatesPrompt, recipeSourcePrompt } from "@camp404/ai-prompts";
+import {
+  recipePlatesPrompt,
+  recipeSourcePrompt,
+  recipeSourceRevisionPrompt,
+} from "@camp404/ai-prompts";
 import {
   RecipeDraft,
   SourceProofread,
@@ -255,6 +259,67 @@ describe("processRuns with a queued source run", () => {
         }),
       },
     ]);
+  });
+
+  it("revises a recipe already in the book: the revision prompt, with the accepted version and the meal plan's plates", async () => {
+    const { captainId, recipeId } = captainAndRecipe();
+    const seeded = testStore.seedAcceptedVersion({
+      recipeId,
+      authorId: captainId,
+      recipe: RECIPE.recipe,
+    });
+    expect(
+      testStore.setMealPlan({
+        actorId: captainId,
+        daysOnSite: 1,
+        days: [{ breakfast: 30, lunch: 0, dinner: 45 }],
+        expectedVersion: 0,
+      }).ok,
+    ).toBe(true);
+    const queued = testStore.queueProofread({
+      recipeIds: [recipeId],
+      actorId: captainId,
+      note: null,
+      plates: 45,
+      now: new Date(),
+      promptVersion: "2026-09-24.1",
+      revisionPromptVersion: "revision-1",
+      model: "claude-opus-4-8",
+    });
+    if (!queued.ok) throw new Error(queued.error);
+    const create = claudeAnswers(toolReply(RESULT));
+    await processRuns({ runIds: queued.runIds });
+
+    const [body] = create.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(body.system).toBe(recipeSourceRevisionPrompt.system);
+    expect(body.messages).toEqual([
+      {
+        role: "user",
+        content: recipeSourceRevisionPrompt.user({
+          // The book's version named the recipe.
+          title: "Red lentil dhal",
+          source: "## Steps\nLentils, salt. Simmer.",
+          serves: null,
+          plates: 45,
+          kitchen: {
+            largestPotLitres: null,
+            burnerCount: null,
+            platesBreakfast: 30,
+            platesLunch: null,
+            platesDinner: 45,
+          },
+          note: null,
+          exchange: [],
+          previous: {
+            version: seeded.version,
+            recipe: RECIPE.recipe,
+            exchange: [],
+          },
+        }),
+      },
+    ]);
+    expect(run(queued.runIds[0]!)?.promptVersion).toBe("revision-1");
+    expect(recipe(recipeId)?.currentVersion?.version).toBe(2);
   });
 
   it("never sends the member's note on why it suits the camp, the link or a name", async () => {

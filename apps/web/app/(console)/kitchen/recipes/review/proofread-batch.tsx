@@ -37,12 +37,11 @@ import { runProofreadingAction } from "../actions";
 // picker, the plate count, the note and the button (the owner's decision 2A).
 // The page passes `run` for them, and the action and the write check again.
 // Each picked recipe queues a source run: Claude reads its newest source and
-// writes it straight into the book, or asks questions first. The whole batch
-// is refused when it would go over the camp's silent daily cap, which no
-// screen counts down; the refusal shows here, in the card, and a wrong plate
-// count shows beside its field.
+// writes it straight into the book, or asks questions first. There is no
+// daily limit. A refusal shows here, in the card, and a wrong plate count
+// shows beside its field.
 
-/** A meal whose plates are set in Camp settings. */
+/** A meal with plates in the year's meal plan (its largest day). */
 export interface MealPlates {
   meal: Meal;
   plates: number;
@@ -72,7 +71,7 @@ export function ProofreadBatch({
   run: {
     /** The meals whose plates are set, in meal order. */
     meals: MealPlates[];
-    /** The largest meal's plates from Camp settings, or 40. */
+    /** The largest count in this year's meal plan, or 40. */
     defaultPlates: number;
   } | null;
 }) {

@@ -7,12 +7,15 @@ import {
 import {
   RECIPE_TRANSITIONS,
   canApproveRecipe,
+  canEditMealPlan,
   canMoveRecipe,
   canRunProofread,
   canSetKitchenSettings,
   defaultPlates,
   groupLinesByCategory,
   groupStepsByPhase,
+  mealPlanPeaks,
+  mealPlanPlateCounts,
 } from "../recipes";
 
 describe("canApproveRecipe", () => {
@@ -188,5 +191,45 @@ describe("defaultPlates", () => {
       }),
     ).toBe(DEFAULT_PLATES);
     expect(DEFAULT_PLATES).toBe(40);
+  });
+});
+
+describe("the meal plan", () => {
+  const days = [
+    { breakfast: 20, lunch: 0, dinner: 25 },
+    { breakfast: 45, lunch: 0, dinner: 50 },
+    { breakfast: 45, lunch: 12, dinner: 60 },
+  ];
+
+  it("lists each distinct plate count once, smallest first, and no 0", () => {
+    expect(mealPlanPlateCounts(days)).toEqual([12, 20, 25, 45, 50, 60]);
+    expect(mealPlanPlateCounts([])).toEqual([]);
+    expect(
+      mealPlanPlateCounts([{ breakfast: 0, lunch: 0, dinner: 0 }]),
+    ).toEqual([]);
+  });
+
+  it("peaks each meal over the days, null for a meal that never happens", () => {
+    expect(mealPlanPeaks(days)).toEqual({
+      kitchenPlatesBreakfast: 45,
+      kitchenPlatesLunch: 12,
+      kitchenPlatesDinner: 60,
+    });
+    expect(mealPlanPeaks([{ breakfast: 30, lunch: 0, dinner: 0 }])).toEqual({
+      kitchenPlatesBreakfast: 30,
+      kitchenPlatesLunch: null,
+      kitchenPlatesDinner: null,
+    });
+    // The largest count in the plan is what Claude writes a recipe for.
+    expect(defaultPlates(mealPlanPeaks(days))).toBe(60);
+    expect(defaultPlates(mealPlanPeaks([]))).toBe(DEFAULT_PLATES);
+  });
+
+  it("lets a captain or a Kitchen lead edit it, and nobody else", () => {
+    expect(canEditMealPlan("captain", [])).toBe(true);
+    expect(canEditMealPlan("team_lead", ["kitchen"])).toBe(true);
+    expect(canEditMealPlan("team_lead", ["structures"])).toBe(false);
+    expect(canEditMealPlan("camp_member", ["kitchen"])).toBe(false);
+    expect(canEditMealPlan("wizard", ["kitchen"])).toBe(false);
   });
 });

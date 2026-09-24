@@ -15,6 +15,7 @@ import type {
   RecipeBookEntry,
   RecipeDetail,
   RecipeRunDetail,
+  RecipeSourceHistoryEntry,
   RecipeSourceVersion,
   RecipeVersionDetail,
   RecipeWriteResult,
@@ -44,6 +45,7 @@ export type {
   RecipeBookEntry,
   RecipeDetail,
   RecipeRunDetail,
+  RecipeSourceHistoryEntry,
   RecipeSourceVersion,
   RecipeVersionDetail,
   RecipeWriteResult,
@@ -256,6 +258,18 @@ export async function getRecipeSource(
   return usesTestStore()
     ? testStore.getRecipeSource(recipeId)
     : db.getRecipeSource(recipeId);
+}
+
+/**
+ * Every version of a recipe's source, newest first. The member's words: the
+ * caller shows them only to the submitter and the Kitchen's reviewers.
+ */
+export async function listRecipeSources(
+  recipeId: string,
+): Promise<RecipeSourceHistoryEntry[]> {
+  return usesTestStore()
+    ? testStore.listRecipeSources(recipeId)
+    : db.listRecipeSources(recipeId);
 }
 
 /** Where a recipe's newest run stands, for the loading panel. */

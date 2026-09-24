@@ -46,11 +46,8 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await expect(page.getByText("Captain access only")).toBeVisible();
     // The editor is withheld — no rename controls render.
     await expect(page.getByRole("button", { name: /^Rename / })).toHaveCount(0);
-    // So is the kitchen card, with its plates per meal.
+    // So is the kitchen card.
     await expect(page.getByLabel("Largest pot (litres)")).toHaveCount(0);
-    await expect(
-      page.getByRole("group", { name: "Plates per meal" }),
-    ).toHaveCount(0);
   });
 
   test("a captain sets the kitchen's size, and no run limit is shown; they persist", async ({
@@ -87,44 +84,23 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await expect(page.getByLabel("Number of burners")).toHaveValue("3");
   });
 
-  test("a captain sets the plates at breakfast, lunch and dinner; they persist", async ({
+  test("the kitchen card has no plates per meal: the meal plan holds them", async ({
     page,
     request,
   }) => {
     await asRank(page, request, "settings-plates-captain", "captain");
 
     await page.goto("/captains/camp-settings");
+    await expect(page.getByLabel("Largest pot (litres)")).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Camp settings" }),
+      page.getByText(/The plates at each meal are on the Kitchen/),
     ).toBeVisible();
-    const meals = page.getByRole("group", { name: "Plates per meal" });
     await expect(
-      meals.getByText("Mornings may have more plates than evenings."),
-    ).toBeVisible();
-    await expect(meals.getByLabel("Breakfast")).toHaveValue("");
-
-    // A count out of range is refused beside its own meal, and nothing saves.
-    await meals.getByLabel("Lunch").fill("501");
-    await page.getByRole("button", { name: "Save kitchen settings" }).click();
-    await expect(meals.getByText("Cook for at most 500 plates.")).toBeVisible();
-
-    await meals.getByLabel("Breakfast").fill("60");
-    await meals.getByLabel("Lunch").fill("40");
-    await meals.getByLabel("Dinner").fill("45");
-    await page.getByRole("button", { name: "Save kitchen settings" }).click();
-    await expect(page.getByText("Kitchen settings saved")).toBeVisible();
-
-    await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Camp settings" }),
-    ).toBeVisible();
-    const saved = page.getByRole("group", { name: "Plates per meal" });
-    await expect(saved.getByLabel("Breakfast")).toHaveValue("60");
-    await expect(saved.getByLabel("Lunch")).toHaveValue("40");
-    await expect(saved.getByLabel("Dinner")).toHaveValue("45");
-    await expect(saved.getByText("Cook for at most 500 plates.")).toHaveCount(
-      0,
-    );
+      page.getByRole("group", { name: "Plates per meal" }),
+    ).toHaveCount(0);
+    for (const meal of ["Breakfast", "Lunch", "Dinner"]) {
+      await expect(page.getByLabel(meal, { exact: true })).toHaveCount(0);
+    }
   });
 
   test("a captain renames a team; it persists and flows to the roster filter", async ({

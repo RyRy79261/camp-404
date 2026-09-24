@@ -11,9 +11,10 @@ import { emptySourceSections } from "@camp404/core";
 
 // The source editor's flow with the actions mocked: Send queues a run and
 // the panel follows the stage the server reports on each poll; a run that
-// asked questions opens the dialog; Close keeps the questions on the page;
-// Send answer queues the next round; a finished run opens the recipe page;
-// a failed one says why and gives the button back.
+// asked questions opens the dialog; Close keeps the questions on the page,
+// and "Claude needs more details — answer here" stands where Send was until
+// the source changes; Send answer queues the next round; a finished run opens
+// the recipe page; a failed one says why and gives the button back.
 
 vi.mock("../../actions", () => ({
   sendSourceForProofreadingAction: vi.fn(),
@@ -35,12 +36,8 @@ import {
   proofreadProgressAction,
   sendSourceForProofreadingAction,
 } from "../../actions";
-import {
-  POLL_MS,
-  SourceEditor,
-  UNREACHABLE,
-  type OpenRun,
-} from "./source-editor";
+import { ANSWER_QUESTIONS_LABEL, UNREACHABLE } from "@/lib/recipe-copy";
+import { POLL_MS, SourceEditor, type OpenRun } from "./source-editor";
 
 const RECIPE = "11111111-1111-4111-8111-111111111111";
 const QUESTIONS = ["How much coconut milk?", "Ground or whole cumin?"];
@@ -96,6 +93,8 @@ const current = () =>
   panel()?.querySelector('[aria-current="step"]')?.textContent ?? null;
 const sendButton = (hidden = false) =>
   screen.queryByRole("button", { name: "Send for proofreading", hidden });
+const answerButton = (hidden = false) =>
+  screen.queryByRole("button", { name: ANSWER_QUESTIONS_LABEL, hidden });
 
 async function pressSend() {
   await act(async () => {
@@ -197,7 +196,8 @@ describe("source editor", () => {
     );
     expect(answerProofreadQuestionsAction).not.toHaveBeenCalled();
 
-    // Close: the questions stay above Serves, and the button is back.
+    // Close: the questions stay above Serves, and the heading's button asks
+    // for the answer instead of sending again.
     await act(async () => {
       fireEvent.click(
         within(dialog).getByRole("button", {
@@ -208,9 +208,33 @@ describe("source editor", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("heading", { level: 2, name: TITLE })).toBeTruthy();
     expect(screen.getByText(QUESTIONS[1]!)).toBeTruthy();
+    expect(sendButton()).toBeNull();
+    expect(answerButton()?.textContent).toBe(
+      "Claude needs more details — answer here",
+    );
+    // It opens the same questions again.
+    await act(async () => {
+      fireEvent.click(answerButton()!);
+    });
+    expect(
+      within(screen.getByRole("dialog", { name: TITLE })).getByText(
+        QUESTIONS[0]!,
+      ),
+    ).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Close and edit the source" }),
+      );
+    });
+    // A change to the source brings Send back: the next send starts over.
+    fireEvent.change(screen.getByLabelText("Serves"), {
+      target: { value: "4" },
+    });
+    expect(answerButton()).toBeNull();
     expect(sendButton()).toBeTruthy();
 
-    // A reload with the questions unanswered opens the dialog again.
+    // A reload with the questions unanswered opens the dialog again, with
+    // the answer button in the heading.
     cleanup();
     serverSays(progress({ outcome: "running", stage: "reading" }));
     renderEditor({
@@ -219,6 +243,8 @@ describe("source editor", () => {
       stage: "saving",
       questions: QUESTIONS,
     });
+    expect(answerButton(true)).toBeTruthy();
+    expect(sendButton(true)).toBeNull();
     const again = screen.getByRole("dialog", { name: TITLE });
     fireEvent.change(within(again).getByLabelText("Your answer"), {
       target: { value: "Two tins, and ground." },

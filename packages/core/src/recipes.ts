@@ -3,6 +3,7 @@ import {
   INGREDIENT_CATEGORIES,
   ViewerRank,
   type IngredientCategory,
+  type MealPlanDay,
   type RecipeStatus,
 } from "@camp404/types";
 
@@ -18,13 +19,12 @@ import {
 // editing a recipe's source and accepting an older draft belong to a captain
 // or a lead of the Kitchen team. Sending a recipe to Claude spends the owner's
 // money, and the owner gave it to the same people (decision 2A): a captain or
-// a Kitchen lead, held back only by the camp's silent daily cap, which no
-// screen shows or counts down. A source run that succeeds saves its version
-// straight into the book; one that needs more hands the recipe back with
-// Claude's questions, and each round counts toward the cap. Changing the
-// kitchen settings stays a captain's alone, and Camp settings no longer shows
-// or sets the cap. All three fail closed on a rank this module does not
-// know.
+// a Kitchen lead, with no daily limit (the owner's call, 2026-09-24). The
+// same people edit the year's meal plan (canEditMealPlan). A source run that
+// succeeds saves its version straight into the book; one that needs more
+// hands the recipe back with Claude's questions. Changing the kitchen
+// settings stays a captain's alone. All of these fail closed on a rank this
+// module does not know.
 //
 // The write re-reads the actor's rank and led teams inside its own
 // transaction and passes those here; it never takes a team list from the
@@ -66,8 +66,20 @@ export function canRunProofread(
 }
 
 /**
- * Whether someone may change the kitchen settings (the pots, the plates at
- * each meal, and the silent daily cap, which no screen sets): captains only,
+ * Whether someone may change the year's meal plan: a captain or a Kitchen
+ * lead, the people who send recipes to Claude for its plate counts. Anyone
+ * approved reads it.
+ */
+export function canEditMealPlan(
+  rank: string,
+  ledTeams: readonly string[],
+): boolean {
+  return canApproveRecipe(rank, ledTeams);
+}
+
+/**
+ * Whether someone may change the kitchen settings (the largest pot and the
+ * burners): captains only,
  * whatever teams they lead.
  */
 export function canSetKitchenSettings(rank: string): boolean {
@@ -173,4 +185,40 @@ export function defaultPlates(settings: {
     settings.kitchenPlatesDinner,
   ].filter((n): n is number => typeof n === "number" && n > 0);
   return set.length > 0 ? Math.max(...set) : DEFAULT_PLATES;
+}
+
+// --- The meal plan ---------------------------------------------------------
+
+/**
+ * Every distinct plate count in the meal plan, smallest first: the counts a
+ * recipe in the book is shown at. A meal of 0 plates is no meal.
+ */
+export function mealPlanPlateCounts(days: readonly MealPlanDay[]): number[] {
+  const counts = new Set<number>();
+  for (const day of days) {
+    for (const plates of [day.breakfast, day.lunch, day.dinner]) {
+      if (Number.isInteger(plates) && plates > 0) counts.add(plates);
+    }
+  }
+  return [...counts].sort((a, b) => a - b);
+}
+
+/**
+ * The largest count at each meal over the days on site, or null for a meal
+ * that is 0 every day, in the shape defaultPlates and the prompts read.
+ */
+export function mealPlanPeaks(days: readonly MealPlanDay[]): {
+  kitchenPlatesBreakfast: number | null;
+  kitchenPlatesLunch: number | null;
+  kitchenPlatesDinner: number | null;
+} {
+  const peak = (meal: keyof MealPlanDay): number | null => {
+    const top = Math.max(0, ...days.map((d) => d[meal]));
+    return top > 0 ? top : null;
+  };
+  return {
+    kitchenPlatesBreakfast: peak("breakfast"),
+    kitchenPlatesLunch: peak("lunch"),
+    kitchenPlatesDinner: peak("dinner"),
+  };
 }

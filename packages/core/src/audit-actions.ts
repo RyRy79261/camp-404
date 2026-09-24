@@ -15,6 +15,7 @@ export const AUDIT_ACTION_LABELS = {
   "camp.cycle.advanced": "Moved the camp to a new year",
   "camp.cycle.founded": "Set the camp's first year",
   "camp.cycle.renamed": "Renamed a year",
+  "camp.kitchen_meal_plan.changed": "Changed the kitchen's meal plan",
   "camp.kitchen_settings.changed": "Changed the kitchen settings",
   "camp.teams.archived": "Archived a team",
   "camp.teams.moved": "Moved a team in the list",

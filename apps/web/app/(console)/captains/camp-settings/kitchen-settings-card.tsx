@@ -17,34 +17,22 @@ import { toast } from "@camp404/ui/components/toast";
 import { setKitchenSettingsAction } from "../../kitchen/recipes/actions";
 
 // The Kitchen card on Camp settings (#243): the kitchen's size, which Claude
-// uses to work out how much one pot cooks, and the plates at each meal, which
-// set the count a recipe is written for. The daily limit on Claude runs is not
-// here: it is a silent cost guard on the server, so the card never sends it
-// and the write keeps the stored value. Captain-only: the page renders it only
+// uses to work out how much one pot cooks. The plates at each meal moved to
+// the Kitchen's meal plan (2026-09-24), and the old daily limit is gone: the
+// card sends neither, and the write keeps the stored values. Captain-only:
+// the page renders it only
 // for a captain, and the action and the write both check again. Drawn like
 // the page's other cards; a problem with a value shows beside that field, as
 // on every captain form.
 
-type Field =
-  | "kitchenLargestPotLitres"
-  | "kitchenBurnerCount"
-  | "kitchenPlatesBreakfast"
-  | "kitchenPlatesLunch"
-  | "kitchenPlatesDinner";
-
-/** The plates-per-meal fields, in meal order, with their labels. */
-const MEAL_FIELDS: { field: Field; label: string }[] = [
-  { field: "kitchenPlatesBreakfast", label: "Breakfast" },
-  { field: "kitchenPlatesLunch", label: "Lunch" },
-  { field: "kitchenPlatesDinner", label: "Dinner" },
-];
+type Field = "kitchenLargestPotLitres" | "kitchenBurnerCount";
 
 type Values = Record<Field, string>;
 type Errors = Partial<Record<Field, string>>;
 
-export type KitchenSettingsValues = Omit<
+export type KitchenSettingsValues = Pick<
   KitchenSettingsInput,
-  "recipeProofreadDailyCap"
+  "kitchenLargestPotLitres" | "kitchenBurnerCount"
 >;
 
 const WHOLE_NUMBER = /^\d+$/;
@@ -53,9 +41,6 @@ function toValues(settings: KitchenSettingsValues): Values {
   return {
     kitchenLargestPotLitres: settings.kitchenLargestPotLitres?.toString() ?? "",
     kitchenBurnerCount: settings.kitchenBurnerCount?.toString() ?? "",
-    kitchenPlatesBreakfast: settings.kitchenPlatesBreakfast?.toString() ?? "",
-    kitchenPlatesLunch: settings.kitchenPlatesLunch?.toString() ?? "",
-    kitchenPlatesDinner: settings.kitchenPlatesDinner?.toString() ?? "",
   };
 }
 
@@ -79,15 +64,18 @@ function parse(
   const candidate = {
     kitchenLargestPotLitres: number("kitchenLargestPotLitres"),
     kitchenBurnerCount: number("kitchenBurnerCount"),
-    kitchenPlatesBreakfast: number("kitchenPlatesBreakfast"),
-    kitchenPlatesLunch: number("kitchenPlatesLunch"),
-    kitchenPlatesDinner: number("kitchenPlatesDinner"),
   };
   // The bounds are checked too, so every wrong field is named at once; a
   // field that already has a problem keeps its own sentence.
   const parsed = KitchenSettingsInput.safeParse(candidate);
   if (parsed.success && Object.keys(errors).length === 0) {
-    return { ok: true, settings: parsed.data };
+    return {
+      ok: true,
+      settings: {
+        kitchenLargestPotLitres: parsed.data.kitchenLargestPotLitres,
+        kitchenBurnerCount: parsed.data.kitchenBurnerCount,
+      },
+    };
   }
   for (const issue of parsed.error?.issues ?? []) {
     const field = issue.path[0] as Field;
@@ -143,8 +131,8 @@ export function KitchenSettingsCard({
         </CardTitle>
         <CardDescription>
           The kitchen&apos;s size, which Claude uses to work out how much one
-          pot can cook, and the plates at each meal. A recipe is written for the
-          largest meal unless a captain or a Kitchen lead picks another count.
+          pot can cook. The plates at each meal are on the Kitchen&apos;s meal
+          plan.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -167,34 +155,6 @@ export function KitchenSettingsCard({
             disabled={pending}
             onChange={(e) => change("kitchenBurnerCount", e.target.value)}
           />
-          <fieldset
-            className="flex flex-col gap-3"
-            aria-describedby="kitchen-plates-help"
-          >
-            <legend className="text-sm font-medium leading-none">
-              Plates per meal
-            </legend>
-            <p
-              id="kitchen-plates-help"
-              className="text-xs text-muted-foreground"
-            >
-              Mornings may have more plates than evenings.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {MEAL_FIELDS.map(({ field, label }) => (
-                <InputField
-                  key={field}
-                  label={label}
-                  helper="Optional, 1 to 500."
-                  inputMode="numeric"
-                  value={values[field]}
-                  error={errors[field]}
-                  disabled={pending}
-                  onChange={(e) => change(field, e.target.value)}
-                />
-              ))}
-            </div>
-          </fieldset>
           {formError && (
             <p className="text-xs text-destructive" role="alert">
               {formError}

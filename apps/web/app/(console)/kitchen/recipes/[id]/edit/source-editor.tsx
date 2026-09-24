@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Send } from "lucide-react";
+import { Check, MessageCircleQuestion, Send } from "lucide-react";
 import {
   SOURCE_SECTIONS,
   type RecipeSourceSections,
@@ -16,56 +16,51 @@ import {
   CardHeader,
   CardTitle,
 } from "@camp404/ui/components/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@camp404/ui/components/dialog";
 import { Input } from "@camp404/ui/components/input";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { Spinner } from "@camp404/ui/components/spinner";
-import { Textarea } from "@camp404/ui/components/textarea";
 import { cn } from "@camp404/ui/lib/utils";
-import { SourceSectionEditor } from "@/components/recipes/source-section-editor";
-import { recipePath } from "@/lib/recipe-copy";
 import {
-  answerProofreadQuestionsAction,
-  proofreadProgressAction,
-  sendSourceForProofreadingAction,
-} from "../../actions";
+  ProofreadQuestionsDialog,
+  QUESTIONS_TITLE,
+  QuestionList,
+  isOpen,
+  pendingQuestions,
+  useRunPoll,
+  type OpenRun,
+  type RunStage,
+} from "@/components/recipes/proofread-questions";
+import { SourceSectionEditor } from "@/components/recipes/source-section-editor";
+import {
+  ANSWER_QUESTIONS_LABEL,
+  UNREACHABLE,
+  recipePath,
+} from "@/lib/recipe-copy";
+import { sendSourceForProofreadingAction } from "../../actions";
 
 // The source editor's client half (#243, Kitchen): the Send button, the
 // loading panel, Claude's questions and the four section editors. The panel
 // shows only what the server returns: the stage the worker last wrote on the
-// run, polled once a second. Nothing else moves on the client beyond the
-// spinner.
+// run, polled once a second (useRunPoll). Nothing else moves on the client
+// beyond the spinner.
 //
 //  - Send saves the source (a new version when it changed) and queues the run;
 //    the button goes while the run is open.
 //  - A run that wrote the recipe: it is in the book; open its page.
 //  - A run that asked questions: a dialog with them, and an answer that queues
-//    the next round. Closing it keeps the questions above the editor until the
-//    next send.
+//    the next round. While they wait for an answer, "Send for proofreading"
+//    is replaced by "Claude needs more details — answer here", which opens
+//    the dialog again (the owner, 2026-09-24), after a reload too: the page
+//    reads the run on the server. Closing the dialog keeps the questions
+//    above the editor; a change to the source brings Send back, because the
+//    next send starts over from the new text.
 //  - A run that failed: its sentence, where the panel was, and the button
 //    comes back.
-//  - A send the server refused (consent, a newer source, the daily cap) says
-//    why above the sections.
+//  - A send the server refused (consent, a newer source) says why above the
+//    sections.
 
-/** How often the loading panel asks where the run is. */
-export const POLL_MS = 1_000;
-
-type Stage = "sending" | "reading" | "checking" | "saving";
-type Outcome = "queued" | "running" | "succeeded" | "failed";
-
-/** The recipe's newest run, as the page read it on the server. */
-export interface OpenRun {
-  runId: string;
-  stage: Stage | null;
-  outcome: Outcome;
-  questions: string[] | null;
-}
+export type { OpenRun };
+export { POLL_MS } from "@/components/recipes/proofread-questions";
 
 const SECTION_TITLES: Record<SourceSection, string> = {
   ingredients: "Ingredients",
@@ -75,7 +70,7 @@ const SECTION_TITLES: Record<SourceSection, string> = {
 };
 
 /** The panel's rows: the stages the worker writes, in order. */
-const STAGES: { stage: Stage; label: string }[] = [
+const STAGES: { stage: RunStage; label: string }[] = [
   { stage: "sending", label: "Sending the recipe" },
   { stage: "reading", label: "Claude is reading it" },
   { stage: "checking", label: "Checking the structure" },
@@ -83,7 +78,7 @@ const STAGES: { stage: Stage; label: string }[] = [
 ];
 
 /** Which row is under way: a queued run, or one not yet staged, is sending. */
-function stageIndex(stage: Stage | null): number {
+function stageIndex(stage: RunStage | null): number {
   if (stage === null) return 0;
   return Math.max(
     0,
@@ -91,41 +86,21 @@ function stageIndex(stage: Stage | null): number {
   );
 }
 
-const QUESTIONS_TITLE = "Claude needs more before it can write this recipe";
-
-/** A send or an answer that never reached the server (the network dropped). */
-export const UNREACHABLE = "Could not reach the server. Try again.";
-
 type Phase =
   | { kind: "idle" }
-  | { kind: "running"; stage: Stage | null }
+  | { kind: "running"; stage: RunStage | null }
   | { kind: "questions"; runId: string; questions: string[] }
   | { kind: "failed"; error: string };
 
 function initialPhase(run: OpenRun | null): Phase {
   if (!run) return { kind: "idle" };
-  if (run.outcome === "queued" || run.outcome === "running") {
-    return { kind: "running", stage: run.stage };
-  }
-  if (run.outcome === "succeeded" && run.questions?.length) {
-    return { kind: "questions", runId: run.runId, questions: run.questions };
-  }
+  if (isOpen(run)) return { kind: "running", stage: run.stage };
+  const questions = pendingQuestions(run);
+  if (questions) return { kind: "questions", runId: run.runId, questions };
   return { kind: "idle" };
 }
 
-function QuestionList({ questions }: { questions: string[] }) {
-  return (
-    <ol className="list-decimal space-y-1 pl-5 text-sm">
-      {questions.map((q, i) => (
-        <li key={i} className="break-words">
-          {q}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function ProofreadingPanel({ stage }: { stage: Stage | null }) {
+function ProofreadingPanel({ stage }: { stage: RunStage | null }) {
   const at = stageIndex(stage);
   return (
     <Card role="status" aria-live="polite" aria-label="Proofreading">
@@ -183,80 +158,40 @@ export function SourceEditor({
   );
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  const [answer, setAnswer] = useState("");
-  const [answerError, setAnswerError] = useState<string | null>(null);
-  const [answering, setAnswering] = useState(false);
+  // The source changed since Claude asked: the next send starts over.
+  const [edited, setEdited] = useState(false);
 
   const running = phase.kind === "running";
 
   // The run being polled, so its questions can be answered.
   const runIdRef = useRef(run?.runId ?? "");
 
-  // Poll the run while it is open, one request at a time; stop as soon as it
-  // settles.
-  useEffect(() => {
-    if (!running) return;
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const settle = (next: Phase) => {
-      stopped = true;
-      setPhase(next);
-    };
-    const tick = async () => {
-      let result: Awaited<ReturnType<typeof proofreadProgressAction>>;
-      try {
-        // The run this page started (or found open on load): a failure can
-        // point the recipe back at an older run, whose success is not ours.
-        result = await proofreadProgressAction({
-          recipeId,
-          ...(runIdRef.current ? { runId: runIdRef.current } : {}),
-        });
-      } catch {
-        // The network dropped a poll; ask again on the next tick.
-        if (!stopped) timer = setTimeout(tick, POLL_MS);
-        return;
-      }
-      if (stopped) return;
-      if (!result.ok) return settle({ kind: "failed", error: result.error });
-      const progress = result.data;
-      if (
-        progress === null ||
-        progress.outcome === "queued" ||
-        progress.outcome === "running"
-      ) {
-        if (progress) setPhase({ kind: "running", stage: progress.stage });
-        timer = setTimeout(tick, POLL_MS);
-        return;
-      }
-      if (progress.outcome === "failed") {
-        return settle({
-          kind: "failed",
-          error: progress.error ?? "The run failed. Try again.",
-        });
-      }
-      if (progress.questions?.length) {
-        setAnswer("");
-        setAnswerError(null);
+  useRunPoll({
+    recipeId,
+    runIdRef,
+    active: running,
+    onStage: (stage) => setPhase({ kind: "running", stage }),
+    onSettled: (settled) => {
+      if (settled.kind === "failed") {
+        setPhase({ kind: "failed", error: settled.error });
+      } else if (settled.kind === "questions") {
+        setEdited(false);
         setDialogOpen(true);
-        return settle({
+        setPhase({
           kind: "questions",
           runId: runIdRef.current,
-          questions: progress.questions,
+          questions: settled.questions,
         });
+      } else {
+        router.push(recipePath(recipeId));
       }
-      stopped = true;
-      router.push(recipePath(recipeId));
-    };
-    timer = setTimeout(tick, POLL_MS);
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-  }, [running, recipeId, router]);
+    },
+  });
 
   const onSectionChange = useCallback(
     (section: SourceSection) => (doc: SourceDoc) => {
       sections.current = { ...sections.current, [section]: doc };
+      setEdited(true);
     },
     [],
   );
@@ -286,56 +221,33 @@ export function SourceEditor({
     setSourceId(result.data.sourceId);
     runIdRef.current = result.data.runId;
     setDialogOpen(false);
+    setEdited(false);
     setPhase({ kind: "running", stage: null });
   }
 
-  async function sendAnswer() {
-    if (phase.kind !== "questions") return;
-    if (!answer.trim()) {
-      setAnswerError("Write your answer.");
-      return;
-    }
-    setAnswering(true);
-    setAnswerError(null);
-    let result: Awaited<ReturnType<typeof answerProofreadQuestionsAction>>;
-    try {
-      result = await answerProofreadQuestionsAction({
-        recipeId,
-        runId: phase.runId,
-        answer,
-      });
-    } catch {
-      setAnswerError(UNREACHABLE);
-      return;
-    } finally {
-      setAnswering(false);
-    }
-    if (!result.ok) {
-      setAnswerError(result.error);
-      return;
-    }
-    runIdRef.current = result.data.runId;
+  function answered(runId: string) {
+    runIdRef.current = runId;
     setDialogOpen(false);
-    setAnswer("");
     setPhase({ kind: "running", stage: null });
   }
 
-  const showSend = !running && !sending;
+  const waiting = phase.kind === "questions" && !edited;
+  const action =
+    running || sending ? undefined : waiting ? (
+      <Button onClick={() => setDialogOpen(true)}>
+        <MessageCircleQuestion aria-hidden />
+        {ANSWER_QUESTIONS_LABEL}
+      </Button>
+    ) : (
+      <Button onClick={send}>
+        <Send aria-hidden />
+        Send for proofreading
+      </Button>
+    );
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <PageHeading
-        eyebrow="Kitchen / Recipes"
-        title={title}
-        actions={
-          showSend ? (
-            <Button onClick={send}>
-              <Send aria-hidden />
-              Send for proofreading
-            </Button>
-          ) : undefined
-        }
-      />
+      <PageHeading eyebrow="Kitchen / Recipes" title={title} actions={action} />
 
       {phase.kind === "running" && <ProofreadingPanel stage={phase.stage} />}
       {phase.kind === "failed" && (
@@ -363,7 +275,10 @@ export function SourceEditor({
           max={500}
           className="w-24"
           value={serves}
-          onChange={(e) => setServes(e.target.value)}
+          onChange={(e) => {
+            setServes(e.target.value);
+            setEdited(true);
+          }}
         />
         <span>plates</span>
         <span className="text-muted-foreground">
@@ -399,48 +314,18 @@ export function SourceEditor({
         </Card>
       ))}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent aria-describedby={undefined}>
-          <DialogHeader>
-            <DialogTitle>{QUESTIONS_TITLE}</DialogTitle>
-          </DialogHeader>
-          {phase.kind === "questions" && (
-            <QuestionList questions={phase.questions} />
-          )}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="proofread-answer" className="text-sm font-medium">
-              Your answer
-            </label>
-            <Textarea
-              id="proofread-answer"
-              rows={5}
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              aria-invalid={answerError ? true : undefined}
-              aria-describedby={
-                answerError ? "proofread-answer-error" : undefined
-              }
-            />
-            {answerError && (
-              <p
-                id="proofread-answer-error"
-                role="alert"
-                className="text-sm text-destructive"
-              >
-                {answerError}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Close and edit the source
-            </Button>
-            <Button onClick={sendAnswer} disabled={answering}>
-              Send answer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {phase.kind === "questions" && (
+        <ProofreadQuestionsDialog
+          key={phase.runId}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          recipeId={recipeId}
+          runId={phase.runId}
+          questions={phase.questions}
+          closeLabel="Close and edit the source"
+          onAnswered={answered}
+        />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import {
   canApproveRecipe,
   canRunProofread,
   defaultPlates,
+  mealPlanPeaks,
 } from "@camp404/core";
 import { MEALS } from "@camp404/types";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
@@ -27,8 +28,8 @@ import {
   formatDay,
   formatWhen,
 } from "@/lib/recipe-labels";
+import { getMealPlan } from "@/lib/meal-plan";
 import {
-  getKitchenSettings,
   listAwaitingAcceptance,
   listProofreadRuns,
   listReadyToProofread,
@@ -36,7 +37,6 @@ import {
   proofreadTokenTotals,
   resetStaleRuns,
   type AwaitingAcceptance,
-  type KitchenSettings,
   type ProofreadRunRow,
   type ReviewQueueEntry,
 } from "@/lib/recipes";
@@ -56,8 +56,7 @@ export const metadata = { title: "Review recipes — Camp 404" };
 // the plate counts, and the older drafts still waiting to be accepted go to a
 // Kitchen lead or a captain (sending to Claude is theirs too, the owner's
 // decision 2A). The token usage goes to captains alone, and is neither read
-// nor sent for anyone else. No run counter is shown: the daily cap is a
-// silent cost guard on the server.
+// nor sent for anyone else. There is no daily limit on runs.
 //
 // The rank gate is team_lead (clearance is global); canApproveRecipe then
 // narrows it to a captain or a lead of Kitchen, so a lead of Structures sees a
@@ -196,8 +195,11 @@ const RUN_COLUMNS: ResponsiveColumn<ProofreadRunRow>[] = [
   },
 ];
 
-/** The meals whose plates Camp settings holds, in meal order. */
-function mealPlates(settings: KitchenSettings): MealPlates[] {
+/**
+ * The meals with plates in this year's meal plan, in meal order, each at its
+ * largest day.
+ */
+function mealPlates(settings: ReturnType<typeof mealPlanPeaks>): MealPlates[] {
   const byMeal = {
     breakfast: settings.kitchenPlatesBreakfast,
     lunch: settings.kitchenPlatesLunch,
@@ -295,11 +297,13 @@ export default async function RecipeReviewPage() {
 
   const isCaptain = rank === "captain";
   const canRun = canRunProofread(rank, leadTeams);
-  const [queue, ready, awaiting, kitchen, captainData] = await Promise.all([
+  const [queue, ready, awaiting, peaks, captainData] = await Promise.all([
     listReviewQueue(),
     listReadyToProofread(),
     listAwaitingAcceptance(),
-    canRun ? getKitchenSettings() : Promise.resolve(null),
+    canRun
+      ? getMealPlan().then((plan) => mealPlanPeaks(plan.days))
+      : Promise.resolve(null),
     isCaptain
       ? Promise.all([
           listProofreadRuns({ limit: 20 }),
@@ -307,9 +311,9 @@ export default async function RecipeReviewPage() {
         ])
       : Promise.resolve(null),
   ]);
-  const run = kitchen && {
-    meals: mealPlates(kitchen),
-    defaultPlates: defaultPlates(kitchen),
+  const run = peaks && {
+    meals: mealPlates(peaks),
+    defaultPlates: defaultPlates(peaks),
   };
 
   return (

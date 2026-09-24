@@ -318,10 +318,12 @@ Decisions baked into the schema — keep new code consistent with them:
     The write re-reads the actor's rank and lead teams inside its own
     transaction. [CORRECTION 2026-09-24] Sending a recipe to Claude is no
     longer captain-only: the owner's decision 2A gives it to the same people
-    (`canRunProofread`, which takes the led teams), held back only by the
-    camp's silent daily cap. The kitchen settings stay captain-only
-    (`canSetKitchenSettings`). Change the rule in those functions, never at
-    a call site.
+    (`canRunProofread`, which takes the led teams). [CORRECTION 2026-09-24]
+    There is no daily cap any more (the owner removed it; the stored
+    `recipe_proofread_daily_cap` column is unread). The same people edit the
+    year's meal plan (`canEditMealPlan`). The kitchen settings stay
+    captain-only (`canSetKitchenSettings`). Change the rule in those
+    functions, never at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping
@@ -361,9 +363,14 @@ Decisions baked into the schema — keep new code consistent with them:
   "Send for proofreading" has Claude either ask questions or write the recipe
   straight into the book, with its scaling notes shown to every reader as
   "How this was scaled". A captain or a Kitchen lead spends money (a Claude
-  run, decision 2A); the daily cap is a silent server-side guard that no
-  screen shows, counts down or sets. There is no cron: a reviewer's click
-  starts each run.
+  run, decision 2A), with no daily limit. There is no cron: a reviewer's
+  click starts each run. [2026-09-24] The plates come from the year's meal
+  plan (`kitchen_meal_plans` + `kitchen_meal_plan_days`, `/kitchen/meal-plan`,
+  `@camp404/db/meal-plan`), not Camp settings: a recipe's plate chips are its
+  distinct counts, and Claude writes a new recipe for the largest. A recipe
+  already in the book is revised, not rewritten: the run carries its accepted
+  version and the questions and answers that settled it
+  (`recipeSourceRevisionPrompt`, recorded as `PROMPT_VERSIONS.recipeSourceRevision`).
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.

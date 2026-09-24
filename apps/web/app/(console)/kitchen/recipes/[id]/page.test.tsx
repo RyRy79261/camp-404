@@ -1,57 +1,74 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { sourceFromText } from "@camp404/core";
 import { KitchenRecipe } from "@camp404/types";
-import type { RecipeDetail } from "@/lib/recipes";
+import type { ProofreadProgress, RecipeDetail } from "@/lib/recipes";
 
-// The recipe page decides on the server who sees what: the Run button, the
-// plate-count field, the Decision buttons and "Edit recipe" render for a
-// Kitchen lead or a captain (2A; everyone else reads why), no run counter
-// renders for anyone, and a recipe that is not in the book is a 404 for anyone
-// but its submitter and the Kitchen's reviewers. "How this was scaled" is for
-// every reader of the book.
+// The recipe page decides on the server who sees what: "Edit source", "Send
+// for proofreading" (or "Claude needs more details — answer here" while
+// Claude's questions wait, read on the server), the "Proofread for N" chips
+// and the Decision buttons render for a Kitchen lead or a captain (2A), no run
+// counter or daily limit renders for anyone, and a recipe that is not in the
+// book is a 404 for anyone but its submitter and the Kitchen's reviewers. In
+// the book it has two tabs, the choice in the address: Recipe (the plate
+// chips from the meal plan, the reader, "How this was scaled") and History
+// (where it came from, every recipe and source version, Claude's reports, the
+// lessons and the activity log).
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn() }));
 vi.mock("@/lib/recipes", () => ({
-  getKitchenSettings: vi.fn(async () => ({
-    recipeProofreadDailyCap: 5,
-    kitchenLargestPotLitres: null,
-    kitchenBurnerCount: null,
-    kitchenPlatesBreakfast: 60,
-    kitchenPlatesLunch: null,
-    kitchenPlatesDinner: 45,
-  })),
   getPlateCount: vi.fn(async () => null),
+  getProofreadProgress: vi.fn(async () => null),
   getRecipeDetail: vi.fn(),
+  listRecipeSources: vi.fn(async () => []),
   resetStaleRuns: vi.fn(async () => ({ reset: 0 })),
 }));
+vi.mock("@/lib/meal-plan", () => ({ getMealPlan: vi.fn() }));
 vi.mock("../actions", () => ({
   acceptProofreadAction: vi.fn(),
   addLessonAction: vi.fn(),
+  answerProofreadQuestionsAction: vi.fn(),
   decideRecipeAction: vi.fn(),
   proofreadPlatesAction: vi.fn(),
-  requestRerunAction: vi.fn(),
+  proofreadProgressAction: vi.fn(async () => ({ ok: true, data: null })),
+  proofreadRecipeAction: vi.fn(),
   resubmitRecipeAction: vi.fn(),
   retypeRecipeTextAction: vi.fn(),
-  runProofreadingAction: vi.fn(),
   startVariationAction: vi.fn(),
 }));
+vi.mock("@camp404/ui/components/toast", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
 const NOT_FOUND = new Error("NEXT_NOT_FOUND");
+const push = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ refresh: vi.fn(), push }),
   notFound: () => {
     throw NOT_FOUND;
   },
 }));
 
+import { toast } from "@camp404/ui/components/toast";
 import { captainPageGate } from "@/lib/captain-gate";
+import { getMealPlan } from "@/lib/meal-plan";
 import {
   getPlateCount,
+  getProofreadProgress,
   getRecipeDetail,
+  listRecipeSources,
   resetStaleRuns,
   type PlateCountDetail,
 } from "@/lib/recipes";
 import { getLeadTeams } from "@/lib/users";
+import { proofreadPlatesAction, proofreadRecipeAction } from "../actions";
 import RecipePage from "./page";
 
 const RECIPE = "11111111-1111-4111-8111-111111111111";
@@ -95,6 +112,19 @@ function detail(overrides: Partial<RecipeDetail> = {}): RecipeDetail {
     history: [],
     ...overrides,
   };
+}
+
+/** A meal plan whose distinct counts are these, over as many days. */
+function mealPlanWith(counts: number[]) {
+  vi.mocked(getMealPlan).mockResolvedValue({
+    cycle: 2026,
+    daysOnSite: counts.length || 1,
+    days: counts.length
+      ? counts.map((n) => ({ breakfast: n, lunch: 0, dinner: n }))
+      : [{ breakfast: 0, lunch: 0, dinner: 0 }],
+    version: 1,
+    updatedAt: null,
+  });
 }
 
 async function renderAs(
@@ -183,6 +213,10 @@ function inBook(overrides: Partial<RecipeDetail> = {}): RecipeDetail {
       {
         id: "v1",
         version: 1,
+        plates: 45,
+        recipe: BOOK_BODY,
+        report: null,
+        scalingNotes: [],
         reason: "Written by hand",
         runId: null,
         authorName: "Kit Lead",
@@ -193,139 +227,148 @@ function inBook(overrides: Partial<RecipeDetail> = {}): RecipeDetail {
   });
 }
 
-const proofreadingCard = () =>
-  screen.getByRole("article", { name: "Turn into a recipe" });
-
 /** No run counter and no per-day limit, anywhere on the page. */
-const NO_RUN_COUNT = /runs? left|per day/i;
+const NO_RUN_COUNT = /runs? left|per day|tomorrow/i;
+
+const SEND = "Send for proofreading";
+const ANSWER = "Claude needs more details — answer here";
+const QUESTIONS = ["How much coconut milk?", "Ground or whole cumin?"];
+
+function progress(overrides: Partial<ProofreadProgress>): ProofreadProgress {
+  return {
+    runId: "run-1",
+    kind: "source",
+    outcome: "succeeded",
+    stage: "saving",
+    questions: null,
+    error: null,
+    ...overrides,
+  };
+}
+
+const tabs = () => screen.getByRole("navigation", { name: "Recipe tabs" });
 
 afterEach(cleanup);
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getPlateCount).mockResolvedValue(null);
+  vi.mocked(getProofreadProgress).mockResolvedValue(null);
+  vi.mocked(listRecipeSources).mockResolvedValue([]);
+  mealPlanWith([45, 60]);
 });
 
 describe("recipe page", () => {
-  it("gives a Kitchen lead the Run panel (2A), and its submitter only the reason", async () => {
-    await renderAs({ id: "lead", rank: "team_lead" }, ["kitchen"], detail());
+  it("gives a Kitchen lead and a captain Send for proofreading in the heading, and no one else", async () => {
+    for (const [viewer, leads, recipe] of [
+      [{ id: "lead", rank: "team_lead" }, ["kitchen"], detail()],
+      [{ id: "cap", rank: "captain" }, [], detail()],
+      [{ id: "cap", rank: "captain" }, [], inBook()],
+    ] as const) {
+      await renderAs(viewer, [...leads], recipe);
+      expect(screen.getByRole("button", { name: SEND })).toBeTruthy();
+      // The old card, its plates box and its note are gone.
+      expect(
+        screen.queryByRole("article", { name: "Turn into a recipe" }),
+      ).toBeNull();
+      expect(
+        screen.queryByLabelText(/What should Claude do differently/),
+      ).toBeNull();
+      expect(document.body.textContent).not.toMatch(NO_RUN_COUNT);
+      cleanup();
+    }
+    expect(getLeadTeams).toHaveBeenCalledTimes(1);
+    vi.mocked(getProofreadProgress).mockClear();
+
+    for (const [viewer, leads, recipe] of [
+      [{ id: "member", rank: "camp_member" }, [], detail()],
+      [{ id: "someone", rank: "camp_member" }, [], inBook()],
+      [{ id: "struct", rank: "team_lead" }, ["structures"], inBook()],
+    ] as const) {
+      await renderAs(viewer, [...leads], recipe);
+      expect(screen.queryByRole("button", { name: SEND })).toBeNull();
+      expect(getProofreadProgress).not.toHaveBeenCalled();
+      cleanup();
+    }
+  });
+
+  it("sends the recipe as it stands, and spins while Claude has it", async () => {
+    vi.mocked(proofreadRecipeAction).mockResolvedValue({
+      ok: true,
+      data: { runId: "run-2" },
+    });
+    await renderAs({ id: "cap", rank: "captain" }, [], inBook());
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: SEND }));
+    });
+    expect(proofreadRecipeAction).toHaveBeenCalledWith({ recipeId: RECIPE });
     expect(
-      within(proofreadingCard()).getByRole("button", {
-        name: "Turn into a recipe with Claude",
-      }),
-    ).toBeTruthy();
+      (
+        screen.getByRole("button", {
+          name: /Claude is proofreading/,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
     cleanup();
 
-    await renderAs({ id: "member", rank: "camp_member" }, [], detail());
-    const card = proofreadingCard();
-    expect(
-      within(card).getByRole("heading", { name: "Turn into a recipe" }),
-    ).toBeTruthy();
-    expect(
-      within(card).getByText(
-        "A captain or a Kitchen lead turns recipes into kitchen recipes with Claude, because each run costs money.",
-      ),
-    ).toBeTruthy();
-    expect(
-      screen.queryByRole("button", { name: /turn into a recipe/i }),
-    ).toBeNull();
-  });
-
-  it("gives a captain the Run button, with no run counter", async () => {
-    await renderAs({ id: "cap", rank: "captain" }, [], detail());
-    const card = proofreadingCard();
-    expect(
-      within(card).getByRole("button", {
-        name: "Turn into a recipe with Claude",
-      }),
-    ).toBeTruthy();
-    // The plates offered are the largest meal's.
-    expect(
-      (within(card).getByLabelText("Plates") as HTMLInputElement).value,
-    ).toBe("60");
-    expect(document.body.textContent).not.toMatch(NO_RUN_COUNT);
-    expect(getLeadTeams).not.toHaveBeenCalled();
-  });
-
-  it("offers a re-run on an accepted recipe, and holds it back when the text is not cleared", async () => {
-    await renderAs(
-      { id: "cap", rank: "captain" },
-      [],
-      detail({
-        status: "proofread",
-        blockedReason: "The member did not agree to Claude.",
-      }),
+    // A refusal says why in a toast, and the button stays.
+    vi.mocked(proofreadRecipeAction).mockResolvedValue({
+      ok: false,
+      error: "Paste the recipe's text first. Claude does not open links.",
+    });
+    await renderAs({ id: "cap", rank: "captain" }, [], inBook());
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: SEND }));
+    });
+    expect(toast.error).toHaveBeenCalledWith(
+      "Paste the recipe's text first. Claude does not open links.",
     );
-    const button = within(proofreadingCard()).getByRole("button", {
-      name: "Turn into a recipe again",
-    }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(
-      within(proofreadingCard()).getByText(
-        "The member did not agree to Claude.",
-      ),
-    ).toBeTruthy();
-  });
+    expect(screen.getByRole("button", { name: SEND })).toBeTruthy();
+    cleanup();
 
-  it("lets a Kitchen lead re-run it, and shows an older re-run request", async () => {
-    // A Kitchen lead sends it again (2A), so asking a captain is gone.
+    // A run already with Claude when the page loads spins too.
+    vi.mocked(getProofreadProgress).mockResolvedValue(
+      progress({ outcome: "running", stage: "reading" }),
+    );
     await renderAs(
       { id: "lead", rank: "team_lead" },
       ["kitchen"],
-      detail({ status: "proofread" }),
+      inBook({ status: "analysing" }),
     );
+    expect(screen.queryByRole("button", { name: SEND })).toBeNull();
     expect(
-      within(proofreadingCard()).getByRole("button", {
-        name: "Turn into a recipe again",
-      }),
+      screen.getByRole("button", { name: /Claude is proofreading/ }),
     ).toBeTruthy();
-    expect(
-      within(proofreadingCard()).queryByRole("button", {
-        name: "Ask a captain to re-run",
-      }),
-    ).toBeNull();
-    cleanup();
+  });
 
-    // The member who suggested it reads the page, but asks nothing.
-    await renderAs(
-      { id: "member", rank: "camp_member" },
-      [],
-      detail({ status: "proofread" }),
+  it("asks for the answer instead of sending again while Claude's questions wait, read on the server", async () => {
+    vi.mocked(getProofreadProgress).mockResolvedValue(
+      progress({ questions: QUESTIONS }),
     );
-    expect(
-      within(proofreadingCard()).queryByRole("button", {
-        name: /Ask a captain/,
-      }),
-    ).toBeNull();
-    cleanup();
+    for (const recipe of [inBook(), detail()]) {
+      await renderAs({ id: "lead", rank: "team_lead" }, ["kitchen"], recipe);
+      expect(getProofreadProgress).toHaveBeenLastCalledWith(RECIPE);
+      expect(screen.queryByRole("button", { name: SEND })).toBeNull();
+      const answer = screen.getByRole("button", { name: ANSWER });
+      // It opens the questions dialog.
+      expect(screen.queryByRole("dialog")).toBeNull();
+      await act(async () => {
+        fireEvent.click(answer);
+      });
+      const dialog = screen.getByRole("dialog", {
+        name: "Claude needs more before it can write this recipe",
+      });
+      expect(within(dialog).getByText(QUESTIONS[1]!)).toBeTruthy();
+      expect(within(dialog).getByLabelText("Your answer")).toBeTruthy();
+      cleanup();
+    }
 
-    await renderAs(
-      { id: "cap", rank: "captain" },
-      [],
-      detail({
-        status: "proofread",
-        rerunRequest: {
-          note: "Use grams, not cups.",
-          byName: "Kim Kitchen",
-          at: new Date("2026-09-22T08:00:00Z"),
-        },
-      }),
+    // A plate count's run is not the recipe's: Send stays.
+    vi.mocked(getProofreadProgress).mockResolvedValue(
+      progress({ kind: "plates", outcome: "running" }),
     );
-    const card = proofreadingCard();
-    expect(
-      within(card).getByText("Kim Kitchen asked for a re-run"),
-    ).toBeTruthy();
-    // The captain's note starts from the lead's words.
-    expect(
-      (
-        within(card).getByLabelText(
-          /What should Claude do differently/,
-        ) as HTMLTextAreaElement
-      ).value,
-    ).toBe("Use grams, not cups.");
-    expect(
-      within(card).queryByRole("button", { name: /Ask a captain/ }),
-    ).toBeNull();
+    await renderAs({ id: "cap", rank: "captain" }, [], inBook());
+    expect(screen.getByRole("button", { name: SEND })).toBeTruthy();
   });
 
   it("hands back stuck runs before it reads the recipe, every time it loads", async () => {
@@ -346,9 +389,7 @@ describe("recipe page", () => {
     render(await RecipePage({ params: Promise.resolve({ id: RECIPE }) }));
     expect(order).toEqual(["reset", "read"]);
     expect(
-      within(proofreadingCard()).getByText(
-        "The last run failed: The run stopped.",
-      ),
+      screen.getByText("The last run failed: The run stopped."),
     ).toBeTruthy();
     cleanup();
 
@@ -356,6 +397,7 @@ describe("recipe page", () => {
     vi.mocked(resetStaleRuns).mockClear();
     await renderAs({ id: "member", rank: "camp_member" }, [], detail());
     expect(resetStaleRuns).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/The last run failed/)).toBeNull();
   });
 
   it("shows a Kitchen lead an older draft of Claude's with the same reader and a button to accept it", async () => {
@@ -507,7 +549,7 @@ describe("recipe page", () => {
     ).rejects.toBe(NOT_FOUND);
   });
 
-  it("shows another member the book's parts only, never the working text", async () => {
+  it("opens on the Recipe tab: only the refined recipe, for a member of the book", async () => {
     await renderAs({ id: "someone", rank: "camp_member" }, [], inBook());
     expect(
       screen.getByRole("heading", { level: 1, name: "Camp dal" }),
@@ -520,42 +562,161 @@ describe("recipe page", () => {
     expect(screen.getByRole("list", { name: "Step 1 uses" }).textContent).toBe(
       "3 kgRed lentils",
     );
+    expect(screen.getByRole("region", { name: "Cook notes" })).toBeTruthy();
+
+    // The tabs: Recipe first and chosen, History a link that keeps the tab.
+    const links = within(tabs()).getAllByRole("link");
+    expect(links.map((l) => l.textContent)).toEqual(["Recipe", "History"]);
+    expect(links[0]!.getAttribute("aria-current")).toBe("page");
+    expect(links[1]!.getAttribute("href")).toBe(
+      `/kitchen/recipes/${RECIPE}?tab=history`,
+    );
+
+    // Nothing of the History tab.
+    for (const name of [
+      "Where it came from",
+      "Recipe versions",
+      "Lessons learned",
+      "Activity",
+    ]) {
+      expect(screen.queryByRole("article", { name })).toBeNull();
+    }
     expect(screen.queryByText("Lentils, water, cumin.")).toBeNull();
     expect(screen.queryByText("One pot.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add lesson" })).toBeNull();
+    expect(listRecipeSources).not.toHaveBeenCalled();
+  });
+
+  it("keeps the History tab in the address, with where it came from, every version, the lessons and the activity", async () => {
+    await renderAs({ id: "someone", rank: "camp_member" }, [], inBook(), {
+      tab: "history",
+    });
+    const links = within(tabs()).getAllByRole("link");
+    expect(links[1]!.getAttribute("aria-current")).toBe("page");
+    expect(links[0]!.getAttribute("href")).toBe(`/kitchen/recipes/${RECIPE}`);
+    // The recipe itself is on the other tab: here it is only inside a
+    // version, closed until opened.
+    for (const uses of screen.getAllByRole("list", { name: "Step 1 uses" })) {
+      expect(uses.closest("details")).not.toBeNull();
+    }
+    expect(
+      screen.queryByRole("navigation", { name: "Plate count" }),
+    ).toBeNull();
+
+    expect(
+      screen.getByRole("article", { name: "Where it came from" }),
+    ).toBeTruthy();
+    const versions = screen.getByRole("article", { name: "Recipe versions" });
+    // Each version opens in place, read only.
+    const version = within(versions).getByText("Version 1").closest("details")!;
+    expect(version).toBeTruthy();
+    expect(
+      within(version).getByRole("list", { name: "Step 1 uses" }).textContent,
+    ).toBe("3 kgRed lentils");
+    expect(within(version).queryByRole("textbox")).toBeNull();
+    expect(
+      screen.getByRole("article", { name: "Lessons learned" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add lesson" })).toBeTruthy();
+    expect(screen.getByRole("article", { name: "Activity" })).toBeTruthy();
+
+    // Not the member's words: no original text, no source versions.
     expect(screen.queryByText("Original text")).toBeNull();
+    expect(screen.queryByText("Lentils, water, cumin.")).toBeNull();
+    expect(
+      screen.queryByRole("article", { name: "Source versions" }),
+    ).toBeNull();
+    expect(listRecipeSources).not.toHaveBeenCalled();
     expect(
       screen.queryByRole("button", { name: /Start a variation/ }),
     ).toBeNull();
+  });
+
+  it("shows the submitter and the reviewers the original text and every source version", async () => {
+    vi.mocked(listRecipeSources).mockResolvedValue([
+      {
+        id: "s2",
+        version: 2,
+        serves: 4,
+        sections: sourceFromText("SECOND-SOURCE-WORDS"),
+        authorId: "lead",
+        authorName: "Kit Lead",
+        createdAt: new Date("2026-09-22T08:00:00Z"),
+      },
+      {
+        id: "s1",
+        version: 1,
+        serves: null,
+        sections: sourceFromText("FIRST-SOURCE-WORDS"),
+        authorId: "member",
+        authorName: "Rita Member",
+        createdAt: new Date("2026-09-20T08:00:00Z"),
+      },
+    ]);
+    for (const [viewer, leads] of [
+      [{ id: "member", rank: "camp_member" }, []],
+      [{ id: "lead", rank: "team_lead" }, ["kitchen"]],
+    ] as const) {
+      await renderAs(viewer, [...leads], inBook(), { tab: "history" });
+      const source = screen.getByRole("article", {
+        name: "Where it came from",
+      });
+      expect(within(source).getByText("Original text")).toBeTruthy();
+      expect(within(source).getByText("Lentils, water, cumin.")).toBeTruthy();
+      expect(within(source).getByText("One pot.")).toBeTruthy();
+      expect(
+        within(source).getByRole("link", { name: "https://example.com/dal" }),
+      ).toBeTruthy();
+      const sources = screen.getByRole("article", { name: "Source versions" });
+      const entries = within(sources)
+        .getAllByText(/^Source version \d$/)
+        .map((e) => e.textContent);
+      expect(entries).toEqual(["Source version 2", "Source version 1"]);
+      expect(within(sources).getByText("SECOND-SOURCE-WORDS")).toBeTruthy();
+      expect(within(sources).getByText("FIRST-SOURCE-WORDS")).toBeTruthy();
+      expect(listRecipeSources).toHaveBeenLastCalledWith(RECIPE);
+      cleanup();
+    }
+  });
+
+  it("gives a member no report, and a Kitchen reviewer every report on the History tab", async () => {
+    vi.mocked(getPlateCount).mockImplementation(async (_v, plates) =>
+      plates === 60 ? FOR_60 : null,
+    );
+    const recipe = inBook({
+      versions: [
+        {
+          ...inBook().versions[0]!,
+          report: { changed: ["SECRET-VERSION-REPORT"], unsure: [] },
+        },
+      ],
+    });
+    await renderAs({ id: "someone", rank: "camp_member" }, [], recipe, {
+      tab: "history",
+    });
+    expect(screen.queryByText("SECRET-VERSION-REPORT")).toBeNull();
+    expect(screen.queryByText("SECRET-COUNT-REPORT")).toBeNull();
     expect(
-      screen.queryByRole("article", { name: "Turn into a recipe" }),
+      screen.queryByRole("article", { name: "Claude's reports" }),
     ).toBeNull();
-    expect(screen.getByRole("button", { name: "Add lesson" })).toBeTruthy();
-    // Everything not about cooking the dish comes after the recipe.
-    const about = screen.getByRole("region", { name: "About this recipe" });
-    const method = screen.getByRole("region", { name: "Method" });
-    expect(
-      method.compareDocumentPosition(about) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      within(about).getByRole("article", { name: "Versions" }),
-    ).toBeTruthy();
-    expect(
-      within(about).getByRole("article", { name: "History" }),
-    ).toBeTruthy();
+    cleanup();
+
+    await renderAs({ id: "lead", rank: "team_lead" }, ["kitchen"], recipe, {
+      tab: "history",
+    });
+    const report = screen.getByRole("article", { name: "Claude's reports" });
+    expect(within(report).getByText("SECRET-VERSION-REPORT")).toBeTruthy();
+    expect(within(report).getByText("SECRET-COUNT-REPORT")).toBeTruthy();
+    expect(within(report).getByText("Version 1, for 60 plates")).toBeTruthy();
+    cleanup();
+
+    // Not on the Recipe tab.
+    await renderAs({ id: "lead", rank: "team_lead" }, ["kitchen"], recipe);
+    expect(screen.queryByText("SECRET-VERSION-REPORT")).toBeNull();
   });
 
-  it("keeps the original text in a details box for the submitter and the reviewers", async () => {
-    await renderAs({ id: "member", rank: "camp_member" }, [], inBook());
-    const source = screen.getByRole("article", { name: "Where it came from" });
-    expect(within(source).getByText("Original text")).toBeTruthy();
-    expect(within(source).getByText("Lentils, water, cumin.")).toBeTruthy();
-    expect(within(source).getByText("One pot.")).toBeTruthy();
-    expect(
-      within(source).getByRole("link", { name: "https://example.com/dal" }),
-    ).toBeTruthy();
-  });
-
-  it("switches plate counts from the address, and says when a count is not ready", async () => {
+  it("draws one chip per distinct count in the meal plan, a tick where it is ready", async () => {
+    mealPlanWith([45, 50, 60, 45]);
     vi.mocked(getPlateCount).mockImplementation(async (_v, plates) =>
       plates === 60 ? FOR_60 : null,
     );
@@ -566,12 +727,16 @@ describe("recipe page", () => {
     const bar = screen.getByRole("navigation", { name: "Plate count" });
     expect(
       within(bar)
-        .getByRole("link", { name: "60" })
+        .getByRole("link", { name: "60 plates, proofread" })
         .getAttribute("aria-current"),
     ).toBe("page");
     expect(
-      within(bar).getByRole("link", { name: "45" }).getAttribute("href"),
+      within(bar)
+        .getByRole("link", { name: "45 plates, proofread" })
+        .getAttribute("href"),
     ).toBe(`/kitchen/recipes/${RECIPE}?plates=45`);
+    // 50 has no result, and a member cannot ask for one: no chip.
+    expect(within(bar).queryByText(/50/)).toBeNull();
     expect(screen.getByRole("list", { name: "Step 1 uses" }).textContent).toBe(
       "3.9 kgRed lentils",
     );
@@ -580,42 +745,28 @@ describe("recipe page", () => {
     expect(within(notes).getByText("Cook in 2 pots.")).toBeTruthy();
     // The meta line still names the recipe's own count.
     expect(screen.getByText(/^Written for 45 plates/)).toBeTruthy();
-    cleanup();
-
-    // A count that is not ready shows the recipe's own amounts, and says so.
-    await renderAs({ id: "cap", rank: "captain" }, [], inBook(), {
-      plates: "50",
-    });
-    expect(screen.getByRole("status").textContent).toContain(
-      "Not proofread for 50 plates yet.",
-    );
-    expect(screen.getByRole("list", { name: "Step 1 uses" }).textContent).toBe(
-      "3 kgRed lentils",
-    );
+    // The Recipe tab keeps the count in the address.
     expect(
-      (screen.getByLabelText("Another count") as HTMLInputElement).value,
-    ).toBe("50");
-    expect(
-      screen.getByRole("button", { name: "Proofread for 50 plates" }),
-    ).toBeTruthy();
-    const plateBar = document.querySelector<HTMLElement>("[data-plate-bar]")!;
-    expect(plateBar.textContent).not.toMatch(NO_RUN_COUNT);
+      within(tabs()).getByRole("link", { name: "Recipe" }).getAttribute("href"),
+    ).toBe(`/kitchen/recipes/${RECIPE}?plates=60`);
     cleanup();
 
     // A count Claude is still writing is shown, but cannot be picked.
+    mealPlanWith([45, 80]);
     await renderAs(
       { id: "someone", rank: "camp_member" },
       [],
       inBook({ openPlateRuns: [80] }),
       { plates: "80" },
     );
-    expect(screen.getByText("80, with Claude").tagName).toBe("SPAN");
+    expect(screen.getByText("80 · with Claude").tagName).toBe("SPAN");
     expect(screen.getByRole("status").textContent).toContain(
       "Claude is proofreading 80 plates.",
     );
     cleanup();
 
     // A count whose paid run failed says so, and why.
+    mealPlanWith([45, 70]);
     await renderAs(
       { id: "someone", rank: "camp_member" },
       [],
@@ -635,11 +786,57 @@ describe("recipe page", () => {
     );
   });
 
-  it("gives a Kitchen lead the plate-count field (2A), and tells everyone else why there is none", async () => {
-    await renderAs({ id: "lead", rank: "team_lead" }, ["kitchen"], inBook());
-    expect(screen.getByLabelText("Another count")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Proofread" })).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(NO_RUN_COUNT);
+  it("gives a Kitchen lead and a captain Proofread for N on a count with no result, and no one else", async () => {
+    mealPlanWith([45, 50, 60]);
+    vi.mocked(proofreadPlatesAction).mockResolvedValue({
+      ok: true,
+      data: { runId: "run-9" },
+    });
+    for (const [viewer, leads] of [
+      [{ id: "lead", rank: "team_lead" }, ["kitchen"]],
+      [{ id: "cap", rank: "captain" }, []],
+    ] as const) {
+      await renderAs(viewer, [...leads], inBook());
+      const bar = screen.getByRole("navigation", { name: "Plate count" });
+      const chip = within(bar).getByRole("button", {
+        name: "50 · Proofread for 50",
+      });
+      // Only the counts with no result are buttons.
+      expect(within(bar).getAllByRole("button")).toHaveLength(1);
+      await act(async () => {
+        fireEvent.click(chip);
+      });
+      expect(proofreadPlatesAction).toHaveBeenLastCalledWith({
+        recipeId: RECIPE,
+        versionId: "v1",
+        plates: 50,
+        rerun: false,
+      });
+      expect(push).toHaveBeenLastCalledWith(
+        `/kitchen/recipes/${RECIPE}?plates=50`,
+      );
+      expect(document.body.textContent).not.toMatch(NO_RUN_COUNT);
+      cleanup();
+    }
+    // The old free-count field is gone.
+    await renderAs({ id: "cap", rank: "captain" }, [], inBook());
+    expect(screen.queryByLabelText("Another count")).toBeNull();
+    cleanup();
+
+    // A refused run says why in a toast.
+    vi.mocked(proofreadPlatesAction).mockResolvedValue({
+      ok: false,
+      error: "Someone else saved a newer version of this recipe.",
+    });
+    await renderAs({ id: "cap", rank: "captain" }, [], inBook());
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "50 · Proofread for 50" }),
+      );
+    });
+    expect(toast.error).toHaveBeenCalledWith(
+      "Someone else saved a newer version of this recipe.",
+    );
     cleanup();
 
     for (const [viewer, leads] of [
@@ -647,67 +844,32 @@ describe("recipe page", () => {
       [{ id: "struct", rank: "team_lead" }, ["structures"]],
     ] as const) {
       await renderAs(viewer, [...leads], inBook());
-      expect(
-        screen.getByText(
-          "A captain or a Kitchen lead proofreads a new plate count, because each run costs money.",
-        ),
-      ).toBeTruthy();
-      expect(screen.queryByLabelText("Another count")).toBeNull();
-      expect(screen.queryByRole("button", { name: /^Proofread/ })).toBeNull();
+      expect(screen.queryByText(/Proofread for/)).toBeNull();
       cleanup();
     }
   });
 
-  it("gives a member no report, and a Kitchen reviewer both reports", async () => {
-    vi.mocked(getPlateCount).mockImplementation(async (_v, plates) =>
-      plates === 60 ? FOR_60 : null,
-    );
-    const recipe = inBook({
-      currentVersion: {
-        ...inBook().currentVersion!,
-        report: { changed: ["SECRET-VERSION-REPORT"], unsure: [] },
-      },
-    });
-    await renderAs({ id: "someone", rank: "camp_member" }, [], recipe, {
-      plates: "60",
-    });
-    expect(screen.queryByText("SECRET-VERSION-REPORT")).toBeNull();
-    expect(screen.queryByText("SECRET-COUNT-REPORT")).toBeNull();
-    expect(
-      screen.queryByRole("article", { name: "Claude's report" }),
-    ).toBeNull();
-    cleanup();
-
-    await renderAs({ id: "lead", rank: "team_lead" }, ["kitchen"], recipe, {
-      plates: "60",
-    });
-    const report = screen.getByRole("article", { name: "Claude's report" });
-    expect(within(report).getByText("SECRET-VERSION-REPORT")).toBeTruthy();
-    expect(within(report).getByText("SECRET-COUNT-REPORT")).toBeTruthy();
-    expect(within(report).getByText("For 60 plates")).toBeTruthy();
-  });
-
-  it("links a Kitchen reviewer to the editor from the book, and no one else", async () => {
+  it("links a Kitchen reviewer to the source editor from the heading, and no one else", async () => {
     await renderAs({ id: "lead", rank: "team_lead" }, ["kitchen"], inBook());
     expect(
-      screen.getByRole("link", { name: "Edit recipe" }).getAttribute("href"),
+      screen.getByRole("link", { name: "Edit source" }).getAttribute("href"),
     ).toBe(`/kitchen/recipes/${RECIPE}/edit`);
     cleanup();
 
     await renderAs({ id: "cap", rank: "captain" }, [], inBook());
-    expect(screen.getByRole("link", { name: "Edit recipe" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Edit source" })).toBeTruthy();
     cleanup();
 
     // The member who suggested it, and a lead of another team, read it only.
     await renderAs({ id: "member", rank: "camp_member" }, [], inBook());
-    expect(screen.queryByRole("link", { name: "Edit recipe" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Edit source" })).toBeNull();
     cleanup();
     await renderAs(
       { id: "struct", rank: "team_lead" },
       ["structures"],
       inBook(),
     );
-    expect(screen.queryByRole("link", { name: "Edit recipe" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Edit source" })).toBeNull();
     cleanup();
 
     // While Claude is writing a new version, the editor has nothing to open.
@@ -716,7 +878,7 @@ describe("recipe page", () => {
       ["kitchen"],
       inBook({ status: "analysing" }),
     );
-    expect(screen.queryByRole("link", { name: "Edit recipe" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Edit source" })).toBeNull();
   });
 
   it("links a Kitchen reviewer to the source editor before the book, while approved or proofread", async () => {
@@ -726,11 +888,8 @@ describe("recipe page", () => {
         ["kitchen"],
         detail({ status, blockedReason: "No consent." }),
       );
-      const decision = screen.getByRole("article", { name: "Decision" });
       expect(
-        within(decision)
-          .getByRole("link", { name: "Edit recipe" })
-          .getAttribute("href"),
+        screen.getByRole("link", { name: "Edit source" }).getAttribute("href"),
       ).toBe(`/kitchen/recipes/${RECIPE}/edit`);
       expect(screen.queryByText(/by hand/)).toBeNull();
       cleanup();
@@ -742,19 +901,20 @@ describe("recipe page", () => {
       [],
       detail({ status: "approved" }),
     );
-    expect(screen.queryByRole("link", { name: "Edit recipe" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Edit source" })).toBeNull();
     cleanup();
 
-    // Nor is it offered before the recipe is approved.
+    // Nor is it offered before the recipe is approved, and nor is Send.
     await renderAs(
       { id: "lead", rank: "team_lead" },
       ["kitchen"],
       detail({ status: "suggested" }),
     );
-    expect(screen.queryByRole("link", { name: "Edit recipe" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Edit source" })).toBeNull();
+    expect(screen.queryByRole("button", { name: SEND })).toBeNull();
   });
 
-  it("says how the recipe was scaled, last, to everyone who reads the book", async () => {
+  it("says how the recipe was scaled, last on the Recipe tab, to everyone who reads the book", async () => {
     const recipe = inBook({
       currentVersion: {
         ...inBook().currentVersion!,
@@ -774,18 +934,16 @@ describe("recipe page", () => {
       "The source serves 4; the lentils are ten times it.",
       "Salt and cumin were scaled more slowly than the lentils.",
     ]);
-    // At the very bottom, after "About this recipe".
-    const about = screen.getByRole("region", { name: "About this recipe" });
+    // At the very bottom, after the cook notes.
+    const notes = screen.getByRole("region", { name: "Cook notes" });
     expect(
-      about.compareDocumentPosition(scaling) & Node.DOCUMENT_POSITION_FOLLOWING,
+      notes.compareDocumentPosition(scaling) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     cleanup();
 
     // No notes (a version from before them): no section.
     await renderAs({ id: "someone", rank: "camp_member" }, [], inBook());
-    expect(
-      screen.getByRole("region", { name: "About this recipe" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Cook notes" })).toBeTruthy();
     expect(
       screen.queryByRole("region", { name: "How this was scaled" }),
     ).toBeNull();

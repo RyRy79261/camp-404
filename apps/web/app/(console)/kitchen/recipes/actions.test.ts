@@ -6,11 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 //     nothing is queued or scheduled.
 //  2. Deciding needs a captain or a lead of Kitchen: a lead of any other team
 //     is refused here, although their clearance is the global team_lead rung.
-//  3. The data layer's refusals (the daily cap above all) reach the caller.
+//  3. The data layer's refusals reach the caller. There is no daily limit.
 //  4. A run sent to Claude is processed after the response, under E2E too, so
 //     the loading panel sees its stages; it is recorded with the pinned
-//     prompt version and model. The plates come from Camp settings, never
-//     from the browser.
+//     prompt versions (the source prompt, or the revision prompt for a recipe
+//     already in the book: the write picks) and model. The plates come from
+//     the meal plan's largest count, never from the browser.
 //  5. Every write names the signed-in actor, never an id from the browser.
 // The rules are checked again inside each write (packages/db, on PGlite).
 
@@ -26,6 +27,18 @@ vi.mock("@/lib/anthropic", () => ({
 vi.mock("@/lib/test-mode", () => ({
   isE2ETestMode: vi.fn(() => false),
   usesTestStore: vi.fn(() => false),
+}));
+vi.mock("@/lib/meal-plan", () => ({
+  getMealPlan: vi.fn(async () => ({
+    cycle: 2026,
+    daysOnSite: 2,
+    days: [
+      { breakfast: 60, lunch: 0, dinner: 45 },
+      { breakfast: 50, lunch: 20, dinner: 45 },
+    ],
+    version: 3,
+    updatedAt: null,
+  })),
 }));
 vi.mock("@/lib/recipe-proofread", () => ({
   processRuns: vi.fn(async () => ({ processed: 1, succeeded: 1, failed: 0 })),
@@ -56,14 +69,6 @@ vi.mock("@/lib/recipes", () => ({
   })),
   answerProofreadQuestions: vi.fn(async () => ({ ok: true, runId: "run-a" })),
   resetStaleRuns: vi.fn(async () => ({ reset: 0 })),
-  getKitchenSettings: vi.fn(async () => ({
-    recipeProofreadDailyCap: 5,
-    kitchenLargestPotLitres: null,
-    kitchenBurnerCount: null,
-    kitchenPlatesBreakfast: 60,
-    kitchenPlatesLunch: null,
-    kitchenPlatesDinner: 45,
-  })),
   getProofreadProgress: vi.fn(async () => ({
     runId: "run-s",
     kind: "source",
@@ -76,12 +81,12 @@ vi.mock("@/lib/recipes", () => ({
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { capRefusal } from "@camp404/db/recipes";
 import { PROMPT_VERSIONS } from "@camp404/ai-prompts";
 import type { ViewerRank } from "@camp404/types";
 import { captainActionGate } from "@/lib/captain-gate";
 import { getLeadTeams } from "@/lib/users";
 import { isE2ETestMode } from "@/lib/test-mode";
+import { getMealPlan } from "@/lib/meal-plan";
 import { processRuns } from "@/lib/recipe-proofread";
 import {
   DECIDE_REFUSAL,
@@ -96,7 +101,6 @@ import {
   acceptProofread,
   answerProofreadQuestions,
   decideRecipe,
-  getKitchenSettings,
   getProofreadProgress,
   queuePlateProofread,
   queueProofread,
@@ -113,6 +117,7 @@ import {
   decideRecipeAction,
   proofreadPlatesAction,
   proofreadProgressAction,
+  proofreadRecipeAction,
   requestRerunAction,
   resubmitRecipeAction,
   runProofreadingAction,
@@ -212,10 +217,12 @@ describe("runProofreadingAction", () => {
         note: "Use tinned tomatoes.",
         plates: 45,
         promptVersion: PROMPT_VERSIONS.recipeSource,
+        revisionPromptVersion: PROMPT_VERSIONS.recipeSourceRevision,
         model: "claude-opus-4-8",
       }),
     );
     expect(PROMPT_VERSIONS.recipeSource).toBe("2026-09-24.1");
+    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-09-24.1");
     // Not before the response: after() holds the work.
     expect(processRuns).not.toHaveBeenCalled();
     expect(after).toHaveBeenCalledTimes(1);
@@ -235,18 +242,15 @@ describe("runProofreadingAction", () => {
     expect(processRuns).toHaveBeenCalledWith({ runIds: ["run-1", "run-2"] });
   });
 
-  it("passes the daily cap's sentence through, and processes nothing", async () => {
-    const sentence = capRefusal(5, 4, 2)!;
+  it("passes the write's refusal through, and processes nothing", async () => {
     vi.mocked(queueProofread).mockResolvedValueOnce({
       ok: false,
-      error: sentence,
+      error: "Dhal: Paste the recipe's text first. Claude does not open links.",
     });
     expect(await runProofreadingAction(RUN)).toEqual({
       ok: false,
-      error:
-        "Claude has done as much proofreading as the camp allows today. Try again tomorrow.",
+      error: "Dhal: Paste the recipe's text first. Claude does not open links.",
     });
-    expect(sentence).not.toMatch(/\d/);
     expect(processRuns).not.toHaveBeenCalled();
     expect(after).not.toHaveBeenCalled();
   });
@@ -650,12 +654,12 @@ describe("sendSourceForProofreadingAction", () => {
     }
     expect(RUN_REFUSAL).toMatch(/a captain or a Kitchen lead/);
     expect(RUN_EXPLAINED).toMatch(/A captain or a Kitchen lead/);
-    expect(getKitchenSettings).not.toHaveBeenCalled();
+    expect(getMealPlan).not.toHaveBeenCalled();
     expect(sendSourceForProofreading).not.toHaveBeenCalled();
     expect(after).not.toHaveBeenCalled();
   });
 
-  it("lets a Kitchen lead send, for the plates Camp settings give, never the browser's", async () => {
+  it("lets a Kitchen lead send, for the meal plan's largest count, never the browser's", async () => {
     actAs("team_lead", ["kitchen"], "lead-1");
     expect(
       await sendSourceForProofreadingAction({
@@ -670,9 +674,10 @@ describe("sendSourceForProofreadingAction", () => {
         actorId: "lead-1",
         basedOnSourceId: RECIPE_B,
         serves: 4,
-        // The largest meal in Camp settings: breakfast's 60.
+        // The largest count in the meal plan: day 1's breakfast, 60.
         plates: 60,
         promptVersion: PROMPT_VERSIONS.recipeSource,
+        revisionPromptVersion: PROMPT_VERSIONS.recipeSourceRevision,
         model: "claude-opus-4-8",
       }),
     );
@@ -729,6 +734,97 @@ describe("sendSourceForProofreadingAction", () => {
   });
 });
 
+describe("proofreadRecipeAction", () => {
+  beforeEach(() => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    actAs("captain", [], "captain-1");
+  });
+
+  it("refuses a lead of another team and a member: nothing is read, queued or scheduled", async () => {
+    for (const [rank, led] of [
+      ["team_lead", ["structures"]],
+      ["camp_member", []],
+    ] as const) {
+      actAs(rank, [...led]);
+      expect(await proofreadRecipeAction({ recipeId: RECIPE_A })).toEqual({
+        ok: false,
+        error: RUN_REFUSAL,
+      });
+    }
+    expect(getMealPlan).not.toHaveBeenCalled();
+    expect(queueProofread).not.toHaveBeenCalled();
+    expect(after).not.toHaveBeenCalled();
+  });
+
+  it("queues the recipe as it stands for the meal plan's largest count, as the Kitchen lead, and runs it after the response", async () => {
+    vi.mocked(queueProofread).mockResolvedValueOnce({
+      ok: true,
+      runIds: ["run-r"],
+    });
+    actAs("team_lead", ["kitchen"], "lead-1");
+    expect(
+      await proofreadRecipeAction({
+        recipeId: RECIPE_A,
+        plates: 3,
+        actorId: "someone-else",
+      }),
+    ).toEqual({ ok: true, data: { runId: "run-r" } });
+    expect(queueProofread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipeIds: [RECIPE_A],
+        actorId: "lead-1",
+        note: null,
+        plates: 60,
+        promptVersion: PROMPT_VERSIONS.recipeSource,
+        revisionPromptVersion: PROMPT_VERSIONS.recipeSourceRevision,
+        model: "claude-opus-4-8",
+      }),
+    );
+    expect(processRuns).not.toHaveBeenCalled();
+    const task = vi.mocked(after).mock.calls[0]![0] as () => Promise<unknown>;
+    await task();
+    expect(processRuns).toHaveBeenCalledWith({ runIds: ["run-r"] });
+    expect(revalidatePath).toHaveBeenCalledWith(`/kitchen/recipes/${RECIPE_A}`);
+  });
+
+  it("writes for 40 plates when the meal plan has none", async () => {
+    vi.mocked(getMealPlan).mockResolvedValueOnce({
+      cycle: 2026,
+      daysOnSite: 1,
+      days: [{ breakfast: 0, lunch: 0, dinner: 0 }],
+      version: 0,
+      updatedAt: null,
+    });
+    await proofreadRecipeAction({ recipeId: RECIPE_A });
+    expect(queueProofread).toHaveBeenCalledWith(
+      expect.objectContaining({ plates: 40 }),
+    );
+  });
+
+  it("refuses a bad id and a missing key before queueing, and passes the write's refusal through", async () => {
+    expect(await proofreadRecipeAction({ recipeId: "nope" })).toEqual({
+      ok: false,
+      error: "Check the recipe and try again.",
+    });
+    delete process.env.ANTHROPIC_API_KEY;
+    expect(await proofreadRecipeAction({ recipeId: RECIPE_A })).toEqual({
+      ok: false,
+      error: PROOFREAD_NOT_SET_UP,
+    });
+    expect(queueProofread).not.toHaveBeenCalled();
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    vi.mocked(queueProofread).mockResolvedValueOnce({
+      ok: false,
+      error: "Camp dal: This recipe can't be proofread now.",
+    });
+    expect(await proofreadRecipeAction({ recipeId: RECIPE_A })).toEqual({
+      ok: false,
+      error: "Camp dal: This recipe can't be proofread now.",
+    });
+    expect(after).not.toHaveBeenCalled();
+  });
+});
+
 describe("answerProofreadQuestionsAction", () => {
   const ANSWER = {
     recipeId: RECIPE_A,
@@ -764,6 +860,7 @@ describe("answerProofreadQuestionsAction", () => {
         actorId: "lead-1",
         answer: "Two 400 ml tins.",
         promptVersion: PROMPT_VERSIONS.recipeSource,
+        revisionPromptVersion: PROMPT_VERSIONS.recipeSourceRevision,
       }),
     );
     const task = vi.mocked(after).mock.calls[0]![0] as () => Promise<unknown>;

@@ -407,6 +407,13 @@
       "when": 1790255498733,
       "tag": "0057_recipe_sources_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790256539592,
+      "tag": "0058_kitchen_meal_plan",
+      "breakpoints": true
     }
   ]
 }

@@ -11,10 +11,8 @@ import {
   NOT_AN_APPROVED_MEMBER,
   NOT_A_KITCHEN_REVIEWER,
   ONLY_A_REVIEWER_SENDS,
-  PROOFREAD_CAP_REACHED,
   ONLY_A_CAPTAIN_SETS_KITCHEN,
   PLATE_RUN_VERSION_GONE,
-  PROOFREAD_OFF,
   RECIPE_CHANGED,
   RECIPE_DECIDED,
   SENDER_NOT_A_REVIEWER,
@@ -30,6 +28,10 @@ import {
   plateCountReady,
   plateRunOpen,
 } from "@camp404/db/recipes";
+import {
+  MEAL_PLAN_CHANGED,
+  NOT_A_MEAL_PLAN_EDITOR,
+} from "@camp404/db/meal-plan";
 import { sourceFromText, sourceText } from "@camp404/core";
 import {
   KitchenRecipe,
@@ -209,30 +211,31 @@ describe("recipe twins", () => {
     expect(captain.rank).toBe("captain");
   });
 
-  it("keeps the stored daily cap when a save leaves it out, as Camp settings does", () => {
+  it("keeps the stored cap and per-meal plates when a save leaves them out, as Camp settings does", () => {
     const captain = makeUser("Cap", "captain");
-    const base = {
-      kitchenLargestPotLitres: null,
-      kitchenBurnerCount: null,
-      ...PLATES_OFF,
-    };
     expect(
       testStore.setKitchenSettings({
         actorId: captain.id,
-        ...base,
+        kitchenLargestPotLitres: null,
+        kitchenBurnerCount: null,
         recipeProofreadDailyCap: 2,
+        kitchenPlatesDinner: 45,
       }).ok,
     ).toBe(true);
-    // The card sends no cap: the silent guard stays where it was.
+    // The card sends only the pot and the burners now.
     expect(
       testStore.setKitchenSettings({
         actorId: captain.id,
-        ...base,
-        kitchenPlatesDinner: 45,
+        kitchenLargestPotLitres: 60,
+        kitchenBurnerCount: 4,
       }),
     ).toMatchObject({
       ok: true,
-      settings: { recipeProofreadDailyCap: 2, kitchenPlatesDinner: 45 },
+      settings: {
+        recipeProofreadDailyCap: 2,
+        kitchenLargestPotLitres: 60,
+        kitchenPlatesDinner: 45,
+      },
     });
     expect(testStore.getKitchenSettings()).toMatchObject({
       recipeProofreadDailyCap: 2,
@@ -240,7 +243,7 @@ describe("recipe twins", () => {
     });
   });
 
-  it("refuses a batch over the daily cap, or with text nobody agreed to send, as a whole", () => {
+  it("has no daily limit, and refuses a batch with text nobody agreed to send as a whole", () => {
     const captain = makeUser("Cap", "captain");
     const member = makeUser("Mo");
     testStore.setKitchenSettings({
@@ -260,19 +263,14 @@ describe("recipe twins", () => {
     const b = suggest(member.id);
     approve(a);
     approve(b);
-    expect(queue(captain.id, [a, b])).toEqual({
-      ok: false,
-      error: PROOFREAD_CAP_REACHED,
-    });
-    // Refused whole: no run was written.
-    expect(testStore.listProofreadRuns()).toHaveLength(0);
-
     const secret = suggest(member.id, false, "Secret curry");
     approve(secret);
-    expect(queue(captain.id, [secret])).toEqual({
+    expect(queue(captain.id, [a, secret])).toEqual({
       ok: false,
       error: forRecipe("Secret curry", NO_AI_CONSENT),
     });
+    // Refused whole: no run was written.
+    expect(testStore.listProofreadRuns()).toHaveLength(0);
     expect(
       testStore.retypeRecipeText({
         recipeId: secret,
@@ -280,22 +278,10 @@ describe("recipe twins", () => {
         text: "Curry, retyped.",
       }),
     ).toEqual({ ok: true });
+    // A stored cap of 1 limits nothing: three runs the same day.
     expect(queue(captain.id, [secret]).ok).toBe(true);
-    expect(testStore.listProofreadRuns()).toHaveLength(1);
-    // The cap is full: the next send is refused, with no number in it.
-    expect(queue(captain.id, [a])).toEqual({
-      ok: false,
-      error: PROOFREAD_CAP_REACHED,
-    });
-
-    testStore.setKitchenSettings({
-      actorId: captain.id,
-      recipeProofreadDailyCap: 0,
-      kitchenLargestPotLitres: null,
-      kitchenBurnerCount: null,
-      ...PLATES_OFF,
-    });
-    expect(queue(captain.id, [a])).toEqual({ ok: false, error: PROOFREAD_OFF });
+    expect(queue(captain.id, [a, b]).ok).toBe(true);
+    expect(testStore.listProofreadRuns()).toHaveLength(3);
   });
 
   it("gives the worker only a run a reviewer queued, and saves its recipe straight into the book", () => {
@@ -706,7 +692,7 @@ describe("recipe twins", () => {
       });
     });
 
-    it("counts toward the one daily cap, and a re-run replaces the stored count", () => {
+    it("has no daily limit, and a re-run replaces the stored count", () => {
       const captain = makeUser("Cap", "captain");
       const target = acceptedRecipe(captain.id);
       testStore.setKitchenSettings({
@@ -731,10 +717,7 @@ describe("recipe twins", () => {
           .getRecipeDetail(target.id)
           ?.plateCounts.filter((c) => c.plates === 40),
       ).toHaveLength(1);
-      expect(plates(captain.id, target, 60)).toEqual({
-        ok: false,
-        error: PROOFREAD_CAP_REACHED,
-      });
+      expect(plates(captain.id, target, 60).ok).toBe(true);
     });
 
     it("refuses an old version, fails a run on it unsent, and resets a stale run without touching the recipe", () => {
@@ -1056,7 +1039,7 @@ describe("recipe twins", () => {
       expect(runs()).toHaveLength(0);
     });
 
-    it("refuses silently at the daily cap, with no number, and writes nothing", () => {
+    it("has no daily limit on a send", () => {
       const captain = makeUser("Cap", "captain");
       const member = makeUser("Mo");
       testStore.setKitchenSettings({
@@ -1073,12 +1056,11 @@ describe("recipe twins", () => {
       expect(
         send(captain.id, b, {
           basedOnSourceId: bSource.id,
-          sections: sourceFromText("Changed, but over the cap."),
-        }),
-      ).toEqual({ ok: false, error: PROOFREAD_CAP_REACHED });
-      expect(PROOFREAD_CAP_REACHED).not.toMatch(/\d/);
-      expect(testStore.getRecipeSource(b)?.version).toBe(1);
-      expect(runs()).toHaveLength(1);
+          sections: sourceFromText("Changed, and sent the same day."),
+        }).ok,
+      ).toBe(true);
+      expect(testStore.getRecipeSource(b)?.version).toBe(2);
+      expect(runs()).toHaveLength(2);
     });
 
     it("hands the worker the source text and nothing private, and moves the stage only while running", () => {
@@ -1104,6 +1086,7 @@ describe("recipe twins", () => {
         exchange: [],
         note: null,
         kitchen: expect.objectContaining({ recipeProofreadDailyCap: 5 }),
+        previous: null,
       });
       expect(JSON.stringify(claimed)).not.toContain("Mo");
       expect(testStore.getProofreadProgress(id)?.stage).toBe("sending");
@@ -1201,7 +1184,7 @@ describe("recipe twins", () => {
       });
     });
 
-    it("counts every round toward the cap, and refuses an answer once the source changed", () => {
+    it("answers with no daily limit, and refuses an answer once the source changed", () => {
       const captain = makeUser("Cap", "captain");
       const member = makeUser("Mo");
       const asked = (id: string) => {
@@ -1236,11 +1219,8 @@ describe("recipe twins", () => {
       });
       const b = approvedRecipe(member.id, captain.id);
       const bRun = asked(b);
-      expect(answer(captain.id, b, bRun, "Four.")).toEqual({
-        ok: false,
-        error: PROOFREAD_CAP_REACHED,
-      });
-      expect(runs()).toHaveLength(2);
+      expect(answer(captain.id, b, bRun, "Four.").ok).toBe(true);
+      expect(runs()).toHaveLength(3);
     });
 
     it("keeps a member's unticked words refused when only Serves changes, and keeps their authorship when they ticked", () => {
@@ -1412,5 +1392,162 @@ describe("recipe twins", () => {
         "## Steps\nLentils, salt. Simmer.",
       );
     });
+
+    it("revises a recipe in the book from its accepted version and the round that settled it, under the revision prompt", () => {
+      const captain = makeUser("Cap", "captain");
+      const member = makeUser("Mo");
+      const id = approvedRecipe(member.id, captain.id);
+      const REVISION = "revision-2026-09-24.1";
+      const sendNow = () =>
+        testStore.sendSourceForProofreading({
+          recipeId: id,
+          actorId: captain.id,
+          basedOnSourceId: testStore.getRecipeSource(id)!.id,
+          serves: null,
+          sections: testStore.getRecipeSource(id)!.sections,
+          plates: RECIPE.plates,
+          now: NOW,
+          promptVersion: PROMPT,
+          revisionPromptVersion: REVISION,
+          model: MODEL,
+        });
+      const first = sendNow();
+      if (!first.ok) throw new Error(first.error);
+      testStore.claimSourceRun(first.runId, NOW);
+      testStore.completeSourceRun({
+        runId: first.runId,
+        result: QUESTIONS,
+        usage: USAGE,
+      });
+      const round = testStore.answerProofreadQuestions({
+        recipeId: id,
+        runId: first.runId,
+        actorId: captain.id,
+        answer: "Four, dry.",
+        now: NOW,
+        promptVersion: PROMPT,
+        revisionPromptVersion: REVISION,
+        model: MODEL,
+      });
+      if (!round.ok) throw new Error(round.error);
+      testStore.claimSourceRun(round.runId, NOW);
+      testStore.completeSourceRun({
+        runId: round.runId,
+        result: written(),
+        usage: USAGE,
+      });
+      // Before the book: the source prompt on both rounds.
+      expect(
+        runs()
+          .filter((r) => [first.runId, round.runId].includes(r.id))
+          .map((r) => r.promptVersion),
+      ).toEqual([PROMPT, PROMPT]);
+      expect(testStore.getRecipeDetail(id)?.versions[0]).toMatchObject({
+        version: 1,
+        plates: RECIPE.plates,
+        recipe: written().recipe,
+        report: RESULT.report,
+      });
+
+      // The meal plan gives the kitchen its plates at each meal.
+      expect(
+        testStore.setMealPlan({
+          actorId: captain.id,
+          daysOnSite: 1,
+          days: [{ breakfast: 45, lunch: 0, dinner: 60 }],
+          expectedVersion: 0,
+        }),
+      ).toEqual({ ok: true, version: 1 });
+
+      const again = sendNow();
+      if (!again.ok) throw new Error(again.error);
+      expect(runs().find((r) => r.id === again.runId)?.promptVersion).toBe(
+        REVISION,
+      );
+      const claimed = testStore.claimSourceRun(again.runId, NOW);
+      expect(claimed?.previous).toEqual({
+        version: 1,
+        recipe: written().recipe,
+        exchange: [{ questions: QUESTIONS.questions, answer: "Four, dry." }],
+      });
+      expect(claimed?.exchange).toEqual([]);
+      expect(claimed?.kitchen).toMatchObject({
+        kitchenPlatesBreakfast: 45,
+        kitchenPlatesLunch: null,
+        kitchenPlatesDinner: 60,
+      });
+    });
+
+    it("lists every source version, newest first, with its author", () => {
+      const captain = makeUser("Cap", "captain");
+      const member = makeUser("Mo");
+      const id = approvedRecipe(member.id, captain.id);
+      const v1 = testStore.getRecipeSource(id)!;
+      expect(
+        send(captain.id, id, {
+          basedOnSourceId: v1.id,
+          sections: sourceFromText("Retyped."),
+        }).ok,
+      ).toBe(true);
+      expect(
+        testStore.listRecipeSources(id).map((x) => [x.version, x.authorName]),
+      ).toEqual([
+        [2, "Cap"],
+        [1, "Mo"],
+      ]);
+    });
+  });
+});
+
+describe("meal plan twin", () => {
+  it("reads 11 empty days, saves for a Kitchen lead or a captain, compare-and-set, audited", () => {
+    const captain = makeUser("Cap", "captain");
+    const kitchen = lead("Kai", "kitchen");
+    const structures = lead("Sam", "structures");
+    const member = makeUser("Mo");
+    expect(testStore.getMealPlan()).toMatchObject({
+      daysOnSite: 11,
+      version: 0,
+    });
+    const two = {
+      daysOnSite: 2,
+      days: [
+        { breakfast: 20, lunch: 0, dinner: 25 },
+        { breakfast: 45, lunch: 0, dinner: 50 },
+      ],
+    };
+    for (const actor of [structures, member]) {
+      expect(
+        testStore.setMealPlan({
+          actorId: actor.id,
+          ...two,
+          expectedVersion: 0,
+        }),
+      ).toEqual({ ok: false, error: NOT_A_MEAL_PLAN_EDITOR });
+    }
+    expect(
+      testStore.setMealPlan({
+        actorId: kitchen.id,
+        ...two,
+        expectedVersion: 0,
+      }),
+    ).toEqual({ ok: true, version: 1 });
+    // A second save from the version the first one replaced is refused.
+    expect(
+      testStore.setMealPlan({
+        actorId: captain.id,
+        ...two,
+        expectedVersion: 0,
+      }),
+    ).toEqual({ ok: false, error: MEAL_PLAN_CHANGED });
+    expect(
+      testStore.setMealPlan({
+        actorId: captain.id,
+        daysOnSite: 1,
+        days: [{ breakfast: 501, lunch: 0, dinner: 0 }],
+        expectedVersion: 1,
+      }).ok,
+    ).toBe(false);
+    expect(testStore.getMealPlan()).toMatchObject({ ...two, version: 1 });
   });
 });

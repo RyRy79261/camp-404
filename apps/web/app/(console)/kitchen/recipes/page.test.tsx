@@ -142,6 +142,16 @@ describe("recipe book", () => {
     expect(screen.getByRole("link", { name: "Review (3)" })).toBeTruthy();
   });
 
+  it("links everyone to the meal plan from the heading", async () => {
+    for (const rank of ["camp_member", "captain"] as const) {
+      await renderAs(rank);
+      expect(
+        screen.getByRole("link", { name: "Meal plan" }).getAttribute("href"),
+      ).toBe("/kitchen/meal-plan");
+      cleanup();
+    }
+  });
+
   it("counts suggestions to decide and proofreads to accept, not ones sent back", async () => {
     await renderAs("team_lead", ["kitchen"]);
     expect(screen.getByRole("link", { name: "Review (3)" })).toBeTruthy();

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, ClipboardCheck, Download } from "lucide-react";
+import { BookOpen, CalendarDays, ClipboardCheck, Download } from "lucide-react";
 import { canApproveRecipe } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -18,7 +18,7 @@ import {
 } from "@camp404/ui/components/responsive-data-table";
 import { RecipeStatusBadge } from "@/components/recipes/recipe-status-badge";
 import { captainPageGate } from "@/lib/captain-gate";
-import { recipePath } from "@/lib/recipe-copy";
+import { MEAL_PLAN_PATH, recipePath } from "@/lib/recipe-copy";
 import { formatDay } from "@/lib/recipe-labels";
 import {
   listAwaitingAcceptance,
@@ -220,6 +220,12 @@ function PageHeadingWithActions({
       description="The camp's recipes, each at its accepted version and the plate counts it is ready for. Anyone can import one; a Kitchen lead or a captain checks it."
       actions={
         <>
+          <Button asChild variant="outline">
+            <Link href={MEAL_PLAN_PATH}>
+              <CalendarDays aria-hidden />
+              Meal plan
+            </Link>
+          </Button>
           {reviewCount !== null && (
             <Button asChild variant="outline">
               <Link href="/kitchen/recipes/review">

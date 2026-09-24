@@ -96,7 +96,9 @@
 //   - recipes: canApproveRecipe and canRunProofread (a captain or a Kitchen
 //     lead), canSetKitchenSettings (captains only),
 //     RECIPE_TRANSITIONS/canMoveRecipe, groupLinesByCategory +
-//     groupStepsByPhase for the recipe page, and defaultPlates (./recipes)
+//     groupStepsByPhase for the recipe page, defaultPlates, and the meal
+//     plan's canEditMealPlan, mealPlanPlateCounts and mealPlanPeaks
+//     (./recipes)
 //   - recipe sources: sourceText (the Markdown-like text Claude reads),
 //     sourceFromText (pasted text into sections), emptySourceSections,
 //     sameSections and sameSource (./recipe-source)

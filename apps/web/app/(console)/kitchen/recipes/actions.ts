@@ -8,6 +8,7 @@ import {
   canApproveRecipe,
   canRunProofread,
   defaultPlates,
+  mealPlanPeaks,
 } from "@camp404/core";
 import {
   AcceptProofreadInput,
@@ -17,6 +18,7 @@ import {
   KitchenSettingsInput,
   QueuePlateProofreadInput,
   QueueProofreadInput,
+  RecipeIdInput,
   RequestRerunInput,
   ResubmitRecipeInput,
   RetypeRecipeTextInput,
@@ -30,6 +32,7 @@ import {
   captainActionGate,
   type CaptainActionAccess,
 } from "@/lib/captain-gate";
+import { getMealPlan } from "@/lib/meal-plan";
 import { processRuns } from "@/lib/recipe-proofread";
 import {
   CHECK_RECIPE,
@@ -50,7 +53,6 @@ import {
   addLesson,
   answerProofreadQuestions,
   decideRecipe,
-  getKitchenSettings,
   getProofreadProgress,
   queuePlateProofread,
   queueProofread,
@@ -114,6 +116,25 @@ async function kitchenGate(
 function runGate(): Promise<Gate | { ok: false; error: string }> {
   return kitchenGate(RUN_REFUSAL, canRunProofread);
 }
+
+/**
+ * The plates Claude writes a recipe for: the largest count in this year's
+ * meal plan, or DEFAULT_PLATES when it has none. Worked out here, never
+ * taken from the browser.
+ */
+async function mealPlanPlates(): Promise<number> {
+  return defaultPlates(mealPlanPeaks((await getMealPlan()).days));
+}
+
+/**
+ * The prompts a source run may be recorded under: the revision prompt when
+ * the recipe already has an accepted version (the write decides), else the
+ * source prompt.
+ */
+const SOURCE_PROMPTS = {
+  promptVersion: PROMPT_VERSIONS.recipeSource,
+  revisionPromptVersion: PROMPT_VERSIONS.recipeSourceRevision,
+};
 
 /** Outside E2E, a run needs the Anthropic key; say so before queueing. */
 function proofreadNotSetUp(): { ok: false; error: string } | null {
@@ -297,9 +318,10 @@ export async function addLessonAction(input: unknown): Promise<ActionResult> {
 }
 
 /**
- * A captain sets the kitchen's size and the plates at each meal; it is
- * audited. Camp settings sends no daily run cap (a silent cost guard no screen
- * shows), and the write then keeps the stored one.
+ * A captain sets the kitchen's size (the largest pot and the burners); it is
+ * audited. The plates at each meal live in the meal plan now, and the old
+ * daily cap is not read: Camp settings sends neither, and the write keeps the
+ * stored values.
  */
 export async function setKitchenSettingsAction(
   input: unknown,
@@ -326,10 +348,11 @@ export async function setKitchenSettingsAction(
 }
 
 /**
- * A captain or a Kitchen lead presses "Turn into a recipe with Claude": Claude
- * reads each picked recipe's newest source and writes it for `plates` plates,
- * straight into the book (or asks questions first). The runs are queued (the
- * cap, the consent and the source are checked in that one transaction) and
+ * A captain or a Kitchen lead presses "Turn into recipes with Claude" on the
+ * review page: Claude reads each picked recipe's newest source and writes it
+ * for `plates` plates, straight into the book (or asks questions first). The
+ * runs are queued (the consent and the source are checked in that one
+ * transaction) and
  * processed after the response, all at once, so the button does not wait on
  * Claude and the batch fits inside the page's 300 s (processRuns). There is
  * no cron: a run that never starts is reset when a Kitchen page next loads.
@@ -352,7 +375,7 @@ export async function runProofreadingAction(
       note: note ?? null,
       plates,
       now: new Date(),
-      promptVersion: PROMPT_VERSIONS.recipeSource,
+      ...SOURCE_PROMPTS,
       model: MODELS.opus,
     });
     if (!result.ok) return result;
@@ -368,8 +391,9 @@ export async function runProofreadingAction(
 /**
  * "Send for proofreading" from the source editor: the source is saved as a
  * new version when it changed, and the run queued, in one transaction. The
- * plates are the kitchen's largest meal from Camp settings, worked out here
- * and never taken from the browser. The run is processed after the response
+ * plates are the largest count in this year's meal plan, worked out here and
+ * never taken from the browser. A recipe already in the book is revised from
+ * its accepted version (the revision prompt). The run is processed after the response
  * (under E2E too), and the editor polls proofreadProgressAction for its
  * stages. It answers with the source version it sent, so a second send from
  * the same page (after Claude's questions, say) is based on that version.
@@ -386,7 +410,7 @@ export async function sendSourceForProofreadingAction(
     if (notSetUp) return notSetUp;
 
     const { recipeId, basedOnSourceId, serves, sections } = parsed.data;
-    const plates = defaultPlates(await getKitchenSettings());
+    const plates = await mealPlanPlates();
     const result = await sendSourceForProofreading({
       recipeId,
       actorId: gate.campUser.id,
@@ -395,7 +419,7 @@ export async function sendSourceForProofreadingAction(
       sections,
       plates,
       now: new Date(),
-      promptVersion: PROMPT_VERSIONS.recipeSource,
+      ...SOURCE_PROMPTS,
       model: MODELS.opus,
     });
     if (!result.ok) return result;
@@ -404,6 +428,43 @@ export async function sendSourceForProofreadingAction(
     after(() => processRuns({ runIds: [runId] }));
     revalidateRecipe(recipeId);
     return { ok: true, data: { runId, sourceId } };
+  });
+}
+
+/**
+ * "Send for proofreading" on the recipe page: Claude reads the recipe's newest
+ * source as it stands, for the largest count in this year's meal plan, and
+ * writes it straight into the book (revising the accepted version when there
+ * is one), or asks questions first. Nothing is edited here: the source editor
+ * does that. It answers with the run, which the page polls.
+ */
+export async function proofreadRecipeAction(
+  input: unknown,
+): Promise<ActionResult<{ runId: string }>> {
+  return runAction("proofreadRecipeAction", async () => {
+    const gate = await runGate();
+    if (!gate.ok) return gate;
+    const parsed = RecipeIdInput.safeParse(input);
+    if (!parsed.success) return { ok: false, error: CHECK_RECIPE };
+    const notSetUp = proofreadNotSetUp();
+    if (notSetUp) return notSetUp;
+
+    const { recipeId } = parsed.data;
+    const result = await queueProofread({
+      recipeIds: [recipeId],
+      actorId: gate.campUser.id,
+      note: null,
+      plates: await mealPlanPlates(),
+      now: new Date(),
+      ...SOURCE_PROMPTS,
+      model: MODELS.opus,
+    });
+    if (!result.ok) return result;
+
+    const runId = result.runIds[0]!;
+    after(() => processRuns({ runIds: [runId] }));
+    revalidateRecipe(recipeId);
+    return { ok: true, data: { runId } };
   });
 }
 
@@ -429,7 +490,7 @@ export async function answerProofreadQuestionsAction(
       actorId: gate.campUser.id,
       answer,
       now: new Date(),
-      promptVersion: PROMPT_VERSIONS.recipeSource,
+      ...SOURCE_PROMPTS,
       model: MODELS.opus,
     });
     if (!result.ok) return result;
@@ -484,8 +545,8 @@ export async function proofreadProgressAction(
  * A captain or a Kitchen lead has Claude proofread the accepted version for
  * another plate count, because food does not scale by multiplying. A count
  * that already has a result is refused by the write unless `rerun` asks for
- * it, so moving a day from 50 to 45 and back never pays twice. The run shares
- * the daily cap, sends Claude the kitchen's recipe alone (never the member's
+ * it, so moving a day from 50 to 45 and back never pays twice. The run
+ * sends Claude the kitchen's recipe alone (never the member's
  * text), and runs after the response, or inline under E2E.
  */
 export async function proofreadPlatesAction(

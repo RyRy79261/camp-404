@@ -13,20 +13,23 @@ import {
 } from "./_helpers";
 
 // The recipe's source editor (#243, test-mode). A Kitchen lead imports a
-// recipe, approves it and opens its editor from "Edit recipe": the Markdown
-// shortcuts make a list and bold as they type; "Send for proofreading" shows
-// the stages the worker writes (E2E holds each 800 ms) and ends on the recipe
-// page, in the book, where "How this was scaled" lists Claude's notes and
-// "Edit recipe" opens the editor again. A source that says "some" of
-// something gets Claude's two questions in a dialog; closing it keeps them
-// above the editor, and the answer sent from the dialog ends on the recipe
-// page. A lead of another team reads the
-// refusal. The page never scrolls sideways and names no run counter.
+// recipe, approves it and opens its editor from "Edit source" in the recipe's
+// heading: the Markdown shortcuts make a list and bold as they type; "Send for
+// proofreading" shows the stages the worker writes (E2E holds each 800 ms) and
+// ends on the recipe page, in the book, where "How this was scaled" lists
+// Claude's notes and "Edit source" opens the editor again. A source that says
+// "some" of something gets Claude's two questions in a dialog; closing it
+// keeps them above the editor, and "Claude needs more details — answer here"
+// stands where Send was, on the editor and on the recipe page, after leaving
+// and coming back (2026-09-24). The answer sent from the dialog ends in the
+// book. A lead of another team reads the refusal. The page never scrolls
+// sideways and names no run counter.
 
 /** How long a run may take under E2E: four stages, each held 800 ms. */
 const RUN_TIMEOUT = 15_000;
 
 const QUESTIONS_TITLE = "Claude needs more before it can write this recipe";
+const ANSWER_HERE = "Claude needs more details — answer here";
 const QUESTIONS = [
   'How much coconut milk? The source says "some".',
   "Is the cumin ground or whole?",
@@ -89,11 +92,8 @@ test.describe("recipe source editor (test-mode)", () => {
       page,
       "Camp dal\n500 g red lentils, 1 tin coconut milk, 1 tsp cumin. Simmer 20 min.",
     );
-    // Before the book, "Edit recipe" in the Decision card opens the editor.
-    await page
-      .getByRole("article", { name: "Decision" })
-      .getByRole("link", { name: "Edit recipe" })
-      .click();
+    // Before the book, "Edit source" in the heading opens the editor.
+    await page.getByRole("link", { name: "Edit source" }).click();
     await expect(page).toHaveURL(`${recipeUrl}/edit`);
     await expect(
       page.getByRole("heading", { level: 1, name: "Camp dal" }),
@@ -156,8 +156,8 @@ test.describe("recipe source editor (test-mode)", () => {
       ),
     ).toBe(true);
 
-    // In the book, "Edit recipe" opens the source editor again.
-    await page.getByRole("link", { name: "Edit recipe" }).click();
+    // In the book, "Edit source" opens the source editor again.
+    await page.getByRole("link", { name: "Edit source" }).click();
     await expect(page).toHaveURL(`${recipeUrl}/edit`);
     await expect(
       page.getByRole("button", { name: "Send for proofreading" }),
@@ -167,7 +167,7 @@ test.describe("recipe source editor (test-mode)", () => {
     ).toBeVisible();
   });
 
-  test("Claude's questions open in a dialog, stay on the page after Close, and the answer ends in the book", async ({
+  test("Claude's questions open in a dialog, stay on the page after Close, are asked for on the recipe page too, and the answer ends in the book", async ({
     page,
     request,
   }) => {
@@ -195,7 +195,8 @@ test.describe("recipe source editor (test-mode)", () => {
     await dialog.getByRole("button", { name: "Send answer" }).click();
     await expect(dialog.getByRole("alert")).toHaveText("Write your answer.");
 
-    // Close: the questions stay, above the editor, and Send is back.
+    // Close: the questions stay, above the editor, and the heading asks for
+    // the answer instead of sending again.
     await dialog
       .getByRole("button", { name: "Close and edit the source" })
       .click();
@@ -213,11 +214,33 @@ test.describe("recipe source editor (test-mode)", () => {
     expect(blockBox!.y).toBeLessThan(servesBox!.y);
     await expect(
       page.getByRole("button", { name: "Send for proofreading" }),
-    ).toBeVisible();
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: ANSWER_HERE }).click();
+    await expect(dialog).toBeVisible();
+    await dialog
+      .getByRole("button", { name: "Close and edit the source" })
+      .click();
 
-    // A reload with the questions unanswered opens the dialog again; the
-    // answer queues the next round, which writes the recipe into the book.
-    await page.reload();
+    // Leave, and come back on the recipe page: the same button, read from
+    // the server, and it opens the same questions.
+    await page.goto(recipeUrl);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Coconut dal" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Send for proofreading" }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: ANSWER_HERE }).click();
+    await expect(dialog).toBeVisible();
+    for (const question of QUESTIONS) {
+      await expect(dialog.getByText(question)).toBeVisible();
+    }
+    await dialog.getByRole("button", { name: "Answer later" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    // Back in the editor the dialog opens again; the answer queues the next
+    // round, which writes the recipe into the book.
+    await openEditor(page, recipeUrl, "Coconut dal");
     await expect(dialog).toBeVisible();
     await dialog
       .getByLabel("Your answer")
