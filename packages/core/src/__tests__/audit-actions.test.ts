@@ -8,6 +8,9 @@ import {
 describe("auditActionLabel", () => {
   it("labels a known action and leaves an unknown one as stored", () => {
     expect(auditActionLabel("payment.recorded")).toBe("Recorded a payment");
+    expect(auditActionLabel("calendar.event_created")).toBe(
+      "Added a calendar event",
+    );
     expect(auditActionLabel("cron.old_job")).toBe("cron.old_job");
     expect(auditActionLabel("toString")).toBe("toString");
   });
@@ -112,6 +115,26 @@ describe("auditDetail", () => {
     ).toBe("Kitchen");
     // A team scope with no team says nothing rather than guessing.
     expect(auditDetail("announcement.pinned", { scope: "team" })).toBeNull();
+  });
+
+  it("names a calendar event and, when it has one, its team", () => {
+    expect(
+      auditDetail(
+        "calendar.event_created",
+        { title: "Kitchen briefing", team: "kitchen", date: "2026-10-01" },
+        teams,
+      ),
+    ).toBe("Kitchen briefing · Kitchen");
+    expect(
+      auditDetail("calendar.event_created", {
+        title: "Build day",
+        team: null,
+        allDay: true,
+      }),
+    ).toBe("Build day");
+    expect(auditDetail("calendar.event_created", { team: "kitchen" })).toBe(
+      null,
+    );
   });
 
   it("shows nothing for a shape it does not know", () => {

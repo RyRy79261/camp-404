@@ -21,6 +21,7 @@ describe("shouldEmailNotification", () => {
     for (const kind of [
       "questionnaire_release",
       "questionnaire_reminder",
+      "task_reminder",
       "approval_decision",
       "captain_promotion",
     ] as const) {

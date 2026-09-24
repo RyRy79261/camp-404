@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
+import { campDayStart } from "@camp404/core";
+import { NOTIFICATION_KINDS } from "@camp404/types";
 import { useTestDb } from "./_harness";
 import { makeActivation, makeUser } from "./_factories";
 import { setUserApproval } from "../burner-profile";
@@ -14,6 +16,7 @@ import {
   sendReminder,
 } from "../questionnaire-lifecycle";
 import * as schema from "../schema";
+import { remindTaskDeadlines } from "../tasks";
 
 // Every delivery is written through deliveryValues from a @camp404/core
 // builder, so each one carries the kind of thing it is. The column has a
@@ -48,6 +51,35 @@ async function gate(db: DB, userId: string, activationId: string) {
 
 describe("notification kinds", () => {
   const h = useTestDb();
+
+  // The Postgres enum is built from NOTIFICATION_KINDS, and a migration adds
+  // each new value. Both halves: the schema's enum and the migrated database.
+  it("keeps the database enum in step with NOTIFICATION_KINDS", async () => {
+    expect(schema.notificationKindEnum.enumValues).toEqual([
+      ...NOTIFICATION_KINDS,
+    ]);
+    const res = await h.client().query<{ value: string }>(
+      `select e.enumlabel as value from pg_enum e
+         join pg_type t on t.oid = e.enumtypid
+        where t.typname = 'notification_kind'
+        order by e.enumsortorder`,
+    );
+    expect(res.rows.map((r) => r.value)).toEqual([...NOTIFICATION_KINDS]);
+  });
+
+  it("marks a task deadline reminder, and the inbox links it to the task board", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    await db.insert(schema.tasks).values({
+      title: "Pack the shade cloth",
+      assigneeId: member.id,
+      dueAt: campDayStart("2026-09-25"),
+    });
+    await remindTaskDeadlines({ now: new Date("2026-09-24T09:00:00Z") });
+
+    const [item] = (await listInbox(member.id)).items;
+    expect(item).toMatchObject({ kind: "task_reminder", link: "/tasks" });
+  });
 
   it("marks an announcement, and the inbox links it to its read page", async () => {
     const db = h.db();

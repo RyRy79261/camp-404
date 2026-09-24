@@ -26,6 +26,7 @@ function row(overrides: Partial<TaskRow> = {}): TaskRow {
     createdByName: "Author",
     dueAt: null,
     completedAt: null,
+    version: 3,
     ...overrides,
   };
 }
@@ -75,21 +76,50 @@ describe("presentTask deadlines", () => {
 
   it("shows no deadline when there is none", () => {
     expect(card(row()).due).toBeNull();
+    expect(card(row()).dueDay).toBeNull();
+  });
+
+  it("gives the edit form the deadline's camp day, even late at night", () => {
+    // 23:30 on 30 Sep in camp time is 21:30 UTC, still the 30th.
+    expect(card(row({ dueAt: new Date("2026-09-30T21:30:00Z") })).dueDay).toBe(
+      "2026-09-30",
+    );
+    // 00:30 on 1 Oct in camp time is 22:30 UTC on the 30th.
+    expect(card(row({ dueAt: new Date("2026-09-30T22:30:00Z") })).dueDay).toBe(
+      "2026-10-01",
+    );
+    expect(card(row({ dueAt: deadlineFromDay("2026-10-05") })).dueDay).toBe(
+      "2026-10-05",
+    );
   });
 });
 
 describe("presentTask buttons", () => {
   it("gives a plain member nothing on someone else's task", () => {
     const c = card(row({ assigneeId: "other", assigneeName: "Other" }));
-    expect([c.canMove, c.canRemove, c.mine]).toEqual([false, false, false]);
+    expect([c.canMove, c.canRemove, c.canEdit, c.mine]).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
   });
 
-  it("lets the person responsible move it, not remove it", () => {
+  it("lets the person responsible move it, not remove or edit it", () => {
     const c = card(row({ assigneeId: "m", assigneeName: "Me" }));
-    expect([c.canMove, c.canRemove, c.mine]).toEqual([true, false, true]);
+    expect([c.canMove, c.canRemove, c.canEdit, c.mine]).toEqual([
+      true,
+      false,
+      false,
+      true,
+    ]);
   });
 
-  it("lets the author, the team's lead and a captain move and remove it", () => {
+  it("carries the version an edit must name", () => {
+    expect(card(row()).version).toBe(3);
+  });
+
+  it("lets the author, the team's lead and a captain move, remove and edit it", () => {
     const author = card(row({ createdById: "m" }));
     const lead = card(row(), {
       id: "l",
@@ -107,9 +137,11 @@ describe("presentTask buttons", () => {
       leadTeams: [],
     });
     for (const c of [author, lead, captain]) {
-      expect([c.canMove, c.canRemove]).toEqual([true, true]);
+      expect([c.canMove, c.canRemove, c.canEdit]).toEqual([true, true, true]);
     }
-    expect([otherLead.canMove, otherLead.canRemove]).toEqual([false, false]);
+    expect([otherLead.canMove, otherLead.canRemove, otherLead.canEdit]).toEqual(
+      [false, false, false],
+    );
   });
 
   it("names the team and says when nobody is responsible", () => {

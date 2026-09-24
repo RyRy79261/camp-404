@@ -34,6 +34,22 @@ export const AddTaskInput = z.object({
 });
 export type AddTaskInput = z.infer<typeof AddTaskInput>;
 
+// An edit carries the task and the version the editor opened, so a second
+// editor cannot silently overwrite the first.
+export const EditTaskInput = AddTaskInput.extend({
+  taskId: z.string().min(1).max(100),
+  version: z.number().int().min(1),
+});
+export type EditTaskInput = z.infer<typeof EditTaskInput>;
+
+/**
+ * What an editor is told when someone else edited the task first. It lives
+ * here, not only in @camp404/db/tasks, because the edit dialog matches it to
+ * refresh the board.
+ */
+export const TASK_EDITED =
+  "Someone else changed this task while you were editing. Close this and open it again to see their changes.";
+
 export const MoveTaskInput = z.object({
   taskId: z.string().min(1).max(100),
   from: TaskBoardStatus,

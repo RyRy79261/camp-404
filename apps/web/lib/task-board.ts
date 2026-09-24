@@ -1,4 +1,4 @@
-import { CAMP_TIME_ZONE, campDayKey } from "@camp404/core";
+import { CAMP_TIME_ZONE, campDayKey, campDayStart } from "@camp404/core";
 import type { TaskBoardStatus } from "@camp404/types";
 
 // What the task board shows, worked out on the server from the tasks and the
@@ -24,6 +24,7 @@ export interface TaskRow {
   createdByName: string | null;
   dueAt: Date | null;
   completedAt: Date | null;
+  version: number;
 }
 
 export type DueTone = "overdue" | "soon" | "later" | "done";
@@ -41,8 +42,14 @@ export interface TaskCard {
   mine: boolean;
   addedBy: string | null;
   due: { label: string; tone: DueTone } | null;
+  /** The deadline as the camp day it falls on, YYYY-MM-DD, for the edit form. */
+  dueDay: string | null;
+  /** The version an edit opened from this card must name. */
+  version: number;
   canMove: boolean;
   canRemove: boolean;
+  /** Who may edit is who may remove: whoever added it, its team's lead, a captain. */
+  canEdit: boolean;
 }
 
 export interface Viewer {
@@ -72,14 +79,10 @@ function daysBetween(fromKey: string, toKey: string): number {
 }
 
 /**
- * The instant a deadline day starts in camp time. A deadline is a day, typed as
- * YYYY-MM-DD; storing the start of that day in Johannesburg keeps its
- * `campDayKey` equal to the day that was typed. Johannesburg is UTC+2 all year
- * (South Africa has no daylight saving), so the offset is fixed.
+ * The instant a deadline day starts in camp time. One rule for camp time lives
+ * in @camp404/core (`campDayStart`), so the board and the reminder cron agree.
  */
-export function deadlineFromDay(day: string): Date {
-  return new Date(`${day}T00:00:00+02:00`);
-}
+export const deadlineFromDay = campDayStart;
 
 function dueOf(task: TaskRow, today: string): TaskCard["due"] {
   if (!task.dueAt) return null;
@@ -120,7 +123,10 @@ export function presentTask(
     mine: task.assigneeId === viewer.id,
     addedBy: task.createdByName,
     due: dueOf(task, campDayKey(input.now)),
+    dueDay: task.dueAt ? campDayKey(task.dueAt) : null,
+    version: task.version,
     canMove: leadsTeam || added || task.assigneeId === viewer.id,
     canRemove: leadsTeam || added,
+    canEdit: leadsTeam || added,
   };
 }

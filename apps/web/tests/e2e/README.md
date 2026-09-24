@@ -157,7 +157,24 @@ complete and jump straight to the gates that follow it (home vs.
 
 ### Spec coverage
 
-- `home.spec.ts` — unauth home page shows both auth CTAs.
+- `home.spec.ts` — **[CORRECTION 2026-09-24]** the signed-out page shows
+  its one sign-in link, and the lost link lands on sign-in. Signed in: an
+  approved member gets their own Home, not the camp's; a captain gets the
+  camp overview as one link and a member cannot open it; a member sees the
+  task they are responsible for under "Your tasks", with the Tasks tile's
+  count, and the row opens `/tasks`; a member with no tasks has no task list
+  and a plain Tasks tile; "Coming up" says the calendar is empty.
+- `tasks.spec.ts` — the task board (`/tasks`) on the store's task twins: a
+  captain adds a task and the person responsible moves it to Done; a lead
+  adds only for a team they lead and a member cannot move others' tasks; a
+  captain edits a task and the edit survives a reload; a lead may edit their
+  team's tasks but not another team's, and the person responsible may not
+  edit.
+- `calendar.spec.ts` — adding a camp calendar event at `/captains/calendar`
+  through the store's calendar twin (a connected calendar that starts
+  empty): a Kitchen lead adds a Kitchen event, which Kitchen members see on
+  Home as theirs and Finance members as Kitchen's; a captain adds an all-day
+  whole-camp event, which wears no badge; a plain member sees the lock.
 - `signup.spec.ts` — invite form renders, invalid codes error, valid
   codes set the cookie and redirect to the Neon Auth sign-up page.
 - `api.spec.ts` — `/api/health` returns ok, `/api/voice/transcribe`

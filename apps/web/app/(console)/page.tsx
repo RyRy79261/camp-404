@@ -3,13 +3,14 @@ import { deriveViewerRank } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { isCampBootstrapped } from "@/lib/bootstrap";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
-import { getUpcomingEvents } from "@/lib/google-calendar";
+import { getUpcomingEvents } from "@/lib/camp-calendar";
 import { buildHome } from "@/lib/home";
 import { getInboxBadge } from "@/lib/inbox-badge";
 import { getMyLift } from "@/lib/lifts";
 import { resolveMemberState } from "@/lib/member-gate";
 import { countUnreadByTeam } from "@/lib/notifications";
 import { isSignInSecured } from "@/lib/sign-in-security";
+import { listMyOpenTasks } from "@/lib/tasks";
 import { getMyTeams, getPendingQuestionnaires } from "@/lib/users";
 import { HomeView } from "@/components/home/home-view";
 import { EnablePush } from "@/components/push/enable-push";
@@ -59,6 +60,7 @@ export default async function HomePage() {
     secured,
     teamsConfig,
     calendar,
+    myTasks,
   ] = await Promise.all([
     waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
     waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
@@ -72,6 +74,9 @@ export default async function HomePage() {
     isSignInSecured(),
     getTeamsConfig(),
     waiting ? Promise.resolve(null) : getUpcomingEvents(),
+    waiting
+      ? Promise.resolve({ items: [], total: 0 })
+      : listMyOpenTasks(campUser.id),
   ]);
   const labels = teamLabelMap(teamsConfig);
   const isCaptain =
@@ -93,8 +98,10 @@ export default async function HomePage() {
     })),
     pending,
     inbox,
+    myTasks,
     lift,
     calendar,
+    teamLabels: labels,
     secured,
   });
 

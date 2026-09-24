@@ -2,6 +2,8 @@ import "server-only";
 
 import {
   announcementNotification,
+  campDayStart,
+  nextCampDay,
   approvalNotification,
   isReviewTransition,
   captainPromotionNotification,
@@ -34,20 +36,29 @@ import type {
   CampMemberDetailOptions,
 } from "@camp404/db/roster";
 import {
+  CANNOT_EDIT,
   CANNOT_MOVE,
   CANNOT_REMOVE,
   DONE_VISIBLE_DAYS,
   NOT_A_MEMBER,
   NOT_A_TASK_AUTHOR,
   NOT_YOUR_TEAM,
+  NOT_YOUR_TEAM_TO_MOVE,
   PICK_YOUR_TEAM,
+  TASK_EDITED,
   TASK_GONE,
   TASK_MOVED,
+  TEAM_NOT_ACTIVE,
   type AssignableMember,
   type BoardTask,
+  type MyOpenTask,
   type TaskBoardStatus,
   type TaskWriteResult,
 } from "@camp404/db/tasks";
+import {
+  calendarEventRefusal,
+  type AddCalendarEventResult,
+} from "@camp404/db/calendar-events";
 import {
   ANNOUNCEMENT_NOTIFICATION_KINDS,
   type InboxFilter,
@@ -74,6 +85,12 @@ import type {
   QuestionnaireFieldChange,
   Team,
 } from "@camp404/types";
+
+import {
+  CALENDAR_MAX_EVENTS,
+  CALENDAR_WINDOW_DAYS,
+  type CalendarEvent,
+} from "./google-calendar";
 
 // Process-scoped in-memory replacement for the Neon-backed user and
 // burner-profile tables. Only used when isE2ETestMode() is true.
@@ -213,6 +230,17 @@ interface TestRequiredAction {
   createdAt: Date;
 }
 
+/**
+ * An event on the stand-in camp calendar. Under E2E the calendar is connected
+ * and starts empty; events added through the page land here, in the shape the
+ * Google read returns.
+ */
+interface TestCalendarEvent extends CalendarEvent {
+  /** When it starts, for the window and the order. */
+  startsAt: Date;
+  createdById: string;
+}
+
 interface TestTask {
   id: string;
   title: string;
@@ -224,6 +252,8 @@ interface TestTask {
   dueAt: Date | null;
   createdAt: Date;
   completedAt: Date | null;
+  /** Bumped by an edit only, as `tasks.version` is. */
+  version: number;
 }
 
 interface TestStoreState {
@@ -242,6 +272,7 @@ interface TestStoreState {
   teamMemberships: TestTeamMembership[];
   requiredActions: TestRequiredAction[];
   tasks: TestTask[];
+  calendarEvents: TestCalendarEvent[];
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -279,6 +310,7 @@ function globalState(): TestStoreState {
       teamMemberships: [] as TestTeamMembership[],
       requiredActions: [] as TestRequiredAction[],
       tasks: [] as TestTask[],
+      calendarEvents: [] as TestCalendarEvent[],
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -326,6 +358,10 @@ const promotionRequests = S.promotionRequests;
 const teamMemberships = S.teamMemberships;
 const requiredActions = S.requiredActions;
 const tasks = S.tasks;
+// A dev server that was running before this field existed has a state object
+// without it; give it one rather than crash.
+S.calendarEvents ??= [];
+const calendarEvents = S.calendarEvents;
 
 /**
  * The camp's current year, resolved the way `currentCycleNumber()` resolves it
@@ -1655,7 +1691,35 @@ export const testStore = {
         dueAt: t.dueAt,
         createdAt: t.createdAt,
         completedAt: t.completedAt,
+        version: t.version,
       }));
+  },
+
+  listMyOpenTasks(
+    userId: string,
+    limit = 5,
+  ): { items: MyOpenTask[]; total: number } {
+    const mine = tasks
+      .filter(
+        (t) =>
+          t.assigneeId === userId &&
+          (t.status === "open" || t.status === "in_progress"),
+      )
+      .sort(
+        (a, b) =>
+          (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity) ||
+          a.createdAt.getTime() - b.createdAt.getTime(),
+      );
+    return {
+      items: mine.slice(0, limit).map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status as MyOpenTask["status"],
+        team: t.team,
+        dueAt: t.dueAt,
+      })),
+      total: mine.length,
+    };
   },
 
   listAssignableMembers(): AssignableMember[] {
@@ -1702,8 +1766,59 @@ export const testStore = {
       dueAt: input.dueAt,
       createdAt: new Date(),
       completedAt: null,
+      version: 1,
     });
     return { ok: true, id };
+  },
+
+  editTask(input: {
+    taskId: string;
+    actorId: string;
+    version: number;
+    title: string;
+    description: string | null;
+    team: Team | null;
+    assigneeId: string | null;
+    dueAt: Date | null;
+    activeTeams: readonly Team[];
+  }): TaskWriteResult {
+    const task = tasks.find(
+      (t) => t.id === input.taskId && t.status !== "cancelled",
+    );
+    if (!task) return { ok: false, error: TASK_GONE };
+    const reach = testStore.senderReach(input.actorId);
+    const leads =
+      reach === undefined || (task.team !== null && reach.includes(task.team));
+    if (!leads && task.createdById !== input.actorId) {
+      return { ok: false, error: CANNOT_EDIT };
+    }
+    if (input.team !== task.team) {
+      if (reach !== undefined) {
+        if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
+        if (!reach.includes(input.team)) {
+          return { ok: false, error: NOT_YOUR_TEAM_TO_MOVE };
+        }
+      }
+      if (input.team && !input.activeTeams.includes(input.team)) {
+        return { ok: false, error: TEAM_NOT_ACTIVE };
+      }
+    }
+    if (
+      input.assigneeId &&
+      input.assigneeId !== task.assigneeId &&
+      findUserById(input.assigneeId)?.approvalStatus !== "approved"
+    ) {
+      return { ok: false, error: NOT_A_MEMBER };
+    }
+    if (task.version !== input.version)
+      return { ok: false, error: TASK_EDITED };
+    task.title = input.title;
+    task.description = input.description;
+    task.team = input.team;
+    task.assigneeId = input.assigneeId;
+    task.dueAt = input.dueAt;
+    task.version += 1;
+    return { ok: true };
   },
 
   moveTask(input: {
@@ -1748,6 +1863,64 @@ export const testStore = {
     return { ok: true };
   },
 
+  /**
+   * Twin of the Google read (getUpcomingEvents): the next events from now up to
+   * CALENDAR_WINDOW_DAYS ahead, soonest first, at most CALENDAR_MAX_EVENTS. An
+   * all-day event counts for its whole camp day.
+   */
+  listCalendarEvents(now: Date): { status: "ok"; events: CalendarEvent[] } {
+    const until = now.getTime() + CALENDAR_WINDOW_DAYS * 86_400_000;
+    const events = calendarEvents
+      .filter((e) => {
+        const ends = e.allDay
+          ? campDayStart(nextCampDay(e.start)).getTime()
+          : e.startsAt.getTime();
+        return ends > now.getTime() && e.startsAt.getTime() <= until;
+      })
+      .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+      .slice(0, CALENDAR_MAX_EVENTS)
+      .map((e) => ({
+        id: e.id,
+        title: e.title,
+        start: e.start,
+        allDay: e.allDay,
+        location: e.location,
+        teamTag: e.teamTag,
+      }));
+    return { status: "ok", events };
+  },
+
+  /** Twin of addCampCalendarEvent: the same reach rule, then the event. */
+  addCalendarEvent(input: {
+    actorId: string;
+    team: Team | null;
+    title: string;
+    date: string;
+    allDay: boolean;
+    start?: string;
+  }): AddCalendarEventResult {
+    const refusal = calendarEventRefusal(
+      testStore.senderReach(input.actorId),
+      input.team,
+    );
+    if (refusal) return { ok: false, error: refusal };
+    const id = `test-event-${S.nextSerial++}`;
+    const start = input.allDay
+      ? input.date
+      : `${input.date}T${input.start ?? "00:00"}:00+02:00`;
+    calendarEvents.push({
+      id,
+      title: input.title,
+      start,
+      allDay: input.allDay,
+      location: null,
+      teamTag: input.team,
+      startsAt: input.allDay ? campDayStart(input.date) : new Date(start),
+      createdById: input.actorId,
+    });
+    return { ok: true, eventId: id };
+  },
+
   reset(): void {
     usersByAuthId.clear();
     profilesByUserId.clear();
@@ -1761,6 +1934,7 @@ export const testStore = {
     teamMemberships.length = 0;
     requiredActions.length = 0;
     tasks.length = 0;
+    calendarEvents.length = 0;
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },

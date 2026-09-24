@@ -23,6 +23,8 @@ export const QUESTIONNAIRE_REF_TYPE = "questionnaire_activation";
 export const ANNOUNCEMENT_REF_TYPE = "announcement";
 /** The reference a captain request carries: the promotion request. */
 export const CAPTAIN_PROMOTION_REF_TYPE = "captain_promotion";
+/** The reference a task deadline reminder carries: the task. */
+export const TASK_REF_TYPE = "task";
 
 const DUE_ON = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -137,6 +139,28 @@ export function captainPromotionNotification(input: {
     body: `${who} asked you to become a captain. Open your notifications to accept or decline.`,
     refType: CAPTAIN_PROMOTION_REF_TYPE,
     refId: input.requestId,
+  };
+}
+
+/** Which of a task's two deadline reminders this is. */
+export type TaskReminderStage = "day_before" | "due_day";
+
+/**
+ * A task the member is responsible for is due tomorrow, or today. The task's
+ * title is the only fact it carries; the tap opens the task board.
+ */
+export function taskDeadlineNotification(input: {
+  taskId: string;
+  title: string;
+  stage: TaskReminderStage;
+}): NotificationPayload {
+  const when = input.stage === "day_before" ? "Due tomorrow" : "Due today";
+  return {
+    kind: "task_reminder",
+    title: input.title,
+    body: `${when}: ${input.title}. Tap to open the task board.`,
+    refType: TASK_REF_TYPE,
+    refId: input.taskId,
   };
 }
 

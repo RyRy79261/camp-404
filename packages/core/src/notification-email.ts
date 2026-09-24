@@ -5,7 +5,7 @@
 // sends. Email is the loudest channel a camp member has, and the one they
 // cannot mute inside the app, so only notices a member must not miss go out:
 // a must-acknowledge announcement, a questionnaire sent to them or chasing
-// them, their approval, and a captain request. Quiet announcements, pop-ups
+// them, a task of theirs coming due, their approval, and a captain request. Quiet announcements, pop-ups
 // and team chatter stay in the app.
 
 import type { NotificationKind, NotificationPayload } from "@camp404/types";
@@ -24,6 +24,7 @@ export function shouldEmailNotification(
       return presentation === "acknowledge";
     case "questionnaire_release":
     case "questionnaire_reminder":
+    case "task_reminder":
     case "approval_decision":
     case "captain_promotion":
       return true;

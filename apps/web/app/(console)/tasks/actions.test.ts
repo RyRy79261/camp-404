@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 //     it, never an id from the browser.
 //  2. A deadline day becomes the start of that day in camp time.
 //  3. A switched-off team is refused before anything is written.
+//  4. An edit passes the version it opened and the active teams, so the data
+//     layer can refuse a stale edit and a move onto a switched-off team.
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ unstable_rethrow: vi.fn() }));
@@ -17,14 +19,21 @@ vi.mock("@/lib/camp-config", () => ({
 }));
 vi.mock("@/lib/tasks", () => ({
   addTask: vi.fn(async () => ({ ok: true, id: "task-1" })),
+  editTask: vi.fn(async () => ({ ok: true })),
   moveTask: vi.fn(async () => ({ ok: true })),
   removeTask: vi.fn(async () => ({ ok: true })),
 }));
 
 import { campDayKey } from "@camp404/core";
 import { captainActionGate } from "@/lib/captain-gate";
-import { addTask, moveTask, removeTask } from "@/lib/tasks";
-import { addTaskAction, moveTaskAction, removeTaskAction } from "./actions";
+import { revalidatePath } from "next/cache";
+import { addTask, editTask, moveTask, removeTask } from "@/lib/tasks";
+import {
+  addTaskAction,
+  editTaskAction,
+  moveTaskAction,
+  removeTaskAction,
+} from "./actions";
 
 const INPUT = {
   title: "  Count the float  ",
@@ -100,6 +109,69 @@ describe("addTaskAction", () => {
       ok: false,
       error: "You can add tasks only for a team you lead.",
     });
+  });
+});
+
+describe("editTaskAction", () => {
+  const EDIT = { ...INPUT, taskId: "t1", version: 2 };
+
+  it("lets any approved member ask, and leaves who may edit to the data layer", async () => {
+    vi.mocked(captainActionGate).mockResolvedValue({
+      ok: false,
+      error: "You don't have access to that.",
+    });
+    expect(await editTaskAction(EDIT)).toEqual({
+      ok: false,
+      error: "You don't have access to that.",
+    });
+    expect(captainActionGate).toHaveBeenCalledWith("camp_member");
+    expect(editTask).not.toHaveBeenCalled();
+  });
+
+  it("edits as the signed-in person, with the version, the deadline in camp time and the active teams", async () => {
+    signedIn("editor");
+    const result = await editTaskAction({ ...EDIT, actorId: "someone-else" });
+    expect(result).toEqual({ ok: true });
+    const arg = vi.mocked(editTask).mock.calls[0]![0];
+    expect(arg).toMatchObject({
+      taskId: "t1",
+      actorId: "editor",
+      version: 2,
+      title: "Count the float",
+      description: null,
+      team: "finance",
+      assigneeId: null,
+      activeTeams: ["kitchen", "finance"],
+    });
+    expect(campDayKey(arg.dueAt!)).toBe("2026-10-01");
+    expect(revalidatePath).toHaveBeenCalledWith("/tasks");
+  });
+
+  it("clears the deadline when none is given", async () => {
+    await editTaskAction({ ...EDIT, due: null });
+    expect(vi.mocked(editTask).mock.calls[0]![0].dueAt).toBeNull();
+  });
+
+  it("refuses a missing title, version or task before anything is written", async () => {
+    expect(await editTaskAction({ ...EDIT, title: "" })).toEqual({
+      ok: false,
+      error: "Give the task a title.",
+    });
+    for (const bad of [
+      { ...EDIT, version: undefined },
+      { ...EDIT, version: 0 },
+      { ...EDIT, version: 1.5 },
+      { ...EDIT, taskId: "" },
+    ]) {
+      expect((await editTaskAction(bad)).ok).toBe(false);
+    }
+    expect(editTask).not.toHaveBeenCalled();
+  });
+
+  it("passes the data layer's refusal through, and revalidates nothing", async () => {
+    vi.mocked(editTask).mockResolvedValue({ ok: false, error: "stale" });
+    expect(await editTaskAction(EDIT)).toEqual({ ok: false, error: "stale" });
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
 
