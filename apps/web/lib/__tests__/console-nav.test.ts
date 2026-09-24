@@ -6,6 +6,7 @@ describe("consoleNavFor", () => {
     expect(consoleNavFor("camp_member").map((i) => i.label)).toEqual([
       "Home",
       "Tasks",
+      "Power",
       "Roster",
       "My forms",
       "Family tree",

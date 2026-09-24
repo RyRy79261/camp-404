@@ -21,6 +21,9 @@ export const CONSOLE_NAV: readonly ConsoleNavEntry[] = [
   { href: "/", label: "Home", rank: "camp_member" },
   // The shared task board: every approved member sees every task.
   { href: "/tasks", label: "Tasks", rank: "camp_member" },
+  // The power plan: every member reads the load list; Power & Lighting leads
+  // and captains edit it. The fuel estimate is linked from its heading.
+  { href: "/power/loads", label: "Power", rank: "camp_member" },
   // The whole camp at a glance, which used to be home (split 2026-09-23).
   { href: "/captains/overview", label: "Camp overview", rank: "captain" },
   // Every approved member browses the roster; captains get the full triage
