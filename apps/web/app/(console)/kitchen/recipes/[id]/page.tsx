@@ -515,7 +515,10 @@ function SourceVersionList({
   );
 }
 
-/** Where the recipe came from: the suggestion, the link, the original text. */
+/**
+ * Where the recipe came from: the suggestion and the link. The pasted text is
+ * source version 1, opened from Source versions, never shown in place here.
+ */
 function WhereItCameFrom({
   detail,
   privileged,
@@ -540,29 +543,13 @@ function WhereItCameFrom({
           {detail.sourceUrl}
         </a>
       )}
-      {privileged && (
-        <details className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
-          <summary className="cursor-pointer font-medium">
-            Original text
-          </summary>
-          <div className="mt-3 flex flex-col gap-3">
-            {detail.text ? (
-              <div className="max-h-[32rem] overflow-y-auto whitespace-pre-wrap">
-                {detail.text}
-              </div>
-            ) : (
-              <p className="text-muted-foreground">No text.</p>
-            )}
-            {detail.suitabilityNote && (
-              <div>
-                <p className="font-medium">Why it suits the camp</p>
-                <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
-                  {detail.suitabilityNote}
-                </p>
-              </div>
-            )}
-          </div>
-        </details>
+      {privileged && detail.suitabilityNote && (
+        <div className="text-sm">
+          <p className="font-medium">Why it suits the camp</p>
+          <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+            {detail.suitabilityNote}
+          </p>
+        </div>
       )}
     </Rail>
   );

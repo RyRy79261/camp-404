@@ -704,8 +704,10 @@ describe("recipe page", () => {
       const source = screen.getByRole("article", {
         name: "Where it came from",
       });
-      expect(within(source).getByText("Original text")).toBeTruthy();
-      expect(within(source).getByText("Lentils, water, cumin.")).toBeTruthy();
+      // The pasted text is source version 1: a link below, never shown here.
+      expect(within(source).queryByText("Original text")).toBeNull();
+      expect(within(source).queryByText("Lentils, water, cumin.")).toBeNull();
+      expect(document.querySelector("details")).toBeNull();
       expect(within(source).getByText("One pot.")).toBeTruthy();
       expect(
         within(source).getByRole("link", { name: "https://example.com/dal" }),
