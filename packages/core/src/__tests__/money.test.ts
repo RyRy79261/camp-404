@@ -130,6 +130,15 @@ describe("sumByCurrency", () => {
     expect(sumByCurrency([])).toEqual([]);
   });
 
+  it("refuses a fractional amount even when the total comes out whole", () => {
+    expect(() =>
+      sumByCurrency([
+        { amountMinor: 0.5, currency: "ZAR" },
+        { amountMinor: 0.5, currency: "ZAR" },
+      ]),
+    ).toThrow(RangeError);
+  });
+
   it("throws on an unknown code rather than drop or mix it", () => {
     expect(() =>
       sumByCurrency([
