@@ -22,6 +22,7 @@ import type {
   RunStage,
   TokenTotals,
 } from "@camp404/db/recipes";
+import type { OpenRun } from "@/components/recipes/proofread-questions";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -329,4 +330,19 @@ export async function proofreadTokenTotals(now: Date): Promise<TokenTotals> {
   return usesTestStore()
     ? testStore.proofreadTokenTotals(now)
     : db.proofreadTokenTotals(now);
+}
+
+/**
+ * The recipe's newest run on the recipe itself (a source send or an adjust,
+ * not a plate count), for the heading's buttons to follow.
+ */
+export async function getOpenRun(recipeId: string): Promise<OpenRun | null> {
+  const progress = await getProofreadProgress(recipeId);
+  if (!progress || progress.kind === "plates") return null;
+  return {
+    runId: progress.runId,
+    stage: progress.stage,
+    outcome: progress.outcome,
+    questions: progress.questions,
+  };
 }

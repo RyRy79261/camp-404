@@ -1,16 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { canApproveRecipe } from "@camp404/core";
+import { canApproveRecipe, canRunProofread } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { RecipeReader } from "@/components/recipes/recipe-reader";
 import { captainPageGate } from "@/lib/captain-gate";
 import { recipeHistoryPath } from "@/lib/recipe-copy";
 import { formatDay } from "@/lib/recipe-labels";
-import { getRecipeDetail } from "@/lib/recipes";
+import { getOpenRun, getRecipeDetail } from "@/lib/recipes";
 import { getLeadTeams } from "@/lib/users";
 import { AddLesson } from "../../recipe-actions";
+import { AdjustButton } from "../../adjust-button";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,10 @@ export default async function RecipeVersionPage({
   if (!shown) notFound();
   const current = shown.id === detail.acceptedVersionId;
   const lessons = detail.lessons.filter((l) => l.versionId === shown.id);
+  // "Adjust with Claude" (the owner's option A): a captain or a Kitchen lead
+  // has Claude write the next version from this one.
+  const canAdjust = canRunProofread(rank, leadTeams);
+  const run = canAdjust ? await getOpenRun(detail.id) : null;
 
   return (
     <div className="flex min-w-0 flex-col gap-8">
@@ -62,12 +67,22 @@ export default async function RecipeVersionPage({
         title={`${detail.title} — Version ${shown.version}${current ? " (current)" : ""}`}
         description={shown.recipe.summary ?? undefined}
         actions={
-          <Button asChild variant="outline">
-            <Link href={recipeHistoryPath(detail.id)}>
-              <ArrowLeft aria-hidden />
-              Back to History
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="outline">
+              <Link href={recipeHistoryPath(detail.id)}>
+                <ArrowLeft aria-hidden />
+                Back to History
+              </Link>
+            </Button>
+            {canAdjust && (
+              <AdjustButton
+                recipeId={detail.id}
+                versionId={shown.id}
+                version={shown.version}
+                run={run}
+              />
+            )}
+          </>
         }
       />
 

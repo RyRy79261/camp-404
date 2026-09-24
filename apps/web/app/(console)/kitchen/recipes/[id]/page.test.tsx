@@ -25,17 +25,30 @@ import type { ProofreadProgress, RecipeDetail } from "@/lib/recipes";
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn() }));
-vi.mock("@/lib/recipes", () => ({
-  getPlateCount: vi.fn(async () => null),
-  getProofreadProgress: vi.fn(async () => null),
-  getRecipeDetail: vi.fn(),
-  listRecipeSources: vi.fn(async () => []),
-  resetStaleRuns: vi.fn(async () => ({ reset: 0 })),
-}));
+vi.mock("@/lib/recipes", () => {
+  const getProofreadProgress = vi.fn(
+    async (_id: string): Promise<ProofreadProgress | null> => null,
+  );
+  return {
+    getPlateCount: vi.fn(async () => null),
+    getProofreadProgress,
+    // The real one reads getProofreadProgress; so does this.
+    getOpenRun: vi.fn(async (id: string) => {
+      const p = await getProofreadProgress(id);
+      if (!p || p.kind === "plates") return null;
+      const { runId, stage, outcome, questions } = p;
+      return { runId, stage, outcome, questions };
+    }),
+    getRecipeDetail: vi.fn(),
+    listRecipeSources: vi.fn(async () => []),
+    resetStaleRuns: vi.fn(async () => ({ reset: 0 })),
+  };
+});
 vi.mock("@/lib/meal-plan", () => ({ getMealPlan: vi.fn() }));
 vi.mock("../actions", () => ({
   acceptProofreadAction: vi.fn(),
   addLessonAction: vi.fn(),
+  adjustVersionAction: vi.fn(),
   answerProofreadQuestionsAction: vi.fn(),
   decideRecipeAction: vi.fn(),
   proofreadPlatesAction: vi.fn(),
@@ -52,6 +65,7 @@ const push = vi.fn();
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push, replace }),
+  usePathname: () => `/kitchen/recipes/${RECIPE}`,
   notFound: () => {
     throw NOT_FOUND;
   },
@@ -268,6 +282,10 @@ describe("recipe page", () => {
     ] as const) {
       await renderAs(viewer, [...leads], recipe);
       expect(screen.getByRole("button", { name: SEND })).toBeTruthy();
+      // "Adjust with Claude" sits beside it once there is a version to change.
+      expect(
+        screen.queryAllByRole("button", { name: "Adjust with Claude" }),
+      ).toHaveLength(recipe.currentVersion ? 1 : 0);
       // The old card, its plates box and its note are gone.
       expect(
         screen.queryByRole("article", { name: "Turn into a recipe" }),
@@ -288,6 +306,9 @@ describe("recipe page", () => {
     ] as const) {
       await renderAs(viewer, [...leads], recipe);
       expect(screen.queryByRole("button", { name: SEND })).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: "Adjust with Claude" }),
+      ).toBeNull();
       expect(getProofreadProgress).not.toHaveBeenCalled();
       cleanup();
     }

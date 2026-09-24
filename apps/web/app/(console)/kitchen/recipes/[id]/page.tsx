@@ -40,7 +40,7 @@ import {
 } from "@/lib/recipe-labels";
 import {
   getPlateCount,
-  getProofreadProgress,
+  getOpenRun,
   getRecipeDetail,
   listRecipeSources,
   resetStaleRuns,
@@ -52,6 +52,7 @@ import {
 import { getLeadTeams } from "@/lib/users";
 import { DecisionPanel, EditAndResubmit } from "./decision-panel";
 import { PlateBar } from "./plate-bar";
+import { AdjustButton } from "./adjust-button";
 import { ProofreadButton } from "./proofread-button";
 import { AcceptProofread, RetypeText } from "./recipe-actions";
 import { RecipeTabs, type RecipeTab } from "./recipe-tabs";
@@ -395,19 +396,6 @@ function HistoryList({ items }: { items: HistoryItem[] }) {
   );
 }
 
-/** The recipe's newest run on the recipe itself, for the heading's button. */
-function openRunOf(
-  progress: Awaited<ReturnType<typeof getProofreadProgress>>,
-): OpenRun | null {
-  if (!progress || progress.kind === "plates") return null;
-  return {
-    runId: progress.runId,
-    stage: progress.stage,
-    outcome: progress.outcome,
-    questions: progress.questions,
-  };
-}
-
 /**
  * "Edit source" and "Send for proofreading" (or, while Claude waits for
  * answers, "Claude needs more details — answer here"), then the status.
@@ -435,6 +423,14 @@ function HeadingActions({
         </Button>
       )}
       {canSend && <ProofreadButton recipeId={detail.id} run={run} />}
+      {canSend && detail.currentVersion && (
+        <AdjustButton
+          recipeId={detail.id}
+          versionId={detail.currentVersion.id}
+          version={detail.currentVersion.version}
+          run={run}
+        />
+      )}
       <RecipeStatusBadge status={detail.status} />
     </>
   );
@@ -598,9 +594,7 @@ export default async function RecipePage({
     (QUEUEABLE.includes(detail.status) ||
       detail.status === "queued" ||
       detail.status === "analysing");
-  const openRun = canSend
-    ? openRunOf(await getProofreadProgress(detail.id))
-    : null;
+  const openRun = canSend ? await getOpenRun(detail.id) : null;
   const actions = (
     <HeadingActions
       detail={detail}

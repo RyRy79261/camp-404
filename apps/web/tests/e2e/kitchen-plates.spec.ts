@@ -251,4 +251,36 @@ test.describe("recipe plate counts (test-mode)", () => {
     ).toBeVisible();
     await expect(page.getByText(/runs? left|per day/i)).toHaveCount(0);
   });
+
+  test("Adjust with Claude on an old version's page writes the next version from it", async ({
+    page,
+    request,
+  }) => {
+    const recipeUrl = await acceptedAt50(page, request);
+
+    await page.goto(`${recipeUrl}/versions/1`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: /Version 1/ }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Adjust with Claude" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByLabel("What should change?")
+      .fill("Add fresh coriander to serve.");
+    await dialog.getByRole("button", { name: "Send to Claude" }).click();
+
+    // Claude writes version 2 into the book, and the recipe page opens on it.
+    await expect(
+      page.getByText("Written for 50 plates · Version 2 · Total 45 min"),
+    ).toBeVisible({ timeout: RUN_TIMEOUT });
+    await expect(page).toHaveURL(new RegExp(`${recipeUrl}(\\?.*)?$`));
+    await page.goto(`${recipeUrl}?tab=history`);
+    const versions = page.getByRole("article", { name: "Recipe versions" });
+    await expect(
+      versions.getByRole("link", { name: "Version 2" }),
+    ).toBeVisible();
+    await expect(
+      versions.getByRole("link", { name: "Version 1" }),
+    ).toBeVisible();
+  });
 });
