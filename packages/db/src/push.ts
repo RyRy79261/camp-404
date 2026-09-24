@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import {
@@ -128,63 +128,75 @@ export interface PushDrainResult {
   pruned: number;
 }
 
+/** How many queued pushes one drain sends. */
+export const PUSH_DRAIN_LIMIT = 200;
+
 /**
- * Drain queued push deliveries. Reads `notification_deliveries` with
- * `pushStatus='queued'` and `channel IN ('push','both')` (never `in_app` —
- * C leaves every delivery queued), sends each to the recipient's device tokens
- * via the injected `send` fn, flips `pushStatus` to sent/failed/skipped, and
- * prunes dead tokens. The status write is conditional on the row still being
- * `queued`, so an overlapping run can't double-write the status; the cron is
- * daily, so double-send is not a practical concern at this scale.
+ * Drain queued push deliveries, oldest first. Reads `notification_deliveries`
+ * with `pushStatus='queued'` and `channel IN ('push','both')` (never `in_app`),
+ * sends each to the recipient's device tokens via the injected `send` fn, flips
+ * `pushStatus` to sent/failed/skipped, and prunes dead tokens.
+ *
+ * Drains now overlap: a send runs one right after it writes deliveries, and a
+ * page load runs one for anything left. So the rows are locked (FOR UPDATE SKIP
+ * LOCKED) for the whole run, as the email drain does: a second run skips what
+ * the first holds, and no phone buzzes twice. Every query goes through `tx`.
  */
-export async function drainQueuedPush(send: PushSend): Promise<PushDrainResult> {
-  const httpDb = createHttpDb();
-  const queued = await httpDb
-    .select({
-      id: schema.notificationDeliveries.id,
-      userId: schema.notificationDeliveries.userId,
-      title: schema.notificationDeliveries.title,
-      body: schema.notificationDeliveries.body,
-      refType: schema.notificationDeliveries.refType,
-      refId: schema.notificationDeliveries.refId,
-    })
-    .from(schema.notificationDeliveries)
-    .where(
-      and(
-        eq(schema.notificationDeliveries.pushStatus, "queued"),
-        inArray(schema.notificationDeliveries.channel, ["push", "both"]),
-      ),
+export async function drainQueuedPush(
+  send: PushSend,
+  options: { limit?: number } = {},
+): Promise<PushDrainResult> {
+  return await withTransaction(async (tx) => {
+    const queued = await tx
+      .select({
+        id: schema.notificationDeliveries.id,
+        userId: schema.notificationDeliveries.userId,
+        title: schema.notificationDeliveries.title,
+        body: schema.notificationDeliveries.body,
+        refType: schema.notificationDeliveries.refType,
+        refId: schema.notificationDeliveries.refId,
+      })
+      .from(schema.notificationDeliveries)
+      .where(
+        and(
+          eq(schema.notificationDeliveries.pushStatus, "queued"),
+          inArray(schema.notificationDeliveries.channel, ["push", "both"]),
+        ),
+      )
+      .orderBy(asc(schema.notificationDeliveries.createdAt))
+      .limit(options.limit ?? PUSH_DRAIN_LIMIT)
+      .for("update", { skipLocked: true });
+
+    if (queued.length === 0) {
+      return { sent: 0, failed: 0, skipped: 0, pruned: 0 };
+    }
+
+    const userIds = [...new Set(queued.map((d) => d.userId))];
+    const tokenRows = await tx
+      .select({
+        userId: schema.pushTokens.userId,
+        token: schema.pushTokens.token,
+      })
+      .from(schema.pushTokens)
+      .where(inArray(schema.pushTokens.userId, userIds));
+
+    const tokensByUser = new Map<string, string[]>();
+    for (const r of tokenRows) {
+      const list = tokensByUser.get(r.userId) ?? [];
+      list.push(r.token);
+      tokensByUser.set(r.userId, list);
+    }
+
+    const { statusById, deadTokens } = await planPushDrain(
+      queued,
+      tokensByUser,
+      send,
     );
 
-  if (queued.length === 0) return { sent: 0, failed: 0, skipped: 0, pruned: 0 };
-
-  const userIds = [...new Set(queued.map((d) => d.userId))];
-  const tokenRows = await httpDb
-    .select({
-      userId: schema.pushTokens.userId,
-      token: schema.pushTokens.token,
-    })
-    .from(schema.pushTokens)
-    .where(inArray(schema.pushTokens.userId, userIds));
-
-  const tokensByUser = new Map<string, string[]>();
-  for (const r of tokenRows) {
-    const list = tokensByUser.get(r.userId) ?? [];
-    list.push(r.token);
-    tokensByUser.set(r.userId, list);
-  }
-
-  const { statusById, deadTokens } = await planPushDrain(
-    queued,
-    tokensByUser,
-    send,
-  );
-
-  let sent = 0;
-  let failed = 0;
-  let skipped = 0;
-  let pruned = 0;
-  await withTransaction(async (tx) => {
+    let sent = 0;
+    let failed = 0;
+    let skipped = 0;
+    let pruned = 0;
     for (const [id, status] of statusById) {
       const updated = await tx
         .update(schema.notificationDeliveries)
@@ -199,7 +211,7 @@ export async function drainQueuedPush(send: PushSend): Promise<PushDrainResult> 
           ),
         )
         .returning({ id: schema.notificationDeliveries.id });
-      if (updated.length === 0) continue; // already handled by another run
+      if (updated.length === 0) continue;
       if (status === "sent") sent += 1;
       else if (status === "failed") failed += 1;
       else skipped += 1;
@@ -210,6 +222,6 @@ export async function drainQueuedPush(send: PushSend): Promise<PushDrainResult> 
         .where(inArray(schema.pushTokens.token, [...deadTokens]));
       pruned = deadTokens.size;
     }
+    return { sent, failed, skipped, pruned };
   });
-  return { sent, failed, skipped, pruned };
 }
