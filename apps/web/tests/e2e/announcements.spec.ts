@@ -438,7 +438,7 @@ test.describe("captain announcements (test-mode)", () => {
     await drafts.getByRole("button", { name: "Delete" }).click();
     const confirm = page.getByRole("dialog", { name: "Delete this draft?" });
     await expect(confirm).toBeVisible();
-    await expect(confirm.getByText(/"Ice run rota" is deleted/)).toBeVisible();
+    await expect(confirm.getByText(/"Ice run rota" will be deleted/)).toBeVisible();
     await confirm.getByRole("button", { name: "Cancel" }).click();
     await expect(confirm).toHaveCount(0);
     await expect(draftTitle).toBeVisible();

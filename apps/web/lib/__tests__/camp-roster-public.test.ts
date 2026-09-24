@@ -128,7 +128,7 @@ describe("toPublicRosterRow", () => {
       expect(row[leaked]).toBeUndefined();
     }
     // Nor under another key: what a member still owes is captain-only.
-    expect(JSON.stringify(row)).not.toMatch(/Burner profile|Dietary/);
+    expect(JSON.stringify(row)).not.toMatch(/burner.profile|dietary/i);
   });
 
   it("matches the captain row on the shared public fields (single-sourced)", () => {

@@ -633,7 +633,7 @@ export function AnnouncementsManager({
         title="Delete this draft?"
         description={
           deleting
-            ? `"${deleting.title}" is deleted. It was never sent, so nobody sees it go.`
+            ? `"${deleting.title}" will be deleted. It was never sent, so nobody sees it go.`
             : ""
         }
         confirmLabel="Delete draft"

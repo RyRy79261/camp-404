@@ -146,7 +146,7 @@ describe("toRosterRow derivations", () => {
     // The member's view of the same person carries none of it.
     const pub = toPublicRosterRow(owing) as unknown as Record<string, unknown>;
     expect(pub.outstanding).toBeUndefined();
-    expect(JSON.stringify(pub)).not.toMatch(/Burner profile|Dietary/);
+    expect(JSON.stringify(pub)).not.toMatch(/burner.profile|dietary/i);
   });
 
   it("falls back to a placeholder name when unnamed", () => {

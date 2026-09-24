@@ -197,7 +197,7 @@ describe("draft actions", () => {
       within(cardFor("First")).getByRole("button", { name: /Delete/ }),
     );
     const dialog = screen.getByRole("dialog", { name: "Delete this draft?" });
-    expect(dialog.textContent).toContain('"First" is deleted');
+    expect(dialog.textContent).toContain('"First" will be deleted');
     expect(deleteDraftAction).not.toHaveBeenCalled();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
