@@ -114,14 +114,12 @@ Sign-in rules worth knowing before you touch `packages/auth`:
 
 - **A Vercel deployment without `BETTER_AUTH_SECRET` fails closed** (sign-in
   off, `/api/auth/*` answers 503), because the placeholder secret is in this
-  public repo and previews share the production database. `authMayServe` is
-  the one switch; do not add a second. [UNRESOLVED 2026-09-24] "Previews share
-  the production database" disagrees with `neon-pr-cleanup.yml`, which deletes
-  the `preview/<branch>` Neon branch the Vercel Neon integration makes for each
-  preview. The Vercel env list could not be read to settle which is live. The
-  owner chooses: previews on the production database, or a Neon branch per
-  preview. Fail-closed stays right either way (a branch starts as a copy of
-  production's data), and the Google proxy works on both.
+  public repo and each preview's Neon branch starts as a copy of production's
+  data. `authMayServe` is the one switch; do not add a second.
+  [CORRECTION 2026-09-24] This line used to say previews share the production
+  database. The owner says each preview gets its own Neon branch
+  (`preview/<branch>`, made by the Vercel Neon integration and deleted by
+  `neon-pr-cleanup.yml`).
 - **Passkeys are bound to a domain for life.** `AUTH_APEX_DOMAIN`
   (camp-404.com) scopes them so the bare domain and `www` share one. Changing
   the domain means every member re-enrols their passkeys (passwords keep
