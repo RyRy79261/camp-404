@@ -125,7 +125,12 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      // Room for the close button in the top-right corner: on both sides
+      // while the header is centred (phones), on the right once it is not.
+      className={cn(
+        "px-6 text-lg leading-none font-semibold sm:pr-6 sm:pl-0",
+        className
+      )}
       {...props}
     />
   )

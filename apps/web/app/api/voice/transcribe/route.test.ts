@@ -27,9 +27,11 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { rateLimiter } from "@/lib/rate-limit";
 import { transcribeAudio } from "@/lib/groq";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
+import { QUESTIONNAIRE_PROMPT, RECIPE_PROMPT } from "@/lib/voice-prompts";
 
-function clip(): Request {
+function clip(promptKey?: string): Request {
   const form = new FormData();
+  if (promptKey !== undefined) form.set("promptKey", promptKey);
   form.set(
     "audio",
     new File([new Uint8Array([1, 2, 3, 4])], "clip.webm", {
@@ -149,5 +151,18 @@ describe("POST /api/voice/transcribe", () => {
       expect.stringMatching(/^voice-transcribe-pending:/),
       expect.anything(),
     );
+  });
+
+  it("biases Whisper with the prompt the form's key names", async () => {
+    await POST(clip("recipe"));
+    await POST(clip("questionnaire"));
+    await POST(clip("toString"));
+    await POST(clip());
+    expect(vi.mocked(transcribeAudio).mock.calls.map((c) => c[1])).toEqual([
+      { prompt: RECIPE_PROMPT },
+      { prompt: QUESTIONNAIRE_PROMPT },
+      { prompt: undefined },
+      { prompt: undefined },
+    ]);
   });
 });

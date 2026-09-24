@@ -42,7 +42,6 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   "cron/notifications/email": "cron",
   "cron/notifications/push": "cron",
   "cron/notifications/reminders": "cron",
-  "cron/recipes/analyse": "cron",
   "cron/telegram/dispatch": "cron",
   // A liveness probe: says the app is up and nothing else.
   health: "public",

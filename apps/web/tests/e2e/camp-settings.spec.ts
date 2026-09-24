@@ -48,6 +48,22 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await expect(page.getByRole("button", { name: /^Rename / })).toHaveCount(0);
   });
 
+  test("a captain sees no Kitchen card: no largest pot, no burners", async ({
+    page,
+    request,
+  }) => {
+    await asRank(page, request, "settings-kitchen-captain", "captain");
+
+    await page.goto("/captains/camp-settings");
+    // Present first, so the absences below are read on a rendered page.
+    await expect(
+      page.getByRole("button", { name: "Rename Kitchen" }),
+    ).toBeVisible();
+    await expect(page.getByText(/largest pot/i)).toHaveCount(0);
+    await expect(page.getByText(/burner/i)).toHaveCount(0);
+    await expect(page.getByText("Kitchen settings")).toHaveCount(0);
+  });
+
   test("a captain renames a team; it persists and flows to the roster filter", async ({
     page,
     request,

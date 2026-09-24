@@ -175,7 +175,7 @@ action that runs through the captain's web UI.
 | Tool | R/W | Tier | Notes |
 |---|---|---|---|
 | `submit_recipe(source, payload)` | W | M | |
-| `list_recipes(filter)` | R | M (ready/scheduled); kitchen L + C (all) | |
+| `list_recipes(filter)` | R | M (recipes with an accepted version) | [CORRECTION 2026-09-24] #243 replaced the ready/scheduled statuses; the tool now lists the recipe book only |
 | `schedule_recipe` / `reject_recipe` | W | kitchen L + C | |
 
 ### Documents
@@ -336,7 +336,11 @@ claim. `tools/teams.ts` adds `set_team_budget` (captain or the team's lead); bud
 since migration 0034. `tools/documents.ts` adds `list_document_drafts`, `get_document_draft`,
 `create_document`, `update_document` (on the version read) and `publish_document`: a captain for
 any document, a team lead for their team's; members still read published documents only. Recipe
-review is not built: nothing moves a recipe out of `pending` until the analyse cron exists. `tools/questionnaires.ts` adds `list_questionnaire_drafts`,
+review lives in the app, not the connector: [CORRECTION 2026-09-24] since #243 `submit_recipe` lands a
+recipe as `suggested` for a Kitchen lead or a captain to approve. [CORRECTION 2026-09-24] A captain or a Kitchen lead sends one to be proofread (the
+owner's decision 2A). [CORRECTION 2026-09-24] `submit_recipe` takes the recipe's `text`
+(a link alone is refused, because the server never opens links; `title` and `link` are optional), and
+`list_recipes` returns each recipe's `plates` and the plate counts it is ready for (`readyPlates`). `tools/questionnaires.ts` adds `list_questionnaire_drafts`,
 `get_questionnaire_draft`, `create_questionnaire_draft` and `update_questionnaire_draft` for
 authors (captain, or team lead for their own), with the builder's edit rule and size limits;
 publishing and sending stay in the app. `tools/lifts.ts` adds `list_drivers` (captain: driver details are captain-read in the

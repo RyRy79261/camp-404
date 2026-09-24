@@ -225,3 +225,81 @@ describe("auditDetail", () => {
     expect(auditDetail("member.notes.viewed", { secret: "x" })).toBeNull();
   });
 });
+
+describe("recipe audit rows", () => {
+  it("label every recipe decision and the kitchen settings", () => {
+    expect(auditActionLabel("recipe.approved")).toBe("Approved a recipe");
+    expect(auditActionLabel("recipe.proofread_queued")).toBe(
+      "Sent a recipe to Claude to write",
+    );
+    expect(auditActionLabel("recipe.rerun_requested")).toBe(
+      "Asked a captain to proofread a recipe again",
+    );
+    expect(auditActionLabel("recipe.plates_queued")).toBe(
+      "Proofread a recipe for a plate count",
+    );
+    expect(auditActionLabel("camp.kitchen_settings.changed")).toBe(
+      "Changed the kitchen settings",
+    );
+    expect(auditActionLabel("camp.kitchen_meal_plan.changed")).toBe(
+      "Changed the kitchen's meal plan",
+    );
+  });
+
+  it("name the recipe, and the version where one was written", () => {
+    expect(auditDetail("recipe.rejected", { title: "Dhal" })).toBe("Dhal");
+    expect(
+      auditDetail("recipe.rerun_requested", { title: "Dhal", note: "Grams" }),
+    ).toBe("Dhal");
+    expect(auditDetail("recipe.accepted", { title: "Dhal", version: 2 })).toBe(
+      "Dhal, version 2",
+    );
+    expect(auditDetail("recipe.version_added", { version: 3 })).toBe(
+      "Version 3",
+    );
+    expect(auditDetail("recipe.approved", {})).toBeNull();
+  });
+
+  it("label and describe the source editor's rows", () => {
+    expect(auditActionLabel("recipe.source_saved")).toBe(
+      "Changed a recipe's source text",
+    );
+    expect(auditActionLabel("recipe.questions_answered")).toBe(
+      "Answered Claude's questions on a recipe",
+    );
+    expect(auditActionLabel("recipe.written_by_claude")).toBe(
+      "Had Claude write a recipe version",
+    );
+    expect(
+      auditDetail("recipe.source_saved", { title: "Dhal", version: 2 }),
+    ).toBe("Dhal, text version 2");
+    expect(auditDetail("recipe.source_saved", { version: 2 })).toBe(
+      "Text version 2",
+    );
+    expect(auditDetail("recipe.source_saved", { title: "Dhal" })).toBe("Dhal");
+    expect(
+      auditDetail("recipe.questions_answered", {
+        title: "Dhal",
+        answer: "2 kg",
+      }),
+    ).toBe("Dhal");
+    expect(
+      auditDetail("recipe.written_by_claude", {
+        title: "Dhal",
+        version: 3,
+        runId: "r",
+      }),
+    ).toBe("Dhal, version 3");
+    expect(auditDetail("recipe.written_by_claude", {})).toBeNull();
+  });
+
+  it("name the plate count a recipe was proofread for", () => {
+    expect(
+      auditDetail("recipe.plates_queued", { title: "Dhal", plates: 45 }),
+    ).toBe("Dhal, 45 plates");
+    expect(auditDetail("recipe.plates_queued", { plates: 45 })).toBe(
+      "45 plates",
+    );
+    expect(auditDetail("recipe.plates_queued", { title: "Dhal" })).toBe("Dhal");
+  });
+});

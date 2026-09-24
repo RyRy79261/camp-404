@@ -458,7 +458,7 @@ function bugReportsCheck(env: EnvBag): SystemCheck {
 function aiCheck(env: EnvBag): SystemCheck {
   const base = {
     id: "ai",
-    label: "AI report tidy-up",
+    label: "Claude (Anthropic)",
     env: ["ANTHROPIC_API_KEY"],
   };
   return env.ANTHROPIC_API_KEY
@@ -467,13 +467,14 @@ function aiCheck(env: EnvBag): SystemCheck {
         value: "On",
         tone: "ok",
         detail:
-          "Improve with AI rewrites a report into a title and steps before it is filed.",
+          "Improve with AI rewrites a report into a title and steps before it is filed. Claude writes a recipe, or proofreads a plate count, only when a captain or a Kitchen lead presses its button.",
       }
     : {
         ...base,
         value: "Off",
         tone: "degraded",
-        detail: "Improve with AI files the plain report instead.",
+        detail:
+          "Improve with AI files the plain report instead, and the recipe screens refuse to send anything to Claude.",
       };
 }
 

@@ -124,6 +124,12 @@ describe("partial unique and queue indexes keep their predicates", () => {
         columns: ["ref_code"],
         where: "ref_code IS NOT NULL",
       },
+      // One open plate-count run per (version, plates): a second captain
+      // pressing the same count is refused rather than paying twice.
+      recipe_proofread_runs_open_plates_idx: {
+        columns: ["version_id", "plates"],
+        where: "kind = 'plates' AND outcome IN ('queued', 'running')",
+      },
       // The console banner's read: "the announcements that are pinned", on
       // every console page load. The PREDICATE is what earns this index — the
       // pinned rows are a handful out of the whole broadcast table. It is NOT

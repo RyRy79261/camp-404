@@ -43,7 +43,7 @@ describe("isJobBuilt", () => {
     }
     expect(
       SCHEDULED_JOBS.filter((j) => !isJobBuilt(j.job)).map((j) => j.job),
-    ).toEqual(["recipes/analyse", "manuals/generate"]);
+    ).toEqual(["manuals/generate"]);
   });
 
   it("does not mistake an inherited key for a stub", () => {

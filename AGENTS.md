@@ -216,6 +216,7 @@ activation_id)` would allow any number of duplicates whose
   unless the statement repeats the index's `WHERE` (drizzle: `targetWhere`).
   The partial unique indexes today: `users_ref_code_uniq`,
   `captain_promotion_open_per_target_idx`,
+  `recipe_proofread_runs_open_plates_idx`,
   `questionnaire_activations_one_open_per_key_idx`,
   `notification_deliveries_broadcast_user_uniq`. A bare `ON CONFLICT DO
 NOTHING`, with no target, is not affected.
@@ -305,6 +306,24 @@ Decisions baked into the schema — keep new code consistent with them:
     message away from the whole camp. Publishing, closing and reminding a
     questionnaire stay captain-only. Change the rule in that function, never
     at a call site.
+  - **The Kitchen's recipe review is the other place team identity decides
+    what a lead may do** (owner's flow for #243, 2026-09-23: "A Kitchen team
+    lead or a captain approves it"). `canApproveRecipe` in
+    `packages/core/src/recipes.ts` lets a captain or a lead of the `kitchen`
+    team approve, reject or ask for changes, retype the text, edit a
+    recipe's source and accept an older draft of Claude's; a lead of any
+    other team is refused. Clearance is still global: the rank gate is
+    `captainActionGate("team_lead")`, and this is not a data tier (every
+    member reads the recipe book), only who may act on the Kitchen's review.
+    The write re-reads the actor's rank and lead teams inside its own
+    transaction. [CORRECTION 2026-09-24] Sending a recipe to Claude is no
+    longer captain-only: the owner's decision 2A gives it to the same people
+    (`canRunProofread`, which takes the led teams). [CORRECTION 2026-09-24]
+    There is no daily limit on sends (the owner removed it). The same people
+    edit the year's meal plan (`canEditMealPlan`). [CORRECTION 2026-09-24]
+    There are no kitchen settings any more (the owner removed the largest
+    pot and the burner count), so `canSetKitchenSettings` is gone. Change the
+    rule in those functions, never at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping
@@ -344,6 +363,27 @@ Decisions baked into the schema — keep new code consistent with them:
   `questionnaire_activations.questionnaire_key`, `broadcasts.ref_type`)
   map to bespoke components via a code-side registry — the DB stores the
   key, never the component.
+- **Kitchen (recipes).** A recipe version (`recipe_versions.body`) holds the
+  whole recipe as one `KitchenRecipe` (`@camp404/types`), in Noble Notations'
+  `create_recipe` field names, checked by Zod on every write. Food does not
+  scale by multiplying, so each plate count is proofread by Claude and stored
+  per (version, plates) in `recipe_plate_counts`; a count that has a result
+  is read, never run again, unless a reviewer explicitly asks for a re-run. A
+  version's own count is a row there too, and a new version starts with only
+  that one. [CORRECTION 2026-09-24] Nobody writes a version by hand any more:
+  a reviewer edits the recipe's source (`recipe_sources`, one Tiptap document
+  per section, versioned) in the editor at `/kitchen/recipes/[id]/edit`, and
+  "Send for proofreading" has Claude either ask questions or write the recipe
+  straight into the book, with its scaling notes shown to every reader as
+  "How this was scaled". A captain or a Kitchen lead spends money (a Claude
+  run, decision 2A), with no daily limit. There is no cron: a reviewer's
+  click starts each run. [2026-09-24] The plates come from the year's meal
+  plan (`kitchen_meal_plans` + `kitchen_meal_plan_days`, `/kitchen/meal-plan`,
+  `@camp404/db/meal-plan`), not Camp settings: a recipe's plate chips are its
+  distinct counts, and Claude writes a new recipe for the largest. A recipe
+  already in the book is revised, not rewritten: the run carries its accepted
+  version and the questions and answers that settled it
+  (`recipeSourceRevisionPrompt`, recorded as `PROMPT_VERSIONS.recipeSourceRevision`).
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.
@@ -387,18 +427,24 @@ version instead.
 ## Cron jobs
 
 All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
-`apps/web/vercel.json` schedules seven, daily (UTC): `maintenance` 07:30,
-`recipes/analyse` 08:00, `manuals/generate` 08:30,
-`notifications/reminders` 09:00, `notifications/dispatch` 09:15,
+`apps/web/vercel.json` schedules six, daily (UTC): `maintenance` 07:30,
+`manuals/generate` 08:30, `notifications/reminders` 09:00, `notifications/dispatch` 09:15,
 `notifications/push` 09:25, `notifications/email` 09:35.
 
 - `maintenance` is where data upkeep lives instead of an operator script:
   it encrypts any leftover plaintext ID number, and (on the production
   deployment only) deletes avatar folders whose owner has no camp account.
+- Recipes have no cron (the camp is on Vercel's Hobby plan). A recipe run
+  starts only from a captain's or a Kitchen lead's click [CORRECTION
+  2026-09-24: 2A] and runs in `after()`, all of a batch at
+  the same time so it fits the page's 300 s; a run stuck over 10 minutes (one
+  queued but never started too) is reset when a Kitchen page loads or the
+  source editor's loading panel polls (`resetStaleRuns`). The Anthropic call sets `maxRetries: 0`: the owner ruled
+  out automatic retries.
 
 - A job must be honest on the cron dashboard. A run with failures answers
   non-2xx; a job that is not built answers `{status: "stub"}` from
-  `apps/web/lib/cron-stub.ts` (recipes and manuals today), never
+  `apps/web/lib/cron-stub.ts` (only manuals today), never
   `{ok: true, processed: 0}`.
 - `apps/web/lib/__tests__/cron-stub.test.ts` checks that every scheduled path
   has a route and every route is scheduled, except `telegram/dispatch`: it is

@@ -8,6 +8,7 @@ describe("consoleNavFor", () => {
       "Home",
       "Tasks",
       "Power",
+      "Recipes",
       "Roster",
       "My forms",
       "Family tree",

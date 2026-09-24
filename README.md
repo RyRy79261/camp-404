@@ -59,6 +59,25 @@ pnpm --filter @camp404/ui storybook
 pnpm turbo run lint typecheck test build
 ```
 
+## Kitchen
+
+Recipes live under `/kitchen/recipes`, and read like
+[Noble Notations](https://www.noble-notations.com)' recipe pages:
+
+| Route                        | Who               | What it is                                                                                                 |
+| ---------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| `/kitchen/recipes`           | Every member      | The recipe book, and your own suggestions.                                                                 |
+| `/kitchen/recipes/new`       | Every member      | Import a recipe by pasting its text (or dictating it).                                                     |
+| `/kitchen/recipes/review`    | Kitchen reviewers | Suggestions to decide and approved recipes to send to Claude; older drafts wait here to be accepted.       |
+| `/kitchen/recipes/[id]`      | Every member      | One recipe, once it is in the book (sooner for its submitter); `?plates=45` shows a proofread plate count. |
+| `/kitchen/recipes/[id]/edit` | Kitchen reviewers | The source editor: edit what the recipe says and send it to Claude, who asks questions or writes it.       |
+
+A Kitchen reviewer is a lead of the Kitchen team or a captain, and either may
+start a Claude run (the owner's decision 2A). A run that succeeds goes
+straight into the book. There is no daily limit on runs (the owner removed
+it). A run stuck over 10 minutes is reset when a Kitchen page loads or the
+source editor's loading panel polls.
+
 ## Mobile builds
 
 See [`apps/mobile/README.md`](apps/mobile/README.md). App Store / Play submission is deferred per the project brief.
@@ -82,13 +101,12 @@ front of whatever command you use.
 
 ## Cron jobs
 
-`apps/web/vercel.json` is the source of truth. It schedules seven jobs, each
+`apps/web/vercel.json` is the source of truth. It schedules six jobs, each
 once a day:
 
 | Path                                | Schedule (UTC)             | What it does                                                                                                                                                                                                                                                   |
 | ----------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/api/cron/maintenance`             | `30 7 * * *` (daily 07:30) | Encrypts any government ID number still stored as plaintext and, on the production deployment only, deletes profile photos and image answers of members with no camp account.                                                                                  |
-| `/api/cron/recipes/analyse`         | `0 8 * * *` (daily 08:00)  | Not built: answers `status: "stub"` and does nothing. Will normalise pending recipes with Claude.                                                                                                                                                              |
 | `/api/cron/manuals/generate`        | `30 8 * * *` (daily 08:30) | Not built: answers `status: "stub"` and does nothing. Will generate camp manuals.                                                                                                                                                                              |
 | `/api/cron/notifications/reminders` | `0 9 * * *` (daily 09:00)  | Reminds members still pending on any open questionnaire send due within the next 48 hours, with the same 24-hour dedup as a captain's manual reminder. Also reminds the person responsible for a task the camp day before it is due and on the day, once each. |
 | `/api/cron/notifications/dispatch`  | `15 9 * * *` (daily 09:15) | Fans out scheduled broadcasts whose `send_at` has arrived into per-member `notification_deliveries`. Immediate announcements still fan out at publish time.                                                                                                    |
@@ -109,9 +127,12 @@ once a day:
   each run.
 - A run with failures answers non-2xx, so the cron dashboard shows it.
 
-> Vercel's Hobby plan caps cron jobs at one run per day. A tighter schedule
-> (for example the recipe or manual jobs every 15 minutes during the planning
-> window, once they are built) needs Pro.
+> The camp runs on Vercel's Hobby plan, which caps cron jobs at one run per
+> day. A tighter schedule (for example the manuals job every 15 minutes during
+> the planning window, once it is built) needs Pro. Recipes use no cron at
+> all: a captain's click starts each Claude run, which runs in `after()`, and
+> a run stuck for more than ten minutes (one queued but never started too) is
+> reset when a Kitchen page loads.
 
 ## Security / POPIA
 

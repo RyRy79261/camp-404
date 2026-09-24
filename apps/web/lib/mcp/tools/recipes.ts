@@ -1,54 +1,76 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
 import * as schema from "@camp404/db/schema";
-import { runTool, truncateList } from "../tool-utils";
+import {
+  listRecipeBook,
+  suggestRecipe,
+  suggestionTitle,
+} from "@camp404/db/recipes";
+import { SuggestRecipeInput } from "@camp404/types";
+import { ToolError, runTool, truncateList } from "../tool-utils";
 
-const SourceEnum = z.enum(schema.recipeSourceEnum.enumValues);
-const StatusEnum = z.enum(schema.recipeStatusEnum.enumValues);
+// Recipes through the Claude connector (#243). A member may suggest one by
+// pasting its text; it lands as `suggested` for a Kitchen lead or a captain
+// to approve in the app. Approving, having Claude write it up and accepting
+// stay in the app. The listing is the camp's recipe book: recipes with an
+// accepted version, readable by any approved member, with the plates each is
+// written for and every plate count that has a result.
 
 export function registerRecipeTools(server: McpServer): void {
   server.registerTool(
     "submit_recipe",
     {
-      title: "Submit a recipe",
+      title: "Suggest a recipe",
       description:
-        "Any camp user can submit a recipe by URL, free text, or audio blob. The recipe lands in 'pending' and is normalised by the AI cron — it'll move to 'analysing' → 'ready' on the next cron run.",
+        "Any camp member can suggest a recipe for the kitchen by giving its text (ingredients and method). The server never opens links, so a link alone is refused; a link may be added for reference. The name is optional and defaults to the text's first line. It lands as 'suggested' until a Kitchen lead or a captain approves it. Nothing is sent to an AI model unless a captain or a Kitchen lead later chooses to, and only if aiConsent is true.",
       inputSchema: {
-        source: SourceEnum,
-        sourceUrl: z.string().url().nullable().optional(),
-        rawText: z.string().nullable().optional(),
-        audioBlobUrl: z.string().url().nullable().optional(),
+        text: z.string().min(1),
+        title: z.string().max(120).nullable().optional(),
+        link: z.string().nullable().optional(),
+        suitabilityNote: z.string().nullable().optional(),
+        aiConsent: z.boolean().optional(),
       },
     },
     async (args, extra) =>
       runTool({
         toolName: "submit_recipe",
         extra,
-        argsForAudit: { source: args.source },
+        argsForAudit: { hasLink: Boolean(args.link) },
         handler: async ({ scope }) => {
-          if (args.source === "url" && !args.sourceUrl) {
-            throw new Error("source='url' requires sourceUrl.");
+          const parsed = SuggestRecipeInput.safeParse({
+            title: args.title ?? undefined,
+            source: "text",
+            url: args.link ?? undefined,
+            text: args.text,
+            suitabilityNote: args.suitabilityNote ?? undefined,
+            aiConsent: args.aiConsent ?? false,
+          });
+          if (!parsed.success) {
+            throw new ToolError(
+              parsed.error.issues[0]?.message ?? "That recipe is not valid.",
+            );
           }
-          if (args.source === "text" && !args.rawText) {
-            throw new Error("source='text' requires rawText.");
-          }
-          if (args.source === "voice" && !args.audioBlobUrl) {
-            throw new Error("source='voice' requires audioBlobUrl.");
-          }
-          const db = createHttpDb();
-          const [row] = await db
-            .insert(schema.recipes)
-            .values({
-              submitterId: scope.campUserId,
-              source: args.source,
-              sourceUrl: args.sourceUrl ?? null,
-              rawText: args.rawText ?? null,
-              audioBlobUrl: args.audioBlobUrl ?? null,
-            })
-            .returning();
-          return row;
+          const input = parsed.data;
+          // The app's own write: it checks the member is approved and the
+          // text is there, so the connector cannot skip a rule the form keeps.
+          const result = await suggestRecipe({
+            submitterId: scope.campUserId,
+            title: input.title ?? null,
+            source: input.source,
+            sourceUrl: input.url ?? null,
+            text: input.text,
+            suitabilityNote: input.suitabilityNote ?? null,
+            aiConsent: input.aiConsent,
+            now: new Date(),
+          });
+          if (!result.ok) throw new ToolError(result.error);
+          return {
+            id: result.id,
+            title: suggestionTitle(input.title ?? null, input.text),
+            status: "suggested",
+          };
         },
       }),
   );
@@ -56,11 +78,10 @@ export function registerRecipeTools(server: McpServer): void {
   server.registerTool(
     "list_recipes",
     {
-      title: "List recipes",
+      title: "List the recipe book",
       description:
-        "Returns recipes filtered by status. Members see 'ready' + 'scheduled' only. Kitchen review (pending / analysing / rejected) is captain-tier and not exposed in this batch yet.",
+        "Returns the camp's recipe book: every recipe with an accepted version, by name, with the plates it is written for (plates) and every plate count that has a result (readyPlates). Suggestions still in review are not listed.",
       inputSchema: {
-        status: z.enum(["ready", "scheduled"]).optional(),
         submittedBy: z.string().uuid().optional(),
       },
     },
@@ -70,25 +91,26 @@ export function registerRecipeTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async () => {
-          const db = createHttpDb();
-          const conditions = [
-            args.status
-              ? eq(schema.recipes.status, args.status)
-              : inArray(schema.recipes.status, ["ready", "scheduled"]),
-          ];
-          if (args.submittedBy)
-            conditions.push(eq(schema.recipes.submitterId, args.submittedBy));
-          const rows = await db
-            .select()
-            .from(schema.recipes)
-            .where(and(...conditions))
-            .orderBy(desc(schema.recipes.createdAt));
-          return truncateList(rows);
+          const book = await listRecipeBook();
+          let rows = book;
+          if (args.submittedBy) {
+            const mine = await createHttpDb()
+              .select({ id: schema.recipes.id })
+              .from(schema.recipes)
+              .where(eq(schema.recipes.submitterId, args.submittedBy));
+            const ids = new Set(mine.map((r) => r.id));
+            rows = book.filter((r) => ids.has(r.id));
+          }
+          return truncateList(
+            rows.map((r) => ({
+              id: r.id,
+              title: r.title,
+              plates: r.plates,
+              readyPlates: r.readyPlates,
+              version: r.version,
+            })),
+          );
         },
       }),
   );
-
-  // Captain/kitchen-lead writes (`schedule_recipe`, `reject_recipe`) ship
-  // in the captain batch — they don't belong in the member-facing surface.
-  void StatusEnum;
 }
