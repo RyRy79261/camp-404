@@ -4,7 +4,6 @@ import {
   campDayKey,
   campDayStart,
   canApproveRecipe,
-  canSetKitchenSettings,
   sameSections,
   sectionText,
   sourceFromText,
@@ -24,7 +23,6 @@ import {
   SOURCE_SECTIONS,
   SourceProofread,
   titleFromText,
-  type KitchenSettingsInput,
   type PlateLine,
   type RecipeSource,
   type RecipeStatus,
@@ -42,16 +40,14 @@ import * as schema from "./schema";
 //  - Anyone approved suggests a recipe. The submitter edits it only when a
 //    reviewer asked for changes, which makes it a suggestion again.
 //  - A Kitchen lead or a captain approves, rejects or asks for changes,
-//    retypes the text, accepts a proofread version and starts a variation
-//    (canApproveRecipe).
+//    retypes the text and accepts a proofread version (canApproveRecipe).
 //  - A captain or a Kitchen lead sends recipes to Claude (the owner's
 //    decision 2A; lockKitchenReviewer), with no daily limit (the owner's
-//    call, 2026-09-24). The kitchen settings (the largest pot and the
-//    burners) stay a captain's (canSetKitchenSettings). The plates per meal
-//    come from the year's meal plan (./meal-plan).
+//    call, 2026-09-24). The plates per meal come from the year's meal plan
+//    (./meal-plan).
 //  - A recipe's source (recipe_sources) is what a reviewer edits and Claude
 //    reads: one Tiptap document per section, versioned. Every suggestion,
-//    resubmission, retype and variation writes a version, and "Send for
+//    resubmission and retype writes a version, and "Send for
 //    proofreading" saves one when the content changed, in the same
 //    transaction as the run (sendSourceForProofreading).
 //  - A `source` run records its stage on the run row as the worker moves
@@ -94,23 +90,12 @@ export type RecipeWriteResult<T = object> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 
-/**
- * What the kitchen settings hold: the largest pot and the burners, both set
- * on Camp settings. The plates at each meal are the meal plan (./meal-plan).
- */
-export type KitchenSettings = KitchenSettingsInput;
-
-export const DEFAULT_KITCHEN_SETTINGS: KitchenSettings = {
-  kitchenLargestPotLitres: null,
-  kitchenBurnerCount: null,
-};
-
-/** The kitchen's size, with this year's largest plates at each meal. */
-export type KitchenForPrompt = KitchenSettings & {
+/** This year's largest plates at each meal, as the prompts read them. */
+export interface KitchenForPrompt {
   kitchenPlatesBreakfast: number | null;
   kitchenPlatesLunch: number | null;
   kitchenPlatesDinner: number | null;
-};
+}
 
 /** A recipe from before #243 has no title. */
 export const UNTITLED_RECIPE = "Untitled recipe";
@@ -132,8 +117,6 @@ export const TEXT_NEEDED = "Paste the recipe text.";
 export const TEXT_TOO_LONG = `Keep the recipe under ${RECIPE_TEXT_MAX} characters.`;
 export const ONLY_A_REVIEWER_SENDS =
   "Only a Kitchen lead or a captain can send a recipe to Claude.";
-export const ONLY_A_CAPTAIN_SETS_KITCHEN =
-  "Only a captain can change the kitchen settings.";
 export const SOURCE_CHANGED =
   "Someone else changed this recipe's source. Reload the page.";
 export const SOURCE_INVALID =
@@ -154,6 +137,8 @@ export const VERSION_CHANGED =
 export const VERSION_INVALID =
   "This version isn't complete. Check each ingredient and step.";
 export const LESSON_NEEDED = "Write what the kitchen learned.";
+export const LESSON_VERSION_GONE =
+  "That version of the recipe isn't there any more. Reload the page.";
 export const STALE_RUN_ERROR =
   "The run stopped before it finished. Nothing was retried.";
 export const NEVER_STARTED_ERROR =
@@ -887,93 +872,6 @@ export async function requestRerun(input: {
   });
 }
 
-// --- Kitchen settings ------------------------------------------------------
-
-function settingsOf(row: KitchenSettings | undefined): KitchenSettings {
-  return row
-    ? {
-        kitchenLargestPotLitres: row.kitchenLargestPotLitres,
-        kitchenBurnerCount: row.kitchenBurnerCount,
-      }
-    : { ...DEFAULT_KITCHEN_SETTINGS };
-}
-
-const SETTINGS_COLUMNS = {
-  kitchenLargestPotLitres: schema.campSettings.kitchenLargestPotLitres,
-  kitchenBurnerCount: schema.campSettings.kitchenBurnerCount,
-};
-
-async function readKitchenSettings(db: DbOrTx): Promise<KitchenSettings> {
-  const [row] = await db
-    .select(SETTINGS_COLUMNS)
-    .from(schema.campSettings)
-    .limit(1);
-  return settingsOf(row);
-}
-
-/** The kitchen's settings: the largest pot and the burners. */
-export async function getKitchenSettings(): Promise<KitchenSettings> {
-  return readKitchenSettings(createHttpDb());
-}
-
-/**
- * Lock the camp_settings singleton FOR UPDATE, creating it first when a fresh
- * database has none. A settings change takes this lock first.
- */
-async function lockSettingsForUpdate(tx: Tx): Promise<KitchenSettings> {
-  await tx
-    .insert(schema.campSettings)
-    .values({ id: true })
-    .onConflictDoNothing({ target: schema.campSettings.id });
-  const [row] = await tx
-    .select(SETTINGS_COLUMNS)
-    .from(schema.campSettings)
-    .where(eq(schema.campSettings.id, true))
-    .for("update");
-  return settingsOf(row);
-}
-
-/** The actor's stored rank, locked so a demotion waits for this write. */
-async function lockActorRank(tx: Tx, actorId: string): Promise<string> {
-  if (!UUID.test(actorId)) return "unknown";
-  const [row] = await tx
-    .select({ rank: schema.users.rank })
-    .from(schema.users)
-    .where(eq(schema.users.id, actorId))
-    .for("share");
-  if (!row) return "unknown";
-  return row.rank === "captain" ? "captain" : "camp_member";
-}
-
-/** A captain changes the kitchen settings; the change is audited. */
-export async function setKitchenSettings(
-  input: { actorId: string } & KitchenSettingsInput,
-): Promise<RecipeWriteResult<{ settings: KitchenSettings }>> {
-  return write(async (tx) => {
-    const before = await lockSettingsForUpdate(tx);
-    // Captains only: the owner let Kitchen leads send recipes to Claude
-    // (2A), not change the kitchen's settings.
-    if (!canSetKitchenSettings(await lockActorRank(tx, input.actorId))) {
-      refuse(ONLY_A_CAPTAIN_SETS_KITCHEN);
-    }
-    const after: KitchenSettings = {
-      kitchenLargestPotLitres: input.kitchenLargestPotLitres,
-      kitchenBurnerCount: input.kitchenBurnerCount,
-    };
-    await tx
-      .update(schema.campSettings)
-      .set({ ...after, updatedAt: new Date() })
-      .where(eq(schema.campSettings.id, true));
-    await writeAuditEvent(tx, {
-      actorId: input.actorId,
-      action: "camp.kitchen_settings.changed",
-      target: "kitchen",
-      metadata: { before, after },
-    });
-    return { settings: after };
-  });
-}
-
 // --- Proofreading ----------------------------------------------------------
 
 export const PLATES_OUT_OF_RANGE =
@@ -1582,10 +1480,7 @@ export async function claimSourceRun(
         plates: row.plates ?? DEFAULT_PLATES,
         exchange: readExchange(row.exchange),
         note: row.note,
-        kitchen: {
-          ...(await readKitchenSettings(tx)),
-          ...(await readMealPlanPeaks(tx)),
-        },
+        kitchen: await readMealPlanPeaks(tx),
         previous: await readPreviousVersion(tx, row.acceptedVersionId),
       } satisfies ClaimedSourceRun,
     };
@@ -2100,7 +1995,6 @@ export interface ClaimedPlateRun {
   plates: number;
   /** The accepted version's body: the kitchen's recipe, never the member's text. */
   recipe: KitchenRecipe;
-  kitchen: KitchenSettings;
 }
 
 /** A plate run whose version is no longer the recipe's accepted one. */
@@ -2191,7 +2085,6 @@ export async function claimPlateRun(
         fromPlates: body.data.plates,
         plates: run.plates,
         recipe: body.data,
-        kitchen: await readKitchenSettings(tx),
       } satisfies ClaimedPlateRun,
     };
   });
@@ -2475,71 +2368,12 @@ export async function acceptProofread(input: {
 }
 
 /**
- * A reviewer starts a variation (a gluten-free one, say): a sibling recipe,
- * approved, linked to the dish it came from. It starts from the original's
- * text, and a copy of its newest source as version 1, only when that source
- * is cleared for Claude, so a variation never launders text its author did
- * not agree to send; otherwise it starts empty and the reviewer writes it.
- * Starting it is the reviewer's own act, so the text is theirs.
+ * What the cooks learned making one version of a recipe, stamped with the burn
+ * year. Any approved member. The version must be one of this recipe's.
  */
-export async function startVariation(input: {
-  recipeId: string;
-  actorId: string;
-  title: string;
-}): Promise<RecipeWriteResult<{ id: string }>> {
-  return write(async (tx) => {
-    await assertKitchenReviewer(tx, input.actorId);
-    const title = cleanTitle(input.title);
-    const original = await lockRecipe(tx, input.recipeId);
-    if (!original.acceptedVersionId) refuse(NO_ACCEPTED_VERSION);
-    const cleared = textBlockedReason(original) === null;
-    const source = await latestSource(tx, original.id);
-    const sourceCleared = sourceBlockedReason(source, original) === null;
-    const now = new Date();
-    const [row] = await tx
-      .insert(schema.recipes)
-      .values({
-        submitterId: input.actorId,
-        source: "text",
-        status: "approved",
-        title,
-        sourceUrl: original.sourceUrl,
-        rawText: cleared ? original.rawText : null,
-        textAuthorId: input.actorId,
-        aiConsentAt: now,
-        approvedBy: input.actorId,
-        approvedAt: now,
-        variantOfRecipeId: original.id,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning({ id: schema.recipes.id });
-    if (source && sourceCleared) {
-      await insertSource(tx, {
-        recipeId: row!.id,
-        serves: source.serves,
-        sections: source.sections,
-        authorId: input.actorId,
-        now,
-      });
-    }
-    await writeAuditEvent(tx, {
-      actorId: input.actorId,
-      action: "recipe.variation_started",
-      target: row!.id,
-      metadata: {
-        title,
-        fromRecipeId: original.id,
-        fromTitle: original.title ?? UNTITLED_RECIPE,
-      },
-    });
-    return { id: row!.id };
-  });
-}
-
-/** What the cooks learned, stamped with the burn year. Any approved member. */
 export async function addLesson(input: {
   recipeId: string;
+  versionId: string;
   authorId: string;
   body: string;
 }): Promise<RecipeWriteResult<{ id: string }>> {
@@ -2558,10 +2392,22 @@ export async function addLesson(input: {
       .for("share");
     if (!recipe) refuse(RECIPE_GONE);
     if (!recipe.acceptedVersionId) refuse(NO_ACCEPTED_VERSION);
+    if (!UUID.test(input.versionId)) refuse(LESSON_VERSION_GONE);
+    const [version] = await tx
+      .select({ id: schema.recipeVersions.id })
+      .from(schema.recipeVersions)
+      .where(
+        and(
+          eq(schema.recipeVersions.id, input.versionId),
+          eq(schema.recipeVersions.recipeId, input.recipeId),
+        ),
+      );
+    if (!version) refuse(LESSON_VERSION_GONE);
     const [row] = await tx
       .insert(schema.recipeLessons)
       .values({
         recipeId: input.recipeId,
+        versionId: input.versionId,
         authorId: input.authorId,
         body,
         cycle: await currentCycleNumber(tx),
@@ -2577,7 +2423,6 @@ export interface RecipeBookEntry {
   id: string;
   title: string;
   status: RecipeStatus;
-  variantOfRecipeId: string | null;
   version: number;
   /** The plates the accepted version is written for. */
   plates: number;
@@ -2617,7 +2462,6 @@ export async function listRecipeBook(): Promise<RecipeBookEntry[]> {
       id: schema.recipes.id,
       title: schema.recipes.title,
       status: schema.recipes.status,
-      variantOfRecipeId: schema.recipes.variantOfRecipeId,
       versionId: schema.recipeVersions.id,
       version: schema.recipeVersions.version,
       plates: schema.recipeVersions.servingsBasis,
@@ -2913,7 +2757,6 @@ export interface RecipeDetail {
   changesNote: string | null;
   rejectionReason: string | null;
   lastError: string | null;
-  variantOfRecipeId: string | null;
   acceptedVersionId: string | null;
   createdAt: Date;
   /** The newest run with its result. No token counts: those are captains'. */
@@ -2943,8 +2786,10 @@ export interface RecipeDetail {
     authorName: string | null;
     createdAt: Date;
   }[];
+  /** Every lesson, newest first, each on the version it was learned on. */
   lessons: {
     id: string;
+    versionId: string;
     body: string;
     cycle: number;
     authorName: string | null;
@@ -3064,6 +2909,7 @@ export async function getRecipeDetail(
     db
       .select({
         id: schema.recipeLessons.id,
+        versionId: schema.recipeLessons.versionId,
         body: schema.recipeLessons.body,
         cycle: schema.recipeLessons.cycle,
         authorName: author.displayName,
@@ -3178,7 +3024,6 @@ export async function getRecipeDetail(
     changesNote: r.changesNote,
     rejectionReason: r.rejectionReason,
     lastError: r.lastError,
-    variantOfRecipeId: r.variantOfRecipeId,
     acceptedVersionId: r.acceptedVersionId,
     createdAt: r.createdAt,
     latestRun: runRows[0] ? runDetail(runRows[0]) : null,

@@ -63,12 +63,9 @@ const BOOK_COLUMNS: ResponsiveColumn<RecipeBookEntry>[] = [
     role: "title",
     cellClassName: "font-medium",
     cell: (r) => (
-      <span className="flex flex-wrap items-center gap-2">
-        <Link href={recipePath(r.id)} className="hover:text-accent">
-          {r.title}
-        </Link>
-        {r.variantOfRecipeId && <Badge variant="secondary">Variation</Badge>}
-      </span>
+      <Link href={recipePath(r.id)} className="hover:text-accent">
+        {r.title}
+      </Link>
     ),
   },
   {

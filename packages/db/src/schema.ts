@@ -1233,11 +1233,6 @@ export const recipes = pgTable(
       (): AnyPgColumn => recipeVersions.id,
       { onDelete: "set null" },
     ),
-    // A variation (a gluten-free one, say) is a sibling recipe, not a version.
-    variantOfRecipeId: uuid("variant_of_recipe_id").references(
-      (): AnyPgColumn => recipes.id,
-      { onDelete: "set null" },
-    ),
 
     // Legacy, from the first recipe design; kept so no data is dropped.
     normalised: jsonb("normalised"),
@@ -1425,7 +1420,7 @@ export const recipeVersions = pgTable(
     servingsBasis: integer("servings_basis").notNull(),
     // The whole recipe in Noble Notations' shape (KitchenRecipe), checked by
     // Zod on every write. Null only on a row from the first draft that the
-    // 0056 migration has not converted.
+    // 0057 migration has not converted.
     body: jsonb("body").$type<KitchenRecipe>(),
     // Legacy, from the first draft; no longer written. Kept, not dropped,
     // because preview deployments share the production database.
@@ -1464,7 +1459,7 @@ export const recipeVersions = pgTable(
 );
 
 // Legacy, no longer written: a first-draft version's ingredients, each with
-// how it scaled. The 0056 migration copied them into recipe_versions.body.
+// how it scaled. The 0057 migration copied them into recipe_versions.body.
 // Kept, not dropped, because preview deployments share the production
 // database.
 export const recipeVersionIngredients = pgTable(
@@ -1548,8 +1543,9 @@ export const recipePlateCounts = pgTable(
   }),
 );
 
-// What the cooks learned ("tinned mushrooms work fine"), stamped with the burn
-// year it was learned in. Post-burn feedback attaches here.
+// What the cooks learned ("tinned mushrooms work fine") making one version of
+// a recipe, stamped with the burn year it was learned in. The version's own
+// page lists its lessons. Post-burn feedback attaches here.
 export const recipeLessons = pgTable(
   "recipe_lessons",
   {
@@ -1557,6 +1553,9 @@ export const recipeLessons = pgTable(
     recipeId: uuid("recipe_id")
       .notNull()
       .references(() => recipes.id, { onDelete: "cascade" }),
+    versionId: uuid("version_id")
+      .notNull()
+      .references(() => recipeVersions.id, { onDelete: "cascade" }),
     authorId: uuid("author_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -1566,21 +1565,25 @@ export const recipeLessons = pgTable(
   },
   (t) => ({
     recipeIdx: index("recipe_lessons_recipe_idx").on(t.recipeId),
+    versionIdx: index("recipe_lessons_version_idx").on(t.versionId),
   }),
 );
 
 // The kitchen's meal plan for one year (the owner's sketch, 2026-09-24): how
-// many days the camp is on site, and the plates at breakfast, lunch and dinner
-// on each day. A recipe in the book is shown at each distinct count in it,
-// and the largest is what Claude writes a new recipe for. It replaces the
-// three per-meal numbers on camp_settings, which stay stored and unread.
-// Anyone approved reads it; a captain or a Kitchen lead saves it, audited and
-// compare-and-set on `version`. No row means the defaults (11 empty days).
+// many days the camp is on site, the date of day 1, and the plates at
+// breakfast, lunch and dinner on each day. A recipe in the book is shown at
+// each distinct count in it, and the largest is what Claude writes a new
+// recipe for. Anyone approved reads it; a captain or a Kitchen lead saves it,
+// audited and compare-and-set on `version`. No row means the defaults (11
+// empty days, no date).
 export const kitchenMealPlans = pgTable(
   "kitchen_meal_plans",
   {
     cycle: integer("cycle").primaryKey(),
     daysOnSite: integer("days_on_site").notNull().default(11),
+    // The date of day 1 (YYYY-MM-DD), which dates every day on the page;
+    // null until someone sets it.
+    firstDay: date("first_day", { mode: "string" }),
     version: integer("version").notNull().default(1),
     updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -2688,24 +2691,9 @@ export const campSettings = pgTable(
       .default(
         sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and MOOP","order":3,"archived":false},{"key":"health_and_safety","label":"Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false},{"key":"finance","label":"Finance","order":8,"archived":false},{"key":"transport_and_logistics","label":"Transport and Logistics","order":9,"archived":false},{"key":"communications_and_hr","label":"Communications & HR","order":10,"archived":false},{"key":"mutant_vehicle","label":"Mutant Vehicle","order":11,"archived":false},{"key":"sound","label":"Sound","order":12,"archived":false},{"key":"water","label":"Water","order":13,"archived":false}]}'::jsonb`,
       ),
-    // Kitchen (#243). The bounds mirror KITCHEN_SETTING_LIMITS in
-    // @camp404/types. The largest pot and the burner count set a recipe's
-    // batch limits. Null until a captain fills them in; the prompt then says
-    // "unknown". The plates at each meal are the year's meal plan
-    // (kitchen_meal_plans), not a setting.
-    kitchenLargestPotLitres: integer("kitchen_largest_pot_litres"),
-    kitchenBurnerCount: integer("kitchen_burner_count"),
   },
   (t) => ({
     singleton: check("camp_settings_singleton", sql`${t.id}`),
-    potCheck: check(
-      "camp_settings_kitchen_largest_pot_litres_check",
-      sql`${t.kitchenLargestPotLitres} between 1 and 500`,
-    ),
-    burnerCheck: check(
-      "camp_settings_kitchen_burner_count_check",
-      sql`${t.kitchenBurnerCount} between 1 and 20`,
-    ),
   }),
 );
 

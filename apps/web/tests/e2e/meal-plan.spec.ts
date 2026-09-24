@@ -17,8 +17,10 @@ import {
 // year's days on site and the plates at breakfast, lunch and dinner, reached
 // from the recipe book. A captain or a Kitchen lead edits it (Save in the
 // heading, "Copy Day 1 to every day"), and it persists; a member reads it and
-// changes nothing; a lead of another team the same. The days are "Day 1",
-// "Day 2"...: Camp settings holds no first day on site. The page fits a phone.
+// changes nothing; a lead of another team the same. The editor sets the date
+// of day 1 beside the days on site, and every day row then shows its date
+// ("Day 1 · Sat 25 Apr"), for the editor and a member alike. The page fits a
+// phone.
 
 async function member(
   page: Page,
@@ -74,10 +76,20 @@ test.describe("meal plan (test-mode)", () => {
     await page.getByRole("button", { name: "Copy Day 1 to every day" }).click();
     await expect(page.getByLabel("Day 3 dinner")).toHaveValue("25");
     await page.getByLabel("Day 2 dinner").fill("50");
+    // The date of day 1, beside the days on site, dates every row at once.
+    await expect(page.getByLabel("Day 1 date")).toHaveValue("");
+    await page.getByLabel("Day 1 date").fill("2026-04-25");
+    await expect(
+      page.getByRole("rowheader", { name: "Day 1 · Sat 25 Apr" }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Meal plan saved")).toBeVisible();
 
     await page.reload();
+    await expect(page.getByLabel("Day 1 date")).toHaveValue("2026-04-25");
+    await expect(
+      page.getByRole("rowheader", { name: "Day 3 · Mon 27 Apr" }),
+    ).toBeVisible();
     await expect(page.getByLabel("Days on site")).toHaveValue("3");
     await expect(page.getByLabel("Day 2 dinner")).toHaveValue("50");
     await expect(page.getByLabel("Day 3 breakfast")).toHaveValue("20");
@@ -102,6 +114,11 @@ test.describe("meal plan (test-mode)", () => {
     await expect(
       table.getByRole("row", { name: /Day 2/ }).getByText("50"),
     ).toBeVisible();
+    // A member reads each day's date too, and has no date to change.
+    await expect(
+      table.getByRole("rowheader", { name: "Day 2 · Sun 26 Apr" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Day 1 date")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save" })).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Copy Day 1 to every day" }),

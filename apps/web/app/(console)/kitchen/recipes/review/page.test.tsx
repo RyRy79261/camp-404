@@ -26,6 +26,7 @@ vi.mock("@/lib/meal-plan", () => ({
       { breakfast: 0, lunch: 30, dinner: 45 },
     ],
     version: 1,
+    firstDay: null,
     updatedAt: null,
   })),
 }));
@@ -332,6 +333,7 @@ describe("recipe review page", () => {
       daysOnSite: 1,
       days: [{ breakfast: 0, lunch: 0, dinner: 0 }],
       version: 0,
+      firstDay: null,
       updatedAt: null,
     });
     await renderAs("captain");

@@ -150,7 +150,8 @@ test.describe("recipe plate counts (test-mode)", () => {
     await expect(chip(page, 3)).toContainText("2.5 kg");
 
     // 5. The History tab, kept in the address through a reload with the
-    //    plate count: every version opens in place, with the activity log.
+    //    plate count: lists of versions, nothing opened in place, and the
+    //    activity log.
     await page
       .getByRole("navigation", { name: "Recipe tabs" })
       .getByRole("link", { name: "History" })
@@ -159,13 +160,51 @@ test.describe("recipe plate counts (test-mode)", () => {
     await page.reload();
     const versions = page.getByRole("article", { name: "Recipe versions" });
     await expect(versions).toBeVisible();
-    await versions.getByText("Version 1").click();
-    await expect(versions.getByText("Red lentils").first()).toBeVisible();
     await expect(
       page.getByRole("article", { name: "Source versions" }),
     ).toBeVisible();
     await expect(page.getByRole("article", { name: "Activity" })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Step 1 uses" })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole("article", { name: "Lessons learned" }),
+    ).toHaveCount(0);
+    await expect(page.getByText(/variation/i)).toHaveCount(0);
     await expect(counts(page)).toHaveCount(0);
+
+    //    A version opens on its own page, read with the recipe reader, with
+    //    its Notes: a lesson added there belongs to that version.
+    await versions.getByRole("link", { name: "Version 1" }).click();
+    await expect(page).toHaveURL(`${recipeUrl}/versions/1`);
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: `${DISH} — Version 1 (current)`,
+      }),
+    ).toBeVisible();
+    await expect(chip(page, 3)).toContainText("Red lentils");
+    const notes = page.getByRole("region", { name: "Notes" });
+    await notes.getByLabel("Add a lesson").fill("Soak the lentils first.");
+    await notes.getByRole("button", { name: "Add lesson" }).click();
+    await expect(notes.getByText("Soak the lentils first.")).toBeVisible();
+
+    //    Back to History, and a source version on its own page.
+    await page.getByRole("link", { name: "Back to History" }).click();
+    await expect(page).toHaveURL(`${recipeUrl}?tab=history`);
+    await expect(page.getByText("Soak the lentils first.")).toHaveCount(0);
+    await page
+      .getByRole("article", { name: "Source versions" })
+      .getByRole("link", { name: "Source version 1" })
+      .click();
+    await expect(page).toHaveURL(`${recipeUrl}/sources/1`);
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: new RegExp(`^${DISH} — Source version 1`),
+      }),
+    ).toBeVisible();
+    await expect(page.getByText(/500 g red lentils/)).toBeVisible();
 
     // 6. A Kitchen lead adds a count to the meal plan and may proofread it
     //    (2A).

@@ -103,8 +103,8 @@ import {
   ANSWER_NEEDED,
   ANSWER_TOO_LONG,
   CHANGES_NOTE_NEEDED,
-  DEFAULT_KITCHEN_SETTINGS,
   LESSON_NEEDED,
+  LESSON_VERSION_GONE,
   NEVER_STARTED_ERROR,
   NO_ACCEPTED_VERSION,
   NOT_A_KITCHEN_REVIEWER,
@@ -113,7 +113,6 @@ import {
   NOT_YOUR_SUGGESTION,
   NO_TEXT_TO_SEND,
   ONLY_A_REVIEWER_SENDS,
-  ONLY_A_CAPTAIN_SETS_KITCHEN,
   PLATE_RUN_VERSION_GONE,
   RECIPE_CHANGED,
   RECIPE_DECIDED,
@@ -131,7 +130,6 @@ import {
   STALE_RUN_ERROR,
   TEXT_NEEDED,
   TEXT_TOO_LONG,
-  TITLE_NEEDED,
   UNTITLED_RECIPE,
   PLATES_OUT_OF_RANGE,
   VERSION_CHANGED,
@@ -155,7 +153,6 @@ import {
   type AwaitingAcceptance,
   type ClaimedPlateRun,
   type ClaimedSourceRun,
-  type KitchenSettings,
   type MySuggestion,
   type ProofreadCandidate,
   type ProofreadProgress,
@@ -180,6 +177,7 @@ import {
   NOT_A_MEAL_PLAN_EDITOR,
   defaultMealPlan,
   type MealPlan,
+  type MealPlanSave,
   type MealPlanWriteResult,
 } from "@camp404/db/meal-plan";
 import {
@@ -201,7 +199,6 @@ import {
   type DraftReport,
   type InboxFilter,
   type IngredientCategory,
-  type KitchenSettingsInput,
   type PlateLine,
   type RecipeSource,
   type RecipeStatus,
@@ -437,7 +434,6 @@ interface TestRecipe {
   lastError: string | null;
   latestRunId: string | null;
   acceptedVersionId: string | null;
-  variantOfRecipeId: string | null;
   rerunRequest: string | null;
   rerunRequestedBy: string | null;
   rerunRequestedAt: Date | null;
@@ -521,6 +517,7 @@ interface TestIngredient {
 interface TestRecipeLesson {
   id: string;
   recipeId: string;
+  versionId: string;
   authorId: string;
   body: string;
   cycle: number;
@@ -577,7 +574,6 @@ interface TestStoreState {
   recipeLessons: TestRecipeLesson[];
   recipeHistory: TestRecipeEvent[];
   /** The kitchen's settings. Reassigned on every edit, so it lives on `S`. */
-  kitchenSettings: KitchenSettings;
   /** `kitchen_meal_plans` with their days, keyed by year. */
   mealPlans: Map<number, MealPlan>;
   nextSerial: number;
@@ -633,7 +629,6 @@ function globalState(): TestStoreState {
       ingredientCatalogue: [] as TestIngredient[],
       recipeLessons: [] as TestRecipeLesson[],
       recipeHistory: [] as TestRecipeEvent[],
-      kitchenSettings: { ...DEFAULT_KITCHEN_SETTINGS },
       mealPlans: new Map<number, MealPlan>(),
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
@@ -710,7 +705,6 @@ S.recipePlateCounts ??= [];
 S.ingredientCatalogue ??= [];
 S.recipeLessons ??= [];
 S.recipeHistory ??= [];
-S.kitchenSettings ??= { ...DEFAULT_KITCHEN_SETTINGS };
 S.mealPlans ??= new Map<number, MealPlan>();
 const recipes = S.recipes;
 const recipeRuns = S.recipeRuns;
@@ -977,7 +971,11 @@ function storePreviousVersion(
 function storeMealPlan(cycle: number): MealPlan {
   const plan = S.mealPlans.get(cycle);
   return plan
-    ? { ...plan, days: plan.days.map((d) => ({ ...d })) }
+    ? {
+        ...plan,
+        firstDay: plan.firstDay ?? null,
+        days: plan.days.map((d) => ({ ...d })),
+      }
     : defaultMealPlan(cycle);
 }
 
@@ -3192,32 +3190,6 @@ export const testStore = {
   // does. The rules come from the same places: canApproveRecipe and
   // canRunProofread in core, and textBlockedReason from @camp404/db/recipes.
 
-  getKitchenSettings(): KitchenSettings {
-    return { ...S.kitchenSettings };
-  },
-
-  setKitchenSettings(
-    input: { actorId: string } & KitchenSettingsInput,
-  ): RecipeWriteResult<{ settings: KitchenSettings }> {
-    if (findUserById(input.actorId)?.rank !== "captain") {
-      return { ok: false, error: ONLY_A_CAPTAIN_SETS_KITCHEN };
-    }
-    const before = { ...S.kitchenSettings };
-    const after: KitchenSettings = {
-      kitchenLargestPotLitres: input.kitchenLargestPotLitres,
-      kitchenBurnerCount: input.kitchenBurnerCount,
-    };
-    S.kitchenSettings = after;
-    recipeHistory.push({
-      recipeId: null,
-      action: "camp.kitchen_settings.changed",
-      actorId: input.actorId,
-      metadata: { before, after },
-      createdAt: new Date(),
-    });
-    return { ok: true, settings: { ...after } };
-  },
-
   /** This year's meal plan, or a given year's (the twin of getMealPlan). */
   getMealPlan(cycle?: number): MealPlan {
     return storeMealPlan(cycle ?? currentCycleNumber());
@@ -3227,9 +3199,7 @@ export const testStore = {
    * Save this year's meal plan (the twin of setMealPlan): a captain or a
    * Kitchen lead, compare-and-set on version, audited.
    */
-  setMealPlan(
-    input: { actorId: string } & MealPlanInput,
-  ): MealPlanWriteResult<{ version: number }> {
+  setMealPlan(input: MealPlanSave): MealPlanWriteResult<{ version: number }> {
     const parsed = MealPlanInput.safeParse(input);
     if (!parsed.success) {
       return {
@@ -3240,7 +3210,7 @@ export const testStore = {
     if (!isKitchenReviewer(input.actorId)) {
       return { ok: false, error: NOT_A_MEAL_PLAN_EDITOR };
     }
-    const { daysOnSite, days, expectedVersion } = parsed.data;
+    const { daysOnSite, firstDay, days, expectedVersion } = parsed.data;
     const cycle = currentCycleNumber();
     const before = storeMealPlan(cycle);
     if (before.version !== expectedVersion) {
@@ -3250,6 +3220,7 @@ export const testStore = {
     S.mealPlans.set(cycle, {
       cycle,
       daysOnSite,
+      firstDay,
       days: days.map((d) => ({ ...d })),
       version,
       updatedAt: new Date(),
@@ -3261,8 +3232,12 @@ export const testStore = {
       metadata: {
         cycle,
         version,
-        before: { daysOnSite: before.daysOnSite, days: before.days },
-        after: { daysOnSite, days },
+        before: {
+          daysOnSite: before.daysOnSite,
+          firstDay: before.firstDay,
+          days: before.days,
+        },
+        after: { daysOnSite, firstDay, days },
       },
       createdAt: new Date(),
     });
@@ -3301,7 +3276,6 @@ export const testStore = {
       lastError: null,
       latestRunId: null,
       acceptedVersionId: null,
-      variantOfRecipeId: null,
       rerunRequest: null,
       rerunRequestedBy: null,
       rerunRequestedAt: null,
@@ -3759,10 +3733,7 @@ export const testStore = {
       plates: run.plates ?? DEFAULT_PLATES,
       exchange: storeExchange(run.exchange),
       note: run.note,
-      kitchen: {
-        ...S.kitchenSettings,
-        ...mealPlanPeaks(storeMealPlan(currentCycleNumber()).days),
-      },
+      kitchen: mealPlanPeaks(storeMealPlan(currentCycleNumber()).days),
       previous: storePreviousVersion(recipe.acceptedVersionId),
     };
   },
@@ -4025,7 +3996,6 @@ export const testStore = {
       fromPlates: version.body.plates,
       plates: run.plates,
       recipe: version.body,
-      kitchen: { ...S.kitchenSettings },
     };
   },
 
@@ -4211,65 +4181,10 @@ export const testStore = {
     });
   },
 
-  startVariation(input: {
-    recipeId: string;
-    actorId: string;
-    title: string;
-  }): RecipeWriteResult<{ id: string }> {
-    if (!isKitchenReviewer(input.actorId)) {
-      return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
-    }
-    const title = input.title.trim();
-    if (!title) return { ok: false, error: TITLE_NEEDED };
-    const original = findRecipe(input.recipeId);
-    if (!original) return { ok: false, error: RECIPE_GONE };
-    if (!original.acceptedVersionId) {
-      return { ok: false, error: NO_ACCEPTED_VERSION };
-    }
-    const now = new Date();
-    const variation: TestRecipe = {
-      id: crypto.randomUUID(),
-      submitterId: input.actorId,
-      source: "text",
-      status: "approved",
-      title,
-      sourceUrl: original.sourceUrl,
-      rawText: storeTextBlocked(original) === null ? original.rawText : null,
-      suitabilityNote: null,
-      textAuthorId: input.actorId,
-      aiConsentAt: now,
-      changesNote: null,
-      rejectionReason: null,
-      lastError: null,
-      latestRunId: null,
-      acceptedVersionId: null,
-      variantOfRecipeId: original.id,
-      rerunRequest: null,
-      rerunRequestedBy: null,
-      rerunRequestedAt: null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    recipes.push(variation);
-    // A copy of the newest source, only when it is cleared for Claude.
-    const source = latestStoreSource(original.id);
-    if (source && sourceBlockedReason(source, original) === null) {
-      insertStoreSource({
-        recipeId: variation.id,
-        serves: source.serves,
-        sections: source.sections,
-        authorId: input.actorId,
-        now,
-      });
-    }
-    recordRecipeEvent(variation, "recipe.variation_started", input.actorId, {
-      fromRecipeId: original.id,
-    });
-    return { ok: true, id: variation.id };
-  },
-
+  /** The twin of addLesson: on one of the recipe's versions. */
   addLesson(input: {
     recipeId: string;
+    versionId: string;
     authorId: string;
     body: string;
   }): RecipeWriteResult<{ id: string }> {
@@ -4283,10 +4198,15 @@ export const testStore = {
     if (!recipe.acceptedVersionId) {
       return { ok: false, error: NO_ACCEPTED_VERSION };
     }
+    const version = recipeVersions.find(
+      (v) => v.id === input.versionId && v.recipeId === recipe.id,
+    );
+    if (!version) return { ok: false, error: LESSON_VERSION_GONE };
     const id = crypto.randomUUID();
     recipeLessons.push({
       id,
       recipeId: recipe.id,
+      versionId: version.id,
       authorId: input.authorId,
       body,
       cycle: currentCycleNumber(),
@@ -4343,7 +4263,6 @@ export const testStore = {
           id: r.id,
           title: r.title,
           status: r.status,
-          variantOfRecipeId: r.variantOfRecipeId,
           version: version.version,
           plates: version.body.plates,
           readyPlates: storePlateCounts(version.id).map((p) => p.plates),
@@ -4510,7 +4429,6 @@ export const testStore = {
       changesNote: r.changesNote,
       rejectionReason: r.rejectionReason,
       lastError: r.lastError,
-      variantOfRecipeId: r.variantOfRecipeId,
       acceptedVersionId: r.acceptedVersionId,
       createdAt: r.createdAt,
       latestRun: run
@@ -4549,6 +4467,7 @@ export const testStore = {
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .map((l) => ({
           id: l.id,
+          versionId: l.versionId,
           body: l.body,
           cycle: l.cycle,
           authorName: userName(l.authorId),
@@ -4647,7 +4566,6 @@ export const testStore = {
     ingredientCatalogue.length = 0;
     recipeLessons.length = 0;
     recipeHistory.length = 0;
-    S.kitchenSettings = { ...DEFAULT_KITCHEN_SETTINGS };
     S.mealPlans.clear();
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);

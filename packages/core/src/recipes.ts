@@ -78,15 +78,6 @@ export function canEditMealPlan(
 }
 
 /**
- * Whether someone may change the kitchen settings (the largest pot and the
- * burners): captains only,
- * whatever teams they lead.
- */
-export function canSetKitchenSettings(rank: string): boolean {
-  return isViewerRank(rank) && rank === "captain";
-}
-
-/**
  * The moves a recipe's status may make.
  * - A suggestion is approved, rejected, or sent back for changes; the member's
  *   edit makes it a suggestion again.
@@ -201,6 +192,34 @@ export function mealPlanPlateCounts(days: readonly MealPlanDay[]): number[] {
     }
   }
   return [...counts].sort((a, b) => a - b);
+}
+
+const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+const WEEKDAY_DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+/**
+ * A day of the meal plan as people read it: "Day 3 · Mon 27 Apr" when the
+ * plan has the date of day 1, otherwise "Day 3". The date is a UTC round trip
+ * (Date.UTC rolls a month end or a leap day over itself), formatted in UTC so
+ * the time zone of whoever reads it cannot move it a day.
+ */
+export function mealPlanDayLabel(firstDay: string | null, day: number): string {
+  const match = firstDay ? ISO_DAY.exec(firstDay) : null;
+  if (!match) return `Day ${day}`;
+  const [, y, m, d] = match;
+  const date = new Date(
+    Date.UTC(Number(y), Number(m) - 1, Number(d) + day - 1),
+  );
+  if (Number.isNaN(date.getTime())) return `Day ${day}`;
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    WEEKDAY_DAY_MONTH.formatToParts(date).find((p) => p.type === type)?.value;
+  return `Day ${day} · ${part("weekday")} ${part("day")} ${part("month")}`;
 }
 
 /**

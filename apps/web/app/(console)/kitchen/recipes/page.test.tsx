@@ -82,7 +82,6 @@ describe("recipe book", () => {
         id: "11111111-1111-4111-8111-111111111111",
         title: "Gai yang",
         status: "accepted",
-        variantOfRecipeId: null,
         version: 2,
         plates: 50,
         readyPlates: [45, 50, 60],
@@ -92,7 +91,6 @@ describe("recipe book", () => {
         id: "22222222-2222-4222-8222-222222222222",
         title: "Gai yang, tofu",
         status: "accepted",
-        variantOfRecipeId: "11111111-1111-4111-8111-111111111111",
         version: 1,
         plates: 1,
         readyPlates: [1],
@@ -127,7 +125,8 @@ describe("recipe book", () => {
         .getByRole("link", { name: "Gai yang" })
         .getAttribute("href"),
     ).toBe("/kitchen/recipes/11111111-1111-4111-8111-111111111111");
-    expect(within(second!).getByText("Variation")).toBeTruthy();
+    // No variations any more (the owner, 2026-09-24): no badge on any row.
+    expect(screen.queryByText("Variation")).toBeNull();
     expect(within(second!).getByText("1 plate")).toBeTruthy();
     expect(screen.queryByText(/Vegan|Allergens/)).toBeNull();
   });

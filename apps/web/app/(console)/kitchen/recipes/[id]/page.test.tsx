@@ -19,8 +19,9 @@ import type { ProofreadProgress, RecipeDetail } from "@/lib/recipes";
 // book is a 404 for anyone but its submitter and the Kitchen's reviewers. In
 // the book it has two tabs, the choice in the address: Recipe (the plate
 // chips from the meal plan, the reader, "How this was scaled") and History
-// (where it came from, every recipe and source version, Claude's reports, the
-// lessons and the activity log).
+// (where it came from, the list of recipe versions and the list of source
+// versions, each opening on its own page and never in place, Claude's reports
+// and the activity log).
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn() }));
@@ -42,7 +43,6 @@ vi.mock("../actions", () => ({
   proofreadRecipeAction: vi.fn(),
   resubmitRecipeAction: vi.fn(),
   retypeRecipeTextAction: vi.fn(),
-  startVariationAction: vi.fn(),
 }));
 vi.mock("@camp404/ui/components/toast", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -99,7 +99,6 @@ function detail(overrides: Partial<RecipeDetail> = {}): RecipeDetail {
     changesNote: null,
     rejectionReason: null,
     lastError: null,
-    variantOfRecipeId: null,
     acceptedVersionId: null,
     createdAt: new Date("2026-09-20T08:00:00Z"),
     latestRun: null,
@@ -123,6 +122,7 @@ function mealPlanWith(counts: number[]) {
       ? counts.map((n) => ({ breakfast: n, lunch: 0, dinner: n }))
       : [{ breakfast: 0, lunch: 0, dinner: 0 }],
     version: 1,
+    firstDay: null,
     updatedAt: null,
   });
 }
@@ -588,18 +588,41 @@ describe("recipe page", () => {
     expect(listRecipeSources).not.toHaveBeenCalled();
   });
 
-  it("keeps the History tab in the address, with where it came from, every version, the lessons and the activity", async () => {
-    await renderAs({ id: "someone", rank: "camp_member" }, [], inBook(), {
+  it("keeps the History tab in the address: where it came from, lists of versions that open on their own pages, and the activity", async () => {
+    const recipe = inBook({
+      acceptedVersionId: "v2",
+      versions: [
+        {
+          id: "v2",
+          version: 2,
+          plates: 45,
+          recipe: BOOK_BODY,
+          report: null,
+          scalingNotes: ["SCALING-NOTE-V2"],
+          reason: "Less cumin",
+          runId: null,
+          authorName: "Kit Lead",
+          createdAt: new Date("2026-09-22T08:00:00Z"),
+        },
+        inBook().versions[0]!,
+      ],
+      lessons: [
+        {
+          id: "l1",
+          versionId: "v1",
+          body: "LESSON-ON-V1",
+          cycle: 2026,
+          authorName: "Rita Member",
+          createdAt: new Date("2026-09-23T08:00:00Z"),
+        },
+      ],
+    });
+    await renderAs({ id: "someone", rank: "camp_member" }, [], recipe, {
       tab: "history",
     });
     const links = within(tabs()).getAllByRole("link");
     expect(links[1]!.getAttribute("aria-current")).toBe("page");
     expect(links[0]!.getAttribute("href")).toBe(`/kitchen/recipes/${RECIPE}`);
-    // The recipe itself is on the other tab: here it is only inside a
-    // version, closed until opened.
-    for (const uses of screen.getAllByRole("list", { name: "Step 1 uses" })) {
-      expect(uses.closest("details")).not.toBeNull();
-    }
     expect(
       screen.queryByRole("navigation", { name: "Plate count" }),
     ).toBeNull();
@@ -608,17 +631,26 @@ describe("recipe page", () => {
       screen.getByRole("article", { name: "Where it came from" }),
     ).toBeTruthy();
     const versions = screen.getByRole("article", { name: "Recipe versions" });
-    // Each version opens in place, read only.
-    const version = within(versions).getByText("Version 1").closest("details")!;
-    expect(version).toBeTruthy();
+    // A list: each version is a link to its own page, newest first.
     expect(
-      within(version).getByRole("list", { name: "Step 1 uses" }).textContent,
-    ).toBe("3 kgRed lentils");
-    expect(within(version).queryByRole("textbox")).toBeNull();
+      within(versions)
+        .getAllByRole("link")
+        .map((l) => [l.textContent, l.getAttribute("href")]),
+    ).toEqual([
+      ["Version 2", `/kitchen/recipes/${RECIPE}/versions/2`],
+      ["Version 1", `/kitchen/recipes/${RECIPE}/versions/1`],
+    ]);
+    expect(within(versions).getByText("Current")).toBeTruthy();
+    // Nothing opens in place: no recipe, no notes, nothing to expand.
+    expect(document.querySelector("details")).toBeNull();
+    expect(screen.queryByRole("list", { name: "Step 1 uses" })).toBeNull();
+    expect(screen.queryByText("SCALING-NOTE-V2")).toBeNull();
+    // Lessons live on their version's page, not in a card here.
     expect(
-      screen.getByRole("article", { name: "Lessons learned" }),
-    ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add lesson" })).toBeTruthy();
+      screen.queryByRole("article", { name: "Lessons learned" }),
+    ).toBeNull();
+    expect(screen.queryByText("LESSON-ON-V1")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add lesson" })).toBeNull();
     expect(screen.getByRole("article", { name: "Activity" })).toBeTruthy();
 
     // Not the member's words: no original text, no source versions.
@@ -628,12 +660,22 @@ describe("recipe page", () => {
       screen.queryByRole("article", { name: "Source versions" }),
     ).toBeNull();
     expect(listRecipeSources).not.toHaveBeenCalled();
-    expect(
-      screen.queryByRole("button", { name: /Start a variation/ }),
-    ).toBeNull();
   });
 
-  it("shows the submitter and the reviewers the original text and every source version", async () => {
+  it("gives no reviewer a way to start a variation", async () => {
+    for (const [viewer, leads] of [
+      [{ id: "lead", rank: "team_lead" }, ["kitchen"]],
+      [{ id: "cap", rank: "captain" }, []],
+    ] as const) {
+      for (const tab of ["recipe", "history"]) {
+        await renderAs(viewer, [...leads], inBook(), { tab });
+        expect(screen.queryByText(/variation/i)).toBeNull();
+        cleanup();
+      }
+    }
+  });
+
+  it("lists every source version for the submitter and the reviewers, each a link to its own page", async () => {
     vi.mocked(listRecipeSources).mockResolvedValue([
       {
         id: "s2",
@@ -669,12 +711,18 @@ describe("recipe page", () => {
         within(source).getByRole("link", { name: "https://example.com/dal" }),
       ).toBeTruthy();
       const sources = screen.getByRole("article", { name: "Source versions" });
-      const entries = within(sources)
-        .getAllByText(/^Source version \d$/)
-        .map((e) => e.textContent);
-      expect(entries).toEqual(["Source version 2", "Source version 1"]);
-      expect(within(sources).getByText("SECOND-SOURCE-WORDS")).toBeTruthy();
-      expect(within(sources).getByText("FIRST-SOURCE-WORDS")).toBeTruthy();
+      expect(
+        within(sources)
+          .getAllByRole("link")
+          .map((l) => [l.textContent, l.getAttribute("href")]),
+      ).toEqual([
+        ["Source version 2", `/kitchen/recipes/${RECIPE}/sources/2`],
+        ["Source version 1", `/kitchen/recipes/${RECIPE}/sources/1`],
+      ]);
+      // The words open on the source version's own page, never here.
+      expect(within(sources).queryByText("SECOND-SOURCE-WORDS")).toBeNull();
+      expect(within(sources).queryByText("FIRST-SOURCE-WORDS")).toBeNull();
+      expect(sources.querySelector("details")).toBeNull();
       expect(listRecipeSources).toHaveBeenLastCalledWith(RECIPE);
       cleanup();
     }

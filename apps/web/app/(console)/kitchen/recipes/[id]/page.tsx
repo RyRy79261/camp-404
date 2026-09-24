@@ -6,14 +6,11 @@ import {
   canApproveRecipe,
   canRunProofread,
   mealPlanPlateCounts,
-  sectionText,
 } from "@camp404/core";
 import {
   MAX_PLATES,
-  SOURCE_SECTIONS,
   type DraftReport,
   type RecipeStatus,
-  type SourceSection,
 } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -30,7 +27,12 @@ import { RecipeReader } from "@/components/recipes/recipe-reader";
 import { RecipeStatusBadge } from "@/components/recipes/recipe-status-badge";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getMealPlan } from "@/lib/meal-plan";
-import { RECIPES_PATH, recipeEditPath, recipePath } from "@/lib/recipe-copy";
+import {
+  RECIPES_PATH,
+  recipeEditPath,
+  recipeSourceVersionPath,
+  recipeVersionPath,
+} from "@/lib/recipe-copy";
 import {
   SOURCE_LABEL,
   formatDay,
@@ -53,12 +55,7 @@ import { getLeadTeams } from "@/lib/users";
 import { DecisionPanel, EditAndResubmit } from "./decision-panel";
 import { PlateBar } from "./plate-bar";
 import { ProofreadButton } from "./proofread-button";
-import {
-  AcceptProofread,
-  AddLesson,
-  RetypeText,
-  StartVariation,
-} from "./recipe-actions";
+import { AcceptProofread, RetypeText } from "./recipe-actions";
 import { RecipeTabs, type RecipeTab } from "./recipe-tabs";
 
 export const dynamic = "force-dynamic";
@@ -81,9 +78,11 @@ export const metadata = { title: "Recipe — Camp 404" };
 //    amounts; one without shows the version's own count and says so. Food
 //    does not scale by multiplying, so nothing here does any maths on an
 //    amount.
-//  - History: where it came from with the original text, every recipe
-//    version and every source version (each opens in place, read only),
-//    Claude's reports, the lessons learned and the activity log.
+//  - History: where it came from with the original text, the list of recipe
+//    versions and the list of source versions (each opens on its own page,
+//    read only: versions/[version] and sources/[version], where a version's
+//    notes, the lessons learned cooking it, live), Claude's reports and the
+//    activity log. Nothing opens in place.
 //
 // BEFORE THE BOOK: composed like the AfrikaBurn console's registration
 // review: a breadcrumb, the heading with the status and a meta line, a main
@@ -399,29 +398,6 @@ function HistoryList({ items }: { items: HistoryItem[] }) {
   );
 }
 
-function VariationOf({ detail }: { detail: RecipeDetail }) {
-  if (!detail.variantOfRecipeId) return null;
-  return (
-    <p className="text-sm text-muted-foreground">
-      A variation of{" "}
-      <Link
-        href={recipePath(detail.variantOfRecipeId)}
-        className="text-accent hover:underline"
-      >
-        another recipe
-      </Link>
-      .
-    </p>
-  );
-}
-
-const SOURCE_SECTION_TITLES: Record<SourceSection, string> = {
-  ingredients: "Ingredients",
-  equipment: "Equipment",
-  steps: "Steps",
-  notes: "Notes",
-};
-
 /** The recipe's newest run on the recipe itself, for the heading's button. */
 function openRunOf(
   progress: Awaited<ReturnType<typeof getProofreadProgress>>,
@@ -467,64 +443,50 @@ function HeadingActions({
   );
 }
 
-/** Every recipe version, newest first; each opens in place to be read. */
+/** Every recipe version, newest first; each opens on its own page. */
 function VersionList({
+  recipeId,
   versions,
   currentId,
 }: {
+  recipeId: string;
   versions: RecipeDetail["versions"];
   currentId: string;
 }) {
   return (
     <ul className="flex flex-col divide-y divide-border">
       {versions.map((v) => (
-        <li key={v.id} className="py-2.5 text-sm">
-          <details>
-            <summary className="flex cursor-pointer list-none flex-col gap-0.5">
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-accent hover:underline">
-                  Version {v.version}
-                </span>
-                {v.id === currentId && <Badge variant="success">Current</Badge>}
-                <span className="text-muted-foreground">
-                  · {platesLabel(v.plates)}
-                </span>
-              </span>
-              {v.reason && (
-                <span className="text-muted-foreground">{v.reason}</span>
-              )}
-              <span className="text-xs text-muted-foreground">
-                {v.authorName ?? "A former member"} · {formatDay(v.createdAt)}
-              </span>
-            </summary>
-            <div className="mt-4 flex flex-col gap-4">
-              <RecipeReader
-                recipe={v.recipe}
-                idPrefix={`version-${v.version}`}
-                layout="stacked"
-              />
-              {v.scalingNotes.length > 0 && (
-                <div>
-                  <p className="font-medium">How this was scaled</p>
-                  <ul className="mt-1 list-disc space-y-1 break-words pl-5">
-                    {v.scalingNotes.map((note, i) => (
-                      <li key={i}>{note}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </details>
+        <li key={v.id} className="flex flex-col gap-0.5 py-2.5 text-sm">
+          <span className="flex flex-wrap items-center gap-2">
+            <Link
+              href={recipeVersionPath(recipeId, v.version)}
+              className="font-medium text-accent hover:underline"
+            >
+              Version {v.version}
+            </Link>
+            {v.id === currentId && <Badge variant="success">Current</Badge>}
+            <span className="text-muted-foreground">
+              · {platesLabel(v.plates)}
+            </span>
+          </span>
+          {v.reason && (
+            <span className="text-muted-foreground">{v.reason}</span>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {v.authorName ?? "A former member"} · {formatDay(v.createdAt)}
+          </span>
         </li>
       ))}
     </ul>
   );
 }
 
-/** Every version of the recipe's source, newest first, each readable. */
+/** Every version of the recipe's source, newest first; each opens on its own page. */
 function SourceVersionList({
+  recipeId,
   sources,
 }: {
+  recipeId: string;
   sources: RecipeSourceHistoryEntry[];
 }) {
   if (sources.length === 0) {
@@ -533,34 +495,20 @@ function SourceVersionList({
   return (
     <ul className="flex flex-col divide-y divide-border">
       {sources.map((source) => (
-        <li key={source.id} className="py-2.5 text-sm">
-          <details>
-            <summary className="flex cursor-pointer list-none flex-col gap-0.5">
-              <span className="font-medium text-accent hover:underline">
-                Source version {source.version}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {source.authorName ?? "A former member"} ·{" "}
-                {formatDay(source.createdAt)}
-                {source.serves !== null
-                  ? ` · Serves ${platesLabel(source.serves)}`
-                  : ""}
-              </span>
-            </summary>
-            <div className="mt-3 flex max-h-[32rem] flex-col gap-3 overflow-y-auto rounded-lg border border-border bg-muted/30 p-3">
-              {SOURCE_SECTIONS.map((key) => {
-                const text = sectionText(source.sections[key]);
-                return text ? (
-                  <div key={key}>
-                    <p className="font-medium">{SOURCE_SECTION_TITLES[key]}</p>
-                    <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
-                      {text}
-                    </p>
-                  </div>
-                ) : null;
-              })}
-            </div>
-          </details>
+        <li key={source.id} className="flex flex-col gap-0.5 py-2.5 text-sm">
+          <Link
+            href={recipeSourceVersionPath(recipeId, source.version)}
+            className="font-medium text-accent hover:underline"
+          >
+            Source version {source.version}
+          </Link>
+          <span className="text-xs text-muted-foreground">
+            {source.authorName ?? "A former member"} ·{" "}
+            {formatDay(source.createdAt)}
+            {source.serves !== null
+              ? ` · Serves ${platesLabel(source.serves)}`
+              : ""}
+          </span>
         </li>
       ))}
     </ul>
@@ -703,7 +651,6 @@ export default async function RecipePage({
         <p className="-mt-4 text-sm text-muted-foreground tabular-nums">
           {meta.join(" · ")}
         </p>
-        <VariationOf detail={detail} />
       </div>
     );
 
@@ -755,12 +702,11 @@ export default async function RecipePage({
               title="Recipe versions"
               description="Every version, newest first. Open one to read it."
             >
-              <VersionList versions={detail.versions} currentId={current.id} />
-              {reviewer && (
-                <div>
-                  <StartVariation recipeId={detail.id} title={detail.title} />
-                </div>
-              )}
+              <VersionList
+                recipeId={detail.id}
+                versions={detail.versions}
+                currentId={current.id}
+              />
             </Rail>
 
             {privileged && (
@@ -769,7 +715,7 @@ export default async function RecipePage({
                 title="Source versions"
                 description="Every version of the text Claude reads, newest first. Open one to read it."
               >
-                <SourceVersionList sources={sources} />
+                <SourceVersionList recipeId={detail.id} sources={sources} />
               </Rail>
             )}
 
@@ -788,30 +734,6 @@ export default async function RecipePage({
                 ))}
               </Rail>
             )}
-
-            <Rail
-              id="recipe-lessons"
-              title="Lessons learned"
-              description="What the kitchen learned cooking it, by burn year. Anyone in camp can add one."
-            >
-              {detail.lessons.length > 0 && (
-                <ul className="flex flex-col divide-y divide-border">
-                  {detail.lessons.map((l) => (
-                    <li
-                      key={l.id}
-                      className="flex flex-col gap-0.5 py-2.5 text-sm"
-                    >
-                      <span className="whitespace-pre-wrap">{l.body}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {l.authorName ?? "A former member"} · Burn {l.cycle} ·{" "}
-                        {formatDay(l.createdAt)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <AddLesson recipeId={detail.id} />
-            </Rail>
 
             <Rail id="recipe-activity" title="Activity">
               <HistoryList items={history} />
@@ -907,9 +829,6 @@ export default async function RecipePage({
         description={meta.join(" · ")}
         actions={actions}
       />
-      <div className="-mt-3 mb-6 flex flex-col gap-2">
-        <VariationOf detail={detail} />
-      </div>
 
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-6">

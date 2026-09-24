@@ -5,13 +5,13 @@ vi.mock("server-only", () => ({}));
 
 import {
   ANSWER_NEEDED,
+  LESSON_VERSION_GONE,
   NEVER_STARTED_ERROR,
   NO_AI_CONSENT,
   NO_TEXT_TO_SEND,
   NOT_AN_APPROVED_MEMBER,
   NOT_A_KITCHEN_REVIEWER,
   ONLY_A_REVIEWER_SENDS,
-  ONLY_A_CAPTAIN_SETS_KITCHEN,
   PLATE_RUN_VERSION_GONE,
   RECIPE_CHANGED,
   RECIPE_DECIDED,
@@ -177,7 +177,7 @@ describe("recipe twins", () => {
     ).toEqual({ ok: false, error: RECIPE_DECIDED });
   });
 
-  it("lets a Kitchen lead queue proofreading (2A), and only a captain change the kitchen settings", () => {
+  it("lets a Kitchen lead queue proofreading (2A), and not a lead of another team", () => {
     const captain = makeUser("Cap", "captain");
     const kitchen = lead("Kai", "kitchen");
     const structures = lead("Sam", "structures");
@@ -191,13 +191,6 @@ describe("recipe twins", () => {
       ok: false,
       error: ONLY_A_REVIEWER_SENDS,
     });
-    expect(
-      testStore.setKitchenSettings({
-        actorId: kitchen.id,
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-      }),
-    ).toEqual({ ok: false, error: ONLY_A_CAPTAIN_SETS_KITCHEN });
     expect(queue(kitchen.id, [id]).ok).toBe(true);
     expect(captain.rank).toBe("captain");
   });
@@ -302,10 +295,6 @@ describe("recipe twins", () => {
 
     testStore.reset();
     expect(testStore.listRecipeBook()).toEqual([]);
-    expect(testStore.getKitchenSettings()).toEqual({
-      kitchenLargestPotLitres: null,
-      kitchenBurnerCount: null,
-    });
   });
 
   it("names a suggestion from its text, and refuses text that is only a link", () => {
@@ -350,24 +339,6 @@ describe("recipe twins", () => {
       lastError: NEVER_STARTED_ERROR,
     });
     expect(testStore.claimSourceRun(q.runIds[0]!, NOW)).toBeNull();
-  });
-
-  it("lets a captain set the pot and the burners, and nothing else", () => {
-    const captain = makeUser("Cap", "captain");
-    expect(
-      testStore.setKitchenSettings({
-        actorId: captain.id,
-        kitchenLargestPotLitres: 50,
-        kitchenBurnerCount: 3,
-      }),
-    ).toEqual({
-      ok: true,
-      settings: { kitchenLargestPotLitres: 50, kitchenBurnerCount: 3 },
-    });
-    expect(testStore.getKitchenSettings()).toEqual({
-      kitchenLargestPotLitres: 50,
-      kitchenBurnerCount: 3,
-    });
   });
 
   it("keeps an accepted recipe accepted when a re-run fails, and a proofread one on its earlier result", () => {
@@ -775,7 +746,7 @@ describe("recipe twins", () => {
 
     const runs = () => testStore.listProofreadRuns({ limit: 200 });
 
-    it("seeds version 1 from a suggestion, and writes one for a resubmission, a retype and a cleared variation", () => {
+    it("seeds version 1 from a suggestion, and writes one for a resubmission and a retype", () => {
       const captain = makeUser("Cap", "captain");
       const kitchen = lead("Kai", "kitchen");
       const member = makeUser("Mo");
@@ -821,39 +792,6 @@ describe("recipe twins", () => {
         authorId: kitchen.id,
         sections: sourceFromText("Retyped."),
       });
-
-      // A variation copies a cleared source; an unticked one starts empty.
-      testStore.seedAcceptedVersion({
-        recipeId: id,
-        authorId: captain.id,
-        reason: "First",
-        recipe: RECIPE,
-      });
-      const variation = testStore.startVariation({
-        recipeId: id,
-        actorId: captain.id,
-        title: "Dhal, mild",
-      });
-      if (!variation.ok) throw new Error(variation.error);
-      expect(testStore.getRecipeSource(variation.id)).toMatchObject({
-        version: 1,
-        authorId: captain.id,
-        sections: sourceFromText("Retyped."),
-      });
-      const unticked = approvedRecipe(member.id, captain.id, false);
-      testStore.seedAcceptedVersion({
-        recipeId: unticked,
-        authorId: captain.id,
-        reason: "First",
-        recipe: RECIPE,
-      });
-      const empty = testStore.startVariation({
-        recipeId: unticked,
-        actorId: captain.id,
-        title: "Curry, mild",
-      });
-      if (!empty.ok) throw new Error(empty.error);
-      expect(testStore.getRecipeSource(empty.id)).toBeNull();
     });
 
     it("lets a Kitchen lead send (canRunProofread); a Structures lead, a member and a demoted lead are refused with nothing written", () => {
@@ -1024,10 +962,11 @@ describe("recipe twins", () => {
         plates: 40,
         exchange: [],
         note: null,
-        kitchen: expect.objectContaining({
-          kitchenLargestPotLitres: null,
-          kitchenBurnerCount: null,
-        }),
+        kitchen: {
+          kitchenPlatesBreakfast: null,
+          kitchenPlatesLunch: null,
+          kitchenPlatesDinner: null,
+        },
         previous: null,
       });
       expect(JSON.stringify(claimed)).not.toContain("Mo");
@@ -1484,5 +1423,76 @@ describe("meal plan twin", () => {
       }).ok,
     ).toBe(false);
     expect(testStore.getMealPlan()).toMatchObject({ ...two, version: 1 });
+  });
+
+  it("keeps the date of day 1 with the plan, and refuses one that is not a date", () => {
+    const captain = makeUser("Cap", "captain");
+    const plan = {
+      daysOnSite: 1,
+      days: [{ breakfast: 20, lunch: 0, dinner: 25 }],
+    };
+    expect(testStore.getMealPlan().firstDay).toBeNull();
+    expect(
+      testStore.setMealPlan({
+        actorId: captain.id,
+        ...plan,
+        firstDay: "2026-04-31",
+        expectedVersion: 0,
+      }),
+    ).toEqual({ ok: false, error: "Pick the date of day 1." });
+    expect(
+      testStore.setMealPlan({
+        actorId: captain.id,
+        ...plan,
+        firstDay: "2026-04-25",
+        expectedVersion: 0,
+      }),
+    ).toEqual({ ok: true, version: 1 });
+    expect(testStore.getMealPlan()).toMatchObject({
+      firstDay: "2026-04-25",
+      version: 1,
+    });
+  });
+});
+
+describe("lessons twin", () => {
+  it("adds a lesson to one of the recipe's versions only, and says which", () => {
+    const captain = makeUser("Cap", "captain");
+    const member = makeUser("Mo");
+    const id = suggest(member.id);
+    const other = suggest(member.id);
+    const first = testStore.seedAcceptedVersion({
+      recipeId: id,
+      authorId: captain.id,
+      recipe: RECIPE,
+    });
+    const elsewhere = testStore.seedAcceptedVersion({
+      recipeId: other,
+      authorId: captain.id,
+      recipe: RECIPE,
+    });
+    expect(
+      testStore.addLesson({
+        recipeId: id,
+        versionId: elsewhere.versionId,
+        authorId: member.id,
+        body: "Soak overnight.",
+      }),
+    ).toEqual({ ok: false, error: LESSON_VERSION_GONE });
+    expect(
+      testStore.addLesson({
+        recipeId: id,
+        versionId: first.versionId,
+        authorId: member.id,
+        body: "Soak overnight.",
+      }).ok,
+    ).toBe(true);
+    expect(testStore.getRecipeDetail(id)?.lessons).toEqual([
+      expect.objectContaining({
+        versionId: first.versionId,
+        body: "Soak overnight.",
+      }),
+    ]);
+    expect(testStore.getRecipeDetail(other)?.lessons).toEqual([]);
   });
 });

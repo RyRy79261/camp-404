@@ -16,7 +16,7 @@ import {
 //
 // What is sent: the recipe's name, its source as the Markdown-like text built
 // from the editor's JSON, how many the source says it serves, the plates to
-// write for, the kitchen's size and meal counts, the captain's note, and every
+// write for, the kitchen's meal counts, the captain's note, and every
 // earlier round of Claude's questions with the reviewer's answer. Never the
 // member's note on why it suits the camp, anyone's name, or audio.
 
@@ -30,8 +30,6 @@ export interface RecipeSourceInput {
   /** The plates every amount must be written for. */
   plates: number;
   kitchen: {
-    largestPotLitres: number | null;
-    burnerCount: number | null;
     platesBreakfast: number | null;
     platesLunch: number | null;
     platesDinner: number | null;
@@ -50,7 +48,7 @@ const MAX_QUESTIONS = 5;
 
 const list = (values: readonly string[]) => values.join(", ");
 
-const SYSTEM = `You write recipes for the kitchen of Camp 404, an AfrikaBurn theme camp that cooks for itself in the Tankwa Karoo desert. A cook reads your recipe at a gas burner and cooks from it for the whole camp, so it must be exact, plain and complete.
+const SYSTEM = `You write recipes for the kitchen of Camp 404, an AfrikaBurn theme camp that cooks for itself in the Tankwa Karoo desert. A cook reads your recipe at the stove and cooks from it for the whole camp, so it must be exact, plain and complete.
 
 How to answer:
 - Answer only by calling the ${TOOL_NAME} tool, once. Never answer in plain text.
@@ -83,7 +81,7 @@ The recipe:
 - The summary is one or two sentences about the dish.
 
 How it was scaled:
-- In scalingNotes, write short lines on how you scaled the amounts from what the source serves to the camp's plates, and why. For example: salt and spices grow more slowly than the bulk ingredients; water and other liquids depend on the pot size and on evaporation, not only on the plates; cooking times do not grow with the quantity; and how many pots the kitchen's largest pot means.
+- In scalingNotes, write short lines on how you scaled the amounts from what the source serves to the camp's plates, and why. For example: salt and spices grow more slowly than the bulk ingredients; water and other liquids depend on evaporation, not only on the plates; and cooking times do not grow with the quantity.
 - When the message says the source's serves is not given, say how many the source suggests it serves, and that you assumed it.
 
 The report:
@@ -115,8 +113,6 @@ export const recipeSourcePrompt = {
       `Name: ${input.title}`,
       "",
       "Kitchen:",
-      `- Largest pot: ${known(input.kitchen.largestPotLitres, "litres")}`,
-      `- Burners: ${known(input.kitchen.burnerCount, "burners")}`,
       `- Plates at breakfast: ${known(input.kitchen.platesBreakfast, "plates")}`,
       `- Plates at lunch: ${known(input.kitchen.platesLunch, "plates")}`,
       `- Plates at dinner: ${known(input.kitchen.platesDinner, "plates")}`,

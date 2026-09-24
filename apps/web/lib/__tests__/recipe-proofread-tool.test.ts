@@ -24,6 +24,9 @@ const BUMP =
 const PINNED: Record<string, string> = {
   "2026-09-24.1":
     "7d0e15ff89f1c14ece609ebe57352fb7fe89b232c4644c653545c5ff940504f8",
+  // The same tool: 2026-09-24.2 changed only the text (no pot size, no burners).
+  "2026-09-24.2":
+    "7d0e15ff89f1c14ece609ebe57352fb7fe89b232c4644c653545c5ff940504f8",
 };
 
 const fingerprint = () =>
@@ -70,6 +73,9 @@ const PLATES_BUMP =
 const PLATES_PINNED: Record<string, string> = {
   "2026-09-25.1":
     "469fb6c1266f3afb7c7ee7b039a061cd169870cc7ed3cedffb709cf10fc9f140",
+  // pots no longer names the kitchen's largest pot or its size.
+  "2026-09-25.2":
+    "7c372fd3f0f8c45cf57dcfe5160fd6881e6332125d84c6fe478736432f6932cf",
 };
 
 const platesFingerprint = () =>
@@ -84,6 +90,8 @@ describe("PLATES_TOOL", () => {
     for (const field of ["lines", "pots", "notes", "report", "unsure"]) {
       expect(schema).toContain(`"${field}"`);
     }
+    // The kitchen's pot size and burners are not settings any more.
+    expect(schema).not.toMatch(/largest pot|pot size|burner/i);
     expect(schema).not.toContain('"science"');
     expect(schema).not.toContain('"oz"');
   });

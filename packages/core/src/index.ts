@@ -98,11 +98,10 @@
 //     and the fuel maths (fuelLine, fuelPerHour, fuelForPlan,
 //     jerryCansNeeded, legacyFuelEstimate) (./power)
 //   - recipes: canApproveRecipe and canRunProofread (a captain or a Kitchen
-//     lead), canSetKitchenSettings (captains only),
-//     RECIPE_TRANSITIONS/canMoveRecipe, groupLinesByCategory +
+//     lead), RECIPE_TRANSITIONS/canMoveRecipe, groupLinesByCategory +
 //     groupStepsByPhase for the recipe page, defaultPlates, and the meal
-//     plan's canEditMealPlan, mealPlanPlateCounts and mealPlanPeaks
-//     (./recipes)
+//     plan's canEditMealPlan, mealPlanPlateCounts, mealPlanPeaks and
+//     mealPlanDayLabel (./recipes)
 //   - recipe sources: sourceText (the Markdown-like text Claude reads),
 //     sourceFromText (pasted text into sections), emptySourceSections,
 //     sameSections and sameSource (./recipe-source)

@@ -10,10 +10,10 @@ import {
   canEditMealPlan,
   canMoveRecipe,
   canRunProofread,
-  canSetKitchenSettings,
   defaultPlates,
   groupLinesByCategory,
   groupStepsByPhase,
+  mealPlanDayLabel,
   mealPlanPeaks,
   mealPlanPlateCounts,
 } from "../recipes";
@@ -61,16 +61,6 @@ describe("canRunProofread", () => {
     for (const rank of ["", "member", "Captain", "admin", "toString"]) {
       expect(canRunProofread(rank, ["kitchen"]), rank).toBe(false);
     }
-  });
-});
-
-describe("canSetKitchenSettings", () => {
-  it("is a captain's alone: 2A does not open the settings to leads", () => {
-    expect(canSetKitchenSettings("captain")).toBe(true);
-    expect(canSetKitchenSettings("team_lead")).toBe(false);
-    expect(canSetKitchenSettings("camp_member")).toBe(false);
-    expect(canSetKitchenSettings("admin")).toBe(false);
-    expect(canSetKitchenSettings("toString")).toBe(false);
   });
 });
 
@@ -223,6 +213,18 @@ describe("the meal plan", () => {
     // The largest count in the plan is what Claude writes a recipe for.
     expect(defaultPlates(mealPlanPeaks(days))).toBe(60);
     expect(defaultPlates(mealPlanPeaks([]))).toBe(DEFAULT_PLATES);
+  });
+
+  it("labels each day with its date when day 1 has one, across a month end and a leap day", () => {
+    expect(mealPlanDayLabel("2026-04-25", 1)).toBe("Day 1 · Sat 25 Apr");
+    expect(mealPlanDayLabel("2026-04-25", 6)).toBe("Day 6 · Thu 30 Apr");
+    expect(mealPlanDayLabel("2026-04-25", 7)).toBe("Day 7 · Fri 1 May");
+    expect(mealPlanDayLabel("2028-02-28", 2)).toBe("Day 2 · Tue 29 Feb");
+    expect(mealPlanDayLabel("2028-02-28", 3)).toBe("Day 3 · Wed 1 Mar");
+    expect(mealPlanDayLabel("2026-12-31", 2)).toBe("Day 2 · Fri 1 Jan");
+    // No date yet, or one that is not a date: the day number alone.
+    expect(mealPlanDayLabel(null, 4)).toBe("Day 4");
+    expect(mealPlanDayLabel("25 April", 4)).toBe("Day 4");
   });
 
   it("lets a captain or a Kitchen lead edit it, and nobody else", () => {

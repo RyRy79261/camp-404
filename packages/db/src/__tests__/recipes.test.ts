@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import type { AuditAction } from "@camp404/core";
 import { sourceFromText, sourceText } from "@camp404/core";
@@ -20,7 +20,6 @@ import {
   NO_TEXT_TO_SEND,
   NOT_A_KITCHEN_REVIEWER,
   NOT_AN_APPROVED_MEMBER,
-  ONLY_A_CAPTAIN_SETS_KITCHEN,
   ONLY_A_REVIEWER_SENDS,
   PLATE_RUN_VERSION_GONE,
   RECIPE_CHANGED,
@@ -32,6 +31,7 @@ import {
   SOURCE_CHANGED,
   SOURCE_INVALID,
   STALE_RUN_ERROR,
+  LESSON_VERSION_GONE,
   VERSION_CHANGED,
   DRAFT_UNREADABLE,
   acceptProofread,
@@ -48,7 +48,6 @@ import {
   failRun,
   failedPlateCounts,
   forRecipe,
-  getKitchenSettings,
   getPlateCount,
   getProofreadProgress,
   getRecipeDetail,
@@ -65,9 +64,7 @@ import {
   resubmitRecipe,
   retypeRecipeText,
   sendSourceForProofreading,
-  setKitchenSettings,
   setRunStage,
-  startVariation,
   suggestRecipe,
   listRecipeSources,
 } from "../recipes";
@@ -90,9 +87,7 @@ const REJECTED: AuditAction = "recipe.rejected";
 const QUEUED: AuditAction = "recipe.proofread_queued";
 const ACCEPTED: AuditAction = "recipe.accepted";
 const RETYPED: AuditAction = "recipe.text_retyped";
-const VARIATION: AuditAction = "recipe.variation_started";
 const RERUN_REQUESTED: AuditAction = "recipe.rerun_requested";
-const KITCHEN_SETTINGS: AuditAction = "camp.kitchen_settings.changed";
 
 function recipe(overrides: Partial<KitchenRecipeInput> = {}): KitchenRecipe {
   return KitchenRecipe.parse({
@@ -1311,106 +1306,82 @@ describe("recipes", () => {
     });
   });
 
-  describe("versions by hand, variations and lessons", () => {
-    it("starts a variation as an approved sibling, and takes lessons on accepted recipes only", async () => {
-      const { captain, kitchenLead, member } = await people();
+  describe("lessons", () => {
+    it("takes a lesson on one of an accepted recipe's versions only, and keeps which one", async () => {
+      const { captain, member } = await people();
       const id = await approved(member.id, captain.id);
-      expect(
-        (await addLesson({ recipeId: id, authorId: member.id, body: "x" })).ok,
-      ).toBe(false);
-      await seedAcceptedVersion(h.db(), {
+      const other = await approved(member.id, captain.id, {
+        title: "Other dhal",
+      });
+      const v1 = await seedAcceptedVersion(h.db(), {
         recipeId: id,
         authorId: captain.id,
         reason: "First",
         recipe: recipe(),
       });
-
-      const variation = await startVariation({
+      const v2 = await seedAcceptedVersion(h.db(), {
         recipeId: id,
-        actorId: kitchenLead.id,
-        title: "Dhal, gluten-free",
+        authorId: captain.id,
+        reason: "Second",
+        recipe: recipe(),
       });
-      if (!variation.ok) throw new Error(variation.error);
-      const [row] = await h
-        .db()
-        .select()
-        .from(schema.recipes)
-        .where(eq(schema.recipes.id, variation.id));
-      expect(row).toMatchObject({
-        status: "approved",
-        variantOfRecipeId: id,
-        textAuthorId: kitchenLead.id,
-        rawText: "2 cups red lentils, salt. Simmer.",
+      const elsewhere = await seedAcceptedVersion(h.db(), {
+        recipeId: other,
+        authorId: captain.id,
+        reason: "First",
+        recipe: recipe(),
       });
-      expect(await auditRows(VARIATION)).toHaveLength(1);
+      // Another recipe's version, or no real version, is refused.
+      for (const versionId of [
+        elsewhere.versionId,
+        "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "v1",
+      ]) {
+        expect(
+          await addLesson({
+            recipeId: id,
+            versionId,
+            authorId: member.id,
+            body: "x",
+          }),
+        ).toEqual({ ok: false, error: LESSON_VERSION_GONE });
+      }
 
       const lesson = await addLesson({
         recipeId: id,
+        versionId: v1.versionId,
         authorId: member.id,
         body: "Tinned lentils work fine.",
       });
       expect(lesson.ok).toBe(true);
       const [stored] = await h.db().select().from(schema.recipeLessons);
-      expect(stored?.cycle).toBe(1);
+      expect(stored).toMatchObject({
+        recipeId: id,
+        versionId: v1.versionId,
+        cycle: 1,
+      });
+      expect((await getRecipeDetail(id))?.lessons).toEqual([
+        expect.objectContaining({
+          versionId: v1.versionId,
+          body: "Tinned lentils work fine.",
+        }),
+      ]);
+      expect(v2.versionId).not.toBe(v1.versionId);
     });
 
-    it("does not copy text its author never agreed to send into a variation", async () => {
-      const { captain, kitchenLead, member } = await people();
-      const id = await approved(member.id, captain.id, { aiConsent: false });
-      await seedAcceptedVersion(h.db(), {
-        recipeId: id,
-        authorId: captain.id,
-        reason: "First",
-        recipe: recipe(),
-      });
-      const variation = await startVariation({
-        recipeId: id,
-        actorId: kitchenLead.id,
-        title: "Dhal, nut-free",
-      });
-      if (!variation.ok) throw new Error(variation.error);
-      const [row] = await h
-        .db()
-        .select({ rawText: schema.recipes.rawText })
-        .from(schema.recipes)
-        .where(eq(schema.recipes.id, variation.id));
-      expect(row?.rawText).toBeNull();
-    });
-  });
-
-  describe("kitchen settings", () => {
-    it("lets only a captain change them, and records before and after", async () => {
-      const { captain, kitchenLead } = await people();
-      expect(await getKitchenSettings()).toEqual({
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-      });
-      const next = { kitchenLargestPotLitres: 60, kitchenBurnerCount: 4 };
+    it("refuses a lesson on a recipe with no accepted version", async () => {
+      const { captain, member } = await people();
+      const id = await approved(member.id, captain.id);
       expect(
-        await setKitchenSettings({ actorId: kitchenLead.id, ...next }),
-      ).toEqual({
-        ok: false,
-        error: ONLY_A_CAPTAIN_SETS_KITCHEN,
-      });
-      expect(
-        (await setKitchenSettings({ actorId: captain.id, ...next })).ok,
-      ).toBe(true);
-      expect(await getKitchenSettings()).toEqual(next);
-      const rows = await h
-        .db()
-        .select()
-        .from(schema.auditLog)
-        .where(
-          and(
-            eq(schema.auditLog.action, KITCHEN_SETTINGS),
-            eq(schema.auditLog.actorId, captain.id),
-          ),
-        );
-      expect(rows).toHaveLength(1);
-      expect(rows[0]?.metadata).toEqual({
-        before: { kitchenLargestPotLitres: null, kitchenBurnerCount: null },
-        after: next,
-      });
+        (
+          await addLesson({
+            recipeId: id,
+            versionId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+            authorId: member.id,
+            body: "x",
+          })
+        ).ok,
+      ).toBe(false);
     });
   });
 
@@ -1518,7 +1489,6 @@ describe("recipes", () => {
         fromPlates: 40,
         plates: 45,
         recipe: recipe(),
-        kitchen: { kitchenLargestPotLitres: null, kitchenBurnerCount: null },
       });
       // Never the member's text or their note.
       expect(JSON.stringify(claimed)).not.toContain("2 cups red lentils");
@@ -1937,7 +1907,7 @@ describe("recipes", () => {
       );
     });
 
-    it("writes a source version for a resubmission, a retype and a cleared variation", async () => {
+    it("writes a source version for a resubmission and a retype", async () => {
       const { captain, kitchenLead, member } = await people();
       const id = await suggest(member.id);
       await decideRecipe({
@@ -2240,10 +2210,11 @@ describe("recipes", () => {
         plates: 40,
         exchange: [],
         note: null,
-        kitchen: expect.objectContaining({
-          kitchenLargestPotLitres: null,
-          kitchenBurnerCount: null,
-        }),
+        kitchen: {
+          kitchenPlatesBreakfast: null,
+          kitchenPlatesLunch: null,
+          kitchenPlatesDinner: null,
+        },
         // Not in the book yet: nothing to revise.
         previous: null,
       });
@@ -2777,55 +2748,6 @@ describe("recipes", () => {
       expect(await recipeRow(id)).toMatchObject({
         status: "approved",
         lastError: STALE_RUN_ERROR,
-      });
-    });
-
-    it("copies a cleared source into a variation, and starts an uncleared one empty", async () => {
-      const { captain, member } = await people();
-      const cleared = await approved(member.id, captain.id);
-      const unticked = await approved(member.id, captain.id, {
-        title: "Secret curry",
-        aiConsent: false,
-      });
-      for (const id of [cleared, unticked]) {
-        await seedAcceptedVersion(h.db(), {
-          recipeId: id,
-          authorId: captain.id,
-          reason: "First",
-          recipe: recipe(),
-        });
-      }
-      const a = await startVariation({
-        recipeId: cleared,
-        actorId: captain.id,
-        title: "Dhal, gluten-free",
-      });
-      const b = await startVariation({
-        recipeId: unticked,
-        actorId: captain.id,
-        title: "Curry, mild",
-      });
-      if (!a.ok || !b.ok) throw new Error("variation refused");
-      const copied = await getRecipeSource(a.id);
-      expect(copied).toMatchObject({ version: 1, authorId: captain.id });
-      expect(copied?.sections).toEqual(
-        (await getRecipeSource(cleared))?.sections,
-      );
-      expect(await getRecipeSource(b.id)).toBeNull();
-    });
-
-    it("keeps the kitchen settings a captain's, even for a Kitchen lead who may send", async () => {
-      const { kitchenLead } = await people();
-      expect(
-        await setKitchenSettings({
-          actorId: kitchenLead.id,
-          kitchenLargestPotLitres: 60,
-          kitchenBurnerCount: 4,
-        }),
-      ).toEqual({ ok: false, error: ONLY_A_CAPTAIN_SETS_KITCHEN });
-      expect(await getKitchenSettings()).toEqual({
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
       });
     });
   });

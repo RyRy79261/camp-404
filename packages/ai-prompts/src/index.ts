@@ -18,8 +18,8 @@ export const PROMPT_VERSIONS = {
   recipeNormalisation: "2026-05-19.1",
   manualGeneration: "2026-05-19.1",
   voiceIntent: "2026-05-19.1",
-  recipeImport: "2026-09-25.1",
-  recipePlates: "2026-09-25.1",
-  recipeSource: "2026-09-24.1",
-  recipeSourceRevision: "2026-09-24.1",
+  recipeImport: "2026-09-25.2",
+  recipePlates: "2026-09-25.2",
+  recipeSource: "2026-09-24.2",
+  recipeSourceRevision: "2026-09-24.2",
 } as const;

@@ -79,7 +79,6 @@ function detail(overrides: Partial<RecipeDetail> = {}): RecipeDetail {
     changesNote: null,
     rejectionReason: null,
     lastError: null,
-    variantOfRecipeId: null,
     acceptedVersionId: "v1",
     createdAt: new Date("2026-09-20T08:00:00Z"),
     latestRun: null,

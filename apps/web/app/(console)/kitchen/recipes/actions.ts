@@ -15,7 +15,6 @@ import {
   AddLessonInput,
   AnswerQuestionsInput,
   DecideRecipeInput,
-  KitchenSettingsInput,
   QueuePlateProofreadInput,
   QueueProofreadInput,
   RecipeIdInput,
@@ -23,7 +22,6 @@ import {
   ResubmitRecipeInput,
   RetypeRecipeTextInput,
   SendSourceInput,
-  StartVariationInput,
   SuggestRecipeInput,
 } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
@@ -37,14 +35,12 @@ import { processRuns } from "@/lib/recipe-proofread";
 import {
   CHECK_RECIPE,
   DECIDE_REFUSAL,
-  KITCHEN_SETTINGS_REFUSAL,
   PROOFREAD_NOT_SET_UP,
   RECIPES_PATH,
   RERUN_REQUEST_REFUSAL,
   RETYPE_REFUSAL,
   REVIEW_REFUSAL,
   RUN_REFUSAL,
-  VARIATION_REFUSAL,
   VERSION_REFUSAL,
   recipePath,
 } from "@/lib/recipe-copy";
@@ -61,10 +57,7 @@ import {
   resubmitRecipe,
   retypeRecipeText,
   sendSourceForProofreading,
-  setKitchenSettings,
-  startVariation,
   suggestRecipe,
-  type KitchenSettings,
   type ProofreadProgress,
 } from "@/lib/recipes";
 import { isE2ETestMode } from "@/lib/test-mode";
@@ -73,9 +66,9 @@ import { getLeadTeams } from "@/lib/users";
 // The kitchen's recipe writes (#243). Each action: the rank gate
 // (captainActionGate), the Zod boundary, then the facade. The gate answers the
 // screen; the rule itself (a captain or a lead of Kitchen, who may also send
-// recipes to Claude under the owner's decision 2A; a captain alone for the
-// kitchen settings) is checked again inside each write's own transaction,
-// which re-reads the actor and never takes a team list from here.
+// recipes to Claude under the owner's decision 2A) is checked again inside
+// each write's own transaction, which re-reads the actor and never takes a
+// team list from here.
 //
 // A run sent to Claude is processed in after(), in production and under E2E
 // alike, so the editor's loading panel sees the stages the worker writes on
@@ -280,27 +273,7 @@ export async function acceptProofreadAction(
   });
 }
 
-/** A sibling recipe, such as a gluten-free one, linked to the original. */
-export async function startVariationAction(
-  input: unknown,
-): Promise<ActionResult<{ id: string }>> {
-  return runAction("startVariationAction", async () => {
-    const gate = await kitchenGate(VARIATION_REFUSAL);
-    if (!gate.ok) return gate;
-    const parsed = StartVariationInput.safeParse(input);
-    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
-    const result = await startVariation({
-      ...parsed.data,
-      actorId: gate.campUser.id,
-    });
-    if (!result.ok) return result;
-    revalidateRecipe(parsed.data.recipeId);
-    revalidatePath(recipePath(result.id));
-    return { ok: true, data: { id: result.id } };
-  });
-}
-
-/** What the cooks learned. Any approved member. */
+/** What the cooks learned on one version. Any approved member. */
 export async function addLessonAction(input: unknown): Promise<ActionResult> {
   return runAction("addLessonAction", async () => {
     const gate = await captainActionGate("camp_member");
@@ -312,36 +285,9 @@ export async function addLessonAction(input: unknown): Promise<ActionResult> {
       authorId: gate.campUser.id,
     });
     if (!result.ok) return result;
-    revalidateRecipe(parsed.data.recipeId);
+    // The lesson shows on its version's own page, below the recipe's.
+    revalidatePath(recipePath(parsed.data.recipeId), "layout");
     return { ok: true };
-  });
-}
-
-/**
- * A captain sets the kitchen's size (the largest pot and the burners); it is
- * audited. The plates at each meal are the meal plan's, not a setting.
- */
-export async function setKitchenSettingsAction(
-  input: unknown,
-): Promise<ActionResult<{ settings: KitchenSettings }>> {
-  return runAction("setKitchenSettingsAction", async () => {
-    const gate = await captainActionGate("captain", KITCHEN_SETTINGS_REFUSAL);
-    if (!gate.ok) return gate;
-    const parsed = KitchenSettingsInput.safeParse(input);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error.issues[0]?.message ?? "Check the kitchen settings.",
-      };
-    }
-    const result = await setKitchenSettings({
-      ...parsed.data,
-      actorId: gate.campUser.id,
-    });
-    if (!result.ok) return result;
-    revalidatePath("/captains/camp-settings");
-    revalidatePath(RECIPES_PATH);
-    return { ok: true, data: { settings: result.settings } };
   });
 }
 

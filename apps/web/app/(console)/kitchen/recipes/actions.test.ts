@@ -37,6 +37,7 @@ vi.mock("@/lib/meal-plan", () => ({
       { breakfast: 50, lunch: 20, dinner: 45 },
     ],
     version: 3,
+    firstDay: null,
     updatedAt: null,
   })),
 }));
@@ -54,12 +55,7 @@ vi.mock("@/lib/recipes", () => ({
     versionId: "v",
     version: 1,
   })),
-  startVariation: vi.fn(async () => ({ ok: true, id: "r-var" })),
   addLesson: vi.fn(async () => ({ ok: true, id: "l" })),
-  setKitchenSettings: vi.fn(async (input: Record<string, unknown>) => ({
-    ok: true,
-    settings: input,
-  })),
   queueProofread: vi.fn(async () => ({ ok: true, runIds: ["run-1", "run-2"] })),
   queuePlateProofread: vi.fn(async () => ({ ok: true, runId: "run-p" })),
   sendSourceForProofreading: vi.fn(async () => ({
@@ -90,7 +86,6 @@ import { getMealPlan } from "@/lib/meal-plan";
 import { processRuns } from "@/lib/recipe-proofread";
 import {
   DECIDE_REFUSAL,
-  KITCHEN_SETTINGS_REFUSAL,
   PROOFREAD_NOT_SET_UP,
   RERUN_REQUEST_REFUSAL,
   REVIEW_REFUSAL,
@@ -99,6 +94,7 @@ import {
 } from "@/lib/recipe-copy";
 import {
   acceptProofread,
+  addLesson,
   answerProofreadQuestions,
   decideRecipe,
   getProofreadProgress,
@@ -108,11 +104,11 @@ import {
   resetStaleRuns,
   resubmitRecipe,
   sendSourceForProofreading,
-  setKitchenSettings,
   suggestRecipe,
 } from "@/lib/recipes";
 import {
   acceptProofreadAction,
+  addLessonAction,
   answerProofreadQuestionsAction,
   decideRecipeAction,
   proofreadPlatesAction,
@@ -122,7 +118,6 @@ import {
   resubmitRecipeAction,
   runProofreadingAction,
   sendSourceForProofreadingAction,
-  setKitchenSettingsAction,
   suggestRecipeAction,
 } from "./actions";
 
@@ -221,8 +216,8 @@ describe("runProofreadingAction", () => {
         model: "claude-opus-4-8",
       }),
     );
-    expect(PROMPT_VERSIONS.recipeSource).toBe("2026-09-24.1");
-    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-09-24.1");
+    expect(PROMPT_VERSIONS.recipeSource).toBe("2026-09-24.2");
+    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-09-24.2");
     // Not before the response: after() holds the work.
     expect(processRuns).not.toHaveBeenCalled();
     expect(after).toHaveBeenCalledTimes(1);
@@ -466,43 +461,33 @@ describe("suggestRecipeAction", () => {
   });
 });
 
-describe("setKitchenSettingsAction", () => {
-  const SETTINGS = {
-    kitchenLargestPotLitres: 60,
-    kitchenBurnerCount: null,
-  };
+describe("addLessonAction", () => {
+  const VERSION = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 
-  it("is a captain's alone", async () => {
-    actAs("team_lead", ["kitchen"]);
-    expect(await setKitchenSettingsAction(SETTINGS)).toEqual({
-      ok: false,
-      error: KITCHEN_SETTINGS_REFUSAL,
-    });
-    expect(setKitchenSettings).not.toHaveBeenCalled();
-  });
-
-  it("saves as the captain", async () => {
-    expect(await setKitchenSettingsAction(SETTINGS)).toEqual({
-      ok: true,
-      data: { settings: { ...SETTINGS, actorId: "captain-1" } },
-    });
-    expect(setKitchenSettings).toHaveBeenCalledWith({
-      ...SETTINGS,
-      actorId: "captain-1",
-    });
-  });
-
-  it("says what is wrong with a value", async () => {
+  it("adds the lesson to the version it names, as the member acting", async () => {
+    actAs("camp_member", [], "member-1");
     expect(
-      await setKitchenSettingsAction({
-        ...SETTINGS,
-        kitchenLargestPotLitres: 0,
+      await addLessonAction({
+        recipeId: RECIPE_A,
+        versionId: VERSION,
+        body: " Soak overnight. ",
       }),
-    ).toEqual({ ok: false, error: "A pot holds at least 1 litre." });
+    ).toEqual({ ok: true });
+    expect(addLesson).toHaveBeenCalledWith({
+      recipeId: RECIPE_A,
+      versionId: VERSION,
+      body: "Soak overnight.",
+      authorId: "member-1",
+    });
+  });
+
+  it("refuses a lesson that names no version", async () => {
+    actAs("camp_member", [], "member-1");
     expect(
-      await setKitchenSettingsAction({ ...SETTINGS, kitchenBurnerCount: 21 }),
-    ).toEqual({ ok: false, error: "Count at most 20 burners." });
-    expect(setKitchenSettings).not.toHaveBeenCalled();
+      (await addLessonAction({ recipeId: RECIPE_A, body: "Soak overnight." }))
+        .ok,
+    ).toBe(false);
+    expect(addLesson).not.toHaveBeenCalled();
   });
 });
 
@@ -551,7 +536,7 @@ describe("proofreadPlatesAction", () => {
         model: "claude-opus-4-8",
       }),
     );
-    expect(PROMPT_VERSIONS.recipePlates).toBe("2026-09-25.1");
+    expect(PROMPT_VERSIONS.recipePlates).toBe("2026-09-25.2");
     expect(processRuns).not.toHaveBeenCalled();
     const task = vi.mocked(after).mock.calls[0]![0] as () => Promise<unknown>;
     await task();
@@ -789,6 +774,7 @@ describe("proofreadRecipeAction", () => {
       daysOnSite: 1,
       days: [{ breakfast: 0, lunch: 0, dinner: 0 }],
       version: 0,
+      firstDay: null,
       updatedAt: null,
     });
     await proofreadRecipeAction({ recipeId: RECIPE_A });

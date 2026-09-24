@@ -320,9 +320,10 @@ Decisions baked into the schema — keep new code consistent with them:
     longer captain-only: the owner's decision 2A gives it to the same people
     (`canRunProofread`, which takes the led teams). [CORRECTION 2026-09-24]
     There is no daily limit on sends (the owner removed it). The same people
-    edit the year's meal plan (`canEditMealPlan`). The kitchen settings stay
-    captain-only (`canSetKitchenSettings`). Change the rule in those
-    functions, never at a call site.
+    edit the year's meal plan (`canEditMealPlan`). [CORRECTION 2026-09-24]
+    There are no kitchen settings any more (the owner removed the largest
+    pot and the burner count), so `canSetKitchenSettings` is gone. Change the
+    rule in those functions, never at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping

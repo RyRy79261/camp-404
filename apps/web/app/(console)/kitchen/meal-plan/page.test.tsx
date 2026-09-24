@@ -43,7 +43,12 @@ const DAYS = [
 async function renderAs(
   rank: "camp_member" | "team_lead" | "captain",
   leads: string[] = [],
-  plan = { daysOnSite: 3, days: DAYS, version: 4 },
+  plan: {
+    daysOnSite: number;
+    days: typeof DAYS;
+    version: number;
+    firstDay?: string | null;
+  } = { daysOnSite: 3, days: DAYS, version: 4 },
 ) {
   vi.mocked(captainPageGate).mockResolvedValue({
     campUser: { id: "viewer" },
@@ -55,6 +60,7 @@ async function renderAs(
     cycle: 2026,
     updatedAt: null,
     ...plan,
+    firstDay: plan.firstDay ?? null,
   });
   render(await MealPlanPage());
 }
@@ -104,6 +110,47 @@ describe("meal plan page", () => {
     expect(getLeadTeams).not.toHaveBeenCalled();
   });
 
+  it("shows every member each day's date once the plan has the date of day 1", async () => {
+    await renderAs("camp_member", [], {
+      daysOnSite: 3,
+      days: DAYS,
+      version: 4,
+      firstDay: "2026-04-29",
+    });
+    const table = screen.getByRole("table", { name: "Plates per day" });
+    const rows = within(table).getAllByRole("row").slice(1);
+    // Across a month end: 29 and 30 April, then 1 May.
+    expect(rows.map((r) => r.querySelector("th")?.textContent)).toEqual([
+      "Day 1 · Wed 29 Apr",
+      "Day 2 · Thu 30 Apr",
+      "Day 3 · Fri 1 May",
+    ]);
+    // A member reads the dates; there is no date to change.
+    expect(screen.queryByLabelText("Day 1 date")).toBeNull();
+  });
+
+  it("lets a Kitchen lead set the date of day 1 beside the days on site, dates every row, and saves it", async () => {
+    await renderAs("team_lead", ["kitchen"]);
+    const date = screen.getByLabelText("Day 1 date") as HTMLInputElement;
+    expect(date.type).toBe("date");
+    expect(date.value).toBe("");
+    expect(screen.getByText("Day 1")).toBeTruthy();
+    fireEvent.change(date, { target: { value: "2026-04-25" } });
+    expect(
+      screen.getByRole("rowheader", { name: "Day 1 · Sat 25 Apr" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("rowheader", { name: "Day 3 · Mon 27 Apr" }),
+    ).toBeTruthy();
+    await save();
+    expect(saveMealPlanAction).toHaveBeenCalledWith({
+      daysOnSite: 3,
+      firstDay: "2026-04-25",
+      days: DAYS,
+      expectedVersion: 4,
+    });
+  });
+
   it("lets a Kitchen lead and a captain edit, and no lead of another team", async () => {
     for (const [rank, leads] of [
       ["team_lead", ["kitchen"]],
@@ -138,6 +185,7 @@ describe("meal plan page", () => {
     await save();
     expect(saveMealPlanAction).toHaveBeenCalledWith({
       daysOnSite: 2,
+      firstDay: null,
       days: [
         { breakfast: 20, lunch: 0, dinner: 25 },
         { breakfast: 0, lunch: 0, dinner: 0 },
@@ -165,6 +213,7 @@ describe("meal plan page", () => {
     await save();
     expect(saveMealPlanAction).toHaveBeenCalledWith({
       daysOnSite: 3,
+      firstDay: null,
       days: [DAYS[0], DAYS[0], DAYS[0]],
       expectedVersion: 4,
     });

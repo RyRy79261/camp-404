@@ -108,7 +108,6 @@ export function registerRecipeTools(server: McpServer): void {
               plates: r.plates,
               readyPlates: r.readyPlates,
               version: r.version,
-              variantOfRecipeId: r.variantOfRecipeId,
             })),
           );
         },

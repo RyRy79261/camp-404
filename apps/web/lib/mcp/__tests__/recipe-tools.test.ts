@@ -29,7 +29,6 @@ vi.mock("@camp404/db/recipes", async (importOriginal) => ({
       id: "recipe-1",
       title: "Camp dhal",
       status: "accepted",
-      variantOfRecipeId: null,
       version: 2,
       plates: 40,
       readyPlates: [40, 45, 60],
@@ -136,7 +135,6 @@ describe("list_recipes", () => {
         plates: 40,
         readyPlates: [40, 45, 60],
         version: 2,
-        variantOfRecipeId: null,
       },
     ]);
   });

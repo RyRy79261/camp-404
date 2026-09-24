@@ -12,6 +12,24 @@ export function recipePath(recipeId: string): string {
   return `${RECIPES_PATH}/${recipeId}`;
 }
 
+/** A recipe's History tab. */
+export function recipeHistoryPath(recipeId: string): string {
+  return `${recipePath(recipeId)}?tab=history`;
+}
+
+/** One version of a recipe, on its own page. */
+export function recipeVersionPath(recipeId: string, version: number): string {
+  return `${recipePath(recipeId)}/versions/${version}`;
+}
+
+/** One version of a recipe's source, on its own page. */
+export function recipeSourceVersionPath(
+  recipeId: string,
+  version: number,
+): string {
+  return `${recipePath(recipeId)}/sources/${version}`;
+}
+
 /** A recipe's source editor. */
 export function recipeEditPath(recipeId: string): string {
   return `${recipePath(recipeId)}/edit`;
@@ -25,12 +43,8 @@ export const VERSION_REFUSAL =
   "Only a Kitchen lead or a captain can save a version of a recipe.";
 export const RERUN_REQUEST_REFUSAL =
   "Only a Kitchen lead or a captain can ask for a recipe to be proofread again.";
-export const VARIATION_REFUSAL =
-  "Only a Kitchen lead or a captain can start a variation.";
 export const RUN_REFUSAL =
   "Only a captain or a Kitchen lead can turn recipes into kitchen recipes with Claude, because each run costs money.";
-export const KITCHEN_SETTINGS_REFUSAL =
-  "Only a captain can change the kitchen settings.";
 export const PROOFREAD_NOT_SET_UP =
   "Proofreading is not set up yet: the Anthropic key is missing. Nothing was queued.";
 export const CHECK_RECIPE = "Check the recipe and try again.";

@@ -46,61 +46,22 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await expect(page.getByText("Captain access only")).toBeVisible();
     // The editor is withheld — no rename controls render.
     await expect(page.getByRole("button", { name: /^Rename / })).toHaveCount(0);
-    // So is the kitchen card.
-    await expect(page.getByLabel("Largest pot (litres)")).toHaveCount(0);
   });
 
-  test("a captain sets the kitchen's size, and no run limit is shown; they persist", async ({
+  test("a captain sees no Kitchen card: no largest pot, no burners", async ({
     page,
     request,
   }) => {
     await asRank(page, request, "settings-kitchen-captain", "captain");
 
     await page.goto("/captains/camp-settings");
+    // Present first, so the absences below are read on a rendered page.
     await expect(
-      page.getByRole("heading", { name: "Camp settings" }),
+      page.getByRole("button", { name: "Rename Kitchen" }),
     ).toBeVisible();
-    const pot = page.getByLabel("Largest pot (litres)");
-    const burners = page.getByLabel("Number of burners");
-    await expect(pot).toHaveValue("");
-    // There is no daily limit on proofreading: no field, no number.
-    await expect(page.getByText(/runs? per day|runs? left/i)).toHaveCount(0);
-
-    // A bad value is refused beside its field, and nothing is saved.
-    await burners.fill("99");
-    await page.getByRole("button", { name: "Save kitchen settings" }).click();
-    await expect(page.getByText("Count at most 20 burners.")).toBeVisible();
-
-    await pot.fill("60");
-    await burners.fill("3");
-    await page.getByRole("button", { name: "Save kitchen settings" }).click();
-    await expect(page.getByText("Kitchen settings saved")).toBeVisible();
-
-    await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Camp settings" }),
-    ).toBeVisible();
-    await expect(page.getByLabel("Largest pot (litres)")).toHaveValue("60");
-    await expect(page.getByLabel("Number of burners")).toHaveValue("3");
-  });
-
-  test("the kitchen card has no plates per meal: the meal plan holds them", async ({
-    page,
-    request,
-  }) => {
-    await asRank(page, request, "settings-plates-captain", "captain");
-
-    await page.goto("/captains/camp-settings");
-    await expect(page.getByLabel("Largest pot (litres)")).toBeVisible();
-    await expect(
-      page.getByText(/The plates at each meal are on the Kitchen/),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("group", { name: "Plates per meal" }),
-    ).toHaveCount(0);
-    for (const meal of ["Breakfast", "Lunch", "Dinner"]) {
-      await expect(page.getByLabel(meal, { exact: true })).toHaveCount(0);
-    }
+    await expect(page.getByText(/largest pot/i)).toHaveCount(0);
+    await expect(page.getByText(/burner/i)).toHaveCount(0);
+    await expect(page.getByText("Kitchen settings")).toHaveCount(0);
   });
 
   test("a captain renames a team; it persists and flows to the roster filter", async ({
@@ -110,9 +71,7 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await asRank(page, request, "settings-captain", "captain");
 
     await page.goto("/captains/camp-settings");
-    // The team table's row, not the Kitchen settings card beside it.
-    const teams = page.getByRole("table");
-    await expect(teams.getByText("Kitchen", { exact: true })).toBeVisible();
+    await expect(page.getByText("Kitchen", { exact: true })).toBeVisible();
 
     // Rename Kitchen → Cuisine through the editor.
     await page.getByRole("button", { name: "Rename Kitchen" }).click();
@@ -124,7 +83,7 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await expect(page.getByText("Cuisine", { exact: true })).toBeVisible();
     await page.reload();
     await expect(page.getByText("Cuisine", { exact: true })).toBeVisible();
-    await expect(teams.getByText("Kitchen", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Kitchen", { exact: true })).toHaveCount(0);
 
     // Cross-surface: the roster's team filter now offers the new label.
     await page.goto("/captains/camp-management");

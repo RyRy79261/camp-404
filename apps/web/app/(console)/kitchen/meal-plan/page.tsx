@@ -16,8 +16,8 @@ export const metadata = { title: "Meal plan — Camp 404" };
 // Every approved member reads it. A captain or a Kitchen lead edits it
 // (canEditMealPlan, decided here on the server); the save checks again inside
 // its own transaction, writes an audit row, and compares the version the page
-// opened. Camp settings holds no first day on site, so the days are "Day 1",
-// "Day 2" and so on (a date setting was ruled out).
+// opened. The plan holds the date of day 1 (the owner, 2026-09-24), so each
+// day is named with its date; with no date set yet it is "Day 1", "Day 2".
 
 export default async function MealPlanPage() {
   const { campUser, rank } = await captainPageGate("camp_member");
@@ -29,6 +29,7 @@ export default async function MealPlanPage() {
       // A saved plan comes back with a new version: start from it.
       key={plan.version}
       daysOnSite={plan.daysOnSite}
+      firstDay={plan.firstDay}
       days={plan.days}
       version={plan.version}
       canEdit={canEditMealPlan(rank, leadTeams)}

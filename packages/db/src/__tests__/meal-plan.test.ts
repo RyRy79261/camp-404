@@ -137,6 +137,53 @@ describe("meal plan", () => {
     });
   });
 
+  it("stores the date of day 1 with the plan, audited, and clears it when blanked", async () => {
+    const { captain } = await people();
+    expect((await getMealPlan()).firstDay).toBeNull();
+    expect(
+      await setMealPlan({
+        actorId: captain.id,
+        daysOnSite: 3,
+        firstDay: "2026-04-25",
+        days: THREE_DAYS,
+        expectedVersion: 0,
+      }),
+    ).toEqual({ ok: true, version: 1 });
+    expect(await getMealPlan()).toMatchObject({
+      firstDay: "2026-04-25",
+      version: 1,
+    });
+    // A date that is not a real calendar day is refused, with nothing saved.
+    expect(
+      await setMealPlan({
+        actorId: captain.id,
+        daysOnSite: 3,
+        firstDay: "2027-02-29",
+        days: THREE_DAYS,
+        expectedVersion: 1,
+      }),
+    ).toEqual({ ok: false, error: "Pick the date of day 1." });
+    expect(
+      await setMealPlan({
+        actorId: captain.id,
+        daysOnSite: 3,
+        firstDay: null,
+        days: THREE_DAYS,
+        expectedVersion: 1,
+      }),
+    ).toEqual({ ok: true, version: 2 });
+    expect((await getMealPlan()).firstDay).toBeNull();
+    const audit = await auditRows();
+    expect(audit[0]!.metadata).toMatchObject({
+      before: { firstDay: null },
+      after: { firstDay: "2026-04-25" },
+    });
+    expect(audit[1]!.metadata).toMatchObject({
+      before: { firstDay: "2026-04-25" },
+      after: { firstDay: null },
+    });
+  });
+
   it("refuses a member and a lead of another team inside the write, and writes nothing", async () => {
     const { member, powerLead } = await people();
     for (const actor of [member, powerLead]) {

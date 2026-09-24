@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Check, GitBranch, Loader2, Type } from "lucide-react";
+import { Check, Loader2, Type } from "lucide-react";
 import { RECIPE_LESSON_MAX, RECIPE_TEXT_MAX } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
@@ -14,15 +14,12 @@ import {
   DialogTitle,
 } from "@camp404/ui/components/dialog";
 import { Field } from "@camp404/ui/components/field";
-import { Input } from "@camp404/ui/components/input";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
-import { recipePath } from "@/lib/recipe-copy";
 import {
   acceptProofreadAction,
   addLessonAction,
   retypeRecipeTextAction,
-  startVariationAction,
 } from "../actions";
 
 // The recipe page's smaller islands. Each posts through its action and the
@@ -117,93 +114,6 @@ export function RetypeText({
   );
 }
 
-/** A sibling recipe, such as a gluten-free one, linked to this one. */
-export function StartVariation({
-  recipeId,
-  title: original,
-}: {
-  recipeId: string;
-  title: string;
-}) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  function start() {
-    if (!title.trim()) {
-      setError("Give the variation a name.");
-      return;
-    }
-    setError(null);
-    startTransition(async () => {
-      const result = await startVariationAction({ recipeId, title });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      toast.success("Variation started");
-      setOpen(false);
-      router.push(recipePath(result.data.id));
-    });
-  }
-
-  return (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          setTitle(`${original} (gluten-free)`);
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        <GitBranch aria-hidden />
-        Start a variation
-      </Button>
-      <Dialog open={open} onOpenChange={(o) => !o && !pending && setOpen(o)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Start a variation</DialogTitle>
-            <DialogDescription>
-              A dish of its own that goes a different way, such as a gluten-free
-              one. It starts approved, with its own versions, and changes
-              nothing about {original}.
-            </DialogDescription>
-          </DialogHeader>
-          <Field label="Variation name" htmlFor="variation-title" error={error}>
-            <Input
-              id="variation-title"
-              value={title}
-              maxLength={120}
-              disabled={pending}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                setError(null);
-              }}
-            />
-          </Field>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              disabled={pending}
-              onClick={() => setOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button disabled={pending} onClick={start}>
-              {pending && <Loader2 className="animate-spin" aria-hidden />}
-              Start variation
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
 /** Why a recipe is accepted as Claude wrote it, recorded on the version. */
 export const ACCEPTED_AS_WRITTEN = "Accepted as Claude wrote it";
 
@@ -260,8 +170,14 @@ export function AcceptProofread({
   );
 }
 
-/** What the cooks learned. Any approved member adds one. */
-export function AddLesson({ recipeId }: { recipeId: string }) {
+/** What the cooks learned on one version. Any approved member adds one. */
+export function AddLesson({
+  recipeId,
+  versionId,
+}: {
+  recipeId: string;
+  versionId: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [body, setBody] = useState("");
@@ -275,7 +191,7 @@ export function AddLesson({ recipeId }: { recipeId: string }) {
     }
     setError(null);
     startTransition(async () => {
-      const result = await addLessonAction({ recipeId, body });
+      const result = await addLessonAction({ recipeId, versionId, body });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -294,7 +210,7 @@ export function AddLesson({ recipeId }: { recipeId: string }) {
           value={body}
           rows={3}
           maxLength={RECIPE_LESSON_MAX}
-          placeholder="e.g. Double the cumin at altitude; the 50 L pot burns on the big burner."
+          placeholder="e.g. Double the cumin; soak the lentils for an hour first."
           disabled={pending}
           onChange={(e) => {
             setBody(e.target.value);

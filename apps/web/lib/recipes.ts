@@ -5,7 +5,6 @@ import type {
   AwaitingAcceptance,
   ClaimedPlateRun,
   ClaimedSourceRun,
-  KitchenSettings,
   MySuggestion,
   PlateCountDetail,
   PlateCountSummary,
@@ -35,7 +34,6 @@ export type {
   AwaitingAcceptance,
   ClaimedPlateRun,
   ClaimedSourceRun,
-  KitchenSettings,
   MySuggestion,
   PlateCountDetail,
   PlateCountSummary,
@@ -96,20 +94,6 @@ export async function requestRerun(
   return usesTestStore()
     ? testStore.requestRerun(input)
     : db.requestRerun(input);
-}
-
-export async function getKitchenSettings(): Promise<KitchenSettings> {
-  return usesTestStore()
-    ? testStore.getKitchenSettings()
-    : db.getKitchenSettings();
-}
-
-export async function setKitchenSettings(
-  input: In<typeof db.setKitchenSettings>,
-): Promise<RecipeWriteResult<{ settings: KitchenSettings }>> {
-  return usesTestStore()
-    ? testStore.setKitchenSettings(input)
-    : db.setKitchenSettings(input);
 }
 
 export async function queueProofread(
@@ -233,14 +217,6 @@ export async function acceptProofread(
   return usesTestStore()
     ? testStore.acceptProofread(input)
     : db.acceptProofread(input);
-}
-
-export async function startVariation(
-  input: In<typeof db.startVariation>,
-): Promise<RecipeWriteResult<{ id: string }>> {
-  return usesTestStore()
-    ? testStore.startVariation(input)
-    : db.startVariation(input);
 }
 
 export async function addLesson(

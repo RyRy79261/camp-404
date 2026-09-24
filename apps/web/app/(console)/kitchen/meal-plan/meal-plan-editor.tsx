@@ -3,6 +3,7 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, Loader2, Save } from "lucide-react";
+import { mealPlanDayLabel } from "@camp404/core";
 import {
   MEALS_OF_THE_DAY,
   MEAL_PLAN_MAX_DAYS,
@@ -11,6 +12,7 @@ import {
   type MealPlanDay,
 } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
+import { DateControl } from "@camp404/ui/components/date-control";
 import { Input } from "@camp404/ui/components/input";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import {
@@ -26,11 +28,12 @@ import { UNREACHABLE } from "@/lib/recipe-copy";
 import { saveMealPlanAction } from "./actions";
 
 // The meal plan's page body (the owner's sketch, 2026-09-24): Save in the
-// heading, the days on site, then one row per day with the plates at
-// breakfast, lunch and dinner, and "Copy Day 1 to every day". Nothing else.
+// heading, the days on site and the date of day 1, then one row per day, named
+// with its date ("Day 1 · Sat 25 Apr"), with the plates at breakfast, lunch
+// and dinner, and "Copy Day 1 to every day". Nothing else.
 //
-// A Kitchen lead or a captain edits; everyone else reads the same table as
-// plain numbers. Save sends the whole plan with the version the page opened:
+// A Kitchen lead or a captain edits; everyone else reads the same table, with
+// the same dates, as plain numbers. Save sends the whole plan with the version the page opened:
 // a problem with a number shows beside it, and a refusal (a lost race, say)
 // beside Save. Changing the days on site keeps the days already filled in and
 // adds empty ones.
@@ -74,13 +77,38 @@ function problems(
   return out;
 }
 
+/**
+ * "Day 1 · Sat 25 Apr", with the date on its own line on a phone so the table's
+ * last column stays on screen; "Day 1" alone when there is no date.
+ */
+function DayLabel({ label }: { label: string }) {
+  const [day, date] = label.split(" · ");
+  return (
+    <>
+      <span className="whitespace-nowrap">
+        {day}
+        {date ? " ·" : ""}
+      </span>
+      {date ? (
+        <>
+          {" "}
+          <span className="block whitespace-nowrap sm:inline">{date}</span>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 export function MealPlanEditor({
   daysOnSite: savedDays,
+  firstDay: savedFirstDay,
   days,
   version,
   canEdit,
 }: {
   daysOnSite: number;
+  /** The date of day 1 (YYYY-MM-DD), or null when not set. */
+  firstDay: string | null;
   days: MealPlanDay[];
   /** The version the page opened; 0 when no plan is saved yet. */
   version: number;
@@ -90,6 +118,7 @@ export function MealPlanEditor({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [daysOnSite, setDaysOnSite] = useState(String(savedDays));
+  const [firstDay, setFirstDay] = useState(savedFirstDay ?? "");
   const [rows, setRows] = useState<Row[]>(() => toRows(days));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -123,6 +152,7 @@ export function MealPlanEditor({
     setRefusal(null);
     const payload = {
       daysOnSite: daysOnSite.trim() === "" ? Number.NaN : Number(daysOnSite),
+      firstDay: firstDay.trim() === "" ? null : firstDay,
       days: rows.map((r) => ({
         breakfast: plates(r.breakfast),
         lunch: plates(r.lunch),
@@ -205,10 +235,33 @@ export function MealPlanEditor({
               {savedDays}
             </output>
           )}
+          {canEdit && (
+            <span className="flex items-center gap-3">
+              <label htmlFor="first-day" className="font-medium">
+                Day 1 date
+              </label>
+              <DateControl
+                id="first-day"
+                value={firstDay}
+                disabled={pending}
+                aria-invalid={errors.firstDay ? true : undefined}
+                aria-describedby={
+                  errors.firstDay ? "first-day-error" : undefined
+                }
+                className="w-auto"
+                onChange={(e) => setFirstDay(e.target.value)}
+              />
+            </span>
+          )}
         </div>
         {errors.daysOnSite && (
           <p id="days-on-site-error" className="text-sm text-destructive">
             {errors.daysOnSite}
+          </p>
+        )}
+        {errors.firstDay && (
+          <p id="first-day-error" className="text-sm text-destructive">
+            {errors.firstDay}
           </p>
         )}
       </div>
@@ -228,8 +281,13 @@ export function MealPlanEditor({
           <TableBody>
             {rows.map((row, i) => (
               <TableRow key={i}>
-                <TableHead scope="row" className="whitespace-nowrap">
-                  Day {i + 1}
+                <TableHead scope="row" className="whitespace-normal">
+                  <DayLabel
+                    label={mealPlanDayLabel(
+                      canEdit ? firstDay : savedFirstDay,
+                      i + 1,
+                    )}
+                  />
                 </TableHead>
                 {MEALS_OF_THE_DAY.map((meal) => {
                   const key = `${i}.${meal}`;

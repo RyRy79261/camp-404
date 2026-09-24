@@ -65,8 +65,26 @@ describe("saveMealPlanAction", () => {
     expect(
       await saveMealPlanAction({ ...PLAN, actorId: "someone-else" }),
     ).toEqual({ ok: true, data: { version: 2 } });
-    expect(setMealPlan).toHaveBeenCalledWith({ ...PLAN, actorId: "lead-1" });
+    expect(setMealPlan).toHaveBeenCalledWith({
+      ...PLAN,
+      firstDay: null,
+      actorId: "lead-1",
+    });
     expect(revalidatePath).toHaveBeenCalledWith("/kitchen/meal-plan");
+  });
+
+  it("passes the date of day 1 through, and refuses one that is not a date", async () => {
+    expect(
+      (await saveMealPlanAction({ ...PLAN, firstDay: "2026-04-25" })).ok,
+    ).toBe(true);
+    expect(setMealPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ firstDay: "2026-04-25" }),
+    );
+    vi.mocked(setMealPlan).mockClear();
+    expect(
+      await saveMealPlanAction({ ...PLAN, firstDay: "2026-02-30" }),
+    ).toEqual({ ok: false, error: "Pick the date of day 1." });
+    expect(setMealPlan).not.toHaveBeenCalled();
   });
 
   it("saves as a captain without reading their teams", async () => {

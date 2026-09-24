@@ -35,7 +35,7 @@ import { isE2ETestMode } from "@/lib/test-mode";
 // It only ever works on a run a reviewer queued (a captain or a Kitchen lead,
 // the owner's decision 2A; claimSourceRun and claimPlateRun return nothing
 // else), sends Claude the source as text, the name, how many the source
-// serves, the plates to write for, the kitchen's size and meal counts (the
+// serves, the plates to write for, the kitchen's meal counts (the
 // meal plan's largest day at each meal), the sender's note and every earlier
 // round of questions and answers (and, for a recipe already in the book, its
 // accepted version and the answers that settled it, so Claude revises
@@ -193,16 +193,13 @@ export function testModeSource(
       notes: [
         {
           kind: "warning",
-          body: "Lentils catch on a big burner. Stir the bottom of the pot often.",
+          body: "Lentils catch easily. Stir the bottom of the pot often.",
         },
       ],
     },
-    report: {
-      changed: ["Test mode: Claude was not called."],
-      unsure: [],
-    },
+    report: { changed: [], unsure: [] },
     scalingNotes: [
-      "Test mode: Claude was not called.",
+      "Lentils, onions and coconut milk were scaled in step with the plates.",
       "Salt and cumin were scaled more slowly than the lentils.",
     ],
   });
@@ -232,7 +229,9 @@ export function testModePlates(claim: ClaimedPlateRun): PlateProofread {
       }),
     ),
     pots: Math.ceil(claim.plates / 40),
-    notes: ["Test mode: Claude was not called."],
+    notes: [
+      "Stir each pot often: at this count the lentils catch on the bottom.",
+    ],
     report: { changed: [], unsure: [] },
   });
 }
@@ -369,8 +368,6 @@ function sourceInput(claim: ClaimedSourceRun) {
     serves: claim.serves,
     plates: claim.plates,
     kitchen: {
-      largestPotLitres: claim.kitchen.kitchenLargestPotLitres,
-      burnerCount: claim.kitchen.kitchenBurnerCount,
       platesBreakfast: claim.kitchen.kitchenPlatesBreakfast,
       platesLunch: claim.kitchen.kitchenPlatesLunch,
       platesDinner: claim.kitchen.kitchenPlatesDinner,
@@ -416,10 +413,6 @@ async function askClaudePlates(
       recipe: claim.recipe,
       fromPlates: claim.fromPlates,
       toPlates: claim.plates,
-      kitchen: {
-        largestPotLitres: claim.kitchen.kitchenLargestPotLitres,
-        burnerCount: claim.kitchen.kitchenBurnerCount,
-      },
     }),
     tool: PLATES_TOOL,
     maxTokens: 8_000,

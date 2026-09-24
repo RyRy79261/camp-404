@@ -150,6 +150,9 @@ test.describe("recipe source editor (test-mode)", () => {
         "Salt and cumin were scaled more slowly than the lentils.",
       ),
     ).toBeVisible();
+    // The stand-in for Claude reads like a real answer: nothing on the page
+    // says it came from test mode.
+    await expect(page.getByText(/test mode|not called/i)).toHaveCount(0);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,

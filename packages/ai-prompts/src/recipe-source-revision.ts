@@ -6,14 +6,14 @@ import { recipeSourcePrompt, type RecipeSourceInput } from "./recipe-source";
 // that version instead of starting from zero (the owner, 2026-09-24: "any
 // revisions should include the latest proofread one"). The message is the
 // source prompt's message (recipeSourcePrompt at PROMPT_VERSIONS.recipeSource
-// 2026-09-24.1) with two more data blocks: the version the kitchen cooks
+// 2026-09-24.2) with two more data blocks: the version the kitchen cooks
 // from, as JSON, and the questions and answers that settled it. The system
 // prompt is the source prompt's, with a section on revising. The tool is the
 // same (record_source_proofread, SourceProofread), so the answer is checked
 // and stored exactly as a first write is.
 //
 // Pinned at PROMPT_VERSIONS.recipeSourceRevision and recorded on every
-// revision run. It is built on recipeSource 2026-09-24.1: a change to that
+// revision run. It is built on recipeSource 2026-09-24.2: a change to that
 // prompt, its tool or SourceProofread changes this one too, so both versions
 // are bumped together (a test holds recipeSource to the version this was
 // written against).
@@ -31,7 +31,7 @@ export interface RecipeSourceRevisionInput extends RecipeSourceInput {
 }
 
 /** The recipeSource version this prompt was written against. */
-export const REVISION_BUILT_ON = "2026-09-24.1";
+export const REVISION_BUILT_ON = "2026-09-24.2";
 
 const REVISING = `
 

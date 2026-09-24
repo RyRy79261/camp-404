@@ -13,8 +13,8 @@ import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // The kitchen's meal plan (the owner's sketch, 2026-09-24): for the camp's
-// current year, the days on site and the plates at breakfast, lunch and
-// dinner on each.
+// current year, the days on site, the date of day 1 and the plates at
+// breakfast, lunch and dinner on each.
 //
 //  - Anyone approved reads it (the page gates that). A recipe in the book is
 //    shown at each distinct count in it (mealPlanPlateCounts), and the
@@ -43,10 +43,18 @@ export const CHECK_MEAL_PLAN = "Check the meal plan and try again.";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** A save as the caller sends it: the date of day 1 may be left out (none). */
+export type MealPlanSave = { actorId: string } & Omit<
+  MealPlanInput,
+  "firstDay"
+> & { firstDay?: string | null };
+
 /** A year's meal plan. Version 0 means none is saved: these are the defaults. */
 export interface MealPlan {
   cycle: number;
   daysOnSite: number;
+  /** The date of day 1 (YYYY-MM-DD), or null when nobody has set it. */
+  firstDay: string | null;
   /** One row per day on site, day 1 first. */
   days: MealPlanDay[];
   version: number;
@@ -60,6 +68,7 @@ export function defaultMealPlan(cycle: number): MealPlan {
   return {
     cycle,
     daysOnSite: MEAL_PLAN_DEFAULT_DAYS,
+    firstDay: null,
     days: Array.from({ length: MEAL_PLAN_DEFAULT_DAYS }, () => ({
       ...EMPTY_DAY,
     })),
@@ -135,6 +144,7 @@ export async function readMealPlan(
   return {
     cycle,
     daysOnSite: plan.daysOnSite,
+    firstDay: plan.firstDay,
     days: mealPlanDays(plan.daysOnSite, rows),
     version: plan.version,
     updatedAt: plan.updatedAt,
@@ -166,7 +176,7 @@ export async function readMealPlanPeaks(db: DbOrTx = createHttpDb()) {
  * the plan was and what it became.
  */
 export async function setMealPlan(
-  input: { actorId: string } & MealPlanInput,
+  input: MealPlanSave,
 ): Promise<MealPlanWriteResult<{ version: number }>> {
   const parsed = MealPlanInput.safeParse(input);
   if (!parsed.success) {
@@ -175,7 +185,7 @@ export async function setMealPlan(
       error: parsed.error.issues[0]?.message ?? CHECK_MEAL_PLAN,
     };
   }
-  const { daysOnSite, days, expectedVersion } = parsed.data;
+  const { daysOnSite, firstDay, days, expectedVersion } = parsed.data;
   try {
     return await withTransaction(async (tx: Tx) => {
       if (!(await lockMealPlanEditor(tx, input.actorId))) {
@@ -191,6 +201,7 @@ export async function setMealPlan(
           .values({
             cycle,
             daysOnSite,
+            firstDay,
             version: 1,
             updatedByUserId: input.actorId,
             updatedAt: now,
@@ -204,6 +215,7 @@ export async function setMealPlan(
           .update(schema.kitchenMealPlans)
           .set({
             daysOnSite,
+            firstDay,
             version: sql`${schema.kitchenMealPlans.version} + 1`,
             updatedByUserId: input.actorId,
             updatedAt: now,
@@ -237,8 +249,12 @@ export async function setMealPlan(
         metadata: {
           cycle,
           version,
-          before: { daysOnSite: before.daysOnSite, days: before.days },
-          after: { daysOnSite, days },
+          before: {
+            daysOnSite: before.daysOnSite,
+            firstDay: before.firstDay,
+            days: before.days,
+          },
+          after: { daysOnSite, firstDay, days },
         },
       });
       return { ok: true as const, version };

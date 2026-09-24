@@ -76,8 +76,6 @@ describe("recipeImportPrompt", () => {
     sourceUrl: "https://www.noble-notations.com/recipes/gai-yang-isaan-oven",
     plates: 45,
     kitchen: {
-      largestPotLitres: 50,
-      burnerCount: 4,
       platesBreakfast: 60,
       platesLunch: null,
       platesDinner: 45,
@@ -86,7 +84,7 @@ describe("recipeImportPrompt", () => {
   };
 
   it("is pinned at its own version, and the old proofread prompt is gone", () => {
-    expect(PROMPT_VERSIONS.recipeImport).toBe("2026-09-25.1");
+    expect(PROMPT_VERSIONS.recipeImport).toBe("2026-09-25.2");
     expect(PROMPT_VERSIONS.recipeNormalisation).toBe("2026-05-19.1");
     expect("recipeProofread" in PROMPT_VERSIONS).toBe(false);
   });
@@ -136,10 +134,8 @@ describe("recipeImportPrompt", () => {
     expect(out.endsWith("</recipe>")).toBe(true);
   });
 
-  it("gives the kitchen's size and meals, and says unknown for one not set", () => {
+  it("gives the kitchen's meals, and says unknown for one not set", () => {
     const out = recipeImportPrompt.user(input);
-    expect(out).toContain("Largest pot: 50 litres");
-    expect(out).toContain("Burners: 4 burners");
     expect(out).toContain("Plates at breakfast: 60 plates");
     expect(out).toContain("Plates at lunch: unknown");
     expect(out).toContain("Plates at dinner: 45 plates");
@@ -184,11 +180,10 @@ describe("recipePlatesPrompt", () => {
     recipe,
     fromPlates: 50,
     toPlates: 45,
-    kitchen: { largestPotLitres: 50, burnerCount: null },
   };
 
   it("is pinned at its own version", () => {
-    expect(PROMPT_VERSIONS.recipePlates).toBe("2026-09-25.1");
+    expect(PROMPT_VERSIONS.recipePlates).toBe("2026-09-25.2");
     expect(recipePlatesPrompt.toolName).toBe("record_plate_quantities");
     expect(recipePlatesPrompt.system).toContain(
       "Answer only by calling the record_plate_quantities tool, once",
@@ -218,7 +213,7 @@ describe("recipePlatesPrompt", () => {
     ]) {
       expect(system, word).toContain(word);
     }
-    expect(system).toMatch(/number and size of the pots/);
+    expect(system).toMatch(/does not grow in step with the plates/);
     expect(system).toMatch(/Round whole items up/);
     expect(system).toContain("1200 g becomes 1.2 kg");
   });
@@ -226,20 +221,18 @@ describe("recipePlatesPrompt", () => {
   it("asks for pots, at most six practical notes and a report, and no science", () => {
     const system = recipePlatesPrompt.system;
     expect(system).toMatch(/pots: how many/);
-    expect(system).toMatch(/null when the pot size is unknown/);
+    expect(system).toMatch(/null when you cannot tell/);
     expect(system).toMatch(/at most 6 short, practical notes/);
     expect(system).toContain("report.changed");
     expect(system).toContain("report.unsure");
     expect(system).toMatch(/No food science/);
   });
 
-  it("names both counts and the kitchen, and puts the recipe in as JSON", () => {
+  it("names both counts, and puts the recipe in as JSON", () => {
     const out = recipePlatesPrompt.user(input);
     expect(out).toMatch(
       /^Proofread "Camp dal" for 45 plates\. It is written for 50 plates\./,
     );
-    expect(out).toContain("Largest pot: 50 litres");
-    expect(out).toContain("Burners: unknown");
     const json = out.slice(
       out.indexOf("<recipe>\n") + "<recipe>\n".length,
       out.lastIndexOf("\n</recipe>"),
@@ -268,8 +261,6 @@ describe("recipeSourcePrompt", () => {
     serves: 4,
     plates: 45,
     kitchen: {
-      largestPotLitres: 50,
-      burnerCount: 4,
       platesBreakfast: 60,
       platesLunch: null,
       platesDinner: 45,
@@ -279,9 +270,9 @@ describe("recipeSourcePrompt", () => {
   };
 
   it("is pinned at its own version, beside the prompts it leaves unchanged", () => {
-    expect(PROMPT_VERSIONS.recipeSource).toBe("2026-09-24.1");
-    expect(PROMPT_VERSIONS.recipeImport).toBe("2026-09-25.1");
-    expect(PROMPT_VERSIONS.recipePlates).toBe("2026-09-25.1");
+    expect(PROMPT_VERSIONS.recipeSource).toBe("2026-09-24.2");
+    expect(PROMPT_VERSIONS.recipeImport).toBe("2026-09-25.2");
+    expect(PROMPT_VERSIONS.recipePlates).toBe("2026-09-25.2");
     expect(recipeSourcePrompt.toolName).toBe("record_source_proofread");
     expect(recipeSourcePrompt.system).toContain(
       "Answer only by calling the record_source_proofread tool, once",
@@ -338,9 +329,8 @@ describe("recipeSourcePrompt", () => {
     const system = recipeSourcePrompt.system;
     expect(system).toContain("scalingNotes");
     expect(system).toMatch(/salt and spices grow more slowly/);
-    expect(system).toMatch(/pot size and on evaporation/);
+    expect(system).toMatch(/liquids depend on evaporation/);
     expect(system).toMatch(/cooking times do not grow with the quantity/);
-    expect(system).toMatch(/how many pots/);
     expect(system).toMatch(/serves is not given/);
     expect(system).toMatch(/you assumed it/);
   });
@@ -358,14 +348,12 @@ describe("recipeSourcePrompt", () => {
     expect(system).toMatch(/list the guess in report\.unsure/);
   });
 
-  it("names the plates, the source's serves, the kitchen and the source", () => {
+  it("names the plates, the source's serves, the meals and the source", () => {
     const out = recipeSourcePrompt.user(input);
     expect(out).toMatch(
       /^Write this recipe for 45 plates\.\nThe source serves: 4 plates\n/,
     );
     expect(out).toContain("Name: Dhal");
-    expect(out).toContain("Largest pot: 50 litres");
-    expect(out).toContain("Burners: 4 burners");
     expect(out).toContain("Plates at breakfast: 60 plates");
     expect(out).toContain("Plates at lunch: unknown");
     expect(out).toContain("Plates at dinner: 45 plates");
@@ -436,8 +424,6 @@ describe("recipeSourceRevisionPrompt", () => {
     serves: 4,
     plates: 60,
     kitchen: {
-      largestPotLitres: 50,
-      burnerCount: 4,
       platesBreakfast: 45,
       platesLunch: null,
       platesDinner: 60,
@@ -457,7 +443,7 @@ describe("recipeSourceRevisionPrompt", () => {
   };
 
   it("is a new prompt at its own version, built on the source prompt it leaves unchanged", () => {
-    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-09-24.1");
+    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-09-24.2");
     // Built on this source prompt: bump both together.
     expect(PROMPT_VERSIONS.recipeSource).toBe(REVISION_BUILT_ON);
     expect(recipeSourceRevisionPrompt.toolName).toBe(
@@ -499,5 +485,79 @@ describe("recipeSourceRevisionPrompt", () => {
     });
     expect(out).toContain("<current_recipe>");
     expect(out).not.toContain("<settled_questions>");
+  });
+});
+
+// The owner removed the kitchen's largest pot and burner count (2026-09-24):
+// no recipe prompt, system or message, may ask about or rely on either.
+describe("the recipe prompts after the kitchen settings went", () => {
+  const recipe = {
+    title: "Camp dal",
+    plates: 50,
+    ingredients: [
+      { name: "Red lentils", category: "legume", quantity: 2.5, unit: "kg" },
+    ],
+    steps: [{ instruction: "Simmer.", uses: ["Red lentils"] }],
+    notes: [],
+  };
+  const kitchen = { platesBreakfast: 45, platesLunch: null, platesDinner: 60 };
+  const source: RecipeSourceInput = {
+    title: "Camp dal",
+    source: "## Steps\nSimmer.",
+    serves: 4,
+    plates: 60,
+    kitchen,
+    note: null,
+    exchange: [],
+  };
+  const texts: [string, string][] = [
+    ["import system", recipeImportPrompt.system],
+    [
+      "import message",
+      recipeImportPrompt.user({
+        title: "Camp dal",
+        text: "Simmer.",
+        sourceUrl: null,
+        plates: 60,
+        kitchen,
+        note: null,
+      }),
+    ],
+    ["plates system", recipePlatesPrompt.system],
+    [
+      "plates message",
+      recipePlatesPrompt.user({
+        title: "Camp dal",
+        recipe,
+        fromPlates: 50,
+        toPlates: 45,
+      }),
+    ],
+    ["source system", recipeSourcePrompt.system],
+    ["source message", recipeSourcePrompt.user(source)],
+    ["revision system", recipeSourceRevisionPrompt.system],
+    [
+      "revision message",
+      recipeSourceRevisionPrompt.user({
+        ...source,
+        previous: {
+          version: 1,
+          recipe: {
+            ...recipe,
+            summary: null,
+            totalTimeMinutes: null,
+            activeTimeMinutes: null,
+          } as never,
+          exchange: [],
+        },
+      }),
+    ],
+  ];
+
+  it.each(texts)("the %s names no pot size and no burners", (_, text) => {
+    expect(text).not.toMatch(/burner/i);
+    expect(text).not.toMatch(/largest pot/i);
+    expect(text).not.toMatch(/pot size|size of the pots/i);
+    expect(text).not.toMatch(/litres\b/i);
   });
 });

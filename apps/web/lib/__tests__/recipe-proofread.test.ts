@@ -248,8 +248,6 @@ describe("processRuns with a queued source run", () => {
           serves: null,
           plates: 45,
           kitchen: {
-            largestPotLitres: null,
-            burnerCount: null,
             platesBreakfast: null,
             platesLunch: null,
             platesDinner: null,
@@ -302,8 +300,6 @@ describe("processRuns with a queued source run", () => {
           serves: null,
           plates: 45,
           kitchen: {
-            largestPotLitres: null,
-            burnerCount: null,
             platesBreakfast: 30,
             platesLunch: null,
             platesDinner: 45,
@@ -680,7 +676,7 @@ describe("under E2E_TEST_MODE", () => {
       plates: 45,
       recipe: { title: "Camp dal", plates: 45 },
       scalingNotes: [
-        "Test mode: Claude was not called.",
+        "Lentils, onions and coconut milk were scaled in step with the plates.",
         "Salt and cumin were scaled more slowly than the lentils.",
       ],
     });
@@ -708,9 +704,12 @@ describe("testModeSource", () => {
     expect(written.steps.every((s) => s.uses.length > 0)).toBe(true);
     expect(written.notes).toHaveLength(1);
     expect(answer.scalingNotes).toEqual([
-      "Test mode: Claude was not called.",
+      "Lentils, onions and coconut milk were scaled in step with the plates.",
       "Salt and cumin were scaled more slowly than the lentils.",
     ]);
+    // Nothing a page shows says it came from a stand-in.
+    expect(answer.report).toEqual({ changed: [], unsure: [] });
+    expect(JSON.stringify(answer)).not.toMatch(/test mode|not called/i);
   });
 
   it("asks two questions about a source that says `some`, until it has an answer", () => {
@@ -854,7 +853,6 @@ describe("a plate-count run", () => {
           recipe: BASE,
           fromPlates: 50,
           toPlates: 45,
-          kitchen: { largestPotLitres: null, burnerCount: null },
         }),
       },
     ]);
@@ -956,7 +954,9 @@ describe("a plate-count run", () => {
         { name: "Salt", quantity: null, quantityMax: null, unit: null },
       ],
       pots: 2,
-      notes: ["Test mode: Claude was not called."],
+      notes: [
+        "Stir each pot often: at this count the lentils catch on the bottom.",
+      ],
     });
     expect(testStore.getPlateCount(versionId, 45)?.lines[0]?.quantity).toBe(
       2.3,

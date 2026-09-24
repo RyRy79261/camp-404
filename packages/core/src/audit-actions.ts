@@ -16,6 +16,8 @@ export const AUDIT_ACTION_LABELS = {
   "camp.cycle.founded": "Set the camp's first year",
   "camp.cycle.renamed": "Renamed a year",
   "camp.kitchen_meal_plan.changed": "Changed the kitchen's meal plan",
+  // No longer written (the settings were removed, 2026-09-24); kept so a row
+  // written before still reads.
   "camp.kitchen_settings.changed": "Changed the kitchen settings",
   "camp.teams.archived": "Archived a team",
   "camp.teams.moved": "Moved a team in the list",
@@ -50,6 +52,8 @@ export const AUDIT_ACTION_LABELS = {
   "recipe.rerun_requested": "Asked a captain to proofread a recipe again",
   "recipe.source_saved": "Changed a recipe's source text",
   "recipe.text_retyped": "Retyped a recipe's text",
+  // No longer written (variations were removed, 2026-09-24); kept so a row
+  // written before still reads.
   "recipe.variation_started": "Started a recipe variation",
   "recipe.version_added": "Wrote a new recipe version",
   "recipe.written_by_claude": "Had Claude write a recipe version",

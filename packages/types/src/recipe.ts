@@ -562,16 +562,14 @@ export const PlateProofread = z.object({
     .describe(
       "One line per ingredient line of the recipe, in the same order, with the same name.",
     ),
-  /** How many pots the count needs, when the kitchen's size is known. */
+  /** How many pots the count needs, when Claude can tell. */
   pots: z
     .number()
     .int()
     .min(1)
     .max(50)
     .nullable()
-    .describe(
-      "How many of the kitchen's largest pots this count needs; null when the pot size is unknown.",
-    ),
+    .describe("How many pots this count needs; null when you cannot tell."),
   notes: z
     .array(z.string().trim().min(1).max(300))
     .max(6)
@@ -713,18 +711,12 @@ export const RetypeRecipeTextInput = z.object({
 });
 export type RetypeRecipeTextInput = z.infer<typeof RetypeRecipeTextInput>;
 
-/** A variation of an accepted recipe, such as a gluten-free one. */
-export const StartVariationInput = z.object({
-  recipeId: RowId,
-  title: z.string().trim().min(1, "Give the variation a name.").max(120),
-});
-export type StartVariationInput = z.infer<typeof StartVariationInput>;
-
 export const RECIPE_LESSON_MAX = 2_000;
 
-/** What the cooks learned making a recipe. */
+/** What the cooks learned making one version of a recipe. */
 export const AddLessonInput = z.object({
   recipeId: RowId,
+  versionId: RowId,
   body: z
     .string()
     .trim()
@@ -819,40 +811,6 @@ export const QueuePlateProofreadInput = z.object({
 });
 export type QueuePlateProofreadInput = z.infer<typeof QueuePlateProofreadInput>;
 
-/** The kitchen's camp settings, and the bounds the database also holds. */
-export const KITCHEN_SETTING_LIMITS = {
-  kitchenLargestPotLitres: { min: 1, max: 500 },
-  kitchenBurnerCount: { min: 1, max: 20 },
-} as const;
-
-const L = KITCHEN_SETTING_LIMITS;
-
-/**
- * The kitchen's size. The plates at each meal are the year's meal plan
- * (MealPlanInput), not a setting.
- */
-export const KitchenSettingsInput = z.object({
-  kitchenLargestPotLitres: z
-    .number()
-    .int()
-    .min(L.kitchenLargestPotLitres.min, "A pot holds at least 1 litre.")
-    .max(
-      L.kitchenLargestPotLitres.max,
-      `A pot holds at most ${L.kitchenLargestPotLitres.max} litres.`,
-    )
-    .nullable(),
-  kitchenBurnerCount: z
-    .number()
-    .int()
-    .min(L.kitchenBurnerCount.min, "Count at least 1 burner.")
-    .max(
-      L.kitchenBurnerCount.max,
-      `Count at most ${L.kitchenBurnerCount.max} burners.`,
-    )
-    .nullable(),
-});
-export type KitchenSettingsInput = z.infer<typeof KitchenSettingsInput>;
-
 // --- Meal plan -------------------------------------------------------------
 // The year's plates at each meal, day by day on site (the owner's sketch,
 // 2026-09-24). A recipe's plate counts are the distinct counts in it, and the
@@ -880,9 +838,24 @@ export type MealPlanDay = z.infer<typeof MealPlanDay>;
 export const MEALS_OF_THE_DAY = ["breakfast", "lunch", "dinner"] as const;
 export type MealOfTheDay = (typeof MEALS_OF_THE_DAY)[number];
 
+/** A calendar day, typed as YYYY-MM-DD. */
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
- * A save of the year's meal plan: the days on site, one row of plates for
- * each, and the version the editor opened (0 when there was no plan yet).
+ * A real calendar day: a UTC round trip gives the same text back. Date.parse
+ * alone rolls "2027-02-30" over to 2 March instead of refusing it.
+ */
+function isCalendarDay(v: string): boolean {
+  if (!ISO_DAY.test(v)) return false;
+  const [y, m, d] = v.split("-").map(Number);
+  const date = new Date(Date.UTC(y!, m! - 1, d!));
+  return date.toISOString().slice(0, 10) === v;
+}
+
+/**
+ * A save of the year's meal plan: the days on site, the date of day 1 (null
+ * when not known yet), one row of plates for each day, and the version the
+ * editor opened (0 when there was no plan yet).
  */
 export const MealPlanInput = z
   .object({
@@ -891,6 +864,14 @@ export const MealPlanInput = z
       .int("Count whole days.")
       .min(1, "Count at least 1 day.")
       .max(MEAL_PLAN_MAX_DAYS, `Count at most ${MEAL_PLAN_MAX_DAYS} days.`),
+    firstDay: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+      z
+        .string()
+        .refine(isCalendarDay, "Pick the date of day 1.")
+        .nullable()
+        .default(null),
+    ),
     days: z.array(MealPlanDay).max(MEAL_PLAN_MAX_DAYS),
     expectedVersion: z.number().int().min(0),
   })

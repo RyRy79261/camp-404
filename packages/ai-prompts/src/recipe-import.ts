@@ -13,7 +13,7 @@ import {
 // tool or RecipeDraft and the version must be bumped with it.
 //
 // What is sent: the recipe's working text, its name, the link as a string
-// (never opened), the plates to write it for, the kitchen's size and meal
+// (never opened), the plates to write it for, the kitchen's meal
 // counts, and the captain's note. Never the member's note on why it suits the
 // camp, anyone's name, or audio.
 
@@ -27,8 +27,6 @@ export interface RecipeImportInput {
   /** The plates every amount must be written for. */
   plates: number;
   kitchen: {
-    largestPotLitres: number | null;
-    burnerCount: number | null;
     platesBreakfast: number | null;
     platesLunch: number | null;
     platesDinner: number | null;
@@ -42,7 +40,7 @@ const TOOL_NAME = "record_recipe";
 
 const list = (values: readonly string[]) => values.join(", ");
 
-const SYSTEM = `You write recipes for the kitchen of Camp 404, an AfrikaBurn theme camp that cooks for itself in the Tankwa Karoo desert. A cook reads your recipe at a gas burner and cooks from it for the whole camp, so it must be exact, plain and complete.
+const SYSTEM = `You write recipes for the kitchen of Camp 404, an AfrikaBurn theme camp that cooks for itself in the Tankwa Karoo desert. A cook reads your recipe at the stove and cooks from it for the whole camp, so it must be exact, plain and complete.
 
 How to answer:
 - Answer only by calling the ${TOOL_NAME} tool, once, with the whole recipe and your report. Never answer in plain text.
@@ -87,8 +85,6 @@ export const recipeImportPrompt = {
     lines.push(
       "",
       "Kitchen:",
-      `- Largest pot: ${known(input.kitchen.largestPotLitres, "litres")}`,
-      `- Burners: ${known(input.kitchen.burnerCount, "burners")}`,
       `- Plates at breakfast: ${known(input.kitchen.platesBreakfast, "plates")}`,
       `- Plates at lunch: ${known(input.kitchen.platesLunch, "plates")}`,
       `- Plates at dinner: ${known(input.kitchen.platesDinner, "plates")}`,

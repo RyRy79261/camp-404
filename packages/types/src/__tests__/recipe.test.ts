@@ -4,7 +4,6 @@ import {
   AddLessonInput,
   DecideRecipeInput,
   KitchenRecipe,
-  KitchenSettingsInput,
   MEAL_PLAN_DEFAULT_DAYS,
   MEAL_PLAN_MAX_DAYS,
   MealPlanInput,
@@ -14,7 +13,6 @@ import {
   ResubmitRecipeInput,
   RequestRerunInput,
   RetypeRecipeTextInput,
-  StartVariationInput,
   SuggestRecipeInput,
   checkPlateLines,
   resolveUse,
@@ -463,38 +461,6 @@ describe("QueueProofreadInput", () => {
   });
 });
 
-describe("KitchenSettingsInput", () => {
-  it("holds the kitchen to real sizes, or unknown, and takes nothing else", () => {
-    const ok = { kitchenLargestPotLitres: 50, kitchenBurnerCount: 3 };
-    expect(KitchenSettingsInput.safeParse(ok).success).toBe(true);
-    expect(
-      KitchenSettingsInput.safeParse({
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-      }).success,
-    ).toBe(true);
-    // No daily cap and no plates at each meal: the meal plan holds those.
-    const extra = KitchenSettingsInput.safeParse({
-      ...ok,
-      recipeProofreadDailyCap: 5,
-      kitchenPlatesBreakfast: 60,
-    });
-    expect(extra.data).toEqual(ok);
-    for (const bad of [
-      { kitchenLargestPotLitres: 0 },
-      { kitchenLargestPotLitres: 501 },
-      { kitchenLargestPotLitres: 2.5 },
-      { kitchenBurnerCount: 0 },
-      { kitchenBurnerCount: 21 },
-    ]) {
-      expect(
-        KitchenSettingsInput.safeParse({ ...ok, ...bad }).success,
-        JSON.stringify(bad),
-      ).toBe(false);
-    }
-  });
-});
-
 describe("the review inputs", () => {
   it("trims a resubmitted suggestion and treats a blank field as no answer", () => {
     expect(
@@ -530,16 +496,31 @@ describe("the review inputs", () => {
         ?.issues[0]?.message,
     ).toBe("Paste the recipe text.");
     expect(
-      StartVariationInput.safeParse({ recipeId: ID_A, title: "" }).error
-        ?.issues[0]?.message,
-    ).toBe("Give the variation a name.");
+      AddLessonInput.safeParse({
+        recipeId: ID_A,
+        versionId: ID_B,
+        body: "x".repeat(2_001),
+      }).success,
+    ).toBe(false);
     expect(
-      AddLessonInput.safeParse({ recipeId: ID_A, body: "x".repeat(2_001) })
+      AddLessonInput.parse({
+        recipeId: ID_B,
+        versionId: ID_A,
+        body: " Soak overnight. ",
+      }),
+    ).toEqual({ recipeId: ID_B, versionId: ID_A, body: "Soak overnight." });
+    // A lesson belongs to a version: none, or not a row id, is refused.
+    expect(
+      AddLessonInput.safeParse({ recipeId: ID_B, body: "Soak overnight." })
         .success,
     ).toBe(false);
     expect(
-      AddLessonInput.parse({ recipeId: ID_B, body: " Soak overnight. " }),
-    ).toEqual({ recipeId: ID_B, body: "Soak overnight." });
+      AddLessonInput.safeParse({
+        recipeId: ID_B,
+        versionId: "v1",
+        body: "Soak overnight.",
+      }).success,
+    ).toBe(false);
   });
 
   it("needs a note to ask a captain for a re-run", () => {
@@ -558,7 +539,8 @@ describe("the review inputs", () => {
 
   it("refuses an id that is not a row id", () => {
     expect(
-      StartVariationInput.safeParse({ recipeId: "abc", title: "GF" }).success,
+      RequestRerunInput.safeParse({ recipeId: "abc", note: "Less salt." })
+        .success,
     ).toBe(false);
   });
 });
@@ -575,6 +557,28 @@ describe("MealPlanInput", () => {
       }).success,
     ).toBe(true);
     expect(MEAL_PLAN_DEFAULT_DAYS).toBe(11);
+  });
+
+  it("takes the date of day 1 as a real calendar day, or none", () => {
+    const plan = { daysOnSite: 1, days: [day], expectedVersion: 0 };
+    expect(MealPlanInput.parse(plan).firstDay).toBeNull();
+    expect(MealPlanInput.parse({ ...plan, firstDay: "" }).firstDay).toBeNull();
+    expect(
+      MealPlanInput.parse({ ...plan, firstDay: null }).firstDay,
+    ).toBeNull();
+    expect(
+      MealPlanInput.parse({ ...plan, firstDay: "2026-04-25" }).firstDay,
+    ).toBe("2026-04-25");
+    expect(
+      MealPlanInput.parse({ ...plan, firstDay: "2028-02-29" }).firstDay,
+    ).toBe("2028-02-29");
+    for (const bad of ["2027-02-29", "2026-04-31", "25 April", "2026-4-25"]) {
+      expect(
+        MealPlanInput.safeParse({ ...plan, firstDay: bad }).error?.issues[0]
+          ?.message,
+        bad,
+      ).toBe("Pick the date of day 1.");
+    }
   });
 
   it("refuses plates outside 0 to 500, a part plate, and rows that do not match the days", () => {
