@@ -512,6 +512,44 @@ describe("tasks", () => {
       expect((await stored(id)).team).toBe("kitchen");
     });
 
+    it("keeps a person responsible who has since left the approved list, but gives the task to nobody new like them", async () => {
+      const db = h.db();
+      const { captain } = await people();
+      const erased = await makeUser(db);
+      const sentBack = await makeUser(db);
+      const id = await added(captain.id, { assigneeId: erased.id });
+      await db
+        .update(schema.users)
+        .set({ sanitised: true })
+        .where(eq(schema.users.id, erased.id));
+      await db
+        .update(schema.users)
+        .set({ approvalStatus: "pending" })
+        .where(eq(schema.users.id, sentBack.id));
+
+      // A title fix with the same person responsible still saves.
+      expect(
+        await edit(id, captain.id, {
+          title: "Fixed title",
+          assigneeId: erased.id,
+        }),
+      ).toEqual({ ok: true });
+      expect(await stored(id)).toMatchObject({
+        title: "Fixed title",
+        assigneeId: erased.id,
+        version: 2,
+      });
+
+      // Handing it to another person who is not approved is still refused.
+      expect(
+        await edit(id, captain.id, { version: 2, assigneeId: sentBack.id }),
+      ).toEqual({ ok: false, error: NOT_A_MEMBER });
+      expect(await stored(id)).toMatchObject({
+        assigneeId: erased.id,
+        version: 2,
+      });
+    });
+
     it("says a removed task is gone", async () => {
       const { captain } = await people();
       const id = await added(captain.id);

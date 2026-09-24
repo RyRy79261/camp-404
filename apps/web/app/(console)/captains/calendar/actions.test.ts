@@ -64,11 +64,19 @@ const INPUT = {
   end: "19:00",
 };
 
-/** The database half as it really runs: the rule passed, Google, then audit. */
+/**
+ * The database half as it really runs: the rule passed, Google, then audit,
+ * and the event undone if the audit row fails.
+ */
 function databaseRuns(audit: () => void = () => {}) {
   vi.mocked(addCampCalendarEvent).mockImplementation(async (input) => {
     const eventId = await input.create();
-    audit();
+    try {
+      audit();
+    } catch (error) {
+      await input.undo(eventId);
+      throw error;
+    }
     return { ok: true, eventId };
   });
 }

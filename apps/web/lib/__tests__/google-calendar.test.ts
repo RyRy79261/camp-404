@@ -281,11 +281,15 @@ describe("whose event", () => {
       { id: "b", summary: "[Finance] Budget", start: { date: "2026-10-01" } },
       { id: "c", summary: "Build day", start: { date: "2026-10-01" } },
     ]);
+    // The title stays as written; Home decides whether the tag comes off.
     expect(fromProperty).toMatchObject({
-      title: "Briefing",
+      title: "[Cuisine] Briefing",
       teamTag: "kitchen",
     });
-    expect(fromTitle).toMatchObject({ title: "Budget", teamTag: "Finance" });
+    expect(fromTitle).toMatchObject({
+      title: "[Finance] Budget",
+      teamTag: "Finance",
+    });
     expect(untagged).toMatchObject({ title: "Build day", teamTag: null });
   });
 

@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as audit from "../audit";
 import * as schema from "../schema";
 import {
   NOT_AN_EVENT_AUTHOR,
@@ -10,12 +11,21 @@ import {
 import { useTestDb } from "./_harness";
 import { makeMembership, makeUser } from "./_factories";
 
+// The real audit writer, which one test makes fail.
+vi.mock("../audit", async (importOriginal) => {
+  const actual = await importOriginal<typeof audit>();
+  return { ...actual, writeAuditEvent: vi.fn(actual.writeAuditEvent) };
+});
+
 // Adding a camp calendar event on a real Postgres (PGlite). What matters: who
 // may add for which team, that Google is never called for a refused author,
-// and that the audit row lands with the event or not at all.
+// that no transaction is open while Google works, and that the audit row
+// lands with the event or the event is taken off Google again.
 
 describe("addCampCalendarEvent", () => {
   const h = useTestDb();
+  const undo = vi.fn(async (_eventId: string) => true);
+  beforeEach(() => undo.mockClear());
 
   async function people() {
     const db = h.db();
@@ -55,6 +65,7 @@ describe("addCampCalendarEvent", () => {
       title: "Build day",
       allDay: true,
       create,
+      undo,
     });
     expect(result).toEqual({ ok: true, eventId: "google-1" });
     expect(create).toHaveBeenCalledTimes(1);
@@ -83,6 +94,7 @@ describe("addCampCalendarEvent", () => {
         team: "kitchen",
         ...event,
         create,
+        undo,
       }),
     ).toEqual({ ok: true, eventId: "google-2" });
     const rows = await auditRows();
@@ -101,6 +113,7 @@ describe("addCampCalendarEvent", () => {
         team: "finance",
         ...event,
         create,
+        undo,
       }),
     ).toEqual({ ok: false, error: NOT_YOUR_EVENT_TEAM });
     expect(
@@ -109,6 +122,7 @@ describe("addCampCalendarEvent", () => {
         team: null,
         ...event,
         create,
+        undo,
       }),
     ).toEqual({ ok: false, error: PICK_YOUR_EVENT_TEAM });
     expect(
@@ -117,6 +131,7 @@ describe("addCampCalendarEvent", () => {
         team: "kitchen",
         ...event,
         create,
+        undo,
       }),
     ).toEqual({ ok: false, error: NOT_AN_EVENT_AUTHOR });
 
@@ -140,6 +155,7 @@ describe("addCampCalendarEvent", () => {
         team: "kitchen",
         ...event,
         create,
+        undo,
       }),
     ).toEqual({ ok: false, error: NOT_AN_EVENT_AUTHOR });
     expect(create).not.toHaveBeenCalled();
@@ -155,8 +171,53 @@ describe("addCampCalendarEvent", () => {
         create: async () => {
           throw new Error("create 403");
         },
+        undo,
       }),
     ).rejects.toThrow("create 403");
+    expect(await auditRows()).toHaveLength(0);
+    expect(undo).not.toHaveBeenCalled();
+  });
+
+  it("holds no transaction while Google works, and takes the event off again if the lead lost the role meanwhile", async () => {
+    const { lead } = await people();
+    // The demotion runs on the harness's one connection: were a transaction
+    // still open around `create`, this query would wait forever.
+    const create = vi.fn(async () => {
+      await h
+        .db()
+        .update(schema.teamMemberships)
+        .set({ isLead: false })
+        .where(eq(schema.teamMemberships.userId, lead.id));
+      return "google-3";
+    });
+    expect(
+      await addCampCalendarEvent({
+        actorId: lead.id,
+        team: "kitchen",
+        ...event,
+        create,
+        undo,
+      }),
+    ).toEqual({ ok: false, error: NOT_AN_EVENT_AUTHOR });
+    expect(undo).toHaveBeenCalledWith("google-3");
+    expect(await auditRows()).toHaveLength(0);
+  });
+
+  it("takes the event off Google again when the audit row cannot be saved", async () => {
+    const { captain } = await people();
+    vi.mocked(audit.writeAuditEvent).mockRejectedValueOnce(
+      new Error("audit insert failed"),
+    );
+    await expect(
+      addCampCalendarEvent({
+        actorId: captain.id,
+        team: null,
+        ...event,
+        create: async () => "google-4",
+        undo,
+      }),
+    ).rejects.toThrow("audit insert failed");
+    expect(undo).toHaveBeenCalledWith("google-4");
     expect(await auditRows()).toHaveLength(0);
   });
 });

@@ -50,6 +50,7 @@ export const CALENDAR_TIMEOUT_MS = 5000;
 
 export interface CalendarEvent {
   id: string;
+  /** As written on the calendar, "[Tag] " prefix and all. */
   title: string;
   /** All-day: the date as YYYY-MM-DD. Timed: an ISO instant. */
   start: string;
@@ -173,8 +174,10 @@ export function parseTeamTag(summary: string | null | undefined): {
 /**
  * Turn Google's events into what the page may show. Drops cancelled and
  * private events and anything without a start; keeps only title, start, place
- * and team. The team's private property wins over a "[Tag]" on the title; the
- * tag is taken off the title either way.
+ * and team. The team's private property wins over a "[Tag]" on the title. The
+ * title stays as written: only Home knows the camp's teams, so Home takes a
+ * "[Tag] " off it when the tag names a team, and leaves "[Cancelled] ..." or
+ * "[TBC] ..." alone.
  */
 export function toCalendarEvents(
   items: readonly GoogleEvent[],
@@ -188,11 +191,11 @@ export function toCalendarEvents(
     const allDay = Boolean(item.start?.date);
     const start = item.start?.date ?? item.start?.dateTime;
     if (!start) continue;
-    const { tag, title } = parseTeamTag(item.summary);
+    const { tag } = parseTeamTag(item.summary);
     const property = item.extendedProperties?.private?.[TEAM_PROPERTY]?.trim();
     out.push({
       id: item.id,
-      title: title || "Untitled event",
+      title: item.summary?.trim() || "Untitled event",
       start,
       allDay,
       location: item.location?.trim() || null,
@@ -291,9 +294,7 @@ export interface NewCalendarEvent {
   end?: string;
 }
 
-type GoogleTime =
-  | { date: string }
-  | { dateTime: string; timeZone: string };
+type GoogleTime = { date: string } | { dateTime: string; timeZone: string };
 
 /** The events.insert body Google receives. */
 export interface CalendarEventBody {

@@ -1,7 +1,7 @@
 import { CAMP_TIME_ZONE, campDayKey } from "@camp404/core";
 import type { MyLift } from "@camp404/db/cars";
 import type { MyOpenTask } from "@camp404/db/tasks";
-import type { CalendarResult } from "./google-calendar";
+import { parseTeamTag, type CalendarResult } from "./google-calendar";
 import type { InboxBadge } from "./inbox-badge";
 
 // What a member's home page shows, decided from their own profile and status
@@ -218,6 +218,21 @@ function teamForTag(
   return match ? { key: match[0], label: match[1] } : null;
 }
 
+/**
+ * The title Home shows: a "[Tag] " prefix is taken off only when the tag names
+ * one of the camp's teams (the badge says it instead). Any other bracket, such
+ * as "[Cancelled]" or "[TBC]", is the author's word and stays.
+ */
+function shownTitle(
+  title: string,
+  teamLabels: Readonly<Record<string, string>>,
+): string {
+  const parsed = parseTeamTag(title);
+  return parsed.title && teamForTag(parsed.tag, teamLabels)
+    ? parsed.title
+    : title;
+}
+
 function upcomingFromCalendar(
   calendar: CalendarResult | null,
   today: string,
@@ -227,6 +242,7 @@ function upcomingFromCalendar(
   if (calendar?.status !== "ok") return [];
   return calendar.events.map((event) => {
     const found = teamForTag(event.teamTag, teamLabels);
+    const title = shownTitle(event.title, teamLabels);
     const team = found
       ? { label: found.label, mine: myTeams.has(found.key) }
       : null;
@@ -236,7 +252,7 @@ function upcomingFromCalendar(
       const day = event.start.slice(0, 10);
       return {
         id: `event:${event.id}`,
-        title: event.title,
+        title,
         when: tidy(DATE_UTC.format(new Date(`${day}T00:00:00Z`))),
         relative: relativeDay(daysBetween(today, day)),
         location: event.location,
@@ -249,7 +265,7 @@ function upcomingFromCalendar(
     const day = campDayKey(at);
     return {
       id: `event:${event.id}`,
-      title: event.title,
+      title,
       when: `${tidy(DATE.format(at))} · ${TIME.format(at)}`,
       relative: relativeDay(daysBetween(today, day)),
       location: event.location,

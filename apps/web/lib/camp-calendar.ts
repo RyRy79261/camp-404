@@ -19,10 +19,10 @@ import { testStore } from "./test-store";
 //
 // Adding an event touches two systems that cannot share a transaction: Google
 // holds the event, the database holds the rule and the audit row. The order is
-// rule, then Google, then the audit row, all inside one database transaction
-// (addCampCalendarEvent). If that transaction fails after Google said yes, the
-// event is taken off Google again, so no event stays on the calendar without
-// its audit row.
+// rule, then Google, then the rule again with the audit row
+// (addCampCalendarEvent), with no transaction open while Google works. If the
+// second step refuses or fails after Google said yes, the event is taken off
+// Google again, so no event stays on the calendar without its audit row.
 
 export type { CalendarResult };
 
@@ -107,15 +107,16 @@ export async function addCalendarEvent(input: {
         }
         return created.id;
       },
+      // Best effort: deleteCalendarEvent never throws, and logs its own
+      // failure by HTTP status.
+      undo: (eventId) => deleteCalendarEvent(env, eventId),
     });
     if (!result.ok) return result;
     forgetCalendarCache();
     return result;
   } catch (error) {
     if (created.id) {
-      // Best effort: deleteCalendarEvent never throws, and logs its own
-      // failure by HTTP status.
-      await deleteCalendarEvent(env, created.id);
+      // The data layer has already taken the event off Google again.
       console.error("camp calendar event not recorded, so it was taken off");
       return { ok: false, error: CALENDAR_NOT_RECORDED };
     }

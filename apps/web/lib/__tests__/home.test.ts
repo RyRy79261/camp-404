@@ -213,10 +213,10 @@ describe("buildHome", () => {
       status: "ok",
       events: [
         event("k", "Kitchen briefing", "kitchen"),
-        event("f", "Budget review", " finance "),
+        event("f", "[Finance] Budget review", " finance "),
         event("a", "Art Car wash", "art car"),
         event("b", "Build day", null),
-        event("x", "Moon party", "Moon"),
+        event("x", "[Moon] Moon party", "Moon"),
       ],
     };
 
@@ -239,8 +239,35 @@ describe("buildHome", () => {
         "Art Car wash": { label: "Art Car", mine: false },
         // Untagged is camp-wide; a tag naming no team is not a team's.
         "Build day": null,
-        "Moon party": null,
+        "[Moon] Moon party": null,
       });
+    });
+
+    it("takes a tag off the title only when it names a team", () => {
+      const home = buildHome(
+        member({
+          calendar: {
+            status: "ok",
+            events: [
+              event("c", "[Cancelled] Burn night", "Cancelled"),
+              event("t", "[TBC] Tasting", "kitchen"),
+              event("k", "[kitchen] Clean up", "kitchen"),
+              event("e", "[Kitchen]", "Kitchen"),
+            ],
+          },
+          teams: [],
+        }),
+      );
+      expect(home.upcoming.map((u) => u.title)).toEqual([
+        // A bracket naming no team is the author's word, and stays.
+        "[Cancelled] Burn night",
+        // The team came from the property; the "[TBC]" still stays.
+        "[TBC] Tasting",
+        // A team's tag comes off: the badge says it.
+        "Clean up",
+        // Nothing but the tag: keep it rather than show an empty title.
+        "[Kitchen]",
+      ]);
     });
 
     it("marks every team the viewer is on, led or not", () => {

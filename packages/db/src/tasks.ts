@@ -409,8 +409,13 @@ export async function editTask(input: {
         return { ok: false, error: TEAM_NOT_ACTIVE };
       }
     }
-    const assignable = await assertAssignable(tx, input.assigneeId);
-    if (!assignable.ok) return assignable;
+    // Like the team, the person responsible is checked only when it changes:
+    // a task may keep someone who has since left the approved list (erased,
+    // or sent back to pending), so a title fix still saves.
+    if (input.assigneeId !== task.assigneeId) {
+      const assignable = await assertAssignable(tx, input.assigneeId);
+      if (!assignable.ok) return assignable;
+    }
 
     const edited = await tx
       .update(schema.tasks)

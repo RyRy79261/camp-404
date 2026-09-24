@@ -1803,6 +1803,7 @@ export const testStore = {
     }
     if (
       input.assigneeId &&
+      input.assigneeId !== task.assigneeId &&
       findUserById(input.assigneeId)?.approvalStatus !== "approved"
     ) {
       return { ok: false, error: NOT_A_MEMBER };
