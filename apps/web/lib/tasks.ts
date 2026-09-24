@@ -5,10 +5,12 @@ import {
   editTask as dbEditTask,
   listAssignableMembers as dbListAssignableMembers,
   listBoardTasks as dbListBoardTasks,
+  listMyOpenTasks as dbListMyOpenTasks,
   moveTask as dbMoveTask,
   removeTask as dbRemoveTask,
   type AssignableMember,
   type BoardTask,
+  type MyOpenTask,
   type TaskWriteResult,
 } from "@camp404/db/tasks";
 import { usesTestStore } from "./test-mode";
@@ -17,12 +19,22 @@ import { testStore } from "./test-store";
 // The shared task board's data, from the database or, under E2E, the test
 // store. The rules live in @camp404/db/tasks; the store repeats them.
 
-export type { AssignableMember, BoardTask, TaskWriteResult };
+export type { AssignableMember, BoardTask, MyOpenTask, TaskWriteResult };
 
 export async function listBoardTasks(now: Date): Promise<BoardTask[]> {
   return usesTestStore()
     ? testStore.listBoardTasks(now)
     : dbListBoardTasks(now);
+}
+
+/** The member's own unfinished tasks for Home: at most `limit`, and the total. */
+export async function listMyOpenTasks(
+  userId: string,
+  limit = 5,
+): Promise<{ items: MyOpenTask[]; total: number }> {
+  return usesTestStore()
+    ? testStore.listMyOpenTasks(userId, limit)
+    : dbListMyOpenTasks(userId, limit);
 }
 
 export async function listAssignableMembers(): Promise<AssignableMember[]> {

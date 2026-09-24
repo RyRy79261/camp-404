@@ -21,6 +21,7 @@ function member(over: Partial<HomeInput> = {}): HomeInput {
     teams: [],
     pending: [],
     inbox: inbox(0, 0),
+    myTasks: { items: [], total: 0 },
     lift: null,
     calendar: { status: "ok", events: [] },
     secured: true,
@@ -29,6 +30,25 @@ function member(over: Partial<HomeInput> = {}): HomeInput {
 }
 
 const ids = (items: { id: string }[]) => items.map((i) => i.id);
+
+type MyTask = HomeInput["myTasks"]["items"][number];
+
+/** One of the member's open tasks, as listMyOpenTasks returns it. */
+function task(id: string, dueAt: Date | null, over: Partial<MyTask> = {}) {
+  return {
+    id,
+    title: `Task ${id}`,
+    status: "open" as const,
+    team: null,
+    dueAt,
+    ...over,
+  };
+}
+
+/** The member's tasks with `total` defaulting to how many are listed. */
+function myTasks(items: MyTask[], total = items.length): HomeInput["myTasks"] {
+  return { items, total };
+}
 
 describe("buildHome", () => {
   it("tells an applicant only that they are waiting, with no to-dos or events", () => {
@@ -75,7 +95,7 @@ describe("buildHome", () => {
     expect(home.waitingForApproval).toBe(false);
     expect(home.todos).toEqual([]);
     expect(home.allDone).toBe(true);
-    expect(ids(home.modules)).toEqual(["announcements", "forms"]);
+    expect(ids(home.modules)).toEqual(["announcements", "forms", "tasks"]);
   });
 
   it("lists forms to answer, soonest deadline first, and says how long is left", () => {
@@ -185,6 +205,7 @@ describe("buildHome", () => {
     expect(ids(lead.modules)).toEqual([
       "announcements",
       "forms",
+      "tasks",
       "message",
       "form",
     ]);
@@ -195,7 +216,7 @@ describe("buildHome", () => {
       }),
     );
     expect(crew.chips).toEqual(["Member"]);
-    expect(ids(crew.modules)).toEqual(["announcements", "forms"]);
+    expect(ids(crew.modules)).toEqual(["announcements", "forms", "tasks"]);
   });
 
   it("shows every team someone is on, the ones they lead first, each with its own count", () => {
@@ -255,6 +276,7 @@ describe("buildHome", () => {
     expect(ids(home.modules)).toEqual([
       "announcements",
       "forms",
+      "tasks",
       "message",
       "form",
       "overview",
@@ -274,8 +296,10 @@ describe("buildHome", () => {
     expect(busy.modules.map((m) => [m.id, m.badge])).toEqual([
       ["announcements", 5],
       ["forms", 2],
+      ["tasks", null],
     ]);
     expect(buildHome(member()).modules.map((m) => m.badge)).toEqual([
+      null,
       null,
       null,
     ]);
@@ -314,5 +338,95 @@ describe("buildHome", () => {
     expect(
       buildHome(member({ secured: null })).checklist.map((c) => c.label),
     ).not.toContain("Sign-in secured");
+  });
+  describe("your tasks", () => {
+    it("lists dated tasks soonest first and undated ones after, each with its due label", () => {
+      const home = buildHome(
+        member({
+          myTasks: myTasks([
+            task("undated", null),
+            task("later", new Date("2026-09-30T10:00:00Z")),
+            task("tomorrow", new Date("2026-09-24T10:00:00Z"), {
+              status: "in_progress",
+            }),
+            task("late", new Date("2026-09-21T10:00:00Z")),
+          ]),
+        }),
+      );
+      expect(
+        home.tasks.map((t) => [t.id, t.due, t.urgent, t.doing, t.href]),
+      ).toEqual([
+        ["task:late", "Overdue", true, false, "/tasks"],
+        ["task:tomorrow", "Due tomorrow", true, true, "/tasks"],
+        ["task:later", "Due in 7 days", false, false, "/tasks"],
+        ["task:undated", null, false, false, "/tasks"],
+      ]);
+      expect(home.tasks[0]?.label).toBe("Task late");
+      expect(home.tasksMore).toBe(0);
+    });
+
+    it("shows at most five and counts the rest as more", () => {
+      const items = Array.from({ length: 7 }, (_, i) =>
+        task(`t${i}`, new Date(Date.UTC(2026, 9, 1 + i, 10))),
+      );
+      const home = buildHome(member({ myTasks: myTasks(items, 9) }));
+      expect(ids(home.tasks)).toEqual([
+        "task:t0",
+        "task:t1",
+        "task:t2",
+        "task:t3",
+        "task:t4",
+      ]);
+      expect(home.tasksMore).toBe(4);
+    });
+
+    it("has no card for a member with no tasks", () => {
+      const home = buildHome(member());
+      expect(home.tasks).toEqual([]);
+      expect(home.tasksMore).toBe(0);
+    });
+
+    it("gives a member waiting for approval no tasks and no Tasks tile", () => {
+      const home = buildHome(
+        member({
+          approval: "pending",
+          myTasks: myTasks([task("a", null)], 3),
+        }),
+      );
+      expect(home.tasks).toEqual([]);
+      expect(home.tasksMore).toBe(0);
+      expect(ids(home.modules)).not.toContain("tasks");
+    });
+
+    it("counts every open task of theirs on the Tasks tile, not just the ones shown", () => {
+      const home = buildHome(
+        member({ myTasks: myTasks([task("a", null), task("b", null)], 8) }),
+      );
+      expect(home.modules.find((m) => m.id === "tasks")).toEqual({
+        id: "tasks",
+        href: "/tasks",
+        label: "Tasks",
+        icon: "tasks",
+        badge: 8,
+        badgeSays: "yours",
+      });
+    });
+
+    it("reads the deadline's day in camp time, not UTC, at midnight", () => {
+      // 22:30 UTC on Wed 23 Sep is 00:30 on Thu 24 Sep in camp: due tomorrow.
+      // 21:30 UTC is 23:30 on Wed in camp: due today.
+      const home = buildHome(
+        member({
+          myTasks: myTasks([
+            task("after", new Date("2026-09-23T22:30:00Z")),
+            task("before", new Date("2026-09-23T21:30:00Z")),
+          ]),
+        }),
+      );
+      expect(home.tasks.map((t) => [t.id, t.due])).toEqual([
+        ["task:before", "Due today"],
+        ["task:after", "Due tomorrow"],
+      ]);
+    });
   });
 });

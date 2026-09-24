@@ -118,6 +118,60 @@ export async function listBoardTasks(now: Date): Promise<BoardTask[]> {
   }));
 }
 
+/** One of a member's own unfinished tasks, for their Home. */
+export interface MyOpenTask {
+  id: string;
+  title: string;
+  status: "open" | "in_progress";
+  team: Team | null;
+  dueAt: Date | null;
+}
+
+/**
+ * The tasks this person is responsible for and has not finished (To do or
+ * Doing), soonest deadline first and no deadline last, at most `limit` of
+ * them; `total` counts them all, so Home can say how many more there are.
+ */
+export async function listMyOpenTasks(
+  userId: string,
+  limit = 5,
+): Promise<{ items: MyOpenTask[]; total: number }> {
+  if (!UUID.test(userId)) return { items: [], total: 0 };
+  const db = createHttpDb();
+  const mine = and(
+    eq(schema.tasks.assigneeId, userId),
+    inArray(schema.tasks.status, ["open", "in_progress"]),
+  );
+  const [rows, [counted]] = await Promise.all([
+    db
+      .select({
+        id: schema.tasks.id,
+        title: schema.tasks.title,
+        status: schema.tasks.status,
+        team: schema.tasks.team,
+        dueAt: schema.tasks.dueAt,
+      })
+      .from(schema.tasks)
+      .where(mine)
+      .orderBy(
+        sql`${schema.tasks.dueAt} ASC NULLS LAST`,
+        asc(schema.tasks.createdAt),
+      )
+      .limit(limit),
+    db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(schema.tasks)
+      .where(mine),
+  ]);
+  return {
+    items: rows.map((row) => ({
+      ...row,
+      status: row.status as MyOpenTask["status"],
+    })),
+    total: counted?.total ?? 0,
+  };
+}
+
 export interface AssignableMember {
   id: string;
   displayName: string;

@@ -20,6 +20,7 @@ import {
   Music,
   Palette,
   Send,
+  SquareKanban,
   Users,
   Wallet,
   Zap,
@@ -105,6 +106,62 @@ function ToDoCard({ todos }: { todos: HomeModel["todos"] }) {
             ))}
           </ul>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * The tasks on the board that are this member's, drawn as the To do card is.
+ * Shown only when they have one; the full board is a link away.
+ */
+function YourTasksCard({
+  tasks,
+  more,
+}: {
+  tasks: HomeModel["tasks"];
+  more: number;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <SquareKanban className="h-4 w-4 text-accent" aria-hidden />
+          Your tasks
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <ul aria-label="Your tasks" className="-my-3 divide-y divide-border">
+          {tasks.map((task) => (
+            <li key={task.id}>
+              <Row href={task.href}>
+                <Circle
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {task.label}
+                </span>
+                {task.doing ? <Badge variant="outline">Doing</Badge> : null}
+                {task.due ? (
+                  <Badge variant={task.urgent ? "warning" : "outline"}>
+                    {task.due}
+                  </Badge>
+                ) : null}
+                <ArrowRight
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                  aria-hidden
+                />
+              </Row>
+            </li>
+          ))}
+        </ul>
+        <Link
+          href="/tasks"
+          className="mt-3 self-start text-xs font-medium text-accent hover:underline"
+        >
+          {more > 0 ? `See all tasks (+${more} more)` : "See all tasks"}
+        </Link>
       </CardContent>
     </Card>
   );
@@ -265,6 +322,7 @@ const MODULE_ICONS: Record<HomeModuleIcon, LucideIcon> = {
   message: Send,
   "send-form": ClipboardList,
   overview: LayoutDashboard,
+  tasks: SquareKanban,
 };
 
 /** A small count in the corner of a tile or icon. */
@@ -432,6 +490,9 @@ export function HomeView({ home }: { home: HomeModel }) {
           ) : (
             <>
               <ToDoCard todos={home.todos} />
+              {home.tasks.length > 0 ? (
+                <YourTasksCard tasks={home.tasks} more={home.tasksMore} />
+              ) : null}
               <ComingUpCard
                 upcoming={home.upcoming}
                 calendarState={home.calendarState}

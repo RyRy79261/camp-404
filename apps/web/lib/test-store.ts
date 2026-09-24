@@ -49,6 +49,7 @@ import {
   TEAM_NOT_ACTIVE,
   type AssignableMember,
   type BoardTask,
+  type MyOpenTask,
   type TaskBoardStatus,
   type TaskWriteResult,
 } from "@camp404/db/tasks";
@@ -1661,6 +1662,33 @@ export const testStore = {
         completedAt: t.completedAt,
         version: t.version,
       }));
+  },
+
+  listMyOpenTasks(
+    userId: string,
+    limit = 5,
+  ): { items: MyOpenTask[]; total: number } {
+    const mine = tasks
+      .filter(
+        (t) =>
+          t.assigneeId === userId &&
+          (t.status === "open" || t.status === "in_progress"),
+      )
+      .sort(
+        (a, b) =>
+          (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity) ||
+          a.createdAt.getTime() - b.createdAt.getTime(),
+      );
+    return {
+      items: mine.slice(0, limit).map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status as MyOpenTask["status"],
+        team: t.team,
+        dueAt: t.dueAt,
+      })),
+      total: mine.length,
+    };
   },
 
   listAssignableMembers(): AssignableMember[] {

@@ -18,6 +18,7 @@ import {
   editTask,
   listAssignableMembers,
   listBoardTasks,
+  listMyOpenTasks,
   moveTask,
   removeTask,
   type BoardTask,
@@ -566,6 +567,96 @@ describe("tasks", () => {
         createdByName: captain.displayName,
         team: "kitchen",
         status: "open",
+      });
+    });
+  });
+
+  describe("listMyOpenTasks", () => {
+    it("lists only the viewer's unfinished tasks, soonest deadline first, with the total", async () => {
+      const db = h.db();
+      const { captain, member, lead } = await people();
+      const add = async (
+        title: string,
+        dueAt: Date | null,
+        assigneeId: string | null = member.id,
+      ) => {
+        const r = await addTask({
+          creatorId: captain.id,
+          ...task({ title, dueAt, assigneeId }),
+        });
+        if (!r.ok) throw new Error(r.error);
+        return r.id;
+      };
+      const firstUndated = await add("Undated, older", null);
+      const secondUndated = await add("Undated, newer", null);
+      await add("Later", new Date("2026-10-10T00:00:00Z"));
+      const doing = await add(
+        "Sooner, doing",
+        new Date("2026-10-01T00:00:00Z"),
+      );
+      const done = await add("Done", new Date("2026-09-24T00:00:00Z"));
+      const removed = await add("Removed", new Date("2026-09-24T00:00:00Z"));
+      await add("Someone else's", new Date("2026-09-24T00:00:00Z"), lead.id);
+      await add("Nobody's", new Date("2026-09-24T00:00:00Z"), null);
+      // Pin the creation order of the two undated ones, which breaks their tie.
+      await db
+        .update(schema.tasks)
+        .set({ createdAt: new Date("2026-09-01T00:00:00Z") })
+        .where(eq(schema.tasks.id, firstUndated));
+      await db
+        .update(schema.tasks)
+        .set({ createdAt: new Date("2026-09-02T00:00:00Z") })
+        .where(eq(schema.tasks.id, secondUndated));
+      expect(
+        (
+          await moveTask({
+            taskId: doing,
+            actorId: member.id,
+            from: "open",
+            to: "in_progress",
+          })
+        ).ok,
+      ).toBe(true);
+      expect(
+        (
+          await moveTask({
+            taskId: done,
+            actorId: member.id,
+            from: "open",
+            to: "done",
+          })
+        ).ok,
+      ).toBe(true);
+      await removeTask({ taskId: removed, actorId: captain.id });
+
+      const all = await listMyOpenTasks(member.id);
+      expect(all.items.map((t) => [t.title, t.status])).toEqual([
+        ["Sooner, doing", "in_progress"],
+        ["Later", "open"],
+        ["Undated, older", "open"],
+        ["Undated, newer", "open"],
+      ]);
+      expect(all.items[0]).toMatchObject({
+        id: doing,
+        team: "kitchen",
+        dueAt: new Date("2026-10-01T00:00:00Z"),
+      });
+      expect(all.total).toBe(4);
+
+      const firstTwo = await listMyOpenTasks(member.id, 2);
+      expect(firstTwo.items.map((t) => t.title)).toEqual([
+        "Sooner, doing",
+        "Later",
+      ]);
+      expect(firstTwo.total).toBe(4);
+    });
+
+    it("gives someone with no tasks, or an id that is not a user, nothing", async () => {
+      const { member } = await people();
+      expect(await listMyOpenTasks(member.id)).toEqual({ items: [], total: 0 });
+      expect(await listMyOpenTasks("not-a-uuid")).toEqual({
+        items: [],
+        total: 0,
       });
     });
   });

@@ -1,5 +1,6 @@
 import { CAMP_TIME_ZONE, campDayKey } from "@camp404/core";
 import type { MyLift } from "@camp404/db/cars";
+import type { MyOpenTask } from "@camp404/db/tasks";
 import type { CalendarResult } from "./google-calendar";
 import type { InboxBadge } from "./inbox-badge";
 
@@ -35,6 +36,11 @@ export interface HomeInput {
    * total, the same number as the bell.
    */
   inbox: InboxBadge;
+  /**
+   * The tasks this person is responsible for and has not finished: the first
+   * few (listMyOpenTasks) and how many there are in all.
+   */
+  myTasks: { items: readonly MyOpenTask[]; total: number };
   lift: MyLift | null;
   calendar: CalendarResult | null;
   /** Two-factor or a passkey is on. Null when it could not be read. */
@@ -48,6 +54,19 @@ export interface HomeTodo {
   /** "Due in 3 days", "Overdue", … or null for no deadline. */
   due: string | null;
   urgent: boolean;
+}
+
+/** One of the member's own tasks on the "Your tasks" card. */
+export interface HomeTask {
+  id: string;
+  label: string;
+  href: string;
+  /** "Due tomorrow", "Overdue", … or null for no deadline. */
+  due: string | null;
+  /** Due today, tomorrow or already overdue. */
+  urgent: boolean;
+  /** In the Doing column. */
+  doing: boolean;
 }
 
 export interface HomeUpcoming {
@@ -68,7 +87,8 @@ export type HomeModuleIcon =
   | "forms"
   | "message"
   | "send-form"
-  | "overview";
+  | "overview"
+  | "tasks";
 
 export interface HomeModule {
   id: string;
@@ -103,6 +123,10 @@ export interface HomeModel {
   chips: string[];
   waitingForApproval: boolean;
   todos: HomeTodo[];
+  /** At most HOME_TASK_LIMIT of the member's open tasks, soonest first. */
+  tasks: HomeTask[];
+  /** How many more open tasks they have than the card shows. */
+  tasksMore: number;
   upcoming: HomeUpcoming[];
   /** Why "coming up" may be short: the calendar is off or unreachable. */
   calendarState: CalendarResult["status"] | null;
@@ -114,6 +138,9 @@ export interface HomeModel {
 }
 
 const DAY_MS = 86_400_000;
+
+/** The most tasks the "Your tasks" card lists; the rest are on /tasks. */
+export const HOME_TASK_LIMIT = 5;
 
 /** Whole days from one YYYY-MM-DD to another (UTC round-trip, no clock drift). */
 function daysBetween(fromKey: string, toKey: string): number {
@@ -281,6 +308,34 @@ export function buildHome(input: HomeInput): HomeModel {
         })
     : [];
 
+  // Your tasks: what they are responsible for on the board. Soonest camp-day
+  // deadline first, no deadline last; the board holds the rest.
+  const tasks: HomeTask[] = approved
+    ? input.myTasks.items
+        .map((t) => ({
+          task: t,
+          days: t.dueAt ? daysBetween(today, campDayKey(t.dueAt)) : null,
+        }))
+        .sort((a, b) => {
+          if (a.days === null || b.days === null) {
+            return a.days !== null ? -1 : b.days !== null ? 1 : 0;
+          }
+          return a.days - b.days;
+        })
+        .slice(0, HOME_TASK_LIMIT)
+        .map(({ task, days }) => ({
+          id: `task:${task.id}`,
+          label: task.title,
+          href: "/tasks",
+          due: days === null ? null : dueLabel(days),
+          urgent: days !== null && days <= 1,
+          doing: task.status === "in_progress",
+        }))
+    : [];
+  const tasksMore = approved
+    ? Math.max(0, input.myTasks.total - tasks.length)
+    : 0;
+
   // Coming up: the camp calendar and your own travel dates, soonest first.
   const upcoming = approved
     ? [
@@ -313,6 +368,16 @@ export function buildHome(input: HomeInput): HomeModel {
       label: "My forms",
       icon: "forms",
       badge: input.pending.length > 0 ? input.pending.length : null,
+    });
+    // The shared task board, for everyone; the count is the tasks that are
+    // theirs and not finished.
+    modules.push({
+      id: "tasks",
+      href: "/tasks",
+      label: "Tasks",
+      icon: "tasks",
+      badge: input.myTasks.total > 0 ? input.myTasks.total : null,
+      badgeSays: "yours",
     });
     // A lead may post and send forms, but only to a team they lead; a captain
     // to anyone (canSendToAudience in @camp404/core). The pages enforce the
@@ -380,6 +445,8 @@ export function buildHome(input: HomeInput): HomeModel {
     chips,
     waitingForApproval: !approved,
     todos,
+    tasks,
+    tasksMore,
     upcoming,
     calendarState: approved ? (input.calendar?.status ?? null) : null,
     lift: approved ? liftCard(input.lift) : null,

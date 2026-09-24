@@ -1,5 +1,23 @@
-import { test, expect } from "@playwright/test";
-import { completeOnboarding, login, resetTestState, setRank } from "./_helpers";
+import { test, expect, type Page } from "@playwright/test";
+import {
+  completeOnboarding,
+  login,
+  redeemInviteAtGate,
+  resetTestState,
+  setRank,
+} from "./_helpers";
+
+/** The camp day (UTC+2, no daylight saving) `days` from now, as YYYY-MM-DD. */
+function campDayFromNow(days: number): string {
+  return new Date(Date.now() + 2 * 3_600_000 + days * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+async function pick(page: Page, trigger: string, option: string) {
+  await page.locator(trigger).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
 
 test.describe("unauthenticated home page", () => {
   test("renders branding and the single auth CTA", async ({ page }) => {
@@ -91,5 +109,89 @@ test.describe("a member's own home", () => {
     ).toBeVisible();
     await expect(page.getByText(/captain-only/)).toBeVisible();
     await expect(page.getByText("Is camp ready?")).toHaveCount(0);
+  });
+
+  test("a member sees the task they are responsible for, and it opens the board", async ({
+    page,
+    request,
+  }) => {
+    await login(page, {
+      id: "home-tasker",
+      email: "home-tasker@example.com",
+      displayName: "Tessa Tasker",
+    });
+    await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+    await completeOnboarding(request, "home-tasker");
+
+    // A captain gives them a task due in ten camp days.
+    await login(page, {
+      id: "home-task-cap",
+      email: "god@example.com",
+      displayName: "Cap Tain",
+    });
+    await page.goto("/");
+    await completeOnboarding(request, "home-task-cap");
+    await setRank(request, "home-task-cap", "captain");
+    await page.goto("/tasks");
+    await page.getByRole("button", { name: "Add task" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Title").fill("Pack the shade cloth");
+    await pick(page, "#task-team", "Structures");
+    await pick(page, "#task-assignee", "Tessa Tasker");
+    await dialog.getByLabel("Deadline").fill(campDayFromNow(10));
+    await dialog.getByRole("button", { name: "Add task" }).click();
+    await expect(page.getByText("Task added")).toBeVisible();
+
+    await login(page, {
+      id: "home-tasker",
+      email: "home-tasker@example.com",
+    });
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Hi Tessa" }),
+    ).toBeVisible();
+    const list = page.getByRole("list", { name: "Your tasks" });
+    const row = list.getByRole("link", { name: /Pack the shade cloth/ });
+    await expect(row).toBeVisible();
+    await expect(row.getByText("Due in 10 days")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "See all tasks" }),
+    ).toBeVisible();
+    const shortcuts = page.getByRole("navigation", { name: "Your modules" });
+    await expect(
+      shortcuts.getByRole("link", { name: "Tasks, 1 yours" }),
+    ).toHaveAttribute("href", "/tasks");
+
+    await row.click();
+    await expect(page).toHaveURL("/tasks");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Tasks" }),
+    ).toBeVisible();
+  });
+
+  test("a member with no tasks has no task list, and a plain Tasks tile", async ({
+    page,
+    request,
+  }) => {
+    await login(page, {
+      id: "home-idle",
+      email: "god@example.com",
+      displayName: "Idle Ida",
+    });
+    await page.goto("/");
+    await completeOnboarding(request, "home-idle");
+    await setRank(request, "home-idle", "member");
+
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Hi Idle" }),
+    ).toBeVisible();
+    await expect(page.getByRole("list", { name: "Your tasks" })).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("navigation", { name: "Your modules" })
+        .getByRole("link", { name: "Tasks", exact: true }),
+    ).toHaveAttribute("href", "/tasks");
   });
 });
