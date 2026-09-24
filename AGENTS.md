@@ -174,6 +174,13 @@ the SQL) runs on the next deploy. Never ship a fix that needs someone to run a
 CLI or SQL command against production by hand. Make it idempotent (`ON
 CONFLICT DO NOTHING`, `WHERE ... IS NULL`) and test it on PGlite.
 
+A **guard migration** is the same mechanism with no data change: a custom
+migration whose only job is to stop the deploy (`RAISE EXCEPTION`) when live
+data would break the next migration, for example a `CHECK` that stored rows
+would fail (`0050_money_in_rands_only_guard.sql`). Generate it with `--custom`
+like a data fix, never write the file by hand, say in the error what to do,
+and test on PGlite that it passes on clean data and stops on bad data.
+
 Two Postgres traps:
 
 - **A nullable column in a unique index drops uniqueness for NULL rows.**
