@@ -190,6 +190,27 @@ test.describe("recipe source editor (test-mode)", () => {
     for (const question of QUESTIONS) {
       await expect(dialog.getByText(question)).toBeVisible();
     }
+    // The title's words leave the close button its room: they once ran
+    // under the X.
+    const close = await dialog
+      .getByRole("button", { name: "Close", exact: true })
+      .boundingBox();
+    const words = await dialog
+      .getByRole("heading", { name: QUESTIONS_TITLE })
+      .evaluate((h) => {
+        const range = document.createRange();
+        range.selectNodeContents(h);
+        return [...range.getClientRects()].map((r) => ({
+          right: r.right,
+          bottom: r.bottom,
+        }));
+      });
+    for (const line of words) {
+      expect(
+        line.right <= close!.x || line.bottom <= close!.y,
+        JSON.stringify({ line, close }),
+      ).toBe(true);
+    }
 
     // An empty answer is refused inline.
     await dialog.getByRole("button", { name: "Send answer" }).click();
