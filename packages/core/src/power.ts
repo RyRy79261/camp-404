@@ -501,9 +501,11 @@ export interface FuelForPlanInput {
 /**
  * The fuel for the stay on one running schedule. Each running hour burns at
  * that hour's load: the hourly buckets, plus the hours-per-day loads' energy
- * spread evenly over the day's running hours. An hour below half load burns
- * `lowLoadFactor` times as much. Energy in hours the generator is off is
- * counted as unserved, not as fuel.
+ * spread evenly over the day's running hours. An hours-per-day load that asks
+ * for more hours than the generator runs is served for the running hours only
+ * (watts × running hours). An hour below half load burns `lowLoadFactor` times
+ * as much. Energy in hours the generator is off is counted as unserved, not
+ * as fuel.
  */
 export function fuelForPlan({
   loads,
@@ -521,14 +523,19 @@ export function fuelForPlan({
 
   const perDay = days.map((day): FuelDay => {
     const buckets = hourlyBuckets(loads, day);
-    const partialWh = hoursPerDayLoads(loads, day).reduce(
-      (sum, load) => sum + energyPerDay(load, day),
-      0,
-    );
-    const spreadWatts = runningCount > 0 ? partialWh / runningCount : 0;
+    // A load cannot draw more than its own watts in an hour, so an
+    // hours-per-day load that asks for more hours than the generator runs is
+    // served for the running hours only; the rest is unserved.
+    let servedPartialWh = 0;
+    let unservedWh = 0;
+    for (const load of hoursPerDayLoads(loads, day)) {
+      const served = loadWatts(load) * Math.min(hoursOn(load), runningCount);
+      servedPartialWh += served;
+      unservedWh += energyPerDay(load, day) - served;
+    }
+    const spreadWatts = runningCount > 0 ? servedPartialWh / runningCount : 0;
     let litres = 0;
     let wh = 0;
-    let unservedWh = runningCount > 0 ? 0 : partialWh;
     for (let h = 0; h < 24; h++) {
       if (!running[h]) {
         unservedWh += buckets[h]!;

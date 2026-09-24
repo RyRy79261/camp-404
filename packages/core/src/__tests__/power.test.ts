@@ -540,6 +540,27 @@ describe("fuelForPlan", () => {
     );
   });
 
+  it("serves an hours-per-day load only for the hours the generator runs", () => {
+    // 1200 W asked for 20 h on a 12 h run: 1200 W × 12 h = 14.4 kWh served,
+    // 1200 W × 8 h = 9600 Wh unserved. 1200 W at PF 0.8 is 1.5 kVA, 27.3% of
+    // rated: 0.3006 + 2.1540 × 0.2727 = 0.8880 L/h, 10.656 L over 12 h.
+    // Spreading all 24 kWh would have drawn 2000 W an hour and 15.36 L.
+    const heater = load({
+      wattsEach: 1200,
+      schedule: "hours_per_day",
+      hoursPerDay: 20,
+    });
+    const fuel = fuelForPlan({
+      loads: [heater],
+      generator: GEN,
+      plan: PLAN,
+      schedule: TWELVE_HOURS,
+    });
+    expect(fuel.perDay[0]!.kWh).toBeCloseTo(14.4, 9);
+    expect(fuel.perDay[0]!.unservedWh).toBeCloseTo(9600, 9);
+    expect(fuel.perDay[0]!.litres).toBeCloseTo(10.656, 3);
+  });
+
   it("applies the low-load factor only to hours below half load", () => {
     const light = fuelForPlan({
       loads: [steady],
