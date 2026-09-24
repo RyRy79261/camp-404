@@ -56,6 +56,12 @@ import {
 // the switch says so before the captain tries.
 const MIN_ACTIVE_TEAMS = 2;
 
+/**
+ * The row's move and rename buttons: 36 px on a phone so the three of them,
+ * the switch and a team name fit a 360 px screen with no sideways scroll.
+ */
+const ACTION_BUTTON = "h-9 w-9 sm:h-10 sm:w-10";
+
 type Busy = { key: string; action: "up" | "down" | "archive" | "rename" };
 type Control = "up" | "down" | "rename";
 
@@ -209,9 +215,13 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-6">Team</TableHead>
-                <TableHead className="w-28">Active</TableHead>
-                <TableHead className="w-36 pr-6 text-right">Actions</TableHead>
+                <TableHead className="pl-4 sm:pl-6">Team</TableHead>
+                <TableHead className="w-14 px-1 sm:w-28 sm:px-2">
+                  Active
+                </TableHead>
+                <TableHead className="pr-3 text-right sm:w-36 sm:pr-6">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -235,7 +245,7 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                   return (
                     <TableRow key={team.key}>
                       {/* The name: read mode, or the rename field. */}
-                      <TableCell className="whitespace-normal py-2 pl-6">
+                      <TableCell className="whitespace-normal py-2 pl-4 sm:pl-6">
                         {editing ? (
                           <div className="flex items-start gap-1">
                             <InputField
@@ -244,7 +254,7 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                                   Rename {team.label}
                                 </span>
                               }
-                              wrapperClassName="max-w-xs flex-1 gap-0 [&>p]:mt-1"
+                              wrapperClassName="min-w-0 max-w-xs flex-1 gap-0 [&>p]:mt-1"
                               value={draftLabel}
                               autoFocus
                               maxLength={40}
@@ -290,7 +300,7 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                           <span className="flex min-w-0 items-center gap-2">
                             <span
                               className={cn(
-                                "truncate font-medium",
+                                "min-w-0 break-words font-medium",
                                 team.archived && "text-muted-foreground",
                               )}
                             >
@@ -304,7 +314,7 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                       </TableCell>
 
                       {/* Archive toggle. */}
-                      <TableCell className="py-2">
+                      <TableCell className="px-1 py-2 sm:px-2">
                         <span className="flex items-center gap-2">
                           <Switch
                             id={`archived-${team.key}`}
@@ -339,13 +349,14 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                       </TableCell>
 
                       {/* Reorder and rename. */}
-                      <TableCell className="py-2 pr-6">
-                        <span className="flex items-center justify-end gap-1">
+                      <TableCell className="py-2 pl-1 pr-3 sm:pl-2 sm:pr-6">
+                        <span className="flex items-center justify-end sm:gap-1">
                           <Button
                             ref={controlRef(team.key, "up")}
                             type="button"
                             variant="ghost"
                             size="icon"
+                            className={ACTION_BUTTON}
                             aria-label={`Move ${team.label} up`}
                             disabled={pending || index === 0}
                             onClick={() => move(team, "up")}
@@ -361,6 +372,7 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                             type="button"
                             variant="ghost"
                             size="icon"
+                            className={ACTION_BUTTON}
                             aria-label={`Move ${team.label} down`}
                             disabled={pending || index === teams.length - 1}
                             onClick={() => move(team, "down")}
@@ -377,6 +389,7 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                               type="button"
                               variant="ghost"
                               size="icon"
+                              className={ACTION_BUTTON}
                               aria-label={`Rename ${team.label}`}
                               disabled={pending}
                               onClick={() => startEdit(team)}

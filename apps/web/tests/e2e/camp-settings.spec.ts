@@ -94,6 +94,42 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     ).toHaveCount(1);
   });
 
+  // The Teams table must fit a phone: on a 390 px screen its Actions column
+  // used to run off the right edge, so the pencils needed a sideways scroll.
+  // Runs on both projects; the mobile-360 one is the phone.
+  test("a captain's Teams table fits the screen, every control in view", async ({
+    page,
+    request,
+  }) => {
+    await asRank(page, request, "settings-phone-captain", "captain");
+
+    await page.goto("/captains/camp-settings");
+    // Present first: the table has rendered before its width is measured.
+    const lastRename = page.getByRole("button", { name: /^Rename / }).last();
+    await expect(lastRename).toBeVisible();
+
+    const table = page.locator('[data-slot="table-container"]');
+    await expect(table).toHaveCount(1);
+    // No sideways scroll inside the table, and none on the page.
+    expect(
+      await table.evaluate((el) => el.scrollWidth - el.clientWidth),
+    ).toBeLessThanOrEqual(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      ),
+    ).toBeLessThanOrEqual(0);
+    // Every pencil sits wholly inside the screen's width (the last row may be
+    // below the fold, so this measures across, not down).
+    const width = page.viewportSize()!.width;
+    const pencils = page.getByRole("button", { name: /^Rename / });
+    for (const box of await pencils.evaluateAll((els) =>
+      els.map((el) => el.getBoundingClientRect().right),
+    )) {
+      expect(box).toBeLessThanOrEqual(width);
+    }
+  });
+
   test("a captain renames, moves and archives Water; all of it persists", async ({
     page,
     request,
