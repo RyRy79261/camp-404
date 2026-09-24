@@ -26,6 +26,9 @@ const PRIVATE_KEYS = [
   "isDriver",
   "driverProfileComplete",
   "duesPaid",
+  // This year's attendance status: team lead and up, so never on a member's
+  // row (the fixture below carries one, so a leak would show).
+  "participation",
 ] as const;
 
 // Every key the PUBLIC row is allowed to carry. The privacy test below compares
@@ -73,6 +76,7 @@ function member(
     intendsToDrive: true,
     driverProfileComplete: false,
     country: "ZA",
+    participation: "accepted",
     createdAt: new Date("2026-01-01"),
     ...overrides,
   };
@@ -279,6 +283,51 @@ describe("rosterForViewer (the page fork — the leak boundary)", () => {
       // reaches a non-captain, whatever a future projection adds.
       expect(Object.keys(row).sort()).toEqual([...PUBLIC_KEYS].sort());
     }
+  });
+
+  // Who is coming this year: team lead and up. A plain member's rows do not
+  // carry the key at all (not even null), a lead's carry the status and nothing
+  // else of the captain's view, and a captain's carry it with everything.
+  describe("this year's status", () => {
+    const roster = [
+      member({ id: "y", approvalStatus: "approved", participation: "applied" }),
+      member({ id: "n", approvalStatus: "approved", participation: null }),
+    ];
+
+    it("is NOT on a plain member's rows: the key is absent", () => {
+      for (const row of rosterForViewer(roster, false).rows) {
+        expect("thisYear" in row).toBe(false);
+      }
+      // The explicit default says the same.
+      for (const row of rosterForViewer(roster, false, undefined, {
+        thisYearForLead: false,
+      }).rows) {
+        expect("thisYear" in row).toBe(false);
+      }
+    });
+
+    it("is on a team lead's rows, with nothing else private", () => {
+      const out = rosterForViewer(roster, false, undefined, {
+        thisYearForLead: true,
+      });
+      expect(out.isCaptain).toBe(false);
+      expect(out.rows.map((r) => r.thisYear)).toEqual(["applied", null]);
+      for (const row of out.rows as unknown as Record<string, unknown>[]) {
+        expect("thisYear" in row).toBe(true);
+        expect(Object.keys(row).sort()).toEqual(
+          [...PUBLIC_KEYS, "thisYear"].sort(),
+        );
+        for (const leaked of PRIVATE_KEYS) {
+          expect(row[leaked]).toBeUndefined();
+        }
+      }
+    });
+
+    it("is on a captain's rows", () => {
+      const out = rosterForViewer(roster, true);
+      expect(out.rows.map((r) => r.thisYear)).toEqual(["applied", null]);
+      for (const row of out.rows) expect("thisYear" in row).toBe(true);
+    });
   });
 
   it("keeps a pending applicant, with their standing, on a member's roster", () => {

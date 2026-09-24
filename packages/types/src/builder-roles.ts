@@ -1,4 +1,13 @@
-import type { Question, QuestionRole } from "./questionnaire";
+import {
+  PARTICIPATION_INTENTS,
+  type ParticipationIntent,
+} from "./participation";
+import {
+  Questionnaire,
+  type Question,
+  type QuestionRole,
+  type SingleSelectQuestion,
+} from "./questionnaire";
 
 // What a camp-authored questionnaire's answers are FOR, when the app uses them
 // beyond storing them. Dietary and driver facts used to be code questionnaires
@@ -9,6 +18,10 @@ import type { Question, QuestionRole } from "./questionnaire";
 // the export and the "drivers" audience already read. The copy itself is
 // `questionnaireRoleMirror` in @camp404/core, which knows which questions a
 // member was actually asked.
+//
+// `participation_intent` is the one role that writes a member's place rather
+// than a fact about them: its Yes / Maybe / No sets this year's
+// camp_participations row, and a missing answer never clears it.
 
 export type BuilderRole = Extract<
   QuestionRole,
@@ -18,6 +31,7 @@ export type BuilderRole = Extract<
   | "driving_this_year"
   | "arrival_date"
   | "departure_date"
+  | "participation_intent"
 >;
 
 /** Each builder role: how it reads to a captain, and the kinds that hold it. */
@@ -43,6 +57,10 @@ export const BUILDER_ROLES: Record<
   },
   arrival_date: { label: "Arrival day", kinds: ["date"] },
   departure_date: { label: "Departure day", kinds: ["date"] },
+  participation_intent: {
+    label: "Coming this year (Yes / Maybe / No: sets their place for the year)",
+    kinds: ["single_select"],
+  },
 };
 
 const ROLE_ORDER = Object.keys(BUILDER_ROLES) as BuilderRole[];
@@ -73,4 +91,76 @@ export interface DriverMirror {
 export interface RoleMirror {
   dietary: DietaryMirror | null;
   driver: DriverMirror | null;
+  /** The member's Yes / Maybe / No for the send's year, or null for nothing. */
+  participation: { intent: ParticipationIntent } | null;
+}
+
+// --- Coming this year? -------------------------------------------------------
+
+/**
+ * The options a participation_intent question carries. The values are fixed
+ * (PARTICIPATION_INTENTS): the builder fills them in when a captain picks the
+ * role, and publishing refuses any other set.
+ */
+export const PARTICIPATION_INTENT_OPTIONS: readonly {
+  value: ParticipationIntent;
+  label: string;
+}[] = [
+  { value: "yes", label: "Yes, I'm coming" },
+  { value: "maybe", label: "Maybe" },
+  { value: "no", label: "No, not this year" },
+];
+
+/**
+ * True when a participation_intent question can publish: its option values
+ * are exactly yes, maybe and no (labels are the captain's to word), and it
+ * takes no "Other…" answer, which no place could be read from.
+ */
+export function hasParticipationOptions(q: SingleSelectQuestion): boolean {
+  if (q.allowOther) return false;
+  const values = q.options.map((o) => o.value);
+  return (
+    values.length === PARTICIPATION_INTENTS.length &&
+    PARTICIPATION_INTENTS.every((intent) => values.includes(intent))
+  );
+}
+
+/** The publish refusal for a participation_intent question that fails it. */
+export function participationOptionsMessage(prompt: string): string {
+  return `"${prompt}" sets each member's place for the year, so its options must be exactly yes, maybe and no, with "Other" off. Set its use to Nothing else and back to put them back.`;
+}
+
+export const ATTENDANCE_QUESTION_PROMPT =
+  "Are you coming to AfrikaBurn with Camp 404 this year?";
+
+/**
+ * The one-question "Coming this year?" questionnaire a captain creates with
+ * one click. The same definition backs the member's own form under My forms.
+ */
+export function attendanceQuestionnaire(): Questionnaire {
+  return Questionnaire.parse({
+    version: "1",
+    title: "Coming this year?",
+    pages: [
+      {
+        id: "coming-this-year",
+        kind: "questions",
+        title: "Coming this year?",
+        questions: [
+          {
+            id: "coming",
+            kind: "single_select",
+            prompt: ATTENDANCE_QUESTION_PROMPT,
+            required: true,
+            display: "radio",
+            role: "participation_intent",
+            options: PARTICIPATION_INTENT_OPTIONS.map(({ value, label }) => ({
+              value,
+              label,
+            })),
+          },
+        ],
+      },
+    ],
+  });
 }

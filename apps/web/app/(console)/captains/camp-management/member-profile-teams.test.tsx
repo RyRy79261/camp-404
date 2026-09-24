@@ -45,6 +45,7 @@ const row: RosterRow = {
   isDriver: false,
   driverProfileComplete: false,
   duesPaid: false,
+  thisYear: null,
 };
 
 function loaded(overrides: Record<string, unknown> = {}) {

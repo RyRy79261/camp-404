@@ -1,5 +1,6 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import type { ParticipationStatus } from "@camp404/types";
 import { createHttpDb } from "./index";
 import { duesSettledSql } from "./payments";
 import * as schema from "./schema";
@@ -44,6 +45,12 @@ export interface CampManagementMember {
   driverProfileComplete: boolean;
   /** ISO alpha-2 country code from the burner profile (NULL if unanswered). */
   country: string | null;
+  /**
+   * Whether the member is coming THIS year (camp_participations), or null when
+   * they have not answered. Team lead and up (MEMBER_FIELD_READERS); the web
+   * layer keeps it off a member's roster.
+   */
+  participation: ParticipationStatus | null;
   /**
    * Sign-in email, from the Better Auth `user` table. Present ONLY when the caller passed
    * `includeEmail: true` (a captain); members never see another's email.
@@ -125,6 +132,12 @@ export async function getCampManagementRoster(
         where ra.user_id = ${schema.users.id}
           and ra.status = 'pending' and ra.blocking = true
       ), '[]'::json)`,
+      // ::text for the same reason as `teams`: a custom enum is not a type the
+      // Neon driver parses.
+      participation: sql<ParticipationStatus | null>`(
+        select cp.status::text from camp_participations cp
+        where cp.user_id = ${schema.users.id} and cp.cycle = ${cycle}
+      )`,
       ...(includeEmail ? { email: schema.user.email } : {}),
       createdAt: schema.users.createdAt,
     })
@@ -171,6 +184,7 @@ export async function getCampManagementRoster(
     intendsToDrive: r.intendsToDrive,
     driverProfileComplete: r.driverCompletedAt != null,
     country: r.country,
+    participation: r.participation ?? null,
     ...(includeEmail ? { email: r.email ?? null } : {}),
     createdAt: r.createdAt,
   }));

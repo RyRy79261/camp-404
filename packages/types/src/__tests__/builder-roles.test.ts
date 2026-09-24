@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { BUILDER_ROLES, builderRolesFor } from "../builder-roles";
+import {
+  ATTENDANCE_QUESTION_PROMPT,
+  BUILDER_ROLES,
+  PARTICIPATION_INTENT_OPTIONS,
+  attendanceQuestionnaire,
+  builderRolesFor,
+  hasParticipationOptions,
+} from "../builder-roles";
+import { PARTICIPATION_INTENTS } from "../participation";
+import { Questionnaire, SingleSelectQuestion } from "../questionnaire";
 import {
   BuilderQuestionnaire,
   validateBuilderQuestionnaire,
@@ -66,6 +75,8 @@ describe("builderRolesFor", () => {
       "dietary_allergies",
       "dietary_notes",
     ]);
+    expect(builderRolesFor("single_select")).toEqual(["participation_intent"]);
+    expect(builderRolesFor("multi_select")).toEqual([]);
     expect(builderRolesFor("number")).toEqual([]);
   });
 
@@ -101,5 +112,164 @@ describe("publishing roles", () => {
     expect(validateBuilderQuestionnaire(twice)).toContain(
       '"Arriving" and "Arriving again" are both marked for the same use. Mark only one.',
     );
+  });
+});
+
+describe("the Coming this year question", () => {
+  const coming = (over: Record<string, unknown> = {}) =>
+    SingleSelectQuestion.parse({
+      id: "coming",
+      kind: "single_select",
+      prompt: "Coming?",
+      role: "participation_intent",
+      options: PARTICIPATION_INTENT_OPTIONS,
+      ...over,
+    });
+
+  it("offers the fixed values in the order members read them", () => {
+    expect(PARTICIPATION_INTENT_OPTIONS.map((o) => o.value)).toEqual([
+      ...PARTICIPATION_INTENTS,
+    ]);
+  });
+
+  it("sits only on a single choice", () => {
+    // A multiple choice has no role field, so the role is dropped on parse.
+    const multi = Questionnaire.parse({
+      version: "1",
+      pages: [
+        {
+          id: "p",
+          kind: "questions",
+          title: "P",
+          questions: [
+            {
+              id: "c",
+              kind: "multi_select",
+              prompt: "Coming?",
+              role: "participation_intent",
+              options: PARTICIPATION_INTENT_OPTIONS,
+            },
+          ],
+        },
+      ],
+    });
+    const page = multi.pages[0]!;
+    expect(page.kind === "questions" && page.questions[0]).not.toHaveProperty(
+      "role",
+    );
+    expect(page.kind === "questions" && page.questions[0]).toHaveProperty(
+      "prompt",
+      "Coming?",
+    );
+  });
+
+  it("accepts yes, maybe and no in any order and any wording, and nothing else", () => {
+    expect(hasParticipationOptions(coming())).toBe(true);
+    expect(
+      hasParticipationOptions(
+        coming({
+          options: [
+            { value: "no", label: "Nope" },
+            { value: "yes", label: "Yebo" },
+            { value: "maybe", label: "Dunno" },
+          ],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      hasParticipationOptions(
+        coming({ options: PARTICIPATION_INTENT_OPTIONS.slice(0, 2) }),
+      ),
+    ).toBe(false);
+    expect(
+      hasParticipationOptions(
+        coming({
+          options: [
+            ...PARTICIPATION_INTENT_OPTIONS,
+            { value: "later", label: "Later" },
+          ],
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      hasParticipationOptions(
+        coming({
+          options: [
+            { value: "yes", label: "Yes" },
+            { value: "maybe", label: "Maybe" },
+            { value: "nah", label: "No" },
+          ],
+        }),
+      ),
+    ).toBe(false);
+    expect(hasParticipationOptions(coming({ allowOther: true }))).toBe(false);
+  });
+
+  it("builds the one-click questionnaire: one required radio question with the role", () => {
+    const q = attendanceQuestionnaire();
+    expect(Questionnaire.parse(q)).toEqual(q);
+    expect(q).toMatchObject({ version: "1", title: "Coming this year?" });
+    expect(q.pages).toHaveLength(1);
+    const page = q.pages[0]!;
+    expect(page).toMatchObject({
+      kind: "questions",
+      title: "Coming this year?",
+    });
+    expect(page.kind === "questions" && page.questions).toEqual([
+      {
+        id: "coming",
+        kind: "single_select",
+        prompt: ATTENDANCE_QUESTION_PROMPT,
+        required: true,
+        display: "radio",
+        role: "participation_intent",
+        options: PARTICIPATION_INTENT_OPTIONS,
+      },
+    ]);
+  });
+
+  it("refuses to publish a builder question whose options were changed", () => {
+    const form = (options: unknown, allowOther?: boolean) =>
+      BuilderQuestionnaire.parse({
+        version: "1",
+        title: "Coming?",
+        pages: [
+          {
+            id: "p1",
+            type: "question",
+            title: "Coming",
+            blocks: [
+              {
+                kind: "question",
+                question: {
+                  id: "coming",
+                  kind: "single_select",
+                  prompt: "Coming?",
+                  role: "participation_intent",
+                  options,
+                  allowOther,
+                },
+              },
+            ],
+          },
+        ],
+      });
+    const refusal = expect.stringContaining(
+      "must be exactly yes, maybe and no",
+    );
+    expect(
+      validateBuilderQuestionnaire(form(PARTICIPATION_INTENT_OPTIONS)),
+    ).toEqual([]);
+    expect(
+      validateBuilderQuestionnaire(form(PARTICIPATION_INTENT_OPTIONS, true)),
+    ).toEqual([refusal]);
+    expect(
+      validateBuilderQuestionnaire(
+        form([
+          { value: "yes", label: "Yes" },
+          { value: "no", label: "No" },
+        ]),
+      ),
+    ).toEqual([refusal]);
   });
 });

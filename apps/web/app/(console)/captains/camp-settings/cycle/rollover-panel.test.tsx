@@ -165,6 +165,7 @@ describe("RolloverPanel — naming the founding year", () => {
         carSeatsStamped: 0,
         teamBudgetsStamped: 0,
         adopteesStamped: 0,
+        participationsStamped: 5,
         auditLogId: "audit-1",
       },
     } as never);
@@ -185,7 +186,7 @@ describe("RolloverPanel — naming the founding year", () => {
     // rather than printed.
     expect(
       await screen.findByText(
-        /3 sends, 12 answers, 20 team places and 1 driver profile already on file are now filed under it/,
+        /3 sends, 12 answers, 20 team places, 1 driver profile and 5 attendance answers already on file are now filed under it/,
       ),
     ).toBeTruthy();
     expect(screen.queryByText(/car seat/)).toBeNull();

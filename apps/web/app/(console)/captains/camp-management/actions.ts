@@ -25,6 +25,7 @@ import { ID_UNREADABLE_LABEL, mergeIdNumber } from "@camp404/db/id-documents";
 import {
   availableReviewActions,
   canDecidePromotion,
+  isParticipationDecision,
   canSendPromotion,
   deriveViewerRank,
   memberQuestionnaireStatuses,
@@ -34,7 +35,11 @@ import {
   type MemberQuestionnaire,
   type ReviewOption,
 } from "@camp404/core";
-import type { ApprovalStatus, Team } from "@camp404/types";
+import {
+  PARTICIPATION_STATUSES,
+  type ApprovalStatus,
+  type Team,
+} from "@camp404/types";
 import { captainActionGate } from "@/lib/captain-gate";
 import { decideUserApproval, findCampUserById } from "@/lib/users";
 import {
@@ -54,6 +59,7 @@ import {
 import { runAction, type ActionFailure } from "@/lib/action-result";
 import { auditReadAfterResponse } from "@/lib/audit";
 import { resolveSafetyDataForViewer } from "@/lib/safety-data";
+import { decideParticipation } from "@/lib/participations";
 
 export type MemberDetailResult =
   | {
@@ -778,5 +784,68 @@ export async function setTeamLeadAction(
     }
     revalidatePath("/captains/camp-management");
     return { ok: true, teams: await getTeamMemberships(userId) };
+  });
+}
+
+export type ParticipationDecisionResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+const ParticipationDecisionInput = z.object({
+  userId: UserId,
+  from: z.enum(PARTICIPATION_STATUSES),
+  to: z.enum(PARTICIPATION_STATUSES),
+});
+
+/**
+ * A captain accepts a member for this year, or puts them on the waiting list:
+ * one tap on the roster, no reason asked.
+ *
+ * Only the moves `isParticipationDecision` allows: a member who said No, or
+ * has not answered, has to say Yes or Maybe first. The write is a
+ * compare-and-set on `from`, so a member who changed their answer (or another
+ * captain who decided first) while this captain was looking is not
+ * overwritten; the captain is told instead.
+ */
+export async function decideParticipationAction(input: {
+  userId: string;
+  from: string;
+  to: string;
+}): Promise<ParticipationDecisionResult> {
+  return runAction("decideParticipationAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+
+    const parsed = ParticipationDecisionInput.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Unknown decision." };
+    const { userId, from, to } = parsed.data;
+    if (!isParticipationDecision(from, to)) {
+      return {
+        ok: false,
+        error:
+          "They have to answer Yes or Maybe before they can be given a place.",
+      };
+    }
+
+    const target = await findCampUserById(userId);
+    if (!target) return { ok: false, error: "Member not found." };
+
+    const decided = await decideParticipation({
+      userId,
+      from,
+      to,
+      decidedByUserId: gate.captainId,
+    });
+    // Either way: on a lost race the roster the captain sees is stale.
+    revalidatePath("/captains/camp-management");
+    revalidatePath("/captains/overview");
+    if (!decided) {
+      const name = target.displayName?.trim() || "This member";
+      return {
+        ok: false,
+        error: `${name}'s answer changed while you were looking. Refresh to see it.`,
+      };
+    }
+    return { ok: true };
   });
 }

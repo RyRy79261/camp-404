@@ -13,6 +13,7 @@ import type * as CampConfig from "@/lib/camp-config";
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/roster", () => ({ getCampManagementRoster: vi.fn() }));
+vi.mock("@/lib/users", () => ({ isTeamLead: vi.fn() }));
 vi.mock("@/lib/camp-config", async (importOriginal) => ({
   ...(await importOriginal<typeof CampConfig>()),
   getTeamsConfig: vi.fn(),
@@ -31,10 +32,16 @@ vi.mock("./camp-management-roster", () => ({
   ),
 }));
 vi.mock("./member-roster", () => ({
-  MemberRoster: (props: { initialTeam: string | null }) => (
+  MemberRoster: (props: {
+    initialTeam: string | null;
+    rows: Record<string, unknown>[];
+  }) => (
     <div
       data-testid="member-roster"
       data-initial-team={props.initialTeam ?? ""}
+      data-this-year={props.rows
+        .map((r) => ("thisYear" in r ? String(r.thisYear) : "absent"))
+        .join(",")}
     />
   ),
 }));
@@ -45,6 +52,8 @@ vi.mock("@/components/export-csv-button", () => ({
 import { captainPageGate } from "@/lib/captain-gate";
 import { getCampManagementRoster } from "@/lib/roster";
 import { getTeamsConfig } from "@/lib/camp-config";
+import { isTeamLead } from "@/lib/users";
+import type { CampManagementMember } from "@camp404/db/roster";
 import CampManagementPage from "./page";
 
 const CONFIG: TeamsConfig = {
@@ -64,6 +73,7 @@ beforeEach(() => {
   } as never);
   vi.mocked(getCampManagementRoster).mockResolvedValue([]);
   vi.mocked(getTeamsConfig).mockResolvedValue(CONFIG);
+  vi.mocked(isTeamLead).mockReset().mockResolvedValue(false);
 });
 
 async function openWith(team?: string) {
@@ -100,6 +110,7 @@ describe("camp-management ?team=", () => {
     vi.mocked(captainPageGate).mockResolvedValue({
       rank: "camp_member",
       cleared: false,
+      campUser: { id: "viewer-1" },
     } as never);
     render(
       await CampManagementPage({
@@ -109,5 +120,53 @@ describe("camp-management ?team=", () => {
     expect(screen.getByTestId("member-roster").dataset.initialTeam).toBe(
       "kitchen",
     );
+  });
+});
+
+describe("camp-management: this year's status on a non-captain's roster", () => {
+  const coming = {
+    id: "m1",
+    displayName: "Nova",
+    handle: null,
+    rank: "member",
+    approvalStatus: "approved",
+    isLead: false,
+    teams: [],
+    duesPaid: false,
+    membershipTier: null,
+    onboardingComplete: true,
+    pendingRequiredActions: 0,
+    pendingRequiredActionItems: [],
+    intendsToDrive: false,
+    driverProfileComplete: false,
+    country: null,
+    participation: "applied",
+    createdAt: new Date("2026-01-01"),
+  } satisfies CampManagementMember;
+
+  async function asNonCaptain(lead: boolean) {
+    vi.mocked(captainPageGate).mockResolvedValue({
+      rank: lead ? "team_lead" : "camp_member",
+      cleared: false,
+      campUser: { id: "viewer-1" },
+    } as never);
+    vi.mocked(getCampManagementRoster).mockResolvedValue([coming]);
+    vi.mocked(isTeamLead).mockResolvedValue(lead);
+    render(await CampManagementPage({ searchParams: Promise.resolve({}) }));
+    return screen.getByTestId("member-roster").dataset.thisYear;
+  }
+
+  it("hands a team lead each member's status (any team: the role is camp-wide)", async () => {
+    expect(await asNonCaptain(true)).toBe("applied");
+    expect(isTeamLead).toHaveBeenCalledWith("viewer-1");
+  });
+
+  it("hands a plain member rows with no status key at all", async () => {
+    expect(await asNonCaptain(false)).toBe("absent");
+  });
+
+  it("does not ask whether a captain leads a team", async () => {
+    render(await CampManagementPage({ searchParams: Promise.resolve({}) }));
+    expect(isTeamLead).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   BarChart3,
+  CalendarCheck,
   Copy,
   FileText,
   Loader2,
@@ -29,7 +30,9 @@ import { PageHeading } from "@camp404/ui/components/page-heading";
 import { toast } from "@camp404/ui/components/toast";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
+import { ATTENDANCE_CHECK_KEY } from "@/lib/attendance-check";
 import {
+  createAttendanceCheckAction,
   createDraftAction,
   deleteDraftAction,
   duplicateDraftAction,
@@ -76,14 +79,20 @@ const STATUS: Record<
 // status, counts and key, and Edit / Results / Send beside it. AfrikaBurn splits
 // the list by audience; Camp 404 chooses the audience per send, so it splits by
 // whether a send is open. "New questionnaire" names the draft first, then opens
-// the builder on it. Every mutation routes through the captain/team-lead-gated
-// server actions; the page re-renders from the server.
+// the builder on it. A captain also has one click for the yearly "Coming this
+// year?" check: it creates and publishes that questionnaire, then opens its
+// Send page, where the captain picks who it reaches. Every mutation routes
+// through the captain/team-lead-gated server actions; the page re-renders from
+// the server.
 export function QuestionnaireHub({
   heading,
   items,
+  canCreateAttendanceCheck = false,
 }: {
   heading: HubHeading;
   items: HubItem[];
+  /** A captain: the only rank that publishes and sends. */
+  canCreateAttendanceCheck?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -96,6 +105,22 @@ export function QuestionnaireHub({
   const [nameError, setNameError] = useState<string | null>(null);
   const nameId = useId();
   const errorId = useId();
+  const [checking, startCheckTransition] = useTransition();
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const checkErrorId = useId();
+  const hasAttendanceCheck = items.some((i) => i.key === ATTENDANCE_CHECK_KEY);
+
+  function attendanceCheck() {
+    setCheckError(null);
+    startCheckTransition(async () => {
+      const result = await createAttendanceCheckAction();
+      if (!result.ok) {
+        setCheckError(result.error);
+        return;
+      }
+      router.push(`/captains/questionnaires/${result.key}/send`);
+    });
+  }
 
   function create() {
     const title = name.trim();
@@ -167,10 +192,40 @@ export function QuestionnaireHub({
       <PageHeading
         {...heading}
         actions={
-          <Button onClick={() => setCreating(true)} disabled={creating}>
-            <Plus aria-hidden />
-            New questionnaire
-          </Button>
+          <div className="flex flex-col gap-1.5 sm:items-end">
+            <div className="flex flex-wrap items-center gap-2">
+              {canCreateAttendanceCheck ? (
+                <Button
+                  variant="outline"
+                  onClick={attendanceCheck}
+                  disabled={checking}
+                  aria-describedby={checkError ? checkErrorId : undefined}
+                >
+                  {checking ? (
+                    <Loader2 aria-hidden className="motion-safe:animate-spin" />
+                  ) : (
+                    <CalendarCheck aria-hidden />
+                  )}
+                  {hasAttendanceCheck
+                    ? "Send this year's attendance check"
+                    : "Create this year's attendance check"}
+                </Button>
+              ) : null}
+              <Button onClick={() => setCreating(true)} disabled={creating}>
+                <Plus aria-hidden />
+                New questionnaire
+              </Button>
+            </div>
+            {checkError ? (
+              <p
+                id={checkErrorId}
+                role="alert"
+                className="text-xs text-destructive"
+              >
+                {checkError}
+              </p>
+            ) : null}
+          </div>
         }
       />
 

@@ -232,6 +232,20 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "teamMemberships.isLead": "camp_member",
   "teamMemberships.cycle": "camp_member",
   "teamMemberships.createdAt": "captain",
+
+  // camp_participations — who is coming this year. A member reads their own
+  // row; any team lead (the role is camp-wide) reads another member's status;
+  // who decided it, when and why stay with captains.
+  "campParticipations.userId": "camp_member",
+  "campParticipations.cycle": "camp_member",
+  "campParticipations.status": "team_lead",
+  // The member's own Yes / Maybe / No, apart from the captain's decision.
+  "campParticipations.intent": "captain",
+  "campParticipations.decidedByUserId": "captain",
+  "campParticipations.decidedAt": "captain",
+  "campParticipations.reason": "captain",
+  "campParticipations.createdAt": "captain",
+  "campParticipations.updatedAt": "captain",
 };
 
 /**

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { Questionnaire, Team } from "@camp404/types";
+import { Questionnaire, Team, questionsWithRole } from "@camp404/types";
 import type { ViewerRank } from "@camp404/types";
 import {
   CAMP_TIME_ZONE,
@@ -33,11 +33,14 @@ import { getLeadTeams } from "@/lib/users";
 import { runAction } from "@/lib/action-result";
 import { getCampManagementRoster } from "@/lib/roster";
 import {
+  createAttendanceCheck,
   createDraft,
+  getBuilderDefinition,
   deleteDraft,
   duplicateDefinition,
   updateDefinition,
 } from "@/lib/questionnaire-definitions";
+import { usesTestStore } from "@/lib/test-mode";
 
 // Questionnaire-builder mutations (Phase C). Team-leads may create and edit
 // their OWN drafts, and SEND to a team they lead (see the send gate below);
@@ -97,6 +100,8 @@ async function gateCaptain(): Promise<CaptainGate> {
 
 /** The refusal a lead sees when the audience is wider than the team they lead. */
 const AUDIENCE_REFUSED = "You can only send to a team you lead.";
+const ATTENDANCE_QUESTION_MISSING =
+  'The "Coming this year?" questionnaire has lost its Yes / Maybe / No question. Open it in the builder and add a question marked "Coming this year", then try again.';
 
 /**
  * The audience half of the send gate: may this actor address this audience?
@@ -210,7 +215,10 @@ export async function duplicateDraftAction(
   ) {
     return { ok: false, error: "Questionnaire not found." };
   }
-  const newKey = await duplicateDefinition({ key, createdBy: gate.campUser.id });
+  const newKey = await duplicateDefinition({
+    key,
+    createdBy: gate.campUser.id,
+  });
   if (!newKey) {
     return { ok: false, error: "Couldn't duplicate this questionnaire." };
   }
@@ -259,6 +267,51 @@ export async function publishAction(key: string): Promise<PublishActionResult> {
   const result = await publishDefinition(key, gate.campUser.id);
   if (result.ok) revalidateBuilder(key);
   return result;
+}
+
+/**
+ * The hub's one click for "Coming this year?" (captain-only: only captains
+ * publish and send). Creates the questionnaire under its fixed key when it is
+ * absent, publishes it when it is not live, and returns its key so the hub can
+ * open its Send page. It never sends: the captain picks the audience there
+ * (Everyone reaches approved members only) and ticks Blocking, so they always
+ * see who it will reach.
+ */
+export async function createAttendanceCheckAction(): Promise<QResultWithKey> {
+  const gate = await gateCaptain();
+  if (!gate.ok) return gate;
+  if (usesTestStore()) {
+    return {
+      ok: false,
+      error: "The attendance check needs the questionnaire builder's database.",
+    };
+  }
+  const key = await createAttendanceCheck(gate.campUser.id);
+  const meta = await getDefinitionMetaRow(key);
+  if (!meta) return { ok: false, error: "Questionnaire not found." };
+  // A captain may have edited it in the builder. Without its Yes / Maybe / No
+  // question it would publish and send, and set nobody's place this year.
+  const definition = await getBuilderDefinition(key);
+  if (
+    !definition ||
+    questionsWithRole(definition, "participation_intent").length === 0
+  ) {
+    return { ok: false, error: ATTENDANCE_QUESTION_MISSING };
+  }
+  // A draft is published here; so is one a captain unpublished, since this
+  // button's purpose is to send it.
+  if (meta.status !== "published") {
+    const published = await publishDefinition(key, gate.campUser.id);
+    if (!published.ok) {
+      return {
+        ok: false,
+        error:
+          published.errors[0] ?? "The attendance check couldn't be published.",
+      };
+    }
+  }
+  revalidateBuilder(key);
+  return { ok: true, key };
 }
 
 export async function unpublishAction(key: string): Promise<QResult> {
@@ -502,7 +555,6 @@ export async function setCarryOverAction(
   revalidateBuilder(key);
   return { ok: true };
 }
-
 
 // --- Reminders (§7.4) ------------------------------------------------------
 // A captain looking at a half-answered questionnaire needs one button that

@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
-import { defaultTeamLabel, initialsFrom } from "@camp404/core";
+import {
+  NOT_ANSWERED_LABEL,
+  PARTICIPATION_LABEL,
+  defaultTeamLabel,
+  initialsFrom,
+} from "@camp404/core";
+import type { ParticipationStatus } from "@camp404/types";
 import { Badge, type BadgeProps } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { cn } from "@camp404/ui/lib/utils";
@@ -137,6 +143,45 @@ export function RosterStatusBadge({
   return (
     <Badge variant={STATUS_VARIANT[status]} className={className}>
       {label}
+    </Badge>
+  );
+}
+
+/**
+ * This year's attendance status → Badge variant, in the status badges' own
+ * vocabulary: a place given is success, the waiting list a warning, a Yes
+ * still to decide the primary tint, a Maybe quiet, and a No quieter still.
+ */
+const THIS_YEAR_VARIANT: Record<ParticipationStatus, BadgeVariant> = {
+  accepted: "success",
+  waitlisted: "warning",
+  applied: "default",
+  maybe: "secondary",
+  not_attending: "outline",
+};
+
+/**
+ * The "This year" pill (captains and team leads): Coming / Maybe / Accepted /
+ * Waiting list / Not coming, or a dashed "Not answered" for a member with no
+ * answer for the year.
+ */
+export function ThisYearBadge({
+  status,
+  className,
+}: {
+  status: ParticipationStatus | null;
+  className?: string;
+}) {
+  if (status === null) {
+    return (
+      <Badge variant="outline" className={cn("border-dashed", className)}>
+        {NOT_ANSWERED_LABEL}
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant={THIS_YEAR_VARIANT[status]} className={className}>
+      {PARTICIPATION_LABEL[status]}
     </Badge>
   );
 }

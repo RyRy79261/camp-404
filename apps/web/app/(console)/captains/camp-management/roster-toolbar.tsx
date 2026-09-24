@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { ChevronDown, Search, TriangleAlert } from "lucide-react";
 import { Input } from "@camp404/ui/components/input";
 import { cn } from "@camp404/ui/lib/utils";
-import type { RosterChip, RosterSort } from "@/lib/camp-roster";
+import type { RosterChip, RosterSort, ThisYearFilter } from "@/lib/camp-roster";
 
 // The sort choices a phone gets, where the table's column headers are hidden.
 const SORT_OPTIONS: { value: string; label: string; sort: RosterSort }[] = [
@@ -33,6 +33,17 @@ const SORT_OPTIONS: { value: string; label: string; sort: RosterSort }[] = [
     label: "Country",
     sort: { key: "country", direction: "asc" },
   },
+];
+
+// The captain's "This year" choices, in the words the badges use.
+const THIS_YEAR_OPTIONS: { value: ThisYearFilter; label: string }[] = [
+  { value: "any", label: "Any" },
+  { value: "applied", label: "Coming" },
+  { value: "maybe", label: "Maybe" },
+  { value: "accepted", label: "Accepted" },
+  { value: "waitlisted", label: "Waiting list" },
+  { value: "not_attending", label: "Not coming" },
+  { value: "none", label: "Not answered" },
 ];
 
 // The roster's filter strip, laid out like the AfrikaBurn registrations filters:
@@ -120,6 +131,7 @@ export function RosterToolbar({
   teams,
   stats,
   sort,
+  thisYear,
   publicOnly = false,
 }: {
   query: string;
@@ -133,6 +145,11 @@ export function RosterToolbar({
   stats: ToolbarStats;
   /** The captain roster's sort, offered as a select below `md`. */
   sort?: { value: RosterSort; onChange: (sort: RosterSort) => void };
+  /** The captain's "This year" filter. Never offered in `publicOnly`. */
+  thisYear?: {
+    value: ThisYearFilter;
+    onChange: (filter: ThisYearFilter) => void;
+  };
   publicOnly?: boolean;
 }) {
   return (
@@ -228,6 +245,32 @@ export function RosterToolbar({
           <SelectChevron />
         </div>
       </FilterField>
+
+      {/* This year — captain view only: who is coming, and who has not said. */}
+      {thisYear && !publicOnly && (
+        <FilterField label="This year" className="w-full sm:w-52">
+          <div className="relative">
+            <select
+              aria-label="This year"
+              value={thisYear.value}
+              onChange={(e) =>
+                thisYear.onChange(e.target.value as ThisYearFilter)
+              }
+              className={cn(
+                SELECT,
+                thisYear.value !== "any" && "border-primary",
+              )}
+            >
+              {THIS_YEAR_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <SelectChevron />
+          </div>
+        </FilterField>
+      )}
 
       {/* Sort — phones only; the table's column headers sort on wider
           screens. */}

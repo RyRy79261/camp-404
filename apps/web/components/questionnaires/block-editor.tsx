@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import {
   BUILDER_ROLES,
+  PARTICIPATION_INTENT_OPTIONS,
   SHORT_LABEL_MAX_LENGTH,
   SUBMIT_TARGET,
   builderRolesFor,
@@ -22,6 +23,7 @@ import {
   type Question,
   type QuestionOption,
   type QuestionRole,
+  type SingleSelectQuestion,
   type VisibleIf,
 } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
@@ -439,7 +441,31 @@ function RoleSelect({
           const { role: _drop, ...rest } = block as Question & {
             role?: string;
           };
-          onChange((v === NO_ROLE ? rest : { ...rest, role: v }) as PageBlock);
+          if (v === NO_ROLE) {
+            // Removing a role leaves the options as they are.
+            onChange(rest as PageBlock);
+          } else if (
+            v === "participation_intent" &&
+            block.kind === "single_select"
+          ) {
+            // Its answer sets each member's place, so the options are the
+            // fixed Yes / Maybe / No, and "Other…" can't be offered.
+            const {
+              allowOther: _other,
+              otherLabel: _otherLabel,
+              ...fixed
+            } = rest as SingleSelectQuestion;
+            onChange({
+              ...fixed,
+              role: v,
+              options: PARTICIPATION_INTENT_OPTIONS.map(({ value, label }) => ({
+                value,
+                label,
+              })),
+            } as PageBlock);
+          } else {
+            onChange({ ...rest, role: v } as PageBlock);
+          }
         }}
       >
         <SelectTrigger aria-label="The app uses this answer as">

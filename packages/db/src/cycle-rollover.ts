@@ -184,6 +184,8 @@ export interface FoundingReport {
   /** Team budgets and adoption slots, year-scoped since migration 0034. */
   teamBudgetsStamped: number;
   adopteesStamped: number;
+  /** Who-is-coming answers given before the camp had a year (0052). */
+  participationsStamped: number;
   auditLogId: string;
 }
 
@@ -621,6 +623,11 @@ export async function setFoundingYear(input: {
       .set({ cycle: input.year })
       .where(eq(schema.adoptees.cycle, UNSET_CYCLE))
       .returning({ id: schema.adoptees.id });
+    const participations = await tx
+      .update(schema.campParticipations)
+      .set({ cycle: input.year })
+      .where(eq(schema.campParticipations.cycle, UNSET_CYCLE))
+      .returning({ userId: schema.campParticipations.userId });
 
     const [audit] = await tx
       .insert(schema.auditLog)
@@ -637,6 +644,7 @@ export async function setFoundingYear(input: {
           carSeatsStamped: seats?.count ?? 0,
           teamBudgetsStamped: budgets.length,
           adopteesStamped: adoptees.length,
+          participationsStamped: participations.length,
         },
       })
       .returning({ id: schema.auditLog.id });
@@ -652,6 +660,7 @@ export async function setFoundingYear(input: {
         carSeatsStamped: seats?.count ?? 0,
         teamBudgetsStamped: budgets.length,
         adopteesStamped: adoptees.length,
+        participationsStamped: participations.length,
         auditLogId: audit!.id,
       },
     };

@@ -87,6 +87,10 @@
 //     in (./time-zone)
 //   - questionnaire status: memberQuestionnaireStatuses — where each
 //     questionnaire stands for one member (./questionnaire-status)
+//   - participation: participationAfterIntent, isParticipationDecision,
+//     PARTICIPATION_LABEL, NOT_ANSWERED_LABEL — who is coming this year, how a
+//     member's answer moves it and which moves a captain may make
+//     (./participation)
 //   - power: canEditPower (a captain or a Power & Lighting lead), the load
 //     maths (loadWatts, energyPerDay, hourlyBuckets, peakLoad,
 //     surgeHeadroomWatts, amps at MAINS_VOLTS, generatorLoadPct, loadBand,
@@ -144,6 +148,7 @@ export * from "./notification-email";
 export * from "./time-zone";
 export * from "./questionnaire-status";
 export * from "./password";
+export * from "./participation";
 export * from "./power";
 export * from "./recipes";
 export * from "./recipe-source";

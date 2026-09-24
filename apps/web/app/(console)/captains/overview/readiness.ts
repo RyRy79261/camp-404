@@ -6,6 +6,13 @@ import {
 import type { TeamConfigEntry } from "@/lib/camp-config";
 import type { TeamCoverage } from "@/lib/roster";
 import { deriveRosterStats, type RosterRow } from "@/lib/camp-roster";
+
+// --- Who is coming this year ------------------------------------------------
+
+// The "This year" card's counts are the roster's own derivation, over
+// approved members only (the people "Everyone" reaches). Re-exported so the
+// board reads every figure from this one module.
+export { deriveThisYear, type ThisYearCounts } from "@/lib/camp-roster";
 import type { OpenSendGateRow } from "@camp404/db/questionnaire-results";
 
 // The pure derivations behind the captain Overview's status board — the shapes

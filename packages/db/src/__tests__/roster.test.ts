@@ -239,6 +239,43 @@ describe("getCampManagementRoster is asked of the camp's current year", () => {
   });
 });
 
+describe("getCampManagementRoster reads this year's attendance", () => {
+  const h = useTestDb();
+
+  it("returns this year's status, and null for an answer in another year", async () => {
+    const db = h.db();
+    const coming = await makeUser(db, { displayName: "Ada" });
+    const lastYear = await makeUser(db, { displayName: "Bo" });
+    const silent = await makeUser(db, { displayName: "Cy" });
+    // `status` is the participation_status enum, so TypeScript holds these
+    // literals to PARTICIPATION_STATUSES.
+    await db.insert(schema.campParticipations).values([
+      { userId: coming.id, cycle: 2027, status: "accepted", intent: "yes" },
+      // Answered for 2026 only: nothing for this year.
+      {
+        userId: lastYear.id,
+        cycle: 2026,
+        status: "waitlisted",
+        intent: "maybe",
+      },
+    ]);
+    await foundedAt(db, 2027);
+
+    const roster = await getCampManagementRoster();
+    const byId = new Map(roster.map((m) => [m.id, m.participation]));
+    expect(byId.get(coming.id)).toBe("accepted");
+    expect(byId.get(lastYear.id)).toBeNull();
+    expect(byId.get(silent.id)).toBeNull();
+
+    // The 2026 answer is still the answer when 2026 is the year asked about.
+    await foundedAt(db, 2026);
+    const earlier = await getCampManagementRoster();
+    expect(earlier.find((m) => m.id === lastYear.id)?.participation).toBe(
+      "waitlisted",
+    );
+  });
+});
+
 describe("captain-only columns are selected only when asked for", () => {
   const h = useTestDb();
 

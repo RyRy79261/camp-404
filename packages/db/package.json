@@ -14,6 +14,7 @@
     "./relations": "./src/relations.ts",
     "./roster": "./src/roster.ts",
     "./team-memberships": "./src/team-memberships.ts",
+    "./participations": "./src/participations.ts",
     "./member-notes": "./src/member-notes.ts",
     "./member-export": "./src/member-export.ts",
     "./payments": "./src/payments.ts",
