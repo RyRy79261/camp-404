@@ -128,7 +128,7 @@ test.describe("recipe plate counts (test-mode)", () => {
     await expect(page).toHaveURL(`${recipeUrl}?plates=45`);
     await expect(
       page.locator("[data-plate-bar]").getByRole("status"),
-    ).toContainText("Not proofread for 45 plates yet.");
+    ).toHaveText("Showing 50 plates.");
     await counts(page)
       .getByRole("button", { name: "Proofread for 45 plates" })
       .click();

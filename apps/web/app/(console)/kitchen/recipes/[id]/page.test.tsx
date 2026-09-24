@@ -887,9 +887,9 @@ describe("recipe page", () => {
       expect(within(bar).getByText("With Claude…").tagName).toBe("SPAN");
       expect(within(bar).queryByRole("button")).toBeNull();
       expect(within(bar).queryByText("Verified")).toBeNull();
-      expect(screen.getByRole("status").textContent).toContain(
-        "Claude is proofreading 80 plates.",
-      );
+      // "With Claude…" beside the selector says it once; the line only says
+      // which count the page shows.
+      expect(screen.getByRole("status").textContent).toBe("Showing 45 plates.");
       // The body stays on the version's own count until the result is in.
       expect(
         screen.getByRole("list", { name: "Step 1 uses" }).textContent,
@@ -935,9 +935,7 @@ describe("recipe page", () => {
       });
       expect(within(bar).getAllByRole("button")).toHaveLength(1);
       expect(within(bar).queryByText("Verified")).toBeNull();
-      expect(screen.getByRole("status").textContent).toBe(
-        "Not proofread for 50 plates yet. Showing 45 plates.",
-      );
+      expect(screen.getByRole("status").textContent).toBe("Showing 45 plates.");
       // The body shows the version's own count, not the one asked for.
       expect(
         screen.getByRole("list", { name: "Step 1 uses" }).textContent,

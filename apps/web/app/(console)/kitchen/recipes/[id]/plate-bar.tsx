@@ -38,20 +38,21 @@ import { proofreadPlatesAction } from "../actions";
 // one. A failed click says why in a toast. A count asked for in the address
 // that is not ready says where it stands under the row.
 
-/** What the page says about a count that is not ready. */
-function statusFor(
+/**
+ * Why a count that is not ready has no result, when the row beside the
+ * selector cannot say it: only a failed run. "Not proofread yet" and "With
+ * Claude…" already sit beside the selector, so they are not repeated here.
+ */
+function failureFor(
   asked: number,
   open: readonly number[],
   failed: readonly { plates: number; error: string }[],
-): string {
-  if (open.includes(asked)) {
-    return `Claude is proofreading ${platesLabel(asked)}. Reload in a minute.`;
-  }
+): string | null {
+  if (open.includes(asked)) return null;
   const lastFailure = failed.find((f) => f.plates === asked);
-  if (lastFailure) {
-    return `The last run for ${platesLabel(asked)} failed: ${lastFailure.error}`;
-  }
-  return `Not proofread for ${platesLabel(asked)} yet.`;
+  return lastFailure
+    ? `The last run for ${platesLabel(asked)} failed: ${lastFailure.error}`
+    : null;
 }
 
 export function PlateBar({
@@ -153,6 +154,8 @@ export function PlateBar({
     );
   }
 
+  const failure = asked === null ? null : failureFor(asked, open, failed);
+
   return (
     <div
       data-plate-bar=""
@@ -184,7 +187,7 @@ export function PlateBar({
       </nav>
       {asked !== null ? (
         <p role="status" className="text-sm text-foreground">
-          {statusFor(asked, open, failed)}{" "}
+          {failure ? `${failure} ` : null}
           <span className="text-muted-foreground">
             Showing {platesLabel(shown)}.
           </span>
