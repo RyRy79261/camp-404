@@ -46,6 +46,8 @@ coverage/
 playwright-report/
 playwright-report-db/
 test-results/
+# e2e-db auth mail capture (AUTH_EMAIL_CAPTURE_FILE)
+.e2e-mail/
 
 # TypeScript incremental build info
 *.tsbuildinfo

@@ -74,6 +74,22 @@ pnpm --filter @camp404/web test:e2e:db
   local database, whichever the run uses; `/api/test/inspect` is store-only.
 - `/api/test/reset` empties the local database. Every helper in
   `@camp404/db/e2e` refuses unless the process points at the local stack.
+- `sign-in.spec.ts` never uses the test login: it drives the real Better
+  Auth forms. Sign up, sign out, a wrong password refused, sign in, forgot
+  password, follow the reset link, the old password refused and the new one
+  accepted; and a GOD_EMAILS address held at the invite gate until it
+  confirms its email from the card there.
+- Auth mail is captured, not sent. `playwright.db.config.ts` sets
+  `AUTH_EMAIL_CAPTURE_FILE` to `apps/web/.e2e-mail/auth-mail.jsonl` (git
+  ignored), and each auth email is appended there as one JSON line with its
+  link; `_mail.ts`'s `waitForAuthMail(to, kind, since)` reads it. The file is
+  honoured only with `E2E_TEST_MODE=1` and `VERCEL_ENV` unset, so no Vercel
+  deployment can write mail to disk, whatever the variable says. Off Vercel
+  nothing stops it: never set `E2E_TEST_MODE=1` and `AUTH_EMAIL_CAPTURE_FILE`
+  together on a server real people use.
+- `/api/test/reset` also refills the in-memory rate-limit buckets. The whole
+  run comes from one address, so a per-IP bucket (the invite gate has one)
+  would otherwise drain across specs.
 - CI runs it as the `e2e-db` job, with Postgres and the Neon proxy as service
   containers.
 
@@ -170,15 +186,15 @@ complete and jump straight to the gates that follow it (home vs.
 The flows below are intentionally out of scope for the `E2E_TEST_MODE`
 suite — covered elsewhere, or only coverable by the future real-auth suite:
 
-- **Real sign-in / account creation (credential + Google).** `E2E_TEST_MODE`
-  *bypasses* Neon Auth entirely — `/api/test/login` just drops the synthetic
-  session cookie that `getAuthenticatedUser()` reads. The actual
-  email/password + OAuth forms (`auth/sign-in-form.tsx` / `sign-up-form.tsx`,
-  driven by `authClient`) talk to a real Neon Auth backend and so can't run
-  here. What *is* covered is everything around auth: the invite gate, the
-  sign-up cookie guard, and the unauthenticated → sign-in redirect. Real
-  credential auth needs the "true E2E" suite below (a Neon Auth test user +
-  `context.addCookies()` for the session token).
+- **Real sign-in / account creation, in THIS suite.** `E2E_TEST_MODE` with
+  the store *bypasses* the auth server — `/api/test/login` just drops the
+  synthetic session cookie that `getAuthenticatedUser()` reads. What *is*
+  covered here is everything around auth: the invite gate, the sign-up cookie
+  guard, and the unauthenticated → sign-in redirect. **[CORRECTION
+  2026-09-24]** Real email-and-password sign-up, sign-in, sign-out and
+  password reset against Better Auth are now covered by the real-database run
+  (`tests/e2e-db/sign-in.spec.ts`, above). Google is still not covered: there
+  are no Google keys in test.
 - **Questionnaire field-by-field validation.** The 13-page wizard's
   navigation, required-field blocking and submission contract are covered at
   the component layer in `components/__tests__/runner.test.tsx` (jsdom). E2E

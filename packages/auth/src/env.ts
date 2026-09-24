@@ -38,6 +38,14 @@ export interface AuthEnv {
   GOOGLE_CLIENT_ID?: string | undefined;
   GOOGLE_CLIENT_SECRET?: string | undefined;
   NODE_ENV?: string | undefined;
+  /** The e2e harness switch. The app refuses to boot with it on Vercel. */
+  E2E_TEST_MODE?: string | undefined;
+  /**
+   * E2E only: auth emails are appended to this file instead of sent, so a
+   * Playwright run can follow a reset link. Honoured only by
+   * resolveAuthEmailCaptureFile.
+   */
+  AUTH_EMAIL_CAPTURE_FILE?: string | undefined;
 }
 
 /**
@@ -89,6 +97,32 @@ export function authMayServe(env: AuthEnv): boolean {
 /** True when an email provider is fully configured (key AND sender). */
 export function isEmailProviderConfigured(env: AuthEnv): boolean {
   return Boolean(trimmed(env.RESEND_API_KEY) && trimmed(env.RESEND_FROM_EMAIL));
+}
+
+/**
+ * The file auth emails are captured to instead of sent, or undefined.
+ *
+ * Honoured ONLY under the e2e harness (E2E_TEST_MODE=1) and ONLY off Vercel
+ * (VERCEL_ENV unset or blank). Anywhere else it is refused outright, whatever
+ * the path says: a file of working reset links on a deployment would be a
+ * side door into every account. The app also refuses to boot with
+ * E2E_TEST_MODE on Vercel, so this is the second of two locks, not the only one.
+ */
+export function resolveAuthEmailCaptureFile(env: AuthEnv): string | undefined {
+  if (env.E2E_TEST_MODE !== "1") return undefined;
+  if (trimmed(env.VERCEL_ENV)) return undefined;
+  return trimmed(env.AUTH_EMAIL_CAPTURE_FILE);
+}
+
+/**
+ * True when an auth email can reach someone: a real provider, or the e2e
+ * capture file. What decides whether a reset or a verification is offered.
+ */
+export function canDeliverAuthEmail(env: AuthEnv): boolean {
+  return (
+    isEmailProviderConfigured(env) ||
+    resolveAuthEmailCaptureFile(env) !== undefined
+  );
 }
 
 /** True when Google sign-in is fully configured. */

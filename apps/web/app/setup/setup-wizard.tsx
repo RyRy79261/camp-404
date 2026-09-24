@@ -7,7 +7,9 @@ import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { CodeDisplay } from "@camp404/ui/components/code-display";
+import { ConfirmEmail } from "@/components/account/confirm-email";
 import { GateScreen } from "@/components/auth-shell";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 import { completeSetupAction } from "./actions";
 
 /**
@@ -84,6 +86,62 @@ export function SetupWizard({
           }
         >
           {pending ? "Setting up…" : "Set up camp & become captain"}
+        </Button>
+      </div>
+    </GateScreen>
+  );
+}
+
+/**
+ * What /setup shows an account that may not found the camp (see
+ * `mayFoundCamp`): the wizard's own gate and card, with the reason in place of
+ * the root code, and a way out to sign in with the founding address.
+ *
+ * An account whose email is unconfirmed also gets the Email card: a founder
+ * who signed up with a password is refused until they confirm, and every
+ * visit on a fresh camp lands here, so this page has to offer the link. The
+ * copy stays neutral: it never says whether this address is the founding one.
+ */
+export function SetupRefused({
+  message,
+  confirm = null,
+}: {
+  message: string;
+  /** Set only while the signed-in address is unconfirmed. */
+  confirm?: { email: string; deliverable: boolean } | null;
+}) {
+  return (
+    <GateScreen
+      icon={<Tent aria-hidden />}
+      eyebrow="First-time setup"
+      title="Set up Camp 404"
+    >
+      <Card>
+        <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
+          <p className="text-sm text-muted-foreground">{message}</p>
+        </CardContent>
+      </Card>
+
+      {confirm ? (
+        <ConfirmEmail
+          email={confirm.email}
+          deliverable={confirm.deliverable}
+          callbackURL="/setup"
+          description={
+            <>
+              Confirm that{" "}
+              <span className="text-foreground">{confirm.email}</span> is yours.
+              If it is the founding address, this page lets you set up the camp
+              once it is confirmed.
+            </>
+          }
+          undeliverable="This deployment can't send email yet, so this address can't be confirmed here. Whoever runs it needs to set up email (or Google sign-in) before the camp can be founded."
+        />
+      ) : null}
+
+      <div className="flex items-center justify-center">
+        <Button asChild variant="outline">
+          <SignOutLink />
         </Button>
       </div>
     </GateScreen>

@@ -4,7 +4,9 @@ import { runAction } from "@/lib/action-result";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
   isCampBootstrapped,
+  mayFoundCamp,
   runFirstTimeSetup,
+  SETUP_REFUSED_MESSAGE,
   type SetupResult,
 } from "@/lib/bootstrap";
 
@@ -19,6 +21,9 @@ import {
  *   else won the race) or when a database error was thrown (runAction logs it
  *   and returns a generic message).
  *
+ * An account that is not the founding address (see `mayFoundCamp`) is
+ * refused with a sentence, and nothing is written.
+ *
  * The bootstrap state is read first, without a lock. After setup, every call
  * is refused before bootstrapFirstCaptain takes the camp_settings lock that
  * sends and the year rollover also wait on. Otherwise any signed-in account
@@ -29,6 +34,11 @@ export async function completeSetupAction(): Promise<SetupResult> {
   return runAction("completeSetupAction", async () => {
     if (await isCampBootstrapped()) {
       return { ok: false, error: "Camp 404 is already set up." };
+    }
+    // Sign-up is open: with GOD_EMAILS set, only a verified founding address
+    // may take the captaincy, so a stranger cannot race the founder.
+    if (!mayFoundCamp(user)) {
+      return { ok: false, error: SETUP_REFUSED_MESSAGE };
     }
     return await runFirstTimeSetup(user);
   });

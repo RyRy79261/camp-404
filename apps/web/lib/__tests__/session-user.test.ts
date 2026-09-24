@@ -44,6 +44,7 @@ describe("toAuthenticatedUser", () => {
         id: "a2",
         primaryEmail: null,
         displayName: "Mallory",
+        emailVerified: false,
       });
       expect(hasCampAccess(noInvite, user!.primaryEmail)).toBe(false);
       expect(isApproved(noInvite, user!.primaryEmail)).toBe(false);
@@ -57,6 +58,26 @@ describe("toAuthenticatedUser", () => {
       emailVerified: false,
     });
     expect(user?.primaryEmail).toBe("ada@example.com");
+  });
+
+  // The confirm-email card shows on false. Only a literal true counts: a
+  // member moved from Neon Auth with a password may hold false or nothing.
+  it("reports the address verified only when the auth server says true", () => {
+    const verified = toAuthenticatedUser({
+      id: "a4",
+      email: "ada@example.com",
+      emailVerified: true,
+    });
+    expect(verified?.emailVerified).toBe(true);
+    for (const emailVerified of [false, null, undefined]) {
+      expect(
+        toAuthenticatedUser({
+          id: "a5",
+          email: "ada@example.com",
+          emailVerified,
+        })?.emailVerified,
+      ).toBe(false);
+    }
   });
 
   it("returns null without a user id", () => {

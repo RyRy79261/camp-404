@@ -12,7 +12,15 @@ interface Bucket {
   updatedAt: number;
 }
 
-const buckets = new Map<string, Bucket>();
+// On globalThis, not a module binding: Next.js gives route handlers and server
+// actions separate module graphs in one process, so a plain module-level Map
+// is duplicated, and `/api/test/reset` would clear a copy the invite action
+// never reads (the same trick as lib/test-store.ts). One process still has one
+// set of buckets, as before.
+const BUCKETS_KEY = "__camp404RateLimitBuckets__";
+const buckets: Map<string, Bucket> = ((globalThis as Record<string, unknown>)[
+  BUCKETS_KEY
+] ??= new Map<string, Bucket>()) as Map<string, Bucket>;
 
 const DEFAULT_WINDOW_MS = 60_000;
 
@@ -46,14 +54,20 @@ export interface RateLimitResult {
  * Reserve one token for `key`. Returns `{ok: true}` if the request is
  * allowed, otherwise `{ok: false, retryAfterSeconds}`.
  */
-export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult {
+export function rateLimit(
+  key: string,
+  opts: RateLimitOptions,
+): RateLimitResult {
   const windowMs = opts.windowMs ?? DEFAULT_WINDOW_MS;
   maybeSweep(windowMs);
   const refillPerMs = opts.limit / windowMs;
   const now = Date.now();
   const existing = buckets.get(key);
   const tokens = existing
-    ? Math.min(opts.limit, existing.tokens + (now - existing.updatedAt) * refillPerMs)
+    ? Math.min(
+        opts.limit,
+        existing.tokens + (now - existing.updatedAt) * refillPerMs,
+      )
     : opts.limit;
 
   if (tokens < 1) {
@@ -66,6 +80,18 @@ export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult 
 
   buckets.set(key, { tokens: tokens - 1, updatedAt: now });
   return { ok: true, retryAfterSeconds: 0 };
+}
+
+/**
+ * Empties every in-memory bucket, so each Playwright spec starts with a full
+ * budget. The whole run comes from one address, so an IP bucket otherwise
+ * drains across specs and a later spec meets "Too many attempts". Called by
+ * `/api/test/reset`; does nothing outside E2E test mode, so no deployment can
+ * reset its own limits.
+ */
+export function resetRateLimitsForE2E(): void {
+  if (!isE2ETestMode()) return;
+  buckets.clear();
 }
 
 /**
@@ -96,8 +122,11 @@ export const rateLimiter: RateLimiter = {
   },
 };
 
-/** Best-effort IP extraction from a Next.js request. */
-export function getClientIp(headers: Headers): string {
+/**
+ * Best-effort IP extraction from a Next.js request. Takes anything with
+ * `get`, so a server action can pass `await headers()` (a read-only bag).
+ */
+export function getClientIp(headers: Pick<Headers, "get">): string {
   const fwd = headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0]!.trim();
   return headers.get("x-real-ip") ?? "unknown";

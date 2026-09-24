@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { AUTH_SESSION, auth } from "@camp404/auth";
+import { AUTH_SESSION, auth, canDeliverAuthEmail } from "@camp404/auth";
 import {
   Card,
   CardDescription,
@@ -8,6 +8,7 @@ import {
 } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ProfileSections } from "@/components/profile/profile-sections";
+import { getAddressToConfirm } from "@/lib/auth";
 import { requireMemberPage } from "@/lib/member-gate";
 import { isE2ETestMode } from "@/lib/test-mode";
 import { sessionLabel } from "./session-label";
@@ -28,7 +29,23 @@ export const metadata = { title: "Sign-in and security — Camp 404" };
 // page cannot show anyone else's devices. A read that fails renders as "could
 // not read", never as an empty list that looks like "nothing there".
 
-async function readSecurity(): Promise<SecurityData> {
+/**
+ * The Email card's data, or null once the address is confirmed. Read from the
+ * signed-in member's own session: `emailVerified` comes from the same
+ * getAuthenticatedUser() every gate uses (the test cookie in the E2E store).
+ */
+async function readConfirmEmail(
+  emailVerified: boolean,
+): Promise<SecurityData["confirmEmail"]> {
+  if (emailVerified) return null;
+  const email = await getAddressToConfirm();
+  if (!email) return null;
+  return { email, deliverable: canDeliverAuthEmail(process.env) };
+}
+
+async function readSecurity(
+  confirmEmail: SecurityData["confirmEmail"],
+): Promise<SecurityData> {
   // The E2E store signs members in with a test cookie, not a Better Auth
   // session, so there is nothing to read.
   if (isE2ETestMode()) {
@@ -37,6 +54,7 @@ async function readSecurity(): Promise<SecurityData> {
       hasPassword: true,
       passkeys: [],
       sessions: null,
+      confirmEmail,
     };
   }
   const h = await headers();
@@ -48,6 +66,7 @@ async function readSecurity(): Promise<SecurityData> {
   ]);
   const currentToken = session?.session.token ?? null;
   return {
+    confirmEmail,
     twoFactorEnabled: session?.user.twoFactorEnabled === true,
     // Unknown counts as having one: asking for a password that exists is a
     // retry, while hiding the field for one that exists is a dead end.
@@ -68,7 +87,9 @@ async function readSecurity(): Promise<SecurityData> {
               token: s.token,
               label: sessionLabel(s.userAgent),
               ipAddress: s.ipAddress ?? null,
-              lastSeen: s.updatedAt ? new Date(s.updatedAt).toISOString() : null,
+              lastSeen: s.updatedAt
+                ? new Date(s.updatedAt).toISOString()
+                : null,
               current: s.token === currentToken,
             }))
             // This device first, then the most recently used.
@@ -81,8 +102,10 @@ async function readSecurity(): Promise<SecurityData> {
 }
 
 export default async function SecurityPage() {
-  await requireMemberPage();
-  const data = await readSecurity();
+  const { authUser } = await requireMemberPage();
+  const data = await readSecurity(
+    await readConfirmEmail(authUser.emailVerified),
+  );
 
   return (
     <div className="flex flex-col">

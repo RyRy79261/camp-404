@@ -209,4 +209,23 @@ test.describe("authenticated flow (test-mode)", () => {
     });
     expect(noAudio.status()).toBe(400);
   });
+
+  test("/api/voice/transcribe refuses a signed-in account with no camp access", async ({
+    page,
+  }) => {
+    // Sign-up is open, and every clip spends the camp's Groq key: an account
+    // that has not redeemed an invite is refused before anything is read.
+    await login(page, { email: "stranger@example.com" });
+    const res = await page.request.post("/api/voice/transcribe", {
+      multipart: {
+        audio: {
+          name: "clip.webm",
+          mimeType: "audio/webm",
+          buffer: Buffer.from("not really audio"),
+        },
+      },
+    });
+    expect(res.status()).toBe(403);
+    expect(await res.json()).toEqual({ error: "forbidden" });
+  });
 });

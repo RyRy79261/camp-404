@@ -41,6 +41,7 @@ beforeEach(() => {
     id: "auth-1",
     primaryEmail: "member@example.com",
     displayName: "Member",
+    emailVerified: true,
   });
   vi.mocked(auth.api.setPassword).mockResolvedValue({ status: true } as never);
 });

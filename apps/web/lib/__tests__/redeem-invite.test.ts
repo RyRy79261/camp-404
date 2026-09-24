@@ -39,7 +39,12 @@ import { createCampUser, findUserByAuthId } from "@camp404/db/burner-profile";
 import { ensureRequiredAction } from "@camp404/db/activations";
 import { claimInviteCode } from "../access-control";
 
-const AUTH = { id: "auth-1", primaryEmail: "ada@example.com", displayName: "Ada" };
+const AUTH = {
+  id: "auth-1",
+  primaryEmail: "ada@example.com",
+  displayName: "Ada",
+  emailVerified: true,
+};
 const ROW = {
   id: "camp-1",
   authUserId: "auth-1",
@@ -69,7 +74,9 @@ describe("redeemInviteForUser — two submits at once", () => {
       Object.assign(new Error("duplicate key"), { code: "23505" }),
     );
 
-    expect(await redeemInviteForUser(AUTH, "Berlin-Crew")).toEqual({ ok: true });
+    expect(await redeemInviteForUser(AUTH, "Berlin-Crew")).toEqual({
+      ok: true,
+    });
     // The winner already seeded the gate; this request adds nothing.
     expect(ensureRequiredAction).not.toHaveBeenCalled();
   });

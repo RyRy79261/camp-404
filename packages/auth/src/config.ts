@@ -20,11 +20,12 @@ import { passkey } from "@better-auth/passkey";
 import { createHttpDb, schema } from "@camp404/db";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@camp404/core";
 import { sendAuthEmail } from "./email";
+import { emailProofGuards } from "./email-proof";
 import {
   AUTH_RP_NAME,
   AUTH_SESSION,
   authConfigWarnings,
-  isEmailProviderConfigured,
+  canDeliverAuthEmail,
   isGoogleConfigured,
   resolveBaseURL,
   resolvePasskeyOrigins,
@@ -51,7 +52,6 @@ const PLACEHOLDER_SECRET =
  */
 export function buildAuthOptions(env: AuthEnv = process.env) {
   const baseURL = resolveBaseURL(env);
-  const emailProvider = isEmailProviderConfigured(env);
   const passkeyRpID = resolvePasskeyRpID(env);
   const passkeyOrigins = resolvePasskeyOrigins(env);
   const useSecureCookies = resolveUseSecureCookies(env);
@@ -102,10 +102,13 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
     },
 
     emailVerification: {
-      // Sent on sign-up only when there is a provider to send it with. It
-      // proves ownership (the GOD_EMAILS recovery path needs a verified email)
-      // without blocking sign-in, unless the env turns the gate on.
-      sendOnSignUp: emailProvider,
+      // Sent on sign-up only when there is a way to deliver it: a provider,
+      // or the e2e capture file. It proves ownership (the GOD_EMAILS recovery
+      // path needs a verified email) without blocking sign-in, unless the env
+      // turns the gate on.
+      sendOnSignUp: canDeliverAuthEmail(env),
+      // A fresh session from a link is taken back for an account with
+      // two-factor on (emailProofGuards), so the link never skips the code.
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
         await sendAuthEmail(env, { to: user.email, kind: "verify", url });
@@ -134,9 +137,23 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
     // Google may link to an existing account with the same email: Google
     // proves the address, and a member who signed up with a password and
     // later presses "Continue with Google" means the same person.
+    //
+    // Linking still refuses when the LOCAL account has not confirmed its email
+    // (Better Auth's `requireLocalEmailVerified`, left at its default, true).
+    // Never relax it: otherwise someone could sign up with a member's address
+    // and a password before the member ever does, and the member's later
+    // Google sign-in would join that account (pre-account takeover). Members
+    // moved from Neon Auth with a password are unverified, and confirm on
+    // Sign-in and security or on the invite gate before Google will link.
     account: {
       accountLinking: { enabled: true, trustedProviders: ["google"] },
     },
+
+    // Every OAuth callback failure (a refused link, a cancelled consent, an
+    // expired state) lands on our sign-in form with `?error=<code>`, which
+    // says what happened in a sentence, instead of Better Auth's bare
+    // built-in error page, which is a dead end.
+    onAPIError: { errorURL: "/auth/sign-in" },
 
     ...(isGoogleConfigured(env)
       ? {
@@ -179,6 +196,10 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
           userVerification: "preferred",
         },
       }),
+      // What an unconfirmed account may not do: enrol a passkey or two-factor
+      // (a squatter's would outlive the owner's reset), keep the ones enrolled
+      // once the owner resets, or skip two-factor through a verification link.
+      emailProofGuards(),
     ],
 
     advanced: {

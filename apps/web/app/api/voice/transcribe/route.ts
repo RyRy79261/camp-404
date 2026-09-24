@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { transcribeAudio } from "@/lib/groq";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
+import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { QUESTIONNAIRE_PROMPT } from "@/lib/voice-prompts";
 
 // 10 MB hard cap. webm/opus at typical mobile bitrates is ~16 KB/s, so this
@@ -9,7 +10,18 @@ import { QUESTIONNAIRE_PROMPT } from "@/lib/voice-prompts";
 const MAX_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_PROMPT_KEYS = new Set(["questionnaire"]);
 
+// Clips a day for an account a captain has not approved yet: the onboarding
+// questionnaire has a few dozen voice fields at most.
+const PENDING_DAILY_CLIPS = 40;
+
 export const runtime = "nodejs";
+
+function tooMany(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: "Rate limit exceeded", retryAfterSeconds },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
+  );
+}
 
 export async function POST(req: Request) {
   const user = await getAuthenticatedUser();
@@ -17,17 +29,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Sign-up is open, so a signed-in account alone is anyone on the internet,
+  // and every clip spends the camp's paid Groq key. Require camp access (an
+  // invite redeemed, or a god address). Not captain approval: the onboarding
+  // questionnaire offers voice, and it runs before a captain has vetted them.
+  const campUser = await ensureCampUser(user);
+  if (!hasCampAccess(campUser, user.primaryEmail)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  // A captain turned them down: they keep their redeemed code, but not the
+  // camp's Groq key.
+  if (campUser.approvalStatus === "rejected") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // Not yet approved means anyone who redeemed a code, and the root code is a
+  // fixed word in this public repo. They get enough for the onboarding
+  // questionnaire, not the 30-a-minute budget an approved member has.
+  if (!isApproved(campUser, user.primaryEmail)) {
+    const daily = await rateLimiter.limit(
+      `voice-transcribe-pending:${user.id}`,
+      {
+        limit: PENDING_DAILY_CLIPS,
+        windowMs: 24 * 60 * 60_000,
+      },
+    );
+    if (!daily.ok) return tooMany(daily.retryAfterSeconds);
+  }
+
   // Explicit windows: 30 clips a minute per member, 60 per address.
   const limit = await rateLimiter.limit(`voice-transcribe:${user.id}`, {
     limit: 30,
     windowMs: 60_000,
   });
-  if (!limit.ok) {
-    return NextResponse.json(
-      { error: "Rate limit exceeded", retryAfterSeconds: limit.retryAfterSeconds },
-      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
-    );
-  }
+  if (!limit.ok) return tooMany(limit.retryAfterSeconds);
 
   // Defence in depth — rate-limit by IP too, since user.id can be cheap to
   // mint via repeated signups.
@@ -38,7 +73,10 @@ export async function POST(req: Request) {
   if (!ipLimit.ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded" },
-      { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSeconds) } },
+      {
+        status: 429,
+        headers: { "Retry-After": String(ipLimit.retryAfterSeconds) },
+      },
     );
   }
 
@@ -51,7 +89,10 @@ export async function POST(req: Request) {
 
   const file = form.get("audio");
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Missing `audio` file" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing `audio` file" },
+      { status: 400 },
+    );
   }
   if (!file.type.startsWith("audio/")) {
     return NextResponse.json(
@@ -81,7 +122,11 @@ export async function POST(req: Request) {
       (err as { status?: unknown } | null)?.status ?? "",
     );
     return NextResponse.json(
-      { error: message.includes("GROQ_API_KEY") ? "Voice not configured" : "Transcription failed" },
+      {
+        error: message.includes("GROQ_API_KEY")
+          ? "Voice not configured"
+          : "Transcription failed",
+      },
       { status: 502 },
     );
   }

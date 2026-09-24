@@ -16,7 +16,7 @@ const { actionSpy, pushSpy } = vi.hoisted(() => ({
 vi.mock("./actions", () => ({ completeSetupAction: actionSpy }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushSpy }) }));
 
-import { SetupWizard } from "./setup-wizard";
+import { SetupRefused, SetupWizard } from "./setup-wizard";
 
 afterEach(() => {
   cleanup();
@@ -27,7 +27,9 @@ afterEach(() => {
 describe("SetupWizard", () => {
   it("frames founding the camp: eyebrow, heading, the root code, the greeting", () => {
     render(<SetupWizard displayName="Ada" founderCode="meowzit" />);
-    expect(screen.getByRole("heading", { name: "Set up Camp 404" })).toBeDefined();
+    expect(
+      screen.getByRole("heading", { name: "Set up Camp 404" }),
+    ).toBeDefined();
     expect(screen.getByText("First-time setup")).toBeDefined();
     expect(screen.getByText("meowzit")).toBeDefined();
     expect(screen.getByText(/Ada/)).toBeDefined();
@@ -72,5 +74,22 @@ describe("SetupWizard", () => {
       expect(screen.getByRole("alert").textContent).toMatch(/couldn.t set up/i),
     );
     expect(pushSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("SetupRefused", () => {
+  it("says why in the wizard's gate, offers a way out, and no setup button", () => {
+    render(<SetupRefused message="Only the founding address can set up." />);
+    expect(
+      screen.getByRole("heading", { name: "Set up Camp 404" }),
+    ).toBeDefined();
+    expect(
+      screen.getByText("Only the founding address can set up."),
+    ).toBeDefined();
+    expect(screen.getByRole("link", { name: "Sign out" })).toBeDefined();
+    expect(
+      screen.queryByRole("button", { name: /set up camp & become captain/i }),
+    ).toBeNull();
+    expect(actionSpy).not.toHaveBeenCalled();
   });
 });

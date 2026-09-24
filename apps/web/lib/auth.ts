@@ -17,6 +17,14 @@ export interface AuthenticatedUser {
   id: string;
   primaryEmail: string | null;
   displayName: string | null;
+  /**
+   * Whether the auth server has proven the member owns their address. Members
+   * moved from Neon Auth with a password were never asked, so they start
+   * false; the confirm-email card (Sign-in and security, and the invite gate)
+   * is how they fix it. Not a gate on its own: `primaryEmail` already withholds
+   * an unproven GOD_EMAILS address.
+   */
+  emailVerified: boolean;
 }
 
 /**
@@ -47,14 +55,35 @@ export const getAuthenticatedUser = cache(
       const fromCookie = await readTestUserCookie();
       if (fromCookie) return fromCookie;
     }
-    if (!authMayServe(process.env)) return null;
-    // No session is `null`; a THROW is a real failure (the database is
-    // down), and it propagates to the error page rather than quietly showing
-    // every member as signed out.
-    const session = await auth.api.getSession({ headers: await headers() });
+    const session = await readSession();
     return toAuthenticatedUser(session?.user);
   },
 );
+
+/**
+ * The address the session holds, even an unproven GOD_EMAILS address that
+ * `primaryEmail` withholds. It exists for one job: asking the auth server to
+ * send a confirm-your-email link, which Better Auth only sends to the
+ * session's own address. Never use it for a gate or a god check; those read
+ * `primaryEmail`.
+ */
+export async function getAddressToConfirm(): Promise<string | null> {
+  if (isE2ETestMode()) {
+    const fromCookie = await readTestUserCookie();
+    if (fromCookie) return fromCookie.primaryEmail;
+  }
+  const session = await readSession();
+  return session?.user.email ?? null;
+}
+
+/** One Better Auth session read per request, shared by the two readers above. */
+const readSession = cache(async () => {
+  if (!authMayServe(process.env)) return null;
+  // No session is `null`; a THROW is a real failure (the database is down),
+  // and it propagates to the error page rather than quietly showing every
+  // member as signed out.
+  return auth.api.getSession({ headers: await headers() });
+});
 
 /** Same as getAuthenticatedUser but redirects to sign-in when unauthenticated. */
 export async function getAuthenticatedUserOrRedirect(): Promise<AuthenticatedUser> {
@@ -68,12 +97,18 @@ async function readTestUserCookie(): Promise<AuthenticatedUser | null> {
   const raw = cookieStore.get(TEST_USER_COOKIE)?.value;
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(decodeURIComponent(raw)) as Partial<AuthenticatedUser>;
+    const parsed = JSON.parse(
+      decodeURIComponent(raw),
+    ) as Partial<AuthenticatedUser>;
     if (typeof parsed.id !== "string" || !parsed.id) return null;
     return {
       id: parsed.id,
       primaryEmail: parsed.primaryEmail ?? null,
       displayName: parsed.displayName ?? null,
+      // Verified unless a spec says otherwise, so every existing login stays
+      // as it was; a spec passes `emailVerified: false` to see the
+      // confirm-email card.
+      emailVerified: parsed.emailVerified !== false,
     };
   } catch {
     return null;

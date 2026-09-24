@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { isEmailProviderConfigured, isGoogleConfigured } from "@camp404/auth";
+import { canDeliverAuthEmail, isGoogleConfigured } from "@camp404/auth";
 import { AuthShell } from "@/components/auth-shell";
 import { ForgotPasswordForm } from "../forgot-password-form";
 import { ResetPasswordForm } from "../reset-password-form";
@@ -64,9 +64,8 @@ export default async function AuthPage({
     case "forgot-password":
       return (
         <AuthShell>
-          <ForgotPasswordForm
-            emailEnabled={isEmailProviderConfigured(process.env)}
-          />
+          {/* A provider, or the e2e capture file (refused on any deployment). */}
+          <ForgotPasswordForm emailEnabled={canDeliverAuthEmail(process.env)} />
         </AuthShell>
       );
     case "reset-password": {

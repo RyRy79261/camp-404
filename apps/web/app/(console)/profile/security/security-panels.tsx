@@ -19,6 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@camp404/ui/components/card";
+import { ConfirmEmail } from "@/components/account/confirm-email";
 import { authClient } from "@/lib/auth-client";
 import { SetFirstPassword } from "./set-first-password";
 
@@ -28,6 +29,11 @@ export interface SecurityData {
   passkeys: PasskeyRow[];
   /** Null when the list could not be read — not the same as "none". */
   sessions: SessionView[] | null;
+  /**
+   * Set only while the member's address is unconfirmed (a password member
+   * moved from Neon Auth); it draws the Email card first.
+   */
+  confirmEmail: { email: string; deliverable: boolean } | null;
 }
 
 /** The server enforces the same numbers; this only says so first. */
@@ -48,7 +54,7 @@ function assessPassword(password: string) {
 }
 
 /**
- * The four panels, each AfrikaBurn's shared component driven by this app's
+ * The four panels (five while the email is unconfirmed), each AfrikaBurn's shared component driven by this app's
  * Better Auth client. Every change calls the auth server from the browser, so
  * the session cookie it rotates lands where it belongs, and then re-reads the
  * server-rendered page.
@@ -59,6 +65,14 @@ export function SecurityPanels({ data }: { data: SecurityData }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
+      {data.confirmEmail ? (
+        <ConfirmEmail
+          email={data.confirmEmail.email}
+          deliverable={data.confirmEmail.deliverable}
+          callbackURL="/profile/security"
+        />
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Password</CardTitle>

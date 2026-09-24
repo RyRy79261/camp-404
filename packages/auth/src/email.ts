@@ -7,8 +7,10 @@
 // It never throws: a Better Auth hook that throws fails the whole request, and
 // every caller here is announcing something that has already happened.
 
+import { appendFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { AuthEnv } from "./env";
-import { isEmailProviderConfigured } from "./env";
+import { isEmailProviderConfigured, resolveAuthEmailCaptureFile } from "./env";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
@@ -87,8 +89,42 @@ export function buildAuthEmail(input: AuthEmailInput): AuthEmailBody {
 }
 
 /**
+ * E2E only: append the email as one JSON line to the capture file, so a
+ * Playwright run can read the link without a real inbox. Returns whether the
+ * line was written. Never throws.
+ */
+async function captureAuthEmail(
+  file: string,
+  input: AuthEmailInput,
+  body: AuthEmailBody,
+): Promise<boolean> {
+  try {
+    await mkdir(dirname(file), { recursive: true });
+    const line = JSON.stringify({
+      at: new Date().toISOString(),
+      to: input.to,
+      kind: input.kind,
+      subject: body.subject,
+      text: body.text,
+      url: input.url ?? null,
+    });
+    await appendFile(file, `${line}\n`, "utf8");
+    return true;
+  } catch (err) {
+    console.error(
+      `[auth:email:capture] write failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
+}
+
+/**
  * Send one auth email to one recipient. Returns whether Resend accepted it
  * (false when the provider is unset, which logs instead). Never throws.
+ *
+ * Under the e2e harness, and only there (resolveAuthEmailCaptureFile refuses
+ * on any deployment), the email is written to the capture file instead and
+ * nothing is sent.
  *
  * One recipient by type: every auth email is addressed to exactly one person,
  * and an array here would be one careless call from putting a second address
@@ -98,7 +134,10 @@ export async function sendAuthEmail(
   env: AuthEnv,
   input: AuthEmailInput,
 ): Promise<boolean> {
-  const { subject, text } = buildAuthEmail(input);
+  const body = buildAuthEmail(input);
+  const { subject, text } = body;
+  const captureFile = resolveAuthEmailCaptureFile(env);
+  if (captureFile) return captureAuthEmail(captureFile, input, body);
   if (!isEmailProviderConfigured(env)) {
     // Locally the link is the whole point of the log. On a deployment it is a
     // working key to someone's account sitting in the logs, so it is withheld.

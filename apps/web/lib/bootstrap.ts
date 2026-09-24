@@ -4,6 +4,8 @@ import {
   bootstrapFirstCaptain,
   getBootstrapState,
 } from "@camp404/db/bootstrap";
+import { isGodEmail } from "./access-control";
+import { envList } from "./integration-config";
 import { usesTestStore } from "./test-mode";
 import { seedBurnerProfileAction } from "./users";
 import type { AuthenticatedUser } from "./auth";
@@ -23,6 +25,24 @@ export async function isCampBootstrapped(): Promise<boolean> {
   if (usesTestStore()) return true;
   const state = await getBootstrapState();
   return state.captainCount > 0 || state.bootstrappedAt !== null;
+}
+
+/** What /setup says to an account that may not found the camp. */
+export const SETUP_REFUSED_MESSAGE =
+  "Only the camp's founding address can set up Camp 404. Sign in with it, and confirm it if asked.";
+
+/**
+ * Whether this account may found the camp on a fresh database. Sign-up is
+ * open, so "the first signed-in account" could be a stranger who beat the
+ * founder to /setup. When GOD_EMAILS is set, only one of those addresses may
+ * found the camp, and only once it is verified: `primaryEmail` is already
+ * null for an unverified god address (lib/session-user.ts), so a stranger
+ * cannot claim the founder's address without proving they own it. With
+ * GOD_EMAILS unset, anyone signed in may, which is how setup always worked.
+ */
+export function mayFoundCamp(user: AuthenticatedUser): boolean {
+  if (envList(process.env.GOD_EMAILS).length === 0) return true;
+  return isGodEmail(user.primaryEmail);
 }
 
 export type SetupResult = { ok: true } | { ok: false; error: string };

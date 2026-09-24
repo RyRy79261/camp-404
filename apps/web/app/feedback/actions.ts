@@ -1,10 +1,11 @@
 "use server";
 
+import { headers } from "next/headers";
 import { z } from "zod";
 import { sanitizeReportText, screenReport } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
-import { rateLimiter } from "@/lib/rate-limit";
+import { getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
 import {
   DEFAULT_FEEDBACK_REPO,
@@ -114,6 +115,19 @@ export async function submitFeedbackAction(
   // tracker, so a daily ceiling is worth the cheap second check.
   const burst = await rateLimiter.limit(`feedback:${user.id}`, { limit: 3 });
   if (!burst.ok) {
+    return {
+      ok: false,
+      error: "You're sending these quickly — give it a minute and try again.",
+    };
+  }
+  // Per address too: sign-up is open, so one person can mint accounts to get
+  // fresh per-account budgets, and each report files a public GitHub issue
+  // and may spend an AI call.
+  const byIp = await rateLimiter.limit(
+    `feedback-ip:${getClientIp(await headers())}`,
+    { limit: 10, windowMs: 60_000 },
+  );
+  if (!byIp.ok) {
     return {
       ok: false,
       error: "You're sending these quickly — give it a minute and try again.",

@@ -122,6 +122,24 @@ Sign-in rules worth knowing before you touch `packages/auth`:
 - **Keep `changeEmail` unmounted** until a flow that notifies the CURRENT
   address exists (AfrikaBurn's finding: the stock flow turns a stolen session
   into an account takeover).
+- **Members moved from Neon Auth may be unverified** (password members were
+  never asked to confirm). They confirm on Sign-in and security or on the
+  invite gate (`components/account/confirm-email.tsx`); until then camp
+  emails skip them and a GOD_EMAILS address does not count. Google refuses to
+  link to an unverified local account on purpose (pre-account takeover), and
+  the refusal lands on our sign-in form with a sentence
+  (`app/auth/oauth-error.ts`). Never relax `requireLocalEmailVerified`.
+- **An unconfirmed account cannot add a passkey or two-factor**
+  (`packages/auth/src/email-proof.ts`). Sign-up is open, so it may belong to
+  someone who signed up with another person's address first, and a passkey or
+  TOTP secret would outlive the owner's password reset. The same plugin clears
+  them when a reset link is used on an unconfirmed account, and takes back the
+  session a verification link opens for an account with two-factor on, so the
+  link never skips the code.
+- **Sign-up says when an address already has an account** (accepted, owner's
+  default 2026-09-24). With open sign-up and automatic sign-in, hiding it would
+  mean every new member signs up and then signs in again. Sign-in and
+  forgot-password stay enumeration-safe; keep them that way.
 
 **`packages/db/src/schema.ts` is the single hand-authored source of truth.**
 Everything under `packages/db/migrations/` — the `.sql` files,
@@ -152,7 +170,7 @@ Two Postgres traps:
 
 - **A nullable column in a unique index drops uniqueness for NULL rows.**
   Postgres treats NULLs as distinct, so `(user_id, definition_key,
-  activation_id)` would allow any number of duplicates whose
+activation_id)` would allow any number of duplicates whose
   `activation_id` is NULL. `questionnaire_responses.activation_id` is
   nullable, and `questionnaire_responses_user_def_cycle_idx` must stay on
   `(user_id, definition_key, cycle)`. When a nullable column must be in the
@@ -163,7 +181,7 @@ Two Postgres traps:
   `captain_promotion_open_per_target_idx`,
   `questionnaire_activations_one_open_per_key_idx`,
   `notification_deliveries_broadcast_user_uniq`. A bare `ON CONFLICT DO
-  NOTHING`, with no target, is not affected.
+NOTHING`, with no target, is not affected.
 
 **Driver choice.** `@camp404/db` exposes two drivers: `createHttpDb()` is
 stateless, for route handlers and server components, and has **no
@@ -191,19 +209,19 @@ With `NEON_LOCAL_PROXY=1`, both drivers go through the proxy for the
 Decisions baked into the schema — keep new code consistent with them:
 
 - **Ranks.** `users.rank` is only `captain` or `member`. Every other
-  "role" is *derived*, never stored: a **team lead** is derived from
+  "role" is _derived_, never stored: a **team lead** is derived from
   `team_memberships.is_lead`; a **driver** from
   `driver_profiles.intends_to_drive`. Do not add a stored role column for
   a derived capability.
-- **`team_lead` clearance is GLOBAL, not per-team.** *(Owner-ratified
+- **`team_lead` clearance is GLOBAL, not per-team.** _(Owner-ratified
   2026-09-09: "it's a sitewide global role." Settled — do not re-open it in
-  passing; a change here is a deliberate reshape, not a refactor.)* Leading
-  *any* team in the camp's current year raises a member to the `team_lead` rung of the
+  passing; a change here is a deliberate reshape, not a refactor.)_ Leading
+  _any_ team in the camp's current year raises a member to the `team_lead` rung of the
   `camp_member < team_lead < captain` ladder **everywhere in the app** —
   `isTeamLead(userId)` is a single boolean and `deriveViewerRank` takes it
-  as one. Team identity governs *audience* (who a `team` / `team_leads`
+  as one. Team identity governs _audience_ (who a `team` / `team_leads`
   broadcast or questionnaire send reaches, which chips a roster row wears),
-  never *clearance*. There is no "lead of team X may see team X's data and
+  never _clearance_. There is no "lead of team X may see team X's data and
   no one else's" tier, and adding one would mean re-shaping
   `deriveViewerRank`, `requireClearance` and every call site — not a local
   change. Rationale: the ladder is a single ordered scale by construction,
@@ -229,7 +247,7 @@ Decisions baked into the schema — keep new code consistent with them:
     last lead is allowed — a leaderless team is a legitimate state (every
     team is leaderless the moment the camp rolls over).
   - **The audience half has one owner too.** Clearance says which rung a
-    viewer stands on; it does not say which audiences they may *address*.
+    viewer stands on; it does not say which audiences they may _address_.
     That is `canSendToAudience` in `packages/core/src/audience-authz.ts`: a
     captain is unrestricted, a team lead may send only to a single `team`
     scope they themselves lead, and everything wider — `everyone`,
@@ -258,16 +276,16 @@ Decisions baked into the schema — keep new code consistent with them:
   Every member page walks one ladder, `requireMemberPage` in
   `apps/web/lib/member-gate.ts`: invite, blocking questionnaire, burner
   profile, captain approval.
-- **Questionnaires — two classes.** *Code questionnaires* (`burner_profiles`,
+- **Questionnaires — two classes.** _Code questionnaires_ (`burner_profiles`,
   `dietary_requirements`, `driver_profiles`, …) are bespoke coded pages
   writing into their own distinct domain tables — keep these as-is.
-  *Builder questionnaires* are authored in-app via the captain questionnaire
+  _Builder questionnaires_ are authored in-app via the captain questionnaire
   builder: their definitions live as data in `questionnaire_definitions` and
   their answers in the one generic `questionnaire_responses` store (JSONB
   keyed by field id). Both classes dispatch through
   `questionnaire_activations` and gate through `required_actions` — the
   shared, key-driven spine. The generic def+response pair is a deliberately
-  *scoped* exception to "bespoke over generic" (below), for camp-authored
+  _scoped_ exception to "bespoke over generic" (below), for camp-authored
   forms only.
 - **Notifications.** `broadcasts` are composed messages fanned out by a
   worker into per-user `notification_deliveries` (a queue). `push_tokens`
@@ -441,7 +459,7 @@ never measured.
   commitlint (`commitlint.config.mjs`): a husky `commit-msg` hook locally and
   the `commitlint` CI job on PRs. Types come from this repo's history
   (`design` included); scopes are free, lower-case kebab-case; the header
-  is 120 characters at most. The subject says *why*, not just *what*.
+  is 120 characters at most. The subject says _why_, not just _what_.
 - One PR per feature. The PR template leads with **Why** and **Decisions**;
   fill in Database even when the answer is "None."
 - Keep the CI gate green before requesting review. `ci-pass` is the one
