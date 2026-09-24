@@ -296,7 +296,7 @@ export function ProofreadBatch({
             <Field
               label="Note for Claude"
               htmlFor="claude-note"
-              help="Optional, e.g. “The last run used cups; use grams.” Sent with each recipe picked. A Kitchen lead's request is not sent unless you copy it here, or run the recipe from its own page, where it is filled in."
+              help="Optional, e.g. “The last run used cups; use grams.” Sent with each recipe picked. A Kitchen lead's request is not sent unless you copy it here."
             >
               <Textarea
                 id="claude-note"

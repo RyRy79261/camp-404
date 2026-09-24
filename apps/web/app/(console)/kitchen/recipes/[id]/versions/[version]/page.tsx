@@ -15,6 +15,10 @@ import { AdjustButton } from "../../adjust-button";
 
 export const dynamic = "force-dynamic";
 
+// "Adjust with Claude" runs its Claude call in `after()`, which lives as long
+// as this page's function; the recipe page allows the same.
+export const maxDuration = 300;
+
 export const metadata = { title: "Recipe version — Camp 404" };
 
 // One version of a recipe on its own page (the owner, 2026-09-24): the

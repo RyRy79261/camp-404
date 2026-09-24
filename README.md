@@ -74,8 +74,9 @@ Recipes live under `/kitchen/recipes`, and read like
 
 A Kitchen reviewer is a lead of the Kitchen team or a captain, and either may
 start a Claude run (the owner's decision 2A). A run that succeeds goes
-straight into the book; the camp's daily limit on runs is a silent cost guard
-that no screen shows.
+straight into the book. There is no daily limit on runs (the owner removed
+it). A run stuck over 10 minutes is reset when a Kitchen page loads or the
+source editor's loading panel polls.
 
 ## Mobile builds
 

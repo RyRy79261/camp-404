@@ -225,8 +225,8 @@ export function RecipeComposer() {
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
             <p>
               Only the recipe&apos;s text, name and link go to Claude, and only
-              when a captain has Claude turn it into a recipe. Your name and
-              your note stay in the camp&apos;s app.
+              when a captain or a Kitchen lead has Claude turn it into a recipe.
+              Your name and your note stay in the camp&apos;s app.
             </p>
           </div>
 

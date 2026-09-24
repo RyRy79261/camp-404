@@ -918,7 +918,9 @@ export async function queueProofread(input: {
     if (!(await lockKitchenReviewer(tx, input.actorId))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
-    const ids = [...new Set(input.recipeIds)];
+    // Sorted, so two batches that share recipes lock them in the same order
+    // and cannot deadlock each other.
+    const ids = [...new Set(input.recipeIds)].sort();
     if (ids.length === 0) refuse(NOT_READY_TO_PROOFREAD);
     const plates = platesOrRefuse(input.plates);
 

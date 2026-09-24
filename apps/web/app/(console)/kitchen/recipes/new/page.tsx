@@ -17,7 +17,7 @@ export default async function ImportRecipePage() {
       <PageHeading
         eyebrow="Kitchen / Recipes / Import"
         title="Import a recipe"
-        description="Paste a recipe as you found it. A Kitchen lead or a captain checks it, and a captain can have Claude turn it into a recipe the kitchen can cook from."
+        description="Paste a recipe as you found it. A Kitchen lead or a captain checks it, and either can have Claude turn it into a recipe the kitchen can cook from."
       />
       <RecipeComposer />
     </div>

@@ -467,7 +467,7 @@ function aiCheck(env: EnvBag): SystemCheck {
         value: "On",
         tone: "ok",
         detail:
-          "Improve with AI rewrites a report into a title and steps before it is filed. Claude writes a recipe, or proofreads a plate count, only when a captain presses its button.",
+          "Improve with AI rewrites a report into a title and steps before it is filed. Claude writes a recipe, or proofreads a plate count, only when a captain or a Kitchen lead presses its button.",
       }
     : {
         ...base,

@@ -337,8 +337,7 @@ since migration 0034. `tools/documents.ts` adds `list_document_drafts`, `get_doc
 `create_document`, `update_document` (on the version read) and `publish_document`: a captain for
 any document, a team lead for their team's; members still read published documents only. Recipe
 review lives in the app, not the connector: [CORRECTION 2026-09-24] since #243 `submit_recipe` lands a
-recipe as `suggested` for a Kitchen lead or a captain to approve, and only a captain sends one to be
-proofread. [CORRECTION 2026-09-24] A captain or a Kitchen lead sends one to be proofread (the
+recipe as `suggested` for a Kitchen lead or a captain to approve. [CORRECTION 2026-09-24] A captain or a Kitchen lead sends one to be proofread (the
 owner's decision 2A). [CORRECTION 2026-09-24] `submit_recipe` takes the recipe's `text`
 (a link alone is refused, because the server never opens links; `title` and `link` are optional), and
 `list_recipes` returns each recipe's `plates` and the plate counts it is ready for (`readyPlates`). `tools/questionnaires.ts` adds `list_questionnaire_drafts`,
