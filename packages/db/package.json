@@ -38,6 +38,7 @@
     "./questionnaire-results": "./src/questionnaire-results.ts",
     "./broadcasts": "./src/broadcasts.ts",
     "./tasks": "./src/tasks.ts",
+    "./power": "./src/power.ts",
     "./calendar-events": "./src/calendar-events.ts",
     "./audience": "./src/audience.ts",
     "./push": "./src/push.ts",

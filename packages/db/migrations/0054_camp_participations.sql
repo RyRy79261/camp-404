@@ -1,8 +1,10 @@
+CREATE TYPE "public"."participation_intent" AS ENUM('yes', 'maybe', 'no');--> statement-breakpoint
 CREATE TYPE "public"."participation_status" AS ENUM('applied', 'maybe', 'accepted', 'waitlisted', 'not_attending');--> statement-breakpoint
 CREATE TABLE "camp_participations" (
 	"user_id" uuid NOT NULL,
 	"cycle" integer DEFAULT 1 NOT NULL,
 	"status" "participation_status" NOT NULL,
+	"intent" "participation_intent" NOT NULL,
 	"decided_by_user_id" uuid,
 	"decided_at" timestamp,
 	"reason" text,

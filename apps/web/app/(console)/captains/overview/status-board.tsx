@@ -24,7 +24,7 @@ import type {
 // sentence as "we cannot read this".
 
 /** AfrikaBurn's rail heading: title left, the count it is over on the right. */
-function RailHead({ title, meta }: { title: string; meta: string }) {
+export function RailHead({ title, meta }: { title: string; meta: string }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <h3 className="text-sm font-semibold">{title}</h3>
@@ -33,7 +33,7 @@ function RailHead({ title, meta }: { title: string; meta: string }) {
   );
 }
 
-function LegendDot({ className }: { className: string }) {
+export function LegendDot({ className }: { className: string }) {
   return (
     <span
       className={`h-2.5 w-2.5 shrink-0 rounded-full ${className}`}

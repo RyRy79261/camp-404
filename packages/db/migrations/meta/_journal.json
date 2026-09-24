@@ -369,15 +369,22 @@
     {
       "idx": 52,
       "version": "7",
-      "when": 1790252724325,
-      "tag": "0052_camp_participations",
+      "when": 1790249721383,
+      "tag": "0052_power_and_fuel",
       "breakpoints": true
     },
     {
       "idx": 53,
       "version": "7",
-      "when": 1790256877560,
-      "tag": "0053_participation_intent",
+      "when": 1790250141199,
+      "tag": "0053_power_runs_all_day",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790258472111,
+      "tag": "0054_camp_participations",
       "breakpoints": true
     }
   ]

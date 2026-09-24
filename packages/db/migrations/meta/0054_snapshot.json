@@ -1,6 +1,6 @@
 {
-  "id": "900687be-898a-4b8c-9ae1-a5a2b2cbb940",
-  "prevId": "0f112a2b-9be8-437d-a21b-194b6455b0f3",
+  "id": "0f5ff028-ba59-4719-b7e2-a9e5fde149ac",
+  "prevId": "900687be-898a-4b8c-9ae1-a5a2b2cbb940",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -775,6 +775,135 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.camp_participations": {
+      "name": "camp_participations",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cycle": {
+          "name": "cycle",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "participation_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "intent": {
+          "name": "intent",
+          "type": "participation_intent",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decided_by_user_id": {
+          "name": "decided_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "camp_participations_cycle_status_idx": {
+          "name": "camp_participations_cycle_status_idx",
+          "columns": [
+            {
+              "expression": "cycle",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "camp_participations_user_id_users_id_fk": {
+          "name": "camp_participations_user_id_users_id_fk",
+          "tableFrom": "camp_participations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "camp_participations_decided_by_user_id_users_id_fk": {
+          "name": "camp_participations_decided_by_user_id_users_id_fk",
+          "tableFrom": "camp_participations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "decided_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "camp_participations_user_id_cycle_pk": {
+          "name": "camp_participations_user_id_cycle_pk",
+          "columns": [
+            "user_id",
+            "cycle"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -6626,6 +6755,26 @@
         "approval_decision",
         "captain_promotion",
         "task_reminder"
+      ]
+    },
+    "public.participation_intent": {
+      "name": "participation_intent",
+      "schema": "public",
+      "values": [
+        "yes",
+        "maybe",
+        "no"
+      ]
+    },
+    "public.participation_status": {
+      "name": "participation_status",
+      "schema": "public",
+      "values": [
+        "applied",
+        "maybe",
+        "accepted",
+        "waitlisted",
+        "not_attending"
       ]
     },
     "public.payment_status": {

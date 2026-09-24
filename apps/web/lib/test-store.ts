@@ -5,6 +5,7 @@ import {
   campDayStart,
   nextCampDay,
   approvalNotification,
+  canEditPower,
   captainPromotionNotification,
   FOUNDER_CODE,
   formatMemberRefCode,
@@ -72,6 +73,26 @@ import {
   type TaskWriteResult,
 } from "@camp404/db/tasks";
 import {
+  ALREADY_HAS_LOADS,
+  ALREADY_HAS_PLAN,
+  DEFAULT_POWER_PLAN,
+  GENERATOR_CHANGED,
+  GENERATOR_GONE,
+  INVENTORY_ITEM_GONE,
+  LOAD_CHANGED,
+  LOAD_GONE,
+  NOT_A_POWER_EDITOR,
+  NOTHING_TO_COPY,
+  PLAN_CHANGED,
+  reachRank,
+  type GeneratorRow,
+  type PowerInventoryItem,
+  type PowerLoadRow,
+  type PowerPlan,
+  type PowerPlanSettings,
+  type PowerWriteResult,
+} from "@camp404/db/power";
+import {
   calendarEventRefusal,
   type AddCalendarEventResult,
 } from "@camp404/db/calendar-events";
@@ -79,6 +100,10 @@ import {
   ANNOUNCEMENT_NOTIFICATION_KINDS,
   type InboxFilter,
   type ReferralUser,
+  type EditGeneratorInput,
+  type EditLoadInput,
+  type GeneratorInput,
+  type LoadInput,
 } from "@camp404/types";
 import {
   currentCycle,
@@ -314,6 +339,13 @@ interface TestStoreState {
   memberRefCodes: Map<string, string>;
   /** `camp_participations`, keyed `${userId}:${cycle}` like its primary key. */
   participations: Map<string, TestParticipation>;
+  /** Power and fuel (#253, #254): the twins of their tables. */
+  powerLoads: PowerLoadRow[];
+  /** `power_plans`, keyed by year like the table's primary key. */
+  powerPlans: Map<number, PowerPlan>;
+  generators: GeneratorRow[];
+  /** The inventory items the "From inventory" helper offers (none archived). */
+  powerInventory: PowerInventoryItem[];
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -355,6 +387,10 @@ function globalState(): TestStoreState {
       payments: [] as TestPayment[],
       memberRefCodes: new Map<string, string>(),
       participations: new Map<string, TestParticipation>(),
+      powerLoads: [] as PowerLoadRow[],
+      powerPlans: new Map<number, PowerPlan>(),
+      generators: [] as GeneratorRow[],
+      powerInventory: [] as PowerInventoryItem[],
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -414,6 +450,14 @@ const participationKey = (userId: string, cycle: number) =>
   `${userId}:${cycle}`;
 const payments = S.payments;
 const memberRefCodes = S.memberRefCodes;
+S.powerLoads ??= [];
+S.powerPlans ??= new Map<number, PowerPlan>();
+S.generators ??= [];
+S.powerInventory ??= [];
+const powerLoads = S.powerLoads;
+const powerPlans = S.powerPlans;
+const generators = S.generators;
+const powerInventory = S.powerInventory;
 
 /**
  * The camp's current year, resolved the way `currentCycleNumber()` resolves it
@@ -447,6 +491,121 @@ function findUserById(userId: string): TestUser | null {
 
 function nextId(): string {
   return `test-user-${S.nextSerial++}`;
+}
+
+// --- Power helpers (the twins of @camp404/db/power's private steps) ---------
+
+/** A captain, or a lead of Power & Lighting this year (lockPowerEditor's twin). */
+function isPowerEditor(userId: string): boolean {
+  const reach = testStore.senderReach(userId);
+  return canEditPower(reachRank(reach), reach ?? []);
+}
+
+/** The store's twin of the db module's write(): a refusal is a sentence. */
+function powerWrite<T extends object>(
+  actorId: string,
+  fn: (cycle: number) => T | string,
+): PowerWriteResult<T> {
+  if (!isPowerEditor(actorId)) return { ok: false, error: NOT_A_POWER_EDITOR };
+  const out = fn(currentCycleNumber());
+  return typeof out === "string"
+    ? { ok: false, error: out }
+    : { ok: true, ...out };
+}
+
+function inventoryItemGone(itemId: string | null): boolean {
+  return itemId !== null && !powerInventory.some((i) => i.id === itemId);
+}
+
+function powerLoadFields(input: LoadInput) {
+  return {
+    name: input.name,
+    area: input.area,
+    category: input.category,
+    quantity: input.quantity,
+    wattsEach: input.wattsEach,
+    surgeWattsEach: input.surgeWattsEach,
+    dutyPct: input.dutyPct,
+    schedule: input.schedule,
+    hoursPerDay: input.hoursPerDay,
+    windows: input.windows ? input.windows.map((w) => ({ ...w })) : null,
+    fromDay: input.fromDay,
+    toDay: input.toDay,
+    volts: input.volts,
+    current: input.current,
+    owner: input.owner,
+    neighbourCamp: input.neighbourCamp,
+    inventoryItemId: input.inventoryItemId,
+    circuit: input.circuit,
+  };
+}
+
+function generatorFields(input: GeneratorInput) {
+  return {
+    model: input.model,
+    ratedKva: input.ratedKva,
+    maxKva: input.maxKva,
+    tankLitres: input.tankLitres,
+    runtime50Hours: input.runtime50Hours,
+    runtime100Hours: input.runtime100Hours,
+    fuelType: input.fuelType,
+    owner: input.owner,
+    inventoryItemId: input.inventoryItemId,
+    noiseNote: input.noiseNote,
+  };
+}
+
+function loadsOf(cycle: number): PowerLoadRow[] {
+  return powerLoads
+    .filter((l) => l.cycle === cycle)
+    .sort(
+      (a, b) =>
+        a.sort - b.sort || a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+}
+
+/** Why a load's compare-and-set lost: gone this year, or someone was first. */
+function loadLoss(loadId: string, cycle: number): string {
+  return powerLoads.some((l) => l.id === loadId && l.cycle === cycle)
+    ? LOAD_CHANGED
+    : LOAD_GONE;
+}
+
+function previousStoreLoadCycle(cycle: number): number | null {
+  const earlier = powerLoads.filter((l) => l.cycle < cycle).map((l) => l.cycle);
+  return earlier.length > 0 ? Math.max(...earlier) : null;
+}
+
+function previousStorePlanCycle(cycle: number): number | null {
+  const earlier = [...powerPlans.keys()].filter((c) => c < cycle);
+  return earlier.length > 0 ? Math.max(...earlier) : null;
+}
+
+/** A generator the plan may name (assertPlanGenerator's twin), or a refusal. */
+function planGeneratorRefusal(
+  generatorId: string | null | undefined,
+  current: string | null,
+): string | null {
+  if (generatorId === undefined || generatorId === null) return null;
+  const gen = generators.find((g) => g.id === generatorId);
+  if (!gen) return GENERATOR_GONE;
+  if (gen.archivedAt !== null && generatorId !== current) return GENERATOR_GONE;
+  return null;
+}
+
+const POWER_PLAN_KEYS = Object.keys(DEFAULT_POWER_PLAN).filter(
+  (key) => key !== "version",
+) as (keyof PowerPlanSettings)[];
+
+function planPatch(
+  patch: Partial<PowerPlanSettings>,
+): Partial<PowerPlanSettings> {
+  return Object.fromEntries(
+    POWER_PLAN_KEYS.filter((key) => patch[key] !== undefined).map((key) => [
+      key,
+      patch[key],
+    ]),
+  );
 }
 
 export const testStore = {
@@ -2212,6 +2371,259 @@ export const testStore = {
     );
   },
 
+  // --- Power and fuel (#253, #254): twins of @camp404/db/power ------------
+
+  listPowerLoads(cycle?: number): PowerLoadRow[] {
+    return loadsOf(cycle ?? currentCycleNumber()).map((l) => ({ ...l }));
+  },
+
+  getPowerPlan(cycle?: number): PowerPlan {
+    const year = cycle ?? currentCycleNumber();
+    const row = powerPlans.get(year);
+    return row
+      ? { ...row }
+      : { ...DEFAULT_POWER_PLAN, cycle: year, updatedAt: null };
+  },
+
+  listGenerators(): GeneratorRow[] {
+    return generators
+      .filter((g) => g.archivedAt === null)
+      .sort(
+        (a, b) =>
+          a.model.localeCompare(b.model) ||
+          a.createdAt.getTime() - b.createdAt.getTime(),
+      )
+      .map((g) => ({ ...g }));
+  },
+
+  getGenerator(id: string): GeneratorRow | null {
+    const gen = generators.find((g) => g.id === id);
+    return gen ? { ...gen } : null;
+  },
+
+  listPowerInventory(): PowerInventoryItem[] {
+    return [...powerInventory]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((i) => ({ ...i }));
+  },
+
+  /** Seeds inventory items for the "From inventory" helper (E2E only). */
+  seedPowerInventory(
+    items: readonly Omit<PowerInventoryItem, "id">[],
+  ): PowerInventoryItem[] {
+    const made = items.map((item) => ({ ...item, id: crypto.randomUUID() }));
+    powerInventory.push(...made);
+    return made;
+  },
+
+  previousLoadCycle(): number | null {
+    return previousStoreLoadCycle(currentCycleNumber());
+  },
+
+  previousPlanCycle(): number | null {
+    return previousStorePlanCycle(currentCycleNumber());
+  },
+
+  addPowerLoad(
+    input: LoadInput & { actorId: string },
+  ): PowerWriteResult<{ id: string }> {
+    return powerWrite(input.actorId, (cycle) => {
+      if (inventoryItemGone(input.inventoryItemId)) return INVENTORY_ITEM_GONE;
+      const mine = powerLoads.filter((l) => l.cycle === cycle);
+      const now = new Date();
+      const row: PowerLoadRow = {
+        ...powerLoadFields(input),
+        id: crypto.randomUUID(),
+        cycle,
+        sort: mine.length > 0 ? Math.max(...mine.map((l) => l.sort)) + 1 : 0,
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+      powerLoads.push(row);
+      return { id: row.id };
+    });
+  },
+
+  updatePowerLoad(
+    input: EditLoadInput & { actorId: string },
+  ): PowerWriteResult {
+    return powerWrite(input.actorId, (cycle) => {
+      if (inventoryItemGone(input.inventoryItemId)) return INVENTORY_ITEM_GONE;
+      const row = powerLoads.find(
+        (l) =>
+          l.id === input.loadId &&
+          l.cycle === cycle &&
+          l.version === input.expectedVersion,
+      );
+      if (!row) return loadLoss(input.loadId, cycle);
+      Object.assign(row, powerLoadFields(input), {
+        version: row.version + 1,
+        updatedAt: new Date(),
+      });
+      return {};
+    });
+  },
+
+  removePowerLoad(input: {
+    actorId: string;
+    loadId: string;
+    expectedVersion: number;
+  }): PowerWriteResult {
+    return powerWrite(input.actorId, (cycle) => {
+      const i = powerLoads.findIndex(
+        (l) =>
+          l.id === input.loadId &&
+          l.cycle === cycle &&
+          l.version === input.expectedVersion,
+      );
+      if (i === -1) return loadLoss(input.loadId, cycle);
+      powerLoads.splice(i, 1);
+      return {};
+    });
+  },
+
+  copyLastYearLoads(input: {
+    actorId: string;
+  }): PowerWriteResult<{ count: number }> {
+    return powerWrite(input.actorId, (cycle) => {
+      if (powerLoads.some((l) => l.cycle === cycle)) return ALREADY_HAS_LOADS;
+      const from = previousStoreLoadCycle(cycle);
+      if (from === null) return NOTHING_TO_COPY;
+      const rows = loadsOf(from);
+      const now = new Date();
+      rows.forEach((row, i) => {
+        powerLoads.push({
+          ...row,
+          windows: row.windows ? row.windows.map((w) => ({ ...w })) : null,
+          inventoryItemId: inventoryItemGone(row.inventoryItemId)
+            ? null
+            : row.inventoryItemId,
+          id: crypto.randomUUID(),
+          cycle,
+          sort: i,
+          version: 1,
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+      return { count: rows.length };
+    });
+  },
+
+  setPowerPlan(input: {
+    actorId: string;
+    patch: Partial<PowerPlanSettings>;
+    expectedVersion: number;
+  }): PowerWriteResult<{ version: number }> {
+    return powerWrite(input.actorId, (cycle) => {
+      const patch = planPatch(input.patch);
+      const existing = powerPlans.get(cycle);
+      if (input.expectedVersion === 0) {
+        const refusal = planGeneratorRefusal(patch.generatorId, null);
+        if (refusal) return refusal;
+        if (existing) return PLAN_CHANGED;
+        powerPlans.set(cycle, {
+          ...DEFAULT_POWER_PLAN,
+          ...patch,
+          cycle,
+          version: 1,
+          updatedAt: new Date(),
+        });
+        return { version: 1 };
+      }
+      const refusal = planGeneratorRefusal(
+        patch.generatorId,
+        existing?.generatorId ?? null,
+      );
+      if (refusal) return refusal;
+      if (!existing || existing.version !== input.expectedVersion) {
+        return PLAN_CHANGED;
+      }
+      const version = existing.version + 1;
+      powerPlans.set(cycle, {
+        ...existing,
+        ...patch,
+        version,
+        updatedAt: new Date(),
+      });
+      return { version };
+    });
+  },
+
+  copyLastYearPlan(input: {
+    actorId: string;
+  }): PowerWriteResult<{ fromCycle: number }> {
+    return powerWrite(input.actorId, (cycle) => {
+      if (powerPlans.has(cycle)) return ALREADY_HAS_PLAN;
+      const fromCycle = previousStorePlanCycle(cycle);
+      if (fromCycle === null) return NOTHING_TO_COPY;
+      const from = powerPlans.get(fromCycle)!;
+      const gen = generators.find((g) => g.id === from.generatorId);
+      powerPlans.set(cycle, {
+        ...from,
+        cycle,
+        generatorId: gen && gen.archivedAt === null ? gen.id : null,
+        firstPoweredDay: null,
+        version: 1,
+        updatedAt: new Date(),
+      });
+      return { fromCycle };
+    });
+  },
+
+  addGenerator(
+    input: GeneratorInput & { actorId: string },
+  ): PowerWriteResult<{ id: string }> {
+    return powerWrite(input.actorId, () => {
+      if (inventoryItemGone(input.inventoryItemId)) return INVENTORY_ITEM_GONE;
+      const now = new Date();
+      const row: GeneratorRow = {
+        ...generatorFields(input),
+        id: crypto.randomUUID(),
+        archivedAt: null,
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+      generators.push(row);
+      return { id: row.id };
+    });
+  },
+
+  updateGenerator(
+    input: EditGeneratorInput & { actorId: string },
+  ): PowerWriteResult {
+    return powerWrite(input.actorId, () => {
+      if (inventoryItemGone(input.inventoryItemId)) return INVENTORY_ITEM_GONE;
+      const gen = generators.find((g) => g.id === input.generatorId);
+      if (!gen || gen.archivedAt !== null) return GENERATOR_GONE;
+      if (gen.version !== input.expectedVersion) return GENERATOR_CHANGED;
+      Object.assign(gen, generatorFields(input), {
+        version: gen.version + 1,
+        updatedAt: new Date(),
+      });
+      return {};
+    });
+  },
+
+  archiveGenerator(input: {
+    actorId: string;
+    generatorId: string;
+  }): PowerWriteResult {
+    return powerWrite(input.actorId, () => {
+      const gen = generators.find((g) => g.id === input.generatorId);
+      if (!gen || gen.archivedAt !== null) return GENERATOR_GONE;
+      const now = new Date();
+      Object.assign(gen, {
+        archivedAt: now,
+        version: gen.version + 1,
+        updatedAt: now,
+      });
+      return {};
+    });
+  },
+
   reset(): void {
     usersByAuthId.clear();
     profilesByUserId.clear();
@@ -2229,6 +2641,10 @@ export const testStore = {
     payments.length = 0;
     memberRefCodes.clear();
     participations.clear();
+    powerLoads.length = 0;
+    powerPlans.clear();
+    generators.length = 0;
+    powerInventory.length = 0;
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },
