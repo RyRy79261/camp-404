@@ -190,7 +190,7 @@ describe("TeamCoverageCard", () => {
         rows={[
           coverageRow({
             key: "communications_and_hr",
-            label: "Communications and HR",
+            label: "Communications & HR",
             members: 1,
             leads: 0,
             hasLead: false,

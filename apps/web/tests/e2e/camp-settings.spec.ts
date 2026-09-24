@@ -78,32 +78,25 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     ).toHaveCount(1);
   });
 
-  test("a captain renames, moves and archives Mutant Vehicle; all of it persists", async ({
+  test("a captain renames, moves and archives Water; all of it persists", async ({
     page,
     request,
   }) => {
-    await asRank(page, request, "settings-mv-captain", "captain");
+    await asRank(page, request, "settings-water-captain", "captain");
 
     await page.goto("/captains/camp-settings");
-    await expect(
-      page.getByText("Mutant Vehicle", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("Water", { exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "Rename Mutant Vehicle" }).click();
-    await page.getByLabel("Rename Mutant Vehicle").fill("Art Car");
-    await page
-      .getByRole("button", { name: "Save name for Mutant Vehicle" })
-      .click();
-    await expect(page.getByText("Art Car", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Rename Water" }).click();
+    await page.getByLabel("Rename Water").fill("H2O");
+    await page.getByRole("button", { name: "Save name for Water" }).click();
+    await expect(page.getByText("H2O", { exact: true })).toBeVisible();
 
-    // Mutant Vehicle is the last team; one step up puts it above
-    // Communications and HR.
-    await page.getByRole("button", { name: "Move Art Car up" }).click();
-    await expect(page.getByRole("row").last()).toContainText(
-      "Communications and HR",
-    );
+    // Water is the last team; one step up puts it above Sound.
+    await page.getByRole("button", { name: "Move H2O up" }).click();
+    await expect(page.getByRole("row").last()).toContainText("Sound");
 
-    const active = page.getByRole("switch", { name: "Art Car active" });
+    const active = page.getByRole("switch", { name: "H2O active" });
     await expect(active).toBeChecked();
     await active.click();
     await expect(active).not.toBeChecked();
@@ -112,16 +105,14 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await expect(
       page.getByRole("heading", { name: "Camp settings" }),
     ).toBeVisible();
-    await expect(page.getByText("Mutant Vehicle", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(page.getByText("Water", { exact: true })).toHaveCount(0);
     const rows = page.getByRole("row");
-    await expect(rows.last()).toContainText("Communications and HR");
-    const artCar = rows.filter({ hasText: "Art Car" });
-    await expect(artCar).toHaveCount(1);
-    await expect(artCar).toContainText("Archived");
+    await expect(rows.last()).toContainText("Sound");
+    const h2o = rows.filter({ hasText: "H2O" });
+    await expect(h2o).toHaveCount(1);
+    await expect(h2o).toContainText("Archived");
     await expect(
-      page.getByRole("switch", { name: "Art Car active" }),
+      page.getByRole("switch", { name: "H2O active" }),
     ).not.toBeChecked();
   });
 });

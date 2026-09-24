@@ -279,7 +279,7 @@ describe("setLead", () => {
 // resolved through the SAME year-scoped query production uses, after a real
 // assignment through the real writer.
 
-describe("the teams added in #236", () => {
+describe("the teams added in #236 and the owner's final list", () => {
   const h = useTestDb();
 
   // Real Postgres enum: a key missing from the migration fails the insert here,
@@ -288,6 +288,8 @@ describe("the teams added in #236", () => {
     "transport_and_logistics",
     "communications_and_hr",
     "mutant_vehicle",
+    "sound",
+    "water",
   ] as const)("%s takes a member and a lead", async (team) => {
     const db = h.db();
     const member = await makeUser(db);

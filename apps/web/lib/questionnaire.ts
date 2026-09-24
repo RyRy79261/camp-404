@@ -1,4 +1,4 @@
-import { MEDICAL_AUDIENCE_NOTE, humanizeKey } from "@camp404/core";
+import { MEDICAL_AUDIENCE_NOTE, defaultTeamLabel } from "@camp404/core";
 import {
   Team,
   safeParseStoredDefinition,
@@ -72,8 +72,8 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 // must NOT bump this.
 // [CORRECTION 2026-09-24] A brand-new team key needs an enum migration, but NOT
 // a version bump while the team sliders stay optional (required: false): Finance,
-// Transport and Logistics, Communications and HR and Mutant Vehicle were all
-// added without one. Only making a team question required would need the bump.
+// Transport and Logistics, Communications & HR, Mutant Vehicle, Sound and Water
+// were all added without one. Only making a team question required would need the bump.
 export const QUESTIONNAIRE_VERSION = "2026.09.16-v10";
 
 // The two team-bound anchors in the burner questionnaire — the only parts that
@@ -511,12 +511,12 @@ export function buildQuestionnaire(
 // overwritten from the live config on read, so these labels never surface.
 //
 // DERIVED rather than typed out again: the keys are the enum, and the labels
-// are the shared humanizer that `audienceLabel` falls back to — so this is the
-// same vocabulary the send picker and the roster chips read, not a ninth copy
-// of it. This module is bundled client-side, which is why it reaches for
+// are the shared default (`defaultTeamLabel`) that `audienceLabel` falls back
+// to — so this is the same vocabulary the send picker and the roster chips
+// read, not another copy of it. This module is bundled client-side, which is why it reaches for
 // @camp404/core and never @camp404/db.
 export const DEFAULT_TEAM_OPTIONS: ReadonlyArray<TeamOption> = Team.options.map(
-  (value) => ({ value, label: humanizeKey(value) }),
+  (value) => ({ value, label: defaultTeamLabel(value) }),
 );
 
 // The stored-shaped burner-profile definition — what the DB-backed accessor

@@ -98,11 +98,13 @@ describe("buildQuestionnaire", () => {
   });
 });
 
-describe("the teams added in #236 on the burner profile", () => {
+describe("the teams added in #236 and the owner's final list on the burner profile", () => {
   const NEW_KEYS = [
     "transport_and_logistics",
     "communications_and_hr",
     "mutant_vehicle",
+    "sound",
+    "water",
   ];
   // What production serves: the stored template with the camp's teams bound in.
   const q = resolveTeamBindings(BURNER_PROFILE_TEMPLATE, DEFAULT_TEAM_OPTIONS);
@@ -130,7 +132,7 @@ describe("the teams added in #236 on the burner profile", () => {
 
   it("keeps a profile finished before the new teams complete, so no one redoes it", () => {
     // A burner profile saved when the camp had nine teams: an answer for each
-    // of those, and none for the three added since.
+    // of those, and none for the five added since.
     const oldTeams = DEFAULT_TEAM_OPTIONS.filter(
       (t) => !NEW_KEYS.includes(t.value),
     );

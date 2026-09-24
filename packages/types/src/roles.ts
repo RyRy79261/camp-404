@@ -20,8 +20,33 @@ export const Team = z.enum([
   "transport_and_logistics",
   "communications_and_hr",
   "mutant_vehicle",
+  "sound",
+  "water",
 ]);
 export type Team = z.infer<typeof Team>;
+
+// What each team is called until a captain renames it: the labels a new camp
+// starts with (DEFAULT_TEAMS in @camp404/db/camp-config seeds the same ones, and
+// a test guards the two against drift). Two keys outlived their names, and a
+// key cannot be renamed because Postgres cannot drop an enum value:
+// `sanitation_and_water` is Sanitation and MOOP (Water is its own team since
+// 2026-09-24), and `health_and_safety` is Safety.
+export const TEAM_DEFAULT_LABELS: Readonly<Record<Team, string>> = {
+  kitchen: "Kitchen",
+  structures: "Structures",
+  power_and_lighting: "Power and Lighting",
+  sanitation_and_water: "Sanitation and MOOP",
+  health_and_safety: "Safety",
+  art_and_activities: "Art and Activities",
+  ministry_of_memes: "Ministry of Memes",
+  ministry_of_vibes: "Ministry of Vibes",
+  finance: "Finance",
+  transport_and_logistics: "Transport and Logistics",
+  communications_and_hr: "Communications & HR",
+  mutant_vehicle: "Mutant Vehicle",
+  sound: "Sound",
+  water: "Water",
+};
 
 // --- Stored vs derived rank, and the viewer clearance ladder --------------
 // The DATABASE stores only two ranks (schema.ts rankEnum). `team_lead` is

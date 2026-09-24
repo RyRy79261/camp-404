@@ -22,7 +22,9 @@ import {
   MessagesSquare,
   Music,
   Palette,
+  Recycle,
   Send,
+  Speaker,
   SquareKanban,
   Truck,
   Users,
@@ -412,7 +414,9 @@ const TEAM_ICONS: Record<string, LucideIcon> = {
   kitchen: ChefHat,
   structures: Hammer,
   power_and_lighting: Zap,
-  sanitation_and_water: Droplets,
+  // The key predates the split: this is Sanitation and MOOP, and Water has
+  // its own entry below.
+  sanitation_and_water: Recycle,
   health_and_safety: HeartPulse,
   art_and_activities: Palette,
   ministry_of_memes: Laugh,
@@ -421,6 +425,8 @@ const TEAM_ICONS: Record<string, LucideIcon> = {
   transport_and_logistics: Truck,
   communications_and_hr: MessagesSquare,
   mutant_vehicle: CarFront,
+  sound: Speaker,
+  water: Droplets,
 };
 
 /**

@@ -124,4 +124,4 @@ Then sign in → `/setup` runs again.
   hardcoded `teamEnum` (`packages/db/src/schema.ts`).
   [CORRECTION 2026-09-24] Configurable teams shipped (see
   `docs/configurable-teams-plan.md`): captains relabel, reorder and archive
-  teams in camp settings. The keys are still `teamEnum`, now twelve.
+  teams in camp settings. The keys are still `teamEnum`, now fourteen.

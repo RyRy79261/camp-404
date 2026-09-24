@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
-import { humanizeKey, initialsFrom } from "@camp404/core";
+import { defaultTeamLabel, initialsFrom } from "@camp404/core";
 import { Badge, type BadgeProps } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { cn } from "@camp404/ui/lib/utils";
@@ -23,14 +23,15 @@ import { COUNTRIES } from "@/lib/countries";
 // key as a chip (and it seeds the config's default labels).
 
 /**
- * Humanise a team enum value: "art_and_activities" → "Art and Activities".
- * A thin alias over the shared humanizer in @camp404/core: the same fallback
+ * A team enum value as its default name: "art_and_activities" → "Art and
+ * Activities", "health_and_safety" → "Safety". A thin alias over the shared
+ * `defaultTeamLabel` in @camp404/core: the same fallback
  * `audienceLabel` (@camp404/db/camp-config) applies when a key has no config
  * entry, so a chip here and a send target there can never read differently.
  * This file is bundled client-side, which is why the shared rule lives in core
  * (pure, DB-free) rather than beside the config it backstops.
  */
-export const teamLabel = humanizeKey;
+export const teamLabel = defaultTeamLabel;
 
 // A small, stable identity palette (avatar and team hues). Picked by hashing an
 // id so a member keeps the same tint across renders.

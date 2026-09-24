@@ -2,6 +2,8 @@
 // apps/web and other packages can derive the same display strings without
 // duplicating the rules.
 
+import { TEAM_DEFAULT_LABELS } from "@camp404/types";
+
 /**
  * Derive up to two uppercase initials from a name or email. Splits on
  * whitespace, "@", and ".". Returns "?" when there's nothing usable.
@@ -62,3 +64,16 @@ export function humanizeKey(key: string): string {
 // Words a key spells in lower case that read as capitals: the
 // communications_and_hr team is "Communications and HR", not "... Hr".
 const INITIALISMS = new Set(["hr"]);
+
+/**
+ * A team key as a name, for when the camp's config has no label for it: the
+ * team's default label (`sanitation_and_water` is "Sanitation and MOOP"), else
+ * the humanised key. A configured label always wins over this; see
+ * `audienceLabel` in @camp404/db/camp-config.
+ */
+export function defaultTeamLabel(key: string): string {
+  return (
+    (TEAM_DEFAULT_LABELS as Readonly<Record<string, string>>)[key] ??
+    humanizeKey(key)
+  );
+}

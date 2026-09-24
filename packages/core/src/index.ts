@@ -20,7 +20,8 @@
 //     cycle-guarded (OD9)
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
 //     (./invites)
-//   - text utils: initialsFrom, slugify, humanizeKey (./text-utils)
+//   - text utils: initialsFrom, slugify, humanizeKey, defaultTeamLabel
+//     (./text-utils)
 //   - markdown → plain text: plainPreview — the strip every plain-text
 //     boundary shares (push, email, Telegram, clipped rows) (./markdown-text)
 //   - text redaction: redactPii, sanitizeReportText (both return a

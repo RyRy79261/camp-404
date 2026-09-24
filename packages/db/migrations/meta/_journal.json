@@ -337,6 +337,20 @@
       "when": 1790214540964,
       "tag": "0047_currency_check",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790247614471,
+      "tag": "0048_sound_and_water_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1790247627730,
+      "tag": "0049_sound_water_and_relabels_in_camp_config",
+      "breakpoints": true
     }
   ]
 }

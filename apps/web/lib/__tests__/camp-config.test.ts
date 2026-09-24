@@ -118,14 +118,14 @@ describe("the seeded column default", () => {
     return JSON.parse(json ?? "{}");
   }
 
-  // 0015 seeded the eight founding teams, 0039 added Finance, and 0044 is the
-  // newest migration that sets the default (it added Transport and Logistics,
-  // Communications and HR and Mutant Vehicle). The newest one is what a new
-  // camp gets.
-  it("migration 0044 matches DEFAULT_CAMP_CONFIG", () => {
-    expect(extractSeed("packages/db/migrations/0044_new_teams.sql")).toEqual(
-      DEFAULT_CAMP_CONFIG,
-    );
+  // 0015 seeded the eight founding teams, 0039 added Finance, 0044 added
+  // Transport and Logistics, Communications and HR and Mutant Vehicle, and
+  // 0048 is the newest migration that sets the default (it added Sound and
+  // Water and renamed three labels). The newest one is what a new camp gets.
+  it("migration 0048 matches DEFAULT_CAMP_CONFIG", () => {
+    expect(
+      extractSeed("packages/db/migrations/0048_sound_and_water_teams.sql"),
+    ).toEqual(DEFAULT_CAMP_CONFIG);
   });
 
   it("schema.ts inline column default matches DEFAULT_CAMP_CONFIG", () => {
@@ -154,11 +154,13 @@ describe("setTeamArchived", () => {
   it("toggles only the matched team's archived flag, immutably", () => {
     const before = fixture();
     const after = setTeamArchived(before, "structures", true);
-    expect(after.teams.find((t) => t.key === "structures")?.archived).toBe(true);
-    expect(before.teams[1]?.archived).toBe(false); // input not mutated
-    expect(setTeamArchived(before, "art_and_activities", false).teams[2]?.archived).toBe(
-      false,
+    expect(after.teams.find((t) => t.key === "structures")?.archived).toBe(
+      true,
     );
+    expect(before.teams[1]?.archived).toBe(false); // input not mutated
+    expect(
+      setTeamArchived(before, "art_and_activities", false).teams[2]?.archived,
+    ).toBe(false);
   });
 });
 
@@ -209,7 +211,10 @@ describe("assertStableTeamKeys", () => {
   it("throws when a key is added or removed", () => {
     const before = fixture();
     const added: TeamsConfig = {
-      teams: [...before.teams, { key: "new", label: "New", order: 3, archived: false }],
+      teams: [
+        ...before.teams,
+        { key: "new", label: "New", order: 3, archived: false },
+      ],
     };
     const removed: TeamsConfig = { teams: before.teams.slice(1) };
     expect(() => assertStableTeamKeys(before, added)).toThrow(/team keys/);
@@ -306,7 +311,9 @@ describe("resolveCycles", () => {
     expect(resolveCycles({ cycles: "nope" })).toEqual([]);
     // One bad entry discards the list wholesale: a dropped year would silently
     // renumber the camp, and "unset" routes the captain to a screen that asks.
-    expect(resolveCycles({ cycles: [cycle(2026), { year: 2027 }] })).toEqual([]);
+    expect(resolveCycles({ cycles: [cycle(2026), { year: 2027 }] })).toEqual(
+      [],
+    );
     // The sentinel is not a year, so a hand-edited config can't smuggle it in.
     expect(resolveCycles({ cycles: [cycle(UNSET_CYCLE)] })).toEqual([]);
   });
@@ -394,7 +401,13 @@ describe("foundingCycles", () => {
 
   it("refuses an implausible year", () => {
     const now = new Date();
-    for (const year of [202, 20267, 2026.5, MIN_CYCLE_YEAR - 1, MAX_CYCLE_YEAR + 1]) {
+    for (const year of [
+      202,
+      20267,
+      2026.5,
+      MIN_CYCLE_YEAR - 1,
+      MAX_CYCLE_YEAR + 1,
+    ]) {
       expect(() => foundingCycles(year, now)).toThrow(/whole number between/);
     }
   });
@@ -674,9 +687,9 @@ describe("roleNameConflicts", () => {
     expect(roleNameConflicts(["Health and Safety"], "health-and-safety")).toBe(
       true,
     );
-    expect(roleNameConflicts(["Health and Safety"], "Health  and  Safety")).toBe(
-      true,
-    );
+    expect(
+      roleNameConflicts(["Health and Safety"], "Health  and  Safety"),
+    ).toBe(true);
   });
 
   it("lets a genuinely different name through", () => {

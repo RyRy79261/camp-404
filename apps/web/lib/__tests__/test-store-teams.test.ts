@@ -30,9 +30,7 @@ import { testStore } from "../test-store";
 function foundedAt(year: number): void {
   const config: CampConfig = {
     ...(testStore.getTeamsConfig() as CampConfig),
-    cycles: [
-      { year, startedAt: `${year}-01-01T00:00:00.000Z`, endedAt: null },
-    ],
+    cycles: [{ year, startedAt: `${year}-01-01T00:00:00.000Z`, endedAt: null }],
   };
   testStore.setTeamsConfig(config satisfies TeamsConfig);
 }
@@ -53,9 +51,9 @@ describe("testStore.assignTeam — the db writer, mirrored", () => {
     const member = makeUser("cook");
     foundedAt(2027);
 
-    expect(testStore.assignTeam({ userId: member.id, team: "kitchen" })).toEqual(
-      { created: true, cycle: 2027 },
-    );
+    expect(
+      testStore.assignTeam({ userId: member.id, team: "kitchen" }),
+    ).toEqual({ created: true, cycle: 2027 });
     expect(testStore.getTeamMemberships(member.id)).toEqual([
       { team: "kitchen", isLead: false, cycle: 2027 },
     ]);
@@ -108,9 +106,9 @@ describe("testStore.removeTeam — the db writer, mirrored", () => {
     foundedAt(2027);
     testStore.assignTeam({ userId: member.id, team: "kitchen" });
 
-    expect(testStore.removeTeam({ userId: member.id, team: "kitchen" })).toEqual(
-      { removed: true, cycle: 2027 },
-    );
+    expect(
+      testStore.removeTeam({ userId: member.id, team: "kitchen" }),
+    ).toEqual({ removed: true, cycle: 2027 });
     expect(testStore.getTeamMemberships(member.id)).toEqual([]);
 
     // The year namespace destroys nothing: rewind the camp to 2026 and last
@@ -137,9 +135,9 @@ describe("testStore.removeTeam — the db writer, mirrored", () => {
   it("is a no-op when they were not on the team", () => {
     const member = makeUser("cook");
     foundedAt(2027);
-    expect(testStore.removeTeam({ userId: member.id, team: "kitchen" })).toEqual(
-      { removed: false, cycle: 2027 },
-    );
+    expect(
+      testStore.removeTeam({ userId: member.id, team: "kitchen" }),
+    ).toEqual({ removed: false, cycle: 2027 });
   });
 });
 
@@ -166,17 +164,19 @@ describe("the teams added in #236, mirrored", () => {
     ]);
   });
 
-  it("offers the three teams in the store's default config, after Finance", () => {
+  it("offers the new teams in the store's default config, after Finance", () => {
     expect(
       testStore
         .getTeamsConfig()
-        .teams.slice(-4)
+        .teams.slice(-6)
         .map((t) => t.key),
     ).toEqual([
       "finance",
       "transport_and_logistics",
       "communications_and_hr",
       "mutant_vehicle",
+      "sound",
+      "water",
     ]);
   });
 });
@@ -352,12 +352,20 @@ describe("a team send reaches the members a captain just assigned", () => {
     testStore.assignTeam({ userId: cook.id, team: "kitchen" });
 
     expect(
-      computeAudience({ scope: "team_leads", team: null }, audienceData(), null),
+      computeAudience(
+        { scope: "team_leads", team: null },
+        audienceData(),
+        null,
+      ),
     ).toEqual([]);
 
     testStore.setLead({ userId: cook.id, team: "kitchen", isLead: true });
     expect(
-      computeAudience({ scope: "team_leads", team: null }, audienceData(), null),
+      computeAudience(
+        { scope: "team_leads", team: null },
+        audienceData(),
+        null,
+      ),
     ).toEqual([cook.id]);
   });
 
@@ -405,10 +413,16 @@ describe("the lead the store produces is the lead the send gate sees", () => {
     );
     // On structures they are a MEMBER, not a lead — membership is not the
     // permission, the lead flag is.
-    expect(canSendToAudience(actor, { scope: "team", team: "structures" })).toBe(
-      false,
-    );
-    for (const scope of ["everyone", "team_leads", "drivers", "individual", "opt_in"] as const) {
+    expect(
+      canSendToAudience(actor, { scope: "team", team: "structures" }),
+    ).toBe(false);
+    for (const scope of [
+      "everyone",
+      "team_leads",
+      "drivers",
+      "individual",
+      "opt_in",
+    ] as const) {
       expect(canSendToAudience(actor, { scope, team: "kitchen" })).toBe(false);
     }
   });
