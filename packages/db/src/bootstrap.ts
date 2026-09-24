@@ -54,12 +54,11 @@ export type BootstrapResult =
   | { ok: false; reason: "already-bootstrapped" };
 
 /**
- * How many people can join with the root invite code. The camp is 30 to 80
- * people, and the founder hands this code to the first crew, so 100 leaves
- * room without leaving the code open for good. After that, members invite
- * members from /tools/invite.
+ * How many people can join with the root invite code: one, the founder
+ * (owner, 2026-09-24). Everyone else is invited from /tools/invite. Codes
+ * minted before this carried 100 uses; the redeem path holds them to one.
  */
-export const FOUNDER_CODE_MAX_USES = 100;
+export const FOUNDER_CODE_MAX_USES = 1;
 
 /** The note on the root invite code. Migration 0022 matches on it. */
 export const FOUNDER_CODE_NOTE = "Camp root invite (first-time setup)";

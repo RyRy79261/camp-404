@@ -61,8 +61,7 @@ captain is allowed to take.
 - **The founder invite code is in this repo.** First-time setup creates the root
   invite code `meowzit` (`apps/web/lib/bootstrap.ts`). Anyone can read it. A
   sign-up with it lands as **pending**, needs a captain's approval, and the code
-  stops after 100 uses. Knowing it gets you into the approval queue, not into
-  the camp.
+  works once only: the founder used it. Knowing it gets you nothing.
 - **One encryption key, no rotation.** ID numbers and bank details are
   encrypted in Node with AES-256-GCM (`packages/db/src/crypto.ts`), not with the
   pgcrypto extension, under the key in `PGCRYPTO_KEY` (the name is historical).

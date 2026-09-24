@@ -3,14 +3,15 @@ import "server-only";
 import {
   announcementNotification,
   approvalNotification,
-  isReviewTransition,
   captainPromotionNotification,
+  FOUNDER_CODE,
+  isReviewTransition,
   normalizeInviteCode,
+  type NotificationKind,
   notificationLink,
+  type NotificationPayload,
   QUESTIONNAIRE_REF_TYPE,
   sortPinned,
-  type NotificationKind,
-  type NotificationPayload,
 } from "@camp404/core";
 import {
   DRAFT_MISSING,
@@ -683,6 +684,8 @@ export const testStore = {
     if (row.revokedAt) return null;
     if (row.expiresAt && row.expiresAt <= new Date()) return null;
     if (row.maxUses !== null && row.useCount >= row.maxUses) return null;
+    // The root code is single-use, as in @camp404/db/invite-codes.
+    if (row.code === FOUNDER_CODE && row.useCount > 0) return null;
     return row;
   },
   consumeInviteCode(code: string): TestInviteCode | null {
