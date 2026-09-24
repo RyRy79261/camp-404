@@ -5,7 +5,6 @@ import {
   auditActionLabel,
   canApproveRecipe,
   canRunProofread,
-  mealPlanPlateCounts,
 } from "@camp404/core";
 import {
   MAX_PLATES,
@@ -26,7 +25,6 @@ import type { OpenRun } from "@/components/recipes/proofread-questions";
 import { RecipeReader } from "@/components/recipes/recipe-reader";
 import { RecipeStatusBadge } from "@/components/recipes/recipe-status-badge";
 import { captainPageGate } from "@/lib/captain-gate";
-import { getMealPlan } from "@/lib/meal-plan";
 import {
   RECIPES_PATH,
   recipeEditPath,
@@ -70,8 +68,8 @@ export const metadata = { title: "Recipe — Camp 404" };
 // IN THE BOOK (an accepted version), two tabs (the owner's sketch,
 // 2026-09-24), the choice in the address (?tab=history) so a link and a
 // reload keep it:
-//  - Recipe, first: only the refined recipe. The plate selector
-//    (plate-bar.tsx, the distinct counts in this year's meal plan), the
+//  - Recipe, first: only the refined recipe. The plate count box
+//    (plate-bar.tsx, any count a member types), the
 //    ingredients beside the method and the cook notes
 //    (components/recipes/recipe-reader.tsx), and "How this was scaled". The count shown is in the address (?plates=45)
 //    and drawn here on the server: a count with a stored result shows its
@@ -688,10 +686,10 @@ export default async function RecipePage({
     const shown =
       wanted !== null && ready.includes(wanted) ? wanted : current.plates;
     const asked = wanted !== null && !ready.includes(wanted) ? wanted : null;
-    const [count, plan]: [
-      PlateCountDetail | null,
-      Awaited<ReturnType<typeof getMealPlan>>,
-    ] = await Promise.all([getPlateCount(current.id, shown), getMealPlan()]);
+    const count: PlateCountDetail | null = await getPlateCount(
+      current.id,
+      shown,
+    );
     const countNotes =
       count && count.source === "proofread"
         ? { plates: shown, notes: count.notes, pots: count.pots }
@@ -706,7 +704,6 @@ export default async function RecipePage({
           key={`${shown}-${asked ?? ""}`}
           recipeId={detail.id}
           versionId={current.id}
-          counts={mealPlanPlateCounts(plan.days)}
           ready={ready}
           open={detail.openPlateRuns}
           failed={detail.failedPlateRuns}

@@ -2,6 +2,7 @@ import {
   act,
   cleanup,
   fireEvent,
+  waitFor,
   render,
   screen,
   within,
@@ -48,8 +49,9 @@ vi.mock("@camp404/ui/components/toast", () => ({
 }));
 const NOT_FOUND = new Error("NEXT_NOT_FOUND");
 const push = vi.fn();
+const replace = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push }),
+  useRouter: () => ({ refresh: vi.fn(), push, replace }),
   notFound: () => {
     throw NOT_FOUND;
   },
@@ -67,11 +69,6 @@ import {
   type PlateCountDetail,
 } from "@/lib/recipes";
 import { getLeadTeams } from "@/lib/users";
-import {
-  choose,
-  installSelectPolyfills,
-  optionNames,
-} from "@/components/questionnaires/__tests__/select-helpers";
 import { proofreadPlatesAction, proofreadRecipeAction } from "../actions";
 import RecipePage from "./page";
 
@@ -253,8 +250,6 @@ function progress(overrides: Partial<ProofreadProgress>): ProofreadProgress {
 const tabs = () => screen.getByRole("navigation", { name: "Recipe tabs" });
 
 afterEach(cleanup);
-
-installSelectPolyfills();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -794,7 +789,7 @@ describe("recipe page", () => {
     expect(screen.queryByText("SECRET-VERSION-REPORT")).toBeNull();
   });
 
-  it("offers one selector of the meal plan's counts and every ready count, smallest first, on the count in the address", async () => {
+  it("offers one number box for the plate count, on the count in the address", async () => {
     mealPlanWith([60, 50, 45, 50]);
     const recipe = inBook({
       plateCounts: [
@@ -811,27 +806,38 @@ describe("recipe page", () => {
       plates: "50",
     });
     const bar = screen.getByRole("navigation", { name: "Plate count" });
-    const select = within(bar).getByRole("combobox", { name: "Plates" });
-    // The count asked for is the one selected, ready or not.
-    expect(select.textContent).toBe("50 plates");
-    expect(await optionNames(select)).toEqual([
-      "45 plates",
-      "50 plates",
-      "60 plates",
-      "70 plates",
-    ]);
-    // Picking a count puts it in the address; the server draws it.
-    await choose(select, "60 plates");
-    expect(push).toHaveBeenLastCalledWith(
-      `/kitchen/recipes/${RECIPE}?plates=60`,
+    const box = within(bar).getByRole("spinbutton", { name: "Plates" });
+    // The count asked for is in the box, ready or not.
+    expect((box as HTMLInputElement).value).toBe("50");
+    // Typing a count puts it in the address; the server draws it.
+    fireEvent.change(box, { target: { value: "60" } });
+    await waitFor(() =>
+      expect(replace).toHaveBeenLastCalledWith(
+        `/kitchen/recipes/${RECIPE}?plates=60`,
+      ),
     );
+    // Any whole count the server accepts, not only the meal plan's.
+    fireEvent.change(box, { target: { value: "73" } });
+    await waitFor(() =>
+      expect(replace).toHaveBeenLastCalledWith(
+        `/kitchen/recipes/${RECIPE}?plates=73`,
+      ),
+    );
+    // Not a count: nothing moves, and the row says what to type.
+    replace.mockClear();
+    fireEvent.change(box, { target: { value: "0" } });
+    expect(within(bar).getByText("Type 1 to 500")).toBeTruthy();
+    expect(within(bar).queryByRole("button")).toBeNull();
+    await new Promise((r) => setTimeout(r, 500));
+    expect(replace).not.toHaveBeenCalled();
     cleanup();
 
-    // No count in the address: the count shown is selected.
+    // No count in the address: the count shown is in the box.
     await renderAs({ id: "someone", rank: "camp_member" }, [], recipe);
-    expect(screen.getByRole("combobox", { name: "Plates" }).textContent).toBe(
-      "45 plates",
-    );
+    expect(
+      (screen.getByRole("spinbutton", { name: "Plates" }) as HTMLInputElement)
+        .value,
+    ).toBe("45");
   });
 
   it("marks a count with a stored result Verified, an indicator and not a control, and shows its amounts", async () => {

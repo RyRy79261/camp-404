@@ -92,12 +92,12 @@ const chip = (page: Page, step: number) =>
 const counts = (page: Page) =>
   page.getByRole("navigation", { name: "Plate count" });
 const selector = (page: Page) =>
-  counts(page).getByRole("combobox", { name: "Plates" });
+  counts(page).getByRole("spinbutton", { name: "Plates" });
 
-/** Pick a count from the selector. */
+/** Type a count into the plates box; the page moves to it. */
 async function pick(page: Page, plates: number) {
-  await selector(page).click();
-  await page.getByRole("option", { name: `${plates} plates` }).click();
+  await selector(page).fill(String(plates));
+  await expect(page).toHaveURL(new RegExp(`[?&]plates=${plates}$`));
 }
 
 test.describe("recipe plate counts (test-mode)", () => {
@@ -118,7 +118,7 @@ test.describe("recipe plate counts (test-mode)", () => {
     ).toBeVisible();
     await expect(chip(page, 3)).toContainText("2.5 kg");
     await expect(chip(page, 3)).toContainText("Red lentils");
-    await expect(selector(page)).toHaveText("50 plates");
+    await expect(selector(page)).toHaveValue("50");
     await expect(counts(page).getByText("Verified")).toBeVisible();
     await expect(page.getByText(/runs? left|per day/i)).toHaveCount(0);
 
@@ -134,7 +134,7 @@ test.describe("recipe plate counts (test-mode)", () => {
       .click();
     await expect(counts(page).getByText("Verified")).toBeVisible();
     await expect(page).toHaveURL(`${recipeUrl}?plates=45`);
-    await expect(selector(page)).toHaveText("45 plates");
+    await expect(selector(page)).toHaveValue("45");
     await expect(chip(page, 3)).toContainText("2.3 kg");
     await expect(
       page

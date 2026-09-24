@@ -1,26 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@camp404/ui/components/select";
+import { Input } from "@camp404/ui/components/input";
 import { toast } from "@camp404/ui/components/toast";
 import { recipePath } from "@/lib/recipe-copy";
 import { platesLabel } from "@/lib/recipe-labels";
+import { MAX_PLATES } from "@camp404/types";
 import { proofreadPlatesAction } from "../actions";
 
 // The plate count a recipe in the book is shown at (the owner, 2026-09-24:
 // "Have there be a selector for the number of meals, present a button if it
-// needs to be proof read, present an indicator if its already verified"). One
-// row: "Plates", one selector, and beside it one of four things for the
-// count picked:
+// needs to be proof read, present an indicator if its already verified"; then
+// "a number input would be better" than a dropdown). One row: "Plates", a
+// number box, and beside it one of four things for the count typed:
 //
 //  - a stored result: "Verified", an indicator, not a control;
 //  - Claude is still writing it: "With Claude…";
@@ -30,9 +25,8 @@ import { proofreadPlatesAction } from "../actions";
 //    is never run twice;
 //  - no result, for anyone else: "Not proofread yet".
 //
-// The selector lists the meal plan's distinct counts and every count with a
-// result, smallest first. Picking one goes to ?plates=N: the count lives in
-// the page address, so it can be shared, and the server draws it. Food does
+// Typing a count goes to ?plates=N: the count lives in the page address, so it
+// can be shared, and the server draws it. Food does
 // not scale by multiplying, so a count is proofread by Claude for the SAME
 // version (its result is stored against the version) and never makes a new
 // one. A failed click says why in a toast. A count asked for in the address
@@ -58,7 +52,6 @@ function failureFor(
 export function PlateBar({
   recipeId,
   versionId,
-  counts,
   ready,
   open,
   failed = [],
@@ -68,8 +61,6 @@ export function PlateBar({
 }: {
   recipeId: string;
   versionId: string;
-  /** The distinct plate counts in this year's meal plan, smallest first. */
-  counts: readonly number[];
   /** Every count the version has a result for. */
   ready: readonly number[];
   /** Counts Claude is still working on. */
@@ -85,20 +76,21 @@ export function PlateBar({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [chosen, setChosen] = useState(asked ?? shown);
+  const [draft, setDraft] = useState(String(asked ?? shown));
+  const typed = Number(draft);
+  // A whole count the server accepts, or null while the box holds anything else.
+  const chosen =
+    Number.isInteger(typed) && typed >= 1 && typed <= MAX_PLATES ? typed : null;
 
   const href = (plates: number) => `${recipePath(recipeId)}?plates=${plates}`;
-  // The count in the address is listed even when the meal plan no longer
-  // has it, so the selector never reads blank.
-  const options = [...new Set([...counts, ...ready, asked ?? shown])].sort(
-    (a, b) => a - b,
-  );
 
-  function pick(value: string) {
-    const plates = Number(value);
-    setChosen(plates);
-    router.push(href(plates));
-  }
+  // The count lives in the page address, so the server draws that count.
+  // Typing waits a moment before it moves, so "45" does not stop at "4".
+  useEffect(() => {
+    if (chosen === null || chosen === (asked ?? shown)) return;
+    const timer = setTimeout(() => router.replace(href(chosen)), 400);
+    return () => clearTimeout(timer);
+  }, [chosen]);
 
   function proofread(plates: number) {
     startTransition(async () => {
@@ -118,7 +110,13 @@ export function PlateBar({
   }
 
   let state: React.ReactNode;
-  if (ready.includes(chosen)) {
+  if (chosen === null) {
+    state = (
+      <span className="text-sm text-muted-foreground">
+        Type 1 to {MAX_PLATES}
+      </span>
+    );
+  } else if (ready.includes(chosen)) {
     state = (
       <span className="inline-flex items-center gap-1.5 text-sm font-medium text-success">
         <Check className="h-4 w-4" aria-hidden />
@@ -171,18 +169,17 @@ export function PlateBar({
         >
           Plates
         </label>
-        <Select value={String(chosen)} onValueChange={pick}>
-          <SelectTrigger id="plate-count" className="w-auto gap-2">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map((plates) => (
-              <SelectItem key={plates} value={String(plates)}>
-                {platesLabel(plates)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Input
+          id="plate-count"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={MAX_PLATES}
+          step={1}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="w-24 tabular-nums"
+        />
         {state}
       </nav>
       {asked !== null ? (
