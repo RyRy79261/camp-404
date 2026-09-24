@@ -115,7 +115,13 @@ Sign-in rules worth knowing before you touch `packages/auth`:
 - **A Vercel deployment without `BETTER_AUTH_SECRET` fails closed** (sign-in
   off, `/api/auth/*` answers 503), because the placeholder secret is in this
   public repo and previews share the production database. `authMayServe` is
-  the one switch; do not add a second.
+  the one switch; do not add a second. [UNRESOLVED 2026-09-24] "Previews share
+  the production database" disagrees with `neon-pr-cleanup.yml`, which deletes
+  the `preview/<branch>` Neon branch the Vercel Neon integration makes for each
+  preview. The Vercel env list could not be read to settle which is live. The
+  owner chooses: previews on the production database, or a Neon branch per
+  preview. Fail-closed stays right either way (a branch starts as a copy of
+  production's data), and the Google proxy works on both.
 - **Passkeys are bound to a domain for life.** `AUTH_APEX_DOMAIN`
   (camp-404.com) scopes them so the bare domain and `www` share one. Changing
   the domain means every member re-enrols their passkeys (passwords keep
@@ -128,7 +134,16 @@ Sign-in rules worth knowing before you touch `packages/auth`:
   on Preview, `AUTH_OAUTH_PROXY_URL`; without them it stays off and Google
   fails on a preview as before. Only this project's preview hosts are
   accepted (`isProjectPreviewOrigin`, pinned to the `ryry79261s-projects`
-  scope); a renamed project or scope needs that pattern changed.
+  scope); a renamed project or scope needs that pattern changed. What the
+  proxy secret opens, beyond signing in as any member on a preview: anyone
+  who can deploy a preview holds it, so they can seal a state naming their own
+  preview and have production swap a member's Google code and send the sealed
+  profile there, with the Google access and ID tokens (`openid email profile`,
+  one hour). A preview sign-in is also not bound to the browser that started
+  it (Better Auth skips the state-cookie check on `/oauth-proxy-callback`), and
+  the sealed profile rides in the preview's URL. Vercel Authentication on
+  previews narrows all three, and also means only someone signed in to Vercel
+  can finish a Google sign-in on a preview inside the plugin's 60 seconds.
 - **Keep `changeEmail` unmounted** until a flow that notifies the CURRENT
   address exists (AfrikaBurn's finding: the stock flow turns a stolen session
   into an account takeover).

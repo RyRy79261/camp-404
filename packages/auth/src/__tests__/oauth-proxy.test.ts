@@ -138,10 +138,11 @@ function googleCallback(
   origin: string,
   state: string,
   cookies = "",
+  outcome = "code=the-code",
 ) {
   return auth.handler(
     new Request(
-      `${origin}/api/auth/callback/google?code=the-code&state=${encodeURIComponent(state)}`,
+      `${origin}/api/auth/callback/google?${outcome}&state=${encodeURIComponent(state)}`,
       { headers: cookies ? { cookie: cookies } : {} },
     ),
   );
@@ -216,6 +217,26 @@ describe("Google sign-in on a preview", () => {
     expect(again.headers.get("location")).toMatch(/error=state_mismatch/);
   });
 
+  it("brings a cancelled Google consent back to the preview's own sign-in form", async () => {
+    const preview = instance(PREVIEW_ENV, emptyDb());
+    const production = instance(PROD_ENV, emptyDb());
+    const start = await startGoogleSignIn(preview, BRANCH);
+
+    // The member presses Cancel on Google's consent screen.
+    const back = await googleCallback(
+      production,
+      PROD,
+      start.state,
+      "",
+      "error=access_denied",
+    );
+    expect(back.status).toBe(302);
+    expect(back.headers.get("location")).toBe(
+      `${BRANCH}/auth/sign-in?error=access_denied`,
+    );
+    expect(google.fetchMock).not.toHaveBeenCalled();
+  });
+
   it("leaves a production sign-in exactly as it was", async () => {
     const prodDb = emptyDb();
     const production = instance(PROD_ENV, prodDb);
@@ -275,6 +296,35 @@ describe("Google sign-in on a preview", () => {
     );
     // Refused before the code was ever exchanged.
     expect(google.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a sealed state whose error page is outside this project's previews", async () => {
+    const production = instance(PROD_ENV, emptyDb());
+    const seal = (data: object) =>
+      symmetricEncrypt({ key: PROXY_SECRET, data: JSON.stringify(data) });
+    const forged = await seal({
+      isOAuthProxy: true,
+      state: "s",
+      stateCookie: await seal({
+        callbackURL: `${BRANCH}/api/auth/oauth-proxy-callback?callbackURL=%2F`,
+        errorURL: "https://evil.example/phish",
+        codeVerifier: "v",
+        expiresAt: Date.now() + 60_000,
+      }),
+    });
+
+    // A cancelled consent would otherwise send the browser to errorURL.
+    const res = await googleCallback(
+      production,
+      PROD,
+      forged,
+      "",
+      "error=access_denied",
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      `/auth/sign-in?error=${OAUTH_PROXY_REFUSED}`,
+    );
   });
 });
 
