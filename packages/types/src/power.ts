@@ -317,6 +317,17 @@ export type EditGeneratorInput = z.infer<typeof EditGeneratorInput>;
 /** A calendar day, typed as YYYY-MM-DD. Only ever a label for day numbers. */
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * A real calendar day: a UTC round trip gives the same text back. Date.parse
+ * alone rolls "2027-02-30" over to 2 March instead of refusing it.
+ */
+function isCalendarDay(v: string): boolean {
+  if (!DAY.test(v)) return false;
+  const [y, m, d] = v.split("-").map(Number);
+  const date = new Date(Date.UTC(y!, m! - 1, d!));
+  return date.toISOString().slice(0, 10) === v;
+}
+
 export const POWER_PLAN_DEFAULTS = {
   powerFactor: 0.8,
   daysOnSite: 7,
@@ -382,10 +393,7 @@ export const PowerPlanInput = z
       z
         .string()
         .regex(DAY, "Pick the first powered day.")
-        .refine(
-          (v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)),
-          "Pick the first powered day.",
-        )
+        .refine(isCalendarDay, "Pick the first powered day.")
         .nullish()
         .transform((v) => v ?? null),
     ),

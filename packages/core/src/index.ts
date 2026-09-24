@@ -89,7 +89,8 @@
 //     questionnaire stands for one member (./questionnaire-status)
 //   - power: canEditPower (a captain or a Power & Lighting lead), the load
 //     maths (loadWatts, energyPerDay, hourlyBuckets, peakLoad,
-//     surgeHeadroomWatts, generatorLoadPct, loadBand, powerTotals, dayLabel)
+//     surgeHeadroomWatts, amps at MAINS_VOLTS, generatorLoadPct, loadBand,
+//     powerTotals, dayLabel)
 //     and the fuel maths (fuelLine, fuelPerHour, fuelForPlan,
 //     jerryCansNeeded, legacyFuelEstimate) (./power)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has

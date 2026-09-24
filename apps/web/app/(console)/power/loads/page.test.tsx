@@ -185,6 +185,13 @@ describe("the load list", () => {
     expect(
       within(peak).getByText("assumes everything on at once"),
     ).toBeTruthy();
+    // Amps = watts ÷ volts: 800 W on 230 V mains; the surge 800 + 960 W.
+    expect(within(peak).getByText("3.5 A at 230 V")).toBeTruthy();
+    const surge = screen.getByRole("article", { name: "Surge headroom" });
+    expect(within(surge).getByText("7.7 A at 230 V")).toBeTruthy();
+    // Each row at its own voltage: the 12 V lights draw 40 A on their supply.
+    expect(screen.getAllByText("40 A at 12 V").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1.4 A").length).toBeGreaterThan(0);
     // The rows read without a member's name.
     expect(screen.getAllByText("Member-owned").length).toBeGreaterThan(0);
     expect(screen.getAllByText("6 h a day").length).toBeGreaterThan(0);
@@ -255,8 +262,9 @@ describe("the load list", () => {
     vi.mocked(listPowerLoads).mockResolvedValue([]);
     await renderAs("captain");
     expect(screen.getByText("No loads yet")).toBeTruthy();
+    // Once only: the empty state's call to action, not the heading as well.
     expect(
-      screen.getAllByRole("button", { name: /Copy last year/ }).length,
-    ).toBeGreaterThan(0);
+      screen.getAllByRole("button", { name: /Copy last year/ }),
+    ).toHaveLength(1);
   });
 });

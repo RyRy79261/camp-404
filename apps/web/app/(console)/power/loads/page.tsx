@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Fuel, Lock, PlugZap } from "lucide-react";
 import {
+  MAINS_VOLTS,
+  amps,
   canEditPower,
   dayLabel,
   generatorLoadPct,
@@ -103,6 +105,11 @@ function editable(row: PowerLoadRow): EditableLoad {
   };
 }
 
+/** Current at a voltage, as "40 A at 12 V": amps = watts ÷ volts. */
+function ampsText(w: number, volts: number): string {
+  return `${formatNumber(amps(w, volts), 1)} A at ${formatNumber(volts, 1)} V`;
+}
+
 function loadColumns(
   canEdit: boolean,
   inventory: InventoryOption[],
@@ -156,10 +163,21 @@ function loadColumns(
     },
     {
       id: "w",
-      header: "W",
+      header: "W · A",
       align: "right",
       cellClassName: "tabular-nums whitespace-nowrap",
-      cell: (r) => watts(loadWatts(r)),
+      // The current sits under the watts, so the table keeps its width. Mains
+      // is the norm, so only a load on another voltage names it.
+      cell: (r) => (
+        <span className="inline-flex flex-col items-end">
+          <span>{watts(loadWatts(r))}</span>
+          <span className="text-xs text-muted-foreground">
+            {r.volts === MAINS_VOLTS
+              ? `${formatNumber(amps(loadWatts(r), r.volts), 1)} A`
+              : ampsText(loadWatts(r), r.volts)}
+          </span>
+        </span>
+      ),
     },
     {
       id: "wh",
@@ -225,6 +243,7 @@ export default async function PowerLoadsPage() {
       label: "Estimated peak",
       value: kw(totals.peak.watts),
       secondary: `${formatNumber(totals.peak.kva, 2, true)} kVA`,
+      current: ampsText(totals.peak.watts, MAINS_VOLTS),
       hint:
         loads.length === 0
           ? "The most drawn at once."
@@ -238,6 +257,7 @@ export default async function PowerLoadsPage() {
       label: "Surge headroom",
       value: kw(totals.surge.watts),
       secondary: `${formatNumber(totals.surge.kva, 2, true)} kVA`,
+      current: ampsText(totals.surge.watts, MAINS_VOLTS),
       hint: "The peak plus the biggest start-up draw of any one item.",
     },
     {
@@ -273,6 +293,8 @@ export default async function PowerLoadsPage() {
     wattsEach: i.wattsEach,
   }));
   const canCopy = loads.length === 0 && earlier !== null;
+  // Offered once, as the empty state's call to action (the only time it
+  // applies), so the page never carries two identical buttons.
   const copyButton = canCopy ? (
     <CopyLastYearButton
       fromCycle={earlier}
@@ -306,7 +328,6 @@ export default async function PowerLoadsPage() {
                 }}
               />
             )}
-            {copyButton}
             <AddLoadButton
               canEdit={canEdit}
               refusalId={REFUSAL_ID}

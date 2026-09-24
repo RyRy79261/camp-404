@@ -712,7 +712,7 @@ export function LoadEditorDialog({
                 label="Hours it runs each day"
                 htmlFor={id("hours")}
                 error={errors.hoursPerDay}
-                help="Not when: the peak then assumes it could be on at any hour."
+                help="How long, not when. The peak counts it as on at the busiest hour; use time windows if you know when it runs."
               >
                 <Input
                   id={id("hours")}

@@ -34,6 +34,8 @@ export interface PowerKpi {
   value: string;
   /** A second figure beside the value, such as the kVA. */
   secondary?: string;
+  /** The current the figure draws, such as "6.2 A at 230 V". */
+  current?: string;
   hint: string;
   /** A caveat under the hint, such as "assumes everything on at once". */
   note?: string;
@@ -78,6 +80,11 @@ export function PowerKpiCards({
                 </span>
               )}
             </span>
+            {kpi.current && (
+              <span className="text-sm font-semibold tabular-nums">
+                {kpi.current}
+              </span>
+            )}
             <span className="text-xs text-muted-foreground">{kpi.hint}</span>
             {kpi.note && (
               <span className="text-xs font-medium text-warning">

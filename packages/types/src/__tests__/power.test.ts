@@ -348,4 +348,17 @@ describe("PowerPlanInput", () => {
         .success,
     ).toBe(false);
   });
+
+  it("refuses a day the calendar does not have", () => {
+    const base = { generatorId: null, expectedVersion: 0 };
+    for (const day of ["2027-02-30", "2027-02-29", "2027-04-31"]) {
+      expect(
+        PowerPlanInput.safeParse({ ...base, firstPoweredDay: day }).success,
+      ).toBe(false);
+    }
+    expect(
+      PowerPlanInput.parse({ ...base, firstPoweredDay: "2028-02-29" })
+        .firstPoweredDay,
+    ).toBe("2028-02-29");
+  });
 });

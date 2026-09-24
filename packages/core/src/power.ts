@@ -248,6 +248,9 @@ export function surgeHeadroomWatts(
 
 // --- Electrical ------------------------------------------------------------
 
+/** Mains, which a load runs on unless it says otherwise: 230 V AC. */
+export const MAINS_VOLTS = 230;
+
 export function amps(watts: number, volts: number): number {
   return watts / volts;
 }
