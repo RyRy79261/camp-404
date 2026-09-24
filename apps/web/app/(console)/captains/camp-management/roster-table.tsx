@@ -1,4 +1,4 @@
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, ChevronRight, Loader2 } from "lucide-react";
 import { isParticipationDecision } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
@@ -25,6 +25,7 @@ import {
   StandingBadge,
   ThisYearBadge,
   countryFlag,
+  focusRosterTrigger,
 } from "./roster-presentation";
 
 // The roster as a console table (≥ md), in the AfrikaBurn registrations/accounts
@@ -94,6 +95,12 @@ const DECISION_BUTTONS: {
  * Yes or Maybe first. Each row has its own transition, so only the tapped
  * button spins; a failure is a toast, the way every one-tap list change on a
  * captain screen reports one.
+ *
+ * Keyboard focus survives the tap. The tapped button is only aria-disabled
+ * while it works (a disabled button drops focus to `<body>`), and once the
+ * decision lands it is no longer offered (an accepted member cannot be
+ * accepted again), so focus moves to the row's remaining button, or to the
+ * row's open control when none is left.
  */
 export function ThisYearDecisionButtons({
   row,
@@ -106,7 +113,24 @@ export function ThisYearDecisionButtons({
 }) {
   const [pending, startTransition] = useTransition();
   const [tapped, setTapped] = useState<ThisYearDecision | null>(null);
+  const container = useRef<HTMLSpanElement>(null);
+  const refocus = useRef(false);
   const from = row.thisYear ?? null;
+
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    // Only when the tapped button took focus with it: never steal focus the
+    // captain has since moved on.
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    const next = container.current?.querySelector<HTMLButtonElement>(
+      "button:not(:disabled)",
+    );
+    if (next) next.focus();
+    else focusRosterTrigger(row.id);
+  }, [from, row.id]);
+
   const offered =
     from === null
       ? []
@@ -114,32 +138,39 @@ export function ThisYearDecisionButtons({
   if (offered.length === 0) return null;
 
   return (
-    <span className={cn("flex flex-wrap items-center gap-1.5", className)}>
-      {offered.map((b) => (
-        <Button
-          key={b.to}
-          type="button"
-          size="sm"
-          variant="outline"
-          aria-label={b.name(row.displayName)}
-          disabled={pending}
-          onClick={(e) => {
-            // The row opens the profile; this tap only decides.
-            e.stopPropagation();
-            setTapped(b.to);
-            startTransition(async () => {
-              const result = await onDecide(row, b.to);
-              if (!result.ok) toast.error(result.error);
-            });
-          }}
-          className="h-7 gap-1.5 px-2 text-xs"
-        >
-          {pending && tapped === b.to && (
-            <Loader2 className="animate-spin" aria-hidden />
-          )}
-          {b.label}
-        </Button>
-      ))}
+    <span
+      ref={container}
+      className={cn("flex flex-wrap items-center gap-1.5", className)}
+    >
+      {offered.map((b) => {
+        const working = pending && tapped === b.to;
+        return (
+          <Button
+            key={b.to}
+            type="button"
+            size="sm"
+            variant="outline"
+            aria-label={b.name(row.displayName)}
+            disabled={pending && !working}
+            aria-disabled={working || undefined}
+            onClick={(e) => {
+              // The row opens the profile; this tap only decides.
+              e.stopPropagation();
+              if (pending) return;
+              setTapped(b.to);
+              startTransition(async () => {
+                const result = await onDecide(row, b.to);
+                if (result.ok) refocus.current = true;
+                else toast.error(result.error);
+              });
+            }}
+            className="h-7 gap-1.5 px-2 text-xs aria-disabled:opacity-50"
+          >
+            {working && <Loader2 className="animate-spin" aria-hidden />}
+            {b.label}
+          </Button>
+        );
+      })}
     </span>
   );
 }

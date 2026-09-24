@@ -47,6 +47,21 @@ export function participationAfterIntent(
   }
 }
 
+/**
+ * The answer a status stands for when no answer is on record: a captain's
+ * Accept or Waiting list goes to a member who said Yes. Only fixtures and seeds
+ * need it; the stored row keeps the member's real answer (`intent`).
+ */
+export const INTENT_IMPLIED_BY_STATUS: Readonly<
+  Record<ParticipationStatus, ParticipationIntent>
+> = {
+  applied: "yes",
+  accepted: "yes",
+  waitlisted: "yes",
+  maybe: "maybe",
+  not_attending: "no",
+};
+
 const DECISIONS: Readonly<
   Partial<Record<ParticipationStatus, readonly ParticipationStatus[]>>
 > = {

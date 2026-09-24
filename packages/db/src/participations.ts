@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import {
   isParticipationDecision,
   participationAfterIntent,
@@ -32,8 +32,14 @@ export type ParticipationRow = typeof schema.campParticipations.$inferSelect;
 export interface ParticipationIntentResult {
   /** The member's status after the answer. */
   status: ParticipationStatus;
-  /** False when the answer left the row as it was. */
+  /** False when the answer left the status as it was. */
   changed: boolean;
+  /**
+   * False when the member gave the answer already on record. A Maybe from an
+   * accepted member keeps the place (`changed` false) but is still a new
+   * answer.
+   */
+  answerChanged: boolean;
   /** True when the answer took the member off an accepted or waitlisted place. */
   withdrew: boolean;
 }
@@ -42,9 +48,10 @@ export interface ParticipationIntentResult {
  * Apply a member's Yes / Maybe / No for one year, on the caller's handle.
  *
  * The first answer of the year inserts the row. A later one locks the row,
- * asks participationAfterIntent what it does, and writes only a change, so Yes
- * or Maybe never lowers an accepted or waitlisted place. When a No takes the
- * member off such a place, the withdrawal is audited in the same transaction.
+ * records the answer as given (`intent`), and asks participationAfterIntent
+ * what it does to the status, so Yes or Maybe never lowers an accepted or
+ * waitlisted place. When a No takes the member off such a place, the
+ * withdrawal is audited in the same transaction.
  */
 export async function applyParticipationIntent(
   tx: DbOrTx,
@@ -64,6 +71,7 @@ export async function applyParticipationIntent(
       userId: input.userId,
       cycle: input.cycle,
       status: first!.next,
+      intent: input.intent,
       createdAt: now,
       updatedAt: now,
     })
@@ -76,7 +84,12 @@ export async function applyParticipationIntent(
     // Bare RETURNING: a column list does not type-check on the DbOrTx union.
     .returning();
   if (inserted) {
-    return { status: inserted.status, changed: true, withdrew: false };
+    return {
+      status: inserted.status,
+      changed: true,
+      answerChanged: true,
+      withdrew: false,
+    };
   }
 
   const where = and(
@@ -84,7 +97,10 @@ export async function applyParticipationIntent(
     eq(schema.campParticipations.cycle, input.cycle),
   );
   const [current] = await tx
-    .select({ status: schema.campParticipations.status })
+    .select({
+      status: schema.campParticipations.status,
+      intent: schema.campParticipations.intent,
+    })
     .from(schema.campParticipations)
     .where(where)
     .for("update");
@@ -95,14 +111,24 @@ export async function applyParticipationIntent(
   }
 
   const change = participationAfterIntent(current.status, input.intent);
-  if (!change) {
-    return { status: current.status, changed: false, withdrew: false };
+  const answerChanged = current.intent !== input.intent;
+  if (!change && !answerChanged) {
+    return {
+      status: current.status,
+      changed: false,
+      answerChanged: false,
+      withdrew: false,
+    };
   }
   await tx
     .update(schema.campParticipations)
-    .set({ status: change.next, updatedAt: now })
+    .set({
+      intent: input.intent,
+      ...(change ? { status: change.next } : {}),
+      updatedAt: now,
+    })
     .where(where);
-  if (change.withdrew) {
+  if (change?.withdrew) {
     await writeAuditEvent(tx, {
       actorId: input.userId,
       action: "participation.withdrawn",
@@ -110,7 +136,12 @@ export async function applyParticipationIntent(
       metadata: { cycle: input.cycle, from: current.status },
     });
   }
-  return { status: change.next, changed: true, withdrew: change.withdrew };
+  return {
+    status: change?.next ?? current.status,
+    changed: change !== null,
+    answerChanged,
+    withdrew: change?.withdrew ?? false,
+  };
 }
 
 /** One change-log entry for the member's own attendance form. */
@@ -121,22 +152,60 @@ export interface AttendanceEdit {
 }
 
 /**
+ * The member's finished answer to the questionnaire that asks this question:
+ * its definition key and the id of the question. The form rewrites that answer
+ * too, so the questionnaire's results and My forms never show an answer the
+ * member has since changed.
+ */
+export interface AttendanceResponseRef {
+  definitionKey: string;
+  fieldId: string;
+}
+
+/**
  * Save a member's answer from their own "Coming this year?" form: the
- * participation row and, when there is one, its change-log entry, in one
- * transaction. The caller resolves `cycle` first (see the module note).
+ * participation row, the answer stored with the questionnaire that asked it
+ * (`response`, when given), and the change-log entry, in one transaction. The
+ * change-log entry and the stored answer are written only when the answer
+ * really changed. The caller resolves `cycle` first (see the module note).
  */
 export async function saveParticipationIntent(input: {
   userId: string;
   cycle: number;
   intent: ParticipationIntent;
   edit: AttendanceEdit | null;
+  response?: AttendanceResponseRef | null;
 }): Promise<ParticipationIntentResult> {
   return withTransaction(async (tx) => {
+    const now = new Date();
     const result = await applyParticipationIntent(tx, {
       userId: input.userId,
       cycle: input.cycle,
       intent: input.intent,
+      now,
     });
+    if (!result.answerChanged) return result;
+    if (input.response) {
+      // Only a finished answer in the same year: a half-filled form is the
+      // runner's to finish, and last year's answer stays last year's.
+      await tx
+        .update(schema.questionnaireResponses)
+        .set({
+          responses: sql`${schema.questionnaireResponses.responses} || jsonb_build_object(${input.response.fieldId}::text, ${input.intent}::text)`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(schema.questionnaireResponses.userId, input.userId),
+            eq(
+              schema.questionnaireResponses.definitionKey,
+              input.response.definitionKey,
+            ),
+            eq(schema.questionnaireResponses.cycle, input.cycle),
+            isNotNull(schema.questionnaireResponses.completedAt),
+          ),
+        );
+    }
     if (input.edit && input.edit.changes.length > 0) {
       await recordQuestionnaireEdit(
         {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { PARTICIPATION_STATUSES } from "@camp404/types";
+import { PARTICIPATION_INTENTS, PARTICIPATION_STATUSES } from "@camp404/types";
 import { seedParticipationForE2E } from "@camp404/db/e2e";
 import { isE2ETestMode, usesTestStore } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
@@ -17,6 +17,8 @@ export const runtime = "nodejs";
 const Body = z.object({
   authUserId: z.string().min(1),
   status: z.enum(PARTICIPATION_STATUSES),
+  // The member's own answer; defaults to the one the status stands for.
+  intent: z.enum(PARTICIPATION_INTENTS).optional(),
 });
 
 export async function POST(req: Request) {
@@ -32,7 +34,7 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const { authUserId, status } = body.data;
+  const { authUserId, status, intent } = body.data;
   const user = await findCampUserByAuthId(authUserId);
   if (!user) {
     return NextResponse.json(
@@ -41,9 +43,9 @@ export async function POST(req: Request) {
     );
   }
   if (usesTestStore()) {
-    testStore.seedParticipation({ userId: user.id, status });
+    testStore.seedParticipation({ userId: user.id, status, intent });
   } else {
-    await seedParticipationForE2E(user.id, status);
+    await seedParticipationForE2E(user.id, status, intent);
   }
   return NextResponse.json({ ok: true });
 }

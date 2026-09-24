@@ -239,6 +239,8 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "campParticipations.userId": "camp_member",
   "campParticipations.cycle": "camp_member",
   "campParticipations.status": "team_lead",
+  // The member's own Yes / Maybe / No, apart from the captain's decision.
+  "campParticipations.intent": "captain",
   "campParticipations.decidedByUserId": "captain",
   "campParticipations.decidedAt": "captain",
   "campParticipations.reason": "captain",

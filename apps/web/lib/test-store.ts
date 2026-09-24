@@ -12,6 +12,7 @@ import {
   isParticipationDecision,
   isReviewTransition,
   normalizeInviteCode,
+  INTENT_IMPLIED_BY_STATUS,
   participationAfterIntent,
   type NotificationKind,
   notificationLink,
@@ -1526,26 +1527,38 @@ export const testStore = {
     const key = participationKey(input.userId, input.cycle);
     const row = participations.get(key);
     const change = participationAfterIntent(row?.status ?? null, input.intent);
-    if (!change) {
-      // Only an existing row can answer "no change".
-      return { status: row!.status, changed: false, withdrew: false };
-    }
-    if (row) {
-      row.status = change.next;
-      row.updatedAt = now;
-    } else {
+    if (!row) {
+      // Every answer from no row writes one, so `change` is never null here.
       participations.set(key, {
         userId: input.userId,
         cycle: input.cycle,
-        status: change.next,
+        status: change!.next,
+        intent: input.intent,
         decidedByUserId: null,
         decidedAt: null,
         reason: null,
         createdAt: now,
         updatedAt: now,
       });
+      return {
+        status: change!.next,
+        changed: true,
+        answerChanged: true,
+        withdrew: false,
+      };
     }
-    return { status: change.next, changed: true, withdrew: change.withdrew };
+    const answerChanged = row.intent !== input.intent;
+    if (change || answerChanged) {
+      row.intent = input.intent;
+      if (change) row.status = change.next;
+      row.updatedAt = now;
+    }
+    return {
+      status: row.status,
+      changed: change !== null,
+      answerChanged,
+      withdrew: change?.withdrew ?? false,
+    };
   },
 
   /**
@@ -1585,6 +1598,8 @@ export const testStore = {
   seedParticipation(input: {
     userId: string;
     status: ParticipationStatus;
+    /** The member's own answer; defaults to the one the status stands for. */
+    intent?: ParticipationIntent;
     cycle?: number;
   }): TestParticipation {
     if (!findUserById(input.userId)) {
@@ -1595,6 +1610,7 @@ export const testStore = {
       userId: input.userId,
       cycle: input.cycle ?? currentCycleNumber(),
       status: input.status,
+      intent: input.intent ?? INTENT_IMPLIED_BY_STATUS[input.status],
       decidedByUserId: null,
       decidedAt: null,
       reason: null,

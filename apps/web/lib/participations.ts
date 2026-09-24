@@ -1,6 +1,10 @@
 import "server-only";
 
-import type { ParticipationIntent, ParticipationStatus } from "@camp404/types";
+import {
+  flattenQuestions,
+  type ParticipationIntent,
+  type ParticipationStatus,
+} from "@camp404/types";
 import { currentCycleNumber as dbCurrentCycleNumber } from "@camp404/db/cycles";
 import {
   ATTENDANCE_EDIT_KEY,
@@ -8,9 +12,12 @@ import {
   getParticipation as dbGetParticipation,
   saveParticipationIntent as dbSaveParticipationIntent,
   type AttendanceEdit,
+  type AttendanceResponseRef,
   type ParticipationIntentResult,
   type ParticipationRow,
 } from "@camp404/db/participations";
+import { ATTENDANCE_CHECK_KEY } from "./attendance-check";
+import { getBuilderDefinition } from "./questionnaire-definitions";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -40,6 +47,7 @@ interface ParticipationsBackend {
     cycle: number;
     intent: ParticipationIntent;
     edit: AttendanceEdit | null;
+    response?: AttendanceResponseRef | null;
   }): Promise<ParticipationIntentResult>;
   decideParticipation(input: DecideParticipationInput): Promise<boolean>;
 }
@@ -62,13 +70,14 @@ const testBackend: ParticipationsBackend = {
   },
   // The store has no transactions; the answer and its change-log entry are
   // written one after the other, the same pair production commits together.
+  // It models no builder responses, so there is no stored answer to rewrite.
   async saveParticipationIntent({ userId, cycle, intent, edit }) {
     const result = testStore.applyParticipationIntent({
       userId,
       cycle,
       intent,
     });
-    if (edit && edit.changes.length > 0) {
+    if (result.answerChanged && edit && edit.changes.length > 0) {
       testStore.recordQuestionnaireEdit({
         userId,
         questionnaireKey: ATTENDANCE_EDIT_KEY,
@@ -93,6 +102,8 @@ function backend(): ParticipationsBackend {
 export interface MyParticipation {
   cycle: number;
   status: ParticipationStatus;
+  /** What they last answered, which a captain's decision does not change. */
+  intent: ParticipationIntent;
   /** When they first answered this year. */
   createdAt: Date;
   updatedAt: Date;
@@ -110,6 +121,7 @@ export async function getMyParticipation(
     ? {
         cycle: row.cycle,
         status: row.status,
+        intent: row.intent,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       }
@@ -126,9 +138,27 @@ export async function saveAttendanceAnswer(input: {
   edit: AttendanceEdit | null;
 }): Promise<ParticipationIntentResult> {
   const b = backend();
-  // Resolved before the write opens its transaction (the one-connection rule).
+  // Both resolved before the write opens its transaction (the one-connection
+  // rule).
   const cycle = await b.currentCycleNumber();
-  return b.saveParticipationIntent({ ...input, cycle });
+  const response = await attendanceResponseRef();
+  return b.saveParticipationIntent({ ...input, cycle, response });
+}
+
+/**
+ * Where the camp's "Coming this year?" questionnaire keeps this answer: its
+ * key and the id of its participation_intent question, or null when there is
+ * no such questionnaire (or the test store, which has none).
+ */
+async function attendanceResponseRef(): Promise<AttendanceResponseRef | null> {
+  const definition = await getBuilderDefinition(ATTENDANCE_CHECK_KEY);
+  if (!definition) return null;
+  const question = flattenQuestions(definition).find(
+    (q) => "role" in q && q.role === "participation_intent",
+  );
+  return question
+    ? { definitionKey: ATTENDANCE_CHECK_KEY, fieldId: question.id }
+    : null;
 }
 
 /**

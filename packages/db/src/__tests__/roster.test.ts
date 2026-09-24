@@ -250,9 +250,14 @@ describe("getCampManagementRoster reads this year's attendance", () => {
     // `status` is the participation_status enum, so TypeScript holds these
     // literals to PARTICIPATION_STATUSES.
     await db.insert(schema.campParticipations).values([
-      { userId: coming.id, cycle: 2027, status: "accepted" },
+      { userId: coming.id, cycle: 2027, status: "accepted", intent: "yes" },
       // Answered for 2026 only: nothing for this year.
-      { userId: lastYear.id, cycle: 2026, status: "waitlisted" },
+      {
+        userId: lastYear.id,
+        cycle: 2026,
+        status: "waitlisted",
+        intent: "maybe",
+      },
     ]);
     await foundedAt(db, 2027);
 

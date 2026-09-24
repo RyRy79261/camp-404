@@ -52,12 +52,14 @@ beforeEach(() => {
   vi.mocked(getMyParticipation).mockResolvedValue({
     cycle: 2027,
     status: "maybe",
+    intent: "maybe",
     createdAt: new Date("2026-09-01"),
     updatedAt: new Date("2026-09-01"),
   });
   vi.mocked(saveAttendanceAnswer).mockResolvedValue({
     status: "applied",
     changed: true,
+    answerChanged: true,
     withdrew: false,
   });
 });
@@ -86,6 +88,31 @@ describe("saveFormReplay: attendance", () => {
   });
 
   it("saves an unchanged answer with no change-log entry", async () => {
+    const result = await saveFormReplay(
+      "attendance",
+      { coming: "maybe" },
+      true,
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(saveAttendanceAnswer).toHaveBeenCalledExactlyOnceWith({
+      userId: "camp-1",
+      intent: "maybe",
+      edit: null,
+    });
+  });
+
+  it("diffs against the member's own Maybe, not the captain's Accept", async () => {
+    // Accepted after saying Maybe: saving Maybe again is no change, so no
+    // change-log entry (it used to log a phantom Yes -> Maybe every time).
+    vi.mocked(getMyParticipation).mockResolvedValue({
+      cycle: 2027,
+      status: "accepted",
+      intent: "maybe",
+      createdAt: new Date("2026-09-01"),
+      updatedAt: new Date("2026-09-01"),
+    });
+
     const result = await saveFormReplay(
       "attendance",
       { coming: "maybe" },

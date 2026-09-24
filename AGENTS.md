@@ -332,7 +332,11 @@ Decisions baked into the schema — keep new code consistent with them:
   It is year-scoped, adopted by `setFoundingYear`, and gates nothing yet: a
   member who says No or Maybe keeps full use of the app and every audience.
   The status reads at `team_lead` (a lead sees it on the roster, read-only);
-  a plain member reads only their own.
+  a plain member reads only their own. `intent` keeps the member's own last
+  answer apart from `status`, so an accepted member who said Maybe reads
+  back Maybe; My forms edits that answer, and the same write rewrites the
+  answer stored with the "Coming this year?" questionnaire so its results
+  agree with the roster. Erasure deletes every year's row.
 - **Notifications.** `broadcasts` are composed messages fanned out by a
   worker into per-user `notification_deliveries` (a queue). `push_tokens`
   holds device tokens.

@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
-import type { ParticipationStatus } from "@camp404/types";
+import type { ParticipationIntent, ParticipationStatus } from "@camp404/types";
 
 /**
  * Test-mode helpers. These hit `/api/test/*` endpoints that are only
@@ -126,9 +126,11 @@ export async function seedParticipation(
   request: APIRequestContext,
   authUserId: string,
   status: ParticipationStatus,
+  /** The member's own answer; the server defaults it from the status. */
+  intent?: ParticipationIntent,
 ): Promise<void> {
   const res = await request.post("/api/test/seed-participation", {
-    data: { authUserId, status },
+    data: { authUserId, status, intent },
   });
   if (!res.ok()) throw new Error(`seedParticipation failed: ${res.status()}`);
 }

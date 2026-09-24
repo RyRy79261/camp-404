@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ParticipationStatus } from "@camp404/types";
+import { INTENT_IMPLIED_BY_STATUS } from "@camp404/core";
 
 // The profile's "This year" card: the member's own answer for this year, in
 // their words, and the way to change it once there is one to change.
@@ -45,6 +46,7 @@ async function renderWith(status: ParticipationStatus | null) {
       ? {
           cycle: 2027,
           status,
+          intent: INTENT_IMPLIED_BY_STATUS[status],
           createdAt: new Date("2026-09-01"),
           updatedAt: new Date("2026-09-02"),
         }

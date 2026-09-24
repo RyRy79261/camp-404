@@ -356,6 +356,69 @@ describe("RosterTable — This year", () => {
     expect(container.querySelectorAll(".animate-spin")).toHaveLength(0);
   });
 
+  it("keeps keyboard focus on the row after a decision lands", async () => {
+    const decide = vi.fn<DecideThisYear>(async () => ({ ok: true }));
+    const { rerender } = render(
+      <RosterTable
+        rows={[withYear("applied")]}
+        selectedId={null}
+        onSelect={() => {}}
+        onDecideThisYear={decide}
+      />,
+    );
+    const accept = screen.getByRole("button", {
+      name: "Accept Nova Reyes for this year",
+    });
+    accept.focus();
+    fireEvent.click(accept);
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+    // Working, the tapped button keeps focus (aria-disabled, not disabled).
+    expect(document.activeElement).toBe(accept);
+    await act(async () => {});
+
+    // The refresh brings the row back accepted: Accept is no longer offered,
+    // so focus moves to the row's remaining button, not to <body>.
+    rerender(
+      <RosterTable
+        rows={[withYear("accepted")]}
+        selectedId={null}
+        onSelect={() => {}}
+        onDecideThisYear={decide}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Accept Nova Reyes for this year" }),
+    ).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", {
+        name: "Put Nova Reyes on the waiting list",
+      }),
+    );
+  });
+
+  it("leaves focus on the tapped button when the decision fails", async () => {
+    vi.mocked(toast.error).mockClear();
+    const decide = vi.fn<DecideThisYear>(async () => ({
+      ok: false,
+      error: "Nova Reyes's answer changed.",
+    }));
+    render(
+      <RosterTable
+        rows={[withYear("maybe")]}
+        selectedId={null}
+        onSelect={() => {}}
+        onDecideThisYear={decide}
+      />,
+    );
+    const waitlist = screen.getByRole("button", {
+      name: "Put Nova Reyes on the waiting list",
+    });
+    waitlist.focus();
+    fireEvent.click(waitlist);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(document.activeElement).toBe(waitlist);
+  });
+
   it("puts the badge and the buttons on the phone card, outside its open button", () => {
     render(
       <RosterList

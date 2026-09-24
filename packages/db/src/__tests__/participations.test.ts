@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import type { AuditAction } from "@camp404/core";
+import { INTENT_IMPLIED_BY_STATUS, type AuditAction } from "@camp404/core";
 import {
   PARTICIPATION_INTENTS,
   PARTICIPATION_STATUSES,
@@ -57,8 +57,11 @@ async function seed(
   userId: string,
   status: ParticipationStatus,
   cycle = 2027,
+  intent: ParticipationIntent = INTENT_IMPLIED_BY_STATUS[status],
 ): Promise<void> {
-  await db.insert(schema.campParticipations).values({ userId, cycle, status });
+  await db
+    .insert(schema.campParticipations)
+    .values({ userId, cycle, status, intent });
 }
 
 async function statusOf(
@@ -121,6 +124,7 @@ describe("applyParticipationIntent", () => {
       expect(result).toEqual({
         status: first[intent],
         changed: true,
+        answerChanged: true,
         withdrew: false,
       });
       expect(await statusOf(db, member.id)).toBe(first[intent]);
@@ -143,31 +147,67 @@ describe("applyParticipationIntent", () => {
     }
   });
 
-  it("leaves an accepted or waitlisted place alone on Yes or Maybe, with no audit row", async () => {
+  it("leaves an accepted or waitlisted place alone on a repeated Yes, writing nothing", async () => {
     const db = h.db();
     for (const held of ["accepted", "waitlisted"] as const) {
-      for (const intent of ["yes", "maybe"] as const) {
-        const member = await makeUser(db);
-        await seed(db, member.id, held);
-        const [before] = await db
-          .select()
-          .from(schema.campParticipations)
-          .where(eq(schema.campParticipations.userId, member.id));
+      const member = await makeUser(db);
+      await seed(db, member.id, held, 2027, "yes");
+      const [before] = await db
+        .select()
+        .from(schema.campParticipations)
+        .where(eq(schema.campParticipations.userId, member.id));
 
-        expect(await answer(member.id, intent)).toEqual({
-          status: held,
-          changed: false,
-          withdrew: false,
-        });
-        const [after] = await db
-          .select()
-          .from(schema.campParticipations)
-          .where(eq(schema.campParticipations.userId, member.id));
-        // Not even updated_at moved: nothing was written.
-        expect(after).toEqual(before);
-      }
+      expect(await answer(member.id, "yes")).toEqual({
+        status: held,
+        changed: false,
+        answerChanged: false,
+        withdrew: false,
+      });
+      const [after] = await db
+        .select()
+        .from(schema.campParticipations)
+        .where(eq(schema.campParticipations.userId, member.id));
+      // Not even updated_at moved: nothing was written.
+      expect(after).toEqual(before);
     }
     expect(await db.select().from(schema.auditLog)).toHaveLength(0);
+  });
+
+  it("keeps an accepted or waitlisted place on Maybe, but records the Maybe", async () => {
+    const db = h.db();
+    for (const held of ["accepted", "waitlisted"] as const) {
+      const member = await makeUser(db);
+      await seed(db, member.id, held, 2027, "yes");
+
+      expect(await answer(member.id, "maybe")).toEqual({
+        status: held,
+        changed: false,
+        answerChanged: true,
+        withdrew: false,
+      });
+      const [row] = await db
+        .select()
+        .from(schema.campParticipations)
+        .where(eq(schema.campParticipations.userId, member.id));
+      expect(row).toMatchObject({ status: held, intent: "maybe" });
+    }
+    expect(await db.select().from(schema.auditLog)).toHaveLength(0);
+  });
+
+  it("stores every answer as given, whatever it does to the status", async () => {
+    const db = h.db();
+    for (const from of PARTICIPATION_STATUSES) {
+      for (const intent of PARTICIPATION_INTENTS) {
+        const member = await makeUser(db);
+        await seed(db, member.id, from);
+        await answer(member.id, intent);
+        const [row] = await db
+          .select({ intent: schema.campParticipations.intent })
+          .from(schema.campParticipations)
+          .where(eq(schema.campParticipations.userId, member.id));
+        expect(row, `${from} + ${intent}`).toEqual({ intent });
+      }
+    }
   });
 
   it("writes exactly one withdrawal audit row when No takes an accepted member off", async () => {
@@ -178,10 +218,14 @@ describe("applyParticipationIntent", () => {
     expect(await answer(member.id, "no")).toEqual({
       status: "not_attending",
       changed: true,
+      answerChanged: true,
       withdrew: true,
     });
     // Answering No again changes nothing and audits nothing more.
-    expect(await answer(member.id, "no")).toMatchObject({ changed: false });
+    expect(await answer(member.id, "no")).toMatchObject({
+      changed: false,
+      answerChanged: false,
+    });
 
     const rows = await auditRows(db, WITHDRAWN);
     expect(rows).toHaveLength(1);
@@ -241,7 +285,12 @@ describe("saveParticipationIntent", () => {
       },
     });
 
-    expect(result).toEqual({ status: "maybe", changed: true, withdrew: false });
+    expect(result).toEqual({
+      status: "maybe",
+      changed: true,
+      answerChanged: true,
+      withdrew: false,
+    });
     const edits = await db.select().from(schema.questionnaireEdits);
     expect(edits).toHaveLength(1);
     expect(edits[0]).toMatchObject({
@@ -249,6 +298,91 @@ describe("saveParticipationIntent", () => {
       questionnaireKey: ATTENDANCE_EDIT_KEY,
       version: "1",
     });
+  });
+
+  it("logs an accepted member's Maybe once, however often it is saved", async () => {
+    // The phantom change: the form showed the captain's Accept as "Yes", so
+    // every save of Maybe logged Yes -> Maybe while the row never moved.
+    const db = h.db();
+    const member = await makeUser(db);
+    await seed(db, member.id, "accepted", 2027, "yes");
+    const edit = {
+      version: "1",
+      editedByUserId: member.id,
+      changes: [
+        { fieldId: "coming", label: "Coming?", from: "Yes", to: "Maybe" },
+      ],
+    };
+
+    for (let i = 0; i < 2; i++) {
+      await saveParticipationIntent({
+        userId: member.id,
+        cycle: 2027,
+        intent: "maybe",
+        edit,
+      });
+    }
+
+    expect(await db.select().from(schema.questionnaireEdits)).toHaveLength(1);
+    expect(await statusOf(db, member.id)).toBe("accepted");
+  });
+
+  it("rewrites only this year's finished answer to the questionnaire named", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    await seed(db, member.id, "maybe");
+    const base = {
+      userId: member.id,
+      definitionVersion: "1",
+      completedAt: new Date(),
+    };
+    await db.insert(schema.questionnaireResponses).values([
+      {
+        ...base,
+        definitionKey: "coming-this-year",
+        cycle: 2027,
+        responses: { coming: "maybe", note: "kids" },
+      },
+      // Last year's answer stays last year's.
+      {
+        ...base,
+        definitionKey: "coming-this-year",
+        cycle: 2026,
+        responses: { coming: "no" },
+      },
+      // Another questionnaire is not this one.
+      {
+        ...base,
+        definitionKey: "feedback",
+        cycle: 2027,
+        responses: { coming: "maybe" },
+      },
+    ]);
+
+    await saveParticipationIntent({
+      userId: member.id,
+      cycle: 2027,
+      intent: "yes",
+      edit: null,
+      response: { definitionKey: "coming-this-year", fieldId: "coming" },
+    });
+
+    const rows = await db
+      .select({
+        key: schema.questionnaireResponses.definitionKey,
+        cycle: schema.questionnaireResponses.cycle,
+        responses: schema.questionnaireResponses.responses,
+      })
+      .from(schema.questionnaireResponses)
+      .where(eq(schema.questionnaireResponses.userId, member.id));
+    const byKey = (key: string, cycle: number) =>
+      rows.find((r) => r.key === key && r.cycle === cycle)?.responses;
+    expect(byKey("coming-this-year", 2027)).toEqual({
+      coming: "yes",
+      note: "kids",
+    });
+    expect(byKey("coming-this-year", 2026)).toEqual({ coming: "no" });
+    expect(byKey("feedback", 2027)).toEqual({ coming: "maybe" });
   });
 
   it("writes no change-log entry when there is none to write", async () => {

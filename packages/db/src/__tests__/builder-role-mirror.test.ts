@@ -5,6 +5,7 @@ import type { ParticipationStatus } from "@camp404/types";
 import { useTestDb } from "./_harness";
 import { addTarget, makeActivation, makeUser } from "./_factories";
 import { completeBuilderResponse } from "../activations";
+import { saveParticipationIntent } from "../participations";
 import * as schema from "../schema";
 
 // A camp-authored Dietary or Transport questionnaire writes the facts the app
@@ -241,6 +242,7 @@ describe("completeBuilderResponse with a Coming this year answer", () => {
       userId: member.id,
       cycle: 2027,
       status: "accepted" satisfies ParticipationStatus,
+      intent: "yes",
     });
 
     await answer(member.id, act.id, "no");
@@ -260,7 +262,7 @@ describe("completeBuilderResponse with a Coming this year answer", () => {
     });
   });
 
-  it("leaves an accepted place alone on Maybe", async () => {
+  it("leaves an accepted place alone on Maybe, and records the Maybe", async () => {
     const db = h.db();
     const member = await makeUser(db);
     const act = await sendTo(db, member.id);
@@ -268,12 +270,48 @@ describe("completeBuilderResponse with a Coming this year answer", () => {
       userId: member.id,
       cycle: 2027,
       status: "accepted",
+      intent: "yes",
     });
-    const before = await db.select().from(schema.campParticipations);
 
     await answer(member.id, act.id, "maybe");
 
-    expect(await db.select().from(schema.campParticipations)).toEqual(before);
+    const rows = await db
+      .select({
+        status: schema.campParticipations.status,
+        intent: schema.campParticipations.intent,
+      })
+      .from(schema.campParticipations);
+    expect(rows).toEqual([{ status: "accepted", intent: "maybe" }]);
     expect(await db.select().from(schema.auditLog)).toEqual([]);
+  });
+  it("keeps the stored answer in step when the member changes it from My forms", async () => {
+    // The Results page and My forms read questionnaire_responses; the roster
+    // and the overview read camp_participations. Both must say the same thing.
+    const db = h.db();
+    const member = await makeUser(db);
+    const act = await sendTo(db, member.id);
+    await answer(member.id, act.id, "maybe");
+
+    await saveParticipationIntent({
+      userId: member.id,
+      cycle: 2027,
+      intent: "yes",
+      edit: null,
+      response: { definitionKey: "coming-this-year", fieldId: "coming" },
+    });
+
+    const [stored] = await db
+      .select({ responses: schema.questionnaireResponses.responses })
+      .from(schema.questionnaireResponses)
+      .where(eq(schema.questionnaireResponses.userId, member.id));
+    expect(stored).toEqual({ responses: { coming: "yes" } });
+    const [row] = await db
+      .select({
+        status: schema.campParticipations.status,
+        intent: schema.campParticipations.intent,
+      })
+      .from(schema.campParticipations)
+      .where(eq(schema.campParticipations.userId, member.id));
+    expect(row).toEqual({ status: "applied", intent: "yes" });
   });
 });

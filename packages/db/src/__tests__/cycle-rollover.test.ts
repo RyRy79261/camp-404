@@ -1174,11 +1174,16 @@ describe("setFoundingYear adopts the year-scoped roster facts", () => {
     // Answered before the year was named: the column default, the sentinel.
     await db
       .insert(schema.campParticipations)
-      .values({ userId: early.id, status: "applied" });
+      .values({ userId: early.id, status: "applied", intent: "yes" });
     // A row already under a real year is not the sentinel's and stays put.
     await db
       .insert(schema.campParticipations)
-      .values({ userId: other.id, cycle: 2025, status: "accepted" });
+      .values({
+        userId: other.id,
+        cycle: 2025,
+        status: "accepted",
+        intent: "yes",
+      });
 
     const res = await setFoundingYear({ year: 2026, actorUserId: null });
     expect(res.ok).toBe(true);

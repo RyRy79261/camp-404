@@ -20,6 +20,7 @@ import {
 import { sql } from "drizzle-orm";
 import {
   NOTIFICATION_KINDS,
+  PARTICIPATION_INTENTS,
   PARTICIPATION_STATUSES,
   type BuilderQuestionnaire,
   type Questionnaire,
@@ -193,6 +194,12 @@ export const notificationKindEnum = pgEnum(
 export const participationStatusEnum = pgEnum(
   "participation_status",
   PARTICIPATION_STATUSES,
+);
+
+// The member's own Yes / Maybe / No for one burn year (PARTICIPATION_INTENTS).
+export const participationIntentEnum = pgEnum(
+  "participation_intent",
+  PARTICIPATION_INTENTS,
 );
 
 export const broadcastScopeEnum = pgEnum("broadcast_scope", [
@@ -801,6 +808,10 @@ export const campParticipations = pgTable(
     // is adopted into that year by setFoundingYear().
     cycle: integer("cycle").notNull().default(1),
     status: participationStatusEnum("status").notNull(),
+    // What the member last answered, kept apart from `status`: a captain's
+    // Accept reads back to the member as the Maybe they actually gave, and a
+    // Maybe that leaves an accepted place alone is still recorded.
+    intent: participationIntentEnum("intent").notNull(),
     // The captain who last accepted or waitlisted this member, and when. Null
     // until a captain decides.
     decidedByUserId: uuid("decided_by_user_id").references(() => users.id, {

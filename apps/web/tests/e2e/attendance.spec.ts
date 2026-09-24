@@ -124,6 +124,13 @@ test.describe("attendance: the member's own answer", () => {
     await expect(
       page.getByText("You have a place at camp this year.", { exact: true }),
     ).toBeVisible();
+
+    // The form reads back the Maybe they gave, not the captain's Accept.
+    await page.goto("/tools/forms/attendance");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Coming this year?" }),
+    ).toBeVisible();
+    await expect(page.getByRole("radio", { name: "Maybe" })).toBeChecked();
   });
 
   test("a member who hasn't answered is told so, with nothing to change", async ({
@@ -212,15 +219,23 @@ test.describe("attendance: the captains' roster and overview", () => {
       page.getByRole("button", { name: "Open Ada Yes's profile" }),
     ).toHaveCount(0);
 
-    // Everyone again, and Ada gets a place.
+    // Everyone again, and Ada gets a place, from the keyboard.
     await filter.selectOption({ label: "Any" });
-    await page
+    const accept = page
       .getByRole("button", { name: "Accept Ada Yes for this year" })
-      .filter({ visible: true })
-      .click();
+      .filter({ visible: true });
+    await accept.focus();
+    await page.keyboard.press("Enter");
     await expect(
       rosterRow(page, "Ada Yes").getByText("Accepted", { exact: true }),
     ).toBeVisible();
+    // The Accept button is gone; focus moved to the row's other button
+    // instead of falling to <body>.
+    await expect(
+      page
+        .getByRole("button", { name: "Put Ada Yes on the waiting list" })
+        .filter({ visible: true }),
+    ).toBeFocused();
     // Accepted is a place: no Accept left, the waiting list still offered.
     await expect(
       page

@@ -23,6 +23,7 @@ import {
   validateBurnerProfileReplay,
   type ReplayValidation,
 } from "./burner-profile-replay";
+import { ATTENDANCE_CHECK_KEY } from "./attendance-check";
 import { getMyParticipation, saveAttendanceAnswer } from "./participations";
 import { QUESTIONNAIRE_VERSION } from "./questionnaire";
 import {
@@ -155,16 +156,6 @@ const BURNER_PROFILE: ReplayableFormDef = {
   },
 };
 
-// How a stored status reads back as the member's own answer. A captain's
-// Accept or Waiting list is still a Yes.
-const ANSWER_FOR_STATUS: Record<ParticipationStatus, ParticipationIntent> = {
-  applied: "yes",
-  accepted: "yes",
-  waitlisted: "yes",
-  maybe: "maybe",
-  not_attending: "no",
-};
-
 // What a No would cost a member who holds a place, said before they choose.
 const PLACE_NOTICE: Partial<Record<ParticipationStatus, string>> = {
   accepted:
@@ -179,9 +170,12 @@ function isIntent(value: unknown): value is ParticipationIntent {
 
 // The member's Yes / Maybe / No for the camp's current year. The builder
 // questionnaire that first asks it is read-only once submitted; this form is
-// how a Maybe changes their mind later. It writes by the same rule as that
-// submit: Yes and Maybe never lower an accepted or waitlisted place, and No
-// always wins (audited when it gives a place up).
+// how a Maybe changes their mind later, and it rewrites the answer stored with
+// that questionnaire too, so My forms lists it once (listAnsweredQuestionnaires
+// leaves it out) and its results agree with the roster. It writes by the same
+// rule as that submit: Yes and Maybe never lower an accepted or waitlisted
+// place, and No always wins (audited when it gives a place up). The form reads
+// back what the member answered, not the captain's decision.
 const ATTENDANCE: ReplayableFormDef = {
   key: "attendance",
   title: "Coming this year?",
@@ -195,7 +189,7 @@ const ATTENDANCE: ReplayableFormDef = {
     if (!row) return null;
     const notice = PLACE_NOTICE[row.status];
     return {
-      responses: { coming: ANSWER_FOR_STATUS[row.status] },
+      responses: { coming: row.intent },
       completedAt: row.createdAt,
       updatedAt: row.updatedAt,
       ...(notice ? { notice } : {}),
@@ -275,13 +269,18 @@ export async function listCompletedForms(
 
 export type { CompletedQuestionnaireAnswers };
 
-/** Every builder questionnaire this member has finished, newest first. */
+/**
+ * Every builder questionnaire this member has finished, newest first, except
+ * "Coming this year?": its answer is the editable attendance form above, and a
+ * second, read-only copy of it would only repeat it.
+ */
 export async function listAnsweredQuestionnaires(
   userId: string,
 ): Promise<CompletedQuestionnaireAnswers[]> {
   // The E2E store models no builder responses.
   if (usesTestStore()) return [];
-  return listCompletedAnswersDb(userId);
+  const answered = await listCompletedAnswersDb(userId);
+  return answered.filter((a) => a.definitionKey !== ATTENDANCE_CHECK_KEY);
 }
 
 /** One finished questionnaire in one year, or null. */

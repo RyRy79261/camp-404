@@ -64,8 +64,16 @@ describe("testStore.applyParticipationIntent", () => {
         cycle: 2027,
         intent: "maybe",
       }),
-    ).toEqual({ status: "maybe", changed: true, withdrew: false });
-    expect(testStore.getParticipation(member.id, 2027)?.status).toBe("maybe");
+    ).toEqual({
+      status: "maybe",
+      changed: true,
+      answerChanged: true,
+      withdrew: false,
+    });
+    expect(testStore.getParticipation(member.id, 2027)).toMatchObject({
+      status: "maybe",
+      intent: "maybe",
+    });
     expect(testStore.getParticipation(member.id, 2026)).toBeNull();
   });
 
@@ -85,9 +93,42 @@ describe("testStore.applyParticipationIntent", () => {
         expect(result.withdrew, `${from} + ${intent}`).toBe(
           intent === "no" && (from === "accepted" || from === "waitlisted"),
         );
-        expect(testStore.getParticipation(member.id, 2027)?.status).toBe(to);
+        expect(testStore.getParticipation(member.id, 2027)).toMatchObject({
+          status: to,
+          intent,
+        });
       }
     }
+  });
+
+  it("keeps an accepted place on Maybe but records the Maybe, as the real write does", () => {
+    const member = makeUser();
+    testStore.seedParticipation({ userId: member.id, status: "accepted" });
+
+    expect(
+      testStore.applyParticipationIntent({
+        userId: member.id,
+        cycle: 2027,
+        intent: "maybe",
+      }),
+    ).toEqual({
+      status: "accepted",
+      changed: false,
+      answerChanged: true,
+      withdrew: false,
+    });
+    // The same Maybe again is no new answer.
+    expect(
+      testStore.applyParticipationIntent({
+        userId: member.id,
+        cycle: 2027,
+        intent: "maybe",
+      }),
+    ).toMatchObject({ changed: false, answerChanged: false });
+    expect(testStore.getParticipation(member.id, 2027)).toMatchObject({
+      status: "accepted",
+      intent: "maybe",
+    });
   });
 
   it("refuses a member who does not exist, as the foreign key would", () => {

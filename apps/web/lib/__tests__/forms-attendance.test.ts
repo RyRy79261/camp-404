@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ParticipationStatus } from "@camp404/types";
+import { INTENT_IMPLIED_BY_STATUS } from "@camp404/core";
+import type { ParticipationIntent, ParticipationStatus } from "@camp404/types";
 
-// The "Coming this year?" entry on My forms: it reads the member's row for
-// this year back as their Yes / Maybe / No, and shows no card until they have
-// answered.
+// The "Coming this year?" entry on My forms: it reads back the Yes / Maybe /
+// No the member gave this year (not the captain's decision), shows no card
+// until they have answered, and is the only place My forms shows that answer.
 
 vi.mock("@/lib/users", () => ({
   getBurnerProfile: vi.fn(async () => null),
@@ -28,15 +29,30 @@ vi.mock("@camp404/db/questionnaire-responses", () => ({
 }));
 
 import { attendanceQuestionnaire } from "@camp404/types";
-import { getReplayableForm, listCompletedForms } from "@/lib/forms";
+import {
+  getReplayableForm,
+  listAnsweredQuestionnaires,
+  listCompletedForms,
+} from "@/lib/forms";
+import { listCompletedQuestionnaireAnswers } from "@camp404/db/questionnaire-responses";
+import { ATTENDANCE_CHECK_KEY } from "@/lib/attendance-check";
 import { getMyParticipation, saveAttendanceAnswer } from "@/lib/participations";
 import { getQuestionnaireForPicker } from "@/lib/questionnaire-config";
 
 const CREATED = new Date("2026-09-01T10:00:00Z");
 const UPDATED = new Date("2026-09-05T10:00:00Z");
 
-function row(status: ParticipationStatus) {
-  return { cycle: 2027, status, createdAt: CREATED, updatedAt: UPDATED };
+function row(
+  status: ParticipationStatus,
+  intent: ParticipationIntent = INTENT_IMPLIED_BY_STATUS[status],
+) {
+  return {
+    cycle: 2027,
+    status,
+    intent,
+    createdAt: CREATED,
+    updatedAt: UPDATED,
+  };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -55,7 +71,7 @@ describe("attendance form", () => {
     expect(getQuestionnaireForPicker).not.toHaveBeenCalled();
   });
 
-  it.each<[ParticipationStatus, string, string | undefined]>([
+  it.each<[ParticipationStatus, ParticipationIntent, string | undefined]>([
     ["applied", "yes", undefined],
     [
       "accepted",
@@ -63,26 +79,34 @@ describe("attendance form", () => {
       "You have a place this year. Choosing No gives it up; Maybe keeps it.",
     ],
     [
+      "accepted",
+      "maybe",
+      "You have a place this year. Choosing No gives it up; Maybe keeps it.",
+    ],
+    [
       "waitlisted",
-      "yes",
+      "maybe",
       "You're on the waiting list. Choosing No takes you off it; Maybe keeps you on it.",
     ],
     ["maybe", "maybe", undefined],
     ["not_attending", "no", undefined],
-  ])("reads %s back as %s", async (status, answer, notice) => {
-    vi.mocked(getMyParticipation).mockResolvedValue(row(status));
-    const form = await getReplayableForm("attendance");
+  ])(
+    "reads %s, answered %s, back as that answer",
+    async (status, answer, notice) => {
+      vi.mocked(getMyParticipation).mockResolvedValue(row(status, answer));
+      const form = await getReplayableForm("attendance");
 
-    const state = await form!.load("u1");
+      const state = await form!.load("u1");
 
-    expect(state).toEqual({
-      responses: { coming: answer },
-      completedAt: CREATED,
-      updatedAt: UPDATED,
-      ...(notice ? { notice } : {}),
-    });
-    expect(getMyParticipation).toHaveBeenCalledWith("u1");
-  });
+      expect(state).toEqual({
+        responses: { coming: answer },
+        completedAt: CREATED,
+        updatedAt: UPDATED,
+        ...(notice ? { notice } : {}),
+      });
+      expect(getMyParticipation).toHaveBeenCalledWith("u1");
+    },
+  );
 
   it("shows a card once the member has answered this year, and none before", async () => {
     vi.mocked(getMyParticipation).mockResolvedValue(null);
@@ -114,5 +138,18 @@ describe("attendance form", () => {
       intent: "no",
       edit: { version: "1", editedByUserId: "u1", changes },
     });
+  });
+
+  it("leaves the attendance questionnaire out of the read-only answers", async () => {
+    // Its answer is the editable form above; a second, fixed copy would go
+    // stale the moment the member changed it there.
+    vi.mocked(listCompletedQuestionnaireAnswers).mockResolvedValue([
+      { definitionKey: ATTENDANCE_CHECK_KEY },
+      { definitionKey: "feedback" },
+    ] as never);
+
+    const answered = await listAnsweredQuestionnaires("u1");
+
+    expect(answered.map((a) => a.definitionKey)).toEqual(["feedback"]);
   });
 });
