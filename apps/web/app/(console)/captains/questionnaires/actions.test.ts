@@ -28,12 +28,14 @@ vi.mock("@camp404/db/questionnaire-lifecycle", () => ({
 }));
 vi.mock("@/lib/questionnaire-definitions", () => ({
   createAttendanceCheck: vi.fn(),
+  getBuilderDefinition: vi.fn(),
   createDraft: vi.fn(),
   deleteDraft: vi.fn(),
   duplicateDefinition: vi.fn(),
   updateDefinition: vi.fn(),
 }));
 
+import { attendanceQuestionnaire } from "@camp404/types";
 import { canSendToAudience } from "@camp404/core";
 import { computeAudience, type AudienceData } from "@camp404/db/audience";
 import {
@@ -55,6 +57,7 @@ import { getCampManagementRoster } from "@/lib/roster";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import {
   createAttendanceCheck,
+  getBuilderDefinition,
   createDraft,
   deleteDraft,
   duplicateDefinition,
@@ -179,6 +182,23 @@ describe("createAttendanceCheckAction", () => {
       stored = "published";
       return { ok: true, version: "coming-this-year-v1", change: "initial" };
     });
+    vi.mocked(getBuilderDefinition).mockResolvedValue(
+      attendanceQuestionnaire(),
+    );
+  });
+
+  it("refuses to publish a check whose Yes / Maybe / No question was deleted", async () => {
+    asViewer("captain");
+    const edited = attendanceQuestionnaire();
+    for (const page of edited.pages) {
+      if (page.kind === "questions") page.questions = [];
+    }
+    vi.mocked(getBuilderDefinition).mockResolvedValue(edited);
+    const result = await createAttendanceCheckAction();
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.error).toMatch(/lost its Yes \/ Maybe \/ No question/);
+    expect(publishDefinition).not.toHaveBeenCalled();
   });
 
   it("refuses a team lead, who may author but not publish or send", async () => {

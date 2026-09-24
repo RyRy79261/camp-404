@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { Questionnaire, Team } from "@camp404/types";
+import { Questionnaire, Team, questionsWithRole } from "@camp404/types";
 import type { ViewerRank } from "@camp404/types";
 import {
   CAMP_TIME_ZONE,
@@ -35,6 +35,7 @@ import { getCampManagementRoster } from "@/lib/roster";
 import {
   createAttendanceCheck,
   createDraft,
+  getBuilderDefinition,
   deleteDraft,
   duplicateDefinition,
   updateDefinition,
@@ -99,6 +100,8 @@ async function gateCaptain(): Promise<CaptainGate> {
 
 /** The refusal a lead sees when the audience is wider than the team they lead. */
 const AUDIENCE_REFUSED = "You can only send to a team you lead.";
+const ATTENDANCE_QUESTION_MISSING =
+  'The "Coming this year?" questionnaire has lost its Yes / Maybe / No question. Open it in the builder and add a question marked "Coming this year", then try again.';
 
 /**
  * The audience half of the send gate: may this actor address this audience?
@@ -286,6 +289,15 @@ export async function createAttendanceCheckAction(): Promise<QResultWithKey> {
   const key = await createAttendanceCheck(gate.campUser.id);
   const meta = await getDefinitionMetaRow(key);
   if (!meta) return { ok: false, error: "Questionnaire not found." };
+  // A captain may have edited it in the builder. Without its Yes / Maybe / No
+  // question it would publish and send, and set nobody's place this year.
+  const definition = await getBuilderDefinition(key);
+  if (
+    !definition ||
+    questionsWithRole(definition, "participation_intent").length === 0
+  ) {
+    return { ok: false, error: ATTENDANCE_QUESTION_MISSING };
+  }
   // A draft is published here; so is one a captain unpublished, since this
   // button's purpose is to send it.
   if (meta.status !== "published") {
