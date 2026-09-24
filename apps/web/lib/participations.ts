@@ -89,14 +89,31 @@ function backend(): ParticipationsBackend {
   return usesTestStore() ? testBackend : realBackend;
 }
 
+/** What a member may read of their own row. */
+export interface MyParticipation {
+  cycle: number;
+  status: ParticipationStatus;
+  /** When they first answered this year. */
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 /** The member's own answer for the camp's current year, or null. */
 export async function getMyParticipation(
   userId: string,
-): Promise<{ cycle: number; status: ParticipationStatus } | null> {
+): Promise<MyParticipation | null> {
   const b = backend();
   const cycle = await b.currentCycleNumber();
   const row = await b.getParticipation(userId, cycle);
-  return row ? { cycle: row.cycle, status: row.status } : null;
+  // Only the member's own fields: never who decided or why.
+  return row
+    ? {
+        cycle: row.cycle,
+        status: row.status,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      }
+    : null;
 }
 
 /**

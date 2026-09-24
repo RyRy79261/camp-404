@@ -41,7 +41,7 @@ export default async function FormsListPage() {
       <PageHeading
         eyebrow="Tools / My forms"
         title="My forms"
-        description="Questionnaires you've completed. Your burner profile can be updated any time, and we keep a log of what you change. Other questionnaires open read-only: their answers are fixed once you submit."
+        description="Questionnaires you've completed. Your burner profile and whether you're coming this year can be updated any time, and we keep a log of what you change. Other questionnaires open read-only: their answers are fixed once you submit."
       />
 
       {forms.length === 0 && answered.length === 0 ? (

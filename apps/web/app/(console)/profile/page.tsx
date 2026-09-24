@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ClipboardList, LogOut, Pencil } from "lucide-react";
+import { CalendarCheck, ClipboardList, LogOut, Pencil } from "lucide-react";
+import type { ParticipationStatus } from "@camp404/types";
 import {
   Avatar,
   AvatarFallback,
@@ -17,6 +18,7 @@ import {
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { rankLabel } from "@/lib/camp-roster";
 import { requireMemberPage } from "@/lib/member-gate";
+import { getMyParticipation } from "@/lib/participations";
 import { getMemberRefCode } from "@/lib/payments";
 import { isTeamLead } from "@/lib/users";
 import { initialsFrom } from "@/lib/initials";
@@ -31,6 +33,16 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Your profile — Camp 404" };
 
+// The member's own answer for this year, in their words. Who decided it and
+// why are the captains' to read, never shown here.
+const THIS_YEAR: Record<ParticipationStatus, string> = {
+  applied: "You said you're coming. The captains haven't confirmed places yet.",
+  maybe: "You said maybe.",
+  accepted: "You have a place at camp this year.",
+  waitlisted: "You're on the waiting list.",
+  not_attending: "You said you're not coming this year.",
+};
+
 // The member's own profile, laid out like the AfrikaBurn profile and account
 // pages: the heading and section pills, then who you are and what you pay with
 // in the main column, and help and sign-out in the side column.
@@ -40,9 +52,10 @@ export default async function ProfilePage() {
   const name = campUser.displayName ?? authUser.primaryEmail ?? "Burner";
   const initials = initialsFrom(campUser.displayName ?? authUser.primaryEmail);
   // The same pill the roster shows: a team lead reads "Team Lead", not "Member".
-  const [lead, refCode] = await Promise.all([
+  const [lead, refCode, participation] = await Promise.all([
     isTeamLead(campUser.id),
     getMemberRefCode(campUser.id),
+    getMyParticipation(campUser.id),
   ]);
   const rank = rankLabel(campUser.rank, lead);
   // Read on the server; only the repo name crosses to the browser — never the
@@ -102,6 +115,31 @@ export default async function ProfilePage() {
             </Card>
 
             {refCode && <PaymentReference code={refCode} />}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CalendarCheck className="h-4 w-4 text-accent" aria-hidden />
+                  This year
+                </CardTitle>
+                <CardDescription>
+                  {participation
+                    ? THIS_YEAR[participation.status]
+                    : "You haven't told us yet."}
+                </CardDescription>
+              </CardHeader>
+              {/* Changing an answer needs one to change: until then the
+                  captains' "Coming this year?" questionnaire asks. */}
+              {participation && (
+                <CardContent>
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href="/tools/forms/attendance">
+                      Change your answer
+                    </Link>
+                  </Button>
+                </CardContent>
+              )}
+            </Card>
 
             <Card>
               <CardHeader>

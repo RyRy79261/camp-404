@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
 import { buildQuestionnaire } from "@/lib/questionnaire";
+import { validateBurnerProfileReplay } from "@/lib/burner-profile-replay";
 
 // Phase 3 archive invariant at the ACTION level: saveFormReplay must validate +
 // diff a re-submit against the FULL team catalogue (getQuestionnaireForResponses,
@@ -89,7 +90,11 @@ describe("saveFormReplay — archive invariant", () => {
 
   it("refuses a pending applicant before reading or saving anything", async () => {
     vi.mocked(isApproved).mockReturnValue(false);
-    const result = await saveFormReplay("burner_profile", { ...required }, true);
+    const result = await saveFormReplay(
+      "burner_profile",
+      { ...required },
+      true,
+    );
     expect(result).toEqual({
       ok: false,
       errors: { _root: "Your account is still awaiting approval." },
@@ -103,6 +108,7 @@ describe("saveFormReplay — archive invariant", () => {
       key: "burner_profile",
       questionnaire: activePicker,
       load: vi.fn(),
+      validate: validateBurnerProfileReplay,
       save,
     } as never);
 
@@ -137,6 +143,7 @@ describe("saveFormReplay — archive invariant", () => {
         completedAt: new Date("2026-01-01"),
         updatedAt: null,
       })),
+      validate: validateBurnerProfileReplay,
       save,
     } as never);
 
@@ -163,6 +170,7 @@ describe("saveFormReplay — archive invariant", () => {
         completedAt: new Date("2026-01-01"),
         updatedAt: null,
       })),
+      validate: validateBurnerProfileReplay,
       save,
     } as never);
 
