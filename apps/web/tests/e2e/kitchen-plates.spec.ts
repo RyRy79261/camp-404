@@ -195,7 +195,7 @@ test.describe("recipe plate counts (test-mode)", () => {
     await expect(counts(page)).toHaveCount(0);
 
     //    A version opens on its own page, read with the recipe reader, with
-    //    its Notes: a lesson added there belongs to that version.
+    //    its Notes: a note added there belongs to that version.
     await versions.getByRole("link", { name: "Version 1" }).click();
     await expect(page).toHaveURL(`${recipeUrl}/versions/1`);
     await expect(
@@ -206,8 +206,8 @@ test.describe("recipe plate counts (test-mode)", () => {
     ).toBeVisible();
     await expect(chip(page, 3)).toContainText("Red lentils");
     const notes = page.getByRole("region", { name: "Notes" });
-    await notes.getByLabel("Add a lesson").fill("Soak the lentils first.");
-    await notes.getByRole("button", { name: "Add lesson" }).click();
+    await notes.getByLabel("Add a note").fill("Soak the lentils first.");
+    await notes.getByRole("button", { name: "Add note" }).click();
     await expect(notes.getByText("Soak the lentils first.")).toBeVisible();
 
     //    Back to History, and a source version on its own page.

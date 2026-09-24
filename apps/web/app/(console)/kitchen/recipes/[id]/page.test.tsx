@@ -590,7 +590,7 @@ describe("recipe page", () => {
     }
     expect(screen.queryByText("Lentils, water, cumin.")).toBeNull();
     expect(screen.queryByText("One pot.")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Add lesson" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add note" })).toBeNull();
     expect(listRecipeSources).not.toHaveBeenCalled();
   });
 
@@ -656,7 +656,7 @@ describe("recipe page", () => {
       screen.queryByRole("article", { name: "Lessons learned" }),
     ).toBeNull();
     expect(screen.queryByText("LESSON-ON-V1")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Add lesson" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add note" })).toBeNull();
 
     // Not the member's words: no original text, no source versions.
     expect(screen.queryByText("Original text")).toBeNull();

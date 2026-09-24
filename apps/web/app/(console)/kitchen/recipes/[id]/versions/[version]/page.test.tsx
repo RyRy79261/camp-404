@@ -148,7 +148,7 @@ describe("recipe version page", () => {
     expect(screen.getByRole("list", { name: "Step 1 uses" }).textContent).toBe(
       "3 kgRed lentils",
     );
-    // Read only: nothing to type into but the lesson.
+    // Read only: nothing to type into but the note.
     expect(screen.getAllByRole("textbox")).toHaveLength(1);
     expect(
       screen
@@ -172,12 +172,12 @@ describe("recipe version page", () => {
     const notes = screen.getByRole("region", { name: "Notes" });
     expect(within(notes).getByText("LESSON-ON-V1")).toBeTruthy();
     expect(screen.queryByText("LESSON-ON-V2")).toBeNull();
-    fireEvent.change(within(notes).getByLabelText("Add a lesson"), {
+    fireEvent.change(within(notes).getByLabelText("Add a note"), {
       target: { value: "Soak overnight." },
     });
     await act(async () => {
       fireEvent.click(
-        within(notes).getByRole("button", { name: "Add lesson" }),
+        within(notes).getByRole("button", { name: "Add note" }),
       );
     });
     expect(addLessonAction).toHaveBeenCalledWith({

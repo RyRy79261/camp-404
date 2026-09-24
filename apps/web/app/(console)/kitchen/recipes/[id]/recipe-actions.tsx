@@ -196,7 +196,7 @@ export function AddLesson({
         setError(result.error);
         return;
       }
-      toast.success("Lesson added");
+      toast.success("Note added");
       setBody("");
       router.refresh();
     });
@@ -204,7 +204,7 @@ export function AddLesson({
 
   return (
     <form onSubmit={add} noValidate className="flex flex-col gap-2">
-      <Field label="Add a lesson" htmlFor="lesson-body" error={error}>
+      <Field label="Add a note" htmlFor="lesson-body" error={error}>
         <Textarea
           id="lesson-body"
           value={body}
@@ -221,7 +221,7 @@ export function AddLesson({
       <div>
         <Button type="submit" variant="secondary" size="sm" disabled={pending}>
           {pending && <Loader2 className="animate-spin" aria-hidden />}
-          Add lesson
+          Add note
         </Button>
       </div>
     </form>

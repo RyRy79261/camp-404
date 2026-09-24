@@ -723,7 +723,7 @@ export const AddLessonInput = z.object({
     .min(1, "Write what the kitchen learned.")
     .max(
       RECIPE_LESSON_MAX,
-      `Keep the lesson under ${RECIPE_LESSON_MAX} characters.`,
+      `Keep the note under ${RECIPE_LESSON_MAX} characters.`,
     ),
 });
 export type AddLessonInput = z.infer<typeof AddLessonInput>;

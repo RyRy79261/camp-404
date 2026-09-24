@@ -2382,7 +2382,7 @@ export async function addLesson(input: {
     const body = input.body.trim();
     if (!body) refuse(LESSON_NEEDED);
     if (body.length > LESSON_MAX) {
-      refuse(`Keep the lesson under ${LESSON_MAX} characters.`);
+      refuse(`Keep the note under ${LESSON_MAX} characters.`);
     }
     if (!UUID.test(input.recipeId)) refuse(RECIPE_GONE);
     const [recipe] = await tx
