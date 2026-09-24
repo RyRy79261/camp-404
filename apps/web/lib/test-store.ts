@@ -122,6 +122,7 @@ import {
   RERUN_NOTE_NEEDED,
   RUN_STAGES,
   SENDER_NOT_A_REVIEWER,
+  ADJUST_VERSION_GONE,
   DRAFT_UNREADABLE,
   SERVES_OUT_OF_RANGE,
   SOURCE_CHANGED,
@@ -133,6 +134,7 @@ import {
   UNTITLED_RECIPE,
   PLATES_OUT_OF_RANGE,
   VERSION_CHANGED,
+  adjustReason,
   baseLines,
   campMonthStartOf,
   draftPlatesMismatch,
@@ -185,6 +187,9 @@ import {
   type AddCalendarEventResult,
 } from "@camp404/db/calendar-events";
 import {
+  ADJUST_INSTRUCTION_MAX,
+  ADJUST_INSTRUCTION_NEEDED,
+  ADJUST_INSTRUCTION_TOO_LONG,
   ANNOUNCEMENT_NOTIFICATION_KINDS,
   DEFAULT_PLATES,
   KitchenRecipe,
@@ -458,7 +463,9 @@ interface TestRecipeRun {
   error: string | null;
   result: unknown;
   /** `recipe` rows are older draft runs; nothing writes one any more. */
-  kind: "recipe" | "plates" | "source";
+  kind: "recipe" | "plates" | "source" | "adjust";
+  /** What should change, on an `adjust` run. */
+  instruction?: string | null;
   plates: number | null;
   versionId: string | null;
   sourceId: string | null;
@@ -958,7 +965,8 @@ function storePreviousVersion(
   const version = recipeVersions.find((v) => v.id === acceptedVersionId);
   if (!version) return null;
   const run = recipeRuns.find(
-    (r) => r.id === version.runId && r.kind === "source",
+    (r) =>
+      r.id === version.runId && (r.kind === "source" || r.kind === "adjust"),
   );
   return {
     version: version.version,
@@ -1044,7 +1052,9 @@ function isStoreRunStage(stage: unknown): stage is RunStage {
  */
 function insertStoreSourceRun(input: {
   recipe: TestRecipe;
-  sourceId: string;
+  sourceId: string | null;
+  /** An adjust run: the version it starts from and what should change. */
+  adjust?: { versionId: string; instruction: string };
   actorId: string;
   now: Date;
   note: string | null;
@@ -1071,9 +1081,10 @@ function insertStoreSourceRun(input: {
     outcome: "queued",
     error: null,
     result: null,
-    kind: "source",
+    kind: input.adjust ? "adjust" : "source",
+    instruction: input.adjust?.instruction ?? null,
     plates: input.plates,
-    versionId: null,
+    versionId: input.adjust?.versionId ?? null,
     sourceId: input.sourceId,
     stage: null,
     exchange: input.exchange,
@@ -1088,6 +1099,22 @@ function insertStoreSourceRun(input: {
   recipe.rerunRequestedAt = null;
   recipe.updatedAt = input.now;
   return runId;
+}
+
+/** The run kinds that write a recipe into the book, or ask first. */
+function isWritingRun(run: TestRecipeRun): boolean {
+  return run.kind === "source" || run.kind === "adjust";
+}
+
+/** One of this recipe's versions (the twin of adjustableVersion). */
+function adjustableStoreVersion(
+  recipeId: string,
+  versionId: string,
+): TestRecipeVersion | null {
+  return (
+    recipeVersions.find((v) => v.id === versionId && v.recipeId === recipeId) ??
+    null
+  );
 }
 
 /** File an ingredient by lower-cased name; fill only an empty category. */
@@ -3626,6 +3653,66 @@ export const testStore = {
   },
 
   /**
+   * "Adjust with Claude" (the twin of adjustVersion): an adjust run on one of
+   * the recipe's versions, with what should change. No consent check: it
+   * sends the kitchen's own recipe and the reviewer's own words.
+   */
+  adjustVersion(input: {
+    recipeId: string;
+    versionId: string;
+    actorId: string;
+    instruction: string;
+    plates: number;
+    now: Date;
+    promptVersion: string;
+    model: string;
+  }): RecipeWriteResult<{ runId: string }> {
+    if (!mayRunProofread(input.actorId)) {
+      return { ok: false, error: ONLY_A_REVIEWER_SENDS };
+    }
+    const instruction = input.instruction.trim();
+    if (!instruction) return { ok: false, error: ADJUST_INSTRUCTION_NEEDED };
+    if (instruction.length > ADJUST_INSTRUCTION_MAX) {
+      return { ok: false, error: ADJUST_INSTRUCTION_TOO_LONG };
+    }
+    if (
+      !Number.isInteger(input.plates) ||
+      input.plates < 1 ||
+      input.plates > 500
+    ) {
+      return { ok: false, error: PLATES_OUT_OF_RANGE };
+    }
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    if (!QUEUEABLE.includes(recipe.status)) {
+      return { ok: false, error: NOT_READY_TO_PROOFREAD };
+    }
+    const base = adjustableStoreVersion(recipe.id, input.versionId);
+    if (!base) return { ok: false, error: ADJUST_VERSION_GONE };
+    const runId = insertStoreSourceRun({
+      recipe,
+      sourceId: null,
+      adjust: { versionId: base.id, instruction },
+      actorId: input.actorId,
+      now: input.now,
+      note: null,
+      plates: input.plates,
+      exchange: [],
+      previousRunId: recipe.latestRunId,
+      promptVersion: input.promptVersion,
+      model: input.model,
+    });
+    recordRecipeEvent(recipe, "recipe.adjust_queued", input.actorId, {
+      runId,
+      plates: input.plates,
+      fromVersion: base.version,
+      promptVersion: input.promptVersion,
+      model: input.model,
+    });
+    return { ok: true, runId };
+  },
+
+  /**
    * A reviewer answers Claude's questions (the twin of
    * answerProofreadQuestions): the next round, on the same source and plates,
    * carrying the whole exchange.
@@ -3660,31 +3747,45 @@ export const testStore = {
       (r) =>
         r.id === input.runId &&
         r.recipeId === recipe.id &&
-        r.kind === "source" &&
+        isWritingRun(r) &&
         r.outcome === "succeeded",
     );
     const questions = readQuestions(asked?.result);
-    if (!asked || !questions || asked.sourceId === null) {
-      return { ok: false, error: RECIPE_CHANGED };
+    if (!asked || !questions) return { ok: false, error: RECIPE_CHANGED };
+
+    let adjust: { versionId: string; instruction: string } | undefined;
+    if (asked.kind === "adjust") {
+      if (!asked.versionId || !asked.instruction) {
+        return { ok: false, error: RECIPE_CHANGED };
+      }
+      if (!adjustableStoreVersion(recipe.id, asked.versionId)) {
+        return { ok: false, error: ADJUST_VERSION_GONE };
+      }
+      adjust = { versionId: asked.versionId, instruction: asked.instruction };
+    } else {
+      if (asked.sourceId === null) return { ok: false, error: RECIPE_CHANGED };
+      const latest = latestStoreSource(recipe.id);
+      if (latest?.id !== asked.sourceId) {
+        return { ok: false, error: SOURCE_CHANGED };
+      }
+      const blocked = sourceBlockedReason(latest, recipe);
+      if (blocked) return { ok: false, error: blocked };
     }
-    const latest = latestStoreSource(recipe.id);
-    if (latest?.id !== asked.sourceId) {
-      return { ok: false, error: SOURCE_CHANGED };
-    }
-    const blocked = sourceBlockedReason(latest, recipe);
-    if (blocked) return { ok: false, error: blocked };
 
     const exchange = [...storeExchange(asked.exchange), { questions, answer }];
     const runId = insertStoreSourceRun({
       recipe,
       sourceId: asked.sourceId,
+      adjust,
       actorId: input.actorId,
       now: input.now,
       note: null,
       plates: asked.plates ?? DEFAULT_PLATES,
       exchange,
       previousRunId: input.runId,
-      promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
+      promptVersion: adjust
+        ? asked.promptVersion
+        : sourcePromptVersion(recipe.acceptedVersionId, input),
       model: input.model,
     });
     recordRecipeEvent(recipe, "recipe.questions_answered", input.actorId, {
@@ -3704,14 +3805,20 @@ export const testStore = {
     now: Date = new Date(),
   ): ClaimedSourceRun | null {
     const run = recipeRuns.find((r) => r.id === runId);
-    if (!run || run.kind !== "source" || run.outcome !== "queued") return null;
+    if (!run || !isWritingRun(run) || run.outcome !== "queued") return null;
     const recipe = findRecipe(run.recipeId);
     if (!recipe || recipe.status !== "queued" || recipe.latestRunId !== run.id)
       return null;
+    const isAdjust = run.kind === "adjust";
     const row = recipeSources.find((x) => x.id === run.sourceId);
     const source = row ? sourceVersionOf(row) : null;
-    const blocked = sourceBlockedReason(source, recipe);
-    if (blocked !== null || !source) {
+    const base = isAdjust ? storePreviousVersion(run.versionId) : null;
+    const blocked = isAdjust
+      ? base && run.instruction
+        ? null
+        : ADJUST_VERSION_GONE
+      : sourceBlockedReason(source, recipe);
+    if (blocked !== null || (!isAdjust && !source)) {
       const error = blocked ?? NO_TEXT_TO_SEND;
       run.outcome = "failed";
       run.finishedAt = now;
@@ -3728,13 +3835,19 @@ export const testStore = {
       runId: run.id,
       recipeId: recipe.id,
       title: recipe.title,
-      sourceText: sourceText(source.sections),
-      serves: source.serves,
+      sourceText: source && !isAdjust ? sourceText(source.sections) : "",
+      serves: source && !isAdjust ? source.serves : null,
       plates: run.plates ?? DEFAULT_PLATES,
       exchange: storeExchange(run.exchange),
       note: run.note,
       kitchen: mealPlanPeaks(storeMealPlan(currentCycleNumber()).days),
-      previous: storePreviousVersion(recipe.acceptedVersionId),
+      previous: isAdjust
+        ? null
+        : storePreviousVersion(recipe.acceptedVersionId),
+      adjust:
+        isAdjust && base && run.instruction
+          ? { base, instruction: run.instruction }
+          : null,
     };
   },
 
@@ -3742,7 +3855,7 @@ export const testStore = {
   setRunStage(runId: string, stage: RunStage): boolean {
     if (!isStoreRunStage(stage)) return false;
     const run = recipeRuns.find((r) => r.id === runId);
-    if (!run || run.kind !== "source" || run.outcome !== "running") {
+    if (!run || !isWritingRun(run) || run.outcome !== "running") {
       return false;
     }
     run.stage = stage;
@@ -3769,7 +3882,7 @@ export const testStore = {
     const recipe = run ? findRecipe(run.recipeId) : null;
     if (
       !run ||
-      run.kind !== "source" ||
+      !isWritingRun(run) ||
       run.outcome !== "running" ||
       !recipe ||
       recipe.status !== "analysing" ||
@@ -3820,7 +3933,10 @@ export const testStore = {
     const written = addStoreVersion(recipe, {
       authorId: run.requestedBy ?? "",
       runId: run.id,
-      reason: "Written by Claude",
+      reason:
+        run.kind === "adjust" && run.instruction
+          ? adjustReason(run.instruction)
+          : "Written by Claude",
       body: answer.recipe!,
       report: answer.report,
       sourceId: run.sourceId,

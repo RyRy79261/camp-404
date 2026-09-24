@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, MessageCircleQuestion, Send } from "lucide-react";
+import { MessageCircleQuestion, Send } from "lucide-react";
 import {
   SOURCE_SECTIONS,
   type RecipeSourceSections,
@@ -18,10 +18,9 @@ import {
 } from "@camp404/ui/components/card";
 import { Input } from "@camp404/ui/components/input";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { Spinner } from "@camp404/ui/components/spinner";
-import { cn } from "@camp404/ui/lib/utils";
 import {
   ProofreadQuestionsDialog,
+  ProofreadingPanel,
   QUESTIONS_TITLE,
   QuestionList,
   isOpen,
@@ -69,23 +68,6 @@ const SECTION_TITLES: Record<SourceSection, string> = {
   notes: "Notes",
 };
 
-/** The panel's rows: the stages the worker writes, in order. */
-const STAGES: { stage: RunStage; label: string }[] = [
-  { stage: "sending", label: "Sending the recipe" },
-  { stage: "reading", label: "Claude is reading it" },
-  { stage: "checking", label: "Checking the structure" },
-  { stage: "saving", label: "Saving" },
-];
-
-/** Which row is under way: a queued run, or one not yet staged, is sending. */
-function stageIndex(stage: RunStage | null): number {
-  if (stage === null) return 0;
-  return Math.max(
-    0,
-    STAGES.findIndex((s) => s.stage === stage),
-  );
-}
-
 type Phase =
   | { kind: "idle" }
   | { kind: "running"; stage: RunStage | null }
@@ -98,37 +80,6 @@ function initialPhase(run: OpenRun | null): Phase {
   const questions = pendingQuestions(run);
   if (questions) return { kind: "questions", runId: run.runId, questions };
   return { kind: "idle" };
-}
-
-function ProofreadingPanel({ stage }: { stage: RunStage | null }) {
-  const at = stageIndex(stage);
-  return (
-    <Card role="status" aria-live="polite" aria-label="Proofreading">
-      <CardContent className="p-4">
-        <ol className="flex flex-col gap-2 text-sm">
-          {STAGES.map((row, i) => (
-            <li
-              key={row.stage}
-              className={cn(
-                "flex items-center gap-2",
-                i > at && "text-muted-foreground",
-              )}
-              aria-current={i === at ? "step" : undefined}
-            >
-              {i < at ? (
-                <Check className="h-4 w-4 text-primary" aria-hidden />
-              ) : i === at ? (
-                <Spinner size="sm" label="Under way:" />
-              ) : (
-                <span className="h-4 w-4" aria-hidden />
-              )}
-              <span>{row.label}</span>
-            </li>
-          ))}
-        </ol>
-      </CardContent>
-    </Card>
-  );
 }
 
 export function SourceEditor({

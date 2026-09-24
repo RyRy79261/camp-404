@@ -1,0 +1,4 @@
+ALTER TABLE "recipe_proofread_runs" DROP CONSTRAINT "recipe_proofread_runs_kind_check";--> statement-breakpoint
+ALTER TABLE "recipe_proofread_runs" ADD COLUMN "instruction" text;--> statement-breakpoint
+ALTER TABLE "recipe_proofread_runs" ADD CONSTRAINT "recipe_proofread_runs_adjust_check" CHECK ("recipe_proofread_runs"."kind" <> 'adjust' OR ("recipe_proofread_runs"."version_id" IS NOT NULL AND "recipe_proofread_runs"."instruction" IS NOT NULL));--> statement-breakpoint
+ALTER TABLE "recipe_proofread_runs" ADD CONSTRAINT "recipe_proofread_runs_kind_check" CHECK ("recipe_proofread_runs"."kind" in ('recipe', 'plates', 'source', 'adjust'));

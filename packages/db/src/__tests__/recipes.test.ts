@@ -14,6 +14,8 @@ import {
 } from "@camp404/types";
 import * as schema from "../schema";
 import {
+  ADJUST_INSTRUCTION_NEEDED,
+  ADJUST_VERSION_GONE,
   ANSWER_NEEDED,
   NEVER_STARTED_ERROR,
   NO_AI_CONSENT,
@@ -35,6 +37,8 @@ import {
   VERSION_CHANGED,
   DRAFT_UNREADABLE,
   acceptProofread,
+  adjustReason,
+  adjustVersion,
   answerProofreadQuestions,
   addLesson,
   catalogueLines,
@@ -2217,6 +2221,8 @@ describe("recipes", () => {
         },
         // Not in the book yet: nothing to revise.
         previous: null,
+        // A source run, not an adjustment.
+        adjust: null,
       });
       expect(JSON.stringify(claimed)).not.toContain("Cheap and vegan");
       expect(JSON.stringify(claimed)).not.toContain(member.displayName);
@@ -2748,6 +2754,254 @@ describe("recipes", () => {
       expect(await recipeRow(id)).toMatchObject({
         status: "approved",
         lastError: STALE_RUN_ERROR,
+      });
+    });
+
+    describe("adjusting a version with Claude", () => {
+      const ADJUST_QUEUED: AuditAction = "recipe.adjust_queued";
+      const ADJUST_PROMPT = "adjust-2026-09-24.1";
+
+      function adjust(
+        actorId: string,
+        recipeId: string,
+        versionId: string,
+        instruction = "Use butternut instead of the lentils.",
+        plates = 40,
+      ) {
+        return adjustVersion({
+          recipeId,
+          versionId,
+          actorId,
+          instruction,
+          plates,
+          now: NOW,
+          promptVersion: ADJUST_PROMPT,
+          model: MODEL,
+        });
+      }
+
+      /** A recipe in the book with two versions: v1 (40) and v2 (50). */
+      async function inTheBook() {
+        const folks = await people();
+        const id = await approved(folks.member.id, folks.captain.id);
+        const v1 = await seedAcceptedVersion(h.db(), {
+          recipeId: id,
+          authorId: folks.captain.id,
+          recipe: recipe({ title: "Dhal one" }),
+        });
+        const v2 = await seedAcceptedVersion(h.db(), {
+          recipeId: id,
+          authorId: folks.captain.id,
+          recipe: recipe({ title: "Dhal two", plates: 50 }),
+        });
+        return { ...folks, id, v1, v2 };
+      }
+
+      it("lets a captain and a Kitchen lead ask; a Structures lead and a member are refused with nothing written", async () => {
+        const { captain, kitchenLead, structuresLead, member, id, v1 } =
+          await inTheBook();
+        for (const who of [structuresLead, member]) {
+          expect(await adjust(who.id, id, v1.versionId)).toEqual({
+            ok: false,
+            error: ONLY_A_REVIEWER_SENDS,
+          });
+        }
+        expect(await runCount()).toBe(0);
+        expect(await auditRows(ADJUST_QUEUED)).toHaveLength(0);
+
+        const byLead = await adjust(kitchenLead.id, id, v1.versionId);
+        if (!byLead.ok) throw new Error(byLead.error);
+        expect(await runRow(byLead.runId)).toMatchObject({
+          kind: "adjust",
+          versionId: v1.versionId,
+          instruction: "Use butternut instead of the lentils.",
+          sourceId: null,
+          plates: 40,
+          outcome: "queued",
+          promptVersion: ADJUST_PROMPT,
+          previousStatus: "accepted",
+          requestedBy: kitchenLead.id,
+        });
+        expect(await recipeRow(id)).toMatchObject({
+          status: "queued",
+          latestRunId: byLead.runId,
+        });
+        const [audit] = await auditRows(ADJUST_QUEUED);
+        expect(audit).toMatchObject({
+          actorId: kitchenLead.id,
+          target: id,
+          metadata: { runId: byLead.runId, fromVersion: 1, plates: 40 },
+        });
+
+        // A run is open: a second ask waits for it.
+        expect(await adjust(captain.id, id, v1.versionId)).toEqual({
+          ok: false,
+          error: expect.stringContaining("can't be proofread now"),
+        });
+        await claimSourceRun(byLead.runId);
+        await failRun({ runId: byLead.runId, error: "Timed out." });
+        const byCaptain = await adjust(captain.id, id, v1.versionId);
+        expect(byCaptain.ok).toBe(true);
+      });
+
+      it("sees a Kitchen lead's demotion that committed before the ask", async () => {
+        const { kitchenLead, id, v1 } = await inTheBook();
+        await setLead({
+          userId: kitchenLead.id,
+          team: "kitchen",
+          isLead: false,
+        });
+        expect(await adjust(kitchenLead.id, id, v1.versionId)).toEqual({
+          ok: false,
+          error: ONLY_A_REVIEWER_SENDS,
+        });
+        expect(await runCount()).toBe(0);
+      });
+
+      it("refuses an empty instruction and a version of another recipe, writing nothing", async () => {
+        const { captain, member, id, v1 } = await inTheBook();
+        expect(await adjust(captain.id, id, v1.versionId, "   ")).toEqual({
+          ok: false,
+          error: ADJUST_INSTRUCTION_NEEDED,
+        });
+        const other = await approved(member.id, captain.id);
+        expect(await adjust(captain.id, other, v1.versionId)).toEqual({
+          ok: false,
+          error: ADJUST_VERSION_GONE,
+        });
+        expect(await runCount()).toBe(0);
+      });
+
+      it("hands the worker the version and the words, not the source, and writes the next version into the book", async () => {
+        const { kitchenLead, id, v1 } = await inTheBook();
+        const asked = await adjust(kitchenLead.id, id, v1.versionId);
+        if (!asked.ok) throw new Error(asked.error);
+
+        const claim = await claimSourceRun(asked.runId);
+        expect(claim).toMatchObject({
+          runId: asked.runId,
+          sourceText: "",
+          serves: null,
+          plates: 40,
+          previous: null,
+          adjust: {
+            instruction: "Use butternut instead of the lentils.",
+            base: { version: 1, exchange: [] },
+          },
+        });
+        expect(claim?.adjust?.base.recipe.title).toBe("Dhal one");
+        expect(await setRunStage(asked.runId, "reading")).toBe(true);
+        expect(await getProofreadProgress(id)).toMatchObject({
+          kind: "adjust",
+          outcome: "running",
+          stage: "reading",
+        });
+
+        const done = await completeSourceRun({
+          runId: asked.runId,
+          result: written({ title: "Butternut dhal", plates: 40 }),
+          usage: USAGE,
+        });
+        if (!done.ok) throw new Error(done.error);
+        const [v3] = await h
+          .db()
+          .select()
+          .from(schema.recipeVersions)
+          .where(eq(schema.recipeVersions.id, done.versionId!));
+        expect(v3).toMatchObject({
+          version: 3,
+          runId: asked.runId,
+          sourceId: null,
+          authorId: kitchenLead.id,
+          reason: "Changed by Claude: Use butternut instead of the lentils.",
+        });
+        expect(await recipeRow(id)).toMatchObject({
+          status: "accepted",
+          acceptedVersionId: done.versionId,
+          title: "Butternut dhal",
+        });
+        expect(await auditRows(WRITTEN)).toHaveLength(1);
+      });
+
+      it("asks questions, and an answer queues the next round on the same version and words", async () => {
+        const { captain, kitchenLead, id, v1, v2 } = await inTheBook();
+        const asked = await adjust(kitchenLead.id, id, v1.versionId);
+        if (!asked.ok) throw new Error(asked.error);
+        await claimSourceRun(asked.runId);
+        await completeSourceRun({
+          runId: asked.runId,
+          result: QUESTIONS,
+          usage: USAGE,
+        });
+        // Back in the book, the current version unchanged, pointing at the
+        // questions.
+        expect(await recipeRow(id)).toMatchObject({
+          status: "accepted",
+          acceptedVersionId: v2.versionId,
+          latestRunId: asked.runId,
+        });
+        expect(await getProofreadProgress(id)).toMatchObject({
+          kind: "adjust",
+          questions: QUESTIONS.questions,
+        });
+
+        const answered = await answerProofreadQuestions({
+          recipeId: id,
+          runId: asked.runId,
+          actorId: captain.id,
+          answer: "Three kilograms of butternut.",
+          now: NOW,
+          promptVersion: PROMPT,
+          model: MODEL,
+        });
+        if (!answered.ok) throw new Error(answered.error);
+        expect(await runRow(answered.runId)).toMatchObject({
+          kind: "adjust",
+          versionId: v1.versionId,
+          instruction: "Use butternut instead of the lentils.",
+          // The round stays on the prompt the adjustment began under.
+          promptVersion: ADJUST_PROMPT,
+          previousRunId: asked.runId,
+          exchange: [
+            {
+              questions: QUESTIONS.questions,
+              answer: "Three kilograms of butternut.",
+            },
+          ],
+        });
+        const claim = await claimSourceRun(answered.runId);
+        expect(claim?.exchange).toHaveLength(1);
+        expect(claim?.adjust?.base.version).toBe(1);
+      });
+
+      it("writes nothing into the book when the sender lost the Kitchen while Claude worked", async () => {
+        const { kitchenLead, id, v1, v2 } = await inTheBook();
+        const asked = await adjust(kitchenLead.id, id, v1.versionId);
+        if (!asked.ok) throw new Error(asked.error);
+        await claimSourceRun(asked.runId);
+        await setLead({
+          userId: kitchenLead.id,
+          team: "kitchen",
+          isLead: false,
+        });
+        expect(
+          await completeSourceRun({
+            runId: asked.runId,
+            result: written({ plates: 40 }),
+            usage: USAGE,
+          }),
+        ).toEqual({ ok: false, error: SENDER_NOT_A_REVIEWER });
+        expect(await recipeRow(id)).toMatchObject({
+          acceptedVersionId: v2.versionId,
+        });
+      });
+
+      it("shortens a long instruction in the version's reason", () => {
+        const long = "a ".repeat(200);
+        const reason = adjustReason(long);
+        expect(reason.startsWith("Changed by Claude: a a")).toBe(true);
+        expect(reason.endsWith("…")).toBe(true);
+        expect(reason.length).toBeLessThan(200);
       });
     });
   });

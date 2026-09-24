@@ -64,6 +64,7 @@ vi.mock("@/lib/recipes", () => ({
     sourceId: "source-2",
   })),
   answerProofreadQuestions: vi.fn(async () => ({ ok: true, runId: "run-a" })),
+  adjustVersion: vi.fn(async () => ({ ok: true, runId: "run-j" })),
   resetStaleRuns: vi.fn(async () => ({ reset: 0 })),
   getProofreadProgress: vi.fn(async () => ({
     runId: "run-s",
@@ -95,6 +96,7 @@ import {
 import {
   acceptProofread,
   addLesson,
+  adjustVersion,
   answerProofreadQuestions,
   decideRecipe,
   getProofreadProgress,
@@ -109,6 +111,7 @@ import {
 import {
   acceptProofreadAction,
   addLessonAction,
+  adjustVersionAction,
   answerProofreadQuestionsAction,
   decideRecipeAction,
   proofreadPlatesAction,
@@ -802,6 +805,99 @@ describe("proofreadRecipeAction", () => {
     expect(await proofreadRecipeAction({ recipeId: RECIPE_A })).toEqual({
       ok: false,
       error: "Camp dal: This recipe can't be proofread now.",
+    });
+    expect(after).not.toHaveBeenCalled();
+  });
+});
+
+describe("adjustVersionAction", () => {
+  const VERSION = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+  const ADJUST = {
+    recipeId: RECIPE_A,
+    versionId: VERSION,
+    instruction: " Use butternut instead of sweet potato. ",
+  };
+
+  it("refuses a lead of another team and a member: nothing is read, queued or scheduled", async () => {
+    for (const [rank, led] of [
+      ["team_lead", ["structures"]],
+      ["camp_member", []],
+    ] as const) {
+      actAs(rank, [...led]);
+      expect(await adjustVersionAction(ADJUST)).toEqual({
+        ok: false,
+        error: RUN_REFUSAL,
+      });
+    }
+    expect(getMealPlan).not.toHaveBeenCalled();
+    expect(adjustVersion).not.toHaveBeenCalled();
+    expect(after).not.toHaveBeenCalled();
+  });
+
+  it("lets a Kitchen lead ask, as themselves, for the meal plan's largest count, and runs it after the response", async () => {
+    actAs("team_lead", ["kitchen"], "lead-1");
+    expect(
+      await adjustVersionAction({
+        ...ADJUST,
+        plates: 3,
+        actorId: "someone-else",
+      }),
+    ).toEqual({ ok: true, data: { runId: "run-j" } });
+    expect(adjustVersion).toHaveBeenCalledWith({
+      recipeId: RECIPE_A,
+      versionId: VERSION,
+      instruction: "Use butternut instead of sweet potato.",
+      actorId: "lead-1",
+      plates: 60,
+      now: expect.any(Date),
+      promptVersion: PROMPT_VERSIONS.recipeAdjust,
+      model: "claude-opus-4-8",
+    });
+    expect(processRuns).not.toHaveBeenCalled();
+    const task = vi.mocked(after).mock.calls[0]![0] as () => Promise<unknown>;
+    await task();
+    expect(processRuns).toHaveBeenCalledWith({ runIds: ["run-j"] });
+    expect(revalidatePath).toHaveBeenCalledWith(
+      `/kitchen/recipes/${RECIPE_A}`,
+      "layout",
+    );
+  });
+
+  it("lets a captain ask without reading their teams", async () => {
+    actAs("captain", [], "captain-1");
+    expect((await adjustVersionAction(ADJUST)).ok).toBe(true);
+    expect(getLeadTeams).not.toHaveBeenCalled();
+    expect(adjustVersion).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: "captain-1" }),
+    );
+  });
+
+  it("refuses an empty instruction, a bad version and a missing key before writing", async () => {
+    expect(
+      await adjustVersionAction({ ...ADJUST, instruction: "   " }),
+    ).toEqual({ ok: false, error: "Say what should change." });
+    expect(
+      (await adjustVersionAction({ ...ADJUST, versionId: "nope" })).ok,
+    ).toBe(false);
+    delete process.env.ANTHROPIC_API_KEY;
+    expect(await adjustVersionAction(ADJUST)).toEqual({
+      ok: false,
+      error: PROOFREAD_NOT_SET_UP,
+    });
+    expect(adjustVersion).not.toHaveBeenCalled();
+    expect(after).not.toHaveBeenCalled();
+  });
+
+  it("passes the write's refusal through, and schedules nothing", async () => {
+    vi.mocked(adjustVersion).mockResolvedValueOnce({
+      ok: false,
+      error:
+        "That version of the recipe isn't there any more. Reload the page.",
+    });
+    expect(await adjustVersionAction(ADJUST)).toEqual({
+      ok: false,
+      error:
+        "That version of the recipe isn't there any more. Reload the page.",
     });
     expect(after).not.toHaveBeenCalled();
   });

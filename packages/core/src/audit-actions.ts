@@ -43,6 +43,7 @@ export const AUDIT_ACTION_LABELS = {
   "payment.recorded": "Recorded a payment",
   "payment.status_changed": "Changed a payment",
   "recipe.accepted": "Accepted a recipe version",
+  "recipe.adjust_queued": "Asked Claude to change a recipe version",
   "recipe.approved": "Approved a recipe",
   "recipe.changes_requested": "Asked for changes to a recipe",
   "recipe.proofread_queued": "Sent a recipe to Claude to write",
@@ -266,6 +267,15 @@ export function auditDetail(
       return title
         ? `${title}, text version ${version}`
         : `Text version ${version}`;
+    }
+    // The version Claude was asked to change.
+    case "recipe.adjust_queued": {
+      const title = text(metadata, "title");
+      const version = count(metadata, "fromVersion");
+      if (version === null) return title;
+      return title
+        ? `${title}, from version ${version}`
+        : `From version ${version}`;
     }
     case "recipe.plates_queued": {
       const title = text(metadata, "title");

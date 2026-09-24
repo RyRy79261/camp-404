@@ -8,6 +8,7 @@ export {
   recipeSourceRevisionPrompt,
   type RecipeSourceRevisionInput,
 } from "./recipe-source-revision";
+export { recipeAdjustPrompt, type RecipeAdjustInput } from "./recipe-adjust";
 
 /**
  * Versioned prompt templates. Bump the `version` whenever the template
@@ -22,4 +23,5 @@ export const PROMPT_VERSIONS = {
   recipePlates: "2026-09-25.2",
   recipeSource: "2026-09-24.2",
   recipeSourceRevision: "2026-09-24.2",
+  recipeAdjust: "2026-09-24.1",
 } as const;

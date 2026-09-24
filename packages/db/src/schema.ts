@@ -1323,8 +1323,12 @@ export const recipeProofreadRuns = pgTable(
     // (the older path). `source`: Claude reads a source version (`sourceId`)
     // and either asks questions or writes the recipe straight into the book.
     // `plates`: Claude proofreads an accepted version (`versionId`) for
-    // `plates` plates.
+    // `plates` plates. `adjust`: Claude writes the next version from one
+    // version (`versionId`) and what a reviewer said should change
+    // (`instruction`), and either asks questions or writes it into the book.
     kind: text("kind").notNull().default("recipe"),
+    // What should change, on an `adjust` run: the reviewer's own words.
+    instruction: text("instruction"),
     // The plates the run writes the recipe for.
     plates: integer("plates"),
     versionId: uuid("version_id").references(
@@ -1343,7 +1347,7 @@ export const recipeProofreadRuns = pgTable(
     sourceId: uuid("source_id").references(() => recipeSources.id, {
       onDelete: "set null",
     }),
-    // How far a running `source` run has got, as the worker writes it; the
+    // How far a running `source` or `adjust` run has got, as the worker writes it; the
     // loading panel shows only these. Null before the run is claimed.
     stage: text("stage"),
     // Every round of Claude's questions and the reviewer's answers that this
@@ -1357,7 +1361,12 @@ export const recipeProofreadRuns = pgTable(
     recipeIdx: index("recipe_proofread_runs_recipe_idx").on(t.recipeId),
     kindCheck: check(
       "recipe_proofread_runs_kind_check",
-      sql`${t.kind} in ('recipe', 'plates', 'source')`,
+      sql`${t.kind} in ('recipe', 'plates', 'source', 'adjust')`,
+    ),
+    // An adjust run names the version it starts from and what should change.
+    adjustCheck: check(
+      "recipe_proofread_runs_adjust_check",
+      sql`${t.kind} <> 'adjust' OR (${t.versionId} IS NOT NULL AND ${t.instruction} IS NOT NULL)`,
     ),
     stageCheck: check(
       "recipe_proofread_runs_stage_check",

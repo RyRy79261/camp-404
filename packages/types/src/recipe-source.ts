@@ -164,6 +164,26 @@ export const AnswerQuestionsInput = z.object({
 });
 export type AnswerQuestionsInput = z.infer<typeof AnswerQuestionsInput>;
 
+/** The longest "What should change?" an adjust run carries to Claude. */
+export const ADJUST_INSTRUCTION_MAX = 2_000;
+export const ADJUST_INSTRUCTION_NEEDED = "Say what should change.";
+export const ADJUST_INSTRUCTION_TOO_LONG = `Keep it under ${ADJUST_INSTRUCTION_MAX} characters.`;
+
+/**
+ * "Adjust with Claude": Claude writes the recipe's next version from one of
+ * its versions (`versionId`) and what the reviewer says should change.
+ */
+export const AdjustVersionInput = z.object({
+  recipeId: RowId,
+  versionId: RowId,
+  instruction: z
+    .string({ error: ADJUST_INSTRUCTION_NEEDED })
+    .trim()
+    .min(1, ADJUST_INSTRUCTION_NEEDED)
+    .max(ADJUST_INSTRUCTION_MAX, ADJUST_INSTRUCTION_TOO_LONG),
+});
+export type AdjustVersionInput = z.infer<typeof AdjustVersionInput>;
+
 /** Every round of questions and answers a run carries to Claude, in order. */
 export const ProofreadExchange = z.array(
   z.object({

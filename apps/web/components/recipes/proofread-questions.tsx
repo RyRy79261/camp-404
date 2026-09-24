@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Check } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
+import { Card, CardContent } from "@camp404/ui/components/card";
 import {
   Dialog,
   DialogContent,
@@ -9,16 +11,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@camp404/ui/components/dialog";
+import { Spinner } from "@camp404/ui/components/spinner";
 import { Textarea } from "@camp404/ui/components/textarea";
+import { cn } from "@camp404/ui/lib/utils";
 import {
   answerProofreadQuestionsAction,
   proofreadProgressAction,
 } from "@/app/(console)/kitchen/recipes/actions";
 import { UNREACHABLE } from "@/lib/recipe-copy";
 
-// What the source editor and the recipe page share about a run sent to
-// Claude (#243, Kitchen): the run as the page read it on the server, the poll
-// that follows it once a second until it settles, and the dialog with
+// What the source editor, the recipe page and "Adjust with Claude" share
+// about a run sent to Claude (#243, Kitchen): the run as the page read it on
+// the server, the poll that follows it once a second until it settles, the
+// loading panel with the stages the worker writes, and the dialog with
 // Claude's questions, whose answer queues the next round. Both pages read the
 // run on load, so questions left unanswered are still there after leaving and
 // coming back.
@@ -132,6 +137,55 @@ export function useRunPoll({
       clearTimeout(timer);
     };
   }, [active, recipeId, runIdRef]);
+}
+
+/** The panel's rows: the stages the worker writes, in order. */
+const STAGES: { stage: RunStage; label: string }[] = [
+  { stage: "sending", label: "Sending the recipe" },
+  { stage: "reading", label: "Claude is reading it" },
+  { stage: "checking", label: "Checking the structure" },
+  { stage: "saving", label: "Saving" },
+];
+
+/** Which row is under way: a queued run, or one not yet staged, is sending. */
+function stageIndex(stage: RunStage | null): number {
+  if (stage === null) return 0;
+  return Math.max(
+    0,
+    STAGES.findIndex((s) => s.stage === stage),
+  );
+}
+
+/** The loading panel: only the stage the worker last wrote on the run. */
+export function ProofreadingPanel({ stage }: { stage: RunStage | null }) {
+  const at = stageIndex(stage);
+  return (
+    <Card role="status" aria-live="polite" aria-label="Proofreading">
+      <CardContent className="p-4">
+        <ol className="flex flex-col gap-2 text-sm">
+          {STAGES.map((row, i) => (
+            <li
+              key={row.stage}
+              className={cn(
+                "flex items-center gap-2",
+                i > at && "text-muted-foreground",
+              )}
+              aria-current={i === at ? "step" : undefined}
+            >
+              {i < at ? (
+                <Check className="h-4 w-4 text-primary" aria-hidden />
+              ) : i === at ? (
+                <Spinner size="sm" label="Under way:" />
+              ) : (
+                <span className="h-4 w-4" aria-hidden />
+              )}
+              <span>{row.label}</span>
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function QuestionList({ questions }: { questions: string[] }) {
