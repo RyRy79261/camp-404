@@ -18,6 +18,9 @@ export const NOTIFICATION_KINDS = [
   "approval_decision",
   // A captain asked the member to become a captain.
   "captain_promotion",
+  // The deadline cron nudged the person responsible for a task that is due
+  // tomorrow or today.
+  "task_reminder",
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

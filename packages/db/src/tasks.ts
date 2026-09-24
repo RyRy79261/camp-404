@@ -1,8 +1,26 @@
-import { and, asc, eq, gte, inArray, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import {
+  campDayKey,
+  campDayStart,
+  nextCampDay,
+  taskDeadlineNotification,
+} from "@camp404/core";
 import { TASK_EDITED } from "@camp404/types";
 import type { DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
+import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 
@@ -359,5 +377,85 @@ export async function editTask(input: {
       )
       .returning({ id: schema.tasks.id });
     return edited.length > 0 ? { ok: true } : { ok: false, error: TASK_EDITED };
+  });
+}
+
+/**
+ * The daily task deadline nudge, run by the reminders cron. The person
+ * responsible for an open or in-progress task hears about it twice: the camp
+ * day before it is due, and on the day. Each reminder is recorded in
+ * `task_deadline_reminders` first, and the delivery is written only when that
+ * record is new, so a re-run never sends twice. The record's key includes the
+ * due day and the person, so moving the deadline or handing the task to
+ * someone else sends a fresh reminder.
+ *
+ * Days are camp days (UTC+2). The cron runs at 09:00 UTC, 11:00 in camp, so a
+ * task added after that and due the same day gets no reminder that day. An
+ * overdue task gets no further reminders, and a task nobody is responsible for
+ * reminds nobody. Push and email go out through their own drains (email
+ * follows the delivery's emailStatus).
+ */
+export async function remindTaskDeadlines(
+  input: { now?: Date } = {},
+): Promise<{ tasks: number; reminded: number }> {
+  const now = input.now ?? new Date();
+  const today = campDayKey(now);
+  const tomorrow = nextCampDay(today);
+  const start = campDayStart(today);
+  const end = campDayStart(nextCampDay(tomorrow));
+
+  // One transaction, one connection: every query goes through `tx`.
+  return await withTransaction(async (tx) => {
+    const due = await tx
+      .select({
+        id: schema.tasks.id,
+        title: schema.tasks.title,
+        dueAt: schema.tasks.dueAt,
+        assigneeId: schema.tasks.assigneeId,
+      })
+      .from(schema.tasks)
+      .innerJoin(schema.users, eq(schema.users.id, schema.tasks.assigneeId))
+      .where(
+        and(
+          inArray(schema.tasks.status, ["open", "in_progress"]),
+          isNotNull(schema.tasks.assigneeId),
+          gte(schema.tasks.dueAt, start),
+          lt(schema.tasks.dueAt, end),
+          eq(schema.users.isSystem, false),
+          eq(schema.users.sanitised, false),
+          eq(schema.users.approvalStatus, "approved"),
+        ),
+      );
+
+    let reminded = 0;
+    for (const task of due) {
+      // The select filters both out; the guard only narrows the types.
+      if (!task.dueAt || !task.assigneeId) continue;
+      const dueDay = campDayKey(task.dueAt);
+      const stage = dueDay === today ? "due_day" : "day_before";
+      const recorded = await tx
+        .insert(schema.taskDeadlineReminders)
+        .values({ taskId: task.id, userId: task.assigneeId, dueDay, stage })
+        .onConflictDoNothing()
+        .returning({ taskId: schema.taskDeadlineReminders.taskId });
+      if (recorded.length === 0) continue;
+      await tx.insert(schema.notificationDeliveries).values(
+        deliveryValues(
+          taskDeadlineNotification({
+            taskId: task.id,
+            title: task.title,
+            stage,
+          }),
+          {
+            userId: task.assigneeId,
+            broadcastId: null,
+            channel: "both",
+            presentation: "feed",
+          },
+        ),
+      );
+      reminded += 1;
+    }
+    return { tasks: due.length, reminded };
   });
 }

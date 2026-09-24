@@ -1,4 +1,4 @@
-import { CAMP_TIME_ZONE, campDayKey } from "@camp404/core";
+import { CAMP_TIME_ZONE, campDayKey, campDayStart } from "@camp404/core";
 import type { TaskBoardStatus } from "@camp404/types";
 
 // What the task board shows, worked out on the server from the tasks and the
@@ -79,14 +79,10 @@ function daysBetween(fromKey: string, toKey: string): number {
 }
 
 /**
- * The instant a deadline day starts in camp time. A deadline is a day, typed as
- * YYYY-MM-DD; storing the start of that day in Johannesburg keeps its
- * `campDayKey` equal to the day that was typed. Johannesburg is UTC+2 all year
- * (South Africa has no daylight saving), so the offset is fixed.
+ * The instant a deadline day starts in camp time. One rule for camp time lives
+ * in @camp404/core (`campDayStart`), so the board and the reminder cron agree.
  */
-export function deadlineFromDay(day: string): Date {
-  return new Date(`${day}T00:00:00+02:00`);
-}
+export const deadlineFromDay = campDayStart;
 
 function dueOf(task: TaskRow, today: string): TaskCard["due"] {
   if (!task.dueAt) return null;

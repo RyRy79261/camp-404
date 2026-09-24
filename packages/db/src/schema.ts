@@ -9,6 +9,7 @@ import {
   bigint,
   jsonb,
   numeric,
+  date,
   primaryKey,
   foreignKey,
   index,
@@ -235,6 +236,13 @@ export const taskStatusEnum = pgEnum("task_status", [
   "in_progress",
   "done",
   "cancelled",
+]);
+
+// Which of a task's two deadline reminders went out: the day before it is due,
+// or on the day itself (task_deadline_reminders.stage).
+export const taskReminderStageEnum = pgEnum("task_reminder_stage", [
+  "day_before",
+  "due_day",
 ]);
 
 // State of a proposed inventory change. A member's proposal starts
@@ -1370,8 +1378,9 @@ export const notificationDeliveries = pgTable(
 // --- Tasks ---------------------------------------------------------------
 // Non-blocking to-dos with deadlines, shown on the shared task board
 // (`packages/db/src/tasks.ts`). Assigned to a member, a team, or both.
-// [CORRECTION 2026-09-23] No reminder nudges a task yet; the reminders cron
-// covers questionnaires only.
+// [CORRECTION 2026-09-24] Reminders exist now: the daily reminders cron nudges
+// the person responsible the day before a task is due and on the day
+// (`remindTaskDeadlines`, recorded in `task_deadline_reminders`).
 
 export const tasks = pgTable(
   "tasks",
@@ -1399,6 +1408,30 @@ export const tasks = pgTable(
     assigneeIdx: index("tasks_assignee_idx").on(t.assigneeId),
     teamIdx: index("tasks_team_idx").on(t.team),
     statusIdx: index("tasks_status_idx").on(t.status),
+  }),
+);
+
+// One row per deadline reminder the cron sent. The key includes the due day
+// and the person, so moving a deadline or handing the task to someone new
+// sends a fresh reminder, and a re-run never sends twice: the cron inserts
+// here with ON CONFLICT DO NOTHING and writes the delivery only when a row
+// comes back.
+export const taskDeadlineReminders = pgTable(
+  "task_deadline_reminders",
+  {
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The camp day the task was due on when the reminder went out.
+    dueDay: date("due_day", { mode: "string" }).notNull(),
+    stage: taskReminderStageEnum("stage").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    pk: primaryKey({ columns: [r.taskId, r.userId, r.dueDay, r.stage] }),
   }),
 );
 

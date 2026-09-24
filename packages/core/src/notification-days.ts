@@ -33,6 +33,23 @@ export function campDayKey(instant: Date): string {
   return DAY_KEY.format(instant);
 }
 
+/**
+ * The instant a camp day starts. A deadline is a day, typed as YYYY-MM-DD;
+ * storing the start of that day in Johannesburg keeps its `campDayKey` equal to
+ * the day that was typed. Johannesburg is UTC+2 all year (South Africa has no
+ * daylight saving), so the offset is fixed.
+ */
+export function campDayStart(day: string): Date {
+  return new Date(`${day}T00:00:00+02:00`);
+}
+
+/** The calendar day after a YYYY-MM-DD key (UTC round-trip, no month maths). */
+export function nextCampDay(key: string): string {
+  const date = new Date(`${key}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
 /** The calendar day before a YYYY-MM-DD key. */
 function dayBefore(key: string): string {
   const date = new Date(`${key}T00:00:00Z`);

@@ -20,5 +20,9 @@ export function notificationLink(
   if (refType === "announcement" && refId && UUID.test(refId)) {
     return `/announcements/${refId}`;
   }
+  // The board has no page per task; the task is a card on /tasks.
+  if (refType === "task" && refId && UUID.test(refId)) {
+    return "/tasks";
+  }
   return NOTIFICATION_FALLBACK_LINK;
 }

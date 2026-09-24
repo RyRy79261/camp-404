@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { campDayKey, groupByDay } from "../notification-days";
+import {
+  campDayKey,
+  campDayStart,
+  groupByDay,
+  nextCampDay,
+} from "../notification-days";
 
 // Camp time is SAST (UTC+2, no daylight saving). The instants below sit either
 // side of camp midnight, which is 22:00 UTC, so a grouping done in the
@@ -10,6 +15,27 @@ describe("campDayKey", () => {
   it("reads the calendar day in camp time, not UTC", () => {
     expect(campDayKey(new Date("2026-09-15T21:59:00Z"))).toBe("2026-09-15");
     expect(campDayKey(new Date("2026-09-15T22:00:00Z"))).toBe("2026-09-16");
+  });
+});
+
+describe("campDayStart", () => {
+  it("is camp midnight, 22:00 UTC the day before, and reads back as the day", () => {
+    expect(campDayStart("2026-09-25").toISOString()).toBe(
+      "2026-09-24T22:00:00.000Z",
+    );
+    for (const day of ["2026-01-01", "2026-02-28", "2026-12-31"]) {
+      expect(campDayKey(campDayStart(day))).toBe(day);
+    }
+  });
+});
+
+describe("nextCampDay", () => {
+  it("steps one calendar day, across a month, a year and a leap day", () => {
+    expect(nextCampDay("2026-09-24")).toBe("2026-09-25");
+    expect(nextCampDay("2026-09-30")).toBe("2026-10-01");
+    expect(nextCampDay("2026-12-31")).toBe("2027-01-01");
+    expect(nextCampDay("2028-02-28")).toBe("2028-02-29");
+    expect(nextCampDay("2027-02-28")).toBe("2027-03-01");
   });
 });
 

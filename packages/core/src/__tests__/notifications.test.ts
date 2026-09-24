@@ -11,11 +11,13 @@ import {
   questionnaireReminderNotification,
   releaseBody,
   reminderBody,
+  taskDeadlineNotification,
 } from "../notifications";
 
 const ACTIVATION = "3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44";
 const BROADCAST = "7f5e2f7a-6f50-4c89-8df9-2f7b8f3dc31e";
 const TITLE = "Camp feedback";
+const TASK = "0b6c7f1e-2a4d-4c3b-8e9f-5a1d2c3b4e6f";
 
 describe("reminderBody", () => {
   it("names the questionnaire and its deadline", () => {
@@ -137,8 +139,37 @@ describe("payload builders", () => {
         requestId: BROADCAST,
         requesterName: "Jo",
       }),
+      taskDeadlineNotification({ taskId: TASK, title: "a", stage: "due_day" }),
     ].map((p) => p.kind);
     for (const kind of kinds) expect(NOTIFICATION_KINDS).toContain(kind);
+  });
+});
+
+describe("taskDeadlineNotification", () => {
+  it("says the task is due tomorrow, or today, and opens the task board", () => {
+    const dayBefore = taskDeadlineNotification({
+      taskId: TASK,
+      title: "Pack the shade cloth",
+      stage: "day_before",
+    });
+    expect(dayBefore).toEqual({
+      kind: "task_reminder",
+      title: "Pack the shade cloth",
+      body: "Due tomorrow: Pack the shade cloth. Tap to open the task board.",
+      refType: "task",
+      refId: TASK,
+    });
+    expect(payloadLink(dayBefore)).toBe("/tasks");
+
+    const dueDay = taskDeadlineNotification({
+      taskId: TASK,
+      title: "Pack the shade cloth",
+      stage: "due_day",
+    });
+    expect(dueDay.body).toBe(
+      "Due today: Pack the shade cloth. Tap to open the task board.",
+    );
+    expect(dueDay.kind).toBe("task_reminder");
   });
 });
 
@@ -213,6 +244,16 @@ describe("notificationMentionsAny", () => {
       captainPromotionNotification({
         requestId: BROADCAST,
         requesterName: "Captain Jo",
+      }),
+      taskDeadlineNotification({
+        taskId: TASK,
+        title: "Pack the shade cloth",
+        stage: "day_before",
+      }),
+      taskDeadlineNotification({
+        taskId: TASK,
+        title: "Pack the shade cloth",
+        stage: "due_day",
       }),
     ];
     for (const payload of payloads) {

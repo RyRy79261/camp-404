@@ -19,6 +19,10 @@ describe("notificationLink", () => {
     );
   });
 
+  it("opens the task board for a task reminder", () => {
+    expect(notificationLink("task", ACTIVATION)).toBe("/tasks");
+  });
+
   it("falls back to the inbox for anything it cannot open", () => {
     for (const [type, id] of [
       ["announcement", "not-a-uuid"],
@@ -27,6 +31,8 @@ describe("notificationLink", () => {
       ["questionnaire_activation", "../../admin"],
       [null, null],
       ["something_new", ACTIVATION],
+      ["task", null],
+      ["task", "not-a-uuid"],
     ] as const) {
       expect(notificationLink(type, id)).toBe(NOTIFICATION_FALLBACK_LINK);
     }
