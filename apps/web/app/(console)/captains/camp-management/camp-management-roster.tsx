@@ -14,17 +14,27 @@ import {
   matchesChip,
   matchesRosterQuery,
   matchesTeam,
+  matchesThisYear,
   sortRosterRows,
   type RosterChip,
   type RosterRow,
   type RosterSort,
+  type ThisYearFilter,
 } from "@/lib/camp-roster";
-import { decideApprovalsAction, type BulkApprovalResult } from "./actions";
+import {
+  decideApprovalsAction,
+  decideParticipationAction,
+  type BulkApprovalResult,
+} from "./actions";
 import { MemberProfile } from "./member-profile";
 import { RejectConfirmDialog } from "./reject-confirm-dialog";
 import { focusRosterTrigger } from "./roster-presentation";
 import { RosterList } from "./roster-list";
-import { RosterTable, type RosterSelection } from "./roster-table";
+import {
+  RosterTable,
+  type DecideThisYear,
+  type RosterSelection,
+} from "./roster-table";
 import { RosterToolbar } from "./roster-toolbar";
 
 // Captains' camp-management roster, composed like the AfrikaBurn console's
@@ -91,6 +101,7 @@ export function CampManagementRoster({
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<RosterChip>("all");
   const [team, setTeam] = useState<string | null>(initialTeam);
+  const [thisYear, setThisYear] = useState<ThisYearFilter>("any");
   // A navigation that changes only `?team=` stays on this route, so React keeps
   // this component mounted and `useState`'s initial value is never re-read: the
   // URL would say one team while the list below it showed another. React's
@@ -147,11 +158,12 @@ export function CampManagementRoster({
             pinned.has(r.id) ||
             (matchesRosterQuery(r, query, teamLabels) &&
               matchesChip(r, chip) &&
-              (team === null || matchesTeam(r, team))),
+              (team === null || matchesTeam(r, team)) &&
+              matchesThisYear(r, thisYear)),
         ),
         sort,
       ),
-    [rows, query, chip, team, teamLabels, pinned, sort],
+    [rows, query, chip, team, thisYear, teamLabels, pinned, sort],
   );
 
   // Resolve the open profile from the FILTERED rows, so narrowing the list to
@@ -211,6 +223,23 @@ export function CampManagementRoster({
       router.refresh();
     });
   }
+
+  // Accept / Waiting list for this year. A decided member stays on screen even
+  // when the new status leaves the filter, like an approval does.
+  const decideThisYear: DecideThisYear = async (row, to) => {
+    if (!row.thisYear)
+      return { ok: false, error: "They haven't answered yet." };
+    const result = await decideParticipationAction({
+      userId: row.id,
+      from: row.thisYear,
+      to,
+    });
+    if (result.ok) {
+      pin([row.id]);
+      router.refresh();
+    }
+    return result;
+  };
 
   // "Nobody is awaiting approval." only when there genuinely are no pending
   // members — not when a search/team filter merely narrowed them out.
@@ -286,6 +315,10 @@ export function CampManagementRoster({
         teams={teams}
         stats={stats}
         sort={{ value: sort, onChange: setSort }}
+        thisYear={{
+          value: thisYear,
+          onChange: (value) => narrow(() => setThisYear(value)),
+        }}
       />
 
       {selection && (
@@ -353,7 +386,7 @@ export function CampManagementRoster({
         // Keyed by the chip and team, so a new filter fades the list in
         // (motion-safe). Typing a search does not: it would flicker per key.
         <div
-          key={`${chip}|${team ?? ""}`}
+          key={`${chip}|${team ?? ""}|${thisYear}`}
           className="flex flex-col gap-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150"
         >
           <p className="text-sm tabular-nums text-muted-foreground">
@@ -366,6 +399,7 @@ export function CampManagementRoster({
             onSelect={setSelectedId}
             selection={selection}
             sort={{ value: sort, onChange: setSort }}
+            onDecideThisYear={decideThisYear}
           />
           <RosterList
             className="md:hidden"
@@ -373,6 +407,7 @@ export function CampManagementRoster({
             selectedId={selectedId}
             onSelect={setSelectedId}
             selection={selection}
+            onDecideThisYear={decideThisYear}
           />
         </div>
       )}

@@ -2,6 +2,7 @@ import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getCampManagementRoster } from "@/lib/roster";
+import { isTeamLead } from "@/lib/users";
 import { rosterForViewer } from "@/lib/camp-roster";
 import { activeTeams, getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { CampManagementRoster } from "./camp-management-roster";
@@ -34,7 +35,7 @@ export default async function CampManagementPage({
 }) {
   // Every approved member may browse; the captain bar only picks the full or
   // the public projection.
-  const { cleared: isCaptain } = await captainPageGate("captain");
+  const { cleared: isCaptain, campUser } = await captainPageGate("captain");
 
   // Fetch once; project to the captain (full) or member (public) row shape.
   // The public projection carries the applicant standing and nothing else off
@@ -44,13 +45,21 @@ export default async function CampManagementPage({
   // `teams` is the active-only, order-sorted list for the filter dropdown;
   // `teamLabels` is the full key→label map (incl. archived) for the profile
   // chips, so a captain's relabel shows on the chips too — not just the filter.
-  // The two reads are independent, so they run together.
-  const [members, config, { team: requestedTeam }] = await Promise.all([
+  // The reads are independent, so they run together.
+  //
+  // A non-captain who leads a team (ANY team: team-lead clearance is
+  // camp-wide) also reads everyone's "This year" status, and nothing else of
+  // the captain's view. The captain gate does not resolve the lead flag at a
+  // captain bar, so it is read here.
+  const [members, config, { team: requestedTeam }, lead] = await Promise.all([
     getCampManagementRoster({ includeEmail: isCaptain }),
     getTeamsConfig(),
     searchParams,
+    isCaptain ? false : isTeamLead(campUser.id),
   ]);
-  const roster = rosterForViewer(members, isCaptain);
+  const roster = rosterForViewer(members, isCaptain, undefined, {
+    thisYearForLead: lead,
+  });
   const active = activeTeams(config);
   const teamLabels = teamLabelMap(config);
   // A team the config actually names — archived ones included, because the

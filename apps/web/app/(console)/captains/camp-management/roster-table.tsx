@@ -1,6 +1,9 @@
-import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react";
+import { useState, useTransition } from "react";
+import { ArrowDown, ArrowUp, ChevronRight, Loader2 } from "lucide-react";
+import { isParticipationDecision } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import { Checkbox } from "@camp404/ui/components/checkbox";
+import { toast } from "@camp404/ui/components/toast";
 import {
   Table,
   TableBody,
@@ -20,6 +23,7 @@ import {
   RosterAvatar,
   RosterStatusBadge,
   StandingBadge,
+  ThisYearBadge,
   countryFlag,
 } from "./roster-presentation";
 
@@ -36,6 +40,11 @@ import {
 // `status`, so the member table carries no triage column; instead the island
 // asks for `showStanding` when somebody on the roster is still an applicant,
 // and that column shows the one approval fact a member may read.
+//
+// "This year" (who is coming) appears whenever the rows carry `thisYear`: a
+// captain's always do, a team lead's do, a plain member's never do (the server
+// leaves the key off). Only the captain island passes `onDecideThisYear`, so
+// only a captain gets the Accept / Waiting list buttons.
 
 /**
  * Ticking rows for a bulk decision (captain view, Pending filter). Reuses the
@@ -46,6 +55,93 @@ export interface RosterSelection {
   /** Only a member still awaiting a decision can be ticked. */
   canSelect: (row: RosterDisplayRow) => boolean;
   onToggle: (id: string) => void;
+}
+
+/** The two places a captain can give a member for this year. */
+export type ThisYearDecision = "accepted" | "waitlisted";
+
+/**
+ * A captain's Accept / Waiting list (captain view only). The island calls the
+ * action, and on success keeps the row on screen and refreshes; the control
+ * spins and reports a failure.
+ */
+export type DecideThisYear = (
+  row: RosterDisplayRow,
+  to: ThisYearDecision,
+) => Promise<{ ok: true } | { ok: false; error: string }>;
+
+const DECISION_BUTTONS: {
+  to: ThisYearDecision;
+  label: string;
+  name: (member: string) => string;
+}[] = [
+  {
+    to: "accepted",
+    label: "Accept",
+    name: (member) => `Accept ${member} for this year`,
+  },
+  {
+    to: "waitlisted",
+    label: "Waiting list",
+    name: (member) => `Put ${member} on the waiting list`,
+  },
+];
+
+/**
+ * The one-tap Accept / Waiting list buttons beside a member's "This year"
+ * badge, offered only where `isParticipationDecision` allows the move: nothing
+ * for a member who said No or has not answered, because they have to answer
+ * Yes or Maybe first. Each row has its own transition, so only the tapped
+ * button spins; a failure is a toast, the way every one-tap list change on a
+ * captain screen reports one.
+ */
+export function ThisYearDecisionButtons({
+  row,
+  onDecide,
+  className,
+}: {
+  row: RosterDisplayRow;
+  onDecide: DecideThisYear;
+  className?: string;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [tapped, setTapped] = useState<ThisYearDecision | null>(null);
+  const from = row.thisYear ?? null;
+  const offered =
+    from === null
+      ? []
+      : DECISION_BUTTONS.filter((b) => isParticipationDecision(from, b.to));
+  if (offered.length === 0) return null;
+
+  return (
+    <span className={cn("flex flex-wrap items-center gap-1.5", className)}>
+      {offered.map((b) => (
+        <Button
+          key={b.to}
+          type="button"
+          size="sm"
+          variant="outline"
+          aria-label={b.name(row.displayName)}
+          disabled={pending}
+          onClick={(e) => {
+            // The row opens the profile; this tap only decides.
+            e.stopPropagation();
+            setTapped(b.to);
+            startTransition(async () => {
+              const result = await onDecide(row, b.to);
+              if (!result.ok) toast.error(result.error);
+            });
+          }}
+          className="h-7 gap-1.5 px-2 text-xs"
+        >
+          {pending && tapped === b.to && (
+            <Loader2 className="animate-spin" aria-hidden />
+          )}
+          {b.label}
+        </Button>
+      ))}
+    </span>
+  );
 }
 
 /** Sortable column headers (captain view). The rows arrive already sorted. */
@@ -119,6 +215,7 @@ export function RosterTable({
   selection,
   sort,
   showStanding = false,
+  onDecideThisYear,
   className,
 }: {
   rows: RosterDisplayRow[];
@@ -133,11 +230,16 @@ export function RosterTable({
    * keeps the table it has always had.
    */
   showStanding?: boolean;
+  /** Captain view: the Accept / Waiting list buttons in the This year cell. */
+  onDecideThisYear?: DecideThisYear;
   className?: string;
 }) {
   // Rows are either all captain rows or all public rows.
   const showStatus = rows.some((r) => r.status !== undefined);
   const standingColumn = !showStatus && showStanding;
+  // Captains and team leads get this year's status; the server leaves the key
+  // off a plain member's rows, so for them there is no column at all.
+  const thisYearColumn = rows.some((r) => "thisYear" in r);
   return (
     <div
       className={cn(
@@ -166,6 +268,7 @@ export function RosterTable({
               <SortHeader label="Status" sortKey="status" sort={sort} />
             )}
             {standingColumn && <TableHead scope="col">Standing</TableHead>}
+            {thisYearColumn && <TableHead scope="col">This year</TableHead>}
             <TableHead scope="col" className="w-12 pr-4">
               <span className="sr-only">Open</span>
             </TableHead>
@@ -240,6 +343,19 @@ export function RosterTable({
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
+                  </TableCell>
+                )}
+                {thisYearColumn && (
+                  <TableCell>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <ThisYearBadge status={r.thisYear ?? null} />
+                      {onDecideThisYear && (
+                        <ThisYearDecisionButtons
+                          row={r}
+                          onDecide={onDecideThisYear}
+                        />
+                      )}
+                    </span>
                   </TableCell>
                 )}
                 <TableCell className="w-12 pr-4 text-right">

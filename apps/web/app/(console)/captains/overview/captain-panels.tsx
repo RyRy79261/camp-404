@@ -23,12 +23,14 @@ import {
   deriveReadinessFunnel,
   deriveSendCompletion,
   deriveTeamCoverage,
+  deriveThisYear,
 } from "./readiness";
 import {
   KpiCards,
   ReadinessFunnelCard,
   SendCompletionCard,
   TeamCoverageCard,
+  ThisYearCard,
 } from "./status-board";
 
 // The captain-only panels of the Overview (the AfrikaBurn console's status
@@ -86,6 +88,8 @@ export async function CaptainStatusBoard() {
   // under the label the captain gave it.
   const teams = deriveTeamCoverage(coverage, teamsConfig.teams);
   const sends = deriveSendCompletion(gates);
+  // Who is coming this year, from the SAME rows as every other figure here.
+  const thisYear = deriveThisYear(rows);
   // The unknown the completion card respects, said in the KPI row's own
   // shape: no open-send list means that card has no figure, not a figure of 0.
   // The dues card reads the ledger and names the rands received.
@@ -104,6 +108,7 @@ export async function CaptainStatusBoard() {
           <ReadinessFunnelCard funnel={funnel} />
         </div>
         <div className="flex flex-col gap-4">
+          <ThisYearCard counts={thisYear} />
           <TeamCoverageCard rows={teams} />
           {/* No send is modelled in the test store, so "no questionnaires are
               open" would be this panel's only possible sentence there, true or

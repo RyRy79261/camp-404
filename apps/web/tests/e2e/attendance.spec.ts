@@ -11,6 +11,8 @@ import {
   redeemInviteAtGate,
   resetTestState,
   seedParticipation,
+  seedTeam,
+  setRank,
 } from "./_helpers";
 
 // The member's side of "Coming this year?" (test-mode, on the store's
@@ -137,5 +139,153 @@ test.describe("attendance: the member's own answer", () => {
     await expect(
       page.getByRole("link", { name: "Change your answer" }),
     ).toHaveCount(0);
+  });
+});
+
+// The captain's side: the roster's "This year" column, filter and one-tap
+// Accept / Waiting list, and the Overview's count. A team lead sees the column
+// read-only; a plain member does not get it at all (the server leaves the
+// status off their rows).
+
+/**
+ * A camp user through the god email (clears access and approval), onboarded
+ * and at `rank`. The last one signed in is the one the page sees.
+ */
+async function person(
+  page: Page,
+  request: APIRequestContext,
+  id: string,
+  displayName: string,
+  rank: "captain" | "member" = "member",
+) {
+  await login(page, { id, email: "god@example.com", displayName });
+  await page.goto("/"); // lazily creates the camp user row
+  await completeOnboarding(request, id);
+  await setRank(request, id, rank);
+}
+
+/**
+ * One member's row on the roster, in whichever copy this viewport shows: the
+ * table (desktop) and the card list (phone) both render every row.
+ */
+function rosterRow(page: Page, name: string) {
+  return page
+    .locator("tr, li")
+    .filter({
+      has: page.getByRole("button", { name: `Open ${name}'s profile` }),
+    })
+    .filter({ visible: true });
+}
+
+async function openRoster(page: Page) {
+  await page.goto("/captains/camp-management");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Camp management" }),
+  ).toBeVisible();
+}
+
+test.describe("attendance: the captains' roster and overview", () => {
+  test.beforeEach(async ({ page, request }) => {
+    await resetTestState(request);
+    // A said Yes, B said Maybe; both are approved members.
+    await person(page, request, "yes-member", "Ada Yes");
+    await seedParticipation(request, "yes-member", "applied");
+    await person(page, request, "maybe-member", "Ben Maybe");
+    await seedParticipation(request, "maybe-member", "maybe");
+  });
+
+  test("a captain filters by this year, accepts in one tap, and the overview counts it", async ({
+    page,
+    request,
+  }) => {
+    await person(page, request, "year-captain", "Cy Captain", "captain");
+    await openRoster(page);
+    await expect(
+      rosterRow(page, "Ada Yes").getByText("Coming", { exact: true }),
+    ).toBeVisible();
+
+    // Only the Maybes.
+    const filter = page.getByRole("combobox", { name: "This year" });
+    await filter.selectOption({ label: "Maybe" });
+    await expect(rosterRow(page, "Ben Maybe")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Open Ada Yes's profile" }),
+    ).toHaveCount(0);
+
+    // Everyone again, and Ada gets a place.
+    await filter.selectOption({ label: "Any" });
+    await page
+      .getByRole("button", { name: "Accept Ada Yes for this year" })
+      .filter({ visible: true })
+      .click();
+    await expect(
+      rosterRow(page, "Ada Yes").getByText("Accepted", { exact: true }),
+    ).toBeVisible();
+    // Accepted is a place: no Accept left, the waiting list still offered.
+    await expect(
+      page
+        .getByRole("button", { name: "Accept Ada Yes for this year" })
+        .filter({ visible: true }),
+    ).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("button", { name: "Put Ada Yes on the waiting list" })
+        .filter({ visible: true }),
+    ).toBeVisible();
+
+    await page.goto("/captains/overview");
+    const card = page.getByRole("article", { name: "This year" });
+    await expect(card).toBeVisible();
+    await expect(
+      card.getByRole("listitem").filter({ hasText: "Accepted" }),
+    ).toHaveText(/^Accepted\s*1$/);
+    await expect(
+      card.getByRole("listitem").filter({ hasText: "Maybe" }),
+    ).toHaveText(/^Maybe\s*1$/);
+  });
+
+  test("a team lead sees who is coming, and cannot decide it", async ({
+    page,
+    request,
+  }) => {
+    await person(page, request, "year-lead", "Lu Lead");
+    await seedTeam(request, "year-lead", "kitchen", true);
+    await openRoster(page);
+
+    await expect(
+      rosterRow(page, "Ada Yes").getByText("Coming", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      rosterRow(page, "Ben Maybe").getByText("Maybe", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("This year", { exact: true }).filter({ visible: true }),
+    ).not.toHaveCount(0);
+    // Read-only: no decision, and no captain filter.
+    await expect(
+      page.getByRole("button", { name: /for this year$/ }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /on the waiting list$/ }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: "This year" })).toHaveCount(
+      0,
+    );
+  });
+
+  test("a plain member gets no This year column at all", async ({
+    page,
+    request,
+  }) => {
+    await person(page, request, "year-member", "Mo Member");
+    await openRoster(page);
+
+    // Present first, so the absences below are about a painted roster.
+    await expect(rosterRow(page, "Ada Yes")).toBeVisible();
+    await expect(
+      page.getByRole("columnheader", { name: "This year" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("This year", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Coming", { exact: true })).toHaveCount(0);
   });
 });

@@ -57,6 +57,7 @@ function row(over: Partial<RosterRow> = {}): RosterRow {
     isDriver: false,
     driverProfileComplete: false,
     duesPaid: false,
+    thisYear: null,
     ...over,
   };
 }

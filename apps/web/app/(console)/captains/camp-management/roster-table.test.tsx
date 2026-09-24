@@ -1,6 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { RosterTable } from "./roster-table";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import type { ParticipationStatus } from "@camp404/types";
+
+vi.mock("@camp404/ui/components/toast", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+
+import { toast } from "@camp404/ui/components/toast";
+import { RosterList } from "./roster-list";
+import { RosterTable, type DecideThisYear } from "./roster-table";
 import { toPublicRosterRow, type RosterDisplayRow } from "@/lib/camp-roster";
 import type { CampManagementMember } from "@camp404/db/roster";
 
@@ -190,5 +205,185 @@ describe("RosterTable — sortable headers", () => {
       <RosterTable rows={[memberRow]} selectedId={null} onSelect={() => {}} />,
     );
     expect(screen.queryByRole("button", { name: /^Member/ })).toBeNull();
+  });
+});
+
+describe("RosterTable — This year", () => {
+  const withYear = (
+    thisYear: ParticipationStatus | null,
+    over: Partial<RosterDisplayRow> = {},
+  ): RosterDisplayRow => ({ ...captainRow, thisYear, ...over });
+
+  it("draws the column only when the rows carry the key", () => {
+    const { unmount } = render(
+      <RosterTable rows={[memberRow]} selectedId={null} onSelect={() => {}} />,
+    );
+    expect(screen.getByRole("columnheader", { name: "Member" })).toBeTruthy();
+    expect(
+      screen.queryByRole("columnheader", { name: "This year" }),
+    ).toBeNull();
+    unmount();
+
+    // A lead's public row: the key, no captain status.
+    render(
+      <RosterTable
+        rows={[{ ...memberRow, thisYear: "applied" }]}
+        selectedId={null}
+        onSelect={() => {}}
+      />,
+    );
+    expect(
+      screen.getByRole("columnheader", { name: "This year" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Coming")).toBeTruthy();
+    // No decision callback: read-only, whatever the status.
+    expect(screen.queryByRole("button", { name: /^Accept / })).toBeNull();
+  });
+
+  it("says Not answered for a member with no answer", () => {
+    render(
+      <RosterTable
+        rows={[withYear(null)]}
+        selectedId={null}
+        onSelect={() => {}}
+        onDecideThisYear={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Not answered")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Accept / })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /on the waiting list$/ }),
+    ).toBeNull();
+  });
+
+  it.each<[ParticipationStatus, boolean, boolean]>([
+    ["applied", true, true],
+    ["maybe", true, true],
+    ["waitlisted", true, false],
+    ["accepted", false, true],
+    ["not_attending", false, false],
+  ])(
+    "offers the right buttons for %s (Accept %s, Waiting list %s)",
+    (status, accept, waitlist) => {
+      render(
+        <RosterTable
+          rows={[withYear(status)]}
+          selectedId={null}
+          onSelect={() => {}}
+          onDecideThisYear={vi.fn()}
+        />,
+      );
+      expect(
+        screen.queryByRole("button", {
+          name: "Accept Nova Reyes for this year",
+        }) !== null,
+      ).toBe(accept);
+      expect(
+        screen.queryByRole("button", {
+          name: "Put Nova Reyes on the waiting list",
+        }) !== null,
+      ).toBe(waitlist);
+    },
+  );
+
+  it("decides without opening the row", async () => {
+    const onSelect = vi.fn();
+    const decide = vi.fn<DecideThisYear>(async () => ({ ok: true }));
+    render(
+      <RosterTable
+        rows={[withYear("applied")]}
+        selectedId={null}
+        onSelect={onSelect}
+        onDecideThisYear={decide}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Accept Nova Reyes for this year" }),
+    );
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+    expect(decide.mock.calls[0]![1]).toBe("accepted");
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("toasts a failure, spinning only the tapped button meanwhile", async () => {
+    vi.mocked(toast.error).mockClear();
+    let settle!: (r: { ok: false; error: string }) => void;
+    const decide = vi.fn<DecideThisYear>(
+      () => new Promise((resolve) => (settle = resolve)),
+    );
+    const { container } = render(
+      <RosterTable
+        rows={[
+          withYear("applied"),
+          withYear("maybe", { id: "m2", displayName: "Kai Moss" }),
+        ]}
+        selectedId={null}
+        onSelect={() => {}}
+        onDecideThisYear={decide}
+      />,
+    );
+    const tapped = screen.getByRole("button", {
+      name: "Put Nova Reyes on the waiting list",
+    });
+    fireEvent.click(tapped);
+
+    // Only the tapped button spins; its row's other button waits, and the
+    // next row's buttons are untouched.
+    await waitFor(() =>
+      expect(tapped.querySelector(".animate-spin")).not.toBeNull(),
+    );
+    expect(container.querySelectorAll(".animate-spin")).toHaveLength(1);
+    const accept = screen.getByRole("button", {
+      name: "Accept Nova Reyes for this year",
+    }) as HTMLButtonElement;
+    expect(accept.querySelector(".animate-spin")).toBeNull();
+    expect(accept.disabled).toBe(true);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Accept Kai Moss for this year",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+
+    await act(async () =>
+      settle({ ok: false, error: "Nova Reyes's answer changed." }),
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("Nova Reyes's answer changed."),
+    );
+    expect(container.querySelectorAll(".animate-spin")).toHaveLength(0);
+  });
+
+  it("puts the badge and the buttons on the phone card, outside its open button", () => {
+    render(
+      <RosterList
+        rows={[withYear("maybe")]}
+        selectedId={null}
+        onSelect={() => {}}
+        onDecideThisYear={vi.fn()}
+      />,
+    );
+    const open = screen.getByRole("button", {
+      name: "Open Nova Reyes's profile",
+    });
+    const accept = screen.getByRole("button", {
+      name: "Accept Nova Reyes for this year",
+    });
+    expect(open.contains(accept)).toBe(false);
+    expect(
+      within(screen.getByRole("listitem")).getByText("Maybe"),
+    ).toBeTruthy();
+  });
+
+  it("gives a plain member's phone card no This year line", () => {
+    render(
+      <RosterList rows={[memberRow]} selectedId={null} onSelect={() => {}} />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Open Nova Reyes's profile" }),
+    ).toBeTruthy();
+    expect(screen.queryByText("This year")).toBeNull();
   });
 });
