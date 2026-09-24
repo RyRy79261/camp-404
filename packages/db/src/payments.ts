@@ -1,9 +1,12 @@
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
+  type Currency,
   formatMemberRefCode,
+  isCurrency,
   paymentReference,
   type PaymentStatus,
+  UnknownCurrencyError,
 } from "@camp404/core";
 import { writeAuditEvent } from "./audit";
 import { currentCycleNumber } from "./cycles";
@@ -75,7 +78,11 @@ export async function ensureMemberRefCode(
 
 export interface RecordPaymentInput {
   userId: string;
+  /** Whole cents. */
   amountCents: number;
+  /** Always ZAR: the camp records money in rands only, and any other code is
+   *  refused before any read or write. */
+  currency: Currency;
   status: PaymentStatus;
   /** What the captain saw, e.g. the bank statement line. */
   note?: string | null;
@@ -89,6 +96,11 @@ export interface RecordPaymentInput {
 export async function recordPayment(
   input: RecordPaymentInput,
 ): Promise<{ id: string; reference: string }> {
+  // Checked here as well as at the action: the database is the last caller's
+  // guard, and a payment in another currency would be added to a rand total.
+  if (!isCurrency(input.currency)) {
+    throw new UnknownCurrencyError(input.currency);
+  }
   if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0) {
     throw new Error(
       "recordPayment: the amount must be whole cents, not negative",
@@ -123,6 +135,7 @@ export async function recordPayment(
             userId: input.userId,
             cycle,
             amountCents: input.amountCents,
+            currency: input.currency,
             reference,
             status: input.status,
             note,
@@ -137,6 +150,7 @@ export async function recordPayment(
             reference,
             cycle,
             amountCents: input.amountCents,
+            currency: input.currency,
             status: input.status,
           },
         });
@@ -228,6 +242,29 @@ export async function listPayments(cycle: number): Promise<PaymentRow[]> {
     .leftJoin(recorder, eq(recorder.id, schema.payments.recordedByUserId))
     .where(eq(schema.payments.cycle, cycle))
     .orderBy(desc(schema.payments.createdAt), desc(schema.payments.id));
+}
+
+/**
+ * The rands that came in for one burn year, in cents. Only payments seen in
+ * the bank (`reconciled`) count. A waived payment settles dues but brings in
+ * no money, and a pending one has not arrived yet. Every payment is in ZAR
+ * (payments_currency_check), so this is a plain rand total.
+ */
+export async function receivedTotal(cycle: number): Promise<number> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      // bigint comes back as a string; a camp's year fits a safe integer.
+      amountMinor: sql<string>`coalesce(sum(${schema.payments.amountCents}), 0)`,
+    })
+    .from(schema.payments)
+    .where(
+      and(
+        eq(schema.payments.cycle, cycle),
+        eq(schema.payments.status, "reconciled"),
+      ),
+    );
+  return Number(row?.amountMinor ?? 0);
 }
 
 /**

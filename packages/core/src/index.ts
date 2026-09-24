@@ -20,7 +20,8 @@
 //     cycle-guarded (OD9)
 //   - invites: generateInviteCode, isSyntacticallyValidCode, CODE_RULES_HINT
 //     (./invites)
-//   - text utils: initialsFrom, slugify, humanizeKey (./text-utils)
+//   - text utils: initialsFrom, slugify, humanizeKey, defaultTeamLabel
+//     (./text-utils)
 //   - markdown → plain text: plainPreview — the strip every plain-text
 //     boundary shares (push, email, Telegram, clipped rows) (./markdown-text)
 //   - text redaction: redactPii, sanitizeReportText (both return a
@@ -46,7 +47,12 @@
 //   - member export: MEMBER_EXPORT_COLUMNS, memberExportColumnsFor — the
 //     roster CSV's columns by rank, from the field list (./member-export)
 //   - payment references: formatMemberRefCode, paymentReference,
-//     PAYMENT_STATUSES, formatRands, parseRandsToCents (./payment-references)
+//     PAYMENT_STATUSES, paymentSettlesDues (./payment-references)
+//   - money: CURRENCIES, DEFAULT_CURRENCY, isCurrency, UnknownCurrencyError,
+//     formatMoney, parseMoneyToMinor, decimalToMinor, sumMinor — money is in
+//     rands (ZAR) only, with one formatter; formatForeignEquivalent and
+//     FOREIGN_CURRENCIES label a rand amount in USD or EUR at a rate a captain
+//     typed, and store nothing (./money)
 //   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,
 //     neutraliseFormula, csvFilenamePart (./csv) — the ONE spreadsheet
 //     serialiser; the questionnaire export and WP9's roster export share it
@@ -102,6 +108,7 @@ export * from "./promotion";
 export * from "./privacy";
 export * from "./member-export";
 export * from "./payment-references";
+export * from "./money";
 export * from "./audience-authz";
 export * from "./pinned-order";
 export * from "./csv";

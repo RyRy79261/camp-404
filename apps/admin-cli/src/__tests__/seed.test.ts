@@ -128,6 +128,9 @@ describe("seedScenario", () => {
     );
     expect(completeBuilderResponse).toHaveBeenCalledTimes(12);
     expect(recordPayment).toHaveBeenCalledTimes(10);
+    expect(recordPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: "ZAR" }),
+    );
   });
 
   it("stops when a writer refuses", async () => {

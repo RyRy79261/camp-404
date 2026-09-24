@@ -2,6 +2,8 @@
 // apps/web and other packages can derive the same display strings without
 // duplicating the rules.
 
+import { TEAM_DEFAULT_LABELS } from "@camp404/types";
+
 /**
  * Derive up to two uppercase initials from a name or email. Splits on
  * whitespace, "@", and ".". Returns "?" when there's nothing usable.
@@ -40,7 +42,7 @@ export function slugify(input: string): string {
 /**
  * Humanise a snake_case enum key for display: "art_and_activities" →
  * "Art and Activities". Connectives ("and", "of") stay lowercase unless they
- * lead. The LAST-RESORT rendering of a stored key — a configured label always
+ * lead, and an initialism ("hr") is capitalised whole. The LAST-RESORT rendering of a stored key — a configured label always
  * wins (see `audienceLabel` / `teamLabelMap` in @camp404/db/camp-config) — but
  * it lives here, beside the other display-string rules, because both the
  * client-side roster chips and the server-side audience vocabulary need the
@@ -50,9 +52,28 @@ export function humanizeKey(key: string): string {
   return key
     .split("_")
     .map((word, index) =>
-      index > 0 && (word === "and" || word === "of")
-        ? word
-        : word.charAt(0).toUpperCase() + word.slice(1),
+      INITIALISMS.has(word)
+        ? word.toUpperCase()
+        : index > 0 && (word === "and" || word === "of")
+          ? word
+          : word.charAt(0).toUpperCase() + word.slice(1),
     )
     .join(" ");
+}
+
+// Words a key spells in lower case that read as capitals: the
+// communications_and_hr team is "Communications and HR", not "... Hr".
+const INITIALISMS = new Set(["hr"]);
+
+/**
+ * A team key as a name, for when the camp's config has no label for it: the
+ * team's default label (`sanitation_and_water` is "Sanitation and MOOP"), else
+ * the humanised key. A configured label always wins over this; see
+ * `audienceLabel` in @camp404/db/camp-config.
+ */
+export function defaultTeamLabel(key: string): string {
+  return (
+    (TEAM_DEFAULT_LABELS as Readonly<Record<string, string>>)[key] ??
+    humanizeKey(key)
+  );
 }

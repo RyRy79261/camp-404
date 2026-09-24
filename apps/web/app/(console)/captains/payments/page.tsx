@@ -1,9 +1,8 @@
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
-import { currentCycleNumber } from "@camp404/db/cycles";
-import { listPayments } from "@camp404/db/payments";
 import { captainPageGate } from "@/lib/captain-gate";
+import { ledgerCycle, listPayments } from "@/lib/payments";
 import { getCampManagementRoster } from "@/lib/roster";
 import { PaymentsManager, type LedgerMember } from "./payments-manager";
 
@@ -23,7 +22,7 @@ export default async function PaymentsPage() {
 
   const data = cleared
     ? await (async () => {
-        const cycle = await currentCycleNumber();
+        const cycle = await ledgerCycle();
         const [payments, roster] = await Promise.all([
           listPayments(cycle),
           getCampManagementRoster(),

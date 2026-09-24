@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { Currency } from "@camp404/types";
 import * as schema from "@camp404/db/schema";
 import {
   getTeamBudget,
@@ -59,10 +60,9 @@ export function registerTeamTools(server: McpServer): void {
         team: TeamEnum,
         assignedAmount: Amount.nullable().optional(),
         perceivedAmount: Amount.nullable().optional(),
-        currency: z
-          .string()
-          .regex(/^[A-Z]{3}$/, "A three-letter currency code, like ZAR.")
-          .optional(),
+        currency: Currency.optional().describe(
+          'Always "ZAR" when given: the camp records money in rands only.',
+        ),
         notes: z.string().max(2000).nullable().optional(),
       },
     },
@@ -84,6 +84,14 @@ export function registerTeamTools(server: McpServer): void {
           const { team, ...change } = args;
           if (Object.values(change).every((value) => value === undefined)) {
             throw new ToolError("Say at least one field to set.");
+          }
+          // The SDK checks the schema first; this is the handler's own
+          // guard, for a caller that reaches it without that check.
+          if (
+            change.currency !== undefined &&
+            !Currency.safeParse(change.currency).success
+          ) {
+            throw new ToolError("Money is recorded in rands (ZAR) only.");
           }
           return await setTeamBudget({
             team,

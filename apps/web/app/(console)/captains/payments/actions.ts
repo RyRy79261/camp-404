@@ -2,10 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { PAYMENT_STATUSES, parseRandsToCents } from "@camp404/core";
-import { recordPayment, setPaymentStatus } from "@camp404/db/payments";
+import {
+  DEFAULT_CURRENCY,
+  PAYMENT_STATUSES,
+  parseMoneyToMinor,
+} from "@camp404/core";
+import { Currency } from "@camp404/types";
 import { runAction } from "@/lib/action-result";
 import { captainActionGate } from "@/lib/captain-gate";
+import { recordPayment, setPaymentStatus } from "@/lib/payments";
 import { findCampUserById } from "@/lib/users";
 
 // The payments ledger's writes. Captain-only. The database writes the audit
@@ -31,6 +36,8 @@ export async function recordPaymentAction(input: {
   amount: string;
   status: string;
   note?: string;
+  /** Only "ZAR", the camp's one currency; left out, the payment is in rands. */
+  currency?: string;
 }): Promise<PaymentActionResult> {
   return runAction("recordPaymentAction", async () => {
     const gate = await captainActionGate("captain");
@@ -39,7 +46,14 @@ export async function recordPaymentAction(input: {
     if (!Id.safeParse(input?.userId).success) {
       return { ok: false, error: "Pick the member who paid." };
     }
-    const amountCents = parseRandsToCents(String(input.amount ?? ""));
+    // Money is in rands only. A caller that says another currency is refused,
+    // not recorded as the same number of rands; "zar" is refused too, not
+    // fixed up, like every money write path.
+    const currency = Currency.safeParse(input.currency ?? DEFAULT_CURRENCY);
+    if (!currency.success) {
+      return { ok: false, error: "Payments are recorded in rands (ZAR) only." };
+    }
+    const amountCents = parseMoneyToMinor(String(input.amount ?? ""));
     if (amountCents === null) {
       return {
         ok: false,
@@ -61,6 +75,7 @@ export async function recordPaymentAction(input: {
     const { reference } = await recordPayment({
       userId: input.userId,
       amountCents,
+      currency: currency.data,
       status: status.data,
       note: note || null,
       recordedByUserId: gate.campUser.id,

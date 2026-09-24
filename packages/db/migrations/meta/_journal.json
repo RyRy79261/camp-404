@@ -309,6 +309,62 @@
       "when": 1790208771229,
       "tag": "0043_task_deadline_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790212984505,
+      "tag": "0044_new_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1790212987743,
+      "tag": "0045_new_teams_in_camp_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790214501899,
+      "tag": "0046_normalise_currency_codes",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790214540964,
+      "tag": "0047_currency_check",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790247614471,
+      "tag": "0048_sound_and_water_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1790247627730,
+      "tag": "0049_sound_water_and_relabels_in_camp_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1790248150494,
+      "tag": "0050_money_in_rands_only_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1790248161166,
+      "tag": "0051_money_in_rands_only",
+      "breakpoints": true
     }
   ]
 }

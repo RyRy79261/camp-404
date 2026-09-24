@@ -3,6 +3,8 @@
 // `AuditEvent.action` in @camp404/db is typed from this list, so a writer with
 // a new action does not compile until the action has a label here.
 
+import { decimalToMinor, formatMoney, isCurrency } from "./money";
+
 export const AUDIT_ACTION_LABELS = {
   "account.sanitized": "Erased their account",
   "announcement.pinned": "Pinned an announcement",
@@ -153,7 +155,12 @@ export function auditDetail(
         return null;
       }
       const moved = `${REIMBURSEMENT_WORDS[from]} to ${REIMBURSEMENT_WORDS[to]}`;
-      return amount && currency ? `${currency} ${amount}, ${moved}` : moved;
+      if (!amount || !currency) return moved;
+      const minor = decimalToMinor(amount);
+      // A row from before the currency rule keeps the text it was written with.
+      return isCurrency(currency) && minor !== null
+        ? `${formatMoney(minor, currency)}, ${moved}`
+        : `${currency} ${amount}, ${moved}`;
     }
     case "team_budget.set": {
       const team = text(metadata, "team");
