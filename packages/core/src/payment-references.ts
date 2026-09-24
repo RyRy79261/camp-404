@@ -53,25 +53,3 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export function paymentSettlesDues(status: PaymentStatus): boolean {
   return status === "reconciled" || status === "waived";
 }
-
-const zar = new Intl.NumberFormat("en-ZA", {
-  style: "currency",
-  currency: "ZAR",
-});
-
-/** Cents as rands, the way a South African reads them: `R 1 250,00`. */
-export function formatRands(amountCents: number): string {
-  return zar.format(amountCents / 100);
-}
-
-/**
- * Rands typed by a captain ("1250", "1 250,50", "R1250.5") as whole cents,
- * or null when it is not an amount. At most two decimals, never negative.
- */
-export function parseRandsToCents(input: string): number | null {
-  const cleaned = input.replace(/^\s*R\s*/i, "").replace(/[\s ]/g, "");
-  if (!/^\d+([.,]\d{1,2})?$/.test(cleaned)) return null;
-  const [whole, fraction = ""] = cleaned.replace(",", ".").split(".");
-  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  return Number.isSafeInteger(cents) ? cents : null;
-}

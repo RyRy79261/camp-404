@@ -27,13 +27,31 @@ plan below is kept as history.
   (`TEAM_LEAD_QUESTION_ID`); `apps/web/lib/questionnaire-config.ts` reads the
   config for it. A new member sees the active teams; a stored answer is
   checked against all teams, archived ones included.
-- **Adding a team key (Phase 4), done once for Finance.** Commit `3111f85`
-  (PR #231) added `finance` to `teamEnum` in `packages/db/src/schema.ts`,
-  which now has **9** values. Migration `0039_finance_team.sql` adds the enum
+- **Adding a team key (Phase 4), done for Finance and five more.** Commit
+  `3111f85` (PR #231) added `finance` to `teamEnum` in
+  `packages/db/src/schema.ts`. Migration `0039_finance_team.sql` adds the enum
   value and the new-camp default; `0040_finance_team_in_camp_config.sql`
   appends Finance to a live camp's team list once, keeping any labels and
   archiving captains have set. Tested in
-  `packages/db/src/__tests__/finance-team-migration.test.ts`.
+  `packages/db/src/__tests__/finance-team-migration.test.ts`. #236 added
+  `transport_and_logistics`, `communications_and_hr` and `mutant_vehicle`
+  (labels "Transport and Logistics", "Communications and HR", "Mutant
+  Vehicle") the same way: `0044_new_teams.sql` adds the three enum values and
+  the new-camp default, and `0045_new_teams_in_camp_config.sql` appends each
+  to a live camp's list once, in that order. Tested in
+  `packages/db/src/__tests__/new-teams-migration.test.ts`. The owner's final
+  list (2026-09-24) added `sound` and `water` the same way
+  (`0048_sound_and_water_teams.sql`, then
+  `0049_sound_water_and_relabels_in_camp_config.sql`), and renamed three teams
+  whose key stays, because Postgres cannot drop an enum value:
+  `sanitation_and_water` is "Sanitation and MOOP" (a different team from
+  Water), `health_and_safety` is "Safety", and `communications_and_hr` is
+  "Communications & HR". 0049 renames a live camp's entry only while it still
+  has the old default label, so a captain's own name is kept. Tested in
+  `packages/db/src/__tests__/sound-water-teams-migration.test.ts`. The default
+  labels live in `TEAM_DEFAULT_LABELS` (`@camp404/types`). `teamEnum` now has
+  **14** values. The team-interest questions are optional, so a new team does
+  not bump `QUESTIONNAIRE_VERSION`.
 - **Cross-team task board.** `/tasks` (`apps/web/app/(console)/tasks/`), with
   columns To do, Doing and Done.
 
@@ -65,8 +83,10 @@ Move the camp's team list out of hardcoded constants into editable config,
 reordered / archived (and later extended) without code changes.
 
 > **[CORRECTION 2026-09-24]** Eight was the founding set. Finance was added in
-> code as the ninth (PR #231), and the owner ruled that teams are extended in
-> code, not from a screen.
+> code as the ninth (PR #231), then Transport and Logistics, Communications and
+> HR and Mutant Vehicle (#236) made twelve, and Sound and Water (the owner's
+> final list, 2026-09-24) made fourteen. The owner ruled that teams are
+> extended in code, not from a screen.
 
 ### Hard constraint
 
@@ -79,11 +99,15 @@ backbone** — woven through ~9 tables (`team_memberships`, `team_budgets`,
 display **labels** + **order** become config; the keys remain the enum. Adding a
 brand-new team **key** later is a separate enum migration (Phase 4).
 
-> **[CORRECTION 2026-09-24]** `teamEnum` now has **9** values: the eight above
-> plus `finance` (migration `0039`). A grep of `schema.ts` finds it in exactly
-> 9 tables: `team_memberships`, `questionnaire_activations`, `documents`,
-> `reimbursements`, `team_budgets`, `broadcasts`, `tasks`, `inventory_items`,
-> `inventory_updates`. The list above is otherwise still right.
+> **[CORRECTION 2026-09-24]** `teamEnum` now has **14** values: the eight above
+> plus `finance` (migration `0039`), `transport_and_logistics`,
+> `communications_and_hr` and `mutant_vehicle` (migration `0044`), and `sound`
+> and `water` (migration `0048`). `sanitation_and_water` is now labelled
+> "Sanitation and MOOP" and `health_and_safety` "Safety". A grep of
+> `schema.ts` finds it in exactly 9 tables: `team_memberships`,
+> `questionnaire_activations`, `documents`, `reimbursements`, `team_budgets`,
+> `broadcasts`, `tasks`, `inventory_items`, `inventory_updates`. The list above
+> is otherwise still right.
 
 ### The coupling (why this is staged, not one PR)
 

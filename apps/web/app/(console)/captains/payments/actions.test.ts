@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/captain-gate", () => ({ captainActionGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ findCampUserById: vi.fn() }));
-vi.mock("@camp404/db/payments", () => ({
+vi.mock("@/lib/payments", () => ({
   recordPayment: vi.fn(async () => ({
     id: "p1",
     reference: "C404-M017-2027-1",
@@ -17,7 +17,7 @@ vi.mock("@camp404/db/payments", () => ({
 import { revalidatePath } from "next/cache";
 import { captainActionGate } from "@/lib/captain-gate";
 import { findCampUserById } from "@/lib/users";
-import { recordPayment, setPaymentStatus } from "@camp404/db/payments";
+import { recordPayment, setPaymentStatus } from "@/lib/payments";
 import { recordPaymentAction, setPaymentStatusAction } from "./actions";
 
 beforeEach(() => {
@@ -46,6 +46,7 @@ describe("recordPaymentAction", () => {
     expect(recordPayment).toHaveBeenCalledWith({
       userId: "m1",
       amountCents: 125050,
+      currency: "ZAR",
       status: "reconciled",
       note: "FNB",
       recordedByUserId: "cap-1",
@@ -78,6 +79,34 @@ describe("recordPaymentAction", () => {
       ok: false,
       error: "Member not found.",
     });
+    expect(recordPayment).not.toHaveBeenCalled();
+  });
+
+  it("records in rands, whether or not the caller says ZAR", async () => {
+    await recordPaymentAction({ ...VALID, amount: "12,34" });
+    expect(recordPayment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ amountCents: 1234, currency: "ZAR" }),
+    );
+    await recordPaymentAction({ ...VALID, amount: "R12,34", currency: "ZAR" });
+    expect(recordPayment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ amountCents: 1234, currency: "ZAR" }),
+    );
+  });
+
+  it("refuses dollars, euros or any other code, and records nothing", async () => {
+    for (const currency of ["USD", "EUR", "GBP", "zar", " ZAR", ""]) {
+      expect(await recordPaymentAction({ ...VALID, currency })).toEqual({
+        ok: false,
+        error: "Payments are recorded in rands (ZAR) only.",
+      });
+    }
+    // A dollar amount typed with its symbol is not read as rands either.
+    expect(await recordPaymentAction({ ...VALID, amount: "US$12,34" })).toEqual(
+      {
+        ok: false,
+        error: "Type the amount in rands, like 1250 or 1250,50.",
+      },
+    );
     expect(recordPayment).not.toHaveBeenCalled();
   });
 

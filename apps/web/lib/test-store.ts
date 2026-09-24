@@ -7,8 +7,15 @@ import {
   approvalNotification,
   isReviewTransition,
   captainPromotionNotification,
+  formatMemberRefCode,
+  isCurrency,
   normalizeInviteCode,
   notificationLink,
+  paymentReference,
+  paymentSettlesDues,
+  sumMinor,
+  UnknownCurrencyError,
+  type PaymentStatus,
   QUESTIONNAIRE_REF_TYPE,
   sortPinned,
   type NotificationKind,
@@ -35,6 +42,7 @@ import type {
   CampMemberDetail,
   CampMemberDetailOptions,
 } from "@camp404/db/roster";
+import type { PaymentRow, RecordPaymentInput } from "@camp404/db/payments";
 import {
   CANNOT_EDIT,
   CANNOT_MOVE,
@@ -256,6 +264,21 @@ interface TestTask {
   version: number;
 }
 
+/** A payments-ledger row (mirrors `payments`). */
+interface TestPayment {
+  id: string;
+  userId: string;
+  cycle: number;
+  amountCents: number;
+  currency: string;
+  reference: string;
+  status: PaymentStatus;
+  note: string | null;
+  recordedByUserId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -273,6 +296,9 @@ interface TestStoreState {
   requiredActions: TestRequiredAction[];
   tasks: TestTask[];
   calendarEvents: TestCalendarEvent[];
+  payments: TestPayment[];
+  /** `users.ref_code`: each member's payment reference, given out once. */
+  memberRefCodes: Map<string, string>;
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -311,6 +337,8 @@ function globalState(): TestStoreState {
       requiredActions: [] as TestRequiredAction[],
       tasks: [] as TestTask[],
       calendarEvents: [] as TestCalendarEvent[],
+      payments: [] as TestPayment[],
+      memberRefCodes: new Map<string, string>(),
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -362,6 +390,10 @@ const tasks = S.tasks;
 // without it; give it one rather than crash.
 S.calendarEvents ??= [];
 const calendarEvents = S.calendarEvents;
+S.payments ??= [];
+S.memberRefCodes ??= new Map<string, string>();
+const payments = S.payments;
+const memberRefCodes = S.memberRefCodes;
 
 /**
  * The camp's current year, resolved the way `currentCycleNumber()` resolves it
@@ -1448,10 +1480,11 @@ export const testStore = {
   },
 
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
-  // The test store models users, burner profiles, team memberships and the
-  // required_actions twin, but not driver profiles or the payments ledger, so
+  // The test store models users, burner profiles, team memberships, the
+  // payments ledger and the required_actions twin, but not driver profiles, so
   // those facets still default (false) — enough for the captain roster to
-  // render in E2E without touching Neon. What a member still owes comes from
+  // render in E2E without touching Neon. `duesPaid` is this year's ledger with
+  // the real query's rule: any payment received or waived. What a member still owes comes from
   // `requiredActions` with the real query's predicate (pending AND blocking,
   // oldest first), so the count and the named list agree.
   // `isLead` and `teams` come from the membership rows and are year-scoped, the
@@ -1461,6 +1494,11 @@ export const testStore = {
   ): CampManagementMember[] {
     const cycle = currentCycleNumber();
     const thisYear = teamMemberships.filter((m) => m.cycle === cycle);
+    const settled = new Set(
+      payments
+        .filter((p) => p.cycle === cycle && paymentSettlesDues(p.status))
+        .map((p) => p.userId),
+    );
     return Array.from(usersByAuthId.values())
       .map((u): CampManagementMember => {
         const mine = thisYear.filter((m) => m.userId === u.id);
@@ -1478,7 +1516,7 @@ export const testStore = {
           approvalStatus: u.approvalStatus,
           isLead: mine.some((m) => m.isLead),
           teams: mine.map((m) => m.team).sort((a, b) => a.localeCompare(b)),
-          duesPaid: false,
+          duesPaid: settled.has(u.id),
           membershipTier: null,
           onboardingComplete: profile?.completedAt != null,
           pendingRequiredActions: owed.length,
@@ -1921,6 +1959,115 @@ export const testStore = {
     return { ok: true, eventId: id };
   },
 
+  // --- payments ledger (mirrors @camp404/db/payments) -----------------------
+  // The same rules as the real ledger, asserted case for case in
+  // lib/__tests__/test-store-payments.test.ts: any currency but ZAR is
+  // refused before anything is written, references are the member's
+  // reference, the year and their count that year, a status moves only from
+  // the one the captain saw, and money received is a plain rand total. The
+  // store keeps no audit log, so the captain's id stops at `recordedByUserId`.
+
+  /** The member's payment reference, giving them the next one first. */
+  ensureMemberRefCode(userId: string): string | null {
+    if (!findUserById(userId)) return null;
+    const existing = memberRefCodes.get(userId);
+    if (existing) return existing;
+    // Codes are never taken back (only reset() clears them), so the count is
+    // the sequence.
+    const code = formatMemberRefCode(memberRefCodes.size + 1);
+    memberRefCodes.set(userId, code);
+    return code;
+  },
+
+  /** Record a payment for this year (mirrors recordPayment). */
+  recordPayment(input: RecordPaymentInput): { id: string; reference: string } {
+    if (!isCurrency(input.currency)) {
+      throw new UnknownCurrencyError(input.currency);
+    }
+    if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0) {
+      throw new Error(
+        "recordPayment: the amount must be whole cents, not negative",
+      );
+    }
+    const refCode = this.ensureMemberRefCode(input.userId);
+    if (!refCode) throw new Error("recordPayment: no such member");
+    const cycle = currentCycleNumber();
+    const count = payments.filter(
+      (p) => p.userId === input.userId && p.cycle === cycle,
+    ).length;
+    const now = new Date();
+    const row: TestPayment = {
+      id: `test-payment-${S.nextSerial++}`,
+      userId: input.userId,
+      cycle,
+      amountCents: input.amountCents,
+      currency: input.currency,
+      reference: paymentReference(refCode, cycle, count + 1),
+      status: input.status,
+      note: input.note?.trim() || null,
+      recordedByUserId: input.recordedByUserId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    payments.push(row);
+    return { id: row.id, reference: row.reference };
+  },
+
+  /** Compare-and-set on `from` (mirrors setPaymentStatus): false when it moved. */
+  setPaymentStatus(input: {
+    paymentId: string;
+    from: PaymentStatus;
+    to: PaymentStatus;
+  }): boolean {
+    if (input.from === input.to) return false;
+    const row = payments.find(
+      (p) => p.id === input.paymentId && p.status === input.from,
+    );
+    if (!row) return false;
+    row.status = input.to;
+    row.updatedAt = new Date();
+    return true;
+  },
+
+  /** Every payment in one burn year, newest first (mirrors listPayments). */
+  listPayments(cycle: number): PaymentRow[] {
+    // Newest first; a later insert wins a tie on the clock, as the real
+    // query's id tie-break settles one.
+    return payments
+      .map((p, order) => ({ p, order }))
+      .filter(({ p }) => p.cycle === cycle && findUserById(p.userId))
+      .sort(
+        (a, b) =>
+          b.p.createdAt.getTime() - a.p.createdAt.getTime() ||
+          b.order - a.order,
+      )
+      .map(({ p }) => ({
+        id: p.id,
+        userId: p.userId,
+        memberName: findUserById(p.userId)?.displayName ?? null,
+        memberRefCode: memberRefCodes.get(p.userId) ?? null,
+        cycle: p.cycle,
+        amountCents: p.amountCents,
+        currency: p.currency,
+        reference: p.reference,
+        status: p.status,
+        note: p.note,
+        recordedByName: p.recordedByUserId
+          ? (findUserById(p.recordedByUserId)?.displayName ?? null)
+          : null,
+        createdAt: p.createdAt,
+      }));
+  },
+
+  /** Rands received in one year, in cents (mirrors receivedTotal). */
+  receivedTotal(cycle: number): number {
+    return sumMinor(
+      payments
+        .filter((p) => p.cycle === cycle && p.status === "reconciled")
+        .map((p) => p.amountCents),
+    );
+  },
+
   reset(): void {
     usersByAuthId.clear();
     profilesByUserId.clear();
@@ -1935,6 +2082,8 @@ export const testStore = {
     requiredActions.length = 0;
     tasks.length = 0;
     calendarEvents.length = 0;
+    payments.length = 0;
+    memberRefCodes.clear();
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },
@@ -1948,4 +2097,5 @@ export type {
   TestPromotionRequest,
   TestTeamMembership,
   TestRequiredAction,
+  TestPayment,
 };

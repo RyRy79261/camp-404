@@ -82,6 +82,11 @@ export const teamEnum = pgEnum("team", [
   "ministry_of_memes",
   "ministry_of_vibes",
   "finance",
+  "transport_and_logistics",
+  "communications_and_hr",
+  "mutant_vehicle",
+  "sound",
+  "water",
 ]);
 
 export const membershipTierEnum = pgEnum("membership_tier", [
@@ -787,6 +792,8 @@ export const payments = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     cycle: integer("cycle").notNull(),
     amountCents: integer("amount_cents").notNull(),
+    // ISO 4217 code, always ZAR: the camp records money in rands only
+    // (CURRENCIES in @camp404/core), held by payments_currency_check.
     currency: text("currency").notNull().default("ZAR"),
     // `C404-M017-2027-1`: the member reference, the year, and that member's
     // payment count that year. Unique across the ledger.
@@ -803,6 +810,7 @@ export const payments = pgTable(
   (p) => ({
     userCycleIdx: index("payments_user_cycle_idx").on(p.userId, p.cycle),
     cycleIdx: index("payments_cycle_idx").on(p.cycle),
+    currencyCheck: check("payments_currency_check", sql`${p.currency} = 'ZAR'`),
   }),
 );
 
@@ -1114,7 +1122,9 @@ export const reimbursements = pgTable(
     team: teamEnum("team"),
 
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
-    // ISO 4217 code of the currency the member actually paid in.
+    // ISO 4217 code, always ZAR: a claim is made in rands, because the camp
+    // records money in rands only (CURRENCIES in @camp404/core), held by
+    // reimbursements_currency_check.
     currency: text("currency").notNull(),
 
     // Where to reimburse to. Bank details are encrypted via pgcrypto in
@@ -1143,6 +1153,10 @@ export const reimbursements = pgTable(
     statusIdx: index("reimbursements_status_idx").on(r.status),
     submitterIdx: index("reimbursements_submitter_idx").on(r.submitterId),
     teamIdx: index("reimbursements_team_idx").on(r.team),
+    currencyCheck: check(
+      "reimbursements_currency_check",
+      sql`${r.currency} = 'ZAR'`,
+    ),
   }),
 );
 
@@ -1158,6 +1172,8 @@ export const teamBudgets = pgTable(
   {
     team: teamEnum("team").notNull(),
     cycle: integer("cycle").notNull().default(1),
+    // ISO 4217 code, always ZAR: the camp records money in rands only
+    // (CURRENCIES in @camp404/core), held by team_budgets_currency_check.
     currency: text("currency").notNull().default("ZAR"),
     assignedAmount: numeric("assigned_amount", { precision: 12, scale: 2 }),
     perceivedAmount: numeric("perceived_amount", { precision: 12, scale: 2 }),
@@ -1166,6 +1182,10 @@ export const teamBudgets = pgTable(
   },
   (tb) => ({
     pk: primaryKey({ columns: [tb.team, tb.cycle] }),
+    currencyCheck: check(
+      "team_budgets_currency_check",
+      sql`${tb.currency} = 'ZAR'`,
+    ),
   }),
 );
 
@@ -1918,13 +1938,14 @@ export const campSettings = pgTable(
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
     // Editable camp config (Phase 1: the team list). Seeded with the 8 founding
-    // teams; the seed mirrors DEFAULT_CAMP_CONFIG in camp-config.ts (a test
+    // teams, Finance, Transport and Logistics, Communications & HR, Mutant
+    // Vehicle, Sound and Water; the seed mirrors DEFAULT_CAMP_CONFIG in camp-config.ts (a test
     // guards the two against drift). See camp-config.ts for the accessor.
     config: jsonb("config")
       .$type<CampConfig>()
       .notNull()
       .default(
-        sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and Water","order":3,"archived":false},{"key":"health_and_safety","label":"Health and Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false},{"key":"finance","label":"Finance","order":8,"archived":false}]}'::jsonb`,
+        sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and MOOP","order":3,"archived":false},{"key":"health_and_safety","label":"Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false},{"key":"finance","label":"Finance","order":8,"archived":false},{"key":"transport_and_logistics","label":"Transport and Logistics","order":9,"archived":false},{"key":"communications_and_hr","label":"Communications & HR","order":10,"archived":false},{"key":"mutant_vehicle","label":"Mutant Vehicle","order":11,"archived":false},{"key":"sound","label":"Sound","order":12,"archived":false},{"key":"water","label":"Water","order":13,"archived":false}]}'::jsonb`,
       ),
   },
   (t) => ({

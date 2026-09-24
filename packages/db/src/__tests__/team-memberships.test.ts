@@ -279,6 +279,38 @@ describe("setLead", () => {
 // resolved through the SAME year-scoped query production uses, after a real
 // assignment through the real writer.
 
+describe("the teams added in #236 and the owner's final list", () => {
+  const h = useTestDb();
+
+  // Real Postgres enum: a key missing from the migration fails the insert here,
+  // where a mocked handle would not.
+  it.each([
+    "transport_and_logistics",
+    "communications_and_hr",
+    "mutant_vehicle",
+    "sound",
+    "water",
+  ] as const)("%s takes a member and a lead", async (team) => {
+    const db = h.db();
+    const member = await makeUser(db);
+    await foundedAt(db, 2027);
+
+    expect(await assignTeam({ userId: member.id, team })).toEqual({
+      created: true,
+      cycle: 2027,
+    });
+    expect(await setLead({ userId: member.id, team, isLead: true })).toEqual({
+      ok: true,
+      changed: true,
+    });
+
+    expect(await isTeamLead(member.id)).toBe(true);
+    expect(await getTeamMemberships(member.id)).toEqual([
+      { team, isLead: true, cycle: 2027 },
+    ]);
+  });
+});
+
 describe("a team broadcast reaches the members a captain just assigned", () => {
   const h = useTestDb();
 

@@ -1,0 +1,3 @@
+ALTER TABLE "payments" ADD CONSTRAINT "payments_currency_check" CHECK ("payments"."currency" in ('ZAR', 'USD', 'EUR'));--> statement-breakpoint
+ALTER TABLE "reimbursements" ADD CONSTRAINT "reimbursements_currency_check" CHECK ("reimbursements"."currency" in ('ZAR', 'USD', 'EUR'));--> statement-breakpoint
+ALTER TABLE "team_budgets" ADD CONSTRAINT "team_budgets_currency_check" CHECK ("team_budgets"."currency" in ('ZAR', 'USD', 'EUR'));

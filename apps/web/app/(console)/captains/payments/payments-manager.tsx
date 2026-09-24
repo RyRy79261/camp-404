@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { Loader2, Wallet } from "lucide-react";
 import {
   CAMP_TIME_ZONE,
-  formatRands,
+  formatMoney,
   readRate,
+  sumMinor,
   type PaymentStatus,
 } from "@camp404/core";
 import type { PaymentRow } from "@camp404/db/payments";
@@ -38,6 +39,9 @@ import { recordPaymentAction, setPaymentStatusAction } from "./actions";
 // Feedback, as on every captain screen: a refused payment shows inline on the
 // form; a failed one-tap move on a ledger row is a toast. Only the control that
 // was used spins, and no second change starts while one runs.
+//
+// Money is in rands only (owner's call, 2026-09-24), so the "Dues paid" card's
+// totals are plain rand totals.
 
 export interface LedgerMember {
   id: string;
@@ -65,6 +69,15 @@ const when = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
   timeZone: CAMP_TIME_ZONE,
 });
+
+/** This year's rows with one status, and their rand total in cents. */
+function totalOf(payments: readonly PaymentRow[], status: PaymentStatus) {
+  const rows = payments.filter((p) => p.status === status);
+  return {
+    count: rows.length,
+    cents: sumMinor(rows.map((p) => p.amountCents)),
+  };
+}
 
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
@@ -97,6 +110,10 @@ export function PaymentsManager({
     members.filter((m) => m.duesPaid).length,
     members.length,
   );
+  // Received counts only money seen in the bank: a waived payment settles dues
+  // but brings nothing in, and a pending one has not arrived.
+  const received = totalOf(payments, "reconciled");
+  const promised = totalOf(payments, "pending");
 
   function record() {
     setError(null);
@@ -177,7 +194,7 @@ export function PaymentsManager({
       header: "Amount",
       align: "right",
       cellClassName: "whitespace-nowrap font-medium tabular-nums",
-      cell: (p) => formatRands(p.amountCents),
+      cell: (p) => formatMoney(p.amountCents, p.currency),
     },
     {
       id: "recorded",
@@ -295,6 +312,22 @@ export function PaymentsManager({
             <p role="status" className="text-xs text-muted-foreground">
               {paid.read} of {paid.of} members have paid for {yearLabel}.
             </p>
+            <div className="mt-1 flex flex-col gap-1 border-t border-border pt-3 text-sm">
+              <p role="status">
+                <span className="text-muted-foreground">Received: </span>
+                <span className="font-medium tabular-nums">
+                  {formatMoney(received.cents)}
+                </span>
+              </p>
+              {promised.count > 0 && (
+                <p role="status">
+                  <span className="text-muted-foreground">Pending: </span>
+                  <span className="font-medium tabular-nums">
+                    {formatMoney(promised.cents)}
+                  </span>
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
 

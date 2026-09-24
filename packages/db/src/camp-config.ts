@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { humanizeKey, slugify, type AudienceScope } from "@camp404/core";
+import { defaultTeamLabel, slugify, type AudienceScope } from "@camp404/core";
 import { writeAuditEvent, type AuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
 import { campSettings } from "./schema";
@@ -27,20 +27,28 @@ export interface TeamsConfig {
   teams: TeamConfigEntry[];
 }
 
-// The 8 founding teams and Finance (added 2026-09-23), seeded as the column default. Labels mirror the roster's
-// previous `teamLabel()` humanizer ("Art and Activities") so Phase 1 renders
-// identically. The schema.ts column seeds the SAME shape via a SQL default; the
+// The 8 founding teams, then Finance (added 2026-09-23), Transport and
+// Logistics, Communications & HR and Mutant Vehicle, and Sound and Water (all
+// added 2026-09-24), seeded as the column default. Labels are
+// TEAM_DEFAULT_LABELS in @camp404/types (a test guards the two against drift):
+// `sanitation_and_water` reads "Sanitation and MOOP" and `health_and_safety`
+// reads "Safety", because Water became its own team and a key cannot be renamed. The schema.ts column seeds the SAME shape via a SQL default; the
 // "seeds match DEFAULT_CAMP_CONFIG" test in camp-config.test.ts guards drift.
 export const DEFAULT_TEAMS: TeamConfigEntry[] = [
   { key: "kitchen", label: "Kitchen", order: 0, archived: false },
   { key: "structures", label: "Structures", order: 1, archived: false },
   { key: "power_and_lighting", label: "Power and Lighting", order: 2, archived: false },
-  { key: "sanitation_and_water", label: "Sanitation and Water", order: 3, archived: false },
-  { key: "health_and_safety", label: "Health and Safety", order: 4, archived: false },
+  { key: "sanitation_and_water", label: "Sanitation and MOOP", order: 3, archived: false },
+  { key: "health_and_safety", label: "Safety", order: 4, archived: false },
   { key: "art_and_activities", label: "Art and Activities", order: 5, archived: false },
   { key: "ministry_of_memes", label: "Ministry of Memes", order: 6, archived: false },
   { key: "ministry_of_vibes", label: "Ministry of Vibes", order: 7, archived: false },
   { key: "finance", label: "Finance", order: 8, archived: false },
+  { key: "transport_and_logistics", label: "Transport and Logistics", order: 9, archived: false },
+  { key: "communications_and_hr", label: "Communications & HR", order: 10, archived: false },
+  { key: "mutant_vehicle", label: "Mutant Vehicle", order: 11, archived: false },
+  { key: "sound", label: "Sound", order: 12, archived: false },
+  { key: "water", label: "Water", order: 13, archived: false },
 ];
 
 export const DEFAULT_CAMP_CONFIG: TeamsConfig = { teams: DEFAULT_TEAMS };
@@ -385,9 +393,9 @@ export const AUDIENCE_SCOPE_LABELS: Readonly<Record<AudienceScope, string>> = {
  *
  * Pass `labels` (from teamLabelMap) to resolve a team key against the camp's
  * CURRENT config, so a rename propagates. Without it — or for a key the config
- * has never heard of — the key is humanised rather than printed raw, which is
- * the difference between reading "Power and Lighting" and reading
- * `power_and_lighting`.
+ * has never heard of — the team's default label (else the humanised key) is
+ * used rather than the raw key, which is the difference between reading
+ * "Power and Lighting" and reading `power_and_lighting`.
  */
 export function audienceLabel(
   scope: AudienceScope,
@@ -396,7 +404,7 @@ export function audienceLabel(
 ): string {
   if (scope === "team") {
     if (!team) return AUDIENCE_SCOPE_LABELS.team;
-    return labels?.[team] ?? humanizeKey(team);
+    return labels?.[team] ?? defaultTeamLabel(team);
   }
   return AUDIENCE_SCOPE_LABELS[scope];
 }

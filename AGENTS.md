@@ -182,12 +182,26 @@ frozen — never regenerate, edit, or delete an existing migration. Each
 change is a new `0001_*.sql`, `0002_*.sql`, … `pnpm --filter @camp404/db
 exec drizzle-kit check` validates consistency.
 
+**Two branches that both add migrations collide on the numbers.** When a
+branch rebases onto one whose migrations merged first, delete the branch's own
+unmerged migrations and regenerate them after the new last one. Never rename
+them into place: the migrator skips an entry whose journal `when` is older
+than the newest one applied, so a renamed migration never runs in production
+and no error says so. `migration-journal.test.ts` fails on it.
+
 **One-off data fixes are migrations too.** `vercel-build` runs
 `db:migrate` before `next build`, so a data fix written as a custom migration
 (`pnpm --filter @camp404/db db:generate --custom --name <name>`, then fill in
 the SQL) runs on the next deploy. Never ship a fix that needs someone to run a
 CLI or SQL command against production by hand. Make it idempotent (`ON
 CONFLICT DO NOTHING`, `WHERE ... IS NULL`) and test it on PGlite.
+
+A **guard migration** is the same mechanism with no data change: a custom
+migration whose only job is to stop the deploy (`RAISE EXCEPTION`) when live
+data would break the next migration, for example a `CHECK` that stored rows
+would fail (`0050_money_in_rands_only_guard.sql`). Generate it with `--custom`
+like a data fix, never write the file by hand, say in the error what to do,
+and test on PGlite that it passes on clean data and stops on bad data.
 
 Two Postgres traps:
 
@@ -400,6 +414,17 @@ All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
   `.returning()` tells the caller whether it won. A lost race returns a
   sentence the user can act on, never a silent overwrite. See
   `setUserApproval` and `decideCaptainPromotion`.
+- **Money is in South African rands only** (owner's call, 2026-09-24:
+  "Everything should be in South African rands"). The ledger keeps integer
+  cents, and every write path (payments, reimbursements, team budgets) refuses
+  any currency but `ZAR` with the `Currency` Zod schema (`@camp404/types`) or
+  `isCurrency`, at its boundary and again in the db function (strict: `"zar"`
+  is refused, not fixed). A `CHECK (currency = 'ZAR')` on each table is the
+  last guard. Only `formatMoney` formats money, and a total is a plain rand
+  total (`sumMinor`). A dollar or euro figure is a label beside a rand amount
+  at most (`formatForeignEquivalent`, at a rate a captain typed); the app
+  never fetches a rate and never stores a foreign amount. The rules live in
+  `packages/core/src/money.ts`.
 - A failed change is reported one way on every captain screen. A problem with
   what someone typed, in a form or a dialog, shows inline beside it. A one-tap
   change on a list row (move, archive, delete, tick) reports its failure as a

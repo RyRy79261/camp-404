@@ -184,6 +184,28 @@ describe("TeamCoverageCard", () => {
     expect(within(structures).getByText("4 members")).toBeTruthy();
   });
 
+  it("keeps a long team's counts on one line, so the name wraps instead", () => {
+    render(
+      <TeamCoverageCard
+        rows={[
+          coverageRow({
+            key: "communications_and_hr",
+            label: "Communications & HR",
+            members: 1,
+            leads: 0,
+            hasLead: false,
+          }),
+        ]}
+      />,
+    );
+
+    const counts = screen.getByText("1 member").parentElement!;
+    expect(within(counts).getByText("No lead")).toBeTruthy();
+    // "1 member" and "No lead" each broke over two lines beside the long name.
+    expect(counts.className).toContain("whitespace-nowrap");
+    expect(counts.className).toContain("shrink-0");
+  });
+
   it("names the teams nobody is on", () => {
     render(
       <TeamCoverageCard

@@ -24,8 +24,9 @@ import type { PaymentRow } from "@camp404/db/payments";
 import { recordPaymentAction, setPaymentStatusAction } from "./actions";
 import { PaymentsManager } from "./payments-manager";
 
-// The ledger screen: the year's count, recording a payment, and moving one
-// between statuses (going back to pending asks first).
+// The ledger screen: the year's count and its rand totals, recording a
+// payment, and moving one between statuses (going back to pending asks first).
+// Money text carries no-break spaces from Intl, so it is matched with \s.
 
 afterEach(() => {
   cleanup();
@@ -62,10 +63,45 @@ describe("PaymentsManager", () => {
     render(
       <PaymentsManager yearLabel="2027" members={MEMBERS} payments={[]} />,
     );
-    expect(screen.getByRole("status").textContent).toBe(
-      "1 of 2 members have paid for 2027.",
-    );
+    const [count, money, ...rest] = screen.getAllByRole("status");
+    expect(count!.textContent).toBe("1 of 2 members have paid for 2027.");
+    expect(money!.textContent).toMatch(/^Received: R\s0,00$/);
+    // Nothing promised, so no Pending line.
+    expect(rest).toHaveLength(0);
     expect(screen.getByText("No payments recorded yet.")).toBeTruthy();
+  });
+
+  it("totals the rands received and pending", () => {
+    render(
+      <PaymentsManager
+        yearLabel="2027"
+        members={MEMBERS}
+        payments={[
+          payment({ id: "a", amountCents: 1234, status: "reconciled" }),
+          payment({ id: "b", amountCents: 1000, status: "reconciled" }),
+          payment({ id: "c", amountCents: 700 }),
+          // Waived settles dues but brings in no money.
+          payment({ id: "e", amountCents: 9900, status: "waived" }),
+        ]}
+      />,
+    );
+    const lines = screen
+      .getAllByRole("status")
+      .map((el) => el.textContent ?? "");
+    expect(lines.find((l) => l.startsWith("Received:"))).toMatch(
+      /^Received: R\s22,34$/,
+    );
+    expect(lines.find((l) => l.startsWith("Pending:"))).toMatch(
+      /^Pending: R\s7,00$/,
+    );
+  });
+
+  it("offers no currency to pick: every amount is in rands", () => {
+    render(
+      <PaymentsManager yearLabel="2027" members={MEMBERS} payments={[]} />,
+    );
+    expect(screen.queryByLabelText("Currency")).toBeNull();
+    expect(screen.getByLabelText("Amount (R)")).toBeTruthy();
   });
 
   it("records a payment with what the captain typed", async () => {

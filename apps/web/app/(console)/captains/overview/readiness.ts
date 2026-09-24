@@ -1,4 +1,5 @@
 import {
+  formatMoney,
   tallyActivationCompletion,
   type RequiredActionStatus,
 } from "@camp404/core";
@@ -40,11 +41,11 @@ export interface ReadinessFunnel {
 
 /**
  * Which facts of the roster this deployment can actually answer. The E2E test
- * store models no payments ledger, and of `required_actions` only the burner
- * profile gate (no questionnaire sends), so it reports `duesPaid: false` for
- * everyone and a `pendingRequiredActions` that misses every send — figures
- * that would read as "nobody has paid" and "the camp is clear". Those stages
- * are marked unknown instead.
+ * store models the payments ledger, but of `required_actions` only the burner
+ * profile gate (no questionnaire sends), so it reports a
+ * `pendingRequiredActions` that misses every send — a figure that would read
+ * as "the camp is clear". That stage, and every stage below it, is marked
+ * unknown instead. A deployment that cannot read the ledger says `dues: false`.
  */
 export interface KnownFacts {
   /** The payments ledger is readable (the `duesPaid` column means something). */
@@ -144,14 +145,18 @@ export interface Kpi {
  *
  * `openSends` is null where the deployment cannot list open sends (the E2E test
  * store returns an empty map whether or not a send is open), and `known.dues`
- * covers the payments ledger, which the same store answers `false` for
- * everyone. Both are marked unavailable rather than counted, for the reason the
- * funnel marks its rungs unknown and the completion card withholds itself.
+ * says whether the payments ledger can be read. Either unknown is marked
+ * unavailable rather than counted, for the reason the funnel marks its rungs
+ * unknown and the completion card withholds itself.
+ *
+ * `received` is this year's money seen in the bank, in cents. Every payment
+ * is in rands, so it is written after the count as one rand total.
  */
 export function deriveKpis(
   rows: readonly RosterRow[],
   openSends: number | null,
   known: Pick<KnownFacts, "dues">,
+  received: number | null = null,
 ): Kpi[] {
   const stats = deriveRosterStats(rows);
   const approved = rows.filter((r) => r.approvalStatus === "approved");
@@ -178,7 +183,9 @@ export function deriveKpis(
       label: "Dues paid",
       value: known.dues ? paid : null,
       hint: known.dues
-        ? `of ${approved.length} approved`
+        ? received !== null
+          ? `of ${approved.length} approved · ${formatMoney(received)}`
+          : `of ${approved.length} approved`
         : "The ledger cannot be read here",
       href: "/captains/payments",
     },

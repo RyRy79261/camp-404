@@ -69,10 +69,44 @@ describe("auditDetail", () => {
       auditDetail("reimbursement.status_changed", {
         from: "submitted",
         to: "approved",
-        amount: "120.50",
+        amount: "12.34",
         currency: "ZAR",
       }),
-    ).toBe("ZAR 120.50, submitted to approved");
+    ).toMatch(/^R[\s\u00a0\u202f]?12,34, submitted to approved$/);
+    expect(
+      auditDetail("reimbursement.status_changed", {
+        from: "approved",
+        to: "paid",
+        amount: "999",
+        currency: "ZAR",
+      }),
+    ).toMatch(/^R[\s\u00a0\u202f]?999,00, approved to paid$/);
+    // An old row with a code or amount outside today's rule reads as written:
+    // a claim once made in dollars is never printed as rands.
+    expect(
+      auditDetail("reimbursement.status_changed", {
+        from: "submitted",
+        to: "approved",
+        amount: "12.34",
+        currency: "USD",
+      }),
+    ).toBe("USD 12.34, submitted to approved");
+    expect(
+      auditDetail("reimbursement.status_changed", {
+        from: "submitted",
+        to: "approved",
+        amount: "12.34",
+        currency: "zar",
+      }),
+    ).toBe("zar 12.34, submitted to approved");
+    expect(
+      auditDetail("reimbursement.status_changed", {
+        from: "submitted",
+        to: "approved",
+        amount: "not money",
+        currency: "EUR",
+      }),
+    ).toBe("EUR not money, submitted to approved");
     expect(auditDetail("team_budget.set", { team: "kitchen" }, teams)).toBe(
       "Kitchen",
     );

@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatMemberRefCode,
-  formatRands,
   memberRefSequence,
-  parseRandsToCents,
   paymentReference,
   paymentSettlesDues,
 } from "../payment-references";
@@ -34,25 +32,6 @@ describe("paymentReference", () => {
   it("refuses a bad member reference or count", () => {
     expect(() => paymentReference("nope", 2027, 1)).toThrow();
     expect(() => paymentReference("C404-M017", 2027, 0)).toThrow();
-  });
-});
-
-describe("amounts", () => {
-  it("parses what a captain types into cents", () => {
-    expect(parseRandsToCents("1250")).toBe(125000);
-    expect(parseRandsToCents("1 250,5")).toBe(125050);
-    expect(parseRandsToCents("R1250.05")).toBe(125005);
-    expect(parseRandsToCents("0")).toBe(0);
-  });
-
-  it("refuses what is not an amount", () => {
-    for (const bad of ["", "-5", "12.345", "ten", "1,2,3"]) {
-      expect(parseRandsToCents(bad)).toBeNull();
-    }
-  });
-
-  it("formats cents as rands", () => {
-    expect(formatRands(125050)).toMatch(/^R\s?1\s?250,50$/);
   });
 });
 

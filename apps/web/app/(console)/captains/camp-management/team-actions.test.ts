@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as CampConfigModule from "@/lib/camp-config";
 
 // Unit tests for the captain-gated team write actions. The gate collaborators
-// and the @camp404/db writers are mocked; the ARCHIVED-TEAM RULE is exercised
+// and the roster facade's writers are mocked; the ARCHIVED-TEAM RULE is exercised
 // against the real `activeTeams` from the config layer, because "archived teams
 // must not be assignable" is the assertion this file exists for.
 
@@ -24,11 +24,16 @@ vi.mock("@camp404/db/roster", () => ({ getCampMemberDetail: vi.fn() }));
 vi.mock("@camp404/db/crypto", () => ({
   decryptField: vi.fn(() => ({ state: "absent", value: null })),
 }));
-vi.mock("@camp404/db/team-memberships", () => ({
+// The actions write through the roster facade (so E2E can drive them on the
+// test store); the facade's real-vs-test routing is not under test here.
+vi.mock("@/lib/roster", () => ({
   assignTeam: vi.fn(async () => ({ created: true, cycle: 2027 })),
   removeTeam: vi.fn(async () => ({ removed: true, cycle: 2027 })),
   setLead: vi.fn(async () => ({ ok: true, changed: true })),
   getTeamMemberships: vi.fn(async () => []),
+  getCampMemberDetail: vi.fn(),
+  listMemberNotes: vi.fn(async () => []),
+  listMemberQuestionnaireGates: vi.fn(async () => []),
 }));
 vi.mock("@/lib/camp-config", async (importOriginal) => ({
   // Spread the real module so `activeTeams` — the archived filter itself —
@@ -51,7 +56,7 @@ import {
   getTeamMemberships,
   removeTeam,
   setLead,
-} from "@camp404/db/team-memberships";
+} from "@/lib/roster";
 
 const CAPTAIN = "cap-1";
 
