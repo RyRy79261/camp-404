@@ -46,8 +46,7 @@ import { testStore } from "../test-store";
 // The E2E recipe twins. Playwright drives the kitchen screens through this
 // store, so it must keep the real rules, in the same words: these cases
 // mirror packages/db/src/__tests__/recipes.test.ts (who may decide, that only
-// a captain queues, the daily cap and the consent rule refusing a whole
-// batch, the compare-and-set sentence, and a worker that claims only what a
+// a captain queues, the consent rule refusing a whole batch, the compare-and-set sentence, and a worker that claims only what a
 // captain queued).
 
 const NOW = new Date("2026-09-24T10:00:00Z");
@@ -139,12 +138,6 @@ const QUESTIONS: SourceProofread = {
 
 const USAGE = { inputTokens: 700, outputTokens: 500 };
 
-const PLATES_OFF = {
-  kitchenPlatesBreakfast: null,
-  kitchenPlatesLunch: null,
-  kitchenPlatesDinner: null,
-};
-
 beforeEach(() => testStore.reset());
 
 describe("recipe twins", () => {
@@ -201,58 +194,17 @@ describe("recipe twins", () => {
     expect(
       testStore.setKitchenSettings({
         actorId: kitchen.id,
-        recipeProofreadDailyCap: 9,
         kitchenLargestPotLitres: null,
         kitchenBurnerCount: null,
-        ...PLATES_OFF,
       }),
     ).toEqual({ ok: false, error: ONLY_A_CAPTAIN_SETS_KITCHEN });
     expect(queue(kitchen.id, [id]).ok).toBe(true);
     expect(captain.rank).toBe("captain");
   });
 
-  it("keeps the stored cap and per-meal plates when a save leaves them out, as Camp settings does", () => {
-    const captain = makeUser("Cap", "captain");
-    expect(
-      testStore.setKitchenSettings({
-        actorId: captain.id,
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-        recipeProofreadDailyCap: 2,
-        kitchenPlatesDinner: 45,
-      }).ok,
-    ).toBe(true);
-    // The card sends only the pot and the burners now.
-    expect(
-      testStore.setKitchenSettings({
-        actorId: captain.id,
-        kitchenLargestPotLitres: 60,
-        kitchenBurnerCount: 4,
-      }),
-    ).toMatchObject({
-      ok: true,
-      settings: {
-        recipeProofreadDailyCap: 2,
-        kitchenLargestPotLitres: 60,
-        kitchenPlatesDinner: 45,
-      },
-    });
-    expect(testStore.getKitchenSettings()).toMatchObject({
-      recipeProofreadDailyCap: 2,
-      kitchenPlatesDinner: 45,
-    });
-  });
-
   it("has no daily limit, and refuses a batch with text nobody agreed to send as a whole", () => {
     const captain = makeUser("Cap", "captain");
     const member = makeUser("Mo");
-    testStore.setKitchenSettings({
-      actorId: captain.id,
-      recipeProofreadDailyCap: 1,
-      kitchenLargestPotLitres: null,
-      kitchenBurnerCount: null,
-      ...PLATES_OFF,
-    });
     const approve = (id: string) =>
       testStore.decideRecipe({
         recipeId: id,
@@ -278,7 +230,7 @@ describe("recipe twins", () => {
         text: "Curry, retyped.",
       }),
     ).toEqual({ ok: true });
-    // A stored cap of 1 limits nothing: three runs the same day.
+    // No daily limit: three runs the same day.
     expect(queue(captain.id, [secret]).ok).toBe(true);
     expect(queue(captain.id, [a, b]).ok).toBe(true);
     expect(testStore.listProofreadRuns()).toHaveLength(3);
@@ -350,7 +302,10 @@ describe("recipe twins", () => {
 
     testStore.reset();
     expect(testStore.listRecipeBook()).toEqual([]);
-    expect(testStore.getKitchenSettings().recipeProofreadDailyCap).toBe(5);
+    expect(testStore.getKitchenSettings()).toEqual({
+      kitchenLargestPotLitres: null,
+      kitchenBurnerCount: null,
+    });
   });
 
   it("names a suggestion from its text, and refuses text that is only a link", () => {
@@ -397,23 +352,21 @@ describe("recipe twins", () => {
     expect(testStore.claimSourceRun(q.runIds[0]!, NOW)).toBeNull();
   });
 
-  it("keeps the plates at each meal with the other kitchen settings", () => {
+  it("lets a captain set the pot and the burners, and nothing else", () => {
     const captain = makeUser("Cap", "captain");
     expect(
       testStore.setKitchenSettings({
         actorId: captain.id,
-        recipeProofreadDailyCap: 5,
         kitchenLargestPotLitres: 50,
         kitchenBurnerCount: 3,
-        kitchenPlatesBreakfast: 60,
-        kitchenPlatesLunch: null,
-        kitchenPlatesDinner: 45,
       }),
-    ).toMatchObject({ ok: true });
-    expect(testStore.getKitchenSettings()).toMatchObject({
-      kitchenPlatesBreakfast: 60,
-      kitchenPlatesLunch: null,
-      kitchenPlatesDinner: 45,
+    ).toEqual({
+      ok: true,
+      settings: { kitchenLargestPotLitres: 50, kitchenBurnerCount: 3 },
+    });
+    expect(testStore.getKitchenSettings()).toEqual({
+      kitchenLargestPotLitres: 50,
+      kitchenBurnerCount: 3,
     });
   });
 
@@ -695,13 +648,6 @@ describe("recipe twins", () => {
     it("has no daily limit, and a re-run replaces the stored count", () => {
       const captain = makeUser("Cap", "captain");
       const target = acceptedRecipe(captain.id);
-      testStore.setKitchenSettings({
-        actorId: captain.id,
-        recipeProofreadDailyCap: 2,
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-        ...PLATES_OFF,
-      });
       run(captain.id, target);
       const again = plates(captain.id, target, 40, true);
       if (!again.ok) throw new Error(again.error);
@@ -1042,13 +988,6 @@ describe("recipe twins", () => {
     it("has no daily limit on a send", () => {
       const captain = makeUser("Cap", "captain");
       const member = makeUser("Mo");
-      testStore.setKitchenSettings({
-        actorId: captain.id,
-        recipeProofreadDailyCap: 1,
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-        ...PLATES_OFF,
-      });
       const a = approvedRecipe(member.id, captain.id);
       const b = approvedRecipe(member.id, captain.id);
       expect(sendAsIs(captain.id, a).ok).toBe(true);
@@ -1085,7 +1024,10 @@ describe("recipe twins", () => {
         plates: 40,
         exchange: [],
         note: null,
-        kitchen: expect.objectContaining({ recipeProofreadDailyCap: 5 }),
+        kitchen: expect.objectContaining({
+          kitchenLargestPotLitres: null,
+          kitchenBurnerCount: null,
+        }),
         previous: null,
       });
       expect(JSON.stringify(claimed)).not.toContain("Mo");
@@ -1210,13 +1152,6 @@ describe("recipe twins", () => {
         error: SOURCE_CHANGED,
       });
 
-      testStore.setKitchenSettings({
-        actorId: captain.id,
-        recipeProofreadDailyCap: 2,
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-        ...PLATES_OFF,
-      });
       const b = approvedRecipe(member.id, captain.id);
       const bRun = asked(b);
       expect(answer(captain.id, b, bRun, "Four.").ok).toBe(true);

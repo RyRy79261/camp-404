@@ -11,8 +11,7 @@ export const metadata = { title: "Meal plan — Camp 404" };
 // The kitchen's meal plan (the owner's sketch, 2026-09-24): this year's days
 // on site, and the plates at breakfast, lunch and dinner on each. A recipe in
 // the book is shown at each distinct count here, and the largest is what
-// Claude writes a new recipe for. It replaces the per-meal plates Camp
-// settings held.
+// Claude writes a new recipe for.
 //
 // Every approved member reads it. A captain or a Kitchen lead edits it
 // (canEditMealPlan, decided here on the server); the save checks again inside

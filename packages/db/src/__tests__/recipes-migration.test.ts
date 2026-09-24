@@ -8,7 +8,7 @@ import { useTestDb } from "./_harness";
 
 // 0054 maps the stored recipe statuses onto the new lifecycle (#243), and 0055
 // (generated) rebuilds the recipe_status type, adds every Kitchen table and
-// column and makes recipes.submitter_id nullable. The harness has applied both to an
+// column (the meal plan's too) and makes recipes.submitter_id nullable. The harness has applied both to an
 // empty database, so each test first puts the database back the way
 // production has it (the old type, no new tables or columns), stores one
 // recipe per old status, and then runs both migrations' own SQL again. All of
@@ -92,16 +92,13 @@ describe("0054_recipe_status_to_text and 0055_recipe_kitchen", () => {
     await h.client().exec(`
       DROP TABLE IF EXISTS "recipe_plate_counts", "recipe_version_ingredients",
         "recipe_versions", "recipe_proofread_runs", "recipe_sources",
-        "recipe_lessons", "ingredients" CASCADE;
+        "recipe_lessons", "ingredients", "kitchen_meal_plan_days",
+        "kitchen_meal_plans" CASCADE;
       ${ADDED_RECIPE_COLUMNS.map(
         (c) => `ALTER TABLE "recipes" DROP COLUMN IF EXISTS "${c}";`,
       ).join("\n")}
-      ALTER TABLE "camp_settings" DROP COLUMN IF EXISTS "recipe_proofread_daily_cap";
       ALTER TABLE "camp_settings" DROP COLUMN IF EXISTS "kitchen_largest_pot_litres";
       ALTER TABLE "camp_settings" DROP COLUMN IF EXISTS "kitchen_burner_count";
-      ALTER TABLE "camp_settings" DROP COLUMN IF EXISTS "kitchen_plates_breakfast";
-      ALTER TABLE "camp_settings" DROP COLUMN IF EXISTS "kitchen_plates_lunch";
-      ALTER TABLE "camp_settings" DROP COLUMN IF EXISTS "kitchen_plates_dinner";
       DROP TYPE IF EXISTS "recipe_run_outcome", "recipe_unit",
         "recipe_scaling_class", "ingredient_keeping_class";
       ALTER TABLE "recipes" ALTER COLUMN "status" DROP DEFAULT;
@@ -201,16 +198,24 @@ describe("0054_recipe_status_to_text and 0055_recipe_kitchen", () => {
       );
     }));
 
-  it("gives the camp a daily cap of 5 and holds the kitchen settings to their bounds", async () => {
+  it("adds only the pot and the burners to camp_settings, held to their bounds", async () => {
     await h.db().insert(schema.campSettings).values({ id: true });
     const [row] = await h.db().select().from(schema.campSettings);
-    expect(row!.recipeProofreadDailyCap).toBe(5);
+    // No daily cap and no per-meal plates: the meal plan holds the plates.
+    const columns = await h.client().query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name = 'camp_settings'
+         AND (column_name LIKE 'kitchen_%' OR column_name LIKE 'recipe_%')
+       ORDER BY column_name`,
+    );
+    expect(columns.rows.map((r) => r.column_name)).toEqual([
+      "kitchen_burner_count",
+      "kitchen_largest_pot_litres",
+    ]);
     expect(row!.kitchenLargestPotLitres).toBeNull();
     expect(row!.kitchenBurnerCount).toBeNull();
 
     for (const bad of [
-      { recipeProofreadDailyCap: -1 },
-      { recipeProofreadDailyCap: 51 },
       { kitchenLargestPotLitres: 0 },
       { kitchenLargestPotLitres: 501 },
       { kitchenBurnerCount: 0 },
@@ -225,7 +230,6 @@ describe("0054_recipe_status_to_text and 0055_recipe_kitchen", () => {
     }
 
     await h.db().update(schema.campSettings).set({
-      recipeProofreadDailyCap: 0,
       kitchenLargestPotLitres: 500,
       kitchenBurnerCount: 20,
     });

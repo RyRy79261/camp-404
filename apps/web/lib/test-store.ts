@@ -134,7 +134,6 @@ import {
   failedPlateCounts,
   forRecipe,
   handBackTo,
-  keep,
   plateCountIsBase,
   plateCountReady,
   plateRunOpen,
@@ -3064,24 +3063,8 @@ export const testStore = {
     }
     const before = { ...S.kitchenSettings };
     const after: KitchenSettings = {
-      // Absent (Camp settings no longer sends it): keep the stored cap.
-      recipeProofreadDailyCap:
-        input.recipeProofreadDailyCap ?? before.recipeProofreadDailyCap,
       kitchenLargestPotLitres: input.kitchenLargestPotLitres,
       kitchenBurnerCount: input.kitchenBurnerCount,
-      // The meal plan holds the plates now; absent keeps the stored ones.
-      kitchenPlatesBreakfast: keep(
-        input.kitchenPlatesBreakfast,
-        before.kitchenPlatesBreakfast,
-      ),
-      kitchenPlatesLunch: keep(
-        input.kitchenPlatesLunch,
-        before.kitchenPlatesLunch,
-      ),
-      kitchenPlatesDinner: keep(
-        input.kitchenPlatesDinner,
-        before.kitchenPlatesDinner,
-      ),
     };
     S.kitchenSettings = after;
     recipeHistory.push({

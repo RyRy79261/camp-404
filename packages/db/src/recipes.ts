@@ -46,11 +46,9 @@ import * as schema from "./schema";
 //    (canApproveRecipe).
 //  - A captain or a Kitchen lead sends recipes to Claude (the owner's
 //    decision 2A; lockKitchenReviewer), with no daily limit (the owner's
-//    call, 2026-09-24: the old cap column stays stored, and nothing reads
-//    it). The kitchen settings stay a captain's (canSetKitchenSettings); a
-//    save that leaves the cap or the old per-meal plates out, as the Camp
-//    settings card does, keeps the stored ones (setKitchenSettings). The
-//    plates per meal now come from the year's meal plan (./meal-plan).
+//    call, 2026-09-24). The kitchen settings (the largest pot and the
+//    burners) stay a captain's (canSetKitchenSettings). The plates per meal
+//    come from the year's meal plan (./meal-plan).
 //  - A recipe's source (recipe_sources) is what a reviewer edits and Claude
 //    reads: one Tiptap document per section, versioned. Every suggestion,
 //    resubmission, retype and variation writes a version, and "Send for
@@ -97,20 +95,21 @@ export type RecipeWriteResult<T = object> =
   | { ok: false; error: string };
 
 /**
- * What the kitchen settings hold. The Camp settings card edits the pot and
- * the burners. The daily cap is no longer read, and the per-meal plates gave
- * way to the meal plan (./meal-plan): KitchenSettingsInput leaves all four
- * optional, and setKitchenSettings keeps the stored ones.
+ * What the kitchen settings hold: the largest pot and the burners, both set
+ * on Camp settings. The plates at each meal are the meal plan (./meal-plan).
  */
-export type KitchenSettings = Required<KitchenSettingsInput>;
+export type KitchenSettings = KitchenSettingsInput;
 
 export const DEFAULT_KITCHEN_SETTINGS: KitchenSettings = {
-  recipeProofreadDailyCap: 5,
   kitchenLargestPotLitres: null,
   kitchenBurnerCount: null,
-  kitchenPlatesBreakfast: null,
-  kitchenPlatesLunch: null,
-  kitchenPlatesDinner: null,
+};
+
+/** The kitchen's size, with this year's largest plates at each meal. */
+export type KitchenForPrompt = KitchenSettings & {
+  kitchenPlatesBreakfast: number | null;
+  kitchenPlatesLunch: number | null;
+  kitchenPlatesDinner: number | null;
 };
 
 /** A recipe from before #243 has no title. */
@@ -893,23 +892,15 @@ export async function requestRerun(input: {
 function settingsOf(row: KitchenSettings | undefined): KitchenSettings {
   return row
     ? {
-        recipeProofreadDailyCap: row.recipeProofreadDailyCap,
         kitchenLargestPotLitres: row.kitchenLargestPotLitres,
         kitchenBurnerCount: row.kitchenBurnerCount,
-        kitchenPlatesBreakfast: row.kitchenPlatesBreakfast,
-        kitchenPlatesLunch: row.kitchenPlatesLunch,
-        kitchenPlatesDinner: row.kitchenPlatesDinner,
       }
     : { ...DEFAULT_KITCHEN_SETTINGS };
 }
 
 const SETTINGS_COLUMNS = {
-  recipeProofreadDailyCap: schema.campSettings.recipeProofreadDailyCap,
   kitchenLargestPotLitres: schema.campSettings.kitchenLargestPotLitres,
   kitchenBurnerCount: schema.campSettings.kitchenBurnerCount,
-  kitchenPlatesBreakfast: schema.campSettings.kitchenPlatesBreakfast,
-  kitchenPlatesLunch: schema.campSettings.kitchenPlatesLunch,
-  kitchenPlatesDinner: schema.campSettings.kitchenPlatesDinner,
 };
 
 async function readKitchenSettings(db: DbOrTx): Promise<KitchenSettings> {
@@ -920,10 +911,7 @@ async function readKitchenSettings(db: DbOrTx): Promise<KitchenSettings> {
   return settingsOf(row);
 }
 
-/**
- * The kitchen's settings: the largest pot and the burners (and the stored
- * cap and per-meal plates, which no screen sets any more).
- */
+/** The kitchen's settings: the largest pot and the burners. */
 export async function getKitchenSettings(): Promise<KitchenSettings> {
   return readKitchenSettings(createHttpDb());
 }
@@ -957,11 +945,6 @@ async function lockActorRank(tx: Tx, actorId: string): Promise<string> {
   return row.rank === "captain" ? "captain" : "camp_member";
 }
 
-/** A value the input left out keeps the stored one; null clears it. */
-export function keep<T>(value: T | undefined, stored: T): T {
-  return value === undefined ? stored : value;
-}
-
 /** A captain changes the kitchen settings; the change is audited. */
 export async function setKitchenSettings(
   input: { actorId: string } & KitchenSettingsInput,
@@ -974,24 +957,8 @@ export async function setKitchenSettings(
       refuse(ONLY_A_CAPTAIN_SETS_KITCHEN);
     }
     const after: KitchenSettings = {
-      // Absent (Camp settings no longer sends it): keep the stored cap.
-      recipeProofreadDailyCap:
-        input.recipeProofreadDailyCap ?? before.recipeProofreadDailyCap,
       kitchenLargestPotLitres: input.kitchenLargestPotLitres,
       kitchenBurnerCount: input.kitchenBurnerCount,
-      // The meal plan holds the plates now; absent keeps the stored ones.
-      kitchenPlatesBreakfast: keep(
-        input.kitchenPlatesBreakfast,
-        before.kitchenPlatesBreakfast,
-      ),
-      kitchenPlatesLunch: keep(
-        input.kitchenPlatesLunch,
-        before.kitchenPlatesLunch,
-      ),
-      kitchenPlatesDinner: keep(
-        input.kitchenPlatesDinner,
-        before.kitchenPlatesDinner,
-      ),
     };
     await tx
       .update(schema.campSettings)
@@ -1456,9 +1423,9 @@ export interface ClaimedSourceRun {
   note: string | null;
   /**
    * The kitchen's size, with the plates at each meal from this year's meal
-   * plan (its largest day at each), not the old Camp settings numbers.
+   * plan (its largest day at each).
    */
-  kitchen: KitchenSettings;
+  kitchen: KitchenForPrompt;
   /**
    * The recipe's accepted version, when it has one, so Claude revises it
    * instead of starting from zero: the recipe as the book has it, and the

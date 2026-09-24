@@ -63,7 +63,7 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     const pot = page.getByLabel("Largest pot (litres)");
     const burners = page.getByLabel("Number of burners");
     await expect(pot).toHaveValue("");
-    // The daily cap is a silent server-side guard: no field, no number.
+    // There is no daily limit on proofreading: no field, no number.
     await expect(page.getByText(/runs? per day|runs? left/i)).toHaveCount(0);
 
     // A bad value is refused beside its field, and nothing is saved.

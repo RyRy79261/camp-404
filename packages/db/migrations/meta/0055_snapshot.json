@@ -1,5 +1,5 @@
 {
-  "id": "64f911b5-aa12-479a-9192-e55e871d5398",
+  "id": "be89549f-2e7b-447d-a1ad-9b2bab9c7600",
   "prevId": "37800181-a525-4f8d-92e1-1f68fa2fa85b",
   "version": "7",
   "dialect": "postgresql",
@@ -824,13 +824,6 @@
           "notNull": true,
           "default": "'{\"teams\":[{\"key\":\"kitchen\",\"label\":\"Kitchen\",\"order\":0,\"archived\":false},{\"key\":\"structures\",\"label\":\"Structures\",\"order\":1,\"archived\":false},{\"key\":\"power_and_lighting\",\"label\":\"Power and Lighting\",\"order\":2,\"archived\":false},{\"key\":\"sanitation_and_water\",\"label\":\"Sanitation and MOOP\",\"order\":3,\"archived\":false},{\"key\":\"health_and_safety\",\"label\":\"Safety\",\"order\":4,\"archived\":false},{\"key\":\"art_and_activities\",\"label\":\"Art and Activities\",\"order\":5,\"archived\":false},{\"key\":\"ministry_of_memes\",\"label\":\"Ministry of Memes\",\"order\":6,\"archived\":false},{\"key\":\"ministry_of_vibes\",\"label\":\"Ministry of Vibes\",\"order\":7,\"archived\":false},{\"key\":\"finance\",\"label\":\"Finance\",\"order\":8,\"archived\":false},{\"key\":\"transport_and_logistics\",\"label\":\"Transport and Logistics\",\"order\":9,\"archived\":false},{\"key\":\"communications_and_hr\",\"label\":\"Communications & HR\",\"order\":10,\"archived\":false},{\"key\":\"mutant_vehicle\",\"label\":\"Mutant Vehicle\",\"order\":11,\"archived\":false},{\"key\":\"sound\",\"label\":\"Sound\",\"order\":12,\"archived\":false},{\"key\":\"water\",\"label\":\"Water\",\"order\":13,\"archived\":false}]}'::jsonb"
         },
-        "recipe_proofread_daily_cap": {
-          "name": "recipe_proofread_daily_cap",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 5
-        },
         "kitchen_largest_pot_litres": {
           "name": "kitchen_largest_pot_litres",
           "type": "integer",
@@ -839,24 +832,6 @@
         },
         "kitchen_burner_count": {
           "name": "kitchen_burner_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "kitchen_plates_breakfast": {
-          "name": "kitchen_plates_breakfast",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "kitchen_plates_lunch": {
-          "name": "kitchen_plates_lunch",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "kitchen_plates_dinner": {
-          "name": "kitchen_plates_dinner",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -886,10 +861,6 @@
           "name": "camp_settings_singleton",
           "value": "\"camp_settings\".\"id\""
         },
-        "camp_settings_recipe_proofread_daily_cap_check": {
-          "name": "camp_settings_recipe_proofread_daily_cap_check",
-          "value": "\"camp_settings\".\"recipe_proofread_daily_cap\" between 0 and 50"
-        },
         "camp_settings_kitchen_largest_pot_litres_check": {
           "name": "camp_settings_kitchen_largest_pot_litres_check",
           "value": "\"camp_settings\".\"kitchen_largest_pot_litres\" between 1 and 500"
@@ -897,18 +868,6 @@
         "camp_settings_kitchen_burner_count_check": {
           "name": "camp_settings_kitchen_burner_count_check",
           "value": "\"camp_settings\".\"kitchen_burner_count\" between 1 and 20"
-        },
-        "camp_settings_kitchen_plates_breakfast_check": {
-          "name": "camp_settings_kitchen_plates_breakfast_check",
-          "value": "\"camp_settings\".\"kitchen_plates_breakfast\" between 1 and 500"
-        },
-        "camp_settings_kitchen_plates_lunch_check": {
-          "name": "camp_settings_kitchen_plates_lunch_check",
-          "value": "\"camp_settings\".\"kitchen_plates_lunch\" between 1 and 500"
-        },
-        "camp_settings_kitchen_plates_dinner_check": {
-          "name": "camp_settings_kitchen_plates_dinner_check",
-          "value": "\"camp_settings\".\"kitchen_plates_dinner\" between 1 and 500"
         }
       },
       "isRLSEnabled": false
@@ -2348,6 +2307,148 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.kitchen_meal_plan_days": {
+      "name": "kitchen_meal_plan_days",
+      "schema": "",
+      "columns": {
+        "cycle": {
+          "name": "cycle",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "breakfast": {
+          "name": "breakfast",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lunch": {
+          "name": "lunch",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "dinner": {
+          "name": "dinner",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "kitchen_meal_plan_days_cycle_kitchen_meal_plans_cycle_fk": {
+          "name": "kitchen_meal_plan_days_cycle_kitchen_meal_plans_cycle_fk",
+          "tableFrom": "kitchen_meal_plan_days",
+          "tableTo": "kitchen_meal_plans",
+          "columnsFrom": [
+            "cycle"
+          ],
+          "columnsTo": [
+            "cycle"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "kitchen_meal_plan_days_cycle_day_pk": {
+          "name": "kitchen_meal_plan_days_cycle_day_pk",
+          "columns": [
+            "cycle",
+            "day"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kitchen_meal_plan_days_day_check": {
+          "name": "kitchen_meal_plan_days_day_check",
+          "value": "\"kitchen_meal_plan_days\".\"day\" between 1 and 30"
+        },
+        "kitchen_meal_plan_days_plates_check": {
+          "name": "kitchen_meal_plan_days_plates_check",
+          "value": "\"kitchen_meal_plan_days\".\"breakfast\" between 0 and 500 and \"kitchen_meal_plan_days\".\"lunch\" between 0 and 500 and \"kitchen_meal_plan_days\".\"dinner\" between 0 and 500"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.kitchen_meal_plans": {
+      "name": "kitchen_meal_plans",
+      "schema": "",
+      "columns": {
+        "cycle": {
+          "name": "cycle",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "days_on_site": {
+          "name": "days_on_site",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 11
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "updated_by_user_id": {
+          "name": "updated_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "kitchen_meal_plans_updated_by_user_id_users_id_fk": {
+          "name": "kitchen_meal_plans_updated_by_user_id_users_id_fk",
+          "tableFrom": "kitchen_meal_plans",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kitchen_meal_plans_days_check": {
+          "name": "kitchen_meal_plans_days_check",
+          "value": "\"kitchen_meal_plans\".\"days_on_site\" between 1 and 30"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.mcp_access_tokens": {

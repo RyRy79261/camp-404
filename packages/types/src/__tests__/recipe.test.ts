@@ -464,39 +464,28 @@ describe("QueueProofreadInput", () => {
 });
 
 describe("KitchenSettingsInput", () => {
-  it("holds the cap to 0..50, the kitchen to real sizes and the plates to 1..500, or unknown", () => {
-    const ok = {
-      recipeProofreadDailyCap: 0,
-      kitchenLargestPotLitres: null,
-      kitchenBurnerCount: null,
-      kitchenPlatesBreakfast: 60,
-      kitchenPlatesLunch: null,
-      kitchenPlatesDinner: 45,
-    };
+  it("holds the kitchen to real sizes, or unknown, and takes nothing else", () => {
+    const ok = { kitchenLargestPotLitres: 50, kitchenBurnerCount: 3 };
     expect(KitchenSettingsInput.safeParse(ok).success).toBe(true);
-    // Camp settings sends no cap: it is optional, and the write keeps the
-    // stored one.
-    const { recipeProofreadDailyCap: _cap, ...noCap } = ok;
-    const parsed = KitchenSettingsInput.safeParse(noCap);
-    expect(parsed.success).toBe(true);
-    expect(parsed.data).not.toHaveProperty("recipeProofreadDailyCap");
-    // Nor the plates at each meal: the meal plan holds them now.
-    const potOnly = KitchenSettingsInput.safeParse({
-      kitchenLargestPotLitres: 50,
-      kitchenBurnerCount: 3,
+    expect(
+      KitchenSettingsInput.safeParse({
+        kitchenLargestPotLitres: null,
+        kitchenBurnerCount: null,
+      }).success,
+    ).toBe(true);
+    // No daily cap and no plates at each meal: the meal plan holds those.
+    const extra = KitchenSettingsInput.safeParse({
+      ...ok,
+      recipeProofreadDailyCap: 5,
+      kitchenPlatesBreakfast: 60,
     });
-    expect(potOnly.success).toBe(true);
-    expect(potOnly.data).not.toHaveProperty("kitchenPlatesBreakfast");
+    expect(extra.data).toEqual(ok);
     for (const bad of [
-      { recipeProofreadDailyCap: 51 },
-      { recipeProofreadDailyCap: -1 },
-      { recipeProofreadDailyCap: 2.5 },
       { kitchenLargestPotLitres: 0 },
       { kitchenLargestPotLitres: 501 },
+      { kitchenLargestPotLitres: 2.5 },
+      { kitchenBurnerCount: 0 },
       { kitchenBurnerCount: 21 },
-      { kitchenPlatesBreakfast: 0 },
-      { kitchenPlatesLunch: 501 },
-      { kitchenPlatesDinner: 40.5 },
     ]) {
       expect(
         KitchenSettingsInput.safeParse({ ...ok, ...bad }).success,

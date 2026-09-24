@@ -127,7 +127,7 @@ export const recipeStatusEnum = pgEnum("recipe_status", [
 ]);
 
 // One proofreading run's state. A failed run still spent tokens, so it counts
-// toward the camp's daily cap.
+// in the monthly usage.
 export const recipeRunOutcomeEnum = pgEnum("recipe_run_outcome", [
   "queued",
   "running",
@@ -1234,8 +1234,8 @@ export const recipeSources = pgTable(
 );
 
 // One proofreading run: who asked for it, what it cost in tokens and what came
-// back. Every run is kept, failed ones too, so the daily cap and the monthly
-// usage count what was really spent.
+// back. Every run is kept, failed ones too, so the monthly usage counts what
+// was really spent.
 export const recipeProofreadRuns = pgTable(
   "recipe_proofread_runs",
   {
@@ -1269,7 +1269,7 @@ export const recipeProofreadRuns = pgTable(
     // (the older path). `source`: Claude reads a source version (`sourceId`)
     // and either asks questions or writes the recipe straight into the book.
     // `plates`: Claude proofreads an accepted version (`versionId`) for
-    // `plates` plates. All count toward the one daily cap.
+    // `plates` plates.
     kind: text("kind").notNull().default("recipe"),
     // The plates the run writes the recipe for.
     plates: integer("plates"),
@@ -2630,28 +2630,15 @@ export const campSettings = pgTable(
         sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and MOOP","order":3,"archived":false},{"key":"health_and_safety","label":"Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false},{"key":"finance","label":"Finance","order":8,"archived":false},{"key":"transport_and_logistics","label":"Transport and Logistics","order":9,"archived":false},{"key":"communications_and_hr","label":"Communications & HR","order":10,"archived":false},{"key":"mutant_vehicle","label":"Mutant Vehicle","order":11,"archived":false},{"key":"sound","label":"Sound","order":12,"archived":false},{"key":"water","label":"Water","order":13,"archived":false}]}'::jsonb`,
       ),
     // Kitchen (#243). The bounds mirror KITCHEN_SETTING_LIMITS in
-    // @camp404/types. Proofreading runs a captain may start per camp day
-    // (0 turns proofreading off); failed runs count, because they still
-    // spend tokens.
-    recipeProofreadDailyCap: integer("recipe_proofread_daily_cap")
-      .notNull()
-      .default(5),
-    // The largest pot and the burner count set a recipe's batch limits. Null
-    // until a captain fills them in; the prompt then says "unknown".
+    // @camp404/types. The largest pot and the burner count set a recipe's
+    // batch limits. Null until a captain fills them in; the prompt then says
+    // "unknown". The plates at each meal are the year's meal plan
+    // (kitchen_meal_plans), not a setting.
     kitchenLargestPotLitres: integer("kitchen_largest_pot_litres"),
     kitchenBurnerCount: integer("kitchen_burner_count"),
-    // Plates at each meal (mornings usually feed more than evenings). The
-    // largest one set is the count Claude writes a recipe for by default.
-    kitchenPlatesBreakfast: integer("kitchen_plates_breakfast"),
-    kitchenPlatesLunch: integer("kitchen_plates_lunch"),
-    kitchenPlatesDinner: integer("kitchen_plates_dinner"),
   },
   (t) => ({
     singleton: check("camp_settings_singleton", sql`${t.id}`),
-    proofreadCapCheck: check(
-      "camp_settings_recipe_proofread_daily_cap_check",
-      sql`${t.recipeProofreadDailyCap} between 0 and 50`,
-    ),
     potCheck: check(
       "camp_settings_kitchen_largest_pot_litres_check",
       sql`${t.kitchenLargestPotLitres} between 1 and 500`,
@@ -2659,18 +2646,6 @@ export const campSettings = pgTable(
     burnerCheck: check(
       "camp_settings_kitchen_burner_count_check",
       sql`${t.kitchenBurnerCount} between 1 and 20`,
-    ),
-    platesBreakfastCheck: check(
-      "camp_settings_kitchen_plates_breakfast_check",
-      sql`${t.kitchenPlatesBreakfast} between 1 and 500`,
-    ),
-    platesLunchCheck: check(
-      "camp_settings_kitchen_plates_lunch_check",
-      sql`${t.kitchenPlatesLunch} between 1 and 500`,
-    ),
-    platesDinnerCheck: check(
-      "camp_settings_kitchen_plates_dinner_check",
-      sql`${t.kitchenPlatesDinner} between 1 and 500`,
     ),
   }),
 );

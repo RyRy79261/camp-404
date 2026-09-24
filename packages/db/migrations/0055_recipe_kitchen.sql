@@ -16,6 +16,26 @@ CREATE TABLE "ingredients" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "kitchen_meal_plan_days" (
+	"cycle" integer NOT NULL,
+	"day" integer NOT NULL,
+	"breakfast" integer DEFAULT 0 NOT NULL,
+	"lunch" integer DEFAULT 0 NOT NULL,
+	"dinner" integer DEFAULT 0 NOT NULL,
+	CONSTRAINT "kitchen_meal_plan_days_cycle_day_pk" PRIMARY KEY("cycle","day"),
+	CONSTRAINT "kitchen_meal_plan_days_day_check" CHECK ("kitchen_meal_plan_days"."day" between 1 and 30),
+	CONSTRAINT "kitchen_meal_plan_days_plates_check" CHECK ("kitchen_meal_plan_days"."breakfast" between 0 and 500 and "kitchen_meal_plan_days"."lunch" between 0 and 500 and "kitchen_meal_plan_days"."dinner" between 0 and 500)
+);
+--> statement-breakpoint
+CREATE TABLE "kitchen_meal_plans" (
+	"cycle" integer PRIMARY KEY NOT NULL,
+	"days_on_site" integer DEFAULT 11 NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	"updated_by_user_id" uuid,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "kitchen_meal_plans_days_check" CHECK ("kitchen_meal_plans"."days_on_site" between 1 and 30)
+);
+--> statement-breakpoint
 CREATE TABLE "recipe_lessons" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"recipe_id" uuid NOT NULL,
@@ -127,12 +147,8 @@ ALTER TABLE "recipe_proofread_runs" ALTER COLUMN "previous_status" SET DATA TYPE
 ALTER TABLE "recipes" ALTER COLUMN "status" SET DEFAULT 'suggested'::"public"."recipe_status";--> statement-breakpoint
 ALTER TABLE "recipes" ALTER COLUMN "status" SET DATA TYPE "public"."recipe_status" USING "status"::"public"."recipe_status";--> statement-breakpoint
 ALTER TABLE "recipes" ALTER COLUMN "submitter_id" DROP NOT NULL;--> statement-breakpoint
-ALTER TABLE "camp_settings" ADD COLUMN "recipe_proofread_daily_cap" integer DEFAULT 5 NOT NULL;--> statement-breakpoint
 ALTER TABLE "camp_settings" ADD COLUMN "kitchen_largest_pot_litres" integer;--> statement-breakpoint
 ALTER TABLE "camp_settings" ADD COLUMN "kitchen_burner_count" integer;--> statement-breakpoint
-ALTER TABLE "camp_settings" ADD COLUMN "kitchen_plates_breakfast" integer;--> statement-breakpoint
-ALTER TABLE "camp_settings" ADD COLUMN "kitchen_plates_lunch" integer;--> statement-breakpoint
-ALTER TABLE "camp_settings" ADD COLUMN "kitchen_plates_dinner" integer;--> statement-breakpoint
 ALTER TABLE "recipes" ADD COLUMN "title" text;--> statement-breakpoint
 ALTER TABLE "recipes" ADD COLUMN "suitability_note" text;--> statement-breakpoint
 ALTER TABLE "recipes" ADD COLUMN "text_author_id" uuid;--> statement-breakpoint
@@ -152,6 +168,8 @@ ALTER TABLE "recipes" ADD COLUMN "rerun_requested_at" timestamp;--> statement-br
 ALTER TABLE "recipes" ADD COLUMN "latest_run_id" uuid;--> statement-breakpoint
 ALTER TABLE "recipes" ADD COLUMN "accepted_version_id" uuid;--> statement-breakpoint
 ALTER TABLE "recipes" ADD COLUMN "variant_of_recipe_id" uuid;--> statement-breakpoint
+ALTER TABLE "kitchen_meal_plan_days" ADD CONSTRAINT "kitchen_meal_plan_days_cycle_kitchen_meal_plans_cycle_fk" FOREIGN KEY ("cycle") REFERENCES "public"."kitchen_meal_plans"("cycle") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "kitchen_meal_plans" ADD CONSTRAINT "kitchen_meal_plans_updated_by_user_id_users_id_fk" FOREIGN KEY ("updated_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "recipe_lessons" ADD CONSTRAINT "recipe_lessons_recipe_id_recipes_id_fk" FOREIGN KEY ("recipe_id") REFERENCES "public"."recipes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "recipe_lessons" ADD CONSTRAINT "recipe_lessons_author_id_users_id_fk" FOREIGN KEY ("author_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "recipe_plate_counts" ADD CONSTRAINT "recipe_plate_counts_version_id_recipe_versions_id_fk" FOREIGN KEY ("version_id") REFERENCES "public"."recipe_versions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -187,9 +205,5 @@ ALTER TABLE "recipes" ADD CONSTRAINT "recipes_rerun_requested_by_users_id_fk" FO
 ALTER TABLE "recipes" ADD CONSTRAINT "recipes_latest_run_id_recipe_proofread_runs_id_fk" FOREIGN KEY ("latest_run_id") REFERENCES "public"."recipe_proofread_runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "recipes" ADD CONSTRAINT "recipes_accepted_version_id_recipe_versions_id_fk" FOREIGN KEY ("accepted_version_id") REFERENCES "public"."recipe_versions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "recipes" ADD CONSTRAINT "recipes_variant_of_recipe_id_recipes_id_fk" FOREIGN KEY ("variant_of_recipe_id") REFERENCES "public"."recipes"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "camp_settings" ADD CONSTRAINT "camp_settings_recipe_proofread_daily_cap_check" CHECK ("camp_settings"."recipe_proofread_daily_cap" between 0 and 50);--> statement-breakpoint
 ALTER TABLE "camp_settings" ADD CONSTRAINT "camp_settings_kitchen_largest_pot_litres_check" CHECK ("camp_settings"."kitchen_largest_pot_litres" between 1 and 500);--> statement-breakpoint
-ALTER TABLE "camp_settings" ADD CONSTRAINT "camp_settings_kitchen_burner_count_check" CHECK ("camp_settings"."kitchen_burner_count" between 1 and 20);--> statement-breakpoint
-ALTER TABLE "camp_settings" ADD CONSTRAINT "camp_settings_kitchen_plates_breakfast_check" CHECK ("camp_settings"."kitchen_plates_breakfast" between 1 and 500);--> statement-breakpoint
-ALTER TABLE "camp_settings" ADD CONSTRAINT "camp_settings_kitchen_plates_lunch_check" CHECK ("camp_settings"."kitchen_plates_lunch" between 1 and 500);--> statement-breakpoint
-ALTER TABLE "camp_settings" ADD CONSTRAINT "camp_settings_kitchen_plates_dinner_check" CHECK ("camp_settings"."kitchen_plates_dinner" between 1 and 500);
+ALTER TABLE "camp_settings" ADD CONSTRAINT "camp_settings_kitchen_burner_count_check" CHECK ("camp_settings"."kitchen_burner_count" between 1 and 20);

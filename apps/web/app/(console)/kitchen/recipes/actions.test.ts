@@ -468,12 +468,8 @@ describe("suggestRecipeAction", () => {
 
 describe("setKitchenSettingsAction", () => {
   const SETTINGS = {
-    recipeProofreadDailyCap: 3,
     kitchenLargestPotLitres: 60,
     kitchenBurnerCount: null,
-    kitchenPlatesBreakfast: 60,
-    kitchenPlatesLunch: null,
-    kitchenPlatesDinner: 45,
   };
 
   it("is a captain's alone", async () => {
@@ -500,12 +496,12 @@ describe("setKitchenSettingsAction", () => {
     expect(
       await setKitchenSettingsAction({
         ...SETTINGS,
-        recipeProofreadDailyCap: -1,
+        kitchenLargestPotLitres: 0,
       }),
-    ).toEqual({ ok: false, error: "The daily limit cannot be below 0." });
+    ).toEqual({ ok: false, error: "A pot holds at least 1 litre." });
     expect(
-      await setKitchenSettingsAction({ ...SETTINGS, kitchenPlatesLunch: 0 }),
-    ).toEqual({ ok: false, error: "Cook for at least 1 plate." });
+      await setKitchenSettingsAction({ ...SETTINGS, kitchenBurnerCount: 21 }),
+    ).toEqual({ ok: false, error: "Count at most 20 burners." });
     expect(setKitchenSettings).not.toHaveBeenCalled();
   });
 });

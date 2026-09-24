@@ -78,8 +78,7 @@ import { makeMembership, makeUser, seedAcceptedVersion } from "./_factories";
 
 // Recipes (#243) on a real Postgres (PGlite). What matters: who may decide,
 // queue and accept, checked again inside each write; that a decision is
-// compare-and-set; that the daily cap and the consent rule refuse a whole
-// batch; and that the worker can only ever claim a recipe a captain queued.
+// compare-and-set; that the consent rule refuses a whole batch; and that the worker can only ever claim a recipe a captain queued.
 
 const NOW = new Date("2026-09-24T10:00:00Z");
 const PROMPT = "2026-09-24.1";
@@ -750,14 +749,8 @@ describe("recipes", () => {
       expect(await runCount()).toBe(0);
     });
 
-    it("has no daily limit: a stored cap, even 0, refuses nothing", async () => {
+    it("has no daily limit: a batch and one more on the same camp day all queue", async () => {
       const { captain, member } = await people();
-      await setKitchenSettings({
-        actorId: captain.id,
-        recipeProofreadDailyCap: 0,
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-      });
       const ids = [];
       for (let i = 0; i < 4; i++)
         ids.push(await approved(member.id, captain.id));
@@ -1389,21 +1382,10 @@ describe("recipes", () => {
     it("lets only a captain change them, and records before and after", async () => {
       const { captain, kitchenLead } = await people();
       expect(await getKitchenSettings()).toEqual({
-        recipeProofreadDailyCap: 5,
         kitchenLargestPotLitres: null,
         kitchenBurnerCount: null,
-        kitchenPlatesBreakfast: null,
-        kitchenPlatesLunch: null,
-        kitchenPlatesDinner: null,
       });
-      const next = {
-        recipeProofreadDailyCap: 3,
-        kitchenLargestPotLitres: 60,
-        kitchenBurnerCount: 4,
-        kitchenPlatesBreakfast: 60,
-        kitchenPlatesLunch: null,
-        kitchenPlatesDinner: 45,
-      };
+      const next = { kitchenLargestPotLitres: 60, kitchenBurnerCount: 4 };
       expect(
         await setKitchenSettings({ actorId: kitchenLead.id, ...next }),
       ).toEqual({
@@ -1425,76 +1407,9 @@ describe("recipes", () => {
           ),
         );
       expect(rows).toHaveLength(1);
-      expect(rows[0]?.metadata).toMatchObject({
-        before: { recipeProofreadDailyCap: 5, kitchenPlatesBreakfast: null },
+      expect(rows[0]?.metadata).toEqual({
+        before: { kitchenLargestPotLitres: null, kitchenBurnerCount: null },
         after: next,
-      });
-    });
-
-    it("keeps the stored cap and per-meal plates when a save leaves them out, as Camp settings does", async () => {
-      const { captain } = await people();
-      expect(
-        (
-          await setKitchenSettings({
-            actorId: captain.id,
-            kitchenLargestPotLitres: null,
-            kitchenBurnerCount: null,
-            recipeProofreadDailyCap: 2,
-            kitchenPlatesDinner: 45,
-          })
-        ).ok,
-      ).toBe(true);
-      // The card sends only the pot and the burners now.
-      const saved = await setKitchenSettings({
-        actorId: captain.id,
-        kitchenLargestPotLitres: 60,
-        kitchenBurnerCount: 4,
-      });
-      expect(saved).toMatchObject({
-        ok: true,
-        settings: {
-          recipeProofreadDailyCap: 2,
-          kitchenLargestPotLitres: 60,
-          kitchenPlatesDinner: 45,
-        },
-      });
-      expect(await getKitchenSettings()).toMatchObject({
-        recipeProofreadDailyCap: 2,
-        kitchenBurnerCount: 4,
-        kitchenPlatesDinner: 45,
-      });
-    });
-
-    it("holds the plates at each meal to 1..500 in the database too", async () => {
-      await h.db().insert(schema.campSettings).values({ id: true });
-      for (const bad of [
-        { kitchenPlatesBreakfast: 0 },
-        { kitchenPlatesLunch: 501 },
-        { kitchenPlatesDinner: -3 },
-      ]) {
-        const err = await h
-          .db()
-          .update(schema.campSettings)
-          .set(bad)
-          .catch((e: unknown) => e);
-        let code: unknown = err;
-        while (code && typeof code === "object" && !("code" in code)) {
-          code = (code as { cause?: unknown }).cause;
-        }
-        expect(
-          (code as { code?: string } | null)?.code,
-          JSON.stringify(bad),
-        ).toBe("23514");
-      }
-      await h.db().update(schema.campSettings).set({
-        kitchenPlatesBreakfast: 1,
-        kitchenPlatesLunch: 500,
-        kitchenPlatesDinner: null,
-      });
-      expect(await getKitchenSettings()).toMatchObject({
-        kitchenPlatesBreakfast: 1,
-        kitchenPlatesLunch: 500,
-        kitchenPlatesDinner: null,
       });
     });
   });
@@ -1603,7 +1518,7 @@ describe("recipes", () => {
         fromPlates: 40,
         plates: 45,
         recipe: recipe(),
-        kitchen: expect.objectContaining({ recipeProofreadDailyCap: 5 }),
+        kitchen: { kitchenLargestPotLitres: null, kitchenBurnerCount: null },
       });
       // Never the member's text or their note.
       expect(JSON.stringify(claimed)).not.toContain("2 cups red lentils");
@@ -1649,12 +1564,6 @@ describe("recipes", () => {
     it("has no daily limit on plate runs either", async () => {
       const { captain, member } = await people();
       const target = await accepted(captain.id, member.id);
-      await setKitchenSettings({
-        actorId: captain.id,
-        recipeProofreadDailyCap: 1,
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-      });
       const other = await approved(member.id, captain.id);
       expect((await queue(captain.id, [other])).ok).toBe(true);
       expect((await plates(captain.id, target, 45)).ok).toBe(true);
@@ -2293,12 +2202,6 @@ describe("recipes", () => {
 
     it("has no daily limit on a send", async () => {
       const { captain, kitchenLead, member } = await people();
-      await setKitchenSettings({
-        actorId: captain.id,
-        recipeProofreadDailyCap: 1,
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-      });
       const a = await approved(member.id, captain.id);
       const b = await approved(member.id, captain.id);
       expect((await sendAsIs(kitchenLead.id, a)).ok).toBe(true);
@@ -2337,7 +2240,10 @@ describe("recipes", () => {
         plates: 40,
         exchange: [],
         note: null,
-        kitchen: expect.objectContaining({ recipeProofreadDailyCap: 5 }),
+        kitchen: expect.objectContaining({
+          kitchenLargestPotLitres: null,
+          kitchenBurnerCount: null,
+        }),
         // Not in the book yet: nothing to revise.
         previous: null,
       });
@@ -2698,12 +2604,6 @@ describe("recipes", () => {
 
     it("answers a round of questions with no daily limit", async () => {
       const { captain, kitchenLead, member } = await people();
-      await setKitchenSettings({
-        actorId: captain.id,
-        recipeProofreadDailyCap: 1,
-        kitchenLargestPotLitres: null,
-        kitchenBurnerCount: null,
-      });
       const id = await approved(member.id, captain.id);
       const sent = await sendAsIs(kitchenLead.id, id);
       if (!sent.ok) throw new Error(sent.error);
@@ -2919,15 +2819,14 @@ describe("recipes", () => {
       expect(
         await setKitchenSettings({
           actorId: kitchenLead.id,
-          recipeProofreadDailyCap: 50,
-          kitchenLargestPotLitres: null,
-          kitchenBurnerCount: null,
-          kitchenPlatesBreakfast: null,
-          kitchenPlatesLunch: null,
-          kitchenPlatesDinner: null,
+          kitchenLargestPotLitres: 60,
+          kitchenBurnerCount: 4,
         }),
       ).toEqual({ ok: false, error: ONLY_A_CAPTAIN_SETS_KITCHEN });
-      expect((await getKitchenSettings()).recipeProofreadDailyCap).toBe(5);
+      expect(await getKitchenSettings()).toEqual({
+        kitchenLargestPotLitres: null,
+        kitchenBurnerCount: null,
+      });
     });
   });
 });

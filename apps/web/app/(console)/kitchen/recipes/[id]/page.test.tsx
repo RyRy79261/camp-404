@@ -388,9 +388,10 @@ describe("recipe page", () => {
     });
     render(await RecipePage({ params: Promise.resolve({ id: RECIPE }) }));
     expect(order).toEqual(["reset", "read"]);
-    expect(
-      screen.getByText("The last run failed: The run stopped."),
-    ).toBeTruthy();
+    // The page has rendered (its title is there), and it carries no
+    // "last run failed" line: the owner has not approved one.
+    expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
+    expect(screen.queryByText(/The last run failed/)).toBeNull();
     cleanup();
 
     // A member reading an ordinary recipe resets too: there is no cron.
@@ -677,6 +678,27 @@ describe("recipe page", () => {
       expect(listRecipeSources).toHaveBeenLastCalledWith(RECIPE);
       cleanup();
     }
+  });
+
+  it("keeps the plate count in the address on both tabs' links", async () => {
+    await renderAs({ id: "someone", rank: "camp_member" }, [], inBook(), {
+      plates: "45",
+    });
+    let links = within(tabs()).getAllByRole("link");
+    expect(links[1]!.getAttribute("href")).toBe(
+      `/kitchen/recipes/${RECIPE}?tab=history&plates=45`,
+    );
+    cleanup();
+
+    await renderAs({ id: "someone", rank: "camp_member" }, [], inBook(), {
+      tab: "history",
+      plates: "45",
+    });
+    links = within(tabs()).getAllByRole("link");
+    expect(links[1]!.getAttribute("aria-current")).toBe("page");
+    expect(links[0]!.getAttribute("href")).toBe(
+      `/kitchen/recipes/${RECIPE}?plates=45`,
+    );
   });
 
   it("gives a member no report, and a Kitchen reviewer every report on the History tab", async () => {

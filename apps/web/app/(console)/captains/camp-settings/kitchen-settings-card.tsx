@@ -17,11 +17,10 @@ import { toast } from "@camp404/ui/components/toast";
 import { setKitchenSettingsAction } from "../../kitchen/recipes/actions";
 
 // The Kitchen card on Camp settings (#243): the kitchen's size, which Claude
-// uses to work out how much one pot cooks. The plates at each meal moved to
-// the Kitchen's meal plan (2026-09-24), and the old daily limit is gone: the
-// card sends neither, and the write keeps the stored values. Captain-only:
-// the page renders it only
-// for a captain, and the action and the write both check again. Drawn like
+// uses to work out how much one pot cooks. The plates at each meal are the
+// Kitchen's meal plan (2026-09-24), and there is no daily limit. Captain-only:
+// the page renders it only for a captain, and the action and the write both
+// check again. Drawn like
 // the page's other cards; a problem with a value shows beside that field, as
 // on every captain form.
 

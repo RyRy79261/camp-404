@@ -14,7 +14,7 @@ import * as schema from "./schema";
 
 // The kitchen's meal plan (the owner's sketch, 2026-09-24): for the camp's
 // current year, the days on site and the plates at breakfast, lunch and
-// dinner on each. It replaces the three per-meal numbers Camp settings held.
+// dinner on each.
 //
 //  - Anyone approved reads it (the page gates that). A recipe in the book is
 //    shown at each distinct count in it (mealPlanPlateCounts), and the

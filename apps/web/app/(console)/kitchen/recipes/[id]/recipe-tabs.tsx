@@ -19,10 +19,11 @@ export function RecipeTabs({
 }: {
   recipeId: string;
   tab: RecipeTab;
-  /** The plate count in the address, kept when going back to the recipe. */
+  /** The plate count in the address, kept on both tabs' links. */
   plates: number | null;
 }) {
   const base = recipePath(recipeId);
+  const count = plates === null ? "" : `plates=${plates}`;
   return (
     <SegmentedLinks
       aria-label="Recipe tabs"
@@ -33,9 +34,13 @@ export function RecipeTabs({
         {
           value: "recipe",
           label: "Recipe",
-          href: plates === null ? base : `${base}?plates=${plates}`,
+          href: count ? `${base}?${count}` : base,
         },
-        { value: "history", label: "History", href: `${base}?tab=history` },
+        {
+          value: "history",
+          label: "History",
+          href: count ? `${base}?tab=history&${count}` : `${base}?tab=history`,
+        },
       ]}
     />
   );

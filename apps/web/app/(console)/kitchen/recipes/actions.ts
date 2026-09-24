@@ -319,9 +319,7 @@ export async function addLessonAction(input: unknown): Promise<ActionResult> {
 
 /**
  * A captain sets the kitchen's size (the largest pot and the burners); it is
- * audited. The plates at each meal live in the meal plan now, and the old
- * daily cap is not read: Camp settings sends neither, and the write keeps the
- * stored values.
+ * audited. The plates at each meal are the meal plan's, not a setting.
  */
 export async function setKitchenSettingsAction(
   input: unknown,

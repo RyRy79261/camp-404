@@ -319,9 +319,8 @@ Decisions baked into the schema — keep new code consistent with them:
     transaction. [CORRECTION 2026-09-24] Sending a recipe to Claude is no
     longer captain-only: the owner's decision 2A gives it to the same people
     (`canRunProofread`, which takes the led teams). [CORRECTION 2026-09-24]
-    There is no daily cap any more (the owner removed it; the stored
-    `recipe_proofread_daily_cap` column is unread). The same people edit the
-    year's meal plan (`canEditMealPlan`). The kitchen settings stay
+    There is no daily limit on sends (the owner removed it). The same people
+    edit the year's meal plan (`canEditMealPlan`). The kitchen settings stay
     captain-only (`canSetKitchenSettings`). Change the rule in those
     functions, never at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for

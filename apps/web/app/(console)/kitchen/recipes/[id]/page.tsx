@@ -467,16 +467,6 @@ function HeadingActions({
   );
 }
 
-/** Why the last run failed, for the people who may send it again. */
-function LastError({ error }: { error: string | null }) {
-  if (!error) return null;
-  return (
-    <p className="text-sm text-destructive" role="status">
-      The last run failed: {error}
-    </p>
-  );
-}
-
 /** Every recipe version, newest first; each opens in place to be read. */
 function VersionList({
   versions,
@@ -714,7 +704,6 @@ export default async function RecipePage({
           {meta.join(" · ")}
         </p>
         <VariationOf detail={detail} />
-        {canRun && <LastError error={detail.lastError} />}
       </div>
     );
 
@@ -748,7 +737,7 @@ export default async function RecipePage({
       return (
         <div className="flex min-w-0 flex-col gap-8">
           {heading}
-          <RecipeTabs recipeId={detail.id} tab="history" plates={null} />
+          <RecipeTabs recipeId={detail.id} tab="history" plates={wanted} />
 
           {reviewing && run ? (
             <DraftArticle
@@ -920,7 +909,6 @@ export default async function RecipePage({
       />
       <div className="-mt-3 mb-6 flex flex-col gap-2">
         <VariationOf detail={detail} />
-        {canRun && <LastError error={detail.lastError} />}
       </div>
 
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start">

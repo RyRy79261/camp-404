@@ -802,15 +802,15 @@ export const AcceptProofreadInput = z.object({
 });
 export type AcceptProofreadInput = z.infer<typeof AcceptProofreadInput>;
 
+/** An action on one recipe that takes nothing else. */
+export const RecipeIdInput = z.object({ recipeId: RowId });
+export type RecipeIdInput = z.infer<typeof RecipeIdInput>;
+
 /**
  * A captain asks Claude to proofread an accepted version for another number
  * of plates. A count that already has a result is not run again unless
  * `rerun` says so.
  */
-/** An action on one recipe that takes nothing else. */
-export const RecipeIdInput = z.object({ recipeId: RowId });
-export type RecipeIdInput = z.infer<typeof RecipeIdInput>;
-
 export const QueuePlateProofreadInput = z.object({
   recipeId: RowId,
   versionId: RowId,
@@ -821,31 +821,17 @@ export type QueuePlateProofreadInput = z.infer<typeof QueuePlateProofreadInput>;
 
 /** The kitchen's camp settings, and the bounds the database also holds. */
 export const KITCHEN_SETTING_LIMITS = {
-  recipeProofreadDailyCap: { min: 0, max: 50, default: 5 },
   kitchenLargestPotLitres: { min: 1, max: 500 },
   kitchenBurnerCount: { min: 1, max: 20 },
-  kitchenPlatesBreakfast: { min: 1, max: MAX_PLATES },
-  kitchenPlatesLunch: { min: 1, max: MAX_PLATES },
-  kitchenPlatesDinner: { min: 1, max: MAX_PLATES },
 } as const;
 
 const L = KITCHEN_SETTING_LIMITS;
 
+/**
+ * The kitchen's size. The plates at each meal are the year's meal plan
+ * (MealPlanInput), not a setting.
+ */
 export const KitchenSettingsInput = z.object({
-  /**
-   * The old daily proofreading cap. Nothing reads it any more (the owner
-   * removed the limit, 2026-09-24) and no screen sets it; the column stays,
-   * and the write keeps the stored value when it is absent.
-   */
-  recipeProofreadDailyCap: z
-    .number()
-    .int()
-    .min(L.recipeProofreadDailyCap.min, "The daily limit cannot be below 0.")
-    .max(
-      L.recipeProofreadDailyCap.max,
-      `The daily limit is at most ${L.recipeProofreadDailyCap.max}.`,
-    )
-    .optional(),
   kitchenLargestPotLitres: z
     .number()
     .int()
@@ -864,22 +850,13 @@ export const KitchenSettingsInput = z.object({
       `Count at most ${L.kitchenBurnerCount.max} burners.`,
     )
     .nullable(),
-  /**
-   * The old plates at each meal. The year's meal plan (MealPlanInput) holds
-   * them now, so Camp settings leaves them out and the write keeps the stored
-   * values when they are absent.
-   */
-  kitchenPlatesBreakfast: PlateCount.nullable().optional(),
-  kitchenPlatesLunch: PlateCount.nullable().optional(),
-  kitchenPlatesDinner: PlateCount.nullable().optional(),
 });
 export type KitchenSettingsInput = z.infer<typeof KitchenSettingsInput>;
 
 // --- Meal plan -------------------------------------------------------------
 // The year's plates at each meal, day by day on site (the owner's sketch,
-// 2026-09-24). It replaces the three per-meal numbers Camp settings held: a
-// recipe's plate counts are the distinct counts in it, and the largest one is
-// what Claude writes a recipe for.
+// 2026-09-24). A recipe's plate counts are the distinct counts in it, and the
+// largest one is what Claude writes a recipe for.
 
 /** The camp is usually on site 11 days. */
 export const MEAL_PLAN_DEFAULT_DAYS = 11;

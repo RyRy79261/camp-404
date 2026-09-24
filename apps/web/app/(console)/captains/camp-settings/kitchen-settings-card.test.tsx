@@ -4,9 +4,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 // The Kitchen card: it shows the saved pot and burners, saves whole numbers
 // (an empty one is "not known"), and puts a problem beside the field it
 // belongs to. A refusal from the server shows in the card, not as a toast.
-// The plates at each meal moved to the meal plan and the old daily cap is
-// gone: the card neither shows nor sends them, so a save keeps the stored
-// values.
+// The plates at each meal are the meal plan's, and there is no daily cap:
+// the card neither shows nor sends either.
 
 vi.mock("../../kitchen/recipes/actions", () => ({
   setKitchenSettingsAction: vi.fn(),
@@ -26,12 +25,8 @@ import { setKitchenSettingsAction } from "../../kitchen/recipes/actions";
 import { KitchenSettingsCard } from "./kitchen-settings-card";
 
 const SAVED = {
-  recipeProofreadDailyCap: 5,
   kitchenLargestPotLitres: 50,
   kitchenBurnerCount: null,
-  kitchenPlatesBreakfast: 60,
-  kitchenPlatesLunch: null,
-  kitchenPlatesDinner: 45,
 };
 
 const field = (name: string) => screen.getByLabelText(name) as HTMLInputElement;
@@ -62,7 +57,7 @@ describe("KitchenSettingsCard", () => {
     }
   });
 
-  it("has no runs-per-day field and sends no cap and no plates, so the stored ones are kept", async () => {
+  it("has no runs-per-day field and sends only the pot and the burners", async () => {
     render(<KitchenSettingsCard settings={SAVED} />);
     // Something present first: the card has rendered its fields.
     expect(field("Largest pot (litres)")).toBeTruthy();
@@ -70,11 +65,10 @@ describe("KitchenSettingsCard", () => {
     expect(screen.queryByLabelText(/runs/i)).toBeNull();
     save();
     await waitFor(() => expect(setKitchenSettingsAction).toHaveBeenCalled());
-    const sent = vi.mocked(setKitchenSettingsAction).mock.calls[0]![0];
-    expect(sent).not.toHaveProperty("recipeProofreadDailyCap");
-    expect(sent).not.toHaveProperty("kitchenPlatesBreakfast");
-    expect(sent).not.toHaveProperty("kitchenPlatesLunch");
-    expect(sent).not.toHaveProperty("kitchenPlatesDinner");
+    expect(vi.mocked(setKitchenSettingsAction).mock.calls[0]![0]).toEqual({
+      kitchenLargestPotLitres: 50,
+      kitchenBurnerCount: null,
+    });
   });
 
   it("saves whole numbers, and an empty field as not known", async () => {

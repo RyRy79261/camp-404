@@ -149,13 +149,13 @@ test.describe("recipe plate counts (test-mode)", () => {
     await expect(page).toHaveURL(`${recipeUrl}?plates=50`);
     await expect(chip(page, 3)).toContainText("2.5 kg");
 
-    // 5. The History tab, kept in the address through a reload: every
-    //    version opens in place, with the activity log.
+    // 5. The History tab, kept in the address through a reload with the
+    //    plate count: every version opens in place, with the activity log.
     await page
       .getByRole("navigation", { name: "Recipe tabs" })
       .getByRole("link", { name: "History" })
       .click();
-    await expect(page).toHaveURL(`${recipeUrl}?tab=history`);
+    await expect(page).toHaveURL(`${recipeUrl}?tab=history&plates=50`);
     await page.reload();
     const versions = page.getByRole("article", { name: "Recipe versions" });
     await expect(versions).toBeVisible();
