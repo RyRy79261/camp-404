@@ -9,8 +9,9 @@ plan below is kept as history.
 - **Config layer.** `packages/db/src/camp-config.ts` holds the team list in
   the `camp_settings.config` JSONB column (added by migration `0015`):
   `getTeamsConfig`, `activeTeams`, `teamLabelMap`, and `mutateTeamsConfig`,
-  which rewrites the config under the `camp_settings` row lock and writes its
-  audit row in the same transaction. `assertStableTeamKeys` refuses any change
+  which rewrites the config under the `camp_settings` row lock and, when the
+  caller passes an audit event, writes that audit row in the same transaction
+  (with none, no row is written). `assertStableTeamKeys` refuses any change
   that adds or removes a team key. The roster, announcements, questionnaire
   sends, the task board and the rest read labels from this config.
 - **Captain team editor.** `/captains/camp-settings`:

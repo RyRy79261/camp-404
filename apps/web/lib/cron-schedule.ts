@@ -23,7 +23,7 @@ export const SCHEDULED_JOBS = [
     job: "maintenance",
     schedule: "30 7 * * *",
     label: "Daily maintenance",
-    what: "Encrypts any ID number still stored as plain text, and on the live site deletes profile photos whose owner has no camp account.",
+    what: "Encrypts any ID number still stored as plain text, and on the live site deletes profile photos and image answers whose owner has no camp account.",
   },
   {
     job: "recipes/analyse",

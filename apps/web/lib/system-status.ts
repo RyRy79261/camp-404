@@ -27,6 +27,8 @@ import {
   envList,
   feedbackTracker,
   firebaseAdminCredentials,
+  founderEmails,
+  founderEmailsUseOldName,
   isEmailConfigured,
   isWebPushConfigured,
   MIN_PREAPPROVED_ENV_CODE_LENGTH,
@@ -546,17 +548,19 @@ function inviteCodesCheck(env: EnvBag): SystemCheck {
 
 function recoveryEmailsCheck(env: EnvBag): SystemCheck {
   // Count only. The addresses are people's email addresses.
-  const count = envList(env.GOD_EMAILS).length;
+  const count = founderEmails(env).length;
   return {
     id: "recovery-emails",
-    label: "Recovery addresses",
-    env: ["GOD_EMAILS"],
+    label: "Founder addresses",
+    env: ["FOUNDER_EMAILS"],
     value: count === 0 ? "None" : plural(count, "address", "addresses"),
     tone: "info",
     detail:
       count === 0
         ? "No address can skip the invite and approval gates."
-        : "A listed address skips the invite and approval gates, but only once its email is verified.",
+        : founderEmailsUseOldName(env)
+          ? "A listed address skips the invite and approval gates, but only once its email is verified. The list is set under an old variable name: rename it to FOUNDER_EMAILS in Vercel. It keeps working until then."
+          : "A listed address skips the invite and approval gates, but only once its email is verified.",
   };
 }
 

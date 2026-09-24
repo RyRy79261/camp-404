@@ -1728,6 +1728,8 @@ export const testStore = {
       inviteCode: u.inviteCode,
       inviteNote: invite?.note ?? null,
       invitedByName: nameOf(invite?.createdByUserId ?? null),
+      // The store keeps no setup latch, so it has no founder to name.
+      isFounder: false,
       createdAt: u.createdAt,
     };
   },

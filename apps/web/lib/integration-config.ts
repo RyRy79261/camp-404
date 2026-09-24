@@ -18,6 +18,24 @@ export function envList(raw: string | undefined): string[] {
 }
 
 /**
+ * The founder addresses: they skip the invite and approval gates once their
+ * email is verified, and only they may run /setup. Read from FOUNDER_EMAILS,
+ * or from GOD_EMAILS, its old name, until the deployment is renamed.
+ */
+export function founderEmails(env: EnvBag): string[] {
+  const current = envList(env.FOUNDER_EMAILS);
+  return current.length > 0 ? current : envList(env.GOD_EMAILS);
+}
+
+/** True when the founder list is set only under its old name. */
+export function founderEmailsUseOldName(env: EnvBag): boolean {
+  return (
+    envList(env.FOUNDER_EMAILS).length === 0 &&
+    envList(env.GOD_EMAILS).length > 0
+  );
+}
+
+/**
  * An `INVITE_CODES` value shorter than this lands its redeemer as pending, for
  * a captain to approve. Env codes never run out, and sign-up is open to anyone,
  * so a short, guessable one must not let people straight into the camp: the

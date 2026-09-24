@@ -21,6 +21,7 @@ import { createHttpDb, schema } from "@camp404/db";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@camp404/core";
 import { sendAuthEmail } from "./email";
 import { emailProofGuards } from "./email-proof";
+import { oauthProxyDisabledPaths, oauthProxyPlugins } from "./oauth-proxy";
 import {
   AUTH_RP_NAME,
   AUTH_SESSION,
@@ -28,6 +29,7 @@ import {
   canDeliverAuthEmail,
   isGoogleConfigured,
   resolveBaseURL,
+  resolveOAuthProxy,
   resolvePasskeyOrigins,
   resolvePasskeyRpID,
   resolveRateLimit,
@@ -55,6 +57,8 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
   const passkeyRpID = resolvePasskeyRpID(env);
   const passkeyOrigins = resolvePasskeyOrigins(env);
   const useSecureCookies = resolveUseSecureCookies(env);
+  const oauthProxy = resolveOAuthProxy(env);
+  const disabledPaths = oauthProxyDisabledPaths(oauthProxy);
 
   return {
     appName: "Camp 404",
@@ -64,6 +68,7 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
     trustedOrigins: resolveTrustedOrigins(env),
     // No outbound telemetry from an auth stack that holds member data.
     telemetry: { enabled: false },
+    ...(disabledPaths.length ? { disabledPaths } : {}),
 
     // The HTTP driver has no transactions, so `transaction` stays at its
     // default (false): operations run one after another, the documented
@@ -200,6 +205,9 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
       // (a squatter's would outlive the owner's reset), keep the ones enrolled
       // once the owner resets, or skip two-factor through a verification link.
       emailProofGuards(),
+      // Google sign-in on previews, through production's registered callback
+      // (resolveOAuthProxy in env.ts). Nothing unless its env is set.
+      ...oauthProxyPlugins(oauthProxy),
     ],
 
     advanced: {

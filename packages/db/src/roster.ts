@@ -211,6 +211,12 @@ export interface CampMemberDetail {
   inviteNote: string | null;
   /** Display name of whoever issued the invite (NULL for root codes). */
   invitedByName: string | null;
+  /**
+   * True only for the account that ran first-time setup
+   * (`camp_settings.bootstrapped_by_user_id`). Not the same as holding the
+   * root code: the crew redeem that code too, so it names no one on its own.
+   */
+  isFounder: boolean;
   createdAt: Date;
 }
 
@@ -262,6 +268,7 @@ export async function getCampMemberDetail(
       inviteCode: schema.users.inviteCode,
       inviteNote: schema.inviteCodes.note,
       invitedByName: inviter.displayName,
+      founderMark: schema.campSettings.bootstrappedByUserId,
       createdAt: schema.users.createdAt,
     })
     .from(schema.users)
@@ -288,6 +295,12 @@ export async function getCampMemberDetail(
       eq(schema.inviteCodes.code, schema.users.inviteCode),
     )
     .leftJoin(inviter, eq(inviter.id, schema.inviteCodes.createdByUserId))
+    // The singleton settings row joins only to the member who founded the
+    // camp, so it never multiplies rows.
+    .leftJoin(
+      schema.campSettings,
+      eq(schema.campSettings.bootstrappedByUserId, schema.users.id),
+    )
     .where(eq(schema.users.id, userId))
     .limit(1);
 
@@ -314,6 +327,7 @@ export async function getCampMemberDetail(
     inviteCode: r.inviteCode,
     inviteNote: r.inviteNote,
     invitedByName: r.invitedByName,
+    isFounder: r.founderMark != null,
     createdAt: r.createdAt,
   };
 }

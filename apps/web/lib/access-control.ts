@@ -5,7 +5,11 @@ import {
   type AssignedRank,
 } from "@camp404/db/invite-codes";
 import { normalizeInviteCode } from "@camp404/core";
-import { envList, MIN_PREAPPROVED_ENV_CODE_LENGTH } from "./integration-config";
+import {
+  envList,
+  founderEmails,
+  MIN_PREAPPROVED_ENV_CODE_LENGTH,
+} from "./integration-config";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -22,12 +26,13 @@ export interface ClaimedInvite {
 export { MIN_PREAPPROVED_ENV_CODE_LENGTH };
 
 /**
- * Returns true if the given email address is in GOD_EMAILS (case-insensitive).
- * God accounts bypass the invite-code requirement.
+ * Returns true if the given email address is a founder address
+ * (FOUNDER_EMAILS, or its old name GOD_EMAILS), case-insensitive. Founder
+ * addresses bypass the invite-code requirement.
  */
 export function isGodEmail(email: string | null | undefined): boolean {
   if (!email) return false;
-  const list = envList(process.env.GOD_EMAILS).map((e) => e.toLowerCase());
+  const list = founderEmails(process.env).map((e) => e.toLowerCase());
   return list.includes(email.toLowerCase());
 }
 

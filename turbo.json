@@ -13,6 +13,8 @@
     "AUTH_RATE_LIMIT_WINDOW_SECONDS",
     "AUTH_RATE_LIMIT_MAX",
     "AUTH_EMAIL_CAPTURE_FILE",
+    "AUTH_OAUTH_PROXY_SECRET",
+    "AUTH_OAUTH_PROXY_URL",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
     "GOOGLE_CALENDAR_ID",
@@ -36,6 +38,7 @@
     "TELEGRAM_WEBHOOK_SECRET",
     "RESEND_API_KEY",
     "RESEND_FROM_EMAIL",
+    "FOUNDER_EMAILS",
     "GOD_EMAILS",
     "INVITE_CODES",
     "GITHUB_FEEDBACK_TOKEN",
@@ -51,7 +54,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "dist/**", "out/**"]
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "!.next/dev/**",
+        "dist/**",
+        "out/**"
+      ]
     },
     "dev": {
       "cache": false,

@@ -76,6 +76,29 @@ describe("getCampMemberDetail — ID ciphertext", () => {
   });
 });
 
+// The root code is shared by the first crew, so the founder is named by the
+// setup latch, never by the code.
+describe("getCampMemberDetail — the founder", () => {
+  const h = useTestDb();
+
+  it("marks only the account that ran first-time setup as the founder", async () => {
+    const db = h.db();
+    // Setup gives the founder the root code, and the crew redeem it too.
+    const founder = await makeUser(db, { inviteCode: "meowzit" });
+    const crew = await makeUser(db, { inviteCode: "meowzit" });
+    await db
+      .insert(schema.campSettings)
+      .values({ id: true, bootstrappedByUserId: founder.id })
+      .onConflictDoUpdate({
+        target: schema.campSettings.id,
+        set: { bootstrappedByUserId: founder.id },
+      });
+
+    expect((await getCampMemberDetail(founder.id))?.isFounder).toBe(true);
+    expect((await getCampMemberDetail(crew.id))?.isFounder).toBe(false);
+  });
+});
+
 // --- The year-scoped roster facts -----------------------------------------
 // team_memberships, driver_profiles and car_members each carry a `cycle`, and
 // every read here filters to the camp's current year. That is the whole of
