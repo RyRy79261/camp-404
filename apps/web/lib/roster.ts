@@ -9,10 +9,15 @@ import {
   type CampMemberDetailOptions,
 } from "@camp404/db/roster";
 import {
+  assignTeam as dbAssignTeam,
   getTeamCoverage as dbGetTeamCoverage,
   getTeamMemberships as dbGetTeamMemberships,
+  removeTeam as dbRemoveTeam,
+  setLead as dbSetLead,
+  type SetLeadResult,
   type TeamCoverage,
   type TeamMembership,
+  type TeamWriteInput,
 } from "@camp404/db/team-memberships";
 import { listMemberQuestionnaireGates as dbListMemberQuestionnaireGates } from "@camp404/db/activations";
 import {
@@ -47,6 +52,13 @@ interface RosterBackend {
   getTeamMemberships(userId: string): Promise<TeamMembership[]>;
   listMemberNotes(userId: string): Promise<MemberNote[]>;
   listMemberQuestionnaireGates(userId: string): Promise<QuestionnaireGate[]>;
+  assignTeam(
+    input: TeamWriteInput,
+  ): Promise<{ created: boolean; cycle: number }>;
+  removeTeam(
+    input: TeamWriteInput,
+  ): Promise<{ removed: boolean; cycle: number }>;
+  setLead(input: TeamWriteInput & { isLead: boolean }): Promise<SetLeadResult>;
 }
 
 // Each entry calls through at CALL time, so a unit test's vi.mock of the db
@@ -60,6 +72,9 @@ const realBackend: RosterBackend = {
   listMemberNotes: (userId) => dbListMemberNotes(userId),
   listMemberQuestionnaireGates: (userId) =>
     dbListMemberQuestionnaireGates(userId),
+  assignTeam: (input) => dbAssignTeam(input),
+  removeTeam: (input) => dbRemoveTeam(input),
+  setLead: (input) => dbSetLead(input),
 };
 
 const testBackend: RosterBackend = {
@@ -81,6 +96,16 @@ const testBackend: RosterBackend = {
   },
   async listMemberQuestionnaireGates(userId) {
     return testStore.listMemberQuestionnaireGates(userId);
+  },
+  // The store keeps no audit log, so the captain's id stops here.
+  async assignTeam({ userId, team }) {
+    return testStore.assignTeam({ userId, team });
+  },
+  async removeTeam({ userId, team }) {
+    return testStore.removeTeam({ userId, team });
+  },
+  async setLead({ userId, team, isLead }) {
+    return testStore.setLead({ userId, team, isLead });
   },
 };
 
@@ -133,4 +158,30 @@ export function listMemberQuestionnaireGates(
   userId: string,
 ): Promise<QuestionnaireGate[]> {
   return backend().listMemberQuestionnaireGates(userId);
+}
+
+// --- The captain member panel's team writes ----------------------------------
+// assignTeamAction, removeTeamAction and setTeamLeadAction write through these,
+// so Playwright can put a member on a team and make them its lead. The action
+// gates them to captains and resolves the team key first; this module does not.
+
+/** Put a member on a team for THIS year. Idempotent; never sets the lead flag. */
+export function assignTeam(
+  input: TeamWriteInput,
+): Promise<{ created: boolean; cycle: number }> {
+  return backend().assignTeam(input);
+}
+
+/** Take a member off a team for THIS year. Idempotent; prior years survive. */
+export function removeTeam(
+  input: TeamWriteInput,
+): Promise<{ removed: boolean; cycle: number }> {
+  return backend().removeTeam(input);
+}
+
+/** Set or clear the lead flag on a membership that exists THIS year. */
+export function setLead(
+  input: TeamWriteInput & { isLead: boolean },
+): Promise<SetLeadResult> {
+  return backend().setLead(input);
 }

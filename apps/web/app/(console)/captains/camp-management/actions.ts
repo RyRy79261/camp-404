@@ -2,25 +2,24 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import {
-  assignTeam,
-  removeTeam,
-  setLead,
-  type TeamMembership,
-} from "@camp404/db/team-memberships";
+import type { TeamMembership } from "@camp404/db/team-memberships";
 import { decryptField } from "@camp404/db/crypto";
 import {
   MAX_MEMBER_NOTE_LENGTH,
   addMemberNote,
   type MemberNote,
 } from "@camp404/db/member-notes";
-// The reads route through the roster facade, so the E2E test store can answer
-// them and Playwright can open a member's panel.
+// The reads and the team writes route through the roster facade, so the E2E
+// test store can answer them and Playwright can open a member's panel and put
+// them on a team.
 import {
+  assignTeam,
   getCampMemberDetail,
   getTeamMemberships,
   listMemberNotes,
   listMemberQuestionnaireGates,
+  removeTeam,
+  setLead,
 } from "@/lib/roster";
 import { ID_UNREADABLE_LABEL, mergeIdNumber } from "@camp404/db/id-documents";
 import {

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { MEDICAL_AUDIENCE_NOTE } from "@camp404/core";
 import { pageQuestions, validateResponses } from "@camp404/types";
 import {
+  BURNER_PROFILE_TEMPLATE,
+  DEFAULT_TEAM_OPTIONS,
   QUESTIONNAIRE_VERSION,
   buildQuestionnaire,
+  resolveTeamBindings,
   type TeamOption,
 } from "@/lib/questionnaire";
 
@@ -92,6 +95,57 @@ describe("buildQuestionnaire", () => {
     // emergency contacts page (2026-09-16); members who finished before it
     // are asked the next time they save My forms.
     expect(QUESTIONNAIRE_VERSION).toBe("2026.09.16-v10");
+  });
+});
+
+describe("the teams added in #236 on the burner profile", () => {
+  const NEW_KEYS = [
+    "transport_and_logistics",
+    "communications_and_hr",
+    "mutant_vehicle",
+  ];
+  // What production serves: the stored template with the camp's teams bound in.
+  const q = resolveTeamBindings(BURNER_PROFILE_TEMPLATE, DEFAULT_TEAM_OPTIONS);
+  const questions = q.pages.flatMap((p) =>
+    p.kind === "questions" ? pageQuestions(p) : [],
+  );
+
+  it("asks about each new team as an optional 0–6 pick", () => {
+    const page = q.pages.find((p) => p.id === "team_interests");
+    if (page?.kind !== "questions") throw new Error("expected questions page");
+    const byId = new Map(pageQuestions(page).map((x) => [x.id, x]));
+    for (const key of NEW_KEYS) {
+      const question = byId.get(`team_interest.${key}`);
+      expect(question, key).toBeDefined();
+      expect(question?.required).toBe(false);
+    }
+  });
+
+  it("offers each new team to someone who wants to lead", () => {
+    const lead = questions.find((x) => x.id === "team_lead.interests");
+    const values =
+      lead && "options" in lead ? lead.options.map((o) => o.value) : [];
+    expect(values).toEqual(expect.arrayContaining(NEW_KEYS));
+  });
+
+  it("keeps a profile finished before the new teams complete, so no one redoes it", () => {
+    // A burner profile saved when the camp had nine teams: an answer for each
+    // of those, and none for the three added since.
+    const oldTeams = DEFAULT_TEAM_OPTIONS.filter(
+      (t) => !NEW_KEYS.includes(t.value),
+    );
+    expect(oldTeams).toHaveLength(9);
+    const stored = {
+      ...requiredAnswers,
+      ...Object.fromEntries(
+        oldTeams.map((t) => [`team_interest.${t.value}`, 3]),
+      ),
+      "team_lead.interests": ["kitchen"],
+    };
+
+    const result = validateResponses(q, stored);
+
+    expect(result.ok).toBe(true);
   });
 });
 

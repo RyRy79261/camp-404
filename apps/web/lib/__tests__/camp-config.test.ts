@@ -118,12 +118,14 @@ describe("the seeded column default", () => {
     return JSON.parse(json ?? "{}");
   }
 
-  // 0015 seeded the eight founding teams; 0039 is the newest migration that
-  // sets the default (it added Finance). The newest one is what a new camp gets.
-  it("migration 0039 matches DEFAULT_CAMP_CONFIG", () => {
-    expect(
-      extractSeed("packages/db/migrations/0039_finance_team.sql"),
-    ).toEqual(DEFAULT_CAMP_CONFIG);
+  // 0015 seeded the eight founding teams, 0039 added Finance, and 0044 is the
+  // newest migration that sets the default (it added Transport and Logistics,
+  // Communications and HR and Mutant Vehicle). The newest one is what a new
+  // camp gets.
+  it("migration 0044 matches DEFAULT_CAMP_CONFIG", () => {
+    expect(extractSeed("packages/db/migrations/0044_new_teams.sql")).toEqual(
+      DEFAULT_CAMP_CONFIG,
+    );
   });
 
   it("schema.ts inline column default matches DEFAULT_CAMP_CONFIG", () => {

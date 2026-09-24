@@ -82,6 +82,9 @@ export const teamEnum = pgEnum("team", [
   "ministry_of_memes",
   "ministry_of_vibes",
   "finance",
+  "transport_and_logistics",
+  "communications_and_hr",
+  "mutant_vehicle",
 ]);
 
 export const membershipTierEnum = pgEnum("membership_tier", [
@@ -1918,13 +1921,14 @@ export const campSettings = pgTable(
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
     // Editable camp config (Phase 1: the team list). Seeded with the 8 founding
-    // teams; the seed mirrors DEFAULT_CAMP_CONFIG in camp-config.ts (a test
+    // teams, Finance, Transport and Logistics, Communications and HR and
+    // Mutant Vehicle; the seed mirrors DEFAULT_CAMP_CONFIG in camp-config.ts (a test
     // guards the two against drift). See camp-config.ts for the accessor.
     config: jsonb("config")
       .$type<CampConfig>()
       .notNull()
       .default(
-        sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and Water","order":3,"archived":false},{"key":"health_and_safety","label":"Health and Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false},{"key":"finance","label":"Finance","order":8,"archived":false}]}'::jsonb`,
+        sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and Water","order":3,"archived":false},{"key":"health_and_safety","label":"Health and Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false},{"key":"finance","label":"Finance","order":8,"archived":false},{"key":"transport_and_logistics","label":"Transport and Logistics","order":9,"archived":false},{"key":"communications_and_hr","label":"Communications and HR","order":10,"archived":false},{"key":"mutant_vehicle","label":"Mutant Vehicle","order":11,"archived":false}]}'::jsonb`,
       ),
   },
   (t) => ({

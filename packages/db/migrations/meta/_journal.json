@@ -309,6 +309,20 @@
       "when": 1790208771229,
       "tag": "0043_task_deadline_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790212984505,
+      "tag": "0044_new_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1790212987743,
+      "tag": "0045_new_teams_in_camp_config",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CalendarPlus,
   Car,
+  CarFront,
   ChefHat,
   CheckCircle2,
   Circle,
@@ -18,10 +19,12 @@ import {
   Laugh,
   ListTodo,
   Megaphone,
+  MessagesSquare,
   Music,
   Palette,
   Send,
   SquareKanban,
+  Truck,
   Users,
   Wallet,
   Zap,
@@ -415,6 +418,9 @@ const TEAM_ICONS: Record<string, LucideIcon> = {
   ministry_of_memes: Laugh,
   ministry_of_vibes: Music,
   finance: Wallet,
+  transport_and_logistics: Truck,
+  communications_and_hr: MessagesSquare,
+  mutant_vehicle: CarFront,
 };
 
 /**

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { initialsFrom, slugify } from "../text-utils";
+import { humanizeKey, initialsFrom, slugify } from "../text-utils";
 
 describe("initialsFrom", () => {
   it("returns '?' for null input", () => {
@@ -56,5 +56,20 @@ describe("slugify", () => {
 
   it("caps length", () => {
     expect(slugify("a".repeat(80)).length).toBeLessThanOrEqual(48);
+  });
+});
+
+describe("humanizeKey", () => {
+  it("capitalises each word and keeps connectives lower case", () => {
+    expect(humanizeKey("art_and_activities")).toBe("Art and Activities");
+    expect(humanizeKey("ministry_of_memes")).toBe("Ministry of Memes");
+  });
+
+  it("capitalises an initialism whole, so a team reads as its label does", () => {
+    expect(humanizeKey("communications_and_hr")).toBe("Communications and HR");
+  });
+
+  it("leaves a word that only contains the initialism alone", () => {
+    expect(humanizeKey("shrubs")).toBe("Shrubs");
   });
 });

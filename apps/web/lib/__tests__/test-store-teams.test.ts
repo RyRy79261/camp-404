@@ -143,6 +143,44 @@ describe("testStore.removeTeam — the db writer, mirrored", () => {
   });
 });
 
+describe("the teams added in #236, mirrored", () => {
+  it("puts a member on Mutant Vehicle and makes them its lead", () => {
+    const member = makeUser("driver");
+    foundedAt(2027);
+
+    expect(
+      testStore.assignTeam({ userId: member.id, team: "mutant_vehicle" }),
+    ).toEqual({ created: true, cycle: 2027 });
+    expect(
+      testStore.setLead({
+        userId: member.id,
+        team: "mutant_vehicle",
+        isLead: true,
+      }),
+    ).toEqual({ ok: true, changed: true });
+
+    expect(testStore.isTeamLead(member.id)).toBe(true);
+    expect(testStore.getLeadTeams(member.id)).toEqual(["mutant_vehicle"]);
+    expect(testStore.getTeamMemberships(member.id)).toEqual([
+      { team: "mutant_vehicle", isLead: true, cycle: 2027 },
+    ]);
+  });
+
+  it("offers the three teams in the store's default config, after Finance", () => {
+    expect(
+      testStore
+        .getTeamsConfig()
+        .teams.slice(-4)
+        .map((t) => t.key),
+    ).toEqual([
+      "finance",
+      "transport_and_logistics",
+      "communications_and_hr",
+      "mutant_vehicle",
+    ]);
+  });
+});
+
 describe("testStore.setLead — the db writer, mirrored", () => {
   it("flips the flag, and isTeamLead sees it", () => {
     const member = makeUser("cook");

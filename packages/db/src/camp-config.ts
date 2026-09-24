@@ -27,7 +27,9 @@ export interface TeamsConfig {
   teams: TeamConfigEntry[];
 }
 
-// The 8 founding teams and Finance (added 2026-09-23), seeded as the column default. Labels mirror the roster's
+// The 8 founding teams, then Finance (added 2026-09-23) and Transport and
+// Logistics, Communications and HR and Mutant Vehicle (added 2026-09-24),
+// seeded as the column default. Labels mirror the roster's
 // previous `teamLabel()` humanizer ("Art and Activities") so Phase 1 renders
 // identically. The schema.ts column seeds the SAME shape via a SQL default; the
 // "seeds match DEFAULT_CAMP_CONFIG" test in camp-config.test.ts guards drift.
@@ -41,6 +43,9 @@ export const DEFAULT_TEAMS: TeamConfigEntry[] = [
   { key: "ministry_of_memes", label: "Ministry of Memes", order: 6, archived: false },
   { key: "ministry_of_vibes", label: "Ministry of Vibes", order: 7, archived: false },
   { key: "finance", label: "Finance", order: 8, archived: false },
+  { key: "transport_and_logistics", label: "Transport and Logistics", order: 9, archived: false },
+  { key: "communications_and_hr", label: "Communications and HR", order: 10, archived: false },
+  { key: "mutant_vehicle", label: "Mutant Vehicle", order: 11, archived: false },
 ];
 
 export const DEFAULT_CAMP_CONFIG: TeamsConfig = { teams: DEFAULT_TEAMS };

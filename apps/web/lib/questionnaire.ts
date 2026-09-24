@@ -65,12 +65,15 @@ const DIETARY_INGREDIENTS: ReadonlyArray<{ value: string; label: string }> = [
 // added/removed, or a required flag flipped) — that re-opens the required-action
 // gate for every member and forces a re-submit.
 // [CORRECTION 2026-09-23] Only a change to what is REQUIRED needs the bump. An
-// optional question (Telegram) or a new team (Finance: the team sliders are
-// optional) leaves every submitted profile complete, and a bump would make
-// every member re-submit for nothing; members add the new answer in My forms. Relabelling / reordering /
-// archiving a team is interpretation, not shape (the response keys are the
-// stable enum), so it must NOT bump this. (Adding a brand-new team key is a
-// shape change — that's Phase 4, with an enum migration + a version bump.)
+// optional question (Telegram) or a new team leaves every submitted profile
+// complete, and a bump would make every member re-submit for nothing; members
+// add the new answer in My forms. Relabelling / reordering / archiving a team
+// is interpretation, not shape (the response keys are the stable enum), so it
+// must NOT bump this.
+// [CORRECTION 2026-09-24] A brand-new team key needs an enum migration, but NOT
+// a version bump while the team sliders stay optional (required: false): Finance,
+// Transport and Logistics, Communications and HR and Mutant Vehicle were all
+// added without one. Only making a team question required would need the bump.
 export const QUESTIONNAIRE_VERSION = "2026.09.16-v10";
 
 // The two team-bound anchors in the burner questionnaire — the only parts that
@@ -502,7 +505,7 @@ export function buildQuestionnaire(
   };
 }
 
-// The 8 founding teams as picker options, mirroring DEFAULT_TEAMS in
+// Every team in the enum as picker options, mirroring DEFAULT_TEAMS in
 // @camp404/db/camp-config (a test guards the two against drift). Used only to
 // freeze BURNER_PROFILE_TEMPLATE; the stored definition's team anchors are
 // overwritten from the live config on read, so these labels never surface.

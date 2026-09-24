@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import * as schema from "../schema";
-import { DEFAULT_CAMP_CONFIG, getTeamsConfig } from "../camp-config";
+import {
+  DEFAULT_CAMP_CONFIG,
+  DEFAULT_TEAMS,
+  getTeamsConfig,
+} from "../camp-config";
 import { useTestDb } from "./_harness";
 
 // Finance joins a camp that already exists. The harness applies the migration
@@ -19,15 +23,15 @@ const MIGRATION_SQL = readFileSync(
 /** A camp as production has it: the 8 founding teams, one relabelled and one
  *  archived by a captain, and a year list beside them. */
 const LIVE_CONFIG = {
-  teams: DEFAULT_CAMP_CONFIG.teams
-    .filter((t) => t.key !== "finance")
-    .map((t) =>
-      t.key === "kitchen"
-        ? { ...t, label: "Kitchen Crew" }
-        : t.key === "ministry_of_memes"
-          ? { ...t, archived: true }
-          : t,
-    ),
+  // The founding eight, not "the default minus Finance": teams added after
+  // Finance (0044) were not there yet when 0040 ran.
+  teams: DEFAULT_TEAMS.slice(0, 8).map((t) =>
+    t.key === "kitchen"
+      ? { ...t, label: "Kitchen Crew" }
+      : t.key === "ministry_of_memes"
+        ? { ...t, archived: true }
+        : t,
+  ),
   cycles: [{ year: 2026 }],
 };
 

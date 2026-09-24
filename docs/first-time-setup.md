@@ -122,3 +122,6 @@ Then sign in → `/setup` runs again.
   so sign-up with the owner's address cannot walk past the gates.
 - **Configurable teams** is a planned follow-up; today the eight teams are the
   hardcoded `teamEnum` (`packages/db/src/schema.ts`).
+  [CORRECTION 2026-09-24] Configurable teams shipped (see
+  `docs/configurable-teams-plan.md`): captains relabel, reorder and archive
+  teams in camp settings. The keys are still `teamEnum`, now twelve.

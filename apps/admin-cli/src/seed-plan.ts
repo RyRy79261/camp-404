@@ -9,8 +9,9 @@ export const SEED_YEAR = 2026;
 export const SEED_INVITE_CODE = "seed-crew-2026";
 
 // The eight founding teams. The demo camp places 24 approved members three to a
-// team, so it leaves out teams added later (Finance): an empty team is a fair
-// thing for a demo to show.
+// team, so it leaves out teams added later (Finance, Transport and Logistics,
+// Communications and HR, Mutant Vehicle): an empty team is a fair thing for a
+// demo to show.
 export const TEAM_KEYS = [
   "kitchen",
   "structures",

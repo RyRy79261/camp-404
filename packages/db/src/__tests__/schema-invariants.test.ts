@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Column, SQL, StringChunk, getTableColumns, is } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import { MEMBER_FIELD_READERS } from "@camp404/core";
+import { Team } from "@camp404/types";
 import * as schema from "../schema";
 
 // The rules a careless column or index change can break without any other test
@@ -225,5 +226,15 @@ describe("every member-data column has a reader in the field-access list", () =>
     expect(
       Object.keys(MEMBER_FIELD_READERS).filter((field) => !known.has(field)),
     ).toEqual([]);
+  });
+});
+
+describe("the team list agrees across packages", () => {
+  // @camp404/types validates team keys at the web boundary; the database enum
+  // is what a row can hold. A key added to one and not the other is either
+  // refused by Zod before it reaches a real column, or accepted by Zod and
+  // refused by Postgres.
+  it("Team in @camp404/types names exactly the database enum's values, in order", () => {
+    expect(Team.options).toEqual(schema.teamEnum.enumValues);
   });
 });
