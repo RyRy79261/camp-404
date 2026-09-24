@@ -10,6 +10,9 @@ import {
   sourceText,
 } from "@camp404/core";
 import {
+  ADJUST_INSTRUCTION_MAX,
+  ADJUST_INSTRUCTION_NEEDED,
+  ADJUST_INSTRUCTION_TOO_LONG,
   DEFAULT_PLATES,
   DraftReport,
   KitchenRecipe,
@@ -149,6 +152,16 @@ export const DRAFT_UNREADABLE =
 /** The sender lost the Kitchen reviewer's place while Claude worked. */
 export const SENDER_NOT_A_REVIEWER =
   "The person who sent this is no longer a Kitchen lead or a captain, so nothing was saved.";
+/** An adjust run's version is gone, or holds no recipe Claude can start from. */
+export const ADJUST_VERSION_GONE =
+  "That version of the recipe isn't there any more. Reload the page.";
+export {
+  ADJUST_INSTRUCTION_NEEDED,
+  ADJUST_INSTRUCTION_TOO_LONG,
+} from "@camp404/types";
+
+/** The run kinds that write a recipe into the book, or ask questions first. */
+const WRITING_KINDS = ["source", "adjust"] as const;
 
 /**
  * A run still `running` this long after it started has stopped, and one still
@@ -968,15 +981,17 @@ export function sourcePromptVersion(
 }
 
 /**
- * Queue a `source` run and move its locked recipe to `queued`,
- * compare-and-set on the statuses a run may be queued from. The caller has
- * made every check.
+ * Queue a `source` run (or, with `adjust`, an `adjust` run) and move its
+ * locked recipe to `queued`, compare-and-set on the statuses a run may be
+ * queued from. The caller has made every check.
  */
 async function insertSourceRun(
   tx: Tx,
   input: {
     recipe: { id: string; title: string | null; status: RecipeStatus };
-    sourceId: string;
+    sourceId: string | null;
+    /** An adjust run: the version it starts from and what should change. */
+    adjust?: { versionId: string; instruction: string };
     actorId: string;
     now: Date;
     note: string | null;
@@ -997,9 +1012,11 @@ async function insertSourceRun(
       promptVersion: input.promptVersion,
       model: input.model,
       outcome: "queued",
-      kind: "source",
+      kind: input.adjust ? "adjust" : "source",
       plates: input.plates,
       sourceId: input.sourceId,
+      versionId: input.adjust?.versionId ?? null,
+      instruction: input.adjust?.instruction ?? null,
       stage: null,
       exchange: input.exchange,
       previousStatus: input.recipe.status,
@@ -1155,10 +1172,118 @@ export async function sendSourceForProofreading(input: {
   });
 }
 
+/** The longest instruction a version's reason quotes. */
+const REASON_INSTRUCTION_MAX = 160;
+
+/** A version's reason when Claude adjusted it: what was asked, shortened. */
+export function adjustReason(instruction: string): string {
+  const words = instruction.trim().replace(/\s+/g, " ");
+  const quoted =
+    words.length > REASON_INSTRUCTION_MAX
+      ? `${words.slice(0, REASON_INSTRUCTION_MAX - 1).trimEnd()}…`
+      : words;
+  return `Changed by Claude: ${quoted}`;
+}
+
+/**
+ * The version an adjust run starts from: one of this recipe's versions, with
+ * a recipe body. Null when it is gone or is a first-draft row with no body.
+ */
+async function adjustableVersion(
+  tx: DbOrTx,
+  recipeId: string,
+  versionId: string,
+): Promise<{ id: string; version: number } | null> {
+  if (!UUID.test(versionId)) return null;
+  const [row] = await tx
+    .select({
+      id: schema.recipeVersions.id,
+      version: schema.recipeVersions.version,
+      body: schema.recipeVersions.body,
+    })
+    .from(schema.recipeVersions)
+    .where(
+      and(
+        eq(schema.recipeVersions.id, versionId),
+        eq(schema.recipeVersions.recipeId, recipeId),
+      ),
+    );
+  if (!row || row.body === null) return null;
+  return { id: row.id, version: row.version };
+}
+
+/**
+ * "Adjust with Claude" (the owner's option A, 2026-09-24): Claude writes the
+ * recipe's next version from one of its versions (`versionId`, any of them,
+ * not only the current one) and what the reviewer says should change. In ONE
+ * transaction: the reviewer check (a captain or a Kitchen lead, read and
+ * locked here), the instruction, the recipe lock on a status a run may be
+ * queued from, the version check, then an `adjust` run and the move to
+ * `queued`, audited. The run sends the kitchen's own recipe and the
+ * reviewer's own words, never a member's text, so it needs no consent check.
+ * It then runs like a source run: questions, or a new version in the book.
+ */
+export async function adjustVersion(input: {
+  recipeId: string;
+  versionId: string;
+  actorId: string;
+  instruction: string;
+  plates: number;
+  now: Date;
+  promptVersion: string;
+  model: string;
+}): Promise<RecipeWriteResult<{ runId: string }>> {
+  return write(async (tx) => {
+    if (!(await lockKitchenReviewer(tx, input.actorId))) {
+      refuse(ONLY_A_REVIEWER_SENDS);
+    }
+    const instruction = input.instruction.trim();
+    if (!instruction) refuse(ADJUST_INSTRUCTION_NEEDED);
+    if (instruction.length > ADJUST_INSTRUCTION_MAX) {
+      refuse(ADJUST_INSTRUCTION_TOO_LONG);
+    }
+    const plates = platesOrRefuse(input.plates);
+
+    const recipe = await lockRecipe(tx, input.recipeId);
+    if (!QUEUEABLE.includes(recipe.status)) refuse(NOT_READY_TO_PROOFREAD);
+    const base = await adjustableVersion(tx, input.recipeId, input.versionId);
+    if (!base) refuse(ADJUST_VERSION_GONE);
+
+    const runId = await insertSourceRun(tx, {
+      recipe,
+      sourceId: null,
+      adjust: { versionId: base.id, instruction },
+      actorId: input.actorId,
+      now: input.now,
+      note: null,
+      plates,
+      exchange: [],
+      previousRunId: recipe.latestRunId,
+      promptVersion: input.promptVersion,
+      model: input.model,
+    });
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "recipe.adjust_queued",
+      target: input.recipeId,
+      metadata: {
+        title: recipe.title ?? UNTITLED_RECIPE,
+        runId,
+        plates,
+        fromVersion: base.version,
+        promptVersion: input.promptVersion,
+        model: input.model,
+      },
+    });
+    return { runId };
+  });
+}
+
 /**
  * A reviewer answers the questions Claude asked, which queues the next round:
- * a `source` run on the same source and plates that carries the whole
- * exchange so far. The same transaction shape as a send (the reviewer
+ * a run of the same kind on the same source (or, for an `adjust` run, the
+ * same version and instruction) and plates that carries the whole exchange
+ * so far. The same transaction shape as a send (the reviewer
  * check, the recipe lock), then
  * compare-and-set: the recipe still points at the question run, and that run
  * succeeded with questions. A second answer to the same run is refused.
@@ -1192,7 +1317,11 @@ export async function answerProofreadQuestions(input: {
     }
     const [asked] = await tx
       .select({
+        kind: schema.recipeProofreadRuns.kind,
         sourceId: schema.recipeProofreadRuns.sourceId,
+        versionId: schema.recipeProofreadRuns.versionId,
+        instruction: schema.recipeProofreadRuns.instruction,
+        promptVersion: schema.recipeProofreadRuns.promptVersion,
         plates: schema.recipeProofreadRuns.plates,
         exchange: schema.recipeProofreadRuns.exchange,
         result: schema.recipeProofreadRuns.result,
@@ -1202,32 +1331,48 @@ export async function answerProofreadQuestions(input: {
         and(
           eq(schema.recipeProofreadRuns.id, input.runId),
           eq(schema.recipeProofreadRuns.recipeId, input.recipeId),
-          eq(schema.recipeProofreadRuns.kind, "source"),
+          inArray(schema.recipeProofreadRuns.kind, WRITING_KINDS),
           eq(schema.recipeProofreadRuns.outcome, "succeeded"),
         ),
       );
     const questions = readQuestions(asked?.result);
-    if (!asked || !questions || asked.sourceId === null) {
-      refuse(RECIPE_CHANGED);
+    if (!asked || !questions) refuse(RECIPE_CHANGED);
+
+    let adjust: { versionId: string; instruction: string } | undefined;
+    if (asked.kind === "adjust") {
+      // Claude asked about this version and this change; the kitchen's own
+      // recipe and the reviewer's words need no consent check.
+      if (asked.versionId === null || asked.instruction === null) {
+        refuse(RECIPE_CHANGED);
+      }
+      const base = await adjustableVersion(tx, input.recipeId, asked.versionId);
+      if (!base) refuse(ADJUST_VERSION_GONE);
+      adjust = { versionId: base.id, instruction: asked.instruction };
+    } else {
+      if (asked.sourceId === null) refuse(RECIPE_CHANGED);
+      // Claude asked about this source; a newer one has not been read.
+      const latest = await latestSource(tx, input.recipeId);
+      if (latest?.id !== asked.sourceId) refuse(SOURCE_CHANGED);
+      const blocked = sourceBlockedReason(latest, recipe);
+      if (blocked) refuse(blocked);
     }
-    // Claude asked about this source; a newer one has not been read.
-    const latest = await latestSource(tx, input.recipeId);
-    if (latest?.id !== asked.sourceId) refuse(SOURCE_CHANGED);
-    const blocked = sourceBlockedReason(latest, recipe);
-    if (blocked) refuse(blocked);
 
     const exchange = [...readExchange(asked.exchange), { questions, answer }];
     const plates = asked.plates ?? DEFAULT_PLATES;
     const runId = await insertSourceRun(tx, {
       recipe,
       sourceId: asked.sourceId,
+      adjust,
       actorId: input.actorId,
       now: input.now,
       note: null,
       plates,
       exchange,
       previousRunId: input.runId,
-      promptVersion: sourcePromptVersion(recipe.acceptedVersionId, input),
+      // An adjust round stays on the adjust prompt it began under.
+      promptVersion: adjust
+        ? asked.promptVersion
+        : sourcePromptVersion(recipe.acceptedVersionId, input),
       model: input.model,
     });
     await writeAuditEvent(tx, {
@@ -1310,7 +1455,7 @@ export interface ClaimedSourceRun {
   runId: string;
   recipeId: string;
   title: string;
-  /** The source as the Markdown-like text Claude reads. */
+  /** The source as the Markdown-like text Claude reads; empty on an adjust run. */
   sourceText: string;
   /** How many the source says it serves; null when it does not say. */
   serves: number | null;
@@ -1329,9 +1474,21 @@ export interface ClaimedSourceRun {
    * instead of starting from zero: the recipe as the book has it, and the
    * questions and answers that settled it (the exchange on the run that
    * wrote it; none for a version written any other way). Null for a recipe
-   * not yet in the book.
+   * not yet in the book. Null on an adjust run, which carries its own.
    */
   previous: PreviousVersion | null;
+  /**
+   * An `adjust` run: the version Claude changes (with the questions and
+   * answers that settled it) and what the reviewer said should change. Null
+   * on a `source` run.
+   */
+  adjust: AdjustClaim | null;
+}
+
+/** What an adjust run starts from. */
+export interface AdjustClaim {
+  base: PreviousVersion;
+  instruction: string;
 }
 
 /** The accepted version a revision run starts from. */
@@ -1364,7 +1521,7 @@ async function readPreviousVersion(
       schema.recipeProofreadRuns,
       and(
         eq(schema.recipeProofreadRuns.id, schema.recipeVersions.runId),
-        eq(schema.recipeProofreadRuns.kind, "source"),
+        inArray(schema.recipeProofreadRuns.kind, WRITING_KINDS),
       ),
     )
     .where(eq(schema.recipeVersions.id, acceptedVersionId));
@@ -1382,11 +1539,14 @@ async function readPreviousVersion(
 type SourceClaim = { claimed: ClaimedSourceRun } | { claimed: null };
 
 /**
- * Take one queued `source` run for the worker: only a run a reviewer queued,
- * whose recipe is still `queued` and points at it, with SKIP LOCKED so two
- * workers never take the same run. The consent on the source is
+ * Take one queued `source` or `adjust` run for the worker: only a run a
+ * reviewer queued, whose recipe is still `queued` and points at it, with SKIP
+ * LOCKED so two workers never take the same run. The consent on a source is
  * read again at the moment it would leave; a run that lost it is failed here,
- * unsent, and the recipe goes back. The run starts at the `sending` stage.
+ * unsent, and the recipe goes back. An adjust run sends the kitchen's own
+ * version and the reviewer's words, so it has no consent to lose; one whose
+ * version holds no recipe is failed the same way. The run starts at the
+ * `sending` stage.
  */
 export async function claimSourceRun(
   runId: string,
@@ -1402,6 +1562,9 @@ export async function claimSourceRun(
         submitterId: schema.recipes.submitterId,
         aiConsentAt: schema.recipes.aiConsentAt,
         acceptedVersionId: schema.recipes.acceptedVersionId,
+        kind: schema.recipeProofreadRuns.kind,
+        versionId: schema.recipeProofreadRuns.versionId,
+        instruction: schema.recipeProofreadRuns.instruction,
         note: schema.recipeProofreadRuns.note,
         plates: schema.recipeProofreadRuns.plates,
         exchange: schema.recipeProofreadRuns.exchange,
@@ -1421,7 +1584,7 @@ export async function claimSourceRun(
       .where(
         and(
           eq(schema.recipeProofreadRuns.id, runId),
-          eq(schema.recipeProofreadRuns.kind, "source"),
+          inArray(schema.recipeProofreadRuns.kind, WRITING_KINDS),
           eq(schema.recipeProofreadRuns.outcome, "queued"),
           eq(schema.recipes.status, "queued"),
           eq(schema.recipes.latestRunId, schema.recipeProofreadRuns.id),
@@ -1431,9 +1594,15 @@ export async function claimSourceRun(
       .for("update", { of: schema.recipeProofreadRuns, skipLocked: true });
     if (!row) refuse("nothing to claim");
 
+    const isAdjust = row.kind === "adjust";
     const source = row.source ? sourceOf(row.source) : null;
-    const blocked = sourceBlockedReason(source, row);
-    if (blocked !== null || !source) {
+    const base = isAdjust ? await readPreviousVersion(tx, row.versionId) : null;
+    const blocked = isAdjust
+      ? base && row.instruction
+        ? null
+        : ADJUST_VERSION_GONE
+      : sourceBlockedReason(source, row);
+    if (blocked !== null || (!isAdjust && !source)) {
       const error = blocked ?? NO_TEXT_TO_SEND;
       await tx
         .update(schema.recipeProofreadRuns)
@@ -1475,13 +1644,19 @@ export async function claimSourceRun(
         runId: row.runId,
         recipeId: row.recipeId,
         title: row.title ?? UNTITLED_RECIPE,
-        sourceText: sourceText(source.sections),
-        serves: source.serves,
+        sourceText: source && !isAdjust ? sourceText(source.sections) : "",
+        serves: source && !isAdjust ? source.serves : null,
         plates: row.plates ?? DEFAULT_PLATES,
         exchange: readExchange(row.exchange),
         note: row.note,
         kitchen: await readMealPlanPeaks(tx),
-        previous: await readPreviousVersion(tx, row.acceptedVersionId),
+        previous: isAdjust
+          ? null
+          : await readPreviousVersion(tx, row.acceptedVersionId),
+        adjust:
+          isAdjust && base && row.instruction
+            ? { base, instruction: row.instruction }
+            : null,
       } satisfies ClaimedSourceRun,
     };
   });
@@ -1489,8 +1664,8 @@ export async function claimSourceRun(
 }
 
 /**
- * The worker says how far a running `source` run has got, for the loading
- * panel. Applies only while the run is still running; true when it did.
+ * The worker says how far a running `source` or `adjust` run has got, for the
+ * loading panel. Applies only while the run is still running; true when it did.
  */
 export async function setRunStage(
   runId: string,
@@ -1503,7 +1678,7 @@ export async function setRunStage(
     .where(
       and(
         eq(schema.recipeProofreadRuns.id, runId),
-        eq(schema.recipeProofreadRuns.kind, "source"),
+        inArray(schema.recipeProofreadRuns.kind, WRITING_KINDS),
         eq(schema.recipeProofreadRuns.outcome, "running"),
       ),
     )
@@ -1512,7 +1687,7 @@ export async function setRunStage(
 }
 
 /**
- * A `source` run came back with a valid answer. In one transaction,
+ * A `source` or `adjust` run came back with a valid answer. In one transaction,
  * compare-and-set on the recipe being `analysing` and pointing at this run:
  *  - Questions: the run succeeds with them stored, and the recipe goes back
  *    to where it stood (handBackTo), pointing at this run so the questions
@@ -1562,11 +1737,13 @@ export async function completeSourceRun(input: {
       .where(
         and(
           eq(schema.recipeProofreadRuns.id, input.runId),
-          eq(schema.recipeProofreadRuns.kind, "source"),
+          inArray(schema.recipeProofreadRuns.kind, WRITING_KINDS),
           eq(schema.recipeProofreadRuns.outcome, "running"),
         ),
       )
       .returning({
+        kind: schema.recipeProofreadRuns.kind,
+        instruction: schema.recipeProofreadRuns.instruction,
         recipeId: schema.recipeProofreadRuns.recipeId,
         plates: schema.recipeProofreadRuns.plates,
         sourceId: schema.recipeProofreadRuns.sourceId,
@@ -1622,7 +1799,10 @@ export async function completeSourceRun(input: {
       recipeId: run.recipeId,
       authorId: run.requestedBy,
       runId: input.runId,
-      reason: "Written by Claude",
+      reason:
+        run.kind === "adjust" && run.instruction
+          ? adjustReason(run.instruction)
+          : "Written by Claude",
       recipe: written,
       report: answer.report,
       sourceId: run.sourceId,

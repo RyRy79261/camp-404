@@ -3,6 +3,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import {
+  recipeAdjustPrompt,
   recipePlatesPrompt,
   recipeSourcePrompt,
   recipeSourceRevisionPrompt,
@@ -43,6 +44,12 @@ import { isE2ETestMode } from "@/lib/test-mode";
 // the answer or the failure. There is no cron: a reviewer's click queues the
 // run and after() runs it; a run stuck over ten minutes is reset when a
 // Kitchen page loads.
+//
+// "Adjust with Claude" runs through the same worker: an `adjust` run is
+// claimed by claimSourceRun too, and sends the version a reviewer picked (as
+// JSON, with the questions and answers that settled it) and what they said
+// should change, instead of a source (recipeAdjustPrompt). Its answer is the
+// same SourceProofread, stored the same way.
 //
 // Claude's answer goes one of two ways. Questions ("needs more") hand the
 // recipe back to where it stood, with the questions kept on the run; the
@@ -125,8 +132,11 @@ const VAGUE_SOURCE = /\bsome\b/i;
  * for the run's plates.
  */
 export function testModeSource(
-  claim: Pick<ClaimedSourceRun, "sourceText" | "exchange" | "plates">,
+  claim: Pick<ClaimedSourceRun, "sourceText" | "exchange" | "plates"> & {
+    adjust?: ClaimedSourceRun["adjust"];
+  },
 ): SourceProofread {
+  if (claim.adjust) return testModeAdjust({ ...claim, adjust: claim.adjust });
   if (VAGUE_SOURCE.test(claim.sourceText) && claim.exchange.length === 0) {
     return SourceProofread.parse({
       needsInfo: true,
@@ -201,6 +211,88 @@ export function testModeSource(
     scalingNotes: [
       "Lentils, onions and coconut milk were scaled in step with the plates.",
       "Salt and cumin were scaled more slowly than the lentils.",
+    ],
+  });
+}
+
+/** An instruction the stand-in finds too vague: it says "something". */
+const VAGUE_CHANGE = /\bsomething\b/i;
+
+/** The ingredient the stand-in adds when a change names none it can read. */
+const STAND_IN_ADDITION = {
+  name: "Fresh coriander",
+  category: "herb",
+  quantity: 2,
+  unit: "bunch",
+  preparation: "chopped",
+  component: "To serve",
+} as const;
+
+/**
+ * The answer that stands in for Claude on an adjust run under E2E_TEST_MODE.
+ * A change that says "something", with no answer yet, gets one question back.
+ * Anything else keeps the version's recipe, written for the run's plates
+ * (every amount scaled in step, to one decimal), with fresh coriander added
+ * to serve, a step that uses it, and a report and scaling notes that say so.
+ */
+export function testModeAdjust(
+  claim: Pick<ClaimedSourceRun, "exchange" | "plates"> & {
+    adjust: NonNullable<ClaimedSourceRun["adjust"]>;
+  },
+): SourceProofread {
+  const { base, instruction } = claim.adjust;
+  if (VAGUE_CHANGE.test(instruction) && claim.exchange.length === 0) {
+    return SourceProofread.parse({
+      needsInfo: true,
+      questions: [
+        'What should change? The request says "something" without naming an ingredient or a step.',
+      ],
+    });
+  }
+  const from = base.recipe.plates;
+  const factor = claim.plates / from;
+  const scale = (value: number | null | undefined) =>
+    value == null ? value : Math.round(value * factor * 10) / 10;
+  const hasAddition = base.recipe.ingredients.some(
+    (line) => line.name === STAND_IN_ADDITION.name,
+  );
+  return SourceProofread.parse({
+    needsInfo: false,
+    recipe: {
+      ...base.recipe,
+      plates: claim.plates,
+      ingredients: [
+        ...base.recipe.ingredients.map((line) => ({
+          ...line,
+          quantity: scale(line.quantity),
+          quantityMax: scale(line.quantityMax),
+        })),
+        ...(hasAddition ? [] : [STAND_IN_ADDITION]),
+      ],
+      steps: [
+        ...base.recipe.steps,
+        ...(hasAddition
+          ? []
+          : [
+              {
+                phase: "Serve",
+                instruction: "Scatter the chopped coriander over each plate.",
+                uses: [`To serve: ${STAND_IN_ADDITION.name}`],
+              },
+            ]),
+      ],
+    },
+    report: {
+      changed: [
+        `Changed as asked: ${instruction.slice(0, 200)}`,
+        "Added fresh coriander to serve.",
+      ],
+      unsure: [],
+    },
+    scalingNotes: [
+      claim.plates === from
+        ? `Kept the amounts for ${from} plates, except where the change moved them.`
+        : `Scaled every amount from ${from} to ${claim.plates} plates, in step with the plates.`,
     ],
   });
 }
@@ -336,15 +428,30 @@ async function callTool(request: {
 }
 
 /**
- * What one claimed source run sends: a recipe in the book is revised from its
- * accepted version and the questions and answers that settled it (the
- * revision prompt, the one the run was queued under); any other is written
- * from its source alone.
+ * What one claimed source run sends: an adjust run sends the version it
+ * starts from and what should change (the adjust prompt); a recipe in the
+ * book is revised from its accepted version and the questions and answers
+ * that settled it (the revision prompt, the one the run was queued under);
+ * any other is written from its source alone.
  */
 export function sourceRequest(claim: ClaimedSourceRun): {
   system: string;
   user: string;
 } {
+  if (claim.adjust) {
+    const { kitchen } = sourceInput(claim);
+    return {
+      system: recipeAdjustPrompt.system,
+      user: recipeAdjustPrompt.user({
+        title: claim.title,
+        plates: claim.plates,
+        kitchen,
+        base: claim.adjust.base,
+        instruction: claim.adjust.instruction,
+        exchange: claim.exchange,
+      }),
+    };
+  }
   if (claim.previous) {
     return {
       system: recipeSourceRevisionPrompt.system,

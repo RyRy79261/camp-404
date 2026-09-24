@@ -116,6 +116,18 @@ export async function sendSourceForProofreading(
     : db.sendSourceForProofreading(input);
 }
 
+/**
+ * "Adjust with Claude": an adjust run on one version, with what should
+ * change, queued in one transaction with its audit row.
+ */
+export async function adjustVersion(
+  input: In<typeof db.adjustVersion>,
+): Promise<RecipeWriteResult<{ runId: string }>> {
+  return usesTestStore()
+    ? testStore.adjustVersion(input)
+    : db.adjustVersion(input);
+}
+
 /** A reviewer's answer to Claude's questions queues the next round. */
 export async function answerProofreadQuestions(
   input: In<typeof db.answerProofreadQuestions>,

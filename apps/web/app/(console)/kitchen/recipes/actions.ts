@@ -13,6 +13,7 @@ import {
 import {
   AcceptProofreadInput,
   AddLessonInput,
+  AdjustVersionInput,
   AnswerQuestionsInput,
   DecideRecipeInput,
   QueuePlateProofreadInput,
@@ -47,6 +48,7 @@ import {
 import {
   acceptProofread,
   addLesson,
+  adjustVersion,
   answerProofreadQuestions,
   decideRecipe,
   getProofreadProgress,
@@ -408,6 +410,50 @@ export async function proofreadRecipeAction(
     const runId = result.runIds[0]!;
     after(() => processRuns({ runIds: [runId] }));
     revalidateRecipe(recipeId);
+    return { ok: true, data: { runId } };
+  });
+}
+
+/**
+ * "Adjust with Claude" (the owner's option A, 2026-09-24), from the recipe
+ * page or one version's page: Claude writes the recipe's next version from
+ * that version and what the reviewer says should change, for the largest
+ * count in this year's meal plan, straight into the book as a proofread does,
+ * or asks questions first (answered with answerProofreadQuestionsAction). The
+ * same people as a send (canRunProofread), checked again inside the write's
+ * own transaction with its audit row. An empty instruction is refused here,
+ * before anything is written. The run is processed after the response, and
+ * the page polls proofreadProgressAction for its stages.
+ */
+export async function adjustVersionAction(
+  input: unknown,
+): Promise<ActionResult<{ runId: string }>> {
+  return runAction("adjustVersionAction", async () => {
+    const gate = await runGate();
+    if (!gate.ok) return gate;
+    const parsed = AdjustVersionInput.safeParse(input);
+    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+    const notSetUp = proofreadNotSetUp();
+    if (notSetUp) return notSetUp;
+
+    const { recipeId, versionId, instruction } = parsed.data;
+    const result = await adjustVersion({
+      recipeId,
+      versionId,
+      instruction,
+      actorId: gate.campUser.id,
+      plates: await mealPlanPlates(),
+      now: new Date(),
+      promptVersion: PROMPT_VERSIONS.recipeAdjust,
+      model: MODELS.opus,
+    });
+    if (!result.ok) return result;
+
+    const { runId } = result;
+    after(() => processRuns({ runIds: [runId] }));
+    // The new version shows on the recipe page and in its History.
+    revalidatePath(recipePath(recipeId), "layout");
+    revalidatePath(RECIPES_PATH);
     return { ok: true, data: { runId } };
   });
 }

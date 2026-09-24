@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import {
+  ADJUST_INSTRUCTION_NEEDED,
+  ADJUST_VERSION_GONE,
   ANSWER_NEEDED,
   LESSON_VERSION_GONE,
   NEVER_STARTED_ERROR,
@@ -968,6 +970,7 @@ describe("recipe twins", () => {
           kitchenPlatesDinner: null,
         },
         previous: null,
+        adjust: null,
       });
       expect(JSON.stringify(claimed)).not.toContain("Mo");
       expect(testStore.getProofreadProgress(id)?.stage).toBe("sending");
@@ -1494,5 +1497,124 @@ describe("lessons twin", () => {
       }),
     ]);
     expect(testStore.getRecipeDetail(other)?.lessons).toEqual([]);
+  });
+});
+
+describe("adjust twin", () => {
+  /** A recipe in the book at version 1, written by Claude for 45 plates. */
+  function inTheBook() {
+    const captain = makeUser("Cam", "captain");
+    const member = makeUser("Mo");
+    const id = suggest(member.id);
+    testStore.decideRecipe({
+      recipeId: id,
+      actorId: captain.id,
+      decision: "approve",
+    });
+    const queued = queue(captain.id, [id]);
+    if (!queued.ok) throw new Error(queued.error);
+    const runId = queued.runIds[0]!;
+    testStore.claimSourceRun(runId, NOW);
+    testStore.completeSourceRun({ runId, result: written(), usage: USAGE });
+    const versionId = testStore.getRecipeDetail(id)!.currentVersion!.id;
+    return { captain, member, id, versionId };
+  }
+
+  function adjust(
+    actorId: string,
+    recipeId: string,
+    versionId: string,
+    instruction = "Swap the salt for smoked salt.",
+  ) {
+    return testStore.adjustVersion({
+      recipeId,
+      versionId,
+      actorId,
+      instruction,
+      plates: 45,
+      now: NOW,
+      promptVersion: "adjust-1",
+      model: "claude-opus-4-8",
+    });
+  }
+
+  it("lets a captain and a Kitchen lead ask, and refuses a Structures lead and a member", () => {
+    const { captain, member, id, versionId } = inTheBook();
+    const structures = lead("Sam", "structures");
+    for (const who of [structures, member]) {
+      expect(adjust(who.id, id, versionId)).toEqual({
+        ok: false,
+        error: ONLY_A_REVIEWER_SENDS,
+      });
+    }
+    expect(adjust(captain.id, id, "  ")).toEqual({
+      ok: false,
+      error: ADJUST_VERSION_GONE,
+    });
+    expect(adjust(captain.id, id, versionId, " ")).toEqual({
+      ok: false,
+      error: ADJUST_INSTRUCTION_NEEDED,
+    });
+    const kitchen = lead("Kai", "kitchen");
+    const asked = adjust(kitchen.id, id, versionId);
+    if (!asked.ok) throw new Error(asked.error);
+    expect(testStore.getProofreadProgress(id)).toMatchObject({
+      kind: "adjust",
+      outcome: "queued",
+    });
+  });
+
+  it("claims the version and the words, and writes the next version into the book", () => {
+    const { captain, id, versionId } = inTheBook();
+    const asked = adjust(captain.id, id, versionId);
+    if (!asked.ok) throw new Error(asked.error);
+    const claim = testStore.claimSourceRun(asked.runId, NOW);
+    expect(claim).toMatchObject({
+      sourceText: "",
+      previous: null,
+      adjust: {
+        instruction: "Swap the salt for smoked salt.",
+        base: { version: 1 },
+      },
+    });
+    expect(testStore.setRunStage(asked.runId, "checking")).toBe(true);
+    const done = testStore.completeSourceRun({
+      runId: asked.runId,
+      result: written({ title: "Smoky dhal" }),
+      usage: USAGE,
+    });
+    expect(done.ok).toBe(true);
+    expect(testStore.getRecipeDetail(id)?.currentVersion).toMatchObject({
+      version: 2,
+      reason: "Changed by Claude: Swap the salt for smoked salt.",
+      recipe: { title: "Smoky dhal" },
+    });
+  });
+
+  it("answers Claude's questions with the next round on the same version and words", () => {
+    const { captain, id, versionId } = inTheBook();
+    const asked = adjust(captain.id, id, versionId);
+    if (!asked.ok) throw new Error(asked.error);
+    testStore.claimSourceRun(asked.runId, NOW);
+    testStore.completeSourceRun({
+      runId: asked.runId,
+      result: QUESTIONS,
+      usage: USAGE,
+    });
+    const answered = testStore.answerProofreadQuestions({
+      recipeId: id,
+      runId: asked.runId,
+      actorId: captain.id,
+      answer: "Two tablespoons.",
+      now: NOW,
+      promptVersion: "source-1",
+      model: "claude-opus-4-8",
+    });
+    if (!answered.ok) throw new Error(answered.error);
+    const claim = testStore.claimSourceRun(answered.runId, NOW);
+    expect(claim?.adjust?.instruction).toBe("Swap the salt for smoked salt.");
+    expect(claim?.exchange).toEqual([
+      { questions: QUESTIONS.questions, answer: "Two tablespoons." },
+    ]);
   });
 });

@@ -30,6 +30,7 @@ vi.mock("@/lib/test-mode", () => ({
 }));
 
 import {
+  recipeAdjustPrompt,
   recipePlatesPrompt,
   recipeSourcePrompt,
   recipeSourceRevisionPrompt,
@@ -50,6 +51,7 @@ import {
   TEST_MODE_USAGE,
   processRuns,
   proofreadSourceClaim,
+  testModeAdjust,
   testModeSource,
 } from "@/lib/recipe-proofread";
 
@@ -737,6 +739,178 @@ describe("testModeSource", () => {
     expect(
       testModeSource({ ...claim, sourceText: "A handsome dal." }).needsInfo,
     ).toBe(false);
+  });
+});
+
+describe("an adjust run", () => {
+  /** A recipe in the book at version 1 (45 plates), from a first run. */
+  async function inTheBook() {
+    const { captainId, recipeId } = captainAndRecipe();
+    claudeAnswers(toolReply(RESULT));
+    await processRuns({ runIds: [queue(captainId, recipeId)] });
+    const detail = recipe(recipeId)!;
+    return { captainId, recipeId, versionId: detail.currentVersion!.id };
+  }
+
+  function adjust(
+    captainId: string,
+    recipeId: string,
+    versionId: string,
+    instruction = "Use butternut instead of the lentils.",
+  ) {
+    const asked = testStore.adjustVersion({
+      recipeId,
+      versionId,
+      actorId: captainId,
+      instruction,
+      plates: 45,
+      now: new Date(),
+      promptVersion: "adjust-1",
+      model: "claude-opus-4-8",
+    });
+    if (!asked.ok) throw new Error(asked.error);
+    return asked.runId;
+  }
+
+  it("sends the version and the words with the adjust prompt, and writes the next version into the book", async () => {
+    const { captainId, recipeId, versionId } = await inTheBook();
+    const runId = adjust(captainId, recipeId, versionId);
+    const stages = watchStages(recipeId);
+    const butternut = {
+      ...RESULT,
+      recipe: { ...RESULT.recipe!, title: "Butternut dhal" },
+    };
+    const create = claudeAnswers(toolReply(butternut));
+
+    expect(await processRuns({ runIds: [runId] })).toMatchObject({
+      succeeded: 1,
+    });
+    expect(stages).toEqual(["sending", "reading", "checking", "saving"]);
+    const [body] = create.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(body).toMatchObject({
+      system: recipeAdjustPrompt.system,
+      tools: [SOURCE_TOOL],
+    });
+    const content = (body.messages as { content: string }[])[0]!.content;
+    expect(content).toBe(
+      recipeAdjustPrompt.user({
+        title: "Red lentil dhal",
+        plates: 45,
+        kitchen: {
+          platesBreakfast: null,
+          platesLunch: null,
+          platesDinner: null,
+        },
+        base: { version: 1, recipe: RESULT.recipe!, exchange: [] },
+        instruction: "Use butternut instead of the lentils.",
+        exchange: [],
+      }),
+    );
+    // Never the member's note or the source text.
+    expect(content).not.toContain("SECRET-SUITABILITY-NOTE");
+    expect(content).not.toContain("<source>");
+
+    const detail = recipe(recipeId);
+    expect(detail?.status).toBe("accepted");
+    expect(detail?.currentVersion).toMatchObject({
+      version: 2,
+      recipe: { title: "Butternut dhal" },
+      reason: "Changed by Claude: Use butternut instead of the lentils.",
+    });
+  });
+
+  it("asks questions under E2E, then writes the stand-in once answered", async () => {
+    const { captainId, recipeId, versionId } = await inTheBook();
+    vi.mocked(anthropic).mockClear();
+    vi.mocked(isE2ETestMode).mockReturnValue(true);
+    vi.useFakeTimers();
+    const vague = adjust(
+      captainId,
+      recipeId,
+      versionId,
+      "Add something green.",
+    );
+    const first = processRuns({ runIds: [vague] });
+    await vi.advanceTimersByTimeAsync(TEST_MODE_STAGE_MS * 5);
+    await first;
+    const progress = testStore.getProofreadProgress(recipeId);
+    expect(progress).toMatchObject({ kind: "adjust", outcome: "succeeded" });
+    expect(progress?.questions).toHaveLength(1);
+
+    const answered = testStore.answerProofreadQuestions({
+      recipeId,
+      runId: vague,
+      actorId: captainId,
+      answer: "Fresh coriander to serve.",
+      now: new Date(),
+      promptVersion: "source-1",
+      model: "claude-opus-4-8",
+    });
+    if (!answered.ok) throw new Error(answered.error);
+    const second = processRuns({ runIds: [answered.runId] });
+    await vi.advanceTimersByTimeAsync(TEST_MODE_STAGE_MS * 5);
+    expect(await second).toMatchObject({ succeeded: 1 });
+    expect(anthropic).not.toHaveBeenCalled();
+    const current = recipe(recipeId)?.currentVersion;
+    expect(current?.version).toBe(2);
+    expect(current?.recipe.ingredients.map((l) => l.name)).toContain(
+      "Fresh coriander",
+    );
+  });
+});
+
+describe("testModeAdjust", () => {
+  const base = {
+    version: 1,
+    recipe: RECIPE.recipe,
+    exchange: [],
+  };
+
+  it("keeps the version, written for the claim's plates, with coriander added and a report that says so", () => {
+    const answer = testModeAdjust({
+      exchange: [],
+      plates: 90,
+      adjust: { base, instruction: "Add fresh herbs to serve." },
+    });
+    expect(SourceProofread.safeParse(answer).success).toBe(true);
+    const written = answer.recipe!;
+    expect(written.plates).toBe(90);
+    expect(written.title).toBe(RECIPE.recipe.title);
+    expect(written.ingredients[0]).toMatchObject({
+      name: "Red lentils",
+      quantity: 6,
+    });
+    expect(written.ingredients.at(-1)).toMatchObject({
+      name: "Fresh coriander",
+      component: "To serve",
+    });
+    expect(answer.report?.changed[0]).toBe(
+      "Changed as asked: Add fresh herbs to serve.",
+    );
+    expect(answer.scalingNotes).toEqual([
+      "Scaled every amount from 45 to 90 plates, in step with the plates.",
+    ]);
+    // Nothing a page shows says it came from a stand-in.
+    expect(JSON.stringify(answer)).not.toMatch(
+      /test mode|stand-in|not called/i,
+    );
+  });
+
+  it("asks one question about a change that says `something`, until it has an answer", () => {
+    const vague = {
+      exchange: [],
+      plates: 45,
+      adjust: { base, instruction: "Change something." },
+    };
+    expect(testModeAdjust(vague).needsInfo).toBe(true);
+    expect(
+      testModeAdjust({
+        ...vague,
+        exchange: [{ questions: ["What?"], answer: "Less salt." }],
+      }).needsInfo,
+    ).toBe(false);
+    // testModeSource hands an adjust claim to it.
+    expect(testModeSource({ ...vague, sourceText: "" }).needsInfo).toBe(true);
   });
 });
 
