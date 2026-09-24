@@ -23,9 +23,12 @@ export {
   isAuthConfigured,
   isEmailProviderConfigured,
   isGoogleConfigured,
+  isProjectPreviewOrigin,
   resolveAuthEmailCaptureFile,
   resolveBaseURL,
+  resolveOAuthProxy,
   resolvePasskeyRpID,
   resolveTrustedOrigins,
   type AuthEnv,
+  type OAuthProxyMode,
 } from "./env";
