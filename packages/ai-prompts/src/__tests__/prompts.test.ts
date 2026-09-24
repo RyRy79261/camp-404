@@ -569,6 +569,16 @@ describe("recipeAdjustPrompt", () => {
     expect(out).not.toContain("<questions>");
   });
 
+  it("says one plate, not one plates", () => {
+    const out = recipeAdjustPrompt.user({
+      ...input,
+      plates: 1,
+      base: { ...input.base, recipe: { ...recipe, plates: 1 } },
+    });
+    expect(out).toMatch(/write it for 1 plate\./);
+    expect(out).toContain("The version to change is written for 1 plate.");
+  });
+
   it("carries every earlier round on this change, after the change", () => {
     const out = recipeAdjustPrompt.user({
       ...input,
