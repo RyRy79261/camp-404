@@ -51,6 +51,8 @@ import {
   CATEGORY_LABELS,
   POWER_FUEL_PATH,
   POWER_REFUSAL,
+  START_UP_SPIKE,
+  START_UP_SPIKE_HELP,
   daysText,
   formatNumber,
   kw,
@@ -254,11 +256,11 @@ export default async function PowerLoadsPage() {
     },
     {
       key: "surge",
-      label: "Surge headroom",
+      label: START_UP_SPIKE,
       value: kw(totals.surge.watts),
       secondary: `${formatNumber(totals.surge.kva, 2, true)} kVA`,
       current: ampsText(totals.surge.watts, MAINS_VOLTS),
-      hint: "The peak plus the biggest start-up draw of any one item.",
+      hint: START_UP_SPIKE_HELP,
     },
     {
       key: "energy",

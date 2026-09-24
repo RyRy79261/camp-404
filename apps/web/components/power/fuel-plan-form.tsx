@@ -30,8 +30,8 @@ import {
 } from "@/app/(console)/power/actions";
 import { hourText } from "@/lib/power-copy";
 
-// The fuel page's plan card (#254): the generator, when it runs, the
-// comparison schedule, days on site and the margins. Everyone sees the same
+// The fuel page's plan card (#254): the generator, when it runs (24 h unless
+// set; the camp runs it 24/7 and tops it up), days on site and the margins. Everyone sees the same
 // fields; for a viewer who may not edit, each one is DISABLED and Save
 // describes to the page's one refusal line (AfrikaBurn's categories screen:
 // transparent, not hidden). It saves the whole card with the version it
@@ -43,8 +43,6 @@ export interface FuelPlanValues {
   secondGeneratorNote: string | null;
   runFromHour: number | null;
   runToHour: number | null;
-  compareRunFromHour: number | null;
-  compareRunToHour: number | null;
   daysOnSite: number;
   powerFactor: number;
   lowLoadFactor: number;
@@ -79,7 +77,6 @@ interface FormState {
   generatorId: string;
   secondGeneratorNote: string;
   run: Schedule;
-  compare: Schedule;
   daysOnSite: string;
   powerFactor: string;
   lowLoadFactor: string;
@@ -100,7 +97,6 @@ function initialState(plan: FuelPlanValues): FormState {
     generatorId: plan.generatorId ?? NO_GENERATOR,
     secondGeneratorNote: plan.secondGeneratorNote ?? "",
     run: schedule(plan.runFromHour, plan.runToHour),
-    compare: schedule(plan.compareRunFromHour, plan.compareRunToHour),
     daysOnSite: String(plan.daysOnSite),
     powerFactor: String(plan.powerFactor),
     lowLoadFactor: String(plan.lowLoadFactor),
@@ -122,15 +118,12 @@ function hours(s: Schedule): [number | null, number | null] {
 
 function toInput(form: FormState, version: number) {
   const [runFromHour, runToHour] = hours(form.run);
-  const [compareRunFromHour, compareRunToHour] = hours(form.compare);
   const note = form.secondGeneratorNote.trim();
   return {
     generatorId: form.generatorId === NO_GENERATOR ? null : form.generatorId,
     secondGeneratorNote: note === "" ? null : note,
     runFromHour,
     runToHour,
-    compareRunFromHour,
-    compareRunToHour,
     daysOnSite: figure(form.daysOnSite),
     powerFactor: figure(form.powerFactor),
     lowLoadFactor: figure(form.lowLoadFactor),
@@ -284,20 +277,11 @@ export function FuelPlanForm({
             <ScheduleField
               idBase={id("run")}
               legend="Hours running"
-              help="Each day repeats. Hours may run past midnight."
+              help="24 h unless you set hours. Each day repeats; hours may run past midnight."
               value={form.run}
               onChange={(v) => set("run", v)}
               disabled={locked}
               error={errors.runFromHour ?? errors.runToHour}
-            />
-            <ScheduleField
-              idBase={id("compare")}
-              legend="Comparison schedule"
-              help="Shown beside the plan below. 18:00–06:00 (12 h) unless you change it."
-              value={form.compare}
-              onChange={(v) => set("compare", v)}
-              disabled={locked}
-              error={errors.compareRunFromHour ?? errors.compareRunToHour}
             />
           </div>
 

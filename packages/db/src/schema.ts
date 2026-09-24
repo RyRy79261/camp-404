@@ -1829,15 +1829,14 @@ export const powerPlans = pgTable(
     // A second generator is a note: the plan runs on one.
     secondGeneratorNote: text("second_generator_note"),
     powerFactor: doublePrecision("power_factor").notNull().default(0.8),
-    daysOnSite: integer("days_on_site").notNull().default(7),
+    // The camp is usually on site 11 days.
+    daysOnSite: integer("days_on_site").notNull().default(11),
     // The date of day 1, only to label the day numbers.
     firstPoweredDay: date("first_powered_day", { mode: "string" }),
-    // The generator's daily on-window, whole hours; both null is 24 hours.
+    // The generator's daily on-window, whole hours; both null is 24 hours,
+    // which is how the camp runs it. There is no comparison schedule.
     runFromHour: integer("run_from_hour"),
     runToHour: integer("run_to_hour"),
-    // The comparison scenario's on-window: 12 hours, 18:00 to 06:00.
-    compareRunFromHour: integer("compare_run_from_hour").default(18),
-    compareRunToHour: integer("compare_run_to_hour").default(6),
     // Multiplies the litres of each running hour below half load.
     lowLoadFactor: doublePrecision("low_load_factor").notNull().default(1),
     safetyMarginPct: doublePrecision("safety_margin_pct").notNull().default(20),
@@ -1857,7 +1856,7 @@ export const powerPlans = pgTable(
     daysCheck: check("power_plans_days_check", sql`${p.daysOnSite} >= 1`),
     hoursCheck: check(
       "power_plans_hours_check",
-      sql`${p.runFromHour} between 0 and 23 and ${p.runToHour} between 0 and 23 and ${p.compareRunFromHour} between 0 and 23 and ${p.compareRunToHour} between 0 and 23`,
+      sql`${p.runFromHour} between 0 and 23 and ${p.runToHour} between 0 and 23`,
     ),
     fuelCheck: check(
       "power_plans_fuel_check",

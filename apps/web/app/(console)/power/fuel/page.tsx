@@ -21,8 +21,6 @@ import {
 import {
   FuelDayByDayCard,
   FuelMethodCard,
-  ScenarioCompareCard,
-  type ScenarioRow,
 } from "@/components/power/fuel-panels";
 import {
   CopyLastYearPlanButton,
@@ -65,7 +63,7 @@ export const metadata = { title: "Fuel estimate — Camp 404" };
 // The fuel estimate (#254). Every approved member reads it; a captain or a
 // Power & Lighting lead edits the plan and the generators. Composed like the
 // load list, from the AfrikaBurn console: the status board's KPI row for the
-// outputs, tables in cards for the comparison and the days, and the categories
+// outputs, a table in a card for the days, and the categories
 // screen for the generators (the table, Add opening a dialog, Edit and a
 // one-tap Archive per row; for everyone else the controls PRESENT BUT
 // DISABLED, described by one Lock line).
@@ -183,12 +181,6 @@ function hoursPerTank(fuel: FuelPlan): number | null {
     : null;
 }
 
-/** "about 16.4 h", or a dash when nothing burns. */
-function tankLastsText(fuel: FuelPlan): string {
-  const every = hoursPerTank(fuel);
-  return every === null ? "—" : `${formatNumber(every, 1)} h`;
-}
-
 /** What is still needed before there is an estimate, or null when ready. */
 function missing(
   generator: GeneratorRow | null,
@@ -224,8 +216,6 @@ function planValues(plan: PowerPlan) {
     secondGeneratorNote: plan.secondGeneratorNote,
     runFromHour: plan.runFromHour,
     runToHour: plan.runToHour,
-    compareRunFromHour: plan.compareRunFromHour,
-    compareRunToHour: plan.compareRunToHour,
     daysOnSite: plan.daysOnSite,
     powerFactor: plan.powerFactor,
     lowLoadFactor: plan.lowLoadFactor,
@@ -269,10 +259,6 @@ export default async function PowerFuelPage() {
   }));
 
   const planSchedule = runText(plan.runFromHour, plan.runToHour);
-  const compareSchedule = runText(
-    plan.compareRunFromHour,
-    plan.compareRunToHour,
-  );
   const gap = missing(generator, loads.length);
 
   let results: ReactNode = null;
@@ -289,19 +275,11 @@ export default async function PowerFuelPage() {
       plan: settings,
       schedule: { fromHour: plan.runFromHour, toHour: plan.runToHour },
     });
-    const compare = fuelForPlan({
-      loads,
-      generator,
-      plan: settings,
-      schedule: {
-        fromHour: plan.compareRunFromHour,
-        toHour: plan.compareRunToHour,
-      },
-    });
-    const cans = (fuel: FuelPlan) =>
-      jerryCansNeeded(fuel.litresWithMargin, plan.canLitres, plan.cansOwned);
-    const unservedKwh = (fuel: FuelPlan) =>
-      Math.max(0, ...fuel.perDay.map((d) => d.unservedWh)) / 1000;
+    const cans = jerryCansNeeded(
+      main.litresWithMargin,
+      plan.canLitres,
+      plan.cansOwned,
+    );
     const days = plan.daysOnSite;
     const every = hoursPerTank(main);
 
@@ -327,7 +305,7 @@ export default async function PowerFuelPage() {
       {
         key: "cans",
         label: "Jerry cans needed",
-        value: String(cans(main)),
+        value: String(cans),
         hint:
           plan.cansOwned > 0
             ? `${formatNumber(plan.canLitres, 1)} L cans, after the ${plan.cansOwned} already owned`
@@ -344,46 +322,7 @@ export default async function PowerFuelPage() {
       },
     ];
 
-    const rows: ScenarioRow[] = [
-      {
-        label: "Hours running a day",
-        values: [main, compare].map((f) => `${f.runningHoursPerDay} h`),
-      },
-      {
-        label: "Litres a day",
-        values: [main, compare].map((f) => litres(busiestDay(f), 2)),
-      },
-      {
-        label: "Litres for the burn",
-        values: [main, compare].map((f) => litres(f.burnLitres)),
-      },
-      {
-        label: "With margin",
-        values: [main, compare].map((f) => litres(f.litresWithMargin)),
-      },
-      {
-        label: "Jerry cans",
-        values: [main, compare].map((f) => String(cans(f))),
-      },
-      {
-        label: "Refills a day",
-        values: [main, compare].map((f) =>
-          formatNumber(f.refillsPerDay, 1, true),
-        ),
-      },
-      {
-        label: "A full tank lasts",
-        values: [main, compare].map(tankLastsText),
-      },
-      {
-        label: "Energy while off, a day",
-        values: [main, compare].map(
-          (f) => `${formatNumber(unservedKwh(f), 2, true)} kWh`,
-        ),
-      },
-    ];
-
-    const offKwh = unservedKwh(main);
+    const offKwh = Math.max(0, ...main.perDay.map((d) => d.unservedWh)) / 1000;
     results = (
       <>
         {(offKwh > 0 || main.overloaded) && (
@@ -417,26 +356,13 @@ export default async function PowerFuelPage() {
           className="lg:grid-cols-3 xl:grid-cols-5"
         />
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <ScenarioCompareCard
-            columns={[
-              { key: "plan", title: "This plan", schedule: planSchedule },
-              {
-                key: "compare",
-                title: "Comparison",
-                schedule: compareSchedule,
-              },
-            ]}
-            rows={rows}
-          />
-          <FuelDayByDayCard
-            days={main.perDay.map((d) => ({
-              label: dayLabel(plan.firstPoweredDay, d.day),
-              litres: d.litres,
-              kWh: d.kWh,
-            }))}
-          />
-        </div>
+        <FuelDayByDayCard
+          days={main.perDay.map((d) => ({
+            label: dayLabel(plan.firstPoweredDay, d.day),
+            litres: d.litres,
+            kWh: d.kWh,
+          }))}
+        />
       </>
     );
   }

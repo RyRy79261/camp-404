@@ -20,6 +20,14 @@ export const CHECK_LOAD = "Check the load and try again.";
 export const CHECK_PLAN = "Check the plan settings and try again.";
 export const CHECK_GENERATOR = "Check the generator and try again.";
 
+/**
+ * The name people read for the start-up surge, and the one sentence that
+ * explains it (owner, 2026-09-24: "surge" meant nothing to them).
+ */
+export const START_UP_SPIKE = "Start-up spike";
+export const START_UP_SPIKE_HELP =
+  "Fridges and freezers draw a short burst when their motor starts, about 3 times their normal draw. This checks the generator can take it.";
+
 export const CATEGORY_LABELS: Record<LoadCategory, string> = {
   refrigeration: "Refrigeration",
   lighting_functional: "Lighting (functional)",

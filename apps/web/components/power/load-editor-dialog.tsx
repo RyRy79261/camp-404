@@ -680,10 +680,10 @@ export function LoadEditorDialog({
               />
             </Field>
             <Field
-              label="Start-up watts each (optional)"
+              label="Start-up spike, watts each (optional)"
               htmlFor={id("surge")}
               error={errors.surgeWattsEach}
-              help="Leave empty for the usual figure: three times for a fridge."
+              help="Fridges and freezers draw a short burst when their motor starts, about 3 times their normal draw. Leave it empty to use that."
               className="sm:col-span-3"
             >
               <Input

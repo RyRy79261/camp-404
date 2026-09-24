@@ -256,26 +256,28 @@ describe("GeneratorInput", () => {
 });
 
 describe("PowerPlanInput", () => {
-  it("fills the defaults: PF 0.8, 7 days, 24 h, a 12 h comparison, 20% margin, 20 L cans", () => {
+  it("fills the defaults: PF 0.8, 11 days, running 24 h, 20% margin, 20 L cans", () => {
     const plan = PowerPlanInput.parse({
       generatorId: null,
       expectedVersion: 0,
     });
     expect(plan).toMatchObject({
       powerFactor: 0.8,
-      daysOnSite: 7,
+      daysOnSite: 11,
       firstPoweredDay: null,
       runFromHour: null,
       runToHour: null,
-      compareRunFromHour: 18,
-      compareRunToHour: 6,
       lowLoadFactor: 1,
       safetyMarginPct: 20,
       canLitres: 20,
       cansOwned: 0,
       secondGeneratorNote: null,
     });
-    expect(POWER_PLAN_DEFAULTS.daysOnSite).toBe(7);
+    expect(POWER_PLAN_DEFAULTS.daysOnSite).toBe(11);
+    // The generator runs 24/7 (owner, 2026-09-24): there is no second,
+    // comparison schedule to fill.
+    expect(plan).not.toHaveProperty("compareRunFromHour");
+    expect(plan).not.toHaveProperty("compareRunToHour");
   });
 
   it("takes a running window as both hours or neither", () => {
@@ -292,17 +294,8 @@ describe("PowerPlanInput", () => {
       ),
     ).toEqual(["runToHour"]);
     expect(
-      issuePaths(
-        PowerPlanInput.safeParse({ ...base, compareRunFromHour: null }),
-      ),
-    ).toEqual(["compareRunFromHour"]);
-    expect(
-      PowerPlanInput.safeParse({
-        ...base,
-        compareRunFromHour: null,
-        compareRunToHour: null,
-      }).success,
-    ).toBe(true);
+      PowerPlanInput.parse({ ...base, runFromHour: null, runToHour: null }),
+    ).toMatchObject({ runFromHour: null, runToHour: null });
   });
 
   it("bounds the power factor, the days and the low-load factor", () => {

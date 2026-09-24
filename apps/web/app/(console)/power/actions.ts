@@ -97,8 +97,6 @@ const FuelPlanFields = z.object({
   secondGeneratorNote: z.string().nullable(),
   runFromHour: hourOrNull,
   runToHour: hourOrNull,
-  compareRunFromHour: hourOrNull,
-  compareRunToHour: hourOrNull,
   daysOnSite: z.number(),
   powerFactor: z.number(),
   lowLoadFactor: z.number(),
@@ -215,7 +213,7 @@ export async function savePlanSettingsAction(
 }
 
 /**
- * The fuel plan: the generator, its hours and the comparison's, days on site,
+ * The fuel plan: the generator, its hours (24 h unless set), days on site,
  * the power factor and the margins. Checked merged onto the current plan and
  * sent without the date of day 1, which the load list owns.
  */

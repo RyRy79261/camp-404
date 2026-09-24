@@ -175,7 +175,7 @@ export function GeneratorRail({
               </li>
               <li className="flex items-center gap-1.5">
                 <LegendDot className={BAND_BAR.red} />
-                Over 90%, or surge past the maximum
+                Over 90%, or a start-up spike past the maximum
               </li>
             </ul>
             <p className="mt-auto text-xs text-muted-foreground">
@@ -183,7 +183,7 @@ export function GeneratorRail({
             </p>
             {generator.surgeExceedsMax && (
               <p className="text-xs font-medium text-destructive">
-                Surge exceeds the generator&apos;s maximum
+                The start-up spike is more than the generator&apos;s maximum
               </p>
             )}
           </>

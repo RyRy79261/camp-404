@@ -98,8 +98,6 @@ const PLAN = {
   firstPoweredDay: null,
   runFromHour: null,
   runToHour: null,
-  compareRunFromHour: 18,
-  compareRunToHour: 6,
   lowLoadFactor: 1,
   safetyMarginPct: 20,
   canLitres: 20,
@@ -180,7 +178,7 @@ describe("the fuel estimate", () => {
     expect(listPowerInventory).toHaveBeenCalled();
   });
 
-  it("works out litres, cans and refills on the server, and compares 12 h", async () => {
+  it("works out litres, cans and refills on the server, running 24 h", async () => {
     await renderAs("captain");
     const kpi = (name: string) => screen.getByRole("article", { name });
     // 0.3006 L/h idle + 2.1540 × (1.065 ÷ 0.8 ÷ 5.5) = 0.822 L/h × 24 h.
@@ -195,21 +193,15 @@ describe("the fuel estimate", () => {
     expect(within(refills).getByText("1.5")).toBeTruthy();
     expect(within(refills).getByText(/about every 16\.4 h/)).toBeTruthy();
 
-    const compare = screen.getByRole("table", { name: "Scenario compare" });
-    const row = (label: string) =>
-      within(compare)
-        .getByRole("rowheader", { name: label })
-        .closest("tr") as HTMLElement;
-    expect(within(compare).getByText("This plan")).toBeTruthy();
-    expect(within(compare).getByText("18:00–06:00")).toBeTruthy();
-    expect(within(row("Hours running a day")).getByText("24 h")).toBeTruthy();
-    expect(within(row("Hours running a day")).getByText("12 h")).toBeTruthy();
-    // Half the hours: 9.86 L a day, 118.4 L with margin, 6 cans.
-    expect(within(row("Litres a day")).getByText("9.86 L")).toBeTruthy();
-    expect(within(row("Jerry cans")).getByText("6")).toBeTruthy();
-    // 1065 W × 12 h off = 12.78 kWh a day the 12 h schedule leaves out.
+    // The generator runs 24/7 (owner, 2026-09-24): one schedule, and no
+    // second, comparison schedule beside it.
     expect(
-      within(row("Energy while off, a day")).getByText("12.78 kWh"),
+      screen.queryByRole("table", { name: "Scenario compare" }),
+    ).toBeNull();
+    expect(screen.queryByText(/Comparison/)).toBeNull();
+    expect(screen.getAllByRole("radio", { name: "24 h" })).toHaveLength(1);
+    expect(
+      within(kpi("Litres a day")).getByText("on the busiest day, running 24 h"),
     ).toBeTruthy();
 
     // Running all day, nothing falls in the off hours: no warning.

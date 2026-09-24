@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { POWER_TEAM } from "@camp404/core";
 import {
@@ -414,6 +414,50 @@ describe("power", () => {
         cycle: 2026,
         updatedAt: null,
       });
+    });
+
+    it("starts a year at 11 days on site, running 24 h, with no comparison schedule", async () => {
+      const { captain } = await people();
+      // The owner's answers (2026-09-24): the camp is usually on site 11
+      // days, and the generator runs 24/7.
+      expect(
+        await setPowerPlan({
+          actorId: captain.id,
+          patch: { powerFactor: 0.9 },
+          expectedVersion: 0,
+        }),
+      ).toEqual({ ok: true, version: 1 });
+      const plan = await getPowerPlan();
+      expect(plan).toMatchObject({
+        daysOnSite: 11,
+        runFromHour: null,
+        runToHour: null,
+        powerFactor: 0.9,
+      });
+      expect(plan).not.toHaveProperty("compareRunFromHour");
+
+      // The column itself, as the committed migrations leave it: a row
+      // written with nothing but its year takes 11 days and 24 h, and the
+      // comparison columns are gone.
+      const [row] = await h
+        .db()
+        .insert(schema.powerPlans)
+        .values({ cycle: 2031 })
+        .returning();
+      expect(row).toMatchObject({
+        daysOnSite: 11,
+        runFromHour: null,
+        runToHour: null,
+      });
+      const columns = await h
+        .db()
+        .execute<{
+          column_name: string;
+        }>(sql`select column_name from information_schema.columns where table_name = 'power_plans'`);
+      const names = columns.rows.map((c) => c.column_name);
+      expect(names).toContain("run_from_hour");
+      expect(names).not.toContain("compare_run_from_hour");
+      expect(names).not.toContain("compare_run_to_hour");
     });
 
     it("lets one of two first saves win", async () => {

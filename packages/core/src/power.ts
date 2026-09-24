@@ -85,12 +85,9 @@ export interface PlanSettings {
   daysOnSite: number;
   /** The date of day 1, YYYY-MM-DD, only for labels. */
   firstPoweredDay: string | null;
-  /** The generator's daily on-window; both null is 24 hours. */
+  /** The generator's daily on-window; both null is 24 hours, the usual. */
   runFromHour: number | null;
   runToHour: number | null;
-  /** The comparison scenario's on-window; both null is 24 hours. */
-  compareRunFromHour: number | null;
-  compareRunToHour: number | null;
   /** Multiplies the litres of each running hour below half load. */
   lowLoadFactor: number;
   safetyMarginPct: number;

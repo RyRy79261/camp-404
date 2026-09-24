@@ -96,8 +96,6 @@ const PLAN = {
   firstPoweredDay: null,
   runFromHour: 18,
   runToHour: 6,
-  compareRunFromHour: 18,
-  compareRunToHour: 6,
   lowLoadFactor: 1.2,
   safetyMarginPct: 20,
   canLitres: 20,
@@ -316,8 +314,6 @@ const FUEL_PLAN = {
   secondGeneratorNote: "The lounge's inverter, if it comes",
   runFromHour: null,
   runToHour: null,
-  compareRunFromHour: 18,
-  compareRunToHour: 6,
   daysOnSite: 10,
   powerFactor: 0.8,
   lowLoadFactor: 1.1,
@@ -386,6 +382,17 @@ describe("saveFuelPlanAction", () => {
     expect(call.patch).not.toHaveProperty("firstPoweredDay");
     expect(revalidatePath).toHaveBeenCalledWith(POWER_LOADS_PATH);
     expect(revalidatePath).toHaveBeenCalledWith(POWER_FUEL_PATH);
+  });
+
+  it("drops a comparison schedule an old page still sends: the camp runs 24/7", async () => {
+    await saveFuelPlanAction({
+      ...FUEL_PLAN,
+      compareRunFromHour: 18,
+      compareRunToHour: 6,
+    });
+    const { patch } = vi.mocked(setPowerPlan).mock.calls[0]![0];
+    expect(patch).not.toHaveProperty("compareRunFromHour");
+    expect(patch).not.toHaveProperty("compareRunToHour");
   });
 
   it("refuses a missing field rather than resetting it to its default", async () => {

@@ -7,7 +7,7 @@ import { z } from "zod";
 // (canEditPower), never this shape's. There is no money here: fuel prices and
 // purchases belong to the budget work, not to this plan.
 
-/** What kind of thing a load is; refrigeration surges on start-up. */
+/** What kind of thing a load is; refrigeration spikes when its motor starts. */
 export const LOAD_CATEGORIES = [
   "refrigeration",
   "lighting_functional",
@@ -169,7 +169,7 @@ function checkLoad(load: LoadFields, ctx: z.RefinementCtx) {
     ctx.addIssue({
       code: "custom",
       path: ["surgeWattsEach"],
-      message: "The start-up draw is at least the running draw.",
+      message: "The start-up spike is at least the running draw.",
     });
   }
   if (load.schedule === "hours_per_day" && load.hoursPerDay == null) {
@@ -330,10 +330,8 @@ function isCalendarDay(v: string): boolean {
 
 export const POWER_PLAN_DEFAULTS = {
   powerFactor: 0.8,
-  daysOnSite: 7,
-  /** The comparison scenario: 12 hours a day, 18:00 to 06:00. */
-  compareRunFromHour: 18,
-  compareRunToHour: 6,
+  /** The camp is usually on site 11 days (owner, 2026-09-24). */
+  daysOnSite: 11,
   lowLoadFactor: 1,
   safetyMarginPct: 20,
   canLitres: 20,
@@ -397,10 +395,9 @@ export const PowerPlanInput = z
         .nullish()
         .transform((v) => v ?? null),
     ),
+    /** The generator runs 24/7 unless these set a daily on-window. */
     runFromHour: RunHour.default(null),
     runToHour: RunHour.default(null),
-    compareRunFromHour: RunHour.default(D.compareRunFromHour),
-    compareRunToHour: RunHour.default(D.compareRunToHour),
     /** Extra fuel for each running hour below half load ("extra margin"). */
     lowLoadFactor: z
       .number()
@@ -431,13 +428,6 @@ export const PowerPlanInput = z
       plan.runToHour,
       "runFromHour",
       "runToHour",
-      ctx,
-    );
-    checkRunWindow(
-      plan.compareRunFromHour,
-      plan.compareRunToHour,
-      "compareRunFromHour",
-      "compareRunToHour",
       ctx,
     );
   })

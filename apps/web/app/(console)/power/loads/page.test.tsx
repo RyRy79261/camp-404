@@ -81,8 +81,6 @@ const PLAN = {
   firstPoweredDay: null,
   runFromHour: null,
   runToHour: null,
-  compareRunFromHour: 18,
-  compareRunToHour: 6,
   lowLoadFactor: 1,
   safetyMarginPct: 20,
   canLitres: 20,
@@ -185,10 +183,18 @@ describe("the load list", () => {
     expect(
       within(peak).getByText("assumes everything on at once"),
     ).toBeTruthy();
-    // Amps = watts ÷ volts: 800 W on 230 V mains; the surge 800 + 960 W.
+    // Amps = watts ÷ volts: 800 W on 230 V mains; the start-up spike is
+    // 800 + 960 W.
     expect(within(peak).getByText("3.5 A at 230 V")).toBeTruthy();
-    const surge = screen.getByRole("article", { name: "Surge headroom" });
-    expect(within(surge).getByText("7.7 A at 230 V")).toBeTruthy();
+    // People read "Start-up spike", never "surge", with one plain sentence.
+    const spike = screen.getByRole("article", { name: "Start-up spike" });
+    expect(within(spike).getByText("7.7 A at 230 V")).toBeTruthy();
+    expect(
+      within(spike).getByText(
+        "Fridges and freezers draw a short burst when their motor starts, about 3 times their normal draw. This checks the generator can take it.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/surge/i)).toBeNull();
     // Each row at its own voltage: the 12 V lights draw 40 A on their supply.
     expect(screen.getAllByText("40 A at 12 V").length).toBeGreaterThan(0);
     expect(screen.getAllByText("1.4 A").length).toBeGreaterThan(0);
@@ -215,10 +221,13 @@ describe("the load list", () => {
     // 0.8 kW ÷ 0.8 = 1 kVA of 1 kVA rated; kW-based it is 80%.
     expect(within(rail).getByText("100%")).toBeTruthy();
     expect(within(rail).getByText("(kW-based: 80%)")).toBeTruthy();
-    // Surge: 0.8 kW + the freezer's 960 W start-up = 2.2 kVA, past 1.1.
+    // Start-up spike: 0.8 kW + the freezer's 960 W = 2.2 kVA, past 1.1.
     expect(
-      within(rail).getByText("Surge exceeds the generator's maximum"),
+      within(rail).getByText(
+        "The start-up spike is more than the generator's maximum",
+      ),
     ).toBeTruthy();
+    expect(within(rail).queryByText(/surge/i)).toBeNull();
   });
 
   it("bands a 5.5 kVA generator green at 1430 W: 32.5% of kVA, 26% by kW", async () => {
@@ -246,9 +255,11 @@ describe("the load list", () => {
     expect(
       within(rail).getByText("of rated kVA at the peak · Comfortable"),
     ).toBeTruthy();
-    // Surge 1430 + 1065 W = 3.12 kVA stays under the 6 kVA maximum.
+    // Start-up spike 1430 + 1065 W = 3.12 kVA stays under the 6 kVA maximum.
     expect(
-      within(rail).queryByText("Surge exceeds the generator's maximum"),
+      within(rail).queryByText(
+        "The start-up spike is more than the generator's maximum",
+      ),
     ).toBeNull();
     expect(rail.querySelector(".bg-success")).not.toBeNull();
   });

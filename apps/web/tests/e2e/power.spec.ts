@@ -170,15 +170,16 @@ test.describe("power load list (test-mode)", () => {
 // issue's generator (5.5 kVA rated, 6 max, 13.5 L tank, 9.8 h at 50% and
 // 5.5 h at 100%) and one 1065 W load all day, then plans 10 days at 24 h:
 // 19.73 L a day, 197.3 L for the burn, 236.7 L with 20%, 12 cans of 20 L.
-// Running 18:00–06:00 instead halves the litres (6 cans) and leaves
-// 12.78 kWh a day in the hours the generator is off, which the page warns of.
+// The camp runs the generator 24/7, so there is no comparison schedule; a
+// plan that sets 18:00–06:00 halves the litres (6 cans) and leaves 12.78 kWh
+// a day in the hours the generator is off, which the page warns of.
 // A lead of Kitchen reads the page and finds Save disabled.
 test.describe("power fuel estimate (test-mode)", () => {
   test.beforeEach(async ({ request }) => {
     await resetTestState(request);
   });
 
-  test("a P&L lead picks a generator and compares 24 h with 12 h; a Kitchen lead only reads", async ({
+  test("a P&L lead picks a generator and plans 24 h, then set hours; a Kitchen lead only reads", async ({
     page,
     request,
   }) => {
@@ -228,7 +229,10 @@ test.describe("power fuel estimate (test-mode)", () => {
     await expect(page.getByText("No generator chosen")).toBeVisible();
     await page.getByRole("combobox", { name: "Generator" }).click();
     await page.getByRole("option", { name: "Test 5.5 (5.5 kVA)" }).click();
-    await page.getByRole("spinbutton", { name: /^Days on site/ }).fill("10");
+    // A new year's plan starts at the camp's usual 11 days on site.
+    const daysOnSite = page.getByRole("spinbutton", { name: /^Days on site/ });
+    await expect(daysOnSite).toHaveValue("11");
+    await daysOnSite.fill("10");
     const running = page.getByRole("radiogroup", { name: "Hours running" });
     await running.getByRole("radio", { name: "24 h" }).click();
     await page.getByRole("button", { name: "Save plan" }).click();
@@ -248,17 +252,13 @@ test.describe("power fuel estimate (test-mode)", () => {
       page.getByText(/falls in hours the generator is off/),
     ).toHaveCount(0);
 
-    // Both schedules side by side, the same loads.
-    const compare = page.getByRole("table", { name: "Scenario compare" });
+    // One schedule only: the cans above are present, and no comparison is.
     await expect(
-      compare.getByRole("columnheader", { name: /This plan\s*24 h/ }),
-    ).toBeVisible();
+      page.getByRole("table", { name: "Scenario compare" }),
+    ).toHaveCount(0);
     await expect(
-      compare.getByRole("columnheader", { name: /Comparison\s*18:00–06:00/ }),
-    ).toBeVisible();
-    await expect(
-      compare.getByRole("row", { name: /^Jerry cans/ }),
-    ).toContainText(/12\s*6/);
+      page.getByRole("radiogroup", { name: "Comparison schedule" }),
+    ).toHaveCount(0);
 
     // Now run it 18:00–06:00 only: half the litres, and the night's freezer
     // energy is unserved.
@@ -275,8 +275,8 @@ test.describe("power fuel estimate (test-mode)", () => {
       page.getByText(/^12\.78 kWh a day falls in hours the generator is off/),
     ).toBeVisible();
     await expect(
-      compare.getByRole("columnheader", { name: /This plan\s*18:00–06:00/ }),
-    ).toBeVisible();
+      page.getByRole("article", { name: "Litres a day" }),
+    ).toContainText("running 18:00–06:00");
 
     // A lead of Kitchen reads the estimate but cannot change it.
     await approvedMember(page, request, "fuel-kitchen", "Kit Fuel");
