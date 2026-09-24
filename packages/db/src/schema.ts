@@ -6,6 +6,7 @@ import {
   timestamp,
   boolean,
   integer,
+  doublePrecision,
   bigint,
   jsonb,
   numeric,
@@ -19,7 +20,19 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
+  CURRENT_KINDS,
+  FUEL_TYPES,
+  GENERATOR_OWNERS,
+  LOAD_CATEGORIES,
+  LOAD_OWNERS,
+  LOAD_SCHEDULES,
   NOTIFICATION_KINDS,
+  type CurrentKind,
+  type FuelType,
+  type GeneratorOwner,
+  type LoadCategory,
+  type LoadOwner,
+  type LoadSchedule,
   type BuilderQuestionnaire,
   type Questionnaire,
   type QuestionnaireFieldChange,
@@ -1541,6 +1554,11 @@ export const inventoryItems = pgTable(
     unit: text("unit"),
     // Optional total weight, in kilograms.
     weightKg: numeric("weight_kg", { precision: 10, scale: 2 }),
+    // The running draw of one unit, in watts, for gear that plugs in. The
+    // power load list's "From inventory" helper reads it (#253). Null for
+    // anything that draws no power, and for every item until inventory has
+    // a screen of its own (#246).
+    wattsEach: doublePrecision("watts_each"),
 
     // Maintenance schedule. `requiresMaintenance` gates the rest; the
     // status page flags items whose `nextMaintenanceDueAt` has passed.
@@ -1650,6 +1668,200 @@ export const inventoryUpdates = pgTable(
     statusIdx: index("inventory_updates_status_idx").on(u.status),
     proposedByIdx: index("inventory_updates_proposed_by_idx").on(
       u.proposedByUserId,
+    ),
+  }),
+);
+
+// --- Power and fuel (#253, #254) -------------------------------------------
+// The Power & Lighting team's plan: what the camp plugs in each year, the
+// generators it can run it on, and one row of settings per year. Only a
+// captain or a Power & Lighting lead writes here (canEditPower, re-read in
+// each write's transaction); anyone in the camp reads it. There is no money
+// here: no prices, costs or budgets.
+//
+// The vocabularies are text with CHECK constraints built from the constants
+// @camp404/types validates with, not pgEnums (a Postgres enum is hard to
+// change).
+
+/** A text column's vocabulary as a CHECK, from the constant the code uses. */
+function oneOf(column: AnyPgColumn, values: readonly string[]) {
+  return sql`${column} in (${sql.raw(values.map((v) => `'${v}'`).join(", "))})`;
+}
+
+// A generator is gear, not a year's data: it is kept across the rollover and
+// archived, never deleted, so an earlier year's plan that names it stays
+// readable. Its owner is only "camp", "member_lent" or "hired": a lent one
+// names no member.
+export const generators = pgTable(
+  "generators",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    model: text("model").notNull(),
+    // The continuous output the datasheet rates it for, and the most it gives
+    // for a moment.
+    ratedKva: doublePrecision("rated_kva").notNull(),
+    maxKva: doublePrecision("max_kva").notNull(),
+    tankLitres: doublePrecision("tank_litres").notNull(),
+    // Hours a full tank lasts at 50% and at 100% load, from the datasheet.
+    runtime50Hours: doublePrecision("runtime_50_hours").notNull(),
+    runtime100Hours: doublePrecision("runtime_100_hours").notNull(),
+    fuelType: text("fuel_type").$type<FuelType>().notNull(),
+    owner: text("owner").$type<GeneratorOwner>().notNull(),
+    inventoryItemId: uuid("inventory_item_id").references(
+      () => inventoryItems.id,
+      { onDelete: "set null" },
+    ),
+    noiseNote: text("noise_note"),
+    archivedAt: timestamp("archived_at", { mode: "date" }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Bumped by every edit, so an edit is a compare-and-set against the
+    // version the editor opened.
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (g) => ({
+    fuelTypeCheck: check(
+      "generators_fuel_type_check",
+      oneOf(g.fuelType, FUEL_TYPES),
+    ),
+    ownerCheck: check(
+      "generators_owner_check",
+      oneOf(g.owner, GENERATOR_OWNERS),
+    ),
+    kvaCheck: check(
+      "generators_kva_check",
+      sql`${g.ratedKva} > 0 and ${g.maxKva} >= ${g.ratedKva}`,
+    ),
+    tankCheck: check(
+      "generators_runtime_check",
+      sql`${g.tankLitres} > 0 and ${g.runtime100Hours} > 0 and ${g.runtime50Hours} > ${g.runtime100Hours}`,
+    ),
+  }),
+);
+
+// One row of the load list, in one year. `cycle` is stamped by the writer
+// with currentCycleNumber(), never a default, so a row cannot land on the
+// sentinel year by accident. Its days are day numbers on site (day 2 to day
+// 5), not dates, so "copy last year" carries them over unchanged.
+//
+// There is deliberately no member id: a member's own load stores only
+// owner = 'member', so no name can reach the camp.
+export const powerLoads = pgTable(
+  "power_loads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    name: text("name").notNull(),
+    area: text("area").notNull(),
+    category: text("category").$type<LoadCategory>().notNull(),
+    quantity: integer("quantity").notNull(),
+    // Running draw of one item, W; its start-up draw when known.
+    wattsEach: doublePrecision("watts_each").notNull(),
+    surgeWattsEach: doublePrecision("surge_watts_each"),
+    // The share of the time it draws, such as a fridge compressor.
+    dutyPct: doublePrecision("duty_pct").notNull().default(100),
+    schedule: text("schedule").$type<LoadSchedule>().notNull(),
+    // Used only by the schedule that needs it; the others store null.
+    hoursPerDay: doublePrecision("hours_per_day"),
+    windows: jsonb("windows").$type<{ fromHour: number; toHour: number }[]>(),
+    // First and last day on site it runs; neither means every day.
+    fromDay: integer("from_day"),
+    toDay: integer("to_day"),
+    volts: doublePrecision("volts").notNull().default(230),
+    current: text("current").$type<CurrentKind>().notNull().default("ac"),
+    owner: text("owner").$type<LoadOwner>().notNull(),
+    // The neighbouring camp that shares the generator, for a neighbour's load.
+    neighbourCamp: text("neighbour_camp"),
+    inventoryItemId: uuid("inventory_item_id").references(
+      () => inventoryItems.id,
+      { onDelete: "set null" },
+    ),
+    circuit: text("circuit"),
+    sort: integer("sort").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (l) => ({
+    cycleIdx: index("power_loads_cycle_idx").on(l.cycle),
+    categoryCheck: check(
+      "power_loads_category_check",
+      oneOf(l.category, LOAD_CATEGORIES),
+    ),
+    scheduleCheck: check(
+      "power_loads_schedule_check",
+      oneOf(l.schedule, LOAD_SCHEDULES),
+    ),
+    currentCheck: check(
+      "power_loads_current_check",
+      oneOf(l.current, CURRENT_KINDS),
+    ),
+    ownerCheck: check("power_loads_owner_check", oneOf(l.owner, LOAD_OWNERS)),
+    drawCheck: check(
+      "power_loads_draw_check",
+      sql`${l.quantity} >= 1 and ${l.wattsEach} > 0 and ${l.dutyPct} between 1 and 100`,
+    ),
+    dayCheck: check(
+      "power_loads_day_check",
+      sql`${l.fromDay} >= 1 and ${l.toDay} >= ${l.fromDay}`,
+    ),
+  }),
+);
+
+// The year's plan: one row per year, the year its key. It holds both the
+// load list's settings (power factor, days on site, the date of day 1) and
+// the fuel settings, so both pages share one power factor and "copy last
+// year" is one row. No row means the defaults (DEFAULT_POWER_PLAN); the first
+// save inserts it.
+export const powerPlans = pgTable(
+  "power_plans",
+  {
+    cycle: integer("cycle").primaryKey(),
+    generatorId: uuid("generator_id").references(() => generators.id, {
+      onDelete: "set null",
+    }),
+    // A second generator is a note: the plan runs on one.
+    secondGeneratorNote: text("second_generator_note"),
+    powerFactor: doublePrecision("power_factor").notNull().default(0.8),
+    daysOnSite: integer("days_on_site").notNull().default(7),
+    // The date of day 1, only to label the day numbers.
+    firstPoweredDay: date("first_powered_day", { mode: "string" }),
+    // The generator's daily on-window, whole hours; both null is 24 hours.
+    runFromHour: integer("run_from_hour"),
+    runToHour: integer("run_to_hour"),
+    // The comparison scenario's on-window: 12 hours, 18:00 to 06:00.
+    compareRunFromHour: integer("compare_run_from_hour").default(18),
+    compareRunToHour: integer("compare_run_to_hour").default(6),
+    // Multiplies the litres of each running hour below half load.
+    lowLoadFactor: doublePrecision("low_load_factor").notNull().default(1),
+    safetyMarginPct: doublePrecision("safety_margin_pct").notNull().default(20),
+    canLitres: doublePrecision("can_litres").notNull().default(20),
+    cansOwned: integer("cans_owned").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (p) => ({
+    powerFactorCheck: check(
+      "power_plans_power_factor_check",
+      sql`${p.powerFactor} between 0.5 and 1`,
+    ),
+    daysCheck: check("power_plans_days_check", sql`${p.daysOnSite} >= 1`),
+    hoursCheck: check(
+      "power_plans_hours_check",
+      sql`${p.runFromHour} between 0 and 23 and ${p.runToHour} between 0 and 23 and ${p.compareRunFromHour} between 0 and 23 and ${p.compareRunToHour} between 0 and 23`,
+    ),
+    fuelCheck: check(
+      "power_plans_fuel_check",
+      sql`${p.lowLoadFactor} >= 1 and ${p.safetyMarginPct} between 0 and 100 and ${p.canLitres} > 0 and ${p.cansOwned} >= 0`,
     ),
   }),
 );
