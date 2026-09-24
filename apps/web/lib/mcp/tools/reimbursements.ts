@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
+import { Currency } from "@camp404/types";
 import { createHttpDb } from "@camp404/db";
 import * as schema from "@camp404/db/schema";
 import { decryptField, encrypt } from "@camp404/db/crypto";
@@ -8,6 +9,7 @@ import {
   getReimbursementForReview,
   listReimbursementsForReview,
   moveReimbursement,
+  submitReimbursement,
   type ReimbursementReviewRow,
   type ReimbursementStatus,
   type ReimbursementTeam,
@@ -35,12 +37,14 @@ export function registerReimbursementTools(server: McpServer): void {
       inputSchema: {
         team: TeamEnum.nullable().optional(),
         amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
-        currency: z.string().length(3),
+        currency: Currency,
         accountType: AccountTypeEnum,
         accountDetails: z
           .string()
           .min(1)
-          .describe("Account number + bank / SWIFT or international equivalent."),
+          .describe(
+            "Account number + bank / SWIFT or international equivalent.",
+          ),
         description: z.string().min(1),
         receiptBlobUrl: z.string().url().nullable().optional(),
         itemPhotoBlobUrl: z.string().url().nullable().optional(),
@@ -58,28 +62,28 @@ export function registerReimbursementTools(server: McpServer): void {
         },
         handler: async ({ scope }) => {
           if (!args.receiptBlobUrl && !args.itemPhotoBlobUrl) {
-            throw new Error("At least one of receipt or item photo is required.");
+            throw new Error(
+              "At least one of receipt or item photo is required.",
+            );
           }
-          const db = createHttpDb();
-          const [row] = await db
-            .insert(schema.reimbursements)
-            .values({
-              submitterId: scope.campUserId,
-              team: args.team ?? null,
-              amount: args.amount,
-              currency: args.currency,
-              accountType: args.accountType,
-              accountDetailsEncrypted: encrypt(args.accountDetails),
-              description: args.description,
-              receiptBlobUrl: args.receiptBlobUrl ?? null,
-              itemPhotoBlobUrl: args.itemPhotoBlobUrl ?? null,
-              voiceMemoBlobUrl: args.voiceMemoBlobUrl ?? null,
-            })
-            .returning({
-              id: schema.reimbursements.id,
-              status: schema.reimbursements.status,
-            });
-          return row;
+          // The SDK checks the schema first; this is the handler's own
+          // guard, for a caller that reaches it without that check.
+          const currency = Currency.safeParse(args.currency);
+          if (!currency.success) {
+            throw new ToolError("Currency must be ZAR, USD or EUR.");
+          }
+          return await submitReimbursement({
+            submitterId: scope.campUserId,
+            team: args.team ?? null,
+            amount: args.amount,
+            currency: currency.data,
+            accountType: args.accountType,
+            accountDetailsEncrypted: encrypt(args.accountDetails),
+            description: args.description,
+            receiptBlobUrl: args.receiptBlobUrl,
+            itemPhotoBlobUrl: args.itemPhotoBlobUrl,
+            voiceMemoBlobUrl: args.voiceMemoBlobUrl,
+          });
         },
       }),
   );
@@ -99,8 +103,11 @@ export function registerReimbursementTools(server: McpServer): void {
         argsForAudit: args,
         handler: async ({ scope }) => {
           const db = createHttpDb();
-          const conditions = [eq(schema.reimbursements.submitterId, scope.campUserId)];
-          if (args.status) conditions.push(eq(schema.reimbursements.status, args.status));
+          const conditions = [
+            eq(schema.reimbursements.submitterId, scope.campUserId),
+          ];
+          if (args.status)
+            conditions.push(eq(schema.reimbursements.status, args.status));
           const rows = await db
             .select()
             .from(schema.reimbursements)
@@ -132,7 +139,11 @@ export function registerReimbursementTools(server: McpServer): void {
 // of someone else's claim are shown only to a captain, and only when the
 // submitter's AI data consent is on (the consent gate in the proposal).
 
-type Move = { from: ReimbursementStatus; to: ReimbursementStatus; title: string };
+type Move = {
+  from: ReimbursementStatus;
+  to: ReimbursementStatus;
+  title: string;
+};
 
 const MOVES = {
   approve_reimbursement: {

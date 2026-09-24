@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { UnknownCurrencyError } from "@camp404/core";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
 import { getCampManagementRoster } from "../roster";
@@ -78,12 +79,14 @@ describe("recordPayment and setPaymentStatus", () => {
     const first = await recordPayment({
       userId: member.id,
       amountCents: 50000,
+      currency: "ZAR",
       status: "pending",
       recordedByUserId: captain.id,
     });
     const second = await recordPayment({
       userId: member.id,
       amountCents: 75000,
+      currency: "ZAR",
       status: "reconciled",
       note: "  FNB 12 Mar  ",
       recordedByUserId: captain.id,
@@ -118,6 +121,7 @@ describe("recordPayment and setPaymentStatus", () => {
     const { id } = await recordPayment({
       userId: member.id,
       amountCents: 50000,
+      currency: "ZAR",
       status: "pending",
       recordedByUserId: captain.id,
     });
@@ -159,11 +163,65 @@ describe("recordPayment and setPaymentStatus", () => {
         recordPayment({
           userId: member.id,
           amountCents,
+          currency: "ZAR",
           status: "pending",
           recordedByUserId: captain.id,
         }),
       ).rejects.toThrow();
     }
+  });
+});
+
+describe("the currency of a payment", () => {
+  const h = useTestDb();
+
+  it("stores a payment in USD and audits its currency", async () => {
+    const db = h.db();
+    await foundedAt(db, 2027);
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    await recordPayment({
+      userId: member.id,
+      amountCents: 1234,
+      currency: "USD",
+      status: "pending",
+      recordedByUserId: captain.id,
+    });
+
+    const [row] = await listPayments(2027);
+    expect(row).toMatchObject({ amountCents: 1234, currency: "USD" });
+    const [audit] = await db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "payment.recorded"));
+    expect(audit!.metadata).toMatchObject({ currency: "USD" });
+  });
+
+  it("refuses GBP or a lower-case code before writing anything", async () => {
+    const db = h.db();
+    await foundedAt(db, 2027);
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    for (const currency of ["GBP", "zar"]) {
+      await expect(
+        recordPayment({
+          userId: member.id,
+          amountCents: 999,
+          currency: currency as never,
+          status: "pending",
+          recordedByUserId: captain.id,
+        }),
+      ).rejects.toThrow(UnknownCurrencyError);
+    }
+
+    expect(await db.select().from(schema.payments)).toEqual([]);
+    expect(await db.select().from(schema.auditLog)).toEqual([]);
+    // Refused before the reference read, so the member was not given one.
+    const [user] = await db
+      .select({ refCode: schema.users.refCode })
+      .from(schema.users)
+      .where(eq(schema.users.id, member.id));
+    expect(user!.refCode).toBeNull();
   });
 });
 
@@ -186,6 +244,7 @@ describe("dues paid on the roster", () => {
       await recordPayment({
         userId,
         amountCents: 50000,
+        currency: "ZAR",
         status,
         recordedByUserId: captain.id,
       });
@@ -222,6 +281,7 @@ describe("erasure and the ledger", () => {
     await recordPayment({
       userId: member.id,
       amountCents: 50000,
+      currency: "ZAR",
       status: "reconciled",
       note: "EFT from N. Reyes",
       recordedByUserId: captain.id,

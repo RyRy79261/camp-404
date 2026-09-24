@@ -1,10 +1,16 @@
 import { and, desc, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { type Currency, isCurrency, UnknownCurrencyError } from "@camp404/core";
 import { writeAuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 
-// Reimbursement review: the moves a claim may make after a member submits it,
+// A member's claim for money they spent for the camp, and its review.
+//
+// Submitting: any member may lodge a claim; the claim's currency must be one
+// the camp handles, checked here as well as at the MCP tool.
+//
+// Review: the moves a claim may make after a member submits it,
 // each one a compare-and-set on the status it was read in, with its audit row
 // in the same transaction. Who may make which move is the caller's check (the
 // MCP captain tools); this module only refuses a move the status does not
@@ -187,4 +193,48 @@ export async function moveReimbursement(input: {
     });
     return { ok: true as const };
   });
+}
+
+export interface SubmitReimbursementInput {
+  submitterId: string;
+  team: ReimbursementTeam | null;
+  /** A decimal string with up to 2 places, e.g. "12.34". */
+  amount: string;
+  /** ZAR, USD or EUR; anything else is refused before writing. */
+  currency: Currency;
+  accountType: (typeof schema.reimbursementAccountTypeEnum.enumValues)[number];
+  /** Already encrypted by the caller: plaintext never reaches this module. */
+  accountDetailsEncrypted: string;
+  description: string;
+  receiptBlobUrl?: string | null;
+  itemPhotoBlobUrl?: string | null;
+  voiceMemoBlobUrl?: string | null;
+}
+
+/** Lodge a member's claim. Refuses a currency the camp does not handle. */
+export async function submitReimbursement(
+  input: SubmitReimbursementInput,
+): Promise<{ id: string; status: ReimbursementStatus }> {
+  if (!isCurrency(input.currency)) {
+    throw new UnknownCurrencyError(input.currency);
+  }
+  const [row] = await createHttpDb()
+    .insert(schema.reimbursements)
+    .values({
+      submitterId: input.submitterId,
+      team: input.team,
+      amount: input.amount,
+      currency: input.currency,
+      accountType: input.accountType,
+      accountDetailsEncrypted: input.accountDetailsEncrypted,
+      description: input.description,
+      receiptBlobUrl: input.receiptBlobUrl ?? null,
+      itemPhotoBlobUrl: input.itemPhotoBlobUrl ?? null,
+      voiceMemoBlobUrl: input.voiceMemoBlobUrl ?? null,
+    })
+    .returning({
+      id: schema.reimbursements.id,
+      status: schema.reimbursements.status,
+    });
+  return row!;
 }

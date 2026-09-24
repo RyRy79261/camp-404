@@ -1,9 +1,12 @@
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
+  type Currency,
   formatMemberRefCode,
+  isCurrency,
   paymentReference,
   type PaymentStatus,
+  UnknownCurrencyError,
 } from "@camp404/core";
 import { writeAuditEvent } from "./audit";
 import { currentCycleNumber } from "./cycles";
@@ -75,7 +78,10 @@ export async function ensureMemberRefCode(
 
 export interface RecordPaymentInput {
   userId: string;
+  /** Minor units of `currency`: cents for every currency the camp handles. */
   amountCents: number;
+  /** ZAR, USD or EUR; anything else is refused before any read or write. */
+  currency: Currency;
   status: PaymentStatus;
   /** What the captain saw, e.g. the bank statement line. */
   note?: string | null;
@@ -89,6 +95,11 @@ export interface RecordPaymentInput {
 export async function recordPayment(
   input: RecordPaymentInput,
 ): Promise<{ id: string; reference: string }> {
+  // Checked here as well as at the action: the database is the last caller's
+  // guard, and a payment in an unknown currency cannot be totalled.
+  if (!isCurrency(input.currency)) {
+    throw new UnknownCurrencyError(input.currency);
+  }
   if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0) {
     throw new Error(
       "recordPayment: the amount must be whole cents, not negative",
@@ -123,6 +134,7 @@ export async function recordPayment(
             userId: input.userId,
             cycle,
             amountCents: input.amountCents,
+            currency: input.currency,
             reference,
             status: input.status,
             note,
@@ -137,6 +149,7 @@ export async function recordPayment(
             reference,
             cycle,
             amountCents: input.amountCents,
+            currency: input.currency,
             status: input.status,
           },
         });

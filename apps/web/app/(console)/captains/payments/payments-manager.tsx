@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Wallet } from "lucide-react";
 import {
   CAMP_TIME_ZONE,
-  formatRands,
+  formatMoney,
   readRate,
   type PaymentStatus,
 } from "@camp404/core";
@@ -177,7 +177,7 @@ export function PaymentsManager({
       header: "Amount",
       align: "right",
       cellClassName: "whitespace-nowrap font-medium tabular-nums",
-      cell: (p) => formatRands(p.amountCents),
+      cell: (p) => formatMoney(p.amountCents, p.currency),
     },
     {
       id: "recorded",

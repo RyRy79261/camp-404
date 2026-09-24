@@ -102,7 +102,7 @@ describe("PaymentsManager", () => {
   it("shows the refusal and keeps the form when recording fails", async () => {
     vi.mocked(recordPaymentAction).mockResolvedValue({
       ok: false,
-      error: "Type the amount in rands, like 1250 or 1250,50.",
+      error: "Type the amount like 1250 or 1250,50.",
     });
     render(
       <PaymentsManager yearLabel="2027" members={MEMBERS} payments={[]} />,
@@ -115,7 +115,9 @@ describe("PaymentsManager", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Record payment" }));
 
-    expect((await screen.findByRole("alert")).textContent).toContain("rands");
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Type the amount like 1250",
+    );
     expect(
       (screen.getByLabelText("Amount (R)") as HTMLInputElement).value,
     ).toBe("x");

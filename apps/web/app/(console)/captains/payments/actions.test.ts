@@ -46,6 +46,7 @@ describe("recordPaymentAction", () => {
     expect(recordPayment).toHaveBeenCalledWith({
       userId: "m1",
       amountCents: 125050,
+      currency: "ZAR",
       status: "reconciled",
       note: "FNB",
       recordedByUserId: "cap-1",
@@ -61,7 +62,7 @@ describe("recordPaymentAction", () => {
     });
     expect(await recordPaymentAction({ ...VALID, amount: "lots" })).toEqual({
       ok: false,
-      error: "Type the amount in rands, like 1250 or 1250,50.",
+      error: "Type the amount like 1250 or 1250,50.",
     });
     expect(await recordPaymentAction({ ...VALID, status: "paid" })).toEqual({
       ok: false,
@@ -78,6 +79,31 @@ describe("recordPaymentAction", () => {
       ok: false,
       error: "Member not found.",
     });
+    expect(recordPayment).not.toHaveBeenCalled();
+  });
+
+  it("records in rands when no currency is given, and passes USD through", async () => {
+    await recordPaymentAction({ ...VALID, amount: "12,34" });
+    expect(recordPayment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ amountCents: 1234, currency: "ZAR" }),
+    );
+    await recordPaymentAction({
+      ...VALID,
+      amount: "US$12,34",
+      currency: "USD",
+    });
+    expect(recordPayment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ amountCents: 1234, currency: "USD" }),
+    );
+  });
+
+  it("refuses a currency the camp does not take, and records nothing", async () => {
+    for (const currency of ["GBP", "usd", " ZAR", ""]) {
+      expect(await recordPaymentAction({ ...VALID, currency })).toEqual({
+        ok: false,
+        error: "Pick ZAR, USD or EUR.",
+      });
+    }
     expect(recordPayment).not.toHaveBeenCalled();
   });
 

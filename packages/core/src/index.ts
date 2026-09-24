@@ -46,7 +46,11 @@
 //   - member export: MEMBER_EXPORT_COLUMNS, memberExportColumnsFor — the
 //     roster CSV's columns by rank, from the field list (./member-export)
 //   - payment references: formatMemberRefCode, paymentReference,
-//     PAYMENT_STATUSES, formatRands, parseRandsToCents (./payment-references)
+//     PAYMENT_STATUSES, paymentSettlesDues (./payment-references)
+//   - money: CURRENCIES, DEFAULT_CURRENCY, CURRENCY_INFO, isCurrency,
+//     UnknownCurrencyError, formatMoney, parseMoneyToMinor, decimalToMinor,
+//     sumByCurrency, formatMoneyTotals — the one currency list (ZAR, USD,
+//     EUR), the one money formatter, and totals kept per currency (./money)
 //   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,
 //     neutraliseFormula, csvFilenamePart (./csv) — the ONE spreadsheet
 //     serialiser; the questionnaire export and WP9's roster export share it
@@ -102,6 +106,7 @@ export * from "./promotion";
 export * from "./privacy";
 export * from "./member-export";
 export * from "./payment-references";
+export * from "./money";
 export * from "./audience-authz";
 export * from "./pinned-order";
 export * from "./csv";

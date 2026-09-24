@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Currency } from "./money";
 import { Team } from "./roles";
 
 export const ReimbursementStatus = z.enum([
@@ -45,8 +46,8 @@ export type ReimbursementAccount = z.infer<typeof ReimbursementAccount>;
 export const ReimbursementInput = z
   .object({
     amount: z.number().positive(),
-    // ISO 4217 code of the currency the member actually paid in.
-    currency: z.string().regex(/^[A-Z]{3}$/, "Three-letter ISO currency code"),
+    // The currency the member actually paid in: ZAR, USD or EUR.
+    currency: Currency,
     // The team the claim is lodged under. null = "general".
     team: Team.nullable().default(null),
     description: z.string().min(1).max(500),

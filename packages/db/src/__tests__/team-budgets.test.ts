@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
+import { UnknownCurrencyError } from "@camp404/core";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
 import { getTeamBudget, listTeamBudgets, setTeamBudget } from "../team-budgets";
@@ -67,6 +68,30 @@ describe("team budgets", () => {
       { team: "kitchen", cycle: 2027, fields: ["assignedAmount", "notes"] },
       { team: "kitchen", cycle: 2027, fields: ["perceivedAmount"] },
     ]);
+  });
+
+  it("refuses a currency the camp does not take, and creates no row", async () => {
+    const db = h.db();
+    const lead = await makeUser(db);
+    await setYears(db, OPEN_2027);
+    for (const currency of ["usd", "GBP"]) {
+      await expect(
+        setTeamBudget({
+          team: "kitchen",
+          change: { assignedAmount: "999.00", currency: currency as never },
+          actorId: lead.id,
+        }),
+      ).rejects.toThrow(UnknownCurrencyError);
+    }
+    expect(await db.select().from(schema.teamBudgets)).toEqual([]);
+    expect(await db.select().from(schema.auditLog)).toEqual([]);
+
+    const row = await setTeamBudget({
+      team: "kitchen",
+      change: { assignedAmount: "999.00", currency: "USD" },
+      actorId: lead.id,
+    });
+    expect(row).toMatchObject({ assignedAmount: "999.00", currency: "USD" });
   });
 
   it("reads only the current year", async () => {

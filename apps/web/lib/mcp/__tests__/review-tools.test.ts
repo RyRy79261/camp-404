@@ -31,6 +31,10 @@ vi.mock("@camp404/db/reimbursements", () => ({
   listReimbursementsForReview: vi.fn(async () => []),
   getReimbursementForReview: vi.fn(async () => null),
   moveReimbursement: vi.fn(async () => ({ ok: true })),
+  submitReimbursement: vi.fn(async () => ({
+    id: CLAIM,
+    status: "submitted",
+  })),
 }));
 vi.mock("@camp404/db/team-budgets", () => ({
   getTeamBudget: vi.fn(async () => null),
@@ -46,6 +50,7 @@ import {
   getReimbursementForReview,
   listReimbursementsForReview,
   moveReimbursement,
+  submitReimbursement,
   type ReimbursementReviewRow,
 } from "@camp404/db/reimbursements";
 import { setTeamBudget } from "@camp404/db/team-budgets";
@@ -223,6 +228,41 @@ describe("moving a claim", () => {
   });
 });
 
+describe("submit_reimbursement", () => {
+  const CLAIM_ARGS = {
+    team: "kitchen",
+    amount: "12.34",
+    currency: "EUR",
+    accountType: "international",
+    accountDetails: "IBAN 0000",
+    description: "Tape",
+    receiptBlobUrl: "https://example.com/receipt.jpg",
+  };
+
+  it("lets any member lodge a claim, with the account encrypted", async () => {
+    expect(await call("submit_reimbursement", CLAIM_ARGS, MEMBER)).toEqual({
+      data: { id: CLAIM, status: "submitted" },
+    });
+    const input = vi.mocked(submitReimbursement).mock.calls[0]![0];
+    expect(input).toMatchObject({
+      submitterId: MEMBER,
+      team: "kitchen",
+      amount: "12.34",
+      currency: "EUR",
+    });
+    expect(input.accountDetailsEncrypted).not.toContain("IBAN 0000");
+  });
+
+  it("refuses a currency the camp does not take, and writes nothing", async () => {
+    for (const currency of ["GBP", "eur"]) {
+      expect(
+        await call("submit_reimbursement", { ...CLAIM_ARGS, currency }, MEMBER),
+      ).toEqual({ error: "Currency must be ZAR, USD or EUR." });
+    }
+    expect(submitReimbursement).not.toHaveBeenCalled();
+  });
+});
+
 describe("set_team_budget", () => {
   it("lets a lead set their team's budget and nobody else's", async () => {
     const result = await call(
@@ -240,6 +280,25 @@ describe("set_team_budget", () => {
       await call("set_team_budget", { team: "structures", notes: "x" }, LEAD),
     ).toEqual({
       error: "Only a captain or the lead of this team can set its budget.",
+    });
+  });
+
+  it("refuses a currency the camp does not take, and sets nothing", async () => {
+    for (const currency of ["GBP", "usd"]) {
+      expect(
+        await call("set_team_budget", { team: "kitchen", currency }, CAPTAIN),
+      ).toEqual({ error: "Currency must be ZAR, USD or EUR." });
+    }
+    expect(setTeamBudget).not.toHaveBeenCalled();
+    await call(
+      "set_team_budget",
+      { team: "kitchen", currency: "USD" },
+      CAPTAIN,
+    );
+    expect(setTeamBudget).toHaveBeenCalledWith({
+      team: "kitchen",
+      change: { currency: "USD" },
+      actorId: CAPTAIN,
     });
   });
 

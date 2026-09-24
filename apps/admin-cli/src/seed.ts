@@ -218,6 +218,7 @@ export async function seedScenario(scenario: Scenario): Promise<string[]> {
     await recordPayment({
       userId: ids.get(member.authUserId)!,
       amountCents: 150_000,
+      currency: "ZAR",
       status: "reconciled",
       note: "Seeded payment",
       recordedByUserId: founder,

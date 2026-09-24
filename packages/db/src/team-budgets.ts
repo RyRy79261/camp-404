@@ -1,4 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
+import { type Currency, isCurrency, UnknownCurrencyError } from "@camp404/core";
 import { writeAuditEvent } from "./audit";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction } from "./index";
@@ -43,8 +44,8 @@ export interface TeamBudgetChange {
   /** A decimal string with up to 2 places, or null to clear. */
   assignedAmount?: string | null;
   perceivedAmount?: string | null;
-  /** ISO 4217, e.g. "ZAR". */
-  currency?: string;
+  /** ZAR, USD or EUR; anything else is refused before writing. */
+  currency?: Currency;
   notes?: string | null;
 }
 
@@ -58,6 +59,10 @@ export async function setTeamBudget(input: {
   change: TeamBudgetChange;
   actorId: string;
 }): Promise<TeamBudgetRow> {
+  const { currency } = input.change;
+  if (currency !== undefined && !isCurrency(currency)) {
+    throw new UnknownCurrencyError(currency);
+  }
   // Resolved before the transaction: currentCycleNumber reads on its own handle.
   const cycle = await currentCycleNumber();
   const set = Object.fromEntries(
