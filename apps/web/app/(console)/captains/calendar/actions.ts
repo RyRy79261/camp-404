@@ -52,7 +52,10 @@ export async function addCalendarEventAction(
       teamLabel: team?.label ?? null,
     });
     if (!result.ok) return result;
+    // Home's "Coming up", the Calendar and the team's page all list it.
     revalidatePath("/");
+    revalidatePath("/calendar");
+    if (event.team) revalidatePath(`/teams/${event.team}`);
     return { ok: true, data: { eventId: result.eventId } };
   });
 }

@@ -1,7 +1,7 @@
-import { CAMP_TIME_ZONE, campDayKey } from "@camp404/core";
+import { CAMP_TIME_ZONE, campDayKey, readTeamEvent } from "@camp404/core";
 import type { MyLift } from "@camp404/db/cars";
 import type { MyOpenTask } from "@camp404/db/tasks";
-import { parseTeamTag, type CalendarResult } from "./google-calendar";
+import type { CalendarResult } from "./google-calendar";
 import type { InboxBadge } from "./inbox-badge";
 
 // What a member's home page shows, decided from their own profile and status
@@ -155,14 +155,15 @@ const DAY_MS = 86_400_000;
 export const HOME_TASK_LIMIT = 5;
 
 /** Whole days from one YYYY-MM-DD to another (UTC round-trip, no clock drift). */
-function daysBetween(fromKey: string, toKey: string): number {
+export function daysBetween(fromKey: string, toKey: string): number {
   return Math.round(
     (Date.parse(`${toKey}T00:00:00Z`) - Date.parse(`${fromKey}T00:00:00Z`)) /
       DAY_MS,
   );
 }
 
-function relativeDay(days: number): string {
+/** "Today", "Tomorrow", "In 12 days", "Yesterday", "3 days ago". */
+export function relativeDay(days: number): string {
   if (days === 0) return "Today";
   if (days === 1) return "Tomorrow";
   if (days > 1) return `In ${days} days`;
@@ -170,7 +171,8 @@ function relativeDay(days: number): string {
   return `${-days} days ago`;
 }
 
-function dueLabel(days: number): string {
+/** "Overdue", "Due today", "Due tomorrow", "Due in 3 days". */
+export function dueLabel(days: number): string {
   if (days < 0) return "Overdue";
   if (days === 0) return "Due today";
   if (days === 1) return "Due tomorrow";
@@ -201,38 +203,6 @@ function tidy(text: string): string {
   return text.replace(",", "");
 }
 
-/**
- * The team a calendar event's tag names: a team key or a team's name, either
- * way case-insensitive and trimmed. Null when it names no team.
- */
-function teamForTag(
-  tag: string | null,
-  teamLabels: Readonly<Record<string, string>>,
-): { key: string; label: string } | null {
-  const wanted = tag?.trim().toLowerCase();
-  if (!wanted) return null;
-  const entries = Object.entries(teamLabels);
-  const match =
-    entries.find(([key]) => key.toLowerCase() === wanted) ??
-    entries.find(([, label]) => label.trim().toLowerCase() === wanted);
-  return match ? { key: match[0], label: match[1] } : null;
-}
-
-/**
- * The title Home shows: a "[Tag] " prefix is taken off only when the tag names
- * one of the camp's teams (the badge says it instead). Any other bracket, such
- * as "[Cancelled]" or "[TBC]", is the author's word and stays.
- */
-function shownTitle(
-  title: string,
-  teamLabels: Readonly<Record<string, string>>,
-): string {
-  const parsed = parseTeamTag(title);
-  return parsed.title && teamForTag(parsed.tag, teamLabels)
-    ? parsed.title
-    : title;
-}
-
 function upcomingFromCalendar(
   calendar: CalendarResult | null,
   today: string,
@@ -240,11 +210,18 @@ function upcomingFromCalendar(
   myTeams: ReadonlySet<string>,
 ): HomeUpcoming[] {
   if (calendar?.status !== "ok") return [];
+  const teams = Object.entries(teamLabels).map(([key, label]) => ({
+    key,
+    label,
+  }));
   return calendar.events.map((event) => {
-    const found = teamForTag(event.teamTag, teamLabels);
-    const title = shownTitle(event.title, teamLabels);
-    const team = found
-      ? { label: found.label, mine: myTeams.has(found.key) }
+    // The team's prefix comes off the title ("Kitchen Team - Briefing", or the
+    // older "[Kitchen] Briefing") only when it names a camp team; the badge
+    // says whose it is. "[Cancelled] ..." is the author's word and stays.
+    const read = readTeamEvent(event.title, event.teamTag, teams);
+    const title = read.title;
+    const team = read.team
+      ? { label: read.team.label, mine: myTeams.has(read.team.key) }
       : null;
     if (event.allDay) {
       // An all-day event is a date, not an instant: shown as that date in
@@ -493,7 +470,8 @@ export function buildHome(input: HomeInput): HomeModel {
           label: t.label,
           isLead: t.isLead,
           unread: t.unread,
-          href: `/captains/camp-management?team=${encodeURIComponent(t.key)}`,
+          // The team's own page: its people, events and open tasks.
+          href: `/teams/${encodeURIComponent(t.key)}`,
         }))
     : [];
 

@@ -1,7 +1,13 @@
 import "server-only";
 
 import { createSign, randomUUID } from "node:crypto";
-import { CAMP_TIME_ZONE, nextCampDay, redactSecrets } from "@camp404/core";
+import {
+  CAMP_TIME_ZONE,
+  nextCampDay,
+  parseTeamTag,
+  redactSecrets,
+  teamEventTitle,
+} from "@camp404/core";
 import { calendarCredentials, type EnvBag } from "./integration-config";
 
 // The camp's shared Google Calendar, read for the member home page's "coming
@@ -22,11 +28,14 @@ import { calendarCredentials, type EnvBag } from "./integration-config";
 // Recurring events arrive already expanded (singleEvents=true), so there is no
 // recurrence maths here.
 //
-// WHOSE EVENT. An event made in the app carries its team twice: as a "[Team] "
-// prefix on the Google title, so people in Google Calendar see it, and as a
-// private extended property (`camp404Team`, the team key), which the app reads
-// first. An event made in Google counts as a team's when its title starts with
-// "[Tag]". Guests are never read.
+// WHOSE EVENT. An event made in the app carries its team twice: in the Google
+// title, in the camp's convention "Power and Lighting Team - General meeting"
+// (teamEventTitle in @camp404/core), so people in Google Calendar see it, and
+// as a private extended property (`camp404Team`, the team key), which the app
+// reads first. An event made in Google counts as a team's when its title is in
+// that convention, or starts with "[Tag]" (the first convention, #260). Only
+// the "[Tag]" is read here; the pages hold the camp's teams and match the
+// convention (readTeamEvent). Guests are never read.
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 /** What a read asks for: the events, and nothing it could change. */
@@ -40,6 +49,24 @@ const API_URL = "https://www.googleapis.com/calendar/v3/calendars";
 export const CALENDAR_WINDOW_DAYS = 60;
 /** How many events the home page shows at most. */
 export const CALENDAR_MAX_EVENTS = 6;
+
+/** How far ahead, and how many events, one read asks Google for. */
+export interface CalendarRange {
+  days: number;
+  max: number;
+}
+
+/** Home's "Coming up": the next few weeks, a handful of events. */
+export const HOME_RANGE: CalendarRange = {
+  days: CALENDAR_WINDOW_DAYS,
+  max: CALENDAR_MAX_EVENTS,
+};
+
+/**
+ * The Calendar page and the team pages: the year ahead, up to Google's own
+ * page size, so one request answers it.
+ */
+export const CALENDAR_PAGE_RANGE: CalendarRange = { days: 365, max: 250 };
 /** How long one read is reused, per server instance. */
 const CACHE_MS = 5 * 60 * 1000;
 /**
@@ -50,7 +77,7 @@ export const CALENDAR_TIMEOUT_MS = 5000;
 
 export interface CalendarEvent {
   id: string;
-  /** As written on the calendar, "[Tag] " prefix and all. */
+  /** As written on the calendar, team prefix and all. */
   title: string;
   /** All-day: the date as YYYY-MM-DD. Timed: an ISO instant. */
   start: string;
@@ -153,30 +180,12 @@ interface GoogleEvent {
   extendedProperties?: { private?: Record<string, string | undefined> };
 }
 
-const TAG_PREFIX = /^\s*\[([^\]]*)\]\s*/;
-
-/**
- * Split a "[Tag] " prefix off an event's title. The tag is trimmed; an empty
- * "[]" is no tag. The title is what is left, trimmed.
- */
-export function parseTeamTag(summary: string | null | undefined): {
-  tag: string | null;
-  title: string;
-} {
-  const text = summary ?? "";
-  const match = TAG_PREFIX.exec(text);
-  if (!match) return { tag: null, title: text.trim() };
-  const tag = match[1]!.trim();
-  if (!tag) return { tag: null, title: text.trim() };
-  return { tag, title: text.slice(match[0].length).trim() };
-}
-
 /**
  * Turn Google's events into what the page may show. Drops cancelled and
  * private events and anything without a start; keeps only title, start, place
  * and team. The team's private property wins over a "[Tag]" on the title. The
- * title stays as written: only Home knows the camp's teams, so Home takes a
- * "[Tag] " off it when the tag names a team, and leaves "[Cancelled] ..." or
+ * title stays as written: only the pages know the camp's teams, so they take a
+ * team's prefix off it (readTeamEvent), and leave "[Cancelled] ..." or
  * "[TBC] ..." alone.
  */
 export function toCalendarEvents(
@@ -205,21 +214,26 @@ export function toCalendarEvents(
   return out;
 }
 
-let cached: { at: number; result: CalendarResult } | null = null;
+/** One cached read per range ("60:6", "365:250"). */
+const cached = new Map<string, { at: number; result: CalendarResult }>();
 
 /**
- * The next events on the camp calendar. Never throws: an unset calendar is
- * `not_configured`, and any failure (sharing not done, API off, network) is
- * `unavailable`, so the home page says so instead of breaking.
+ * The next events on the camp calendar, `range.days` ahead and at most
+ * `range.max` of them. Never throws: an unset calendar is `not_configured`,
+ * and any failure (sharing not done, API off, network) is `unavailable`, so
+ * the page says so instead of breaking.
  */
 export async function getUpcomingEvents(
   env: EnvBag = process.env,
   now: Date = new Date(),
   timeoutMs: number = CALENDAR_TIMEOUT_MS,
+  range: CalendarRange = HOME_RANGE,
 ): Promise<CalendarResult> {
   const config = calendarConfig(env);
   if (!config) return { status: "not_configured" };
-  if (cached && now.getTime() - cached.at < CACHE_MS) return cached.result;
+  const key = `${range.days}:${range.max}`;
+  const hit = cached.get(key);
+  if (hit && now.getTime() - hit.at < CACHE_MS) return hit.result;
 
   let result: CalendarResult;
   try {
@@ -230,9 +244,11 @@ export async function getUpcomingEvents(
     url.searchParams.set("timeMin", now.toISOString());
     url.searchParams.set(
       "timeMax",
-      new Date(now.getTime() + CALENDAR_WINDOW_DAYS * 86_400_000).toISOString(),
+      new Date(now.getTime() + range.days * 86_400_000).toISOString(),
     );
-    url.searchParams.set("maxResults", String(CALENDAR_MAX_EVENTS * 2));
+    // Twice what is shown, up to Google's page size: cancelled and private
+    // events come back too and are dropped below.
+    url.searchParams.set("maxResults", String(Math.min(range.max * 2, 2500)));
     url.searchParams.set(
       "fields",
       "items(id,summary,status,visibility,location,start,extendedProperties/private)",
@@ -245,22 +261,22 @@ export async function getUpcomingEvents(
     const body = (await eventsRes.json()) as { items?: GoogleEvent[] };
     result = {
       status: "ok",
-      events: toCalendarEvents(body.items ?? []).slice(0, CALENDAR_MAX_EVENTS),
+      events: toCalendarEvents(body.items ?? []).slice(0, range.max),
     };
   } catch (error) {
     console.error("camp calendar read failed", logSafe(error, env));
     result = { status: "unavailable" };
   }
-  cached = { at: now.getTime(), result };
+  cached.set(key, { at: now.getTime(), result });
   return result;
 }
 
 /**
- * Forget the cached read, so the next Home shows an event just added. Other
- * server instances keep theirs for up to CACHE_MS.
+ * Forget the cached reads, so the next Home or Calendar shows an event just
+ * added. Other server instances keep theirs for up to CACHE_MS.
  */
 export function forgetCalendarCache(): void {
-  cached = null;
+  cached.clear();
 }
 
 /**
@@ -312,7 +328,8 @@ export interface CalendarEventBody {
 
 /**
  * The Google event for a new camp event. A team goes on twice: in the title,
- * for people reading Google Calendar, and as a private property, for the app.
+ * in the camp's convention ("Power and Lighting Team - General meeting"), for
+ * people reading Google Calendar, and as a private property, for the app.
  * An all-day event ends on the next day because Google's end date is
  * exclusive. A timed one is written at the camp's fixed +02:00 offset
  * (Johannesburg has no daylight saving).
@@ -323,7 +340,7 @@ export function eventRequestBody(input: NewCalendarEvent): CalendarEventBody {
     timeZone: CAMP_TIME_ZONE,
   });
   const body: CalendarEventBody = {
-    summary: input.team ? `[${input.team.label}] ${input.title}` : input.title,
+    summary: teamEventTitle(input.team?.label ?? null, input.title),
     ...(input.description ? { description: input.description } : {}),
     start: input.allDay ? { date: input.date } : time(input.start ?? "00:00"),
     end: input.allDay

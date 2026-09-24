@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, CalendarPlus, Info } from "lucide-react";
+import { teamEventTitle } from "@camp404/core";
 import { AddCalendarEventInput } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -135,7 +136,7 @@ export function EventComposer({
               required
               help={
                 teamLabel
-                  ? `Google Calendar shows it as “[${teamLabel}] …”.`
+                  ? `Google Calendar shows it as “${teamEventTitle(teamLabel, title.trim() || "…")}”.`
                   : "Keep it short: it is what Home shows."
               }
               error={fieldErrors.title}
@@ -300,8 +301,10 @@ export function EventComposer({
           Preview — how Home shows it
         </p>
         <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <span className="min-w-0 flex-1">
+          {/* The badge under the title, as Home draws it on a phone, so a
+              long team name never hides the title in this narrow column. */}
+          <CardContent className="flex flex-col items-start gap-1.5 p-4">
+            <span className="w-full min-w-0">
               <span className="block truncate text-sm font-medium">
                 {previewTitle}
               </span>
@@ -309,9 +312,7 @@ export function EventComposer({
                 {previewWhen}
               </span>
             </span>
-            {teamLabel ? (
-              <Badge className="shrink-0">Yours · {teamLabel}</Badge>
-            ) : null}
+            {teamLabel ? <Badge>Yours · {teamLabel}</Badge> : null}
           </CardContent>
         </Card>
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">

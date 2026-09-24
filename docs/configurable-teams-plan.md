@@ -71,7 +71,10 @@ button.
   2026-09-24] Power & Lighting now has bespoke tools, though no dashboard:
   its load list and fuel estimate (`/power/loads`, `/power/fuel`). The other
   teams' pages (for example the kitchen's recipes and shopping lists) are not
-  built.
+  built. [CORRECTION 2026-09-25] Every team now has a read-only page,
+  `/teams/[key]` (the first slice of #267): this year's leads and members,
+  its upcoming calendar events and its open tasks, open to any approved
+  member. The team tools and the rest of #267 are not built.
 
 ## Original plan (history)
 

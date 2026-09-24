@@ -270,6 +270,32 @@ describe("buildHome", () => {
       ]);
     });
 
+    it("reads the naming convention: 'Kitchen Team - Briefing' is Kitchen's Briefing", () => {
+      const home = buildHome(
+        member({
+          calendar: {
+            status: "ok",
+            events: [
+              // Made in the app: the property and the convention.
+              event("k", "Kitchen Team - Briefing", "kitchen"),
+              // Typed in Google: the convention alone.
+              event("f", "Finance Team - Budget", null),
+              // No such team: every word stays, camp-wide.
+              event("e", "Early Team - Gate", null),
+            ],
+          },
+          teams: [
+            { key: "kitchen", label: "Kitchen", isLead: false, unread: 0 },
+          ],
+        }),
+      );
+      expect(teamsOf(home)).toEqual({
+        Briefing: { label: "Kitchen", mine: true },
+        Budget: { label: "Finance", mine: false },
+        "Early Team - Gate": null,
+      });
+    });
+
     it("marks every team the viewer is on, led or not", () => {
       const home = buildHome(
         member({
@@ -357,9 +383,10 @@ describe("buildHome", () => {
     expect(
       home.teams.map((t) => [t.label, t.isLead, t.unread, t.href]),
     ).toEqual([
-      ["Cuisine", true, 1, "/captains/camp-management?team=kitchen"],
-      ["Water", true, 3, "/captains/camp-management?team=sanitation_and_water"],
-      ["Structures", false, 0, "/captains/camp-management?team=structures"],
+      // Each opens its team's own page.
+      ["Cuisine", true, 1, "/teams/kitchen"],
+      ["Water", true, 3, "/teams/sanitation_and_water"],
+      ["Structures", false, 0, "/teams/structures"],
     ]);
     // Leading two teams is still one set of tiles, not one per team.
     expect(ids(home.modules).filter((id) => id === "message")).toHaveLength(1);

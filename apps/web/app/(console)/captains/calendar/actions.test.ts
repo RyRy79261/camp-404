@@ -125,13 +125,16 @@ describe("addCalendarEventAction", () => {
     });
     const body = vi.mocked(createCalendarEvent).mock.calls[0]![1];
     expect(body).toMatchObject({
-      summary: "[Kitchen] Kitchen briefing",
+      // The camp's convention (owner, 2026-09-24): "Power Team - General meeting".
+      summary: "Kitchen Team - Kitchen briefing",
       description: "Bring a torch",
       start: { dateTime: `${NEXT_WEEK}T18:00:00+02:00` },
       extendedProperties: { private: { camp404Team: "kitchen" } },
     });
     expect(forgetCalendarCache).toHaveBeenCalled();
     expect(revalidatePath).toHaveBeenCalledWith("/");
+    expect(revalidatePath).toHaveBeenCalledWith("/calendar");
+    expect(revalidatePath).toHaveBeenCalledWith("/teams/kitchen");
     expect(deleteCalendarEvent).not.toHaveBeenCalled();
   });
 

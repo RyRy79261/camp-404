@@ -10,7 +10,7 @@ import {
   eventRequestBody,
   forgetCalendarCache,
   getUpcomingEvents,
-  parseTeamTag,
+  CALENDAR_PAGE_RANGE,
   signAssertion,
   toCalendarEvents,
   WRITE_SCOPE,
@@ -193,6 +193,52 @@ describe("getUpcomingEvents", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it("reads the year ahead for the Calendar page, cached apart from Home's read", async () => {
+    const asked: { days: number; max: string | null }[] = [];
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      if (String(url).startsWith("https://oauth2.googleapis.com/token")) {
+        return Response.json({ access_token: "tok" });
+      }
+      const u = new URL(String(url));
+      asked.push({
+        days: Math.round(
+          (Date.parse(u.searchParams.get("timeMax")!) -
+            Date.parse(u.searchParams.get("timeMin")!)) /
+            86_400_000,
+        ),
+        max: u.searchParams.get("maxResults"),
+      });
+      return Response.json({
+        items: Array.from({ length: 9 }, (_, n) => ({
+          id: `e${n}`,
+          summary: `Event ${n}`,
+          start: { date: "2026-10-03" },
+        })),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const now = new Date("2026-09-23T08:00:00Z");
+
+    const home = await getUpcomingEvents(ENV, now);
+    const page = await getUpcomingEvents(
+      ENV,
+      now,
+      undefined,
+      CALENDAR_PAGE_RANGE,
+    );
+    expect(asked).toEqual([
+      { days: 60, max: "12" },
+      { days: 365, max: "500" },
+    ]);
+    // Home keeps its handful; the page gets every event Google sent.
+    expect(home.status === "ok" && home.events).toHaveLength(6);
+    expect(page.status === "ok" && page.events).toHaveLength(9);
+    // Each is reused on its own: neither read asks Google again.
+    await getUpcomingEvents(ENV, now);
+    await getUpcomingEvents(ENV, now, undefined, CALENDAR_PAGE_RANGE);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
   it("gives up on a stalled request and reports unavailable, so Home is not held", async () => {
     // A fetch that never answers on its own; it ends only when aborted.
     vi.stubGlobal(
@@ -246,30 +292,6 @@ function assertionOf(init: RequestInit | undefined): string {
 }
 
 describe("whose event", () => {
-  it("takes a [Tag] prefix off the title, trimmed", () => {
-    expect(parseTeamTag("[Kitchen] Briefing")).toEqual({
-      tag: "Kitchen",
-      title: "Briefing",
-    });
-    expect(parseTeamTag("  [ art car ]   Wash day ")).toEqual({
-      tag: "art car",
-      title: "Wash day",
-    });
-    expect(parseTeamTag("Build day")).toEqual({
-      tag: null,
-      title: "Build day",
-    });
-    expect(parseTeamTag("[] Nothing")).toEqual({
-      tag: null,
-      title: "[] Nothing",
-    });
-    expect(parseTeamTag("Meet at [Gate]")).toEqual({
-      tag: null,
-      title: "Meet at [Gate]",
-    });
-    expect(parseTeamTag(undefined)).toEqual({ tag: null, title: "" });
-  });
-
   it("reads the team from the private property first, and the title's tag after", () => {
     const [fromProperty, fromTitle, untagged] = toCalendarEvents([
       {
@@ -281,7 +303,8 @@ describe("whose event", () => {
       { id: "b", summary: "[Finance] Budget", start: { date: "2026-10-01" } },
       { id: "c", summary: "Build day", start: { date: "2026-10-01" } },
     ]);
-    // The title stays as written; Home decides whether the tag comes off.
+    // The title stays as written; the pages decide whether the tag comes off
+    // (readTeamEvent in @camp404/core, which holds the "[Tag]" reader too).
     expect(fromProperty).toMatchObject({
       title: "[Cuisine] Briefing",
       teamTag: "kitchen",
@@ -316,7 +339,7 @@ describe("whose event", () => {
 });
 
 describe("eventRequestBody", () => {
-  it("writes an all-day team event with the team in the title and the property, ending the next day", () => {
+  it("writes an all-day team event titled in the camp's convention, with the property, ending the next day", () => {
     expect(
       eventRequestBody({
         title: "Stock take",
@@ -326,7 +349,8 @@ describe("eventRequestBody", () => {
         allDay: true,
       }),
     ).toEqual({
-      summary: "[Kitchen] Stock take",
+      // Owner, 2026-09-24: "Power Team - General meeting", not "[Kitchen] …".
+      summary: "Kitchen Team - Stock take",
       description: "Bring the list.",
       // Google's end date is exclusive: across the month end.
       start: { date: "2026-09-30" },
@@ -346,6 +370,22 @@ describe("eventRequestBody", () => {
       start: { date: "2026-12-31" },
       end: { date: "2027-01-01" },
     });
+  });
+
+  it("names a team once, whatever its label", () => {
+    const title = (label: string) =>
+      eventRequestBody({
+        title: "General meeting",
+        description: null,
+        team: { key: "power_and_lighting", label },
+        date: "2026-10-01",
+        allDay: true,
+      }).summary;
+    expect(title("Power and Lighting")).toBe(
+      "Power and Lighting Team - General meeting",
+    );
+    // A label that already says "Team" is not doubled.
+    expect(title("Power Team")).toBe("Power Team - General meeting");
   });
 
   it("writes a timed event at camp time, +02:00", () => {
