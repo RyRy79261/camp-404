@@ -149,6 +149,12 @@ describe("the fuel estimate", () => {
     for (const radio of screen.getAllByRole("radio")) {
       expect(radio).toHaveProperty("disabled", true);
     }
+    // The run-hours choice says why it is disabled too.
+    expect(
+      screen
+        .getByRole("radiogroup", { name: "Hours running" })
+        .getAttribute("aria-describedby"),
+    ).toBe(refusal.id);
     const add = screen.getByRole("button", { name: /^Add generator/ });
     expect(add).toHaveProperty("disabled", true);
     expect(add.getAttribute("aria-describedby")).toBe(refusal.id);

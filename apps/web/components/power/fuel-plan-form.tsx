@@ -281,6 +281,7 @@ export function FuelPlanForm({
               value={form.run}
               onChange={(v) => set("run", v)}
               disabled={locked}
+              describedBy={canEdit ? undefined : refusalId}
               error={errors.runFromHour ?? errors.runToHour}
             />
           </div>
@@ -357,6 +358,7 @@ function ScheduleField({
   value,
   onChange,
   disabled,
+  describedBy,
   error,
 }: {
   idBase: string;
@@ -365,6 +367,8 @@ function ScheduleField({
   value: Schedule;
   onChange: (value: Schedule) => void;
   disabled: boolean;
+  /** The refusal sentence's id, when the viewer may not edit. */
+  describedBy?: string;
   error?: string;
 }) {
   return (
@@ -372,6 +376,7 @@ function ScheduleField({
       <legend className="mb-1.5 text-sm font-medium">{legend}</legend>
       <SegmentedControl
         aria-label={legend}
+        aria-describedby={describedBy}
         options={RUN_MODES}
         value={value.mode}
         disabled={disabled}
