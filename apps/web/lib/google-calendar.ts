@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createSign } from "node:crypto";
+import { createSign, randomUUID } from "node:crypto";
 import { CAMP_TIME_ZONE, nextCampDay, redactSecrets } from "@camp404/core";
 import { calendarCredentials, type EnvBag } from "./integration-config";
 
@@ -298,6 +298,11 @@ type GoogleTime = { date: string } | { dateTime: string; timeZone: string };
 
 /** The events.insert body Google receives. */
 export interface CalendarEventBody {
+  /**
+   * Our own id for the event, so a create that timed out can still be taken
+   * off: Google may have saved it before the answer was lost.
+   */
+  id?: string;
   summary: string;
   description?: string;
   start: GoogleTime;
@@ -329,6 +334,14 @@ export function eventRequestBody(input: NewCalendarEvent): CalendarEventBody {
     body.extendedProperties = { private: { [TEAM_PROPERTY]: input.team.key } };
   }
   return body;
+}
+
+/**
+ * A new Google event id: Google allows base32hex (0-9, a-v), 5 to 1024
+ * characters, and a UUID's hex digits are inside that.
+ */
+export function newCalendarEventId(): string {
+  return randomUUID().replaceAll("-", "");
 }
 
 /**
@@ -370,8 +383,8 @@ export async function createCalendarEvent(
 }
 
 /**
- * Take an event off the camp calendar. Used only to undo a create whose audit
- * row could not be saved. Never throws: false when it did not happen.
+ * Take an event off the camp calendar. Used only to undo a create that failed
+ * or whose audit row could not be saved. Never throws: false when it did not happen.
  */
 export async function deleteCalendarEvent(
   env: EnvBag,
@@ -388,8 +401,10 @@ export async function deleteCalendarEvent(
       signal: AbortSignal.timeout(timeoutMs),
       headers: { Authorization: `Bearer ${token}` },
     });
-    // 410: it is already gone, which is what was wanted.
-    if (!res.ok && res.status !== 410) throw new Error(`delete ${res.status}`);
+    // 404 or 410: it is not there, which is what was wanted.
+    if (!res.ok && res.status !== 404 && res.status !== 410) {
+      throw new Error(`delete ${res.status}`);
+    }
     return true;
   } catch (error) {
     console.error("camp calendar undo failed", logSafe(error, env));

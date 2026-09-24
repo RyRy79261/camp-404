@@ -506,4 +506,17 @@ describe("writing to the calendar", () => {
     );
     expect(await deleteCalendarEvent(ENV, "google-event-1")).toBe(false);
   });
+
+  it("counts an event that is not there as taken off", async () => {
+    // The undo after a failed create: Google never saved it, so 404.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) =>
+        String(url).includes("oauth2")
+          ? Response.json({ access_token: "tok" })
+          : new Response("not found", { status: 404 }),
+      ),
+    );
+    expect(await deleteCalendarEvent(ENV, "google-event-1")).toBe(true);
+  });
 });

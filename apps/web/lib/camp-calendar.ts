@@ -7,6 +7,8 @@ import {
   createCalendarEvent,
   deleteCalendarEvent,
   eventRequestBody,
+  newCalendarEventId,
+  type CalendarEventBody,
   forgetCalendarCache,
   getUpcomingEvents as readGoogleCalendar,
   type CalendarResult,
@@ -73,17 +75,20 @@ export async function addCalendarEvent(input: {
   const env = process.env;
   if (!calendarConfig(env)) return { ok: false, error: CALENDAR_NOT_CONNECTED };
 
-  const body = eventRequestBody({
-    title: event.title,
-    description: event.description,
-    team: event.team
-      ? { key: event.team, label: input.teamLabel ?? event.team }
-      : null,
-    date: event.date,
-    allDay: event.allDay,
-    start: event.start,
-    end: event.end,
-  });
+  const body: CalendarEventBody = {
+    id: newCalendarEventId(),
+    ...eventRequestBody({
+      title: event.title,
+      description: event.description,
+      team: event.team
+        ? { key: event.team, label: input.teamLabel ?? event.team }
+        : null,
+      date: event.date,
+      allDay: event.allDay,
+      start: event.start,
+      end: event.end,
+    }),
+  };
 
   // Set from inside `create`, read after the transaction: a holder object,
   // because a closure's assignment to a plain `let` is invisible to narrowing.
@@ -103,6 +108,9 @@ export async function addCalendarEvent(input: {
           created.id = await createCalendarEvent(env, body);
         } catch (error) {
           created.googleFailed = true;
+          // A timeout does not mean Google did not save it. Our own id lets
+          // us take it off; a 404 here just means it never landed.
+          await deleteCalendarEvent(env, body.id!);
           throw error;
         }
         return created.id;

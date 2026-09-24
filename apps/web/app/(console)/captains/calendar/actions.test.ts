@@ -189,7 +189,7 @@ describe("addCalendarEventAction", () => {
     expect(forgetCalendarCache).not.toHaveBeenCalled();
   });
 
-  it("says so when Google cannot be reached, with nothing to undo", async () => {
+  it("says so when Google cannot be reached, and takes off the event it may have saved", async () => {
     vi.mocked(createCalendarEvent).mockRejectedValueOnce(
       new Error("create 500"),
     );
@@ -197,7 +197,13 @@ describe("addCalendarEventAction", () => {
       ok: false,
       error: "Couldn't reach the camp calendar. Try again.",
     });
-    expect(deleteCalendarEvent).not.toHaveBeenCalled();
+    // A timed-out insert may still have landed: the undo uses the id we sent.
+    const sent = vi.mocked(createCalendarEvent).mock.calls[0]![1];
+    expect(sent.id).toMatch(/^[0-9a-v]{5,1024}$/);
+    expect(deleteCalendarEvent).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      sent.id,
+    );
   });
 
   it("says so when the calendar is not connected, without touching the database", async () => {
