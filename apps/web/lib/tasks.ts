@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   addTask as dbAddTask,
+  editTask as dbEditTask,
   listAssignableMembers as dbListAssignableMembers,
   listBoardTasks as dbListBoardTasks,
   moveTask as dbMoveTask,
@@ -34,6 +35,12 @@ export async function addTask(
   input: Parameters<typeof dbAddTask>[0],
 ): Promise<TaskWriteResult<{ id: string }>> {
   return usesTestStore() ? testStore.addTask(input) : dbAddTask(input);
+}
+
+export async function editTask(
+  input: Parameters<typeof dbEditTask>[0],
+): Promise<TaskWriteResult> {
+  return usesTestStore() ? testStore.editTask(input) : dbEditTask(input);
 }
 
 export async function moveTask(

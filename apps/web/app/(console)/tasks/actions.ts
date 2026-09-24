@@ -1,12 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { AddTaskInput, MoveTaskInput } from "@camp404/types";
+import {
+  AddTaskInput,
+  EditTaskInput,
+  MoveTaskInput,
+  Team,
+} from "@camp404/types";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainActionGate } from "@/lib/captain-gate";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { deadlineFromDay } from "@/lib/task-board";
-import { addTask, moveTask, removeTask } from "@/lib/tasks";
+import { addTask, editTask, moveTask, removeTask } from "@/lib/tasks";
 
 // The shared task board's writes. The gate here answers the screen; the rule
 // itself (who may add for which team, who may move or remove which task) is
@@ -52,6 +57,46 @@ export async function addTaskAction(
     if (!result.ok) return result;
     revalidatePath("/tasks");
     return { ok: true, data: { id: result.id } };
+  });
+}
+
+/**
+ * Edit a task. Any approved member may ask; whether THIS member may edit THIS
+ * task (whoever added it, its team's lead or a captain), and which team they
+ * may move it to, is decided inside the write's transaction.
+ */
+export async function editTaskAction(input: unknown): Promise<ActionResult> {
+  return runAction("editTaskAction", async () => {
+    const gate = await captainActionGate("camp_member");
+    if (!gate.ok) return gate;
+
+    const parsed = EditTaskInput.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error:
+          parsed.error.issues[0]?.message ?? "Check the task and try again.",
+      };
+    }
+    const { taskId, version, title, description, team, assigneeId, due } =
+      parsed.data;
+
+    const result = await editTask({
+      taskId,
+      actorId: gate.campUser.id,
+      version,
+      title,
+      description,
+      team,
+      assigneeId,
+      dueAt: due ? deadlineFromDay(due) : null,
+      activeTeams: activeTeams(await getTeamsConfig())
+        .map((t) => t.key)
+        .filter((key): key is Team => Team.safeParse(key).success),
+    });
+    if (!result.ok) return result;
+    revalidatePath("/tasks");
+    return { ok: true };
   });
 }
 

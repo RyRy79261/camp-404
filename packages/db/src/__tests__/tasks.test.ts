@@ -1,26 +1,33 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import * as schema from "../schema";
 import {
+  CANNOT_EDIT,
   CANNOT_MOVE,
   CANNOT_REMOVE,
   NOT_A_MEMBER,
   NOT_A_TASK_AUTHOR,
   NOT_YOUR_TEAM,
+  NOT_YOUR_TEAM_TO_MOVE,
   PICK_YOUR_TEAM,
+  TASK_EDITED,
   TASK_GONE,
   TASK_MOVED,
+  TEAM_NOT_ACTIVE,
   addTask,
+  editTask,
   listAssignableMembers,
   listBoardTasks,
   moveTask,
   removeTask,
+  type BoardTask,
 } from "../tasks";
 import { useTestDb } from "./_harness";
 import { makeMembership, makeUser } from "./_factories";
 
 // The shared task board's data layer on a real Postgres (PGlite). What
-// matters: who may add, move and remove; that a move is a compare-and-set; and
+// matters: who may add, move, edit and remove; that a move and an edit are
+// compare-and-set, and a move does not spoil an open edit; and
 // what the board shows.
 
 const NOW = new Date("2026-09-23T10:00:00Z");
@@ -252,6 +259,270 @@ describe("tasks", () => {
           to: "done",
         }),
       ).toEqual({ ok: false, error: TASK_GONE });
+    });
+  });
+
+  describe("editTask", () => {
+    const ALL_ACTIVE = ["kitchen", "structures", "finance"] as NonNullable<
+      BoardTask["team"]
+    >[];
+
+    async function stored(id: string) {
+      const [row] = await h
+        .db()
+        .select()
+        .from(schema.tasks)
+        .where(eq(schema.tasks.id, id));
+      return row!;
+    }
+
+    async function added(creatorId: string, overrides = {}) {
+      const r = await addTask({ creatorId, ...task(overrides) });
+      if (!r.ok) throw new Error(r.error);
+      return r.id;
+    }
+
+    function edit(
+      taskId: string,
+      actorId: string,
+      overrides: Partial<Parameters<typeof editTask>[0]> = {},
+    ) {
+      return editTask({
+        taskId,
+        actorId,
+        version: 1,
+        title: "Buy more gas bottles",
+        description: "Three, not two.",
+        team: "kitchen",
+        assigneeId: null,
+        dueAt: new Date("2026-10-01T22:00:00Z"),
+        activeTeams: ALL_ACTIVE,
+        ...overrides,
+      });
+    }
+
+    it("lets a captain edit any task, clear its team, and bumps the version", async () => {
+      const { captain, lead, member } = await people();
+      const id = await added(lead.id);
+
+      expect(
+        await edit(id, captain.id, { team: null, assigneeId: member.id }),
+      ).toEqual({ ok: true });
+      expect(await stored(id)).toMatchObject({
+        title: "Buy more gas bottles",
+        description: "Three, not two.",
+        team: null,
+        assigneeId: member.id,
+        dueAt: new Date("2026-10-01T22:00:00Z"),
+        version: 2,
+        status: "open",
+      });
+      expect((await listBoardTasks(NOW))[0]!.version).toBe(2);
+    });
+
+    it("lets a lead edit their team's task, and not another team's", async () => {
+      const db = h.db();
+      const { captain, lead } = await people();
+      const kitchen = await added(captain.id);
+      const finance = await added(captain.id, { team: "finance" });
+
+      expect(await edit(kitchen, lead.id)).toEqual({ ok: true });
+      expect(await edit(finance, lead.id, { team: "finance" })).toEqual({
+        ok: false,
+        error: CANNOT_EDIT,
+      });
+      expect((await stored(finance)).title).toBe("Buy gas bottles");
+
+      // A lead of several teams edits across all of them.
+      await makeMembership(db, {
+        userId: lead.id,
+        team: "finance",
+        isLead: true,
+      });
+      expect(await edit(finance, lead.id, { team: "finance" })).toEqual({
+        ok: true,
+      });
+    });
+
+    it("lets a lead move a task only to a team they lead", async () => {
+      const db = h.db();
+      const { lead } = await people();
+      const id = await added(lead.id);
+
+      expect(await edit(id, lead.id, { team: "structures" })).toEqual({
+        ok: false,
+        error: NOT_YOUR_TEAM_TO_MOVE,
+      });
+      expect(await edit(id, lead.id, { team: null })).toEqual({
+        ok: false,
+        error: PICK_YOUR_TEAM,
+      });
+      expect((await stored(id)).team).toBe("kitchen");
+
+      await makeMembership(db, {
+        userId: lead.id,
+        team: "structures",
+        isLead: true,
+      });
+      expect(await edit(id, lead.id, { team: "structures" })).toEqual({
+        ok: true,
+      });
+      expect((await stored(id)).team).toBe("structures");
+    });
+
+    it("lets the author, no longer a lead, edit the task but not change its team", async () => {
+      const db = h.db();
+      const { lead } = await people();
+      const id = await added(lead.id);
+      await db
+        .update(schema.teamMemberships)
+        .set({ isLead: false })
+        .where(eq(schema.teamMemberships.userId, lead.id));
+
+      expect(await edit(id, lead.id, { team: "structures" })).toEqual({
+        ok: false,
+        error: NOT_YOUR_TEAM_TO_MOVE,
+      });
+      expect(await edit(id, lead.id, { team: null })).toEqual({
+        ok: false,
+        error: PICK_YOUR_TEAM,
+      });
+      expect(await edit(id, lead.id)).toEqual({ ok: true });
+      expect((await stored(id)).title).toBe("Buy more gas bottles");
+    });
+
+    it("refuses the person responsible, who may only move it", async () => {
+      const { captain, member } = await people();
+      const id = await added(captain.id, { assigneeId: member.id });
+
+      expect(await edit(id, member.id, { assigneeId: member.id })).toEqual({
+        ok: false,
+        error: CANNOT_EDIT,
+      });
+      expect(await stored(id)).toMatchObject({
+        title: "Buy gas bottles",
+        version: 1,
+      });
+    });
+
+    it("tells the second editor someone else edited first, and changes nothing", async () => {
+      const { captain, lead } = await people();
+      const id = await added(captain.id);
+
+      expect(await edit(id, lead.id, { title: "First" })).toEqual({
+        ok: true,
+      });
+      expect(
+        await edit(id, captain.id, { title: "Second", version: 1 }),
+      ).toEqual({ ok: false, error: TASK_EDITED });
+      expect(await stored(id)).toMatchObject({ title: "First", version: 2 });
+
+      // With the version they now see, the second editor gets through.
+      expect(
+        await edit(id, captain.id, { title: "Second", version: 2 }),
+      ).toEqual({ ok: true });
+      expect(await stored(id)).toMatchObject({ title: "Second", version: 3 });
+    });
+
+    it("does not bump the version on a move, so an open edit still saves", async () => {
+      const { captain, member } = await people();
+      const id = await added(captain.id, { assigneeId: member.id });
+
+      await moveTask({
+        taskId: id,
+        actorId: member.id,
+        from: "open",
+        to: "in_progress",
+      });
+      expect(await stored(id)).toMatchObject({
+        status: "in_progress",
+        version: 1,
+      });
+      expect(await edit(id, captain.id, { version: 1 })).toEqual({
+        ok: true,
+      });
+      expect(await stored(id)).toMatchObject({
+        status: "in_progress",
+        version: 2,
+      });
+    });
+
+    it("refuses a lead removed between opening the edit and saving it", async () => {
+      const db = h.db();
+      const { captain, lead } = await people();
+      const id = await added(captain.id);
+      // The lead could edit it a moment ago.
+      expect(await edit(id, lead.id, { title: "Before" })).toEqual({
+        ok: true,
+      });
+
+      await db
+        .update(schema.teamMemberships)
+        .set({ isLead: false })
+        .where(
+          and(
+            eq(schema.teamMemberships.userId, lead.id),
+            eq(schema.teamMemberships.team, "kitchen"),
+          ),
+        );
+      expect(await edit(id, lead.id, { title: "After", version: 2 })).toEqual({
+        ok: false,
+        error: CANNOT_EDIT,
+      });
+      expect((await stored(id)).title).toBe("Before");
+    });
+
+    it("gives the task only to an approved, current member", async () => {
+      const db = h.db();
+      const { captain, member } = await people();
+      const id = await added(captain.id);
+      const pending = await makeUser(db, { approvalStatus: "pending" });
+
+      expect(await edit(id, captain.id, { assigneeId: pending.id })).toEqual({
+        ok: false,
+        error: NOT_A_MEMBER,
+      });
+      expect(await stored(id)).toMatchObject({ assigneeId: null, version: 1 });
+      expect(await edit(id, captain.id, { assigneeId: member.id })).toEqual({
+        ok: true,
+      });
+    });
+
+    it("keeps a switched-off team on a task, but moves none onto one", async () => {
+      const { captain } = await people();
+      const id = await added(captain.id);
+      const withoutKitchen = ALL_ACTIVE.filter((t) => t !== "kitchen");
+      const withoutStructures = ALL_ACTIVE.filter((t) => t !== "structures");
+
+      expect(
+        await edit(id, captain.id, {
+          team: "structures",
+          activeTeams: withoutStructures,
+        }),
+      ).toEqual({ ok: false, error: TEAM_NOT_ACTIVE });
+      expect((await stored(id)).team).toBe("kitchen");
+
+      expect(
+        await edit(id, captain.id, {
+          team: "kitchen",
+          activeTeams: withoutKitchen,
+        }),
+      ).toEqual({ ok: true });
+      expect((await stored(id)).team).toBe("kitchen");
+    });
+
+    it("says a removed task is gone", async () => {
+      const { captain } = await people();
+      const id = await added(captain.id);
+      await removeTask({ taskId: id, actorId: captain.id });
+      expect(await edit(id, captain.id)).toEqual({
+        ok: false,
+        error: TASK_GONE,
+      });
+      expect(await edit("not-a-uuid", captain.id)).toEqual({
+        ok: false,
+        error: TASK_GONE,
+      });
     });
   });
 

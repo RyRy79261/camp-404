@@ -1,5 +1,6 @@
 import { and, asc, eq, gte, inArray, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { TASK_EDITED } from "@camp404/types";
 import type { DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
 import { createHttpDb, withTransaction } from "./index";
@@ -15,11 +16,15 @@ import * as schema from "./schema";
 //  - Move between columns: the person responsible, whoever added it, a lead of
 //    its team, or a captain.
 //  - Remove: whoever added it, a lead of its team, or a captain.
+//  - Edit: the same people as remove. Only a lead or a captain may move it to
+//    another team (a lead only to one they lead, a captain to any or none),
+//    and nobody onto a team that has been switched off.
 //
 // Every write re-reads the actor's reach inside its own transaction and locks
 // it (`lockSenderReach`, the announcements' rule), so a lead removed a moment
 // ago cannot still add or move. Moves and removals are compare-and-set: the
 // WHERE names the column the actor saw, and a lost race returns a sentence.
+// An edit is compare-and-set on `version`, which only an edit bumps.
 
 type Team = (typeof schema.teamEnum.enumValues)[number];
 export type TaskBoardStatus = "open" | "in_progress" | "done";
@@ -44,6 +49,8 @@ export interface BoardTask {
   dueAt: Date | null;
   createdAt: Date;
   completedAt: Date | null;
+  /** Bumped by every edit; an edit names the version it opened. */
+  version: number;
 }
 
 /**
@@ -69,6 +76,7 @@ export async function listBoardTasks(now: Date): Promise<BoardTask[]> {
       dueAt: schema.tasks.dueAt,
       createdAt: schema.tasks.createdAt,
       completedAt: schema.tasks.completedAt,
+      version: schema.tasks.version,
     })
     .from(schema.tasks)
     .leftJoin(assignee, eq(assignee.id, schema.tasks.assigneeId))
@@ -132,6 +140,38 @@ export const CANNOT_MOVE =
   "Only the person responsible, whoever added it, its team's lead or a captain can move this task.";
 export const CANNOT_REMOVE =
   "Only whoever added this task, its team's lead or a captain can remove it.";
+export const CANNOT_EDIT =
+  "Only whoever added this task, its team's lead or a captain can edit it.";
+export const NOT_YOUR_TEAM_TO_MOVE =
+  "You can move a task only to a team you lead.";
+export const TEAM_NOT_ACTIVE =
+  "That team isn't active any more. Pick another team.";
+export { TASK_EDITED };
+
+/**
+ * Refuses a person responsible who is not an approved, current member. Null
+ * (nobody yet) is always fine.
+ */
+async function assertAssignable(
+  tx: DbOrTx,
+  assigneeId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!assigneeId) return { ok: true };
+  const [member] = UUID.test(assigneeId)
+    ? await tx
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(
+          and(
+            eq(schema.users.id, assigneeId),
+            eq(schema.users.isSystem, false),
+            eq(schema.users.sanitised, false),
+            eq(schema.users.approvalStatus, "approved"),
+          ),
+        )
+    : [];
+  return member ? { ok: true } : { ok: false, error: NOT_A_MEMBER };
+}
 
 /** Add a task, as a captain or a lead of its team. */
 export async function addTask(input: {
@@ -151,22 +191,8 @@ export async function addTask(input: {
         return { ok: false, error: NOT_YOUR_TEAM };
       }
     }
-    if (input.assigneeId) {
-      const [member] = UUID.test(input.assigneeId)
-        ? await tx
-            .select({ id: schema.users.id })
-            .from(schema.users)
-            .where(
-              and(
-                eq(schema.users.id, input.assigneeId),
-                eq(schema.users.isSystem, false),
-                eq(schema.users.sanitised, false),
-                eq(schema.users.approvalStatus, "approved"),
-              ),
-            )
-        : [];
-      if (!member) return { ok: false, error: NOT_A_MEMBER };
-    }
+    const assignable = await assertAssignable(tx, input.assigneeId);
+    if (!assignable.ok) return assignable;
     const [row] = await tx
       .insert(schema.tasks)
       .values({
@@ -191,6 +217,7 @@ async function lockTask(tx: DbOrTx, taskId: string) {
       team: schema.tasks.team,
       assigneeId: schema.tasks.assigneeId,
       createdById: schema.tasks.createdByUserId,
+      version: schema.tasks.version,
     })
     .from(schema.tasks)
     .where(eq(schema.tasks.id, taskId))
@@ -268,5 +295,69 @@ export async function removeTask(input: {
       )
       .returning({ id: schema.tasks.id });
     return removed.length > 0 ? { ok: true } : { ok: false, error: TASK_GONE };
+  });
+}
+
+/**
+ * Change a task's title, details, team, person responsible and deadline.
+ *
+ * `version` is the version the editor opened. If someone else edited the task
+ * since, nothing changes and the editor is told. A move does not bump the
+ * version, so a card moved while the dialog was open still saves.
+ * `activeTeams` are the teams switched on in the camp's config: a task may keep
+ * a team that has since been switched off, but nobody may move one onto it.
+ */
+export async function editTask(input: {
+  taskId: string;
+  actorId: string;
+  version: number;
+  title: string;
+  description: string | null;
+  team: Team | null;
+  assigneeId: string | null;
+  dueAt: Date | null;
+  activeTeams: readonly Team[];
+}): Promise<TaskWriteResult> {
+  return await withTransaction(async (tx) => {
+    const reach = await lockSenderReach(tx, input.actorId);
+    const task = await lockTask(tx, input.taskId);
+    if (!task) return { ok: false, error: TASK_GONE };
+    const allowed =
+      leadsTaskTeam(reach, task.team) || task.createdById === input.actorId;
+    if (!allowed) return { ok: false, error: CANNOT_EDIT };
+
+    if (input.team !== task.team) {
+      if (reach !== undefined) {
+        if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
+        if (!reach.includes(input.team)) {
+          return { ok: false, error: NOT_YOUR_TEAM_TO_MOVE };
+        }
+      }
+      if (input.team && !input.activeTeams.includes(input.team)) {
+        return { ok: false, error: TEAM_NOT_ACTIVE };
+      }
+    }
+    const assignable = await assertAssignable(tx, input.assigneeId);
+    if (!assignable.ok) return assignable;
+
+    const edited = await tx
+      .update(schema.tasks)
+      .set({
+        title: input.title,
+        description: input.description,
+        team: input.team,
+        assigneeId: input.assigneeId,
+        dueAt: input.dueAt,
+        version: sql`${schema.tasks.version} + 1`,
+      })
+      .where(
+        and(
+          eq(schema.tasks.id, input.taskId),
+          eq(schema.tasks.version, input.version),
+          ne(schema.tasks.status, "cancelled"),
+        ),
+      )
+      .returning({ id: schema.tasks.id });
+    return edited.length > 0 ? { ok: true } : { ok: false, error: TASK_EDITED };
   });
 }

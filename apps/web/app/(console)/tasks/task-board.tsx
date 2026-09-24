@@ -12,8 +12,15 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRight, CalendarDays, Plus, Trash2, User } from "lucide-react";
-import type { TaskBoardStatus } from "@camp404/types";
+import {
+  ArrowRight,
+  CalendarDays,
+  Pencil,
+  Plus,
+  Trash2,
+  User,
+} from "lucide-react";
+import { TASK_EDITED, type TaskBoardStatus } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
@@ -41,7 +48,12 @@ import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
 import { TASK_COLUMNS, type TaskCard } from "@/lib/task-board";
-import { addTaskAction, moveTaskAction, removeTaskAction } from "./actions";
+import {
+  addTaskAction,
+  editTaskAction,
+  moveTaskAction,
+  removeTaskAction,
+} from "./actions";
 
 export interface TeamOption {
   value: string;
@@ -86,6 +98,10 @@ export function TaskBoard({
   const [team, setTeam] = React.useState(ALL);
   const [person, setPerson] = React.useState(ALL);
   const [adding, setAdding] = React.useState(false);
+  // The card being edited. It stays set after the dialog closes, so the dialog
+  // can animate out; opening Edit on a card replaces it.
+  const [editing, setEditing] = React.useState<TaskCard | null>(null);
+  const [editOpen, setEditOpen] = React.useState(false);
   // A card moved here and not yet confirmed by the server's next render.
   const [moved, setMoved] = React.useState<Record<string, TaskBoardStatus>>({});
   const [pendingId, setPendingId] = React.useState<string | null>(null);
@@ -229,6 +245,10 @@ export function TaskBoard({
                     busy={pendingId !== null}
                     onMove={(to) => move(card, to)}
                     onRemove={() => setRemoving(card)}
+                    onEdit={() => {
+                      setEditing(card);
+                      setEditOpen(true);
+                    }}
                   />
                 ))}
               </BoardColumn>
@@ -238,13 +258,28 @@ export function TaskBoard({
       </DndContext>
 
       {canAdd ? (
-        <AddTaskDialog
+        <TaskDialog
           open={adding}
           onOpenChange={setAdding}
           members={members}
           teams={addTeams}
           canAddWithoutTeam={canAddWithoutTeam}
-          onAdded={() => router.refresh()}
+          onSaved={() => router.refresh()}
+        />
+      ) : null}
+
+      {editing ? (
+        <TaskDialog
+          // A fresh form for each card and each version of it.
+          key={`${editing.id}:${editing.version}`}
+          editing={editing}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          members={members}
+          teams={addTeams}
+          canAddWithoutTeam={canAddWithoutTeam}
+          onSaved={() => router.refresh()}
+          onStale={() => router.refresh()}
         />
       ) : null}
 
@@ -318,12 +353,14 @@ function TaskCardView({
   busy,
   onMove,
   onRemove,
+  onEdit,
 }: {
   card: TaskCard;
   pending: boolean;
   busy: boolean;
   onMove: (to: TaskBoardStatus) => void;
   onRemove: () => void;
+  onEdit: () => void;
 }) {
   const { listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: card.id,
@@ -378,7 +415,7 @@ function TaskCardView({
             <span className="text-muted-foreground">Nobody yet</span>
           )}
         </p>
-        {card.canMove || card.canRemove ? (
+        {card.canMove || card.canRemove || card.canEdit ? (
           <div
             className="flex flex-wrap items-center gap-1 border-t border-border pt-2"
             // The buttons are for pressing, not for starting a drag.
@@ -400,17 +437,33 @@ function TaskCardView({
                   </Button>
                 ))
               : null}
-            {card.canRemove ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-auto h-8 px-2 text-muted-foreground hover:text-destructive"
-                disabled={busy}
-                aria-label={`Remove “${card.title}”`}
-                onClick={onRemove}
-              >
-                <Trash2 aria-hidden className="size-3.5" />
-              </Button>
+            {card.canEdit || card.canRemove ? (
+              <div className="ml-auto flex items-center gap-1">
+                {card.canEdit ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                    disabled={busy}
+                    aria-label={`Edit “${card.title}”`}
+                    onClick={onEdit}
+                  >
+                    <Pencil aria-hidden className="size-3.5" />
+                  </Button>
+                ) : null}
+                {card.canRemove ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                    disabled={busy}
+                    aria-label={`Remove “${card.title}”`}
+                    onClick={onRemove}
+                  >
+                    <Trash2 aria-hidden className="size-3.5" />
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -419,36 +472,78 @@ function TaskCardView({
   );
 }
 
-function AddTaskDialog({
+/**
+ * Add a task or, given `editing`, change one. Editing prefills every field and
+ * sends the version the card was opened at, so a second editor is told rather
+ * than silently overwritten.
+ */
+function TaskDialog({
   open,
   onOpenChange,
   members,
   teams,
   canAddWithoutTeam,
-  onAdded,
+  editing,
+  onSaved,
+  onStale,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   members: Member[];
   teams: TeamOption[];
   canAddWithoutTeam: boolean;
-  onAdded: () => void;
+  editing?: TaskCard;
+  onSaved: () => void;
+  onStale?: () => void;
 }) {
-  const firstTeam = canAddWithoutTeam ? NONE : (teams[0]?.value ?? NONE);
-  const [title, setTitle] = React.useState("");
-  const [description, setDescription] = React.useState("");
-  const [team, setTeam] = React.useState(firstTeam);
-  const [assignee, setAssignee] = React.useState(NONE);
-  const [due, setDue] = React.useState("");
+  const initial = {
+    title: editing?.title ?? "",
+    description: editing?.description ?? "",
+    team: editing
+      ? (editing.team ?? NONE)
+      : canAddWithoutTeam
+        ? NONE
+        : (teams[0]?.value ?? NONE),
+    assignee: editing?.assigneeId ?? NONE,
+    due: editing?.dueDay ?? "",
+  };
+  const [title, setTitle] = React.useState(initial.title);
+  const [description, setDescription] = React.useState(initial.description);
+  const [team, setTeam] = React.useState(initial.team);
+  const [assignee, setAssignee] = React.useState(initial.assignee);
+  const [due, setDue] = React.useState(initial.due);
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
 
+  // A task may keep a team this viewer could not pick (an archived team, or
+  // one they don't lead), so it stays in the list. The server refuses a move
+  // onto a team the viewer may not pick.
+  const teamOptions: TeamOption[] =
+    editing?.team && !teams.some((t) => t.value === editing.team)
+      ? [
+          ...teams,
+          { value: editing.team, label: editing.teamLabel ?? editing.team },
+        ]
+      : teams;
+  const showNoTeam = canAddWithoutTeam || (editing && editing.team === null);
+  // Likewise the person responsible, if they are no longer on the list.
+  const memberOptions: Member[] =
+    editing?.assigneeId && !members.some((m) => m.id === editing.assigneeId)
+      ? [
+          ...members,
+          {
+            id: editing.assigneeId,
+            displayName: editing.assigneeName ?? "Unnamed member",
+          },
+        ]
+      : members;
+
   function reset() {
-    setTitle("");
-    setDescription("");
-    setTeam(firstTeam);
-    setAssignee(NONE);
-    setDue("");
+    setTitle(initial.title);
+    setDescription(initial.description);
+    setTeam(initial.team);
+    setAssignee(initial.assignee);
+    setDue(initial.due);
     setError(null);
   }
 
@@ -456,21 +551,29 @@ function AddTaskDialog({
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await addTaskAction({
+      const fields = {
         title,
         description,
         team: team === NONE ? null : team,
         assigneeId: assignee === NONE ? null : assignee,
         due: due || null,
-      });
+      };
+      const result = editing
+        ? await editTaskAction({
+            ...fields,
+            taskId: editing.id,
+            version: editing.version,
+          })
+        : await addTaskAction(fields);
       if (!result.ok) {
         setError(result.error);
+        if (result.error === TASK_EDITED) onStale?.();
         return;
       }
-      toast.success("Task added");
-      reset();
+      toast.success(editing ? "Task updated" : "Task added");
+      if (!editing) reset();
       onOpenChange(false);
-      onAdded();
+      onSaved();
     });
   }
 
@@ -486,9 +589,11 @@ function AddTaskDialog({
       <DialogContent>
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
-            <DialogTitle>Add a task</DialogTitle>
+            <DialogTitle>{editing ? "Edit task" : "Add a task"}</DialogTitle>
             <DialogDescription>
-              It goes into To do, where the whole camp can see it.
+              {editing
+                ? "The whole camp sees the change."
+                : "It goes into To do, where the whole camp can see it."}
             </DialogDescription>
           </DialogHeader>
 
@@ -519,10 +624,10 @@ function AddTaskDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {canAddWithoutTeam ? (
+                  {showNoTeam ? (
                     <SelectItem value={NONE}>No team</SelectItem>
                   ) : null}
-                  {teams.map((t) => (
+                  {teamOptions.map((t) => (
                     <SelectItem key={t.value} value={t.value}>
                       {t.label}
                     </SelectItem>
@@ -550,7 +655,7 @@ function AddTaskDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE}>Nobody yet</SelectItem>
-                {members.map((m) => (
+                {memberOptions.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     {m.displayName}
                   </SelectItem>
@@ -578,7 +683,13 @@ function AddTaskDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={pending || title.trim() === ""}>
-              {pending ? "Adding…" : "Add task"}
+              {editing
+                ? pending
+                  ? "Saving…"
+                  : "Save changes"
+                : pending
+                  ? "Adding…"
+                  : "Add task"}
             </Button>
           </DialogFooter>
         </form>

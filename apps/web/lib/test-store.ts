@@ -34,15 +34,19 @@ import type {
   CampMemberDetailOptions,
 } from "@camp404/db/roster";
 import {
+  CANNOT_EDIT,
   CANNOT_MOVE,
   CANNOT_REMOVE,
   DONE_VISIBLE_DAYS,
   NOT_A_MEMBER,
   NOT_A_TASK_AUTHOR,
   NOT_YOUR_TEAM,
+  NOT_YOUR_TEAM_TO_MOVE,
   PICK_YOUR_TEAM,
+  TASK_EDITED,
   TASK_GONE,
   TASK_MOVED,
+  TEAM_NOT_ACTIVE,
   type AssignableMember,
   type BoardTask,
   type TaskBoardStatus,
@@ -224,6 +228,8 @@ interface TestTask {
   dueAt: Date | null;
   createdAt: Date;
   completedAt: Date | null;
+  /** Bumped by an edit only, as `tasks.version` is. */
+  version: number;
 }
 
 interface TestStoreState {
@@ -1653,6 +1659,7 @@ export const testStore = {
         dueAt: t.dueAt,
         createdAt: t.createdAt,
         completedAt: t.completedAt,
+        version: t.version,
       }));
   },
 
@@ -1700,8 +1707,58 @@ export const testStore = {
       dueAt: input.dueAt,
       createdAt: new Date(),
       completedAt: null,
+      version: 1,
     });
     return { ok: true, id };
+  },
+
+  editTask(input: {
+    taskId: string;
+    actorId: string;
+    version: number;
+    title: string;
+    description: string | null;
+    team: Team | null;
+    assigneeId: string | null;
+    dueAt: Date | null;
+    activeTeams: readonly Team[];
+  }): TaskWriteResult {
+    const task = tasks.find(
+      (t) => t.id === input.taskId && t.status !== "cancelled",
+    );
+    if (!task) return { ok: false, error: TASK_GONE };
+    const reach = testStore.senderReach(input.actorId);
+    const leads =
+      reach === undefined || (task.team !== null && reach.includes(task.team));
+    if (!leads && task.createdById !== input.actorId) {
+      return { ok: false, error: CANNOT_EDIT };
+    }
+    if (input.team !== task.team) {
+      if (reach !== undefined) {
+        if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
+        if (!reach.includes(input.team)) {
+          return { ok: false, error: NOT_YOUR_TEAM_TO_MOVE };
+        }
+      }
+      if (input.team && !input.activeTeams.includes(input.team)) {
+        return { ok: false, error: TEAM_NOT_ACTIVE };
+      }
+    }
+    if (
+      input.assigneeId &&
+      findUserById(input.assigneeId)?.approvalStatus !== "approved"
+    ) {
+      return { ok: false, error: NOT_A_MEMBER };
+    }
+    if (task.version !== input.version)
+      return { ok: false, error: TASK_EDITED };
+    task.title = input.title;
+    task.description = input.description;
+    task.team = input.team;
+    task.assigneeId = input.assigneeId;
+    task.dueAt = input.dueAt;
+    task.version += 1;
+    return { ok: true };
   },
 
   moveTask(input: {

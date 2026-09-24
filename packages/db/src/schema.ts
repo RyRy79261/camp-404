@@ -1390,6 +1390,10 @@ export const tasks = pgTable(
     status: taskStatusEnum("status").notNull().default("open"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { mode: "date" }),
+    // Bumped by an edit only, so an edit is a compare-and-set against the
+    // version the editor opened. A move or a removal leaves it alone: someone
+    // moving the card does not spoil an edit that is already open.
+    version: integer("version").notNull().default(1),
   },
   (t) => ({
     assigneeIdx: index("tasks_assignee_idx").on(t.assigneeId),

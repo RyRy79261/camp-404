@@ -24,6 +24,7 @@ export interface TaskRow {
   createdByName: string | null;
   dueAt: Date | null;
   completedAt: Date | null;
+  version: number;
 }
 
 export type DueTone = "overdue" | "soon" | "later" | "done";
@@ -41,8 +42,14 @@ export interface TaskCard {
   mine: boolean;
   addedBy: string | null;
   due: { label: string; tone: DueTone } | null;
+  /** The deadline as the camp day it falls on, YYYY-MM-DD, for the edit form. */
+  dueDay: string | null;
+  /** The version an edit opened from this card must name. */
+  version: number;
   canMove: boolean;
   canRemove: boolean;
+  /** Who may edit is who may remove: whoever added it, its team's lead, a captain. */
+  canEdit: boolean;
 }
 
 export interface Viewer {
@@ -120,7 +127,10 @@ export function presentTask(
     mine: task.assigneeId === viewer.id,
     addedBy: task.createdByName,
     due: dueOf(task, campDayKey(input.now)),
+    dueDay: task.dueAt ? campDayKey(task.dueAt) : null,
+    version: task.version,
     canMove: leadsTeam || added || task.assigneeId === viewer.id,
     canRemove: leadsTeam || added,
+    canEdit: leadsTeam || added,
   };
 }
