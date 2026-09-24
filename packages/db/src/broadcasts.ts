@@ -840,7 +840,8 @@ export interface DispatchResult {
  * Scheduled fan-out worker. Materialises `notification_deliveries` for every
  * broadcast that is published, not yet dispatched, and whose `send_at` has
  * arrived (or is immediate / NULL). Each broadcast is claimed by atomically
- * flipping `dispatched_at`, so overlapping cron runs can't double-process it;
+ * flipping `dispatched_at`, so overlapping runs (a send's own, a page load's)
+ * can't double-process it;
  * the `(broadcast_id, user_id)` dedupe index makes the insert idempotent too.
  * Immediate camp-wide announcements still fan out inline via
  * {@link publishAnnouncement} — this drains the deferred / scheduled tail.

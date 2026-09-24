@@ -381,7 +381,10 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
     .limit(1);
   if (!def) return { ok: false, error: "Questionnaire not found." };
   if (def.status !== "published" || !def.version) {
-    return { ok: false, error: "Publish this questionnaire before sending it." };
+    return {
+      ok: false,
+      error: "Publish this questionnaire before sending it.",
+    };
   }
 
   const existingOpen = await getOpenActivationForKey(input.questionnaireKey);
@@ -421,14 +424,12 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
       input.targetUserIds &&
       input.targetUserIds.length > 0
     ) {
-      await tx
-        .insert(schema.questionnaireActivationTargets)
-        .values(
-          input.targetUserIds.map((userId) => ({
-            activationId: act!.id,
-            userId,
-          })),
-        );
+      await tx.insert(schema.questionnaireActivationTargets).values(
+        input.targetUserIds.map((userId) => ({
+          activationId: act!.id,
+          userId,
+        })),
+      );
     }
     return act!.id;
   });
@@ -453,7 +454,8 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
   } catch (err) {
     // Only the one-open conflict gets the friendly message; any other failure
     // is a genuine fault and must not masquerade as "already open".
-    if (isOpenActivationConflict(err)) return { ok: false, error: ONE_OPEN_ERROR };
+    if (isOpenActivationConflict(err))
+      return { ok: false, error: ONE_OPEN_ERROR };
     return {
       ok: false,
       error: "Couldn't send this questionnaire right now — please try again.",
@@ -663,7 +665,7 @@ export type ReminderResult =
  */
 export async function sendReminder(input: {
   activationId: string;
-  /** Null for the deadline cron: the camp, not a captain, is nudging. */
+  /** Null for the deadline reminders: the camp, not a captain, is nudging. */
   senderId: string | null;
   /** Injectable clock — the dedup window is the whole feature, so tests own it. */
   now?: Date;
@@ -790,11 +792,12 @@ export async function sendReminder(input: {
   });
 }
 
-/** How far ahead the daily cron looks for a deadline. */
+/** How far ahead the deadline reminders look. */
 export const DUE_SOON_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 /**
- * The daily deadline nudge (WP10.reminders-cron). Every open send whose
+ * The deadline nudge, run on a page load (apps/web/lib/background-work.ts).
+ * Every open send whose
  * deadline falls within the next {@link DUE_SOON_WINDOW_MS} gets a reminder to
  * the members still pending, through sendReminder, so its 24-hour dedup still
  * holds: a member a captain nudged this morning is not nudged again. The camp

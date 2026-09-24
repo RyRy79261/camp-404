@@ -1,19 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [
-    { "path": "/api/cron/maintenance", "schedule": "30 7 * * *" },
-    { "path": "/api/cron/manuals/generate", "schedule": "30 8 * * *" },
-    { "path": "/api/cron/notifications/reminders", "schedule": "0 9 * * *" },
-    { "path": "/api/cron/notifications/dispatch", "schedule": "15 9 * * *" },
-    { "path": "/api/cron/notifications/push", "schedule": "25 9 * * *" },
-    { "path": "/api/cron/notifications/email", "schedule": "35 9 * * *" }
-  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
         {
           "key": "Permissions-Policy",
           "value": "camera=(self), microphone=(self), geolocation=()"

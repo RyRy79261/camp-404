@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // packages/db; here we lock the gate + Zod validation by mocking the server-only
 // auth + db modules (the real @camp404/core clearance maths is left intact).
 
+vi.mock("@/lib/background-work", () => ({ deliverAfterResponse: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({
@@ -69,6 +70,7 @@ import {
   sendReminder,
   unpublishDefinition,
 } from "@camp404/db/questionnaire-lifecycle";
+import { deliverAfterResponse } from "@/lib/background-work";
 
 /**
  * Sign in as one viewer. `leadTeams` is the SOURCE of the team-lead facts, not
@@ -282,6 +284,8 @@ describe("sendAction — validation", () => {
         activatedByUserId: "u1",
       }),
     );
+    // No cron: the notices the send wrote go out after this response.
+    expect(deliverAfterResponse).toHaveBeenCalledOnce();
   });
 
   it("converts a dueAt ISO string into a Date", async () => {

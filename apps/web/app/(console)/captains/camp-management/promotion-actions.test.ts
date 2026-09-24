@@ -7,6 +7,7 @@ import type * as IdDocumentsModule from "@camp404/db/id-documents";
 // here we assert the orchestration: captain-gating, guard→copy mapping, the
 // idempotent send call, and that NO rank flip happens on send.
 
+vi.mock("@/lib/background-work", () => ({ deliverAfterResponse: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
@@ -51,6 +52,7 @@ import {
   sendCaptainPromotion,
 } from "@/lib/promotion";
 import { getCampMemberDetail } from "@camp404/db/roster";
+import { deliverAfterResponse } from "@/lib/background-work";
 
 const CAPTAIN = "captain-1";
 
@@ -98,6 +100,8 @@ describe("sendCaptainPromotionAction", () => {
       requestedByUserId: CAPTAIN,
     });
     expect(revalidatePath).toHaveBeenCalledWith("/captains/camp-management");
+    // The request is a notice to the member; it goes out after the response.
+    expect(deliverAfterResponse).toHaveBeenCalledOnce();
     // Only `target.rank` is read here, so this path must not opt into the ID
     // ciphertext — the data layer's default (exclude) has to stay in force.
     // The second read is the requester's name, which never needs it either.

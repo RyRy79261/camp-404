@@ -161,7 +161,7 @@ export async function deleteQuestionnaireImageBlobs(
 // --- Orphan sweep ------------------------------------------------------------
 // Before commit 1f1f16d, account erasure swept `avatars/<camp id>/`, but uploads
 // live under `avatars/<auth id>/`, so every member erased then left their photos
-// behind. The daily maintenance cron removes any avatar folder whose owner has
+// behind. The daily upkeep (lib/background-work.ts, run on a page load) removes any avatar folder whose owner has
 // no camp account, so those photos go without anyone running a script, and any
 // future leak is cleaned the same way.
 

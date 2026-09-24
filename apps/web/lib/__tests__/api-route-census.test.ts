@@ -7,14 +7,12 @@ import { describe, expect, it } from "vitest";
 // on the internet: a new route that forgets its gate is the easiest hole to
 // ship, and this makes forgetting it a red test instead of a silent default.
 //
-// A static check, in the style of cron-stub.test.ts: it reads the files and
+// A static check: it reads the files and
 // runs none of them. It proves the guard is named in the route, not that it
 // is called in the right place; the routes' own tests prove that.
 
 /** How a route is guarded. */
 type GuardClass =
-  /** Vercel cron: `assertCron` checks the CRON_SECRET bearer. */
-  | "cron"
   /** Only exists under E2E_TEST_MODE (`isE2ETestMode`), never on Vercel. */
   | "test-only"
   /** Any signed-in account. Rare: sign-up is open, so prefer camp-access. */
@@ -36,13 +34,6 @@ type GuardClass =
 const ROUTE_GUARDS: Record<string, GuardClass> = {
   "auth/[...path]": "auth-handler",
   avatar: "camp-access",
-  "cron/maintenance": "cron",
-  "cron/manuals/generate": "cron",
-  "cron/notifications/dispatch": "cron",
-  "cron/notifications/email": "cron",
-  "cron/notifications/push": "cron",
-  "cron/notifications/reminders": "cron",
-  "cron/telegram/dispatch": "cron",
   // A liveness probe: says the app is up and nothing else.
   health: "public",
   "mcp/[transport]": "bearer-mcp",
@@ -80,7 +71,6 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
 
 /** The name each class must find in the route's source, if any. */
 const REQUIRED_GUARD: Record<GuardClass, string | null> = {
-  cron: "assertCron",
   "test-only": "isE2ETestMode",
   session: "getAuthenticatedUser",
   "camp-access": "hasCampAccess",
@@ -140,15 +130,4 @@ describe("the /api route census", () => {
       ).toContain(needed);
     });
   }
-
-  it("checks the cron secret before a stub cron answers", () => {
-    for (const [route, guard] of Object.entries(ROUTE_GUARDS)) {
-      if (guard !== "cron") continue;
-      const text = source(route);
-      const stub = text.indexOf("cronStubResponse(");
-      if (stub === -1) continue;
-      expect(text.indexOf("assertCron(req)"), route).toBeGreaterThan(-1);
-      expect(text.indexOf("assertCron(req)"), route).toBeLessThan(stub);
-    }
-  });
 });

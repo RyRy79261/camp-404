@@ -68,6 +68,7 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > four announcements actions, all five camp-management actions, and both
   > profile actions; the duplicate `ActionResult<T>` that lived in
   > `announcements/actions.ts` was deleted in favour of the shared module.
+
 - **Shake-to-report bug/feature modal** — spec written at
   `docs/specs/2026-05-31-shake-to-report-design.md`; **not built**, pending
   maintainer review of the open decisions (storage target, Intake-Tracker relationship,
@@ -87,8 +88,8 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > on /profile and "Report" on the error page, C1a), and the `severity` hint was
   > removed (B4c, #176).
 
-- **Telegram outbound triggers — intentionally NOT activated (maintainer decision).** `issueGroupInviteForUser` (on captain approval) and `queueAnnouncement` (on announcement publish) are built + unit-tested in `@camp404/telegram`, and the inbound webhook + dispatch cron exist, but the triggers are deliberately **left uncalled** — Telegram outbound must not run yet. Keep all the code; wire the triggers (guarded for no bot config, with an announcement→Telegram toggle, surfacing the invite link via `notification_deliveries`) only when Telegram is explicitly turned on. **[audit #10]**
-- **Invite-code case handling** — generated/DB codes are canonically lowercase (validity pattern `/^[a-z0-9]+.../`), but the redeem path matches **verbatim** while `/api/tools/invite/check` lowercases — so a DB code typed in the wrong case can pass the availability check yet fail on redeem. Fixing this needs a *coordinated* change (normalise at redeem + env + seed + storage **and** update the e2e fixtures + the CI `INVITE_CODES`, which currently use uppercase verbatim). An earlier attempt that only lowercased the redeem path broke the e2e and was reverted; do it as a deliberate, test-data-aware change. **[audit #11]**
+- **Telegram outbound triggers — intentionally NOT activated (maintainer decision).** `issueGroupInviteForUser` (on captain approval) and `queueAnnouncement` (on announcement publish) are built + unit-tested in `@camp404/telegram`, and the inbound webhook + `dispatchPendingAnnouncements` exist (the dispatch cron route was removed 2026-09-24: no cron jobs; call it from `deliverDue` in `apps/web/lib/background-work.ts` when Telegram is turned on), but the triggers are deliberately **left uncalled** — Telegram outbound must not run yet. Keep all the code; wire the triggers (guarded for no bot config, with an announcement→Telegram toggle, surfacing the invite link via `notification_deliveries`) only when Telegram is explicitly turned on. **[audit #10]**
+- **Invite-code case handling** — generated/DB codes are canonically lowercase (validity pattern `/^[a-z0-9]+.../`), but the redeem path matches **verbatim** while `/api/tools/invite/check` lowercases — so a DB code typed in the wrong case can pass the availability check yet fail on redeem. Fixing this needs a _coordinated_ change (normalise at redeem + env + seed + storage **and** update the e2e fixtures + the CI `INVITE_CODES`, which currently use uppercase verbatim). An earlier attempt that only lowercased the redeem path broke the e2e and was reverted; do it as a deliberate, test-data-aware change. **[audit #11]**
 - **MCP OAuth DB-flow tests** — the pure crypto is now tested; the DB-backed flows (authorization-code consume, refresh-token rotation, rotation-race, Postgres round-trip) need an integration/DB test harness the repo doesn't have yet. **[audit #9]**
 - ~~**Gate fallback removal**~~ — done in #179: the E2E test store mirrors required actions, and the `completedAt` check is gone.
 - **`opt_in` activation scope** — pull-model audience (members self-select); currently error-gated in `openActivation`. **[E]**
@@ -99,9 +100,9 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
 
 ## Operator actions (config, not code)
 
-- **Email (Resend):** create a Resend account, verify the sending domain, then set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` (e.g. `Camp 404 <notices@camp-404.com>`) in Vercel. Until then `/api/cron/notifications/email` answers 503 and the queue waits; nothing is marked sent. Only must-read notices queue email (`shouldEmailNotification`).
+- **Email (Resend):** create a Resend account, verify the sending domain, then set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` (e.g. `Camp 404 <notices@camp-404.com>`) in Vercel. Until then the email drain is skipped and the queue waits; nothing is marked sent. Only must-read notices queue email (`shouldEmailNotification`).
 - **Firebase / push:** set `FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY` (service account) + `NEXT_PUBLIC_FIREBASE_*` + the VAPID key in Vercel to activate web push. Until then the pipeline is inert (no tokens registered, drain no-ops).
-- ~~**PII backfill**~~ — automatic: the daily `/api/cron/maintenance` job encrypts any leftover plaintext ID number.
+- ~~**PII backfill**~~ — automatic: the daily upkeep (run on a page load, `apps/web/lib/background-work.ts`) encrypts any leftover plaintext ID number.
 - ~~**Erased members' photos**~~ — automatic: the same job deletes avatar folders whose owner has no camp account (production only).
 - ~~**Invite bootstrap codes**~~ — no longer needed for safety: an `INVITE_CODES` value shorter than 20 characters now lands its redeemer as pending, for a captain to approve. A long random value still lets members straight in.
 - **Account erasure:** ~~deleting the upstream Neon Auth identity is a separate operator action.~~ [CORRECTION 2026-09-23] Resolved by the move to self-hosted Better Auth: erasure now deletes the sign-in identity (email, password hash, sessions, passkeys) in the same transaction as the "Lost Cat #N" sanitise.

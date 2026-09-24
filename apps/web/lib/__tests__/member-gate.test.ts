@@ -9,6 +9,9 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
+vi.mock("@/lib/background-work", () => ({
+  runDueWorkAfterResponse: vi.fn(),
+}));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   getPendingRequiredActions: vi.fn(),
@@ -19,6 +22,7 @@ vi.mock("@/lib/users", () => ({
 
 import { redirect } from "next/navigation";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { runDueWorkAfterResponse } from "@/lib/background-work";
 import {
   ensureCampUser,
   getPendingRequiredActions,
@@ -173,6 +177,8 @@ describe("resolveMemberState", () => {
 
     await expect(resolveMemberState()).resolves.toEqual({ kind: "signed_out" });
     expect(redirect).not.toHaveBeenCalled();
+    // A visitor who is not signed in runs no background work.
+    expect(runDueWorkAfterResponse).not.toHaveBeenCalled();
   });
 
   it("reports the block instead of redirecting on it", async () => {
@@ -191,5 +197,7 @@ describe("resolveMemberState", () => {
       block: { reason: "approval", href: "/pending-approval" },
     });
     expect(redirect).not.toHaveBeenCalled();
+    // No cron jobs: a signed-in member's page load runs the due work.
+    expect(runDueWorkAfterResponse).toHaveBeenCalledOnce();
   });
 });

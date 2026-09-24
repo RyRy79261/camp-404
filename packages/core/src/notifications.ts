@@ -195,7 +195,7 @@ export function kindForBroadcast(
 }
 
 /**
- * A scheduled broadcast, fanned out by the dispatch cron. Its text is what the
+ * A scheduled broadcast, fanned out once its time has come (on a page load). Its text is what the
  * sender wrote; it points at its own reference, or at itself.
  */
 export function scheduledBroadcastNotification(input: {

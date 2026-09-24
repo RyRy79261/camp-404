@@ -45,6 +45,7 @@ import { QUESTIONNAIRE_VERSION } from "./questionnaire";
 import type { AuthenticatedUser } from "./auth";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { deliverAfterResponse } from "./background-work";
 
 type Rank = "captain" | "member";
 type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -375,7 +376,10 @@ export async function decideUserApproval(input: {
   reason?: string | null;
 }): Promise<boolean> {
   const store = usesTestStore() ? testBackend : realBackend;
-  return store.setUserApproval(input);
+  const changed = await store.setUserApproval(input);
+  // An approval writes the member a notice; send it now, not on a schedule.
+  if (changed) deliverAfterResponse();
+  return changed;
 }
 
 /**

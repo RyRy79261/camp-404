@@ -11,11 +11,7 @@ import {
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { CheckListCard } from "@/components/system/check-list";
 import { captainPageGate } from "@/lib/captain-gate";
-import {
-  dailyTimeLabel,
-  isJobBuilt,
-  SCHEDULED_JOBS,
-} from "@/lib/cron-schedule";
+import { BACKGROUND_JOBS } from "@/lib/background-jobs";
 import { getSystemStatus } from "@/lib/system-probe";
 
 export const dynamic = "force-dynamic";
@@ -94,46 +90,35 @@ export default async function SystemStatusPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Scheduled jobs</CardTitle>
+          <CardTitle className="text-base">Background work</CardTitle>
           <CardDescription>
-            What runs by itself each day, and when. The app does not record when
-            each job last ran, so no last-run time is shown here. Vercel&rsquo;s
-            Cron Jobs tab for this project lists each run.
+            Nothing runs on a schedule. Each job runs when someone uses the app:
+            right after the action that needs it, or when any member opens a
+            page, at most once every five minutes.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="flex flex-col">
-            {SCHEDULED_JOBS.map((job) => {
-              const built = isJobBuilt(job.job);
-              return (
-                <div
-                  key={job.job}
-                  className="flex flex-col gap-1.5 border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0 sm:flex-row sm:gap-6"
-                >
-                  <dt className="flex w-full shrink-0 flex-col gap-1.5 sm:w-56">
-                    <span className="text-sm font-medium text-foreground">
-                      {job.label}
-                    </span>
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant="outline">
-                        {dailyTimeLabel(job.schedule)}
-                      </Badge>
-                      {!built && (
-                        <Badge variant="secondary">Not built yet</Badge>
-                      )}
-                    </span>
-                  </dt>
-                  <dd className="flex flex-1 flex-col gap-1.5">
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {job.what}
-                    </p>
-                    <p className="font-mono text-[11px] tracking-wide break-all text-muted-foreground/70">
-                      /api/cron/{job.job}
-                    </p>
-                  </dd>
-                </div>
-              );
-            })}
+            {BACKGROUND_JOBS.map((job) => (
+              <div
+                key={job.label}
+                className="flex flex-col gap-1.5 border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0 sm:flex-row sm:gap-6"
+              >
+                <dt className="flex w-full shrink-0 flex-col gap-1.5 sm:w-56">
+                  <span className="text-sm font-medium text-foreground">
+                    {job.label}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <Badge variant="outline">{job.when}</Badge>
+                  </span>
+                </dt>
+                <dd className="flex flex-1 flex-col gap-1.5">
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {job.what}
+                  </p>
+                </dd>
+              </div>
+            ))}
           </dl>
         </CardContent>
       </Card>

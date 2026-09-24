@@ -440,7 +440,8 @@ export async function editTask(input: {
 }
 
 /**
- * The daily task deadline nudge, run by the reminders cron. The person
+ * The task deadline nudge, run on a page load (apps/web/lib/background-work.ts,
+ * camp daytime only, at most every five minutes). The person
  * responsible for an open or in-progress task hears about it twice: the camp
  * day before it is due, and on the day. Each reminder is recorded in
  * `task_deadline_reminders` first, and the delivery is written only when that
@@ -448,8 +449,8 @@ export async function editTask(input: {
  * due day and the person, so moving the deadline or handing the task to
  * someone else sends a fresh reminder.
  *
- * Days are camp days (UTC+2). The cron runs at 09:00 UTC, 11:00 in camp, so a
- * task added after that and due the same day gets no reminder that day. An
+ * Days are camp days (UTC+2). A task added and due the same day is reminded on
+ * the next page load, once. An
  * overdue task gets no further reminders, and a task nobody is responsible for
  * reminds nobody. Push and email go out through their own drains (email
  * follows the delivery's emailStatus).

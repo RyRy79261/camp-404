@@ -12,6 +12,7 @@ import {
   syncOpenGates,
   type CampUser,
 } from "./users";
+import { runDueWorkAfterResponse } from "./background-work";
 
 /** Why a member cannot use a member page yet, and where to send them. */
 export type MemberBlock =
@@ -72,6 +73,9 @@ export const resolveMemberState = cache(async (): Promise<MemberState> => {
   if (!authUser) return { kind: "signed_out" };
   const campUser = await ensureCampUser(authUser);
   const block = await memberBlock(campUser, authUser.primaryEmail);
+  // No cron jobs: a member loading a page is what runs the due work (guarded,
+  // after the response; lib/background-work.ts).
+  runDueWorkAfterResponse();
   return { kind: "member", authUser, campUser, block };
 });
 

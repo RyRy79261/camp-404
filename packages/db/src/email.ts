@@ -18,7 +18,7 @@ export interface EmailDrainResult {
   skipped: number;
 }
 
-/** How many queued emails one run sends. The cron runs daily. */
+/** How many queued emails one run sends; a later page load sends the rest. */
 export const EMAIL_DRAIN_LIMIT = 100;
 
 /**

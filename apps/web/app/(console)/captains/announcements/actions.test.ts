@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // and again, in the claim, when it is published. The data layer is mocked; the
 // gate and the audience rules are what these assert.
 
+vi.mock("@/lib/background-work", () => ({ deliverAfterResponse: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
@@ -52,6 +53,7 @@ import {
   publishAnnouncement,
   setAnnouncementPinned,
 } from "@/lib/notifications";
+import { deliverAfterResponse } from "@/lib/background-work";
 
 const DRAFT = { title: "Prep", body: "Knives out at 4.", presentation: "feed" };
 
@@ -166,6 +168,8 @@ describe("announcement audiences", () => {
         senderId: "user-1",
       });
     }
+    // No cron: each publish sends its notices after the response.
+    expect(deliverAfterResponse).toHaveBeenCalledTimes(2);
   });
 
   it("counts the audience the draft is for", async () => {
@@ -272,8 +276,10 @@ describe("pinning an announcement", () => {
     signIn("member", ["kitchen"]);
     pinContext({ scope: "team", team: "kitchen" });
     expect(await setPinnedAction("b5", false)).toEqual({ ok: true });
-    expect(setAnnouncementPinned).toHaveBeenLastCalledWith(
-      { id: "b5", actorId: "user-1", pinned: false },
-    );
+    expect(setAnnouncementPinned).toHaveBeenLastCalledWith({
+      id: "b5",
+      actorId: "user-1",
+      pinned: false,
+    });
   });
 });

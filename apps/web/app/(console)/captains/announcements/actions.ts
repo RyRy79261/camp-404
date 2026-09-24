@@ -23,6 +23,7 @@ import { captainActionGate } from "@/lib/captain-gate";
 import { getLeadTeams } from "@/lib/users";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { NOT_YOUR_PIN, NOT_YOUR_TEAM } from "./audience-copy";
+import { deliverAfterResponse } from "@/lib/background-work";
 
 type TeamKey = Extract<Audience, { scope: "team" }>["team"];
 
@@ -185,6 +186,7 @@ export async function publishAction(
 
     const result = await publishAnnouncement({ id, senderId: gate.senderId });
     if (!result.ok) return result;
+    deliverAfterResponse();
     revalidatePath("/captains/announcements");
     return { ok: true, data: { recipientCount: result.recipientCount } };
   });

@@ -11,7 +11,7 @@
 //     __tests__/system-status.test.ts seeds every secret with a marker and
 //     proves no marker reaches any string.
 //  2. Derive, do not duplicate. Each rule comes from the code that applies it
-//     (lib/integration-config.ts, lib/env.ts, lib/cron-stub.ts), so the report
+//     (lib/integration-config.ts, lib/env.ts), so the report
 //     cannot disagree with what the app does.
 //  3. Say why. "Off: email notices are not sent" ends the search; "Off" alone
 //     starts one.
@@ -20,7 +20,6 @@
 // the server half that reads the real env and runs the probe.
 
 import { redactSecrets } from "@camp404/core";
-import { CRON_STUBS } from "./cron-stub";
 import { PGCRYPTO_KEY_MIN_LENGTH } from "./env";
 import {
   calendarCredentials,
@@ -236,33 +235,6 @@ function encryptionCheck(env: EnvBag): SystemCheck {
     tone: "ok",
     detail:
       "ID numbers are encrypted at rest. If this key is lost, stored ID numbers cannot be read.",
-  };
-}
-
-function scheduledJobsCheck(env: EnvBag): SystemCheck {
-  const base = {
-    id: "scheduled-jobs",
-    label: "Scheduled jobs",
-    env: ["CRON_SECRET"],
-  };
-  const stubs = Object.keys(CRON_STUBS);
-  const stubNote = stubs.length
-    ? ` Not built yet, so they do nothing: ${stubs.join(", ")}.`
-    : "";
-  if (!env.CRON_SECRET) {
-    const production = env.VERCEL_ENV === "production";
-    return {
-      ...base,
-      value: "Refused · no secret",
-      tone: production ? "attention" : "degraded",
-      detail: `CRON_SECRET is not set, so every scheduled job is refused. Reminders, notices, push, email and the daily maintenance do not run.${stubNote}`,
-    };
-  }
-  return {
-    ...base,
-    value: "Authorised",
-    tone: "ok",
-    detail: `Scheduled jobs must send CRON_SECRET, and they do.${stubNote}`,
   };
 }
 
@@ -509,11 +481,11 @@ function telegramCheck(env: EnvBag): SystemCheck {
   const set = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET);
   return {
     ...base,
-    value: set ? "Keys set · not scheduled" : "Off",
+    value: set ? "Keys set · not sending" : "Off",
     tone: "info",
     detail: set
-      ? "The bot keys are set, but nothing queues Telegram posts and its job is not on the schedule."
-      : "Not in use. Nothing queues Telegram posts, and its job is not on the schedule.",
+      ? "The bot keys are set, but nothing queues Telegram posts and nothing sends them."
+      : "Not in use. Nothing queues Telegram posts, and nothing sends them.",
   };
 }
 
@@ -583,7 +555,6 @@ export function deriveSystemStatus(
     setupCheck(probe),
     signInCheck(env),
     encryptionCheck(env),
-    scheduledJobsCheck(env),
     deploymentCheck(env),
   ];
   const optional = [

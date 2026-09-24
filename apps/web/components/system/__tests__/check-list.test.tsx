@@ -98,7 +98,6 @@ describe("CheckListCard", () => {
       "DATABASE_URL",
       "BETTER_AUTH_SECRET",
       "PGCRYPTO_KEY",
-      "CRON_SECRET",
       "GROQ_API_KEY",
     ]) {
       expect(text).toContain(name);

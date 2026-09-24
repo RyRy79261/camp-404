@@ -4,8 +4,8 @@ import * as schema from "./schema";
 import { encrypt } from "./crypto";
 import { ID_NUMBER_KEY, splitIdNumber, idColumnsFor } from "./id-documents";
 
-// Data upkeep that runs on its own, from the daily maintenance cron
-// (apps/web/app/api/cron/maintenance). Nothing here needs a person to run it.
+// Data upkeep that runs on its own, once a day on a member's page load
+// (apps/web/lib/background-work.ts). Nothing here needs a person to run it.
 
 /**
  * Move any plaintext government ID number still sitting in
