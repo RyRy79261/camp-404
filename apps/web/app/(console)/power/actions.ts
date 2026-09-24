@@ -3,21 +3,32 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { canEditPower } from "@camp404/core";
-import { EditLoadInput, LoadInput, PowerPlanInput } from "@camp404/types";
+import {
+  EditGeneratorInput,
+  EditLoadInput,
+  GeneratorInput,
+  LoadInput,
+  PowerPlanInput,
+} from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import {
   captainActionGate,
   type CaptainActionAccess,
 } from "@/lib/captain-gate";
 import {
+  addGenerator,
   addPowerLoad,
+  archiveGenerator,
   copyLastYearLoads,
+  copyLastYearPlan,
   getPowerPlan,
   removePowerLoad,
   setPowerPlan,
+  updateGenerator,
   updatePowerLoad,
 } from "@/lib/power";
 import {
+  CHECK_GENERATOR,
   CHECK_LOAD,
   CHECK_PLAN,
   POWER_FUEL_PATH,
@@ -26,7 +37,7 @@ import {
 } from "@/lib/power-copy";
 import { getLeadTeams } from "@/lib/users";
 
-// The load list's writes (#253). Each action: the gate (a captain or a Power &
+// The load list's and the fuel page's writes (#253, #254). Each action: the gate (a captain or a Power &
 // Lighting lead), the Zod boundary, then the facade with the actor's id alone.
 // The gate answers the screen; the rule itself is checked again inside each
 // write's own transaction (lockPowerEditor), which re-reads the actor's rank
@@ -75,6 +86,29 @@ const PlanSettingsFields = z.object({
   powerFactor: z.number(),
   expectedVersion: z.number(),
 });
+
+/**
+ * The plan fields the fuel page edits; the date of day 1 is the load list's
+ * and is kept. Types only, every field required, as PlanSettingsFields.
+ */
+const hourOrNull = z.number().nullable();
+const FuelPlanFields = z.object({
+  generatorId: z.string().nullable(),
+  secondGeneratorNote: z.string().nullable(),
+  runFromHour: hourOrNull,
+  runToHour: hourOrNull,
+  compareRunFromHour: hourOrNull,
+  compareRunToHour: hourOrNull,
+  daysOnSite: z.number(),
+  powerFactor: z.number(),
+  lowLoadFactor: z.number(),
+  safetyMarginPct: z.number(),
+  canLitres: z.number(),
+  cansOwned: z.number(),
+  expectedVersion: z.number(),
+});
+
+const ArchiveGeneratorInput = z.object({ generatorId: z.guid() });
 
 export async function addLoadAction(
   input: unknown,
@@ -177,5 +211,113 @@ export async function savePlanSettingsAction(
     if (!result.ok) return result;
     revalidatePower();
     return { ok: true, data: { version: result.version } };
+  });
+}
+
+/**
+ * The fuel plan: the generator, its hours and the comparison's, days on site,
+ * the power factor and the margins. Checked merged onto the current plan and
+ * sent without the date of day 1, which the load list owns.
+ */
+export async function saveFuelPlanAction(
+  input: unknown,
+): Promise<ActionResult<{ version: number }>> {
+  return runAction("saveFuelPlanAction", async () => {
+    const gate = await powerGate(POWER_REFUSAL);
+    if (!gate.ok) return gate;
+    const fields = FuelPlanFields.safeParse(input);
+    if (!fields.success) return { ok: false, error: CHECK_PLAN };
+    const {
+      cycle: _cycle,
+      version: _v,
+      updatedAt: _u,
+      ...current
+    } = await getPowerPlan();
+    const parsed = PowerPlanInput.safeParse({ ...current, ...fields.data });
+    if (!parsed.success) {
+      return { ok: false, error: firstIssue(parsed.error, CHECK_PLAN) };
+    }
+    const { firstPoweredDay: _day, expectedVersion, ...patch } = parsed.data;
+    const result = await setPowerPlan({
+      actorId: gate.campUser.id,
+      patch,
+      expectedVersion,
+    });
+    if (!result.ok) return result;
+    revalidatePower();
+    return { ok: true, data: { version: result.version } };
+  });
+}
+
+/** Copies the most recent earlier year's plan, when this year has none. */
+export async function copyLastYearPlanAction(): Promise<
+  ActionResult<{ fromCycle: number }>
+> {
+  return runAction("copyLastYearPlanAction", async () => {
+    const gate = await powerGate(POWER_REFUSAL);
+    if (!gate.ok) return gate;
+    const result = await copyLastYearPlan({ actorId: gate.campUser.id });
+    if (!result.ok) return result;
+    revalidatePower();
+    return { ok: true, data: { fromCycle: result.fromCycle } };
+  });
+}
+
+export async function addGeneratorAction(
+  input: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  return runAction("addGeneratorAction", async () => {
+    const gate = await powerGate(POWER_REFUSAL);
+    if (!gate.ok) return gate;
+    const parsed = GeneratorInput.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: firstIssue(parsed.error, CHECK_GENERATOR) };
+    }
+    const result = await addGenerator({
+      ...parsed.data,
+      actorId: gate.campUser.id,
+    });
+    if (!result.ok) return result;
+    revalidatePower();
+    return { ok: true, data: { id: result.id } };
+  });
+}
+
+export async function updateGeneratorAction(
+  input: unknown,
+): Promise<ActionResult> {
+  return runAction("updateGeneratorAction", async () => {
+    const gate = await powerGate(POWER_REFUSAL);
+    if (!gate.ok) return gate;
+    const parsed = EditGeneratorInput.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: firstIssue(parsed.error, CHECK_GENERATOR) };
+    }
+    const result = await updateGenerator({
+      ...parsed.data,
+      actorId: gate.campUser.id,
+    });
+    if (!result.ok) return result;
+    revalidatePower();
+    return { ok: true };
+  });
+}
+
+/** Retires a generator; a plan that names it still reads. */
+export async function archiveGeneratorAction(
+  input: unknown,
+): Promise<ActionResult> {
+  return runAction("archiveGeneratorAction", async () => {
+    const gate = await powerGate(POWER_REFUSAL);
+    if (!gate.ok) return gate;
+    const parsed = ArchiveGeneratorInput.safeParse(input);
+    if (!parsed.success) return { ok: false, error: CHECK_GENERATOR };
+    const result = await archiveGenerator({
+      ...parsed.data,
+      actorId: gate.campUser.id,
+    });
+    if (!result.ok) return result;
+    revalidatePower();
+    return { ok: true };
   });
 }

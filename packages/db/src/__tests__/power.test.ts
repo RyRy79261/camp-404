@@ -30,6 +30,7 @@ import {
   listPowerInventory,
   listPowerLoads,
   previousLoadCycle,
+  previousPlanCycle,
   removePowerLoad,
   setPowerPlan,
   updateGenerator,
@@ -382,8 +383,10 @@ describe("power", () => {
           expectedVersion: 0,
         }),
       ).toEqual({ ok: true, version: 1 });
+      expect(await previousPlanCycle()).toBeNull();
       await campYear(h.db(), 2027, [2026]);
       expect((await getPowerPlan()).version).toBe(0);
+      expect(await previousPlanCycle()).toBe(2026);
       expect(await copyLastYearPlan({ actorId: captain.id })).toEqual({
         ok: true,
         fromCycle: 2026,

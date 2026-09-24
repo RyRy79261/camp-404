@@ -33,6 +33,9 @@ export interface SegmentedControlProps {
   onValueChange: (value: string) => void;
   id?: string;
   "aria-label"?: string;
+  "aria-describedby"?: string;
+  /** Every segment disabled; the value still shows. */
+  disabled?: boolean;
   className?: string;
 }
 
@@ -42,7 +45,9 @@ function SegmentedControl({
   onValueChange,
   id,
   className,
+  disabled,
   "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedBy,
 }: SegmentedControlProps) {
   const refs = React.useRef<(HTMLButtonElement | null)[]>([]);
   const selectedIndex = options.findIndex((o) => o.value === value);
@@ -77,7 +82,9 @@ function SegmentedControl({
       id={id}
       role="radiogroup"
       aria-label={ariaLabel}
-      className={cn(SEGMENT_GROUP, className)}
+      aria-describedby={ariaDescribedBy}
+      aria-disabled={disabled || undefined}
+      className={cn(SEGMENT_GROUP, disabled && "opacity-60", className)}
     >
       {options.map((option, i) => {
         const selected = option.value === value;
@@ -94,6 +101,7 @@ function SegmentedControl({
             role="radio"
             aria-checked={selected}
             tabIndex={tabbable ? 0 : -1}
+            disabled={disabled}
             onClick={() => focusSelect(i)}
             onKeyDown={(e) => onKeyDown(e, i)}
             className={cn(SEGMENT, selected ? SEGMENT_ON : SEGMENT_OFF)}

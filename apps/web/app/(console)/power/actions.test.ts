@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The load list's actions (#253). What matters here:
+// The load list's and the fuel page's actions (#253, #254). What matters here:
 //  1. Editing needs a captain or a lead of Power & Lighting: a lead of any
 //     other team (Kitchen) is refused before the facade is called, although
 //     their clearance is the global team_lead rung. A member is refused too.
 //  2. Every write names the signed-in actor and nothing else: never a team
 //     list, never an id from the browser.
 //  3. The plan settings are checked merged onto the current plan, and only
-//     the three fields this page edits are sent.
+//     the fields each page edits are sent: the load list's three, and the
+//     fuel page's without the date of day 1.
 // The rule is checked again inside each write (packages/db, on PGlite).
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -21,17 +22,25 @@ vi.mock("@/lib/power", () => ({
   copyLastYearLoads: vi.fn(async () => ({ ok: true, count: 3 })),
   setPowerPlan: vi.fn(async () => ({ ok: true, version: 4 })),
   getPowerPlan: vi.fn(),
+  copyLastYearPlan: vi.fn(async () => ({ ok: true, fromCycle: 2025 })),
+  addGenerator: vi.fn(async () => ({ ok: true, id: "gen-new" })),
+  updateGenerator: vi.fn(async () => ({ ok: true })),
+  archiveGenerator: vi.fn(async () => ({ ok: true })),
 }));
 
 import { revalidatePath } from "next/cache";
 import type { ViewerRank } from "@camp404/types";
 import { captainActionGate } from "@/lib/captain-gate";
 import {
+  addGenerator,
   addPowerLoad,
+  archiveGenerator,
   copyLastYearLoads,
+  copyLastYearPlan,
   getPowerPlan,
   removePowerLoad,
   setPowerPlan,
+  updateGenerator,
   updatePowerLoad,
 } from "@/lib/power";
 import {
@@ -41,10 +50,15 @@ import {
 } from "@/lib/power-copy";
 import { getLeadTeams } from "@/lib/users";
 import {
+  addGeneratorAction,
   addLoadAction,
+  archiveGeneratorAction,
   copyLastYearLoadsAction,
+  copyLastYearPlanAction,
   removeLoadAction,
+  saveFuelPlanAction,
   savePlanSettingsAction,
+  updateGeneratorAction,
   updateLoadAction,
 } from "./actions";
 
@@ -283,5 +297,181 @@ describe("savePlanSettingsAction", () => {
       await savePlanSettingsAction({ ...SETTINGS, powerFactor: 0.2 }),
     ).toEqual({ ok: false, error: "The power factor is at least 0.5." });
     expect(setPowerPlan).not.toHaveBeenCalled();
+  });
+});
+
+const GENERATOR = {
+  model: "Test 5.5",
+  ratedKva: 5.5,
+  maxKva: 6,
+  tankLitres: 13.5,
+  runtime50Hours: 9.8,
+  runtime100Hours: 5.5,
+  fuelType: "petrol",
+  owner: "camp",
+};
+
+const FUEL_PLAN = {
+  generatorId: GEN_ID,
+  secondGeneratorNote: "The lounge's inverter, if it comes",
+  runFromHour: null,
+  runToHour: null,
+  compareRunFromHour: 18,
+  compareRunToHour: 6,
+  daysOnSite: 10,
+  powerFactor: 0.8,
+  lowLoadFactor: 1.1,
+  safetyMarginPct: 25,
+  canLitres: 25,
+  cansOwned: 3,
+  expectedVersion: 3,
+};
+
+describe("the fuel page's actions refuse a Kitchen lead", () => {
+  const cases: [string, () => Promise<unknown>, () => unknown][] = [
+    [
+      "saveFuelPlanAction",
+      () => saveFuelPlanAction(FUEL_PLAN),
+      () => setPowerPlan,
+    ],
+    [
+      "copyLastYearPlanAction",
+      () => copyLastYearPlanAction(),
+      () => copyLastYearPlan,
+    ],
+    [
+      "addGeneratorAction",
+      () => addGeneratorAction(GENERATOR),
+      () => addGenerator,
+    ],
+    [
+      "updateGeneratorAction",
+      () =>
+        updateGeneratorAction({
+          ...GENERATOR,
+          generatorId: GEN_ID,
+          expectedVersion: 1,
+        }),
+      () => updateGenerator,
+    ],
+    [
+      "archiveGeneratorAction",
+      () => archiveGeneratorAction({ generatorId: GEN_ID }),
+      () => archiveGenerator,
+    ],
+  ];
+
+  it.each(cases)("%s", async (_name, act, facade) => {
+    actAs("team_lead", ["kitchen"]);
+    expect(await act()).toEqual({ ok: false, error: POWER_REFUSAL });
+    expect(facade()).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("saveFuelPlanAction", () => {
+  it("sends the fuel fields with the version, and keeps the date of day 1", async () => {
+    actAs("team_lead", ["power_and_lighting"], "lead-1");
+    expect(await saveFuelPlanAction(FUEL_PLAN)).toEqual({
+      ok: true,
+      data: { version: 4 },
+    });
+    const call = vi.mocked(setPowerPlan).mock.calls[0]![0];
+    const { expectedVersion: _v, ...fields } = FUEL_PLAN;
+    expect(call).toEqual({
+      actorId: "lead-1",
+      patch: fields,
+      expectedVersion: 3,
+    });
+    expect(call.patch).not.toHaveProperty("firstPoweredDay");
+    expect(revalidatePath).toHaveBeenCalledWith(POWER_LOADS_PATH);
+    expect(revalidatePath).toHaveBeenCalledWith(POWER_FUEL_PATH);
+  });
+
+  it("refuses a missing field rather than resetting it to its default", async () => {
+    const { cansOwned: _c, ...rest } = FUEL_PLAN;
+    expect(await saveFuelPlanAction(rest)).toMatchObject({ ok: false });
+    expect(setPowerPlan).not.toHaveBeenCalled();
+  });
+
+  it("returns the plan's own sentence for half a schedule", async () => {
+    expect(await saveFuelPlanAction({ ...FUEL_PLAN, runFromHour: 18 })).toEqual(
+      {
+        ok: false,
+        error:
+          "Give both the start and the stop hour, or neither for 24 hours.",
+      },
+    );
+    expect(setPowerPlan).not.toHaveBeenCalled();
+  });
+
+  it("passes a lost race's sentence through", async () => {
+    vi.mocked(setPowerPlan).mockResolvedValueOnce({
+      ok: false,
+      error: "Someone changed this year's plan first. Reload the page.",
+    });
+    expect(await saveFuelPlanAction(FUEL_PLAN)).toEqual({
+      ok: false,
+      error: "Someone changed this year's plan first. Reload the page.",
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("generator actions", () => {
+  it("add, edit and archive as the actor, with the version on an edit", async () => {
+    actAs("team_lead", ["power_and_lighting"], "lead-1");
+    expect(
+      await addGeneratorAction({ ...GENERATOR, actorId: "someone-else" }),
+    ).toEqual({ ok: true, data: { id: "gen-new" } });
+    expect(vi.mocked(addGenerator).mock.calls[0]![0]).toMatchObject({
+      model: "Test 5.5",
+      ratedKva: 5.5,
+      inventoryItemId: null,
+      noiseNote: null,
+      actorId: "lead-1",
+    });
+    await updateGeneratorAction({
+      ...GENERATOR,
+      generatorId: GEN_ID,
+      expectedVersion: 2,
+    });
+    expect(updateGenerator).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generatorId: GEN_ID,
+        expectedVersion: 2,
+        actorId: "lead-1",
+      }),
+    );
+    expect(await archiveGeneratorAction({ generatorId: GEN_ID })).toEqual({
+      ok: true,
+    });
+    expect(archiveGenerator).toHaveBeenCalledWith({
+      generatorId: GEN_ID,
+      actorId: "lead-1",
+    });
+  });
+
+  it("returns the generator's own sentence and writes nothing", async () => {
+    expect(
+      await addGeneratorAction({ ...GENERATOR, runtime100Hours: 12 }),
+    ).toEqual({
+      ok: false,
+      error: "A tank runs out sooner at full load than at half load.",
+    });
+    expect(await archiveGeneratorAction({ generatorId: "nope" })).toEqual({
+      ok: false,
+      error: "Check the generator and try again.",
+    });
+    expect(addGenerator).not.toHaveBeenCalled();
+    expect(archiveGenerator).not.toHaveBeenCalled();
+  });
+
+  it("copies last year's plan as the actor", async () => {
+    expect(await copyLastYearPlanAction()).toEqual({
+      ok: true,
+      data: { fromCycle: 2025 },
+    });
+    expect(copyLastYearPlan).toHaveBeenCalledWith({ actorId: "captain-1" });
   });
 });

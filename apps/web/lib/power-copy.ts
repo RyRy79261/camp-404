@@ -1,4 +1,9 @@
-import type { LoadCategory, LoadOwner } from "@camp404/types";
+import type {
+  FuelType,
+  GeneratorOwner,
+  LoadCategory,
+  LoadOwner,
+} from "@camp404/types";
 
 // The power screens' fixed sentences, paths and labels (#253, #254). A plain
 // module: a "use server" file may export only async functions, so the power
@@ -13,6 +18,7 @@ export const POWER_REFUSAL =
   "Only captains and Power & Lighting leads can change the power plan.";
 export const CHECK_LOAD = "Check the load and try again.";
 export const CHECK_PLAN = "Check the plan settings and try again.";
+export const CHECK_GENERATOR = "Check the generator and try again.";
 
 export const CATEGORY_LABELS: Record<LoadCategory, string> = {
   refrigeration: "Refrigeration",
@@ -31,6 +37,18 @@ export const OWNER_LABELS: Record<LoadOwner, string> = {
   neighbour: "Neighbour",
 };
 
+/** Whose a generator is. A lent one names no member. */
+export const GENERATOR_OWNER_LABELS: Record<GeneratorOwner, string> = {
+  camp: "Camp",
+  member_lent: "Lent by a member",
+  hired: "Hired",
+};
+
+export const FUEL_LABELS: Record<FuelType, string> = {
+  petrol: "Petrol",
+  diesel: "Diesel",
+};
+
 /** A load's owner as the list shows it. */
 export function ownerText(load: {
   owner: LoadOwner;
@@ -45,6 +63,12 @@ export function ownerText(load: {
 /** "18:00", from a whole hour. */
 export function hourText(hour: number): string {
   return `${String(hour).padStart(2, "0")}:00`;
+}
+
+/** A generator's daily schedule: "24 h" or "18:00–06:00". */
+export function runText(fromHour: number | null, toHour: number | null) {
+  if (fromHour === null || toHour === null) return "24 h";
+  return `${hourText(fromHour)}–${hourText(toHour)}`;
 }
 
 /** "24 h", "6 h a day", or the windows: "18:00–02:00, 06:00–08:00". */
@@ -112,7 +136,12 @@ export function watts(value: number): string {
   return `${formatNumber(value, 0)} W`;
 }
 
-/** A percentage, whole: "64%". */
+/** A percentage, to at most one place: "64%", "32.5%". */
 export function pct(value: number): string {
-  return `${formatNumber(value, 0)}%`;
+  return `${formatNumber(value, 1)}%`;
+}
+
+/** Litres, to `digits` places: "19.73 L". */
+export function litres(value: number, digits = 1): string {
+  return `${formatNumber(value, digits, true)} L`;
 }

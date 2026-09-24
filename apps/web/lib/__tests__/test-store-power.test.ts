@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}));
 
 import {
   ALREADY_HAS_LOADS,
+  ALREADY_HAS_PLAN,
   DEFAULT_POWER_PLAN,
   LOAD_CHANGED,
   NOT_A_POWER_EDITOR,
@@ -183,5 +184,31 @@ describe("test store: power", () => {
     expect(save(8)).toEqual({ ok: true, version: 1 });
     expect(save(10)).toEqual({ ok: false, error: PLAN_CHANGED });
     expect(testStore.getPowerPlan().daysOnSite).toBe(8);
+  });
+
+  it("copies last year's plan once, naming the year it came from", () => {
+    const captain = makeUser("Cap", "captain");
+    expect(testStore.previousPlanCycle()).toBeNull();
+    testStore.setPowerPlan({
+      actorId: captain.id,
+      patch: { daysOnSite: 8, firstPoweredDay: "2026-04-27" },
+      expectedVersion: 0,
+    });
+    campYear(2027, [2026]);
+    expect(testStore.previousPlanCycle()).toBe(2026);
+    expect(testStore.copyLastYearPlan({ actorId: captain.id })).toEqual({
+      ok: true,
+      fromCycle: 2026,
+    });
+    expect(testStore.getPowerPlan()).toMatchObject({
+      cycle: 2027,
+      daysOnSite: 8,
+      firstPoweredDay: null,
+      version: 1,
+    });
+    expect(testStore.copyLastYearPlan({ actorId: captain.id })).toEqual({
+      ok: false,
+      error: ALREADY_HAS_PLAN,
+    });
   });
 });

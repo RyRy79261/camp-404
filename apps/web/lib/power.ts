@@ -63,6 +63,12 @@ export async function previousLoadCycle(): Promise<number | null> {
     : db.previousLoadCycle();
 }
 
+export async function previousPlanCycle(): Promise<number | null> {
+  return usesTestStore()
+    ? testStore.previousPlanCycle()
+    : db.previousPlanCycle();
+}
+
 // --- Writes ------------------------------------------------------------------
 
 export async function addPowerLoad(

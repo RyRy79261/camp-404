@@ -556,6 +556,11 @@ function previousStoreLoadCycle(cycle: number): number | null {
   return earlier.length > 0 ? Math.max(...earlier) : null;
 }
 
+function previousStorePlanCycle(cycle: number): number | null {
+  const earlier = [...powerPlans.keys()].filter((c) => c < cycle);
+  return earlier.length > 0 ? Math.max(...earlier) : null;
+}
+
 /** A generator the plan may name (assertPlanGenerator's twin), or a refusal. */
 function planGeneratorRefusal(
   generatorId: string | null | undefined,
@@ -2269,6 +2274,10 @@ export const testStore = {
     return previousStoreLoadCycle(currentCycleNumber());
   },
 
+  previousPlanCycle(): number | null {
+    return previousStorePlanCycle(currentCycleNumber());
+  },
+
   addPowerLoad(
     input: LoadInput & { actorId: string },
   ): PowerWriteResult<{ id: string }> {
@@ -2401,9 +2410,8 @@ export const testStore = {
   }): PowerWriteResult<{ fromCycle: number }> {
     return powerWrite(input.actorId, (cycle) => {
       if (powerPlans.has(cycle)) return ALREADY_HAS_PLAN;
-      const earlier = [...powerPlans.keys()].filter((c) => c < cycle);
-      if (earlier.length === 0) return NOTHING_TO_COPY;
-      const fromCycle = Math.max(...earlier);
+      const fromCycle = previousStorePlanCycle(cycle);
+      if (fromCycle === null) return NOTHING_TO_COPY;
       const from = powerPlans.get(fromCycle)!;
       const gen = generators.find((g) => g.id === from.generatorId);
       powerPlans.set(cycle, {

@@ -399,6 +399,13 @@ export async function previousLoadCycle(): Promise<number | null> {
   return previousCycleWithLoads(db, await currentCycleNumber(db));
 }
 
+/** The latest year before this one that has a plan, or null. */
+export async function previousPlanCycle(): Promise<number | null> {
+  const db = createHttpDb();
+  const row = await previousPlan(db, await currentCycleNumber(db));
+  return row?.cycle ?? null;
+}
+
 // --- Loads -------------------------------------------------------------------
 
 /** The fields a load's form owns: everything but its identity and place. */

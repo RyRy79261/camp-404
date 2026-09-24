@@ -214,6 +214,38 @@ describe("the load list", () => {
     ).toBeTruthy();
   });
 
+  it("bands a 5.5 kVA generator green at 1430 W: 32.5% of kVA, 26% by kW", async () => {
+    vi.mocked(listPowerLoads).mockResolvedValue([
+      load({ name: "Sound desk", category: "sound", wattsEach: 1065 }),
+      load({
+        id: "load-2",
+        name: "Lounge lamps",
+        category: "lighting_functional",
+        wattsEach: 365,
+      }),
+    ] as never);
+    vi.mocked(getPowerPlan).mockResolvedValue({ ...PLAN, generatorId: GEN_ID });
+    vi.mocked(getGenerator).mockResolvedValue({
+      id: GEN_ID,
+      model: "Test 5.5",
+      ratedKva: 5.5,
+      maxKva: 6,
+    } as never);
+    await renderAs("captain");
+    const rail = screen.getByRole("article", { name: "Generator" });
+    // 1430 W ÷ 0.8 = 1.7875 kVA of 5.5 rated; 1.43 kW of 5.5 is 26%.
+    expect(within(rail).getByText("32.5%")).toBeTruthy();
+    expect(within(rail).getByText("(kW-based: 26%)")).toBeTruthy();
+    expect(
+      within(rail).getByText("of rated kVA at the peak · Comfortable"),
+    ).toBeTruthy();
+    // Surge 1430 + 1065 W = 3.12 kVA stays under the 6 kVA maximum.
+    expect(
+      within(rail).queryByText("Surge exceeds the generator's maximum"),
+    ).toBeNull();
+    expect(rail.querySelector(".bg-success")).not.toBeNull();
+  });
+
   it("offers last year's list only when this year is empty", async () => {
     vi.mocked(previousLoadCycle).mockResolvedValue(2025);
     await renderAs("captain");

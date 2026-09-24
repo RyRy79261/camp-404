@@ -39,11 +39,20 @@ export interface PowerKpi {
   note?: string;
 }
 
-export function PowerKpiCards({ kpis }: { kpis: PowerKpi[] }) {
+export function PowerKpiCards({
+  kpis,
+  label = "Load at a glance",
+  className,
+}: {
+  kpis: PowerKpi[];
+  label?: string;
+  /** The grid's columns, when the row is not four wide. */
+  className?: string;
+}) {
   return (
     <section
-      aria-label="Load at a glance"
-      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      aria-label={label}
+      className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-4", className)}
     >
       {kpis.map((kpi) => (
         <Card
