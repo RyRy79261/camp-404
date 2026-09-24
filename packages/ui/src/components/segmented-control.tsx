@@ -25,6 +25,7 @@ const SEGMENT =
   "flex-1 rounded-sm px-3 py-2 text-center text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const SEGMENT_ON = "bg-primary text-primary-foreground shadow-sm";
 const SEGMENT_OFF = "text-muted-foreground hover:text-foreground";
+const SEGMENT_DISABLED = "cursor-not-allowed text-muted-foreground/60";
 const SEGMENT_GROUP = "inline-flex w-full rounded-md border p-1";
 
 export interface SegmentedControlProps {
@@ -117,6 +118,11 @@ function SegmentedControl({
 export interface SegmentedLinkOption extends SegmentedOption {
   /** Where this segment navigates. */
   href: string;
+  /**
+   * A segment that exists but cannot be visited yet (a plate count Claude is
+   * still writing). Drawn in place, dimmed, as text rather than a link.
+   */
+  disabled?: boolean;
 }
 
 export interface SegmentedLinksProps {
@@ -145,6 +151,17 @@ function SegmentedLinks({
   return (
     <nav aria-label={ariaLabel} className={cn(SEGMENT_GROUP, className)}>
       {options.map((option) => {
+        if (option.disabled) {
+          return (
+            <span
+              key={option.value}
+              aria-disabled="true"
+              className={cn(SEGMENT, SEGMENT_DISABLED)}
+            >
+              {option.label}
+            </span>
+          );
+        }
         const selected = option.value === value;
         return (
           <Anchor

@@ -252,7 +252,7 @@ describe("deriveSystemStatus", () => {
     ).toBe("attention");
     expect(
       check({ CRON_SECRET: "set-and-long" }, OK_PROBE, "scheduled-jobs").detail,
-    ).toContain("recipes/analyse");
+    ).toContain("manuals/generate");
   });
 
   it("flags test mode on any deployment", () => {

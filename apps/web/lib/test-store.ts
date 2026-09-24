@@ -22,6 +22,12 @@ import {
   type PaymentStatus,
   QUESTIONNAIRE_REF_TYPE,
   sortPinned,
+  canApproveRecipe,
+  canRunProofread,
+  sameSections,
+  sourceFromText,
+  sourceText,
+  type AuditAction,
 } from "@camp404/core";
 import {
   DRAFT_MISSING,
@@ -86,12 +92,101 @@ import {
   type PowerWriteResult,
 } from "@camp404/db/power";
 import {
+  ANSWER_NEEDED,
+  ANSWER_TOO_LONG,
+  CHANGES_NOTE_NEEDED,
+  DEFAULT_KITCHEN_SETTINGS,
+  LESSON_NEEDED,
+  NEVER_STARTED_ERROR,
+  NO_ACCEPTED_VERSION,
+  NOT_A_KITCHEN_REVIEWER,
+  NOT_AN_APPROVED_MEMBER,
+  NOT_READY_TO_PROOFREAD,
+  NOT_YOUR_SUGGESTION,
+  NO_TEXT_TO_SEND,
+  ONLY_A_REVIEWER_SENDS,
+  ONLY_A_CAPTAIN_SETS_KITCHEN,
+  PLATE_RUN_VERSION_GONE,
+  RECIPE_CHANGED,
+  RECIPE_DECIDED,
+  RECIPE_GONE,
+  REJECT_REASON_NEEDED,
+  RERUN_NOTE_MAX,
+  RERUN_NOTE_NEEDED,
+  RUN_STAGES,
+  SENDER_NOT_A_REVIEWER,
+  DRAFT_UNREADABLE,
+  SERVES_OUT_OF_RANGE,
+  SOURCE_CHANGED,
+  SOURCE_INVALID,
+  STALE_RUN_AFTER_MS,
+  STALE_RUN_ERROR,
+  TEXT_NEEDED,
+  TEXT_TOO_LONG,
+  TITLE_NEEDED,
+  UNTITLED_RECIPE,
+  PLATES_OUT_OF_RANGE,
+  VERSION_CHANGED,
+  baseLines,
+  campDayStartOf,
+  campMonthStartOf,
+  capRefusal,
+  draftPlatesMismatch,
+  failedPlateCounts,
+  forRecipe,
+  handBackTo,
+  plateCountIsBase,
+  plateCountReady,
+  plateRunOpen,
+  readDraft,
+  readQuestions,
+  runDetail,
+  sourceBlockedReason,
+  suggestionTitle,
+  textBlockedReason,
+  versionInvalid,
+  type AwaitingAcceptance,
+  type ClaimedPlateRun,
+  type ClaimedSourceRun,
+  type KitchenSettings,
+  type MySuggestion,
+  type ProofreadCandidate,
+  type ProofreadProgress,
+  type ProofreadRunRow,
+  type PlateCountDetail,
+  type RecipeBookEntry,
+  type RecipeDecision,
+  type RecipeDetail,
+  type RecipeSourceVersion,
+  type RecipeVersionDetail,
+  type RecipeWriteResult,
+  type ReviewQueueEntry,
+  type RunStage,
+  type RunUsage,
+  type TokenTotals,
+} from "@camp404/db/recipes";
+import {
   calendarEventRefusal,
   type AddCalendarEventResult,
 } from "@camp404/db/calendar-events";
 import {
   ANNOUNCEMENT_NOTIFICATION_KINDS,
+  DEFAULT_PLATES,
+  KitchenRecipe,
+  PROOFREAD_ANSWER_MAX,
+  PlateProofread,
+  RECIPE_TEXT_MAX,
+  ProofreadExchange,
+  RecipeDraft,
+  RecipeSourceSections,
+  SourceProofread,
+  type DraftReport,
   type InboxFilter,
+  type IngredientCategory,
+  type KitchenSettingsInput,
+  type PlateLine,
+  type RecipeSource,
+  type RecipeStatus,
   type ReferralUser,
   type EditGeneratorInput,
   type EditLoadInput,
@@ -305,6 +400,122 @@ interface TestPayment {
   updatedAt: Date;
 }
 
+/** A recipe (mirrors `recipes`; a store recipe always has a title). */
+interface TestRecipe {
+  id: string;
+  submitterId: string | null;
+  source: RecipeSource;
+  status: RecipeStatus;
+  title: string;
+  sourceUrl: string | null;
+  rawText: string | null;
+  suitabilityNote: string | null;
+  textAuthorId: string | null;
+  aiConsentAt: Date | null;
+  changesNote: string | null;
+  rejectionReason: string | null;
+  lastError: string | null;
+  latestRunId: string | null;
+  acceptedVersionId: string | null;
+  variantOfRecipeId: string | null;
+  rerunRequest: string | null;
+  rerunRequestedBy: string | null;
+  rerunRequestedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** One proofreading run (mirrors `recipe_proofread_runs`). */
+interface TestRecipeRun {
+  id: string;
+  recipeId: string;
+  requestedBy: string | null;
+  requestedAt: Date;
+  note: string | null;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  promptVersion: string;
+  model: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  outcome: "queued" | "running" | "succeeded" | "failed";
+  error: string | null;
+  result: unknown;
+  /** `recipe` rows are older draft runs; nothing writes one any more. */
+  kind: "recipe" | "plates" | "source";
+  plates: number | null;
+  versionId: string | null;
+  sourceId: string | null;
+  stage: RunStage | null;
+  exchange: ProofreadExchange | null;
+  previousStatus: RecipeStatus | null;
+  previousRunId: string | null;
+}
+
+/** One version of a recipe's source (mirrors `recipe_sources`). */
+interface TestRecipeSource {
+  id: string;
+  recipeId: string;
+  version: number;
+  serves: number | null;
+  sections: RecipeSourceSections;
+  authorId: string | null;
+  createdAt: Date;
+}
+
+/** A recipe version (mirrors `recipe_versions`: the whole recipe as a body). */
+interface TestRecipeVersion {
+  id: string;
+  recipeId: string;
+  version: number;
+  body: KitchenRecipe;
+  report: DraftReport | null;
+  scalingNotes: string[];
+  sourceId: string | null;
+  runId: string | null;
+  reason: string;
+  authorId: string;
+  createdAt: Date;
+}
+
+/** One version's recipe for one plate count (mirrors `recipe_plate_counts`). */
+interface TestPlateCount {
+  versionId: string;
+  plates: number;
+  lines: PlateLine[];
+  pots: number | null;
+  notes: string[];
+  report: DraftReport | null;
+  source: "version" | "proofread";
+  runId: string | null;
+  createdAt: Date;
+}
+
+/** The ingredient catalogue (mirrors `ingredients`, matched by lower name). */
+interface TestIngredient {
+  id: string;
+  name: string;
+  category: IngredientCategory | null;
+}
+
+interface TestRecipeLesson {
+  id: string;
+  recipeId: string;
+  authorId: string;
+  body: string;
+  cycle: number;
+  createdAt: Date;
+}
+
+/** The store's audit rows for recipes and the kitchen settings. */
+interface TestRecipeEvent {
+  recipeId: string | null;
+  action: AuditAction;
+  actorId: string;
+  metadata: Record<string, unknown>;
+  createdAt: Date;
+}
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -332,6 +543,16 @@ interface TestStoreState {
   generators: GeneratorRow[];
   /** The inventory items the "From inventory" helper offers (none archived). */
   powerInventory: PowerInventoryItem[];
+  recipes: TestRecipe[];
+  recipeRuns: TestRecipeRun[];
+  recipeSources: TestRecipeSource[];
+  recipeVersions: TestRecipeVersion[];
+  recipePlateCounts: TestPlateCount[];
+  ingredientCatalogue: TestIngredient[];
+  recipeLessons: TestRecipeLesson[];
+  recipeHistory: TestRecipeEvent[];
+  /** The kitchen's settings. Reassigned on every edit, so it lives on `S`. */
+  kitchenSettings: KitchenSettings;
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -376,6 +597,15 @@ function globalState(): TestStoreState {
       powerPlans: new Map<number, PowerPlan>(),
       generators: [] as GeneratorRow[],
       powerInventory: [] as PowerInventoryItem[],
+      recipes: [] as TestRecipe[],
+      recipeRuns: [] as TestRecipeRun[],
+      recipeSources: [] as TestRecipeSource[],
+      recipeVersions: [] as TestRecipeVersion[],
+      recipePlateCounts: [] as TestPlateCount[],
+      ingredientCatalogue: [] as TestIngredient[],
+      recipeLessons: [] as TestRecipeLesson[],
+      recipeHistory: [] as TestRecipeEvent[],
+      kitchenSettings: { ...DEFAULT_KITCHEN_SETTINGS },
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -439,6 +669,23 @@ const powerLoads = S.powerLoads;
 const powerPlans = S.powerPlans;
 const generators = S.generators;
 const powerInventory = S.powerInventory;
+S.recipes ??= [];
+S.recipeRuns ??= [];
+S.recipeSources ??= [];
+S.recipeVersions ??= [];
+S.recipePlateCounts ??= [];
+S.ingredientCatalogue ??= [];
+S.recipeLessons ??= [];
+S.recipeHistory ??= [];
+S.kitchenSettings ??= { ...DEFAULT_KITCHEN_SETTINGS };
+const recipes = S.recipes;
+const recipeRuns = S.recipeRuns;
+const recipeSources = S.recipeSources;
+const recipeVersions = S.recipeVersions;
+const recipePlateCounts = S.recipePlateCounts;
+const ingredientCatalogue = S.ingredientCatalogue;
+const recipeLessons = S.recipeLessons;
+const recipeHistory = S.recipeHistory;
 
 /**
  * The camp's current year, resolved the way `currentCycleNumber()` resolves it
@@ -587,6 +834,287 @@ function planPatch(
       patch[key],
     ]),
   );
+}
+
+// --- Recipe helpers (the twins of @camp404/db/recipes' private steps) -------
+
+function findRecipe(id: string): TestRecipe | null {
+  return recipes.find((r) => r.id === id) ?? null;
+}
+
+function userName(id: string | null): string | null {
+  return id ? (findUserById(id)?.displayName ?? null) : null;
+}
+
+/**
+ * A captain, or a lead of Kitchen this year, may send recipes to Claude (the
+ * owner's decision 2A; the twin of the reviewer lock the queue takes).
+ */
+function mayRunProofread(userId: string): boolean {
+  const reach = testStore.senderReach(userId);
+  return canRunProofread(reachRank(reach), reach ?? []);
+}
+
+/** A captain, or a lead of Kitchen this year (the twin of lockKitchenReviewer). */
+function isKitchenReviewer(userId: string): boolean {
+  const reach = testStore.senderReach(userId);
+  return canApproveRecipe(reachRank(reach), reach ?? []);
+}
+
+/** Only the tick on the suggestion counts, as in production. */
+function storeTextBlocked(recipe: TestRecipe): string | null {
+  return textBlockedReason(recipe);
+}
+
+/** Hand a recipe back after its run failed (the twin of handBack). */
+function handBackStore(
+  run: TestRecipeRun,
+  from: RecipeStatus,
+  error: string,
+  now: Date,
+): void {
+  const recipe = findRecipe(run.recipeId);
+  if (!recipe || recipe.status !== from || recipe.latestRunId !== run.id) {
+    return;
+  }
+  const previous = recipeRuns.find((r) => r.id === run.previousRunId);
+  const to = handBackTo({
+    failedRunId: run.id,
+    previousStatus: run.previousStatus,
+    previousRunId: run.previousRunId,
+    previousRunSucceeded: previous?.outcome === "succeeded",
+    acceptedVersionId: recipe.acceptedVersionId,
+  });
+  recipe.status = to.status;
+  recipe.latestRunId = to.runId;
+  recipe.lastError = error;
+  recipe.updatedAt = now;
+}
+
+function runsSince(since: Date): number {
+  return recipeRuns.filter((r) => r.requestedAt.getTime() >= since.getTime())
+    .length;
+}
+
+function recordRecipeEvent(
+  recipe: TestRecipe,
+  action: AuditAction,
+  actorId: string,
+  detail: Record<string, unknown> = {},
+): void {
+  recipeHistory.push({
+    recipeId: recipe.id,
+    action,
+    actorId,
+    metadata: { title: recipe.title, ...detail },
+    createdAt: new Date(),
+  });
+}
+
+/** The statuses a proofreading run may be queued from (QUEUEABLE). */
+const QUEUEABLE: readonly RecipeStatus[] = [
+  "approved",
+  "proofread",
+  "accepted",
+];
+
+function sourceVersionOf(row: TestRecipeSource): RecipeSourceVersion {
+  return {
+    id: row.id,
+    version: row.version,
+    serves: row.serves,
+    sections: structuredClone(row.sections),
+    authorId: row.authorId,
+  };
+}
+
+/** A recipe's newest source version, or null (the twin of latestSource). */
+function latestStoreSource(recipeId: string): TestRecipeSource | null {
+  let latest: TestRecipeSource | null = null;
+  for (const row of recipeSources) {
+    if (row.recipeId === recipeId && (!latest || row.version > latest.version))
+      latest = row;
+  }
+  return latest;
+}
+
+/** The sections as the editor's schema allows, or the refusal (checkSections). */
+function checkStoreSections(
+  sections: unknown,
+): { ok: true; sections: RecipeSourceSections } | { ok: false; error: string } {
+  const parsed = RecipeSourceSections.safeParse(sections);
+  if (parsed.success) return { ok: true, sections: parsed.data };
+  const custom = parsed.error.issues.find((issue) => issue.code === "custom");
+  return { ok: false, error: custom?.message ?? SOURCE_INVALID };
+}
+
+function servesInRange(serves: number | null): boolean {
+  return (
+    serves === null ||
+    (Number.isInteger(serves) && serves >= 1 && serves <= 500)
+  );
+}
+
+/** Write the next version of a recipe's source (the twin of insertSource). */
+function insertStoreSource(input: {
+  recipeId: string;
+  serves: number | null;
+  sections: RecipeSourceSections;
+  authorId: string | null;
+  now: Date;
+}): TestRecipeSource {
+  const version = (latestStoreSource(input.recipeId)?.version ?? 0) + 1;
+  const row: TestRecipeSource = {
+    id: crypto.randomUUID(),
+    recipeId: input.recipeId,
+    version,
+    serves: input.serves,
+    sections: structuredClone(input.sections),
+    authorId: input.authorId,
+    createdAt: input.now,
+  };
+  recipeSources.push(row);
+  return row;
+}
+
+/** A run's stored exchange; an unreadable one reads as none. */
+function storeExchange(exchange: unknown): ProofreadExchange {
+  const parsed = ProofreadExchange.safeParse(exchange ?? []);
+  return parsed.success ? parsed.data : [];
+}
+
+function isStoreRunStage(stage: unknown): stage is RunStage {
+  return (RUN_STAGES as readonly unknown[]).includes(stage);
+}
+
+/**
+ * Queue a `source` run and move the recipe to `queued` (the twin of
+ * insertSourceRun). The caller has made every check.
+ */
+function insertStoreSourceRun(input: {
+  recipe: TestRecipe;
+  sourceId: string;
+  actorId: string;
+  now: Date;
+  note: string | null;
+  plates: number;
+  exchange: ProofreadExchange;
+  previousRunId: string | null;
+  promptVersion: string;
+  model: string;
+}): string {
+  const runId = crypto.randomUUID();
+  const { recipe } = input;
+  recipeRuns.push({
+    id: runId,
+    recipeId: recipe.id,
+    requestedBy: input.actorId,
+    requestedAt: input.now,
+    note: input.note,
+    startedAt: null,
+    finishedAt: null,
+    promptVersion: input.promptVersion,
+    model: input.model,
+    inputTokens: null,
+    outputTokens: null,
+    outcome: "queued",
+    error: null,
+    result: null,
+    kind: "source",
+    plates: input.plates,
+    versionId: null,
+    sourceId: input.sourceId,
+    stage: null,
+    exchange: input.exchange,
+    previousStatus: recipe.status,
+    previousRunId: input.previousRunId,
+  });
+  recipe.status = "queued";
+  recipe.lastError = null;
+  recipe.latestRunId = runId;
+  recipe.rerunRequest = null;
+  recipe.rerunRequestedBy = null;
+  recipe.rerunRequestedAt = null;
+  recipe.updatedAt = input.now;
+  return runId;
+}
+
+/** File an ingredient by lower-cased name; fill only an empty category. */
+function upsertStoreIngredient(line: KitchenRecipe["ingredients"][number]) {
+  const name = line.name.trim();
+  const existing = ingredientCatalogue.find(
+    (c) => c.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (existing) {
+    existing.category ??= line.category;
+    return;
+  }
+  ingredientCatalogue.push({
+    id: crypto.randomUUID(),
+    name,
+    category: line.category,
+  });
+}
+
+/** The twin of insertVersion: the body, its own plate count, the catalogue. */
+function addStoreVersion(
+  recipe: TestRecipe,
+  input: {
+    authorId: string;
+    runId: string | null;
+    reason: string;
+    body: KitchenRecipe;
+    report: DraftReport | null;
+    sourceId?: string | null;
+    scalingNotes?: string[];
+  },
+): { versionId: string; version: number } {
+  const version =
+    Math.max(
+      0,
+      ...recipeVersions
+        .filter((v) => v.recipeId === recipe.id)
+        .map((v) => v.version),
+    ) + 1;
+  const id = crypto.randomUUID();
+  const now = new Date();
+  recipeVersions.push({
+    id,
+    recipeId: recipe.id,
+    version,
+    body: input.body,
+    report: input.report,
+    scalingNotes: input.scalingNotes ?? [],
+    sourceId: input.sourceId ?? null,
+    runId: input.runId,
+    reason: input.reason,
+    authorId: input.authorId,
+    createdAt: now,
+  });
+  recipePlateCounts.push({
+    versionId: id,
+    plates: input.body.plates,
+    lines: baseLines(input.body),
+    pots: null,
+    notes: [],
+    report: null,
+    source: "version",
+    runId: null,
+    createdAt: now,
+  });
+  input.body.ingredients.forEach(upsertStoreIngredient);
+  recipe.status = "accepted";
+  recipe.acceptedVersionId = id;
+  recipe.title = input.body.title;
+  recipe.updatedAt = now;
+  return { versionId: id, version };
+}
+
+/** The plate counts a version has a result for, smallest first. */
+function storePlateCounts(versionId: string): TestPlateCount[] {
+  return recipePlateCounts
+    .filter((p) => p.versionId === versionId)
+    .sort((a, b) => a.plates - b.plates);
 }
 
 export const testStore = {
@@ -2483,6 +3011,1395 @@ export const testStore = {
     });
   },
 
+  // --- Recipes: twins of @camp404/db/recipes, same rules, same words --------
+  // The store is one synchronous process, so every check runs before the
+  // first change and a refusal leaves nothing behind, as the real rollback
+  // does. The rules come from the same places: canApproveRecipe and
+  // canRunProofread in core, and textBlockedReason, capRefusal and the camp
+  // day from @camp404/db/recipes.
+
+  getKitchenSettings(): KitchenSettings {
+    return { ...S.kitchenSettings };
+  },
+
+  setKitchenSettings(
+    input: { actorId: string } & KitchenSettingsInput,
+  ): RecipeWriteResult<{ settings: KitchenSettings }> {
+    if (findUserById(input.actorId)?.rank !== "captain") {
+      return { ok: false, error: ONLY_A_CAPTAIN_SETS_KITCHEN };
+    }
+    const before = { ...S.kitchenSettings };
+    const after: KitchenSettings = {
+      // Absent (Camp settings no longer sends it): keep the stored cap.
+      recipeProofreadDailyCap:
+        input.recipeProofreadDailyCap ?? before.recipeProofreadDailyCap,
+      kitchenLargestPotLitres: input.kitchenLargestPotLitres,
+      kitchenBurnerCount: input.kitchenBurnerCount,
+      kitchenPlatesBreakfast: input.kitchenPlatesBreakfast,
+      kitchenPlatesLunch: input.kitchenPlatesLunch,
+      kitchenPlatesDinner: input.kitchenPlatesDinner,
+    };
+    S.kitchenSettings = after;
+    recipeHistory.push({
+      recipeId: null,
+      action: "camp.kitchen_settings.changed",
+      actorId: input.actorId,
+      metadata: { before, after },
+      createdAt: new Date(),
+    });
+    return { ok: true, settings: { ...after } };
+  },
+
+  suggestRecipe(input: {
+    submitterId: string;
+    title: string | null;
+    source: RecipeSource;
+    sourceUrl: string | null;
+    text: string | null;
+    suitabilityNote: string | null;
+    aiConsent: boolean;
+    now: Date;
+  }): RecipeWriteResult<{ id: string }> {
+    if (findUserById(input.submitterId)?.approvalStatus !== "approved") {
+      return { ok: false, error: NOT_AN_APPROVED_MEMBER };
+    }
+    const text = input.text?.trim() || null;
+    if (!text) return { ok: false, error: TEXT_NEEDED };
+    const id = crypto.randomUUID();
+    recipes.push({
+      id,
+      submitterId: input.submitterId,
+      source: input.source,
+      status: "suggested",
+      title: suggestionTitle(input.title, text),
+      sourceUrl: input.sourceUrl?.trim() || null,
+      rawText: text,
+      suitabilityNote: input.suitabilityNote?.trim() || null,
+      textAuthorId: input.submitterId,
+      aiConsentAt: input.aiConsent ? input.now : null,
+      changesNote: null,
+      rejectionReason: null,
+      lastError: null,
+      latestRunId: null,
+      acceptedVersionId: null,
+      variantOfRecipeId: null,
+      rerunRequest: null,
+      rerunRequestedBy: null,
+      rerunRequestedAt: null,
+      createdAt: input.now,
+      updatedAt: input.now,
+    });
+    // Version 1 of the source: the member's own words, split into sections.
+    insertStoreSource({
+      recipeId: id,
+      serves: null,
+      sections: sourceFromText(text),
+      authorId: input.submitterId,
+      now: input.now,
+    });
+    return { ok: true, id };
+  },
+
+  resubmitRecipe(input: {
+    recipeId: string;
+    actorId: string;
+    title: string;
+    text: string | null;
+    suitabilityNote: string | null;
+    aiConsent: boolean;
+    now?: Date;
+  }): RecipeWriteResult {
+    if (findUserById(input.actorId)?.approvalStatus !== "approved") {
+      return { ok: false, error: NOT_AN_APPROVED_MEMBER };
+    }
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    if (recipe.submitterId !== input.actorId) {
+      return { ok: false, error: NOT_YOUR_SUGGESTION };
+    }
+    const text = input.text?.trim() || null;
+    if (recipe.source !== "url" && !text) {
+      return { ok: false, error: TEXT_NEEDED };
+    }
+    if (recipe.status !== "changes_requested") {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    const now = input.now ?? new Date();
+    Object.assign(recipe, {
+      status: "suggested",
+      title: input.title.trim(),
+      rawText: text,
+      textAuthorId: input.actorId,
+      // The member's own words again: only their fresh tick counts.
+      aiConsentAt: input.aiConsent ? now : null,
+      suitabilityNote: input.suitabilityNote?.trim() || null,
+      updatedAt: now,
+    } satisfies Partial<TestRecipe>);
+    // The member's words are the source again, and theirs.
+    if (text) {
+      insertStoreSource({
+        recipeId: recipe.id,
+        serves: null,
+        sections: sourceFromText(text),
+        authorId: input.actorId,
+        now,
+      });
+    }
+    return { ok: true };
+  },
+
+  decideRecipe(
+    input: { recipeId: string; actorId: string } & RecipeDecision,
+  ): RecipeWriteResult {
+    if (!isKitchenReviewer(input.actorId)) {
+      return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
+    }
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    let detail: Record<string, unknown> = {};
+    if (input.decision === "reject") {
+      if (!input.reason.trim()) {
+        return { ok: false, error: REJECT_REASON_NEEDED };
+      }
+      detail = { reason: input.reason.trim() };
+    } else if (input.decision === "request_changes") {
+      if (!input.note.trim()) return { ok: false, error: CHANGES_NOTE_NEEDED };
+      detail = { note: input.note.trim() };
+    }
+    if (recipe.status !== "suggested") {
+      return { ok: false, error: RECIPE_DECIDED };
+    }
+    if (input.decision === "approve") recipe.status = "approved";
+    else if (input.decision === "reject") {
+      recipe.status = "rejected";
+      recipe.rejectionReason = input.reason.trim();
+    } else {
+      recipe.status = "changes_requested";
+      recipe.changesNote = input.note.trim();
+    }
+    recipe.updatedAt = new Date();
+    recordRecipeEvent(
+      recipe,
+      input.decision === "approve"
+        ? "recipe.approved"
+        : input.decision === "reject"
+          ? "recipe.rejected"
+          : "recipe.changes_requested",
+      input.actorId,
+      detail,
+    );
+    return { ok: true };
+  },
+
+  retypeRecipeText(input: {
+    recipeId: string;
+    actorId: string;
+    text: string;
+  }): RecipeWriteResult {
+    if (!isKitchenReviewer(input.actorId)) {
+      return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
+    }
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    const text = input.text.trim();
+    if (!text) return { ok: false, error: TEXT_NEEDED };
+    if (!["suggested", "approved", "proofread"].includes(recipe.status)) {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    const now = new Date();
+    recipe.rawText = text;
+    recipe.textAuthorId = input.actorId;
+    // The reviewer's retyping is their agreement, as in production.
+    recipe.aiConsentAt = now;
+    recipe.updatedAt = now;
+    // The retyped text is the next source version, and the reviewer's; the
+    // Serves set in the source editor carries over, as in production.
+    insertStoreSource({
+      recipeId: recipe.id,
+      serves: latestStoreSource(recipe.id)?.serves ?? null,
+      sections: sourceFromText(text),
+      authorId: input.actorId,
+      now,
+    });
+    recordRecipeEvent(recipe, "recipe.text_retyped", input.actorId);
+    return { ok: true };
+  },
+
+  requestRerun(input: {
+    recipeId: string;
+    actorId: string;
+    note: string;
+    now?: Date;
+  }): RecipeWriteResult {
+    if (!isKitchenReviewer(input.actorId)) {
+      return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
+    }
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    const note = input.note.trim();
+    if (!note) return { ok: false, error: RERUN_NOTE_NEEDED };
+    if (note.length > RERUN_NOTE_MAX) {
+      return {
+        ok: false,
+        error: `Keep the note under ${RERUN_NOTE_MAX} characters.`,
+      };
+    }
+    if (!["approved", "proofread", "accepted"].includes(recipe.status)) {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    const now = input.now ?? new Date();
+    recipe.rerunRequest = note;
+    recipe.rerunRequestedBy = input.actorId;
+    recipe.rerunRequestedAt = now;
+    recipe.updatedAt = now;
+    recordRecipeEvent(recipe, "recipe.rerun_requested", input.actorId, {
+      note,
+    });
+    return { ok: true };
+  },
+
+  queueProofread(input: {
+    recipeIds: readonly string[];
+    actorId: string;
+    note: string | null;
+    plates: number;
+    now: Date;
+    promptVersion: string;
+    model: string;
+  }): RecipeWriteResult<{ runIds: string[] }> {
+    if (!mayRunProofread(input.actorId)) {
+      return { ok: false, error: ONLY_A_REVIEWER_SENDS };
+    }
+    const ids = [...new Set(input.recipeIds)];
+    if (ids.length === 0) return { ok: false, error: NOT_READY_TO_PROOFREAD };
+    const overCap = capRefusal(
+      S.kitchenSettings.recipeProofreadDailyCap,
+      runsSince(campDayStartOf(input.now)),
+      ids.length,
+    );
+    if (overCap) return { ok: false, error: overCap };
+    if (
+      !Number.isInteger(input.plates) ||
+      input.plates < 1 ||
+      input.plates > 500
+    ) {
+      return { ok: false, error: PLATES_OUT_OF_RANGE };
+    }
+    const picked: { recipe: TestRecipe; source: TestRecipeSource }[] = [];
+    for (const id of ids) {
+      const recipe = findRecipe(id);
+      if (!recipe) return { ok: false, error: RECIPE_GONE };
+      if (!QUEUEABLE.includes(recipe.status)) {
+        return {
+          ok: false,
+          error: forRecipe(recipe.title, NOT_READY_TO_PROOFREAD),
+        };
+      }
+      const source = latestStoreSource(recipe.id);
+      if (!source) {
+        return { ok: false, error: forRecipe(recipe.title, NO_TEXT_TO_SEND) };
+      }
+      const blocked = sourceBlockedReason(source, recipe);
+      if (blocked)
+        return { ok: false, error: forRecipe(recipe.title, blocked) };
+      picked.push({ recipe, source });
+    }
+    const note = input.note?.trim() || null;
+    const runIds: string[] = [];
+    for (const { recipe, source } of picked) {
+      const runId = insertStoreSourceRun({
+        recipe,
+        sourceId: source.id,
+        actorId: input.actorId,
+        now: input.now,
+        note,
+        plates: input.plates,
+        exchange: [],
+        previousRunId: recipe.latestRunId,
+        promptVersion: input.promptVersion,
+        model: input.model,
+      });
+      recordRecipeEvent(recipe, "recipe.proofread_queued", input.actorId, {
+        runId,
+        plates: input.plates,
+        sourceVersion: source.version,
+        promptVersion: input.promptVersion,
+        model: input.model,
+      });
+      runIds.push(runId);
+    }
+    return { ok: true, runIds };
+  },
+
+  /**
+   * "Send for proofreading" (the twin of sendSourceForProofreading): a new
+   * source version when the content changed, by the reviewer, who becomes the
+   * text's author; an unchanged send saves nothing and keeps the author, so a
+   * member's unticked words stay refused. Then the run.
+   */
+  sendSourceForProofreading(input: {
+    recipeId: string;
+    actorId: string;
+    basedOnSourceId: string | null;
+    serves: number | null;
+    sections: RecipeSourceSections;
+    plates: number;
+    now: Date;
+    promptVersion: string;
+    model: string;
+  }): RecipeWriteResult<{ runId: string; sourceId: string }> {
+    if (!mayRunProofread(input.actorId)) {
+      return { ok: false, error: ONLY_A_REVIEWER_SENDS };
+    }
+    const overCap = capRefusal(
+      S.kitchenSettings.recipeProofreadDailyCap,
+      runsSince(campDayStartOf(input.now)),
+      1,
+    );
+    if (overCap) return { ok: false, error: overCap };
+    if (
+      !Number.isInteger(input.plates) ||
+      input.plates < 1 ||
+      input.plates > 500
+    ) {
+      return { ok: false, error: PLATES_OUT_OF_RANGE };
+    }
+    if (!servesInRange(input.serves)) {
+      return { ok: false, error: SERVES_OUT_OF_RANGE };
+    }
+    const checked = checkStoreSections(input.sections);
+    if (!checked.ok) return checked;
+    const { sections } = checked;
+    const serves = input.serves;
+    // The same ceiling as pasted text (the cost guard on what reaches Claude).
+    const text = sourceText(sections);
+    if (text.length > RECIPE_TEXT_MAX) {
+      return { ok: false, error: TEXT_TOO_LONG };
+    }
+
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    if (!QUEUEABLE.includes(recipe.status)) {
+      return { ok: false, error: NOT_READY_TO_PROOFREAD };
+    }
+    const latest = latestStoreSource(recipe.id);
+    if ((latest?.id ?? null) !== input.basedOnSourceId) {
+      return { ok: false, error: SOURCE_CHANGED };
+    }
+
+    // Only a change to the words makes the reviewer their author; a
+    // serves-only change keeps the author, and so the member's tick.
+    const wordsChanged = !latest || !sameSections(latest.sections, sections);
+    const authorId = wordsChanged ? input.actorId : latest.authorId;
+    // The consent check runs on what would be sent, before anything is
+    // written, so a refusal leaves nothing behind (the real rollback).
+    const blocked = wordsChanged
+      ? sourceBlockedReason(
+          { sections, authorId },
+          { submitterId: recipe.submitterId, aiConsentAt: input.now },
+        )
+      : sourceBlockedReason({ sections, authorId }, recipe);
+    if (blocked) return { ok: false, error: blocked };
+
+    let source = latest;
+    if (!source || wordsChanged || source.serves !== serves) {
+      source = insertStoreSource({
+        recipeId: recipe.id,
+        serves,
+        sections,
+        authorId,
+        now: input.now,
+      });
+      if (wordsChanged) {
+        recipe.rawText = text || null;
+        recipe.textAuthorId = input.actorId;
+        recipe.aiConsentAt = input.now;
+        recipe.updatedAt = input.now;
+      }
+      recordRecipeEvent(recipe, "recipe.source_saved", input.actorId, {
+        version: source.version,
+      });
+    }
+    const runId = insertStoreSourceRun({
+      recipe,
+      sourceId: source.id,
+      actorId: input.actorId,
+      now: input.now,
+      note: null,
+      plates: input.plates,
+      exchange: [],
+      previousRunId: recipe.latestRunId,
+      promptVersion: input.promptVersion,
+      model: input.model,
+    });
+    recordRecipeEvent(recipe, "recipe.proofread_queued", input.actorId, {
+      runId,
+      plates: input.plates,
+      sourceVersion: source.version,
+      promptVersion: input.promptVersion,
+      model: input.model,
+    });
+    return { ok: true, runId, sourceId: source.id };
+  },
+
+  /**
+   * A reviewer answers Claude's questions (the twin of
+   * answerProofreadQuestions): the next round, on the same source and plates,
+   * carrying the whole exchange. Every round counts toward the cap.
+   */
+  answerProofreadQuestions(input: {
+    recipeId: string;
+    runId: string;
+    actorId: string;
+    answer: string;
+    now: Date;
+    promptVersion: string;
+    model: string;
+  }): RecipeWriteResult<{ runId: string }> {
+    if (!mayRunProofread(input.actorId)) {
+      return { ok: false, error: ONLY_A_REVIEWER_SENDS };
+    }
+    const overCap = capRefusal(
+      S.kitchenSettings.recipeProofreadDailyCap,
+      runsSince(campDayStartOf(input.now)),
+      1,
+    );
+    if (overCap) return { ok: false, error: overCap };
+    const answer = input.answer.trim();
+    if (!answer) return { ok: false, error: ANSWER_NEEDED };
+    if (answer.length > PROOFREAD_ANSWER_MAX) {
+      return { ok: false, error: ANSWER_TOO_LONG };
+    }
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    if (
+      recipe.latestRunId !== input.runId ||
+      !QUEUEABLE.includes(recipe.status)
+    ) {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    const asked = recipeRuns.find(
+      (r) =>
+        r.id === input.runId &&
+        r.recipeId === recipe.id &&
+        r.kind === "source" &&
+        r.outcome === "succeeded",
+    );
+    const questions = readQuestions(asked?.result);
+    if (!asked || !questions || asked.sourceId === null) {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    const latest = latestStoreSource(recipe.id);
+    if (latest?.id !== asked.sourceId) {
+      return { ok: false, error: SOURCE_CHANGED };
+    }
+    const blocked = sourceBlockedReason(latest, recipe);
+    if (blocked) return { ok: false, error: blocked };
+
+    const exchange = [...storeExchange(asked.exchange), { questions, answer }];
+    const runId = insertStoreSourceRun({
+      recipe,
+      sourceId: asked.sourceId,
+      actorId: input.actorId,
+      now: input.now,
+      note: null,
+      plates: asked.plates ?? DEFAULT_PLATES,
+      exchange,
+      previousRunId: input.runId,
+      promptVersion: input.promptVersion,
+      model: input.model,
+    });
+    recordRecipeEvent(recipe, "recipe.questions_answered", input.actorId, {
+      runId,
+      answeredRunId: input.runId,
+      round: exchange.length,
+    });
+    return { ok: true, runId };
+  },
+
+  /**
+   * Take one queued `source` run (the twin of claimSourceRun). A run whose
+   * source lost its consent is failed unsent and its recipe handed back.
+   */
+  claimSourceRun(
+    runId: string,
+    now: Date = new Date(),
+  ): ClaimedSourceRun | null {
+    const run = recipeRuns.find((r) => r.id === runId);
+    if (!run || run.kind !== "source" || run.outcome !== "queued") return null;
+    const recipe = findRecipe(run.recipeId);
+    if (!recipe || recipe.status !== "queued" || recipe.latestRunId !== run.id)
+      return null;
+    const row = recipeSources.find((x) => x.id === run.sourceId);
+    const source = row ? sourceVersionOf(row) : null;
+    const blocked = sourceBlockedReason(source, recipe);
+    if (blocked !== null || !source) {
+      const error = blocked ?? NO_TEXT_TO_SEND;
+      run.outcome = "failed";
+      run.finishedAt = now;
+      run.error = error;
+      handBackStore(run, "queued", error, now);
+      return null;
+    }
+    run.outcome = "running";
+    run.startedAt = now;
+    run.stage = "sending";
+    recipe.status = "analysing";
+    recipe.updatedAt = now;
+    return {
+      runId: run.id,
+      recipeId: recipe.id,
+      title: recipe.title,
+      sourceText: sourceText(source.sections),
+      serves: source.serves,
+      plates: run.plates ?? DEFAULT_PLATES,
+      exchange: storeExchange(run.exchange),
+      note: run.note,
+      kitchen: { ...S.kitchenSettings },
+    };
+  },
+
+  /** The twin of setRunStage: only while a source run is running. */
+  setRunStage(runId: string, stage: RunStage): boolean {
+    if (!isStoreRunStage(stage)) return false;
+    const run = recipeRuns.find((r) => r.id === runId);
+    if (!run || run.kind !== "source" || run.outcome !== "running") {
+      return false;
+    }
+    run.stage = stage;
+    return true;
+  },
+
+  /**
+   * A source run came back with a valid answer (the twin of
+   * completeSourceRun): questions hand the recipe back pointing at this run;
+   * a recipe for the run's plates is saved straight into the book.
+   */
+  completeSourceRun(input: {
+    runId: string;
+    result: SourceProofread;
+    usage: RunUsage;
+    now?: Date;
+  }): RecipeWriteResult<{ versionId: string | null }> {
+    const parsed = SourceProofread.safeParse(input.result);
+    if (!parsed.success) {
+      return { ok: false, error: versionInvalid(parsed.error) };
+    }
+    const answer = parsed.data;
+    const run = recipeRuns.find((r) => r.id === input.runId);
+    const recipe = run ? findRecipe(run.recipeId) : null;
+    if (
+      !run ||
+      run.kind !== "source" ||
+      run.outcome !== "running" ||
+      !recipe ||
+      recipe.status !== "analysing" ||
+      recipe.latestRunId !== run.id
+    ) {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    const asked = run.plates ?? DEFAULT_PLATES;
+    if (!answer.needsInfo && answer.recipe!.plates !== asked) {
+      return {
+        ok: false,
+        error: draftPlatesMismatch(asked, answer.recipe!.plates),
+      };
+    }
+    // The sender must still be a Kitchen reviewer when the recipe is written
+    // into the book, as the write re-checks in production.
+    if (
+      !answer.needsInfo &&
+      !(run.requestedBy && isKitchenReviewer(run.requestedBy))
+    ) {
+      return { ok: false, error: SENDER_NOT_A_REVIEWER };
+    }
+    const now = input.now ?? new Date();
+    Object.assign(run, {
+      outcome: "succeeded",
+      finishedAt: now,
+      result: answer,
+      inputTokens: input.usage.inputTokens,
+      outputTokens: input.usage.outputTokens,
+      error: null,
+    } satisfies Partial<TestRecipeRun>);
+
+    if (answer.needsInfo) {
+      const to = handBackTo({
+        failedRunId: run.id,
+        previousStatus: run.previousStatus,
+        previousRunId: run.previousRunId,
+        previousRunSucceeded: false,
+        acceptedVersionId: recipe.acceptedVersionId,
+      });
+      recipe.status = to.status;
+      recipe.latestRunId = run.id;
+      recipe.lastError = null;
+      recipe.updatedAt = now;
+      return { ok: true, versionId: null };
+    }
+
+    const written = addStoreVersion(recipe, {
+      authorId: run.requestedBy ?? "",
+      runId: run.id,
+      reason: "Written by Claude",
+      body: answer.recipe!,
+      report: answer.report,
+      sourceId: run.sourceId,
+      scalingNotes: answer.scalingNotes,
+    });
+    recipe.lastError = null;
+    recordRecipeEvent(
+      recipe,
+      "recipe.written_by_claude",
+      run.requestedBy ?? "",
+      { version: written.version, runId: run.id },
+    );
+    return { ok: true, versionId: written.versionId };
+  },
+
+  failRun(input: {
+    runId: string;
+    error: string;
+    usage?: RunUsage | null;
+    now?: Date;
+  }): RecipeWriteResult {
+    const run = recipeRuns.find((r) => r.id === input.runId);
+    if (!run || run.outcome !== "running") {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    const now = input.now ?? new Date();
+    const error = input.error.trim().slice(0, 1_000) || "The run failed.";
+    run.outcome = "failed";
+    run.finishedAt = now;
+    run.error = error;
+    if (input.usage) {
+      run.inputTokens = input.usage.inputTokens;
+      run.outputTokens = input.usage.outputTokens;
+    }
+    // A plate-count run never moved its recipe, so only its own row changes.
+    if (run.kind !== "plates") handBackStore(run, "analysing", error, now);
+    return { ok: true };
+  },
+
+  resetStaleRuns(
+    now: Date,
+    staleAfterMs: number = STALE_RUN_AFTER_MS,
+  ): { reset: number } {
+    const cutoff = now.getTime() - staleAfterMs;
+    let reset = 0;
+    for (const run of recipeRuns) {
+      const stopped =
+        run.outcome === "running" &&
+        run.startedAt !== null &&
+        run.startedAt.getTime() < cutoff;
+      const neverStarted =
+        run.outcome === "queued" && run.requestedAt.getTime() < cutoff;
+      if (!stopped && !neverStarted) continue;
+      const error = stopped ? STALE_RUN_ERROR : NEVER_STARTED_ERROR;
+      run.outcome = "failed";
+      run.finishedAt = now;
+      run.error = error;
+      reset += 1;
+      if (run.kind !== "plates") {
+        handBackStore(run, stopped ? "analysing" : "queued", error, now);
+      }
+    }
+    return { reset };
+  },
+
+  // --- Plate counts: twins of queuePlateProofread and the plate worker ------
+
+  queuePlateProofread(input: {
+    recipeId: string;
+    versionId: string;
+    plates: number;
+    rerun: boolean;
+    actorId: string;
+    now: Date;
+    promptVersion: string;
+    model: string;
+  }): RecipeWriteResult<{ runId: string }> {
+    if (!mayRunProofread(input.actorId)) {
+      return { ok: false, error: ONLY_A_REVIEWER_SENDS };
+    }
+    const overCap = capRefusal(
+      S.kitchenSettings.recipeProofreadDailyCap,
+      runsSince(campDayStartOf(input.now)),
+      1,
+    );
+    if (overCap) return { ok: false, error: overCap };
+    const plates = input.plates;
+    if (!Number.isInteger(plates) || plates < 1 || plates > 500) {
+      return { ok: false, error: PLATES_OUT_OF_RANGE };
+    }
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    if (recipe.acceptedVersionId === null) {
+      return { ok: false, error: NO_ACCEPTED_VERSION };
+    }
+    const version = recipeVersions.find((v) => v.id === input.versionId);
+    if (recipe.acceptedVersionId !== input.versionId || !version) {
+      return { ok: false, error: VERSION_CHANGED };
+    }
+    if (plates === version.body.plates) {
+      return { ok: false, error: plateCountIsBase(plates) };
+    }
+    const ready = recipePlateCounts.some(
+      (p) => p.versionId === version.id && p.plates === plates,
+    );
+    if (ready && !input.rerun) {
+      return { ok: false, error: plateCountReady(plates) };
+    }
+    const open = recipeRuns.some(
+      (r) =>
+        r.kind === "plates" &&
+        r.versionId === version.id &&
+        r.plates === plates &&
+        (r.outcome === "queued" || r.outcome === "running"),
+    );
+    if (open) return { ok: false, error: plateRunOpen(plates) };
+
+    const runId = crypto.randomUUID();
+    recipeRuns.push({
+      id: runId,
+      recipeId: recipe.id,
+      requestedBy: input.actorId,
+      requestedAt: input.now,
+      note: null,
+      startedAt: null,
+      finishedAt: null,
+      promptVersion: input.promptVersion,
+      model: input.model,
+      inputTokens: null,
+      outputTokens: null,
+      outcome: "queued",
+      error: null,
+      result: null,
+      kind: "plates",
+      plates,
+      versionId: version.id,
+      sourceId: null,
+      stage: null,
+      exchange: null,
+      previousStatus: null,
+      previousRunId: null,
+    });
+    recordRecipeEvent(recipe, "recipe.plates_queued", input.actorId, {
+      version: version.version,
+      plates,
+      runId,
+      rerun: ready,
+      promptVersion: input.promptVersion,
+      model: input.model,
+    });
+    return { ok: true, runId };
+  },
+
+  claimPlateRun(runId: string, now: Date = new Date()): ClaimedPlateRun | null {
+    const run = recipeRuns.find((r) => r.id === runId);
+    if (
+      !run ||
+      run.kind !== "plates" ||
+      run.outcome !== "queued" ||
+      run.versionId === null ||
+      run.plates === null
+    ) {
+      return null;
+    }
+    const version = recipeVersions.find((v) => v.id === run.versionId);
+    const recipe = findRecipe(run.recipeId);
+    if (!version || !recipe || recipe.acceptedVersionId !== version.id) {
+      run.outcome = "failed";
+      run.finishedAt = now;
+      run.error = PLATE_RUN_VERSION_GONE;
+      return null;
+    }
+    run.outcome = "running";
+    run.startedAt = now;
+    return {
+      runId: run.id,
+      recipeId: recipe.id,
+      title: recipe.title,
+      fromPlates: version.body.plates,
+      plates: run.plates,
+      recipe: version.body,
+      kitchen: { ...S.kitchenSettings },
+    };
+  },
+
+  completePlateRun(input: {
+    runId: string;
+    result: PlateProofread;
+    usage: RunUsage;
+    now?: Date;
+  }): RecipeWriteResult {
+    const parsed = PlateProofread.safeParse(input.result);
+    if (!parsed.success) {
+      return { ok: false, error: versionInvalid(parsed.error) };
+    }
+    const run = recipeRuns.find((r) => r.id === input.runId);
+    if (
+      !run ||
+      run.kind !== "plates" ||
+      run.outcome !== "running" ||
+      run.versionId === null ||
+      run.plates === null
+    ) {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    const existing = recipePlateCounts.find(
+      (p) => p.versionId === run.versionId && p.plates === run.plates,
+    );
+    if (existing?.source === "version") {
+      return { ok: false, error: plateCountIsBase(run.plates) };
+    }
+    const now = input.now ?? new Date();
+    Object.assign(run, {
+      outcome: "succeeded",
+      finishedAt: now,
+      result: parsed.data,
+      inputTokens: input.usage.inputTokens,
+      outputTokens: input.usage.outputTokens,
+      error: null,
+    } satisfies Partial<TestRecipeRun>);
+    const stored: TestPlateCount = {
+      versionId: run.versionId,
+      plates: run.plates,
+      lines: parsed.data.lines,
+      pots: parsed.data.pots,
+      notes: parsed.data.notes,
+      report: parsed.data.report,
+      source: "proofread",
+      runId: run.id,
+      createdAt: now,
+    };
+    if (existing) Object.assign(existing, stored);
+    else recipePlateCounts.push(stored);
+    return { ok: true };
+  },
+
+  failPlateRun(input: {
+    runId: string;
+    error: string;
+    usage?: RunUsage | null;
+    now?: Date;
+  }): RecipeWriteResult {
+    const run = recipeRuns.find((r) => r.id === input.runId);
+    if (!run || run.kind !== "plates" || run.outcome !== "running") {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    run.outcome = "failed";
+    run.finishedAt = input.now ?? new Date();
+    run.error = input.error.trim().slice(0, 1_000) || "The run failed.";
+    if (input.usage) {
+      run.inputTokens = input.usage.inputTokens;
+      run.outputTokens = input.usage.outputTokens;
+    }
+    return { ok: true };
+  },
+
+  /**
+   * Seed an older `recipe` run that came back with a draft, as rows written
+   * before source runs look: nothing writes one any more, but a draft still
+   * waiting in `proofread` keeps its Accept button. Unit tests only; no route
+   * reaches it.
+   */
+  seedLegacyDraft(input: {
+    recipeId: string;
+    actorId: string;
+    result: RecipeDraft;
+    now?: Date;
+  }): string {
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) throw new Error(RECIPE_GONE);
+    const now = input.now ?? new Date();
+    const runId = crypto.randomUUID();
+    recipeRuns.push({
+      id: runId,
+      recipeId: recipe.id,
+      requestedBy: input.actorId,
+      requestedAt: now,
+      note: null,
+      startedAt: now,
+      finishedAt: now,
+      promptVersion: "2026-09-25.1",
+      model: "claude-opus-4-8",
+      inputTokens: 1,
+      outputTokens: 1,
+      outcome: "succeeded",
+      error: null,
+      result: RecipeDraft.parse(input.result),
+      kind: "recipe",
+      plates: input.result.recipe.plates,
+      versionId: null,
+      sourceId: null,
+      stage: null,
+      exchange: null,
+      previousStatus: recipe.status,
+      previousRunId: recipe.latestRunId,
+    });
+    recipe.status = "proofread";
+    recipe.latestRunId = runId;
+    recipe.updatedAt = now;
+    return runId;
+  },
+
+  /**
+   * Accept an older run's draft exactly as Claude wrote it (the twin of
+   * acceptProofread): the draft is read from the run, never taken from the
+   * caller.
+   */
+  acceptProofread(input: {
+    recipeId: string;
+    runId: string;
+    actorId: string;
+    reason?: string | null;
+  }): RecipeWriteResult<{ versionId: string; version: number }> {
+    if (!isKitchenReviewer(input.actorId)) {
+      return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
+    }
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    if (recipe.status !== "proofread" || recipe.latestRunId !== input.runId) {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    const run = recipeRuns.find(
+      (r) => r.id === input.runId && r.recipeId === recipe.id,
+    );
+    const draft = readDraft(run?.result);
+    if (!draft) return { ok: false, error: DRAFT_UNREADABLE };
+    const parsed = KitchenRecipe.safeParse(draft.recipe);
+    if (!parsed.success) {
+      return { ok: false, error: versionInvalid(parsed.error) };
+    }
+    const written = addStoreVersion(recipe, {
+      authorId: input.actorId,
+      runId: input.runId,
+      reason: input.reason?.trim() || "Written by Claude",
+      body: parsed.data,
+      report: draft.report ?? null,
+    });
+    recordRecipeEvent(recipe, "recipe.accepted", input.actorId, {
+      version: written.version,
+      runId: input.runId,
+    });
+    return { ok: true, ...written };
+  },
+
+  /**
+   * Test only: a version in the book, as a run or an accept would write it,
+   * with no reviewer check. The app has no way to write a version by hand any
+   * more, so the suites that need one seed it here; lib/recipes.ts does not
+   * export it.
+   */
+  seedAcceptedVersion(input: {
+    recipeId: string;
+    authorId: string;
+    recipe: KitchenRecipe;
+    reason?: string;
+  }): { versionId: string; version: number } {
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) throw new Error(`No recipe ${input.recipeId}`);
+    return addStoreVersion(recipe, {
+      authorId: input.authorId,
+      runId: null,
+      reason: input.reason ?? "Seeded",
+      body: KitchenRecipe.parse(input.recipe),
+      report: null,
+    });
+  },
+
+  startVariation(input: {
+    recipeId: string;
+    actorId: string;
+    title: string;
+  }): RecipeWriteResult<{ id: string }> {
+    if (!isKitchenReviewer(input.actorId)) {
+      return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
+    }
+    const title = input.title.trim();
+    if (!title) return { ok: false, error: TITLE_NEEDED };
+    const original = findRecipe(input.recipeId);
+    if (!original) return { ok: false, error: RECIPE_GONE };
+    if (!original.acceptedVersionId) {
+      return { ok: false, error: NO_ACCEPTED_VERSION };
+    }
+    const now = new Date();
+    const variation: TestRecipe = {
+      id: crypto.randomUUID(),
+      submitterId: input.actorId,
+      source: "text",
+      status: "approved",
+      title,
+      sourceUrl: original.sourceUrl,
+      rawText: storeTextBlocked(original) === null ? original.rawText : null,
+      suitabilityNote: null,
+      textAuthorId: input.actorId,
+      aiConsentAt: now,
+      changesNote: null,
+      rejectionReason: null,
+      lastError: null,
+      latestRunId: null,
+      acceptedVersionId: null,
+      variantOfRecipeId: original.id,
+      rerunRequest: null,
+      rerunRequestedBy: null,
+      rerunRequestedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    recipes.push(variation);
+    // A copy of the newest source, only when it is cleared for Claude.
+    const source = latestStoreSource(original.id);
+    if (source && sourceBlockedReason(source, original) === null) {
+      insertStoreSource({
+        recipeId: variation.id,
+        serves: source.serves,
+        sections: source.sections,
+        authorId: input.actorId,
+        now,
+      });
+    }
+    recordRecipeEvent(variation, "recipe.variation_started", input.actorId, {
+      fromRecipeId: original.id,
+    });
+    return { ok: true, id: variation.id };
+  },
+
+  addLesson(input: {
+    recipeId: string;
+    authorId: string;
+    body: string;
+  }): RecipeWriteResult<{ id: string }> {
+    if (findUserById(input.authorId)?.approvalStatus !== "approved") {
+      return { ok: false, error: NOT_AN_APPROVED_MEMBER };
+    }
+    const body = input.body.trim();
+    if (!body) return { ok: false, error: LESSON_NEEDED };
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    if (!recipe.acceptedVersionId) {
+      return { ok: false, error: NO_ACCEPTED_VERSION };
+    }
+    const id = crypto.randomUUID();
+    recipeLessons.push({
+      id,
+      recipeId: recipe.id,
+      authorId: input.authorId,
+      body,
+      cycle: currentCycleNumber(),
+      createdAt: new Date(),
+    });
+    return { ok: true, id };
+  },
+
+  getRecipeSource(recipeId: string): RecipeSourceVersion | null {
+    const row = latestStoreSource(recipeId);
+    return row ? sourceVersionOf(row) : null;
+  },
+
+  getProofreadProgress(
+    recipeId: string,
+    runId?: string | null,
+  ): ProofreadProgress | null {
+    const recipe = findRecipe(recipeId);
+    const wanted = runId ?? recipe?.latestRunId;
+    const run = recipe
+      ? recipeRuns.find((r) => r.id === wanted && r.recipeId === recipe.id)
+      : undefined;
+    if (!run) return null;
+    return {
+      runId: run.id,
+      kind: run.kind,
+      outcome: run.outcome,
+      stage: isStoreRunStage(run.stage) ? run.stage : null,
+      questions: run.outcome === "succeeded" ? readQuestions(run.result) : null,
+      error: run.error,
+    };
+  },
+
+  listRecipeBook(): RecipeBookEntry[] {
+    return recipes
+      .filter((r) => r.acceptedVersionId !== null)
+      .map((r) => {
+        const version = recipeVersions.find(
+          (v) => v.id === r.acceptedVersionId,
+        )!;
+        return {
+          id: r.id,
+          title: r.title,
+          status: r.status,
+          variantOfRecipeId: r.variantOfRecipeId,
+          version: version.version,
+          plates: version.body.plates,
+          readyPlates: storePlateCounts(version.id).map((p) => p.plates),
+          versionCreatedAt: version.createdAt,
+        };
+      })
+      .sort((a, b) =>
+        a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
+      );
+  },
+
+  listMySuggestions(userId: string): MySuggestion[] {
+    return recipes
+      .filter((r) => r.submitterId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((r) => ({
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        source: r.source,
+        createdAt: r.createdAt,
+        changesNote: r.changesNote,
+        rejectionReason: r.rejectionReason,
+      }));
+  },
+
+  listReviewQueue(): ReviewQueueEntry[] {
+    const rank = (r: TestRecipe) => (r.status === "changes_requested" ? 1 : 0);
+    return recipes
+      .filter(
+        (r) => r.status === "suggested" || r.status === "changes_requested",
+      )
+      .sort(
+        (a, b) =>
+          rank(a) - rank(b) || a.createdAt.getTime() - b.createdAt.getTime(),
+      )
+      .map((r) => ({
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        source: r.source,
+        sourceUrl: r.sourceUrl,
+        submitterId: r.submitterId,
+        submitterName: userName(r.submitterId),
+        suitabilityNote: r.suitabilityNote,
+        changesNote: r.changesNote,
+        createdAt: r.createdAt,
+      }));
+  },
+
+  listReadyToProofread(): ProofreadCandidate[] {
+    return recipes
+      .filter((r) => ["approved", "proofread", "accepted"].includes(r.status))
+      .sort(
+        (a, b) =>
+          Number(a.status !== "approved") - Number(b.status !== "approved") ||
+          a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
+      )
+      .map((r) => ({
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        blockedReason: storeTextBlocked(r),
+        lastError: r.lastError,
+        acceptedVersionId: r.acceptedVersionId,
+        rerunRequest: r.rerunRequest
+          ? { note: r.rerunRequest, byName: userName(r.rerunRequestedBy) }
+          : null,
+        updatedAt: r.updatedAt,
+      }));
+  },
+
+  listAwaitingAcceptance(): AwaitingAcceptance[] {
+    const finished = (r: TestRecipe) =>
+      recipeRuns.find((run) => run.id === r.latestRunId)?.finishedAt ?? null;
+    return recipes
+      .filter((r) => r.status === "proofread")
+      .map((r) => ({
+        id: r.id,
+        title: r.title,
+        latestRunId: r.latestRunId,
+        finishedAt: finished(r),
+        acceptedVersionId: r.acceptedVersionId,
+      }))
+      .sort(
+        (a, b) =>
+          (a.finishedAt?.getTime() ?? 0) - (b.finishedAt?.getTime() ?? 0),
+      );
+  },
+
+  getRecipeDetail(recipeId: string): RecipeDetail | null {
+    const r = findRecipe(recipeId);
+    if (!r) return null;
+    const run = recipeRuns.find((x) => x.id === r.latestRunId);
+    const versions = recipeVersions
+      .filter((v) => v.recipeId === r.id)
+      .sort((a, b) => b.version - a.version);
+    const current = versions.find((v) => v.id === r.acceptedVersionId);
+    const currentVersion: RecipeVersionDetail | null = current
+      ? {
+          id: current.id,
+          version: current.version,
+          plates: current.body.plates,
+          recipe: current.body,
+          report: current.report,
+          scalingNotes: current.scalingNotes,
+          runId: current.runId,
+          reason: current.reason,
+          authorName: userName(current.authorId),
+          createdAt: current.createdAt,
+        }
+      : null;
+    const plateCounts = current
+      ? storePlateCounts(current.id).map((p) => ({
+          plates: p.plates,
+          source: p.source,
+          pots: p.pots,
+          createdAt: p.createdAt,
+        }))
+      : [];
+    const openPlateRuns = current
+      ? recipeRuns
+          .filter(
+            (x) =>
+              x.kind === "plates" &&
+              x.versionId === current.id &&
+              (x.outcome === "queued" || x.outcome === "running") &&
+              x.plates !== null,
+          )
+          .map((x) => x.plates!)
+          .sort((a, b) => a - b)
+      : [];
+    const failedPlateRuns = current
+      ? failedPlateCounts(
+          recipeRuns
+            .filter((x) => x.kind === "plates" && x.versionId === current.id)
+            // Newest first; of two queued at once, the later one.
+            .reverse()
+            .sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime()),
+          plateCounts.map((p) => p.plates),
+          openPlateRuns,
+        )
+      : [];
+    return {
+      id: r.id,
+      title: r.title,
+      status: r.status,
+      source: r.source,
+      sourceUrl: r.sourceUrl,
+      text: r.rawText,
+      suitabilityNote: r.suitabilityNote,
+      submitterId: r.submitterId,
+      submitterName: userName(r.submitterId),
+      textAuthorId: r.textAuthorId,
+      blockedReason: storeTextBlocked(r),
+      rerunRequest:
+        r.rerunRequest && r.rerunRequestedAt
+          ? {
+              note: r.rerunRequest,
+              byName: userName(r.rerunRequestedBy),
+              at: r.rerunRequestedAt,
+            }
+          : null,
+      changesNote: r.changesNote,
+      rejectionReason: r.rejectionReason,
+      lastError: r.lastError,
+      variantOfRecipeId: r.variantOfRecipeId,
+      acceptedVersionId: r.acceptedVersionId,
+      createdAt: r.createdAt,
+      latestRun: run
+        ? runDetail({
+            id: run.id,
+            outcome: run.outcome,
+            requestedAt: run.requestedAt,
+            finishedAt: run.finishedAt,
+            note: run.note,
+            plates: run.plates,
+            promptVersion: run.promptVersion,
+            model: run.model,
+            error: run.error,
+            result: run.result,
+            stage: run.stage,
+          })
+        : null,
+      currentVersion,
+      plateCounts,
+      openPlateRuns,
+      failedPlateRuns,
+      versions: versions.map((v) => ({
+        id: v.id,
+        version: v.version,
+        reason: v.reason,
+        runId: v.runId,
+        authorName: userName(v.authorId),
+        createdAt: v.createdAt,
+      })),
+      lessons: recipeLessons
+        .filter((l) => l.recipeId === r.id)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .map((l) => ({
+          id: l.id,
+          body: l.body,
+          cycle: l.cycle,
+          authorName: userName(l.authorId),
+          createdAt: l.createdAt,
+        })),
+      history: recipeHistory
+        .filter((e) => e.recipeId === r.id)
+        .map((e) => ({
+          action: e.action,
+          actorName: userName(e.actorId),
+          metadata: e.metadata,
+          createdAt: e.createdAt,
+        })),
+    };
+  },
+
+  getPlateCount(versionId: string, plates: number): PlateCountDetail | null {
+    const row = recipePlateCounts.find(
+      (p) => p.versionId === versionId && p.plates === plates,
+    );
+    if (!row) return null;
+    return {
+      plates: row.plates,
+      lines: row.lines,
+      pots: row.pots,
+      notes: row.notes,
+      report: row.report,
+      source: row.source,
+    };
+  },
+
+  listProofreadRuns(options: { limit?: number } = {}): ProofreadRunRow[] {
+    const limit = Math.min(Math.max(1, options.limit ?? 20), 200);
+    return [...recipeRuns]
+      .sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime())
+      .slice(0, limit)
+      .map((run) => ({
+        id: run.id,
+        recipeId: run.recipeId,
+        recipeTitle: findRecipe(run.recipeId)?.title ?? UNTITLED_RECIPE,
+        requestedByName: userName(run.requestedBy),
+        requestedAt: run.requestedAt,
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        outcome: run.outcome,
+        inputTokens: run.inputTokens,
+        outputTokens: run.outputTokens,
+        promptVersion: run.promptVersion,
+        model: run.model,
+        error: run.error,
+      }));
+  },
+
+  proofreadTokenTotals(now: Date): TokenTotals {
+    const since = campMonthStartOf(now);
+    const month = recipeRuns.filter(
+      (run) => run.requestedAt.getTime() >= since.getTime(),
+    );
+    return {
+      since,
+      runs: month.length,
+      inputTokens: month.reduce((sum, run) => sum + (run.inputTokens ?? 0), 0),
+      outputTokens: month.reduce(
+        (sum, run) => sum + (run.outputTokens ?? 0),
+        0,
+      ),
+    };
+  },
+
   reset(): void {
     usersByAuthId.clear();
     profilesByUserId.clear();
@@ -2503,6 +4420,15 @@ export const testStore = {
     powerPlans.clear();
     generators.length = 0;
     powerInventory.length = 0;
+    recipes.length = 0;
+    recipeRuns.length = 0;
+    recipeSources.length = 0;
+    recipeVersions.length = 0;
+    recipePlateCounts.length = 0;
+    ingredientCatalogue.length = 0;
+    recipeLessons.length = 0;
+    recipeHistory.length = 0;
+    S.kitchenSettings = { ...DEFAULT_KITCHEN_SETTINGS };
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },

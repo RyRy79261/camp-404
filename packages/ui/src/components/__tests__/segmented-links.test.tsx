@@ -96,4 +96,27 @@ describe("SegmentedLinks", () => {
       screen.getByRole("link", { name: "All" }).hasAttribute("data-next-link"),
     ).toBe(true);
   });
+
+  it("draws a disabled segment as dimmed text, never a link", () => {
+    render(
+      <SegmentedLinks
+        aria-label="Plate count"
+        value="50"
+        options={[
+          { value: "50", label: "50", href: "?plates=50" },
+          {
+            value: "60",
+            label: "60, with Claude",
+            href: "?plates=60",
+            disabled: true,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    const pending = screen.getByText("60, with Claude");
+    expect(pending.tagName).toBe("SPAN");
+    expect(pending.getAttribute("aria-disabled")).toBe("true");
+    expect(pending.getAttribute("href")).toBeNull();
+  });
 });

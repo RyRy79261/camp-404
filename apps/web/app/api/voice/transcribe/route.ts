@@ -3,12 +3,11 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { transcribeAudio } from "@/lib/groq";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { QUESTIONNAIRE_PROMPT } from "@/lib/voice-prompts";
+import { voicePromptFor } from "@/lib/voice-prompts";
 
 // 10 MB hard cap. webm/opus at typical mobile bitrates is ~16 KB/s, so this
 // is ~10 minutes of speech — plenty for any single questionnaire field.
 const MAX_BYTES = 10 * 1024 * 1024;
-const ACCEPTED_PROMPT_KEYS = new Set(["questionnaire"]);
 
 // Clips a day for an account a captain has not approved yet: the onboarding
 // questionnaire has a few dozen voice fields at most.
@@ -104,10 +103,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Audio too large" }, { status: 413 });
   }
 
-  const promptKey = String(form.get("promptKey") ?? "");
-  const prompt = ACCEPTED_PROMPT_KEYS.has(promptKey)
-    ? QUESTIONNAIRE_PROMPT
-    : undefined;
+  const prompt = voicePromptFor(String(form.get("promptKey") ?? ""));
 
   try {
     const text = await transcribeAudio(file, { prompt });

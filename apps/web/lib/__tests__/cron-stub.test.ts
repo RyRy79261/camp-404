@@ -16,7 +16,6 @@ vi.mock("@camp404/telegram", () => ({ dispatchPendingAnnouncements: vi.fn() }));
 import { CRON_STUBS, type CronStubJob } from "@/lib/cron-stub";
 import { SCHEDULED_JOBS } from "@/lib/cron-schedule";
 import { GET as manualsGenerate } from "@/app/api/cron/manuals/generate/route";
-import { GET as recipesAnalyse } from "@/app/api/cron/recipes/analyse/route";
 import { GET as telegramDispatch } from "@/app/api/cron/telegram/dispatch/route";
 import { dispatchPendingAnnouncements } from "@camp404/telegram";
 
@@ -86,7 +85,6 @@ describe("the cron schedule", () => {
 describe("a job that is not built yet", () => {
   const routes: Record<CronStubJob, (r: Request) => Promise<Response>> = {
     "manuals/generate": manualsGenerate,
-    "recipes/analyse": recipesAnalyse,
   };
 
   for (const [job, GET] of Object.entries(routes)) {

@@ -1,6 +1,6 @@
 import { CRON_STUBS } from "./cron-stub";
 
-// The seven scheduled jobs, in the order apps/web/vercel.json lists them, for
+// The six scheduled jobs, in the order apps/web/vercel.json lists them, for
 // the captain System status page. vercel.json is what Vercel actually runs;
 // this is the same list with a name and a sentence each, so a captain can read
 // it. __tests__/cron-stub.test.ts checks it against vercel.json, path by path
@@ -24,12 +24,6 @@ export const SCHEDULED_JOBS = [
     schedule: "30 7 * * *",
     label: "Daily maintenance",
     what: "Encrypts any ID number still stored as plain text, and on the live site deletes profile photos and image answers whose owner has no camp account.",
-  },
-  {
-    job: "recipes/analyse",
-    schedule: "0 8 * * *",
-    label: "Recipe analysis",
-    what: "Meant to analyse the camp's recipes. It is not built yet, so a run does nothing.",
   },
   {
     job: "manuals/generate",

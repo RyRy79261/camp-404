@@ -66,9 +66,9 @@ test.describe("/captains/system (test-mode)", () => {
     await expect(
       page.getByText(/does not record when each job last ran/),
     ).toBeVisible();
-    // The two stubs say so.
+    // The one stub left (manuals) says so. Recipes run from a captain's click, not a cron.
     await expect(page.getByText("Not built yet", { exact: true })).toHaveCount(
-      2,
+      1,
     );
   });
 

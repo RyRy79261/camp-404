@@ -11,6 +11,7 @@ export * from "./questionnaire-queue";
 export * from "./promotion";
 export * from "./referral";
 export * from "./recipe";
+export * from "./recipe-source";
 export * from "./money";
 export * from "./reimbursement";
 export * from "./voice-intent";

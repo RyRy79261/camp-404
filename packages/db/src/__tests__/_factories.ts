@@ -1,4 +1,5 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import type { KitchenRecipe } from "@camp404/types";
 import type { drizzle } from "drizzle-orm/pglite";
 import * as schema from "../schema";
 
@@ -121,4 +122,69 @@ export async function requiredActionsFor(
     .select()
     .from(schema.requiredActions)
     .where(eq(schema.requiredActions.userId, userId));
+}
+
+/**
+ * A recipe version in the book, written the way the app's insertVersion does
+ * (the version row, its own plate count and the catalogue lines), with the
+ * recipe pointed at it as `accepted`. Nothing in the app writes a version by
+ * hand any more, so the suites that need one in the book seed it here.
+ */
+export async function seedAcceptedVersion(
+  db: DB,
+  input: {
+    recipeId: string;
+    authorId: string | null;
+    recipe: KitchenRecipe;
+    reason?: string;
+  },
+): Promise<{ versionId: string; version: number }> {
+  const { recipe } = input;
+  const [top] = await db
+    .select({ max: sql<number | null>`max(${schema.recipeVersions.version})` })
+    .from(schema.recipeVersions)
+    .where(eq(schema.recipeVersions.recipeId, input.recipeId));
+  const version = (top?.max ?? 0) + 1;
+  const [row] = await db
+    .insert(schema.recipeVersions)
+    .values({
+      recipeId: input.recipeId,
+      version,
+      servingsBasis: recipe.plates,
+      body: recipe,
+      report: null,
+      runId: null,
+      reason: input.reason ?? "Seeded",
+      authorId: input.authorId,
+    })
+    .returning({ id: schema.recipeVersions.id });
+  await db.insert(schema.recipePlateCounts).values({
+    versionId: row!.id,
+    plates: recipe.plates,
+    lines: recipe.ingredients.map((line) => ({
+      name: line.name,
+      quantity: line.quantity,
+      quantityMax: line.quantityMax,
+      unit: line.unit,
+      note: null,
+    })),
+    source: "version",
+  });
+  for (const line of recipe.ingredients) {
+    await db.execute(sql`
+      INSERT INTO ingredients (name, category)
+      VALUES (${line.name.trim()}, ${line.category})
+      ON CONFLICT (lower(name)) DO NOTHING
+    `);
+  }
+  await db
+    .update(schema.recipes)
+    .set({
+      status: "accepted",
+      acceptedVersionId: row!.id,
+      title: recipe.title,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.recipes.id, input.recipeId));
+  return { versionId: row!.id, version };
 }

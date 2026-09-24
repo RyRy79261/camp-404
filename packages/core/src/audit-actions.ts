@@ -15,6 +15,7 @@ export const AUDIT_ACTION_LABELS = {
   "camp.cycle.advanced": "Moved the camp to a new year",
   "camp.cycle.founded": "Set the camp's first year",
   "camp.cycle.renamed": "Renamed a year",
+  "camp.kitchen_settings.changed": "Changed the kitchen settings",
   "camp.teams.archived": "Archived a team",
   "camp.teams.moved": "Moved a team in the list",
   "camp.teams.renamed": "Renamed a team",
@@ -36,6 +37,19 @@ export const AUDIT_ACTION_LABELS = {
   "member.team_removed": "Took a member off a team",
   "payment.recorded": "Recorded a payment",
   "payment.status_changed": "Changed a payment",
+  "recipe.accepted": "Accepted a recipe version",
+  "recipe.approved": "Approved a recipe",
+  "recipe.changes_requested": "Asked for changes to a recipe",
+  "recipe.proofread_queued": "Sent a recipe to Claude to write",
+  "recipe.questions_answered": "Answered Claude's questions on a recipe",
+  "recipe.plates_queued": "Proofread a recipe for a plate count",
+  "recipe.rejected": "Rejected a recipe",
+  "recipe.rerun_requested": "Asked a captain to proofread a recipe again",
+  "recipe.source_saved": "Changed a recipe's source text",
+  "recipe.text_retyped": "Retyped a recipe's text",
+  "recipe.variation_started": "Started a recipe variation",
+  "recipe.version_added": "Wrote a new recipe version",
+  "recipe.written_by_claude": "Had Claude write a recipe version",
   "reimbursement.status_changed": "Moved a reimbursement",
   "safety.emergency_contacts.view": "Read emergency contacts",
   "team_budget.set": "Set a team budget",
@@ -191,6 +205,39 @@ export function auditDetail(
       if (!title) return null;
       const team = text(metadata, "team");
       return team ? `${title} · ${teamLabel(team)}` : title;
+    }
+    // The recipe's name, and the version number where one was written.
+    case "recipe.approved":
+    case "recipe.rejected":
+    case "recipe.changes_requested":
+    case "recipe.text_retyped":
+    case "recipe.proofread_queued":
+    case "recipe.rerun_requested":
+    case "recipe.variation_started":
+    case "recipe.questions_answered":
+      return text(metadata, "title");
+    // The source's own version number, which is not the recipe's.
+    case "recipe.source_saved": {
+      const title = text(metadata, "title");
+      const version = count(metadata, "version");
+      if (version === null) return title;
+      return title
+        ? `${title}, text version ${version}`
+        : `Text version ${version}`;
+    }
+    case "recipe.plates_queued": {
+      const title = text(metadata, "title");
+      const plates = count(metadata, "plates");
+      if (plates === null) return title;
+      return title ? `${title}, ${plates} plates` : `${plates} plates`;
+    }
+    case "recipe.accepted":
+    case "recipe.version_added":
+    case "recipe.written_by_claude": {
+      const title = text(metadata, "title");
+      const version = count(metadata, "version");
+      if (version === null) return title;
+      return title ? `${title}, version ${version}` : `Version ${version}`;
     }
     case "camp.cycle.renamed": {
       const to = text(metadata, "to");

@@ -93,6 +93,13 @@
 //     powerTotals, dayLabel)
 //     and the fuel maths (fuelLine, fuelPerHour, fuelForPlan,
 //     jerryCansNeeded, legacyFuelEstimate) (./power)
+//   - recipes: canApproveRecipe and canRunProofread (a captain or a Kitchen
+//     lead), canSetKitchenSettings (captains only),
+//     RECIPE_TRANSITIONS/canMoveRecipe, groupLinesByCategory +
+//     groupStepsByPhase for the recipe page, and defaultPlates (./recipes)
+//   - recipe sources: sourceText (the Markdown-like text Claude reads),
+//     sourceFromText (pasted text into sections), emptySourceSections,
+//     sameSections and sameSource (./recipe-source)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -136,3 +143,5 @@ export * from "./time-zone";
 export * from "./questionnaire-status";
 export * from "./password";
 export * from "./power";
+export * from "./recipes";
+export * from "./recipe-source";

@@ -34,9 +34,14 @@ import {
   type LoadOwner,
   type LoadSchedule,
   type BuilderQuestionnaire,
+  type DraftReport,
+  type KitchenRecipe,
+  type PlateLine,
+  type ProofreadExchange,
   type Questionnaire,
   type QuestionnaireFieldChange,
   type QuestionnaireResponses,
+  type SourceDoc,
 } from "@camp404/types";
 // Type-only (erased at runtime — no import cycle with camp-config.ts, which
 // imports this schema): types the camp_settings.config JSONB column. The
@@ -107,12 +112,47 @@ export const membershipTierEnum = pgEnum("membership_tier", [
   "build_week_only",
 ]);
 
+// The recipe lifecycle (#243). Mirrors RECIPE_STATUSES in @camp404/types; the
+// allowed moves are RECIPE_TRANSITIONS in @camp404/core. Only `queued` recipes
+// are ever sent to Anthropic, and only a captain queues one.
 export const recipeStatusEnum = pgEnum("recipe_status", [
-  "pending",
+  "suggested",
+  "changes_requested",
+  "approved",
+  "queued",
   "analysing",
-  "ready",
-  "scheduled",
+  "proofread",
+  "accepted",
   "rejected",
+]);
+
+// One proofreading run's state. A failed run still spent tokens, so it counts
+// toward the camp's daily cap.
+export const recipeRunOutcomeEnum = pgEnum("recipe_run_outcome", [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+]);
+
+// Legacy, from the first recipe draft: the units, scaling classes and keeping
+// classes of recipe_version_ingredients, which is no longer written. The
+// recipe's own units now live in recipe_versions.body (RECIPE_LINE_UNITS).
+export const recipeUnitEnum = pgEnum("recipe_unit", ["g", "ml", "each"]);
+
+export const recipeScalingClassEnum = pgEnum("recipe_scaling_class", [
+  "linear",
+  "sublinear",
+  "fixed_per_batch",
+  "step",
+]);
+
+export const ingredientKeepingClassEnum = pgEnum("ingredient_keeping_class", [
+  "fresh",
+  "resilient",
+  "frozen",
+  "stable_fridge",
+  "shelf_stable",
 ]);
 
 export const recipeSourceEnum = pgEnum("recipe_source", [
@@ -1060,23 +1100,87 @@ export const requiredActions = pgTable(
 );
 
 // --- Recipes -------------------------------------------------------------
+// Kitchen 1 (#243). A recipe is a suggestion until a Kitchen lead or a captain
+// approves it, and has no food on record until a version is accepted. The dish
+// (its name, who suggested it, where it came from) lives here; the food
+// (ingredients, method, prep plan) lives in recipe_versions, one row per
+// change. Recipes are not year-scoped: next year's menu starts from the
+// accepted versions.
 
 export const recipes = pgTable(
   "recipes",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    submitterId: uuid("submitter_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "set null" }),
+    // Nullable, so ON DELETE SET NULL can do what it says. Erasure keeps the
+    // users row as the Lost Cat stub, so in practice the link stays.
+    submitterId: uuid("submitter_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     source: recipeSourceEnum("source").notNull(),
-    status: recipeStatusEnum("status").notNull().default("pending"),
+    status: recipeStatusEnum("status").notNull().default("suggested"),
+    // Rows from before #243 have no title; every new suggestion needs one.
+    title: text("title"),
 
     sourceUrl: text("source_url"),
+    // The working text: what a captain or a Kitchen lead may send to Claude. A voice
+    // suggestion stores only its transcript, never the audio.
     rawText: text("raw_text"),
     audioBlobUrl: text("audio_blob_url"),
     transcript: text("transcript"),
+    // Why it suits the camp. Never sent to Anthropic.
+    suitabilityNote: text("suitability_note"),
+    // Whose words the working text is. A lead or captain who retypes the
+    // text becomes its author, and their consent is what counts.
+    textAuthorId: uuid("text_author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // When the text's author ticked "a captain or a Kitchen lead may send this
+    // text to Claude".
+    // Null means proofreading is refused until someone retypes it.
+    aiConsentAt: timestamp("ai_consent_at", { mode: "date" }),
 
-    // Populated by the Opus normalisation cron
+    approvedBy: uuid("approved_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    approvedAt: timestamp("approved_at", { mode: "date" }),
+    rejectedBy: uuid("rejected_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    rejectedAt: timestamp("rejected_at", { mode: "date" }),
+    rejectionReason: text("rejection_reason"),
+    // What the reviewer asked the submitter to change.
+    changesNote: text("changes_note"),
+    queuedBy: uuid("queued_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    queuedAt: timestamp("queued_at", { mode: "date" }),
+    // The last proofreading error, shown until the next run.
+    lastError: text("last_error"),
+    // A Kitchen lead's request that a captain run proofreading again, with
+    // what should change. Cleared when a captain queues the next run.
+    rerunRequest: text("rerun_request"),
+    rerunRequestedBy: uuid("rerun_requested_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    rerunRequestedAt: timestamp("rerun_requested_at", { mode: "date" }),
+    // The newest run and the version the recipe book shows. Both tables
+    // point back here too; the columns are nullable, so a recipe is written
+    // first and pointed at its run or version afterwards.
+    latestRunId: uuid("latest_run_id").references(
+      (): AnyPgColumn => recipeProofreadRuns.id,
+      { onDelete: "set null" },
+    ),
+    acceptedVersionId: uuid("accepted_version_id").references(
+      (): AnyPgColumn => recipeVersions.id,
+      { onDelete: "set null" },
+    ),
+    // A variation (a gluten-free one, say) is a sibling recipe, not a version.
+    variantOfRecipeId: uuid("variant_of_recipe_id").references(
+      (): AnyPgColumn => recipes.id,
+      { onDelete: "set null" },
+    ),
+
+    // Legacy, from the first recipe design; kept so no data is dropped.
     normalised: jsonb("normalised"),
     dietaryTags: jsonb("dietary_tags").$type<string[]>().default([]),
 
@@ -1089,6 +1193,320 @@ export const recipes = pgTable(
   (r) => ({
     statusIdx: index("recipes_status_idx").on(r.status),
     submitterIdx: index("recipes_submitter_idx").on(r.submitterId),
+  }),
+);
+
+// A recipe's source: the text a Kitchen lead or a captain edits in the source
+// editor and sends to Claude, one row per saved version. Each section is a
+// Tiptap document (SourceDoc in @camp404/types), checked by Zod on every
+// write; Claude reads the Markdown-like text built from them (sourceText in
+// @camp404/core). `authorId` is whose words these are: a member's suggestion,
+// or the reviewer who changed it, whose change is their agreement to send it.
+export const recipeSources = pgTable(
+  "recipe_sources",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    // How many the source says it serves; null when it does not say.
+    serves: integer("serves"),
+    ingredients: jsonb("ingredients").$type<SourceDoc>().notNull(),
+    equipment: jsonb("equipment").$type<SourceDoc>().notNull(),
+    steps: jsonb("steps").$type<SourceDoc>().notNull(),
+    notes: jsonb("notes").$type<SourceDoc>().notNull(),
+    authorId: uuid("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    recipeVersionIdx: uniqueIndex("recipe_sources_recipe_version_idx").on(
+      t.recipeId,
+      t.version,
+    ),
+    servesCheck: check(
+      "recipe_sources_serves_check",
+      sql`${t.serves} between 1 and 500`,
+    ),
+  }),
+);
+
+// One proofreading run: who asked for it, what it cost in tokens and what came
+// back. Every run is kept, failed ones too, so the daily cap and the monthly
+// usage count what was really spent.
+export const recipeProofreadRuns = pgTable(
+  "recipe_proofread_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    // The captain who pressed Run.
+    requestedBy: uuid("requested_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    requestedAt: timestamp("requested_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    // The captain's note for a re-run, sent to Claude with the text.
+    note: text("note"),
+    startedAt: timestamp("started_at", { mode: "date" }),
+    finishedAt: timestamp("finished_at", { mode: "date" }),
+    promptVersion: text("prompt_version").notNull(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    outcome: recipeRunOutcomeEnum("outcome").notNull().default("queued"),
+    error: text("error"),
+    // What Claude answered: a RecipeDraft for a `recipe` run, a
+    // PlateProofread for a `plates` run. Typed unknown and parsed on read,
+    // because a run stored under an older contract must read as unreadable
+    // rather than as the new shape.
+    result: jsonb("result").$type<unknown>(),
+    // `recipe`: Claude turns the working text into a draft for a reviewer
+    // (the older path). `source`: Claude reads a source version (`sourceId`)
+    // and either asks questions or writes the recipe straight into the book.
+    // `plates`: Claude proofreads an accepted version (`versionId`) for
+    // `plates` plates. All count toward the one daily cap.
+    kind: text("kind").notNull().default("recipe"),
+    // The plates the run writes the recipe for.
+    plates: integer("plates"),
+    versionId: uuid("version_id").references(
+      (): AnyPgColumn => recipeVersions.id,
+      { onDelete: "cascade" },
+    ),
+    // Where the recipe stood when this run was queued, so a failed run hands
+    // it back there: a re-run that fails leaves an accepted recipe accepted,
+    // and a proofread one still holding the earlier result it was waiting on.
+    previousStatus: recipeStatusEnum("previous_status"),
+    previousRunId: uuid("previous_run_id").references(
+      (): AnyPgColumn => recipeProofreadRuns.id,
+      { onDelete: "set null" },
+    ),
+    // The source version a `source` run reads.
+    sourceId: uuid("source_id").references(() => recipeSources.id, {
+      onDelete: "set null",
+    }),
+    // How far a running `source` run has got, as the worker writes it; the
+    // loading panel shows only these. Null before the run is claimed.
+    stage: text("stage"),
+    // Every round of Claude's questions and the reviewer's answers that this
+    // run carries to Claude (ProofreadExchange). Empty on a first run.
+    exchange: jsonb("exchange").$type<ProofreadExchange>(),
+  },
+  (t) => ({
+    requestedAtIdx: index("recipe_proofread_runs_requested_at_idx").on(
+      t.requestedAt,
+    ),
+    recipeIdx: index("recipe_proofread_runs_recipe_idx").on(t.recipeId),
+    kindCheck: check(
+      "recipe_proofread_runs_kind_check",
+      sql`${t.kind} in ('recipe', 'plates', 'source')`,
+    ),
+    stageCheck: check(
+      "recipe_proofread_runs_stage_check",
+      sql`${t.stage} in ('sending', 'reading', 'checking', 'saving')`,
+    ),
+    platesCheck: check(
+      "recipe_proofread_runs_plates_check",
+      sql`${t.plates} between 1 and 500`,
+    ),
+    // One open plate run per (version, plate count): a second captain
+    // pressing the same count is refused rather than paying twice.
+    openPlatesIdx: uniqueIndex("recipe_proofread_runs_open_plates_idx")
+      .on(t.versionId, t.plates)
+      .where(
+        sql`${t.kind} = 'plates' AND ${t.outcome} IN ('queued', 'running')`,
+      ),
+  }),
+);
+
+// The ingredient catalogue, filled as recipes are accepted and matched by
+// lower-cased name. `category` is the shopping-list category (one of
+// INGREDIENT_CATEGORIES), filled from the first recipe that names it; Noble
+// Notations keeps the category on its ingredient record the same way. The
+// keeping class, allergens and units are legacy from the first draft. The
+// supplier columns wait for the shopping list (#245).
+export const ingredients = pgTable(
+  "ingredients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    otherNames: jsonb("other_names").$type<string[]>().notNull().default([]),
+    category: text("category"),
+    keepingClass: ingredientKeepingClassEnum("keeping_class"),
+    allergens: jsonb("allergens").$type<string[]>().notNull().default([]),
+    canonicalUnit: recipeUnitEnum("canonical_unit"),
+    conversions: jsonb("conversions").$type<Record<string, number>>(),
+    packSizes: jsonb("pack_sizes").$type<number[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    nameIdx: uniqueIndex("ingredients_name_lower_idx").on(
+      sql`lower(${t.name})`,
+    ),
+  }),
+);
+
+// One version of a recipe's food. Changing the food makes a new version with
+// a reason; the old ones stay readable. `runId` is null for a version written
+// by hand.
+export const recipeVersions = pgTable(
+  "recipe_versions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    // The plates the recipe is written for: body.plates.
+    servingsBasis: integer("servings_basis").notNull(),
+    // The whole recipe in Noble Notations' shape (KitchenRecipe), checked by
+    // Zod on every write. Null only on a row from the first draft that the
+    // 0056 migration has not converted.
+    body: jsonb("body").$type<KitchenRecipe>(),
+    // Legacy, from the first draft; no longer written. Kept, not dropped,
+    // because preview deployments share the production database.
+    method: text("method"),
+    prepPlan: jsonb("prep_plan").$type<unknown>(),
+    flags: jsonb("flags").$type<unknown>(),
+    // What Claude changed and was unsure of (DraftReport); null for a version
+    // written by hand. A first-draft row may hold an older shape.
+    report: jsonb("report").$type<DraftReport | null>(),
+    runId: uuid("run_id").references(() => recipeProofreadRuns.id, {
+      onDelete: "set null",
+    }),
+    reason: text("reason"),
+    authorId: uuid("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // The source version Claude wrote this version from; null for one
+    // written any other way.
+    sourceId: uuid("source_id").references(() => recipeSources.id, {
+      onDelete: "set null",
+    }),
+    // How Claude scaled the source to the version's plates, shown to every
+    // reader under the recipe. Empty for a version written any other way.
+    scalingNotes: jsonb("scaling_notes")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    recipeVersionIdx: uniqueIndex("recipe_versions_recipe_version_idx").on(
+      t.recipeId,
+      t.version,
+    ),
+  }),
+);
+
+// Legacy, no longer written: a first-draft version's ingredients, each with
+// how it scaled. The 0056 migration copied them into recipe_versions.body.
+// Kept, not dropped, because preview deployments share the production
+// database.
+export const recipeVersionIngredients = pgTable(
+  "recipe_version_ingredients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    versionId: uuid("version_id")
+      .notNull()
+      .references(() => recipeVersions.id, { onDelete: "cascade" }),
+    ingredientId: uuid("ingredient_id")
+      .notNull()
+      .references(() => ingredients.id, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+    quantityPerServing: doublePrecision("quantity_per_serving").notNull(),
+    unit: recipeUnitEnum("unit").notNull(),
+    scalingClass: recipeScalingClassEnum("scaling_class").notNull(),
+    scalingExponent: doublePrecision("scaling_exponent"),
+    perBatchAmount: doublePrecision("per_batch_amount"),
+    stepSize: doublePrecision("step_size"),
+    conversionNote: text("conversion_note"),
+    prepNote: text("prep_note"),
+    optional: boolean("optional").notNull().default(false),
+    // What this version says about the ingredient, as the reviewer accepted
+    // it. The catalogue keeps what it learned first; a version that corrects
+    // an allergen or a keeping class must not lose the correction to it.
+    keepingClass: ingredientKeepingClassEnum("keeping_class"),
+    allergens: jsonb("allergens").$type<string[]>().notNull().default([]),
+  },
+  (t) => ({
+    versionIdx: index("recipe_version_ingredients_version_idx").on(
+      t.versionId,
+      t.position,
+    ),
+    ingredientIdx: index("recipe_version_ingredients_ingredient_idx").on(
+      t.ingredientId,
+    ),
+  }),
+);
+
+// A version's recipe written for one number of plates. Food does not scale by
+// multiplying, so each count is proofread by Claude once and kept: moving a
+// day from 50 plates to 45 and back to 50 reads the stored 50. The version's
+// own count is a row too (source `version`), written with the version, so the
+// shopping list (#245) reads this one table for every count. A new version
+// starts with only its own count: counts proofread for the old food do not
+// carry over.
+export const recipePlateCounts = pgTable(
+  "recipe_plate_counts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    versionId: uuid("version_id")
+      .notNull()
+      .references(() => recipeVersions.id, { onDelete: "cascade" }),
+    plates: integer("plates").notNull(),
+    // One line per recipe line, in the recipe's order (checkPlateLines).
+    lines: jsonb("lines").$type<PlateLine[]>().notNull(),
+    // How many pots the count needs, when it was worked out.
+    pots: integer("pots"),
+    notes: jsonb("notes").$type<string[]>().notNull().default([]),
+    report: jsonb("report").$type<DraftReport | null>(),
+    // `version`: the version's own count. `proofread`: Claude's answer.
+    source: text("source").notNull(),
+    runId: uuid("run_id").references(() => recipeProofreadRuns.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    versionPlatesIdx: uniqueIndex("recipe_plate_counts_version_plates_idx").on(
+      t.versionId,
+      t.plates,
+    ),
+    platesCheck: check(
+      "recipe_plate_counts_plates_check",
+      sql`${t.plates} between 1 and 500`,
+    ),
+    sourceCheck: check(
+      "recipe_plate_counts_source_check",
+      sql`${t.source} in ('version', 'proofread')`,
+    ),
+  }),
+);
+
+// What the cooks learned ("tinned mushrooms work fine"), stamped with the burn
+// year it was learned in. Post-burn feedback attaches here.
+export const recipeLessons = pgTable(
+  "recipe_lessons",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    body: text("body").notNull(),
+    cycle: integer("cycle").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    recipeIdx: index("recipe_lessons_recipe_idx").on(t.recipeId),
   }),
 );
 
@@ -2158,9 +2576,49 @@ export const campSettings = pgTable(
       .default(
         sql`'{"teams":[{"key":"kitchen","label":"Kitchen","order":0,"archived":false},{"key":"structures","label":"Structures","order":1,"archived":false},{"key":"power_and_lighting","label":"Power and Lighting","order":2,"archived":false},{"key":"sanitation_and_water","label":"Sanitation and MOOP","order":3,"archived":false},{"key":"health_and_safety","label":"Safety","order":4,"archived":false},{"key":"art_and_activities","label":"Art and Activities","order":5,"archived":false},{"key":"ministry_of_memes","label":"Ministry of Memes","order":6,"archived":false},{"key":"ministry_of_vibes","label":"Ministry of Vibes","order":7,"archived":false},{"key":"finance","label":"Finance","order":8,"archived":false},{"key":"transport_and_logistics","label":"Transport and Logistics","order":9,"archived":false},{"key":"communications_and_hr","label":"Communications & HR","order":10,"archived":false},{"key":"mutant_vehicle","label":"Mutant Vehicle","order":11,"archived":false},{"key":"sound","label":"Sound","order":12,"archived":false},{"key":"water","label":"Water","order":13,"archived":false}]}'::jsonb`,
       ),
+    // Kitchen (#243). The bounds mirror KITCHEN_SETTING_LIMITS in
+    // @camp404/types. Proofreading runs a captain may start per camp day
+    // (0 turns proofreading off); failed runs count, because they still
+    // spend tokens.
+    recipeProofreadDailyCap: integer("recipe_proofread_daily_cap")
+      .notNull()
+      .default(5),
+    // The largest pot and the burner count set a recipe's batch limits. Null
+    // until a captain fills them in; the prompt then says "unknown".
+    kitchenLargestPotLitres: integer("kitchen_largest_pot_litres"),
+    kitchenBurnerCount: integer("kitchen_burner_count"),
+    // Plates at each meal (mornings usually feed more than evenings). The
+    // largest one set is the count Claude writes a recipe for by default.
+    kitchenPlatesBreakfast: integer("kitchen_plates_breakfast"),
+    kitchenPlatesLunch: integer("kitchen_plates_lunch"),
+    kitchenPlatesDinner: integer("kitchen_plates_dinner"),
   },
   (t) => ({
     singleton: check("camp_settings_singleton", sql`${t.id}`),
+    proofreadCapCheck: check(
+      "camp_settings_recipe_proofread_daily_cap_check",
+      sql`${t.recipeProofreadDailyCap} between 0 and 50`,
+    ),
+    potCheck: check(
+      "camp_settings_kitchen_largest_pot_litres_check",
+      sql`${t.kitchenLargestPotLitres} between 1 and 500`,
+    ),
+    burnerCheck: check(
+      "camp_settings_kitchen_burner_count_check",
+      sql`${t.kitchenBurnerCount} between 1 and 20`,
+    ),
+    platesBreakfastCheck: check(
+      "camp_settings_kitchen_plates_breakfast_check",
+      sql`${t.kitchenPlatesBreakfast} between 1 and 500`,
+    ),
+    platesLunchCheck: check(
+      "camp_settings_kitchen_plates_lunch_check",
+      sql`${t.kitchenPlatesLunch} between 1 and 500`,
+    ),
+    platesDinnerCheck: check(
+      "camp_settings_kitchen_plates_dinner_check",
+      sql`${t.kitchenPlatesDinner} between 1 and 500`,
+    ),
   }),
 );
 

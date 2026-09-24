@@ -46,6 +46,85 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await expect(page.getByText("Captain access only")).toBeVisible();
     // The editor is withheld — no rename controls render.
     await expect(page.getByRole("button", { name: /^Rename / })).toHaveCount(0);
+    // So is the kitchen card, with its plates per meal.
+    await expect(page.getByLabel("Largest pot (litres)")).toHaveCount(0);
+    await expect(
+      page.getByRole("group", { name: "Plates per meal" }),
+    ).toHaveCount(0);
+  });
+
+  test("a captain sets the kitchen's size, and no run limit is shown; they persist", async ({
+    page,
+    request,
+  }) => {
+    await asRank(page, request, "settings-kitchen-captain", "captain");
+
+    await page.goto("/captains/camp-settings");
+    await expect(
+      page.getByRole("heading", { name: "Camp settings" }),
+    ).toBeVisible();
+    const pot = page.getByLabel("Largest pot (litres)");
+    const burners = page.getByLabel("Number of burners");
+    await expect(pot).toHaveValue("");
+    // The daily cap is a silent server-side guard: no field, no number.
+    await expect(page.getByText(/runs? per day|runs? left/i)).toHaveCount(0);
+
+    // A bad value is refused beside its field, and nothing is saved.
+    await burners.fill("99");
+    await page.getByRole("button", { name: "Save kitchen settings" }).click();
+    await expect(page.getByText("Count at most 20 burners.")).toBeVisible();
+
+    await pot.fill("60");
+    await burners.fill("3");
+    await page.getByRole("button", { name: "Save kitchen settings" }).click();
+    await expect(page.getByText("Kitchen settings saved")).toBeVisible();
+
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Camp settings" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Largest pot (litres)")).toHaveValue("60");
+    await expect(page.getByLabel("Number of burners")).toHaveValue("3");
+  });
+
+  test("a captain sets the plates at breakfast, lunch and dinner; they persist", async ({
+    page,
+    request,
+  }) => {
+    await asRank(page, request, "settings-plates-captain", "captain");
+
+    await page.goto("/captains/camp-settings");
+    await expect(
+      page.getByRole("heading", { name: "Camp settings" }),
+    ).toBeVisible();
+    const meals = page.getByRole("group", { name: "Plates per meal" });
+    await expect(
+      meals.getByText("Mornings may have more plates than evenings."),
+    ).toBeVisible();
+    await expect(meals.getByLabel("Breakfast")).toHaveValue("");
+
+    // A count out of range is refused beside its own meal, and nothing saves.
+    await meals.getByLabel("Lunch").fill("501");
+    await page.getByRole("button", { name: "Save kitchen settings" }).click();
+    await expect(meals.getByText("Cook for at most 500 plates.")).toBeVisible();
+
+    await meals.getByLabel("Breakfast").fill("60");
+    await meals.getByLabel("Lunch").fill("40");
+    await meals.getByLabel("Dinner").fill("45");
+    await page.getByRole("button", { name: "Save kitchen settings" }).click();
+    await expect(page.getByText("Kitchen settings saved")).toBeVisible();
+
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Camp settings" }),
+    ).toBeVisible();
+    const saved = page.getByRole("group", { name: "Plates per meal" });
+    await expect(saved.getByLabel("Breakfast")).toHaveValue("60");
+    await expect(saved.getByLabel("Lunch")).toHaveValue("40");
+    await expect(saved.getByLabel("Dinner")).toHaveValue("45");
+    await expect(saved.getByText("Cook for at most 500 plates.")).toHaveCount(
+      0,
+    );
   });
 
   test("a captain renames a team; it persists and flows to the roster filter", async ({
@@ -55,7 +134,9 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await asRank(page, request, "settings-captain", "captain");
 
     await page.goto("/captains/camp-settings");
-    await expect(page.getByText("Kitchen", { exact: true })).toBeVisible();
+    // The team table's row, not the Kitchen settings card beside it.
+    const teams = page.getByRole("table");
+    await expect(teams.getByText("Kitchen", { exact: true })).toBeVisible();
 
     // Rename Kitchen → Cuisine through the editor.
     await page.getByRole("button", { name: "Rename Kitchen" }).click();
@@ -67,7 +148,7 @@ test.describe("camp-settings — team editor (test-mode)", () => {
     await expect(page.getByText("Cuisine", { exact: true })).toBeVisible();
     await page.reload();
     await expect(page.getByText("Cuisine", { exact: true })).toBeVisible();
-    await expect(page.getByText("Kitchen", { exact: true })).toHaveCount(0);
+    await expect(teams.getByText("Kitchen", { exact: true })).toHaveCount(0);
 
     // Cross-surface: the roster's team filter now offers the new label.
     await page.goto("/captains/camp-management");

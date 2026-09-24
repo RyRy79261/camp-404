@@ -38,6 +38,7 @@
     "./broadcasts": "./src/broadcasts.ts",
     "./tasks": "./src/tasks.ts",
     "./power": "./src/power.ts",
+    "./recipes": "./src/recipes.ts",
     "./calendar-events": "./src/calendar-events.ts",
     "./audience": "./src/audience.ts",
     "./push": "./src/push.ts",

@@ -15,6 +15,9 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
+  "dependencies": {
+    "@camp404/types": "workspace:*"
+  },
   "devDependencies": {
     "@camp404/eslint-config": "workspace:*",
     "@camp404/typescript-config": "workspace:*",

@@ -379,6 +379,34 @@
       "when": 1790250141199,
       "tag": "0053_power_runs_all_day",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790255474363,
+      "tag": "0054_recipe_status_to_text",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1790255478578,
+      "tag": "0055_recipe_kitchen",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1790255496182,
+      "tag": "0056_recipe_versions_body",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1790255498733,
+      "tag": "0057_recipe_sources_seed",
+      "breakpoints": true
     }
   ]
 }

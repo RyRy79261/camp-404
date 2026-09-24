@@ -5,10 +5,6 @@ import { NextResponse } from "next/server";
 // `schedule` must match vercel.json; a test checks it.
 
 export const CRON_STUBS = {
-  "recipes/analyse": {
-    schedule: "0 8 * * *",
-    message: "Not built yet. Recipes are not analysed. This run did nothing.",
-  },
   "manuals/generate": {
     schedule: "30 8 * * *",
     message: "Not built yet. Manuals are not generated. This run did nothing.",
