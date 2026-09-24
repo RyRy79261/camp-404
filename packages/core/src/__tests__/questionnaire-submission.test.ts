@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   BuilderQuestionnaire,
+  PARTICIPATION_INTENTS,
+  PARTICIPATION_INTENT_OPTIONS,
   Questionnaire,
+  attendanceQuestionnaire,
   fromBuilderQuestionnaire,
 } from "@camp404/types";
 import {
@@ -142,6 +145,7 @@ describe("questionnaireRoleMirror", () => {
         intendsToDrive: true,
         arrivalAt: new Date("2027-04-26T00:00:00.000Z"),
       },
+      participation: null,
     });
   });
 
@@ -155,6 +159,7 @@ describe("questionnaireRoleMirror", () => {
     ).toEqual({
       dietary: { allergies: null },
       driver: { intendsToDrive: false, arrivalAt: null },
+      participation: null,
     });
   });
 
@@ -167,10 +172,30 @@ describe("questionnaireRoleMirror", () => {
           kind: "questions",
           title: "P",
           questions: [
-            { id: "ana", kind: "boolean", prompt: "Anaphylactic?", role: "dietary_anaphylactic" },
-            { id: "notes", kind: "short_text", prompt: "Notes", role: "dietary_notes" },
-            { id: "leave", kind: "date", prompt: "Leaving", role: "departure_date" },
-            { id: "name", kind: "short_text", prompt: "Name", role: "emergency_contact_name" },
+            {
+              id: "ana",
+              kind: "boolean",
+              prompt: "Anaphylactic?",
+              role: "dietary_anaphylactic",
+            },
+            {
+              id: "notes",
+              kind: "short_text",
+              prompt: "Notes",
+              role: "dietary_notes",
+            },
+            {
+              id: "leave",
+              kind: "date",
+              prompt: "Leaving",
+              role: "departure_date",
+            },
+            {
+              id: "name",
+              kind: "short_text",
+              prompt: "Name",
+              role: "emergency_contact_name",
+            },
           ],
         },
       ],
@@ -185,6 +210,7 @@ describe("questionnaireRoleMirror", () => {
     ).toEqual({
       dietary: { isAnaphylactic: true, notes: null },
       driver: { departureAt: null },
+      participation: null,
     });
   });
 
@@ -215,29 +241,96 @@ describe("questionnaireRoleMirror", () => {
           kind: "questions",
           title: "Food",
           questions: [
-            { id: "allergies", kind: "long_text", prompt: "Allergies", role: "dietary_allergies" },
+            {
+              id: "allergies",
+              kind: "long_text",
+              prompt: "Allergies",
+              role: "dietary_allergies",
+            },
           ],
         },
         {
           id: "end",
           kind: "questions",
           title: "End",
-          questions: [{ id: "bye", kind: "short_text", prompt: "Bye", required: false }],
+          questions: [
+            { id: "bye", kind: "short_text", prompt: "Bye", required: false },
+          ],
         },
       ],
     });
     expect(
       questionnaireRoleMirror(branching, { eat: "yes", allergies: "Nuts" }),
-    ).toEqual({ dietary: { allergies: "Nuts" }, driver: null });
+    ).toEqual({
+      dietary: { allergies: "Nuts" },
+      driver: null,
+      participation: null,
+    });
     expect(
       questionnaireRoleMirror(branching, { eat: "no", allergies: "Nuts" }),
-    ).toEqual({ dietary: { allergies: null }, driver: null });
+    ).toEqual({
+      dietary: { allergies: null },
+      driver: null,
+      participation: null,
+    });
   });
 
   it("writes nothing for a questionnaire with no role questions", () => {
     expect(questionnaireRoleMirror(DRAFTABLE, { a: "Great" })).toEqual({
       dietary: null,
       driver: null,
+      participation: null,
     });
+  });
+});
+
+describe("questionnaireRoleMirror: Coming this year", () => {
+  it("carries each Yes, Maybe or No the member gave", () => {
+    for (const intent of PARTICIPATION_INTENTS) {
+      expect(
+        questionnaireRoleMirror(attendanceQuestionnaire(), { coming: intent }),
+      ).toEqual({ dietary: null, driver: null, participation: { intent } });
+    }
+  });
+
+  it("writes nothing for an unknown value or no answer, so a place is never cleared", () => {
+    for (const value of ["other:Later", "YES", 1, true, null]) {
+      expect(
+        questionnaireRoleMirror(attendanceQuestionnaire(), { coming: value }),
+      ).toMatchObject({ participation: null });
+    }
+    expect(
+      questionnaireRoleMirror(attendanceQuestionnaire(), {}),
+    ).toMatchObject({ participation: null });
+  });
+
+  it("writes nothing when the question was hidden", () => {
+    const hidden = Questionnaire.parse({
+      version: "1",
+      pages: [
+        {
+          id: "p",
+          kind: "questions",
+          title: "P",
+          questions: [
+            { id: "member", kind: "boolean", prompt: "Still a member?" },
+            {
+              id: "coming",
+              kind: "single_select",
+              prompt: "Coming?",
+              role: "participation_intent",
+              options: PARTICIPATION_INTENT_OPTIONS,
+              visibleIf: { fieldId: "member", op: "eq", value: true },
+            },
+          ],
+        },
+      ],
+    });
+    expect(
+      questionnaireRoleMirror(hidden, { member: true, coming: "no" }),
+    ).toMatchObject({ participation: { intent: "no" } });
+    expect(
+      questionnaireRoleMirror(hidden, { member: false, coming: "no" }),
+    ).toMatchObject({ participation: null });
   });
 });

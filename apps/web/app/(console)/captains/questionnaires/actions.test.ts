@@ -27,6 +27,7 @@ vi.mock("@camp404/db/questionnaire-lifecycle", () => ({
   closeActivation: vi.fn(),
 }));
 vi.mock("@/lib/questionnaire-definitions", () => ({
+  createAttendanceCheck: vi.fn(),
   createDraft: vi.fn(),
   deleteDraft: vi.fn(),
   duplicateDefinition: vi.fn(),
@@ -37,6 +38,7 @@ import { canSendToAudience } from "@camp404/core";
 import { computeAudience, type AudienceData } from "@camp404/db/audience";
 import {
   closeActivationAction,
+  createAttendanceCheckAction,
   createDraftAction,
   deleteDraftAction,
   duplicateDraftAction,
@@ -52,6 +54,7 @@ import { ensureCampUser, getLeadTeams, isTeamLead } from "@/lib/users";
 import { getCampManagementRoster } from "@/lib/roster";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import {
+  createAttendanceCheck,
   createDraft,
   deleteDraft,
   duplicateDefinition,
@@ -74,11 +77,7 @@ function asViewer(
   rank: "captain" | "member",
   isLead: boolean | string[] = false,
 ): void {
-  const leadTeams = Array.isArray(isLead)
-    ? isLead
-    : isLead
-      ? ["kitchen"]
-      : [];
+  const leadTeams = Array.isArray(isLead) ? isLead : isLead ? ["kitchen"] : [];
   vi.mocked(getAuthenticatedUser).mockResolvedValue({
     primaryEmail: "x@example.com",
   } as unknown as Awaited<ReturnType<typeof getAuthenticatedUser>>);
@@ -120,7 +119,11 @@ describe("publishAction — captain gate", () => {
       change: "initial",
     });
     const res = await publishAction("feedback");
-    expect(res).toEqual({ ok: true, version: "feedback-v1", change: "initial" });
+    expect(res).toEqual({
+      ok: true,
+      version: "feedback-v1",
+      change: "initial",
+    });
     expect(publishDefinition).toHaveBeenCalledWith("feedback", "u1");
   });
 
@@ -159,11 +162,74 @@ describe("publishAction — captain gate", () => {
   });
 });
 
+describe("createAttendanceCheckAction", () => {
+  /** The stored row behind the fixed key: absent until the first create. */
+  let stored: "draft" | "published" | null;
+
+  beforeEach(() => {
+    stored = null;
+    vi.mocked(createAttendanceCheck).mockImplementation(async () => {
+      stored ??= "draft";
+      return "coming-this-year";
+    });
+    vi.mocked(getDefinitionMetaRow).mockImplementation(async (key) =>
+      stored ? { key, status: stored, version: null, createdBy: "u1" } : null,
+    );
+    vi.mocked(publishDefinition).mockImplementation(async () => {
+      stored = "published";
+      return { ok: true, version: "coming-this-year-v1", change: "initial" };
+    });
+  });
+
+  it("refuses a team lead, who may author but not publish or send", async () => {
+    asViewer("member", ["kitchen", "structures"]);
+    expect(await createAttendanceCheckAction()).toEqual({
+      ok: false,
+      error: "Only captains can publish or send.",
+    });
+    expect(createAttendanceCheck).not.toHaveBeenCalled();
+    expect(publishDefinition).not.toHaveBeenCalled();
+  });
+
+  it("creates and publishes it for a captain, and a second click returns the same key", async () => {
+    asViewer("captain");
+    expect(await createAttendanceCheckAction()).toEqual({
+      ok: true,
+      key: "coming-this-year",
+    });
+    expect(createAttendanceCheck).toHaveBeenCalledWith("u1");
+    expect(publishDefinition).toHaveBeenCalledWith("coming-this-year", "u1");
+
+    expect(await createAttendanceCheckAction()).toEqual({
+      ok: true,
+      key: "coming-this-year",
+    });
+    // Already live: not published again.
+    expect(publishDefinition).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a publish refusal as its first reason", async () => {
+    asViewer("captain");
+    vi.mocked(publishDefinition).mockResolvedValue({
+      ok: false,
+      errors: ["Its options must be exactly yes, maybe and no."],
+      issues: [],
+    });
+    expect(await createAttendanceCheckAction()).toEqual({
+      ok: false,
+      error: "Its options must be exactly yes, maybe and no.",
+    });
+  });
+});
+
 describe("sendAction — validation", () => {
   beforeEach(() => asViewer("captain"));
 
   it("rejects scope=team without a team", async () => {
-    const res = await sendAction("feedback", { scope: "team", blocking: false });
+    const res = await sendAction("feedback", {
+      scope: "team",
+      blocking: false,
+    });
     expect(res).toEqual({ ok: false, error: "Choose a team to send to." });
     expect(sendActivation).not.toHaveBeenCalled();
   });
@@ -386,7 +452,12 @@ const LIN = "33333333-3333-4333-8333-333333333333";
 type RosterRow = Awaited<ReturnType<typeof getCampManagementRoster>>[number];
 
 function rosterRow(id: string, teams: string[], isLead = false): RosterRow {
-  return { id, teams, isLead, approvalStatus: "approved" } as unknown as RosterRow;
+  return {
+    id,
+    teams,
+    isLead,
+    approvalStatus: "approved",
+  } as unknown as RosterRow;
 }
 
 const ROSTER: RosterRow[] = [

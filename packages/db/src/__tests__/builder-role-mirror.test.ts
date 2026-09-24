@@ -1,12 +1,15 @@
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import type { AuditAction } from "@camp404/core";
+import type { ParticipationStatus } from "@camp404/types";
 import { useTestDb } from "./_harness";
-import { makeActivation, makeUser } from "./_factories";
+import { addTarget, makeActivation, makeUser } from "./_factories";
 import { completeBuilderResponse } from "../activations";
 import * as schema from "../schema";
 
 // A camp-authored Dietary or Transport questionnaire writes the facts the app
-// already reads: dietary_requirements, and this year's driver_profiles row.
+// already reads: dietary_requirements, and this year's driver_profiles row. A
+// "Coming this year?" answer sets the member's camp_participations row.
 
 describe("completeBuilderResponse with role answers", () => {
   const h = useTestDb();
@@ -42,6 +45,7 @@ describe("completeBuilderResponse with role answers", () => {
     await submit(member.id, act.id, {
       dietary: { allergies: "Peanuts", isAnaphylactic: true },
       driver: null,
+      participation: null,
     });
 
     const [row] = await db
@@ -71,6 +75,7 @@ describe("completeBuilderResponse with role answers", () => {
 
     await submit(member.id, act.id, {
       dietary: null,
+      participation: null,
       driver: {
         intendsToDrive: true,
         arrivalAt: new Date("2027-04-26T00:00:00.000Z"),
@@ -101,10 +106,12 @@ describe("completeBuilderResponse with role answers", () => {
     const act = await makeActivation(db, { questionnaireKey: "transport" });
     await submit(member.id, act.id, {
       dietary: null,
+      participation: null,
       driver: { intendsToDrive: true },
     });
     await submit(member.id, act.id, {
       dietary: null,
+      participation: null,
       driver: { intendsToDrive: false },
     });
 
@@ -128,5 +135,145 @@ describe("completeBuilderResponse with role answers", () => {
 
     expect(await db.select().from(schema.dietaryRequirements)).toEqual([]);
     expect(await db.select().from(schema.driverProfiles)).toEqual([]);
+    expect(await db.select().from(schema.campParticipations)).toEqual([]);
+  });
+});
+
+describe("completeBuilderResponse with a Coming this year answer", () => {
+  const h = useTestDb();
+  type DB = ReturnType<typeof h.db>;
+  const WITHDRAWN: AuditAction = "participation.withdrawn";
+
+  /** The camp's live year is 2028; every send below was frozen at 2027. */
+  async function liveYear2028(db: DB) {
+    await db
+      .insert(schema.campSettings)
+      .values({ id: true })
+      .onConflictDoNothing({ target: schema.campSettings.id });
+    const [row] = await db
+      .select({ config: schema.campSettings.config })
+      .from(schema.campSettings);
+    await db
+      .update(schema.campSettings)
+      .set({
+        config: {
+          ...row!.config,
+          cycles: [
+            {
+              year: 2028,
+              startedAt: "2028-01-01T00:00:00.000Z",
+              endedAt: null,
+            },
+          ],
+        },
+      })
+      .where(eq(schema.campSettings.id, true));
+  }
+
+  async function sendTo(db: DB, userId: string) {
+    const act = await makeActivation(db, {
+      questionnaireKey: "coming-this-year",
+      cycle: 2027,
+      blocking: true,
+    });
+    await addTarget(db, act.id, userId);
+    await db.insert(schema.requiredActions).values({
+      userId,
+      actionKey: "coming-this-year",
+      type: "questionnaire",
+      title: "Coming this year?",
+      version: "1",
+      activationId: act.id,
+      blocking: true,
+    });
+    return act;
+  }
+
+  async function answer(
+    userId: string,
+    activationId: string,
+    intent: "yes" | "maybe" | "no",
+  ) {
+    await completeBuilderResponse({
+      userId,
+      definitionKey: "coming-this-year",
+      definitionVersion: "1",
+      cycle: 2027,
+      responses: { coming: intent },
+      activationId,
+      mirror: { dietary: null, driver: null, participation: { intent } },
+    });
+  }
+
+  async function places(db: DB, userId: string) {
+    return db
+      .select({
+        cycle: schema.campParticipations.cycle,
+        status: schema.campParticipations.status,
+      })
+      .from(schema.campParticipations)
+      .where(eq(schema.campParticipations.userId, userId));
+  }
+
+  it("records the answer for the send's year, not the live one, and clears the gate", async () => {
+    const db = h.db();
+    await liveYear2028(db);
+    const member = await makeUser(db);
+    const act = await sendTo(db, member.id);
+
+    await answer(member.id, act.id, "yes");
+
+    expect(await places(db, member.id)).toEqual([
+      { cycle: 2027, status: "applied" },
+    ]);
+    const [gate] = await db
+      .select({ status: schema.requiredActions.status })
+      .from(schema.requiredActions)
+      .where(eq(schema.requiredActions.userId, member.id));
+    expect(gate).toEqual({ status: "completed" });
+  });
+
+  it("takes an accepted member off on No, with one withdrawal audit row", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const act = await sendTo(db, member.id);
+    await db.insert(schema.campParticipations).values({
+      userId: member.id,
+      cycle: 2027,
+      status: "accepted" satisfies ParticipationStatus,
+    });
+
+    await answer(member.id, act.id, "no");
+
+    expect(await places(db, member.id)).toEqual([
+      { cycle: 2027, status: "not_attending" },
+    ]);
+    const audits = await db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, WITHDRAWN));
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      actorId: member.id,
+      target: member.id,
+      metadata: { cycle: 2027, from: "accepted" },
+    });
+  });
+
+  it("leaves an accepted place alone on Maybe", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const act = await sendTo(db, member.id);
+    await db.insert(schema.campParticipations).values({
+      userId: member.id,
+      cycle: 2027,
+      status: "accepted",
+    });
+    const before = await db.select().from(schema.campParticipations);
+
+    await answer(member.id, act.id, "maybe");
+
+    expect(await db.select().from(schema.campParticipations)).toEqual(before);
+    expect(await db.select().from(schema.auditLog)).toEqual([]);
   });
 });

@@ -247,6 +247,11 @@ export const QUESTION_ROLES = [
   "driving_this_year",
   "arrival_date",
   "departure_date",
+  // "Are you coming this year?": a Yes / Maybe / No single choice whose answer
+  // sets this year's camp_participations row (@camp404/db/participations). Its
+  // option values are fixed as PARTICIPATION_INTENTS; publishing refuses any
+  // other set.
+  "participation_intent",
 ] as const;
 export type QuestionRole = (typeof QUESTION_ROLES)[number];
 
@@ -292,6 +297,8 @@ export const SingleSelectQuestion = z.object({
   otherLabel: z.string().optional(),
   shuffleOptions: z.boolean().optional(),
   ...camp404QuestionFields,
+  // The only kind that can say Yes / Maybe / No with fixed values.
+  role: z.literal("participation_intent").optional(),
 });
 export type SingleSelectQuestion = z.infer<typeof SingleSelectQuestion>;
 

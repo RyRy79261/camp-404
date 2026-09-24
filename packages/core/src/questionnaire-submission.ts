@@ -6,8 +6,10 @@
 // Pure — no I/O, no env.
 
 import {
+  PARTICIPATION_INTENTS,
   QuestionnaireResponses,
   isBuilderRole,
+  type ParticipationIntent,
   type DietaryMirror,
   type DriverMirror,
   type Questionnaire,
@@ -64,7 +66,8 @@ export function boundDraftResponses(
 // A captain marks a question with a builder role (BUILDER_ROLES in
 // @camp404/types), and a final submit copies the answer into
 // dietary_requirements or this year's driver_profiles row, which the roster,
-// the export and the "drivers" audience already read.
+// the export and the "drivers" audience already read. A participation_intent
+// answer sets the member's camp_participations row for the send's year.
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -73,6 +76,12 @@ function dayAnswer(value: unknown): Date | null {
   if (typeof value !== "string" || !DAY.test(value)) return null;
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function intentAnswer(value: unknown): ParticipationIntent | null {
+  return (PARTICIPATION_INTENTS as readonly unknown[]).includes(value)
+    ? (value as ParticipationIntent)
+    : null;
 }
 
 function textAnswer(value: unknown): string | null {
@@ -86,6 +95,11 @@ function textAnswer(value: unknown): string | null {
  * yes/no) when it was hidden, branched past or left unanswered, so a member who
  * now says "no allergies" does not keep last year's list. A questionnaire with
  * no role question writes nothing.
+ *
+ * The one exception is participation_intent: it writes only a Yes, Maybe or
+ * No the member was asked and gave. A hidden, unanswered or unknown answer
+ * leaves `participation` null, so nothing is written: a missing answer never
+ * takes a member's place away.
  */
 export function questionnaireRoleMirror(
   definition: Questionnaire,
@@ -96,6 +110,7 @@ export function questionnaireRoleMirror(
   );
   const dietary: DietaryMirror = {};
   const driver: DriverMirror = {};
+  let participation: RoleMirror["participation"] = null;
   for (const q of allQuestions(definition)) {
     const role = "role" in q ? q.role : undefined;
     if (!isBuilderRole(role)) continue;
@@ -119,10 +134,16 @@ export function questionnaireRoleMirror(
       case "departure_date":
         driver.departureAt = dayAnswer(value);
         break;
+      case "participation_intent": {
+        const intent = intentAnswer(value);
+        if (intent) participation = { intent };
+        break;
+      }
     }
   }
   return {
     dietary: Object.keys(dietary).length > 0 ? dietary : null,
     driver: Object.keys(driver).length > 0 ? driver : null,
+    participation,
   };
 }

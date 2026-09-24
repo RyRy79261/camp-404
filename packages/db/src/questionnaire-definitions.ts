@@ -164,6 +164,11 @@ export async function insertDefinitionDraft(input: {
   title: string;
   createdBy: string | null;
   definition: Questionnaire;
+  /**
+   * The year policy (see setDefinitionCarryOver). Omitted, the column's
+   * default (carry) stays.
+   */
+  carryOver?: boolean;
 }): Promise<void> {
   const db = createHttpDb();
   await db.insert(questionnaireDefinitions).values({
@@ -173,6 +178,7 @@ export async function insertDefinitionDraft(input: {
     status: "draft",
     version: null,
     createdBy: input.createdBy,
+    ...(input.carryOver === undefined ? {} : { carryOver: input.carryOver }),
   });
 }
 
