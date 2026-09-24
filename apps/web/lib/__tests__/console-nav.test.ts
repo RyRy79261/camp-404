@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { CONSOLE_NAV, consoleNavFor } from "../console-nav";
+import { POWER_FUEL_PATH, POWER_LOADS_PATH } from "../power-copy";
 
 describe("consoleNavFor", () => {
   it("shows a member only the member destinations", () => {
     expect(consoleNavFor("camp_member").map((i) => i.label)).toEqual([
       "Home",
       "Tasks",
+      "Power",
       "Roster",
       "My forms",
       "Family tree",
@@ -37,6 +39,14 @@ describe("consoleNavFor", () => {
     expect(consoleNavFor("captain").map((i) => i.href)).toEqual(
       CONSOLE_NAV.map((e) => e.href),
     );
+  });
+
+  it("lights the Power entry on both power pages", () => {
+    // The nav marks an entry active on its href and every path beneath it.
+    const power = CONSOLE_NAV.find((e) => e.label === "Power");
+    for (const path of [POWER_LOADS_PATH, POWER_FUEL_PATH]) {
+      expect(path.startsWith(`${power?.href}/`)).toBe(true);
+    }
   });
 
   it("sends the client labels and links only, never the rank bar", () => {

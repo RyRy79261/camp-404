@@ -67,8 +67,11 @@ button.
   (`assertStableTeamKeys`); a captain can only relabel or archive. Removing a
   key would need a questionnaire version bump and a migration of stored
   answers (see Phase 4 below).
-- **Per-team dashboards.** Wanted later, one bespoke page per team (for
-  example the kitchen's recipes and shopping lists). None exists yet.
+- **Per-team dashboards.** Wanted, one bespoke page per team. [CORRECTION
+  2026-09-24] Power & Lighting now has bespoke tools, though no dashboard:
+  its load list and fuel estimate (`/power/loads`, `/power/fuel`). The other
+  teams' pages (for example the kitchen's recipes and shopping lists) are not
+  built.
 
 ## Original plan (history)
 

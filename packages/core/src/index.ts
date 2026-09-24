@@ -87,6 +87,12 @@
 //     in (./time-zone)
 //   - questionnaire status: memberQuestionnaireStatuses — where each
 //     questionnaire stands for one member (./questionnaire-status)
+//   - power: canEditPower (a captain or a Power & Lighting lead), the load
+//     maths (loadWatts, energyPerDay, hourlyBuckets, peakLoad,
+//     surgeHeadroomWatts, amps at MAINS_VOLTS, generatorLoadPct, loadBand,
+//     powerTotals, dayLabel)
+//     and the fuel maths (fuelLine, fuelPerHour, fuelForPlan,
+//     jerryCansNeeded, legacyFuelEstimate) (./power)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -129,3 +135,4 @@ export * from "./notification-email";
 export * from "./time-zone";
 export * from "./questionnaire-status";
 export * from "./password";
+export * from "./power";
