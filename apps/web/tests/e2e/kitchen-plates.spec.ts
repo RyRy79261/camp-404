@@ -14,10 +14,11 @@ import {
 } from "./_helpers";
 
 // Plate counts on a recipe in the book (#243, the owner's sketch 2026-09-24,
-// test-mode). The chips are the distinct counts in this year's meal plan.
-// Food does not scale by multiplying, so a count is proofread by Claude once
-// and kept: a captain or a Kitchen lead (2A) presses "N · Proofread for N",
-// and afterwards the count is a link with a tick that runs nothing. The page
+// test-mode). One selector lists the distinct counts in this year's meal
+// plan. Food does not scale by multiplying, so a count is proofread by Claude
+// once and kept, for the same version: a captain or a Kitchen lead (2A)
+// picks a count and presses "Proofread for N plates", and afterwards the
+// count reads "Verified" and runs nothing. The page
 // has two tabs, Recipe and History, kept in the address. No run counter
 // shows. E2E mode stands in for Anthropic: a plate count's amounts are
 // base × (to/from)^0.9, so 2.5 kg for 50 plates reads 2.3 kg for 45.
@@ -90,6 +91,14 @@ const chip = (page: Page, step: number) =>
   page.getByRole("list", { name: `Step ${step} uses` });
 const counts = (page: Page) =>
   page.getByRole("navigation", { name: "Plate count" });
+const selector = (page: Page) =>
+  counts(page).getByRole("combobox", { name: "Plates" });
+
+/** Pick a count from the selector. */
+async function pick(page: Page, plates: number) {
+  await selector(page).click();
+  await page.getByRole("option", { name: `${plates} plates` }).click();
+}
 
 test.describe("recipe plate counts (test-mode)", () => {
   test.beforeEach(async ({ request }) => {
@@ -102,34 +111,42 @@ test.describe("recipe plate counts (test-mode)", () => {
   }) => {
     const recipeUrl = await acceptedAt50(page, request);
 
-    // 1. The Recipe tab, written for 50, with each step's amounts, and a chip
-    //    for each count in the meal plan.
+    // 1. The Recipe tab, written for 50, with each step's amounts, and the
+    //    selector on 50, verified.
     await expect(
       page.getByRole("heading", { level: 1, name: DISH }),
     ).toBeVisible();
     await expect(chip(page, 3)).toContainText("2.5 kg");
     await expect(chip(page, 3)).toContainText("Red lentils");
-    await expect(
-      counts(page).getByRole("link", { name: "50 plates, proofread" }),
-    ).toHaveAttribute("aria-current", "page");
+    await expect(selector(page)).toHaveText("50 plates");
+    await expect(counts(page).getByText("Verified")).toBeVisible();
     await expect(page.getByText(/runs? left|per day/i)).toHaveCount(0);
 
-    // 2. A captain has Claude proofread 45 plates from its chip.
-    await counts(page)
-      .getByRole("button", { name: "45 · Proofread for 45" })
-      .click();
+    // 2. A captain picks 45, which is not proofread yet, and has Claude
+    //    proofread it.
+    await pick(page, 45);
     await expect(page).toHaveURL(`${recipeUrl}?plates=45`);
-    await expect(
-      counts(page).getByRole("link", { name: "45 plates, proofread" }),
-    ).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("status")).toContainText(
+      "Not proofread for 45 plates yet.",
+    );
+    await counts(page)
+      .getByRole("button", { name: "Proofread for 45 plates" })
+      .click();
+    await expect(counts(page).getByText("Verified")).toBeVisible();
+    await expect(page).toHaveURL(`${recipeUrl}?plates=45`);
+    await expect(selector(page)).toHaveText("45 plates");
     await expect(chip(page, 3)).toContainText("2.3 kg");
     await expect(
       page
         .getByRole("region", { name: "Cook notes" })
         .getByText("For 45 plates"),
     ).toBeVisible();
-    // Both counts are ready: nothing left to proofread.
+    // Both counts are ready: nothing left to proofread. It is the same
+    // version: the heading still names version 1.
     await expect(counts(page).getByRole("button")).toHaveCount(0);
+    await expect(
+      page.getByText("Written for 50 plates · Version 1 · Total 45 min"),
+    ).toBeVisible();
 
     // 3. At phone width the page never scrolls sideways.
     await expect
@@ -143,10 +160,9 @@ test.describe("recipe plate counts (test-mode)", () => {
       .toBe(true);
 
     // 4. Back to 50: the recipe's own amounts, and no run.
-    await counts(page)
-      .getByRole("link", { name: "50 plates, proofread" })
-      .click();
+    await pick(page, 50);
     await expect(page).toHaveURL(`${recipeUrl}?plates=50`);
+    await expect(counts(page).getByText("Verified")).toBeVisible();
     await expect(chip(page, 3)).toContainText("2.5 kg");
 
     // 5. The History tab, kept in the address through a reload with the
@@ -223,8 +239,10 @@ test.describe("recipe plate counts (test-mode)", () => {
     await expect(page.getByText("Meal plan saved")).toBeVisible();
     await page.goto(`${recipeUrl}?plates=45`);
     await expect(chip(page, 3)).toContainText("2.3 kg");
+    await pick(page, 60);
+    await expect(page).toHaveURL(`${recipeUrl}?plates=60`);
     await expect(
-      counts(page).getByRole("button", { name: "60 · Proofread for 60" }),
+      counts(page).getByRole("button", { name: "Proofread for 60 plates" }),
     ).toBeVisible();
     await expect(page.getByText(/runs? left|per day/i)).toHaveCount(0);
   });

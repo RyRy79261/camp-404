@@ -70,10 +70,10 @@ export const metadata = { title: "Recipe — Camp 404" };
 // IN THE BOOK (an accepted version), two tabs (the owner's sketch,
 // 2026-09-24), the choice in the address (?tab=history) so a link and a
 // reload keep it:
-//  - Recipe, first: only the refined recipe. The plate chips (plate-bar.tsx,
-//    one per distinct count in this year's meal plan), the ingredients beside
-//    the method and the cook notes (components/recipes/recipe-reader.tsx), and
-//    "How this was scaled". The count shown is in the address (?plates=45)
+//  - Recipe, first: only the refined recipe. The plate selector
+//    (plate-bar.tsx, the distinct counts in this year's meal plan), the
+//    ingredients beside the method and the cook notes
+//    (components/recipes/recipe-reader.tsx), and "How this was scaled". The count shown is in the address (?plates=45)
 //    and drawn here on the server: a count with a stored result shows its
 //    amounts; one without shows the version's own count and says so. Food
 //    does not scale by multiplying, so nothing here does any maths on an
@@ -101,8 +101,8 @@ export const metadata = { title: "Recipe — Camp 404" };
 //    version, and then only the book's parts (no working text, no note, no
 //    source versions, no unaccepted proofread). Anyone else gets a 404, as if
 //    it did not exist.
-//  - the Decision buttons, "Edit source", "Send for proofreading" and the
-//    "Proofread for N" chips render for a Kitchen lead or a captain (sending
+//  - the Decision buttons, "Edit source", "Send for proofreading" and
+//    "Proofread for N plates" render for a Kitchen lead or a captain (sending
 //    to Claude is theirs too, the owner's decision 2A). The actions and the
 //    writes check again. There is no daily limit and no run counter.
 //  - Claude's reports and unaccepted drafts render for a Kitchen lead or a

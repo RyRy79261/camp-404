@@ -1,39 +1,42 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Sparkles } from "lucide-react";
+import { Button } from "@camp404/ui/components/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@camp404/ui/components/select";
 import { toast } from "@camp404/ui/components/toast";
-import { cn } from "@camp404/ui/lib/utils";
 import { recipePath } from "@/lib/recipe-copy";
 import { platesLabel } from "@/lib/recipe-labels";
 import { proofreadPlatesAction } from "../actions";
 
-// The plate counts a recipe in the book is shown at (the owner's sketch,
-// 2026-09-24): one chip for each distinct count in this year's meal plan.
-// Food does not scale by multiplying, so a count is either proofread by
-// Claude and stored, or not yet:
+// The plate count a recipe in the book is shown at (the owner, 2026-09-24:
+// "Have there be a selector for the number of meals, present a button if it
+// needs to be proof read, present an indicator if its already verified"). One
+// row: "Plates", one selector, and beside it one of four things for the
+// count picked:
 //
-//  - a count with a stored result is a LINK (?plates=N) with a tick: the
-//    count lives in the page address, so it can be shared, and the server
-//    draws it;
-//  - a count Claude is still writing is shown dimmed, "with Claude";
-//  - a count with no result is "N · Proofread for N", a button for a captain
-//    or a Kitchen lead only (each run costs money; the owner's decision 2A).
-//    Everyone else does not see it. The action and the write check the
-//    reviewer and the count again, and a count with a result is never run
-//    twice.
+//  - a stored result: "Verified", an indicator, not a control;
+//  - Claude is still writing it: "With Claude…";
+//  - no result, for a captain or a Kitchen lead: "Proofread for N plates"
+//    (each run costs money; the owner's decision 2A). The action and the
+//    write check the reviewer and the count again, and a count with a result
+//    is never run twice;
+//  - no result, for anyone else: "Not proofread yet".
 //
-// A failed click says why in a toast, and only the chip that was pressed
-// spins. A count asked for in the address that is not ready says where it
-// stands under the chips.
-
-const CHIP =
-  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const CHIP_ON = "border-primary bg-primary text-primary-foreground";
-const CHIP_OFF =
-  "border-border bg-background text-foreground hover:border-foreground/40";
+// The selector lists the meal plan's distinct counts and every count with a
+// result, smallest first. Picking one goes to ?plates=N: the count lives in
+// the page address, so it can be shared, and the server draws it. Food does
+// not scale by multiplying, so a count is proofread by Claude for the SAME
+// version (its result is stored against the version) and never makes a new
+// one. A failed click says why in a toast. A count asked for in the address
+// that is not ready says where it stands under the row.
 
 /** What the page says about a count that is not ready. */
 function statusFor(
@@ -81,12 +84,22 @@ export function PlateBar({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [pressed, setPressed] = useState<number | null>(null);
+  const [chosen, setChosen] = useState(asked ?? shown);
 
   const href = (plates: number) => `${recipePath(recipeId)}?plates=${plates}`;
+  // The count in the address is listed even when the meal plan no longer
+  // has it, so the selector never reads blank.
+  const options = [...new Set([...counts, ...ready, asked ?? shown])].sort(
+    (a, b) => a - b,
+  );
+
+  function pick(value: string) {
+    const plates = Number(value);
+    setChosen(plates);
+    router.push(href(plates));
+  }
 
   function proofread(plates: number) {
-    setPressed(plates);
     startTransition(async () => {
       const result = await proofreadPlatesAction({
         recipeId,
@@ -103,75 +116,72 @@ export function PlateBar({
     });
   }
 
-  const chips = counts.flatMap((plates) => {
-    if (ready.includes(plates)) {
-      const selected = plates === shown;
-      return [
-        <Link
-          key={plates}
-          href={href(plates)}
-          aria-current={selected ? "page" : undefined}
-          aria-label={`${platesLabel(plates)}, proofread`}
-          className={cn(CHIP, selected ? CHIP_ON : CHIP_OFF)}
-        >
-          {plates}
-          <Check className="h-3.5 w-3.5" aria-hidden />
-        </Link>,
-      ];
-    }
-    if (open.includes(plates)) {
-      return [
-        <span
-          key={plates}
-          aria-disabled="true"
-          className={cn(CHIP, "border-dashed text-muted-foreground")}
-        >
-          {plates} · with Claude
-        </span>,
-      ];
-    }
-    if (!canRun) return [];
-    const spinning = pending && pressed === plates;
-    return [
-      <button
-        key={plates}
+  let state: React.ReactNode;
+  if (ready.includes(chosen)) {
+    state = (
+      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-success">
+        <Check className="h-4 w-4" aria-hidden />
+        Verified
+      </span>
+    );
+  } else if (open.includes(chosen)) {
+    state = (
+      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        With Claude…
+      </span>
+    );
+  } else if (canRun) {
+    state = (
+      <Button
         type="button"
+        variant="outline"
         disabled={pending}
-        onClick={() => proofread(plates)}
-        className={cn(
-          CHIP,
-          "border-dashed border-accent/60 text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-60",
-        )}
+        onClick={() => proofread(chosen)}
       >
-        {plates} ·{" "}
-        {spinning ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        {pending ? (
+          <Loader2 className="animate-spin" aria-hidden />
         ) : (
-          <Sparkles className="h-3.5 w-3.5" aria-hidden />
+          <Sparkles aria-hidden />
         )}
-        Proofread for {plates}
-      </button>,
-    ];
-  });
-
-  if (chips.length === 0 && asked === null) return null;
+        Proofread for {platesLabel(chosen)}
+      </Button>
+    );
+  } else {
+    state = (
+      <span className="text-sm text-muted-foreground">Not proofread yet</span>
+    );
+  }
 
   return (
     <div
       data-plate-bar=""
       className="flex flex-col gap-3 rounded-lg bg-muted/60 p-3.5 sm:px-4 sm:py-3.5"
     >
-      {chips.length > 0 && (
-        <nav
-          aria-label="Plate count"
-          className="flex min-w-0 flex-wrap items-center gap-2"
+      <nav
+        aria-label="Plate count"
+        className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2"
+      >
+        <label
+          htmlFor="plate-count"
+          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground"
         >
-          <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Plates
-          </span>
-          {chips}
-        </nav>
-      )}
+          Plates
+        </label>
+        <Select value={String(chosen)} onValueChange={pick}>
+          <SelectTrigger id="plate-count" className="w-auto gap-2">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((plates) => (
+              <SelectItem key={plates} value={String(plates)}>
+                {platesLabel(plates)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {state}
+      </nav>
       {asked !== null ? (
         <p role="status" className="text-sm text-foreground">
           {statusFor(asked, open, failed)}{" "}
