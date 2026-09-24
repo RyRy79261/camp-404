@@ -197,6 +197,15 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
+    # Two shards, each with its own `next dev` and in-memory store, so the
+    # serial rule in playwright.config.ts still holds inside each. One server
+    # compiling every route the whole suite visits starved the runner at about
+    # test 90 (three "The runner has received a shutdown signal" deaths on PR
+    # #262, same point each time, three Azure regions).
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1/2, 2/2]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v5
@@ -222,12 +231,17 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
         # Desktop only; the 360 px project runs nightly (mobile.yml).
-        run: pnpm --filter @camp404/web test:e2e
+        # A memory line every 20 s leaves evidence if a runner dies mid-run.
+        run: |
+          ( while sleep 20; do
+              echo "[mem $(date -u +%T)] $(free -m | awk '/Mem:/{print "used="$3"MB avail="$7"MB"} /Swap:/{print "swap="$3"MB"}' | tr '\n' ' ')top: $(ps -eo rss=,comm= --sort=-rss | head -3 | awk '{printf "%s=%dMB ", $2, $1/1024}')"
+            done ) &
+          pnpm --filter @camp404/web test:e2e --shard=${{ matrix.shard }}
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report
+          name: playwright-report-${{ strategy.job-index }}
           path: apps/web/playwright-report/
           retention-days: 7
 
