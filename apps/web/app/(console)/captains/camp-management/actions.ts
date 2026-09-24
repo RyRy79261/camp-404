@@ -60,6 +60,7 @@ import { runAction, type ActionFailure } from "@/lib/action-result";
 import { auditReadAfterResponse } from "@/lib/audit";
 import { resolveSafetyDataForViewer } from "@/lib/safety-data";
 import { decideParticipation } from "@/lib/participations";
+import { deliverAfterResponse } from "@/lib/background-work";
 
 export type MemberDetailResult =
   | {
@@ -630,6 +631,7 @@ export async function sendCaptainPromotionAction(
       targetUserId,
       requestedByUserId: gate.captainId,
     });
+    deliverAfterResponse();
     revalidatePath("/captains/camp-management");
     return {
       ok: true,

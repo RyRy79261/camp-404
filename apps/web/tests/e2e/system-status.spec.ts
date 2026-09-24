@@ -59,17 +59,13 @@ test.describe("/captains/system (test-mode)", () => {
     await expect(checkRow(page, "Sign-in")).toBeVisible();
 
     await expect(
-      page.getByRole("heading", { name: "Scheduled jobs" }),
+      page.getByRole("heading", { name: "Background work" }),
     ).toBeVisible();
-    await expect(page.getByText("/api/cron/maintenance")).toBeVisible();
-    await expect(page.getByText("Daily at 07:30 UTC")).toBeVisible();
-    await expect(
-      page.getByText(/does not record when each job last ran/),
-    ).toBeVisible();
-    // The one stub left (manuals) says so. Recipes run from a captain's click, not a cron.
-    await expect(page.getByText("Not built yet", { exact: true })).toHaveCount(
-      1,
-    );
+    await expect(page.getByText(/Nothing runs on a schedule/)).toBeVisible();
+    await expect(page.getByText("Upkeep", { exact: true })).toBeVisible();
+    // No cron jobs (owner, 2026-09-24): no schedule times, no cron routes.
+    await expect(page.getByText(/Daily at/)).toHaveCount(0);
+    await expect(page.getByText(/\/api\/cron\//)).toHaveCount(0);
   });
 
   test("a member sees the locked shell and no status", async ({
@@ -91,9 +87,9 @@ test.describe("/captains/system (test-mode)", () => {
         "System status is captain-only. Your rank doesn't have clearance for this.",
       ),
     ).toBeVisible();
-    await expect(page.getByText("Scheduled jobs")).toHaveCount(0);
+    await expect(page.getByText("Background work")).toHaveCount(0);
     await expect(checkRow(page, "Database")).toHaveCount(0);
-    await expect(page.getByText("/api/cron/maintenance")).toHaveCount(0);
+    await expect(page.getByText("Upkeep", { exact: true })).toHaveCount(0);
   });
 
   test("a team lead sees the locked shell too: the page needs a captain", async ({
@@ -111,7 +107,7 @@ test.describe("/captains/system (test-mode)", () => {
     await expect(
       page.getByText("System status is captain-only.", { exact: false }),
     ).toBeVisible();
-    await expect(page.getByText("Scheduled jobs")).toHaveCount(0);
+    await expect(page.getByText("Background work")).toHaveCount(0);
     await expect(checkRow(page, "Database")).toHaveCount(0);
     // A lead's nav has no link to it either.
     await expect(

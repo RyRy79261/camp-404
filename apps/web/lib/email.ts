@@ -8,8 +8,8 @@ import { isEmailConfigured as isEmailConfiguredIn } from "./integration-config";
 // one message, which would show members each other's emails.
 //
 // Needs RESEND_API_KEY and RESEND_FROM_EMAIL (an address on a domain verified
-// in Resend, e.g. "Camp 404 <notices@camp-404.com>"). Without them the cron
-// route answers 503 and nothing is marked sent.
+// in Resend, e.g. "Camp 404 <notices@camp-404.com>"). Without them the drain
+// is skipped (lib/background-work.ts) and nothing is marked sent.
 
 const RESEND_URL = "https://api.resend.com/emails";
 

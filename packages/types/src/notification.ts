@@ -12,13 +12,13 @@ export const NOTIFICATION_KINDS = [
   "lead_directive",
   // A questionnaire was sent to the member.
   "questionnaire_release",
-  // A captain or the deadline cron nudged the member about a questionnaire.
+  // A captain or the deadline reminders nudged the member about a questionnaire.
   "questionnaire_reminder",
   // A captain approved the member's place in the camp.
   "approval_decision",
   // A captain asked the member to become a captain.
   "captain_promotion",
-  // The deadline cron nudged the person responsible for a task that is due
+  // The deadline reminders nudged the person responsible for a task that is due
   // tomorrow or today.
   "task_reminder",
 ] as const;

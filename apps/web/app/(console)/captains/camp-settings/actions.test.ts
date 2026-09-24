@@ -9,6 +9,7 @@ import type { TeamsConfig } from "@camp404/db/camp-config";
 // uses. requireClearance/deriveViewerRank (@camp404/core) and the pure
 // transforms (@camp404/db/camp-config) run for real.
 
+vi.mock("@/lib/background-work", () => ({ deliverAfterResponse: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
@@ -40,6 +41,7 @@ import {
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { mutateTeamsConfig } from "@/lib/camp-config";
+import { deliverAfterResponse } from "@/lib/background-work";
 
 function asCaptain() {
   vi.mocked(getAuthenticatedUser).mockResolvedValue({
@@ -58,8 +60,8 @@ function asCaptain() {
 // Make the mocked writer actually run the transform against `config`, so the
 // in-lock guards (assertStableTeamKeys, last-active) execute under test.
 function writerOver(config: TeamsConfig) {
-  vi.mocked(mutateTeamsConfig).mockImplementation(
-    async (transform) => transform(config),
+  vi.mocked(mutateTeamsConfig).mockImplementation(async (transform) =>
+    transform(config),
   );
 }
 
@@ -196,7 +198,8 @@ describe("renameTeamAction", () => {
     const result = await renameTeamAction("kitchen", "structures");
     expect(result).toEqual({
       ok: false,
-      error: 'Another team is already called “structures”. Pick a different name.',
+      error:
+        "Another team is already called “structures”. Pick a different name.",
     });
   });
 
@@ -423,6 +426,8 @@ describe("advanceCycleAction", () => {
       announcement: { title: "New year", body: "Off we go." },
     });
     expect(result).toEqual({ ok: true, report });
+    // The rollover's notices go out after the response, not on a schedule.
+    expect(deliverAfterResponse).toHaveBeenCalledOnce();
   });
 
   it("defaults the optional levers off", async () => {

@@ -245,16 +245,6 @@ describe("deriveSystemStatus", () => {
     expect(codes.detail).toContain("2 are shorter than 20 characters");
   });
 
-  it("refuses scheduled jobs loudly only in production", () => {
-    expect(check({}, OK_PROBE, "scheduled-jobs").tone).toBe("degraded");
-    expect(
-      check({ VERCEL_ENV: "production" }, OK_PROBE, "scheduled-jobs").tone,
-    ).toBe("attention");
-    expect(
-      check({ CRON_SECRET: "set-and-long" }, OK_PROBE, "scheduled-jobs").detail,
-    ).toContain("manuals/generate");
-  });
-
   it("flags test mode on any deployment", () => {
     const deployment = check({ E2E_TEST_MODE: "1" }, OK_PROBE, "deployment");
     expect(deployment.tone).toBe("attention");

@@ -99,40 +99,23 @@ front of whatever command you use.
 `drizzle-kit migrate` tracks applied migrations in the
 `__drizzle_migrations` table, so it is safe to run on every deploy.
 
-## Cron jobs
+## Background work (no cron jobs)
 
-`apps/web/vercel.json` is the source of truth. It schedules six jobs, each
-once a day:
+The camp runs on Vercel's free plan, so nothing is scheduled:
+`apps/web/vercel.json` has no `crons`. The work that used to run daily now
+runs when people use the app, after the response (`apps/web/lib/background-work.ts`):
 
-| Path                                | Schedule (UTC)             | What it does                                                                                                                                                                                                                                                   |
-| ----------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/cron/maintenance`             | `30 7 * * *` (daily 07:30) | Encrypts any government ID number still stored as plaintext and, on the production deployment only, deletes profile photos and image answers of members with no camp account.                                                                                  |
-| `/api/cron/manuals/generate`        | `30 8 * * *` (daily 08:30) | Not built: answers `status: "stub"` and does nothing. Will generate camp manuals.                                                                                                                                                                              |
-| `/api/cron/notifications/reminders` | `0 9 * * *` (daily 09:00)  | Reminds members still pending on any open questionnaire send due within the next 48 hours, with the same 24-hour dedup as a captain's manual reminder. Also reminds the person responsible for a task the camp day before it is due and on the day, once each. |
-| `/api/cron/notifications/dispatch`  | `15 9 * * *` (daily 09:15) | Fans out scheduled broadcasts whose `send_at` has arrived into per-member `notification_deliveries`. Immediate announcements still fan out at publish time.                                                                                                    |
-| `/api/cron/notifications/push`      | `25 9 * * *` (daily 09:25) | Sends queued push deliveries to FCM through firebase-admin. Answers 503 without Firebase config.                                                                                                                                                               |
-| `/api/cron/notifications/email`     | `35 9 * * *` (daily 09:35) | Emails the notices that must not be missed, through Resend. Answers 503 and touches nothing without Resend config.                                                                                                                                             |
+| Work                                                                                          | When it runs                                                                                               |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Announcement fan-out, push, email                                                             | Right after the action that wrote the notices, and on any page load for anything left queued or scheduled. |
+| Questionnaire and task deadline reminders                                                     | On a page load, 09:00–21:00 camp time, deduped as before.                                                  |
+| Upkeep: encrypt leftover plaintext ID numbers, delete orphan avatar folders (production only) | On a page load, once a day. Erasure also deletes the member's own folder at once.                          |
 
-- Every job needs `Authorization: Bearer ${CRON_SECRET}`.
-- `/api/cron/telegram/dispatch` exists but is deliberately not scheduled:
-  Telegram outbound stays off until the owner turns it on (see
-  `DEFERRED.md`). Without a bot it answers `status: "not_configured"`.
-- `apps/web/lib/__tests__/cron-stub.test.ts` checks the routes against
-  `vercel.json`: it fails when a scheduled path has no route or a route is
-  not scheduled (telegram excepted), and when the `SCHEDULED_JOBS` list in
-  `apps/web/lib/cron-schedule.ts` drifts from it path by path and time by
-  time.
-- Captains can read the schedule at `/captains/system`. The app keeps no
-  record of when a job last ran; Vercel's Cron Jobs tab for the project lists
-  each run.
-- A run with failures answers non-2xx, so the cron dashboard shows it.
-
-> The camp runs on Vercel's Hobby plan, which caps cron jobs at one run per
-> day. A tighter schedule (for example the manuals job every 15 minutes during
-> the planning window, once it is built) needs Pro. Recipes use no cron at
-> all: a captain's click starts each Claude run, which runs in `after()`, and
-> a run stuck for more than ten minutes (one queued but never started too) is
-> reset when a Kitchen page loads.
+- The page-load run is guarded by a row in `action_rate_limit`, so it runs at
+  most once every five minutes across every server.
+- Push and email are skipped until Firebase and Resend are configured; their
+  deliveries stay queued until then.
+- Captains can read this list at `/captains/system`.
 
 ## Security / POPIA
 

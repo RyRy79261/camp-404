@@ -424,32 +424,41 @@ prompt templates in `@camp404/ai-prompts` are pinned and versioned
 deliberately. Do not swap models or edit a prompt in place — bump the
 version instead.
 
-## Cron jobs
+## No cron jobs
 
-All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
-`apps/web/vercel.json` schedules six, daily (UTC): `maintenance` 07:30,
-`manuals/generate` 08:30, `notifications/reminders` 09:00, `notifications/dispatch` 09:15,
-`notifications/push` 09:25, `notifications/email` 09:35.
+**Nothing runs on a schedule** (owner, 2026-09-24: "We're on free vercel, no
+cron jobs in there"). `apps/web/vercel.json` has no `crons`, and there are no
+`/api/cron/*` routes and no `CRON_SECRET`. Work happens at the user's action
+or lazily on a page load, both in `after()` (`apps/web/lib/background-work.ts`):
 
-- `maintenance` is where data upkeep lives instead of an operator script:
-  it encrypts any leftover plaintext ID number, and (on the production
-  deployment only) deletes avatar folders whose owner has no camp account.
-- Recipes have no cron (the camp is on Vercel's Hobby plan). A recipe run
-  starts only from a captain's or a Kitchen lead's click [CORRECTION
-  2026-09-24: 2A] and runs in `after()`, all of a batch at
-  the same time so it fits the page's 300 s; a run stuck over 10 minutes (one
-  queued but never started too) is reset when a Kitchen page loads or the
-  source editor's loading panel polls (`resetStaleRuns`). The Anthropic call sets `maxRetries: 0`: the owner ruled
-  out automatic retries.
-
-- A job must be honest on the cron dashboard. A run with failures answers
-  non-2xx; a job that is not built answers `{status: "stub"}` from
-  `apps/web/lib/cron-stub.ts` (only manuals today), never
-  `{ok: true, processed: 0}`.
-- `apps/web/lib/__tests__/cron-stub.test.ts` checks that every scheduled path
-  has a route and every route is scheduled, except `telegram/dispatch`: it is
-  off on purpose (Telegram outbound stays off until the owner turns it on, see
-  `DEFERRED.md`) and answers `status: "not_configured"` without a bot.
+- **At the action.** An action that writes notices (publish an announcement,
+  send or remind a questionnaire, ask a member to be captain, approve a member,
+  roll the year) calls `deliverAfterResponse()`: fan-out, push and email go
+  out right then. A new action that writes `notification_deliveries` calls it
+  too.
+- **On a page load.** `resolveMemberState` (every signed-in console page)
+  calls `runDueWorkAfterResponse()`: scheduled announcements whose time has
+  come, deadline reminders (camp daytime only, 09:00–21:00), a retry of
+  anything left queued, and once a day the upkeep (encrypt leftover plaintext
+  ID numbers; on production only, delete avatar folders whose owner has no
+  camp account). It is guarded by a row in `action_rate_limit`
+  (`consumeRateLimit`, one statement on the database clock), so it runs at
+  most once per five minutes across every server.
+- Every step is idempotent and claim-safe: broadcasts are claimed by
+  `dispatched_at`, the push and email drains lock their rows `FOR UPDATE SKIP
+LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
+  not stop the others. None of it runs under `E2E_TEST_MODE`.
+- Erasure deletes the member's avatar folder at the moment of erasure
+  (`apps/web/lib/account.ts`); the daily upkeep only catches leftovers.
+- Recipes follow the same rule. A recipe run starts only from a captain's or a
+  Kitchen lead's click [CORRECTION 2026-09-24: 2A] and runs in `after()`, all
+  of a batch at the same time so it fits the page's 300 s; a run stuck over 10
+  minutes (one queued but never started too) is reset when a Kitchen page
+  loads or the source editor's loading panel polls (`resetStaleRuns`). The
+  Anthropic call sets `maxRetries: 0`: the owner ruled out automatic retries.
+- Telegram outbound stays off (`DEFERRED.md`). `dispatchPendingAnnouncements`
+  is kept in `@camp404/telegram`; when Telegram is turned on, call it from
+  `deliverDue`, not from a scheduled route.
 
 ## Conventions
 

@@ -20,6 +20,7 @@ import {
 } from "@camp404/db/cycle-rollover";
 import { captainActionGate } from "@/lib/captain-gate";
 import { mutateTeamsConfig } from "@/lib/camp-config";
+import { deliverAfterResponse } from "@/lib/background-work";
 
 // Captain-only team-settings mutations (Phase 2). Each does a captain-gate, a
 // Zod boundary parse, then a locked read-modify-write via mutateTeamsConfig.
@@ -213,8 +214,7 @@ const CycleYear = z.coerce
 
 const SetFoundingYearForm = z.object({ year: CycleYear });
 
-const CYCLE_NAME_TOO_LONG =
-  `Keep the name to ${MAX_CYCLE_NAME_LENGTH} characters or fewer.`;
+const CYCLE_NAME_TOO_LONG = `Keep the name to ${MAX_CYCLE_NAME_LENGTH} characters or fewer.`;
 
 const SetCycleNameForm = z.object({
   year: CycleYear,
@@ -337,6 +337,8 @@ export async function advanceCycleAction(
               : `A new year has to be later than the one you're in, and between ${MIN_CYCLE_YEAR} and ${MAX_CYCLE_YEAR}.`,
     };
   }
+  // The rollover can write a camp-wide notice and new questionnaire sends.
+  deliverAfterResponse();
   revalidateRolloverSurfaces();
   return { ok: true, report: result.report };
 }

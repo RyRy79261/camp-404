@@ -10,7 +10,7 @@ export * as schema from "./schema";
 export type Database = NeonHttpDatabase<typeof schema>;
 export type PooledDatabase = { db: NeonDatabase<typeof schema>; pool: Pool };
 
-// In Node.js (e.g. cron jobs, CLI), use the WebSocket-backed serverless driver.
+// In Node.js (e.g. background work, CLI), use the WebSocket-backed serverless driver.
 // In edge / route handlers, prefer the HTTP driver — zero connection cost.
 
 // Placeholder used during `next build`'s page-data collection step, when

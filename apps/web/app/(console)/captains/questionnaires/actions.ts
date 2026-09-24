@@ -41,6 +41,7 @@ import {
   updateDefinition,
 } from "@/lib/questionnaire-definitions";
 import { usesTestStore } from "@/lib/test-mode";
+import { deliverAfterResponse } from "@/lib/background-work";
 
 // Questionnaire-builder mutations (Phase C). Team-leads may create and edit
 // their OWN drafts, and SEND to a team they lead (see the send gate below);
@@ -385,6 +386,7 @@ export async function sendAction(
     targetUserIds: parsed.data.targetUserIds,
   });
   if (!result.ok) return result;
+  deliverAfterResponse();
   revalidateBuilder(key);
   return { ok: true, activationId: result.activationId };
 }
@@ -600,6 +602,7 @@ export async function remindPendingAction(
       senderId: gate.campUser.id,
     });
     if (!result.ok) return result;
+    deliverAfterResponse();
 
     if (result.outcome === "nobody_pending") {
       return {

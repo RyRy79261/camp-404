@@ -80,7 +80,7 @@ function daysBetween(fromKey: string, toKey: string): number {
 
 /**
  * The instant a deadline day starts in camp time. One rule for camp time lives
- * in @camp404/core (`campDayStart`), so the board and the reminder cron agree.
+ * in @camp404/core (`campDayStart`), so the board and the deadline reminders agree.
  */
 export const deadlineFromDay = campDayStart;
 
