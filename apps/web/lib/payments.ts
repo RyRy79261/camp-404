@@ -1,11 +1,11 @@
 import "server-only";
 
-import type { MoneyTotal, PaymentStatus } from "@camp404/core";
+import type { PaymentStatus } from "@camp404/core";
 import { currentCycleNumber as dbCurrentCycleNumber } from "@camp404/db/cycles";
 import {
   ensureMemberRefCode as dbEnsureMemberRefCode,
   listPayments as dbListPayments,
-  receivedTotalsByCurrency as dbReceivedTotalsByCurrency,
+  receivedTotal as dbReceivedTotal,
   recordPayment as dbRecordPayment,
   setPaymentStatus as dbSetPaymentStatus,
   type PaymentRow,
@@ -34,7 +34,7 @@ interface PaymentsBackend {
     to: PaymentStatus;
     actorId: string;
   }): Promise<boolean>;
-  receivedTotalsByCurrency(cycle: number): Promise<MoneyTotal[]>;
+  receivedTotal(cycle: number): Promise<number>;
 }
 
 // Each entry calls through at CALL time, so a unit test's vi.mock of the db
@@ -45,7 +45,7 @@ const realBackend: PaymentsBackend = {
   listPayments: (cycle) => dbListPayments(cycle),
   recordPayment: (input) => dbRecordPayment(input),
   setPaymentStatus: (input) => dbSetPaymentStatus(input),
-  receivedTotalsByCurrency: (cycle) => dbReceivedTotalsByCurrency(cycle),
+  receivedTotal: (cycle) => dbReceivedTotal(cycle),
 };
 
 const testBackend: PaymentsBackend = {
@@ -65,8 +65,8 @@ const testBackend: PaymentsBackend = {
   async setPaymentStatus({ paymentId, from, to }) {
     return testStore.setPaymentStatus({ paymentId, from, to });
   },
-  async receivedTotalsByCurrency(cycle) {
-    return testStore.receivedTotalsByCurrency(cycle);
+  async receivedTotal(cycle) {
+    return testStore.receivedTotal(cycle);
   },
 };
 
@@ -92,7 +92,7 @@ export function listPayments(cycle: number): Promise<PaymentRow[]> {
   return backend().listPayments(cycle);
 }
 
-/** Record a payment for this year. Refuses an unknown currency. */
+/** Record a payment for this year. Refuses any currency but ZAR. */
 export function recordPayment(
   input: RecordPaymentInput,
 ): Promise<{ id: string; reference: string }> {
@@ -109,7 +109,7 @@ export function setPaymentStatus(input: {
   return backend().setPaymentStatus(input);
 }
 
-/** Money received in one year, one total per currency, no FX. */
-export function receivedTotalsByCurrency(cycle: number): Promise<MoneyTotal[]> {
-  return backend().receivedTotalsByCurrency(cycle);
+/** Rands received in one year, in cents. */
+export function receivedTotal(cycle: number): Promise<number> {
+  return backend().receivedTotal(cycle);
 }

@@ -24,8 +24,8 @@ import type { PaymentRow } from "@camp404/db/payments";
 import { recordPaymentAction, setPaymentStatusAction } from "./actions";
 import { PaymentsManager } from "./payments-manager";
 
-// The ledger screen: the year's count and money, recording a payment in its
-// currency, and moving one between statuses (going back to pending asks first).
+// The ledger screen: the year's count and its rand totals, recording a
+// payment, and moving one between statuses (going back to pending asks first).
 // Money text carries no-break spaces from Intl, so it is matched with \s.
 
 afterEach(() => {
@@ -71,7 +71,7 @@ describe("PaymentsManager", () => {
     expect(screen.getByText("No payments recorded yet.")).toBeTruthy();
   });
 
-  it("totals money per currency, never one mixed sum", () => {
+  it("totals the rands received and pending", () => {
     render(
       <PaymentsManager
         yearLabel="2027"
@@ -79,13 +79,7 @@ describe("PaymentsManager", () => {
         payments={[
           payment({ id: "a", amountCents: 1234, status: "reconciled" }),
           payment({ id: "b", amountCents: 1000, status: "reconciled" }),
-          payment({
-            id: "c",
-            amountCents: 500,
-            currency: "USD",
-            status: "reconciled",
-          }),
-          payment({ id: "d", amountCents: 700, currency: "EUR" }),
+          payment({ id: "c", amountCents: 700 }),
           // Waived settles dues but brings in no money.
           payment({ id: "e", amountCents: 9900, status: "waived" }),
         ]}
@@ -94,63 +88,20 @@ describe("PaymentsManager", () => {
     const lines = screen
       .getAllByRole("status")
       .map((el) => el.textContent ?? "");
-    const receivedLine = lines.find((l) => l.startsWith("Received:"));
-    const pendingLine = lines.find((l) => l.startsWith("Pending:"));
-    expect(receivedLine).toMatch(/^Received: R\s22,34 · US\$5,00$/);
-    expect(pendingLine).toMatch(/^Pending: €7,00$/);
-    // 1234 + 1000 + 500 cents added across currencies would read 27,34.
-    expect(lines.join(" ")).not.toMatch(/27,34/);
-  });
-
-  it("shows each ledger row in its own currency", () => {
-    render(
-      <PaymentsManager
-        yearLabel="2027"
-        members={MEMBERS}
-        payments={[payment({ amountCents: 500, currency: "USD" })]}
-      />,
+    expect(lines.find((l) => l.startsWith("Received:"))).toMatch(
+      /^Received: R\s22,34$/,
     );
-    // Drawn twice (table and card list); both say dollars.
-    const amounts = screen.getAllByText(/^US\$5,00$/);
-    expect(amounts.length).toBeGreaterThan(0);
-    expect(screen.queryByText(/^R\s5,00$/)).toBeNull();
+    expect(lines.find((l) => l.startsWith("Pending:"))).toMatch(
+      /^Pending: R\s7,00$/,
+    );
   });
 
-  it("records in the currency the captain picked", async () => {
-    vi.mocked(recordPaymentAction).mockResolvedValue({
-      ok: true,
-      reference: "C404-M017-2027-1",
-    });
+  it("offers no currency to pick: every amount is in rands", () => {
     render(
       <PaymentsManager yearLabel="2027" members={MEMBERS} payments={[]} />,
     );
-    const select = screen.getByLabelText("Currency") as HTMLSelectElement;
-    expect(select.value).toBe("ZAR");
-    expect([...select.options].map((o) => o.textContent)).toEqual([
-      "ZAR (R)",
-      "USD (US$)",
-      "EUR (€)",
-    ]);
-
-    fireEvent.change(screen.getByLabelText("Member"), {
-      target: { value: "m1" },
-    });
-    fireEvent.change(select, { target: { value: "USD" } });
-    // The amount says which money it is in.
-    fireEvent.change(screen.getByLabelText("Amount (US$)"), {
-      target: { value: "5" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Record payment" }));
-
-    await waitFor(() =>
-      expect(recordPaymentAction).toHaveBeenCalledWith({
-        userId: "m1",
-        amount: "5",
-        currency: "USD",
-        status: "reconciled",
-        note: "",
-      }),
-    );
+    expect(screen.queryByLabelText("Currency")).toBeNull();
+    expect(screen.getByLabelText("Amount (R)")).toBeTruthy();
   });
 
   it("records a payment with what the captain typed", async () => {
@@ -177,7 +128,6 @@ describe("PaymentsManager", () => {
       expect(recordPaymentAction).toHaveBeenCalledWith({
         userId: "m1",
         amount: "1250",
-        currency: "ZAR",
         status: "reconciled",
         note: "FNB",
       }),
@@ -188,7 +138,7 @@ describe("PaymentsManager", () => {
   it("shows the refusal and keeps the form when recording fails", async () => {
     vi.mocked(recordPaymentAction).mockResolvedValue({
       ok: false,
-      error: "Type the amount like 1250 or 1250,50.",
+      error: "Type the amount in rands, like 1250 or 1250,50.",
     });
     render(
       <PaymentsManager yearLabel="2027" members={MEMBERS} payments={[]} />,
@@ -201,9 +151,7 @@ describe("PaymentsManager", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Record payment" }));
 
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "Type the amount like 1250",
-    );
+    expect((await screen.findByRole("alert")).textContent).toContain("rands");
     expect(
       (screen.getByLabelText("Amount (R)") as HTMLInputElement).value,
     ).toBe("x");

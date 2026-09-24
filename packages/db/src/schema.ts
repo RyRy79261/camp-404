@@ -792,8 +792,8 @@ export const payments = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     cycle: integer("cycle").notNull(),
     amountCents: integer("amount_cents").notNull(),
-    // ISO 4217 code, limited to the camp's three currencies (ZAR, USD, EUR:
-    // CURRENCIES in @camp404/core) by payments_currency_check.
+    // ISO 4217 code, always ZAR: the camp records money in rands only
+    // (CURRENCIES in @camp404/core), held by payments_currency_check.
     currency: text("currency").notNull().default("ZAR"),
     // `C404-M017-2027-1`: the member reference, the year, and that member's
     // payment count that year. Unique across the ledger.
@@ -810,10 +810,7 @@ export const payments = pgTable(
   (p) => ({
     userCycleIdx: index("payments_user_cycle_idx").on(p.userId, p.cycle),
     cycleIdx: index("payments_cycle_idx").on(p.cycle),
-    currencyCheck: check(
-      "payments_currency_check",
-      sql`${p.currency} in ('ZAR', 'USD', 'EUR')`,
-    ),
+    currencyCheck: check("payments_currency_check", sql`${p.currency} = 'ZAR'`),
   }),
 );
 
@@ -1125,9 +1122,9 @@ export const reimbursements = pgTable(
     team: teamEnum("team"),
 
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
-    // ISO 4217 code of the currency the member actually paid in, limited to
-    // the camp's three currencies (ZAR, USD, EUR: CURRENCIES in @camp404/core)
-    // by reimbursements_currency_check.
+    // ISO 4217 code, always ZAR: a claim is made in rands, because the camp
+    // records money in rands only (CURRENCIES in @camp404/core), held by
+    // reimbursements_currency_check.
     currency: text("currency").notNull(),
 
     // Where to reimburse to. Bank details are encrypted via pgcrypto in
@@ -1158,7 +1155,7 @@ export const reimbursements = pgTable(
     teamIdx: index("reimbursements_team_idx").on(r.team),
     currencyCheck: check(
       "reimbursements_currency_check",
-      sql`${r.currency} in ('ZAR', 'USD', 'EUR')`,
+      sql`${r.currency} = 'ZAR'`,
     ),
   }),
 );
@@ -1175,8 +1172,8 @@ export const teamBudgets = pgTable(
   {
     team: teamEnum("team").notNull(),
     cycle: integer("cycle").notNull().default(1),
-    // ISO 4217 code, limited to the camp's three currencies (ZAR, USD, EUR:
-    // CURRENCIES in @camp404/core) by team_budgets_currency_check.
+    // ISO 4217 code, always ZAR: the camp records money in rands only
+    // (CURRENCIES in @camp404/core), held by team_budgets_currency_check.
     currency: text("currency").notNull().default("ZAR"),
     assignedAmount: numeric("assigned_amount", { precision: 12, scale: 2 }),
     perceivedAmount: numeric("perceived_amount", { precision: 12, scale: 2 }),
@@ -1187,7 +1184,7 @@ export const teamBudgets = pgTable(
     pk: primaryKey({ columns: [tb.team, tb.cycle] }),
     currencyCheck: check(
       "team_budgets_currency_check",
-      sql`${tb.currency} in ('ZAR', 'USD', 'EUR')`,
+      sql`${tb.currency} = 'ZAR'`,
     ),
   }),
 );

@@ -10,8 +10,8 @@ import { testStore } from "../test-store";
 // The E2E ledger twin. Playwright drives the payments screen and the
 // Overview's "Dues paid" through this store, so it must keep the real
 // ledger's rules: these cases mirror packages/db/src/__tests__/payments.test.ts
-// (the currency kept, an unknown one refused, the compare-and-set on status,
-// money totalled per currency, dues settled by received or waived only).
+// (rands kept, any other currency refused, the compare-and-set on status,
+// the rands received totalled, dues settled by received or waived only).
 
 /** Tell the camp what year it is, the mirror of the PGlite suite's `foundedAt`. */
 function foundedAt(year: number): void {
@@ -145,26 +145,26 @@ describe("recordPayment and setPaymentStatus (store)", () => {
 });
 
 describe("the currency of a payment (store)", () => {
-  it("keeps a payment in USD", () => {
+  it("keeps a payment in rands", () => {
     const captain = makeUser("Jo", "captain");
     const member = makeUser("Nova");
     testStore.recordPayment({
       userId: member.id,
       amountCents: 1234,
-      currency: "USD",
+      currency: "ZAR",
       status: "pending",
       recordedByUserId: captain.id,
     });
     expect(testStore.listPayments(2027)[0]).toMatchObject({
       amountCents: 1234,
-      currency: "USD",
+      currency: "ZAR",
     });
   });
 
-  it("refuses GBP or a lower-case code before writing anything", () => {
+  it("refuses dollars, euros or a misspelt code before writing anything", () => {
     const captain = makeUser("Jo", "captain");
     const member = makeUser("Nova");
-    for (const currency of ["GBP", "zar", " ZAR"]) {
+    for (const currency of ["USD", "EUR", "GBP", "zar", " ZAR"]) {
       expect(() =>
         testStore.recordPayment({
           userId: member.id,
@@ -183,43 +183,34 @@ describe("the currency of a payment (store)", () => {
   });
 });
 
-describe("money received per currency (store)", () => {
-  it("totals each currency apart, and counts only what reached the bank this year", () => {
+describe("money received (store)", () => {
+  it("totals the rands that reached the bank this year", () => {
     const captain = makeUser("Jo", "captain");
     const member = makeUser("Nova");
     const record = (
       amountCents: number,
-      currency: "ZAR" | "USD" | "EUR",
       status: "pending" | "reconciled" | "waived",
     ) =>
       testStore.recordPayment({
         userId: member.id,
         amountCents,
-        currency,
+        currency: "ZAR",
         status,
         recordedByUserId: captain.id,
       });
-    // USD first: the totals still come back in CURRENCIES order.
-    record(500, "USD", "reconciled");
-    record(1234, "ZAR", "reconciled");
-    record(1000, "ZAR", "reconciled");
-    record(700, "EUR", "pending");
-    record(9900, "ZAR", "waived");
-    record(300, "USD", "pending");
+    record(1234, "reconciled");
+    record(1000, "reconciled");
+    record(700, "pending");
+    record(9900, "waived");
 
-    expect(testStore.receivedTotalsByCurrency(2027)).toEqual([
-      { currency: "ZAR", amountMinor: 2234 },
-      { currency: "USD", amountMinor: 500 },
-    ]);
+    expect(testStore.receivedTotal(2027)).toBe(2234);
 
     // Next year, the same rows are last year's money.
     foundedAt(2028);
-    record(4200, "EUR", "reconciled");
-    expect(testStore.receivedTotalsByCurrency(2028)).toEqual([
-      { currency: "EUR", amountMinor: 4200 },
-    ]);
-    expect(testStore.receivedTotalsByCurrency(2027)).toHaveLength(2);
-    expect(testStore.receivedTotalsByCurrency(2025)).toEqual([]);
+    record(4200, "reconciled");
+    expect(testStore.receivedTotal(2028)).toBe(4200);
+    expect(testStore.receivedTotal(2027)).toBe(2234);
+    expect(testStore.receivedTotal(2025)).toBe(0);
   });
 });
 
@@ -273,6 +264,6 @@ describe("dues paid on the store's roster", () => {
     testStore.reset();
     foundedAt(2027);
     expect(testStore.listPayments(2027)).toEqual([]);
-    expect(testStore.receivedTotalsByCurrency(2027)).toEqual([]);
+    expect(testStore.receivedTotal(2027)).toBe(0);
   });
 });

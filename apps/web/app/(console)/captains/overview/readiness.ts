@@ -1,7 +1,6 @@
 import {
-  formatMoneyTotals,
+  formatMoney,
   tallyActivationCompletion,
-  type MoneyTotal,
   type RequiredActionStatus,
 } from "@camp404/core";
 import type { TeamConfigEntry } from "@/lib/camp-config";
@@ -150,15 +149,14 @@ export interface Kpi {
  * unavailable rather than counted, for the reason the funnel marks its rungs
  * unknown and the completion card withholds itself.
  *
- * `received` is this year's money seen in the bank, one total per currency.
- * It is written after the count exactly as it is: no FX, so a rand total and a
- * dollar total are never added into one figure.
+ * `received` is this year's money seen in the bank, in cents. Every payment
+ * is in rands, so it is written after the count as one rand total.
  */
 export function deriveKpis(
   rows: readonly RosterRow[],
   openSends: number | null,
   known: Pick<KnownFacts, "dues">,
-  received: readonly MoneyTotal[] | null = null,
+  received: number | null = null,
 ): Kpi[] {
   const stats = deriveRosterStats(rows);
   const approved = rows.filter((r) => r.approvalStatus === "approved");
@@ -185,8 +183,8 @@ export function deriveKpis(
       label: "Dues paid",
       value: known.dues ? paid : null,
       hint: known.dues
-        ? received
-          ? `of ${approved.length} approved · ${formatMoneyTotals(received)}`
+        ? received !== null
+          ? `of ${approved.length} approved · ${formatMoney(received)}`
           : `of ${approved.length} approved`
         : "The ledger cannot be read here",
       href: "/captains/payments",

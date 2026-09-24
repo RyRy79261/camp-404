@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { CURRENCIES } from "@camp404/core";
 import * as schema from "../schema";
 import { makeUser } from "./_factories";
 import { useTestDb } from "./_harness";
@@ -9,6 +8,10 @@ import { useTestDb } from "./_harness";
 // holds the three money tables to ZAR, USD and EUR. The harness has applied
 // both to an empty database, so each test drops the constraints, stores the
 // dirty rows production may have, and runs the migrations' own SQL again.
+// [CORRECTION 2026-09-24] Money is now in rands only: 0050 and 0051 replace
+// 0047's constraint with currency = 'ZAR' (rands-only-migration.test.ts).
+// These tests still hold 0046 and 0047 to what they did, in their own
+// three-code vocabulary.
 
 function migration(name: string): string {
   return readFileSync(
@@ -21,6 +24,9 @@ const NORMALISE_SQL = migration("0046_normalise_currency_codes");
 const CHECK_SQL = migration("0047_currency_check");
 
 const MONEY_TABLES = ["payments", "reimbursements", "team_budgets"] as const;
+
+/** The codes 0046 and 0047 allowed, before money became rands only. */
+const THREE_CODES = ["ZAR", "USD", "EUR"];
 
 const UNMAPPED_MESSAGE =
   "currency cleanup: payments holds a code other than ZAR, USD or EUR; add a mapping in a new migration";
@@ -127,7 +133,7 @@ describe("0046_normalise_currency_codes and 0047_currency_check", () => {
       team_budgets: ["EUR", "USD", "ZAR"],
     });
     for (const codes of Object.values(once)) {
-      for (const code of codes) expect(CURRENCIES).toContain(code);
+      for (const code of codes) expect(THREE_CODES).toContain(code);
     }
 
     await h.client().exec(CHECK_SQL);

@@ -13,9 +13,8 @@ import {
   notificationLink,
   paymentReference,
   paymentSettlesDues,
-  sumByCurrency,
+  sumMinor,
   UnknownCurrencyError,
-  type MoneyTotal,
   type PaymentStatus,
   QUESTIONNAIRE_REF_TYPE,
   sortPinned,
@@ -1960,11 +1959,11 @@ export const testStore = {
 
   // --- payments ledger (mirrors @camp404/db/payments) -----------------------
   // The same rules as the real ledger, asserted case for case in
-  // lib/__tests__/test-store-payments.test.ts: an unknown currency is refused
-  // before anything is written, references are the member's reference, the
-  // year and their count that year, a status moves only from the one the
-  // captain saw, and money is totalled one currency at a time. The store keeps
-  // no audit log, so the captain's id stops at `recordedByUserId`.
+  // lib/__tests__/test-store-payments.test.ts: any currency but ZAR is
+  // refused before anything is written, references are the member's
+  // reference, the year and their count that year, a status moves only from
+  // the one the captain saw, and money received is a plain rand total. The
+  // store keeps no audit log, so the captain's id stops at `recordedByUserId`.
 
   /** The member's payment reference, giving them the next one first. */
   ensureMemberRefCode(userId: string): string | null {
@@ -2058,13 +2057,12 @@ export const testStore = {
       }));
   },
 
-  /** Money received in one year, one total per currency (mirrors receivedTotalsByCurrency). */
-  receivedTotalsByCurrency(cycle: number): MoneyTotal[] {
-    // sumByCurrency keeps CURRENCIES order and never adds across currencies.
-    return sumByCurrency(
+  /** Rands received in one year, in cents (mirrors receivedTotal). */
+  receivedTotal(cycle: number): number {
+    return sumMinor(
       payments
         .filter((p) => p.cycle === cycle && p.status === "reconciled")
-        .map((p) => ({ amountMinor: p.amountCents, currency: p.currency })),
+        .map((p) => p.amountCents),
     );
   },
 

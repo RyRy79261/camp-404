@@ -244,11 +244,11 @@ describe("the team list agrees across packages", () => {
 });
 
 describe("money columns", () => {
-  // Every write path refuses a code outside CURRENCIES, and the CHECK
-  // constraint is the last guard: a total over a column that can hold "usd"
-  // or "GBP" would add it up as a currency of its own. A new money table
-  // without the constraint, or a currency added to one list and not the
-  // other, fails here.
+  // Money is in rands only. Every write path refuses a code outside
+  // CURRENCIES (ZAR), and the CHECK constraint is the last guard: a rand
+  // total over a column that can hold "USD" would add dollars in as rands. A
+  // new money table without the constraint, or a currency added to one list
+  // and not the other, fails here.
   const moneyColumns = configs.flatMap((config) =>
     config.columns
       .filter((column) => column.name === "currency")

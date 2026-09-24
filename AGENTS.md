@@ -378,12 +378,16 @@ All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
   `.returning()` tells the caller whether it won. A lost race returns a
   sentence the user can act on, never a silent overwrite. See
   `setUserApproval` and `decideCaptainPromotion`.
-- Money is stored in integer minor units (cents) with a currency from
-  `CURRENCIES` (ZAR, USD, EUR), and every write path checks the code with the
-  `Currency` Zod schema (`@camp404/types`) or `isCurrency`, at its boundary and
-  again in the db function (strict: `"usd"` is refused, not fixed). Only
-  `formatMoney` / `formatMoneyTotals` format money. Totals are one per
-  currency, never summed across them: there is no FX. The money rules live in
+- **Money is in South African rands only** (owner's call, 2026-09-24:
+  "Everything should be in South African rands"). The ledger keeps integer
+  cents, and every write path (payments, reimbursements, team budgets) refuses
+  any currency but `ZAR` with the `Currency` Zod schema (`@camp404/types`) or
+  `isCurrency`, at its boundary and again in the db function (strict: `"zar"`
+  is refused, not fixed). A `CHECK (currency = 'ZAR')` on each table is the
+  last guard. Only `formatMoney` formats money, and a total is a plain rand
+  total (`sumMinor`). A dollar or euro figure is a label beside a rand amount
+  at most (`formatForeignEquivalent`, at a rate a captain typed); the app
+  never fetches a rate and never stores a foreign amount. The rules live in
   `packages/core/src/money.ts`.
 - A failed change is reported one way on every captain screen. A problem with
   what someone typed, in a form or a dialog, shows inline beside it. A one-tap

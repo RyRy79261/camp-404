@@ -37,7 +37,9 @@ export function registerReimbursementTools(server: McpServer): void {
       inputSchema: {
         team: TeamEnum.nullable().optional(),
         amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
-        currency: Currency,
+        currency: Currency.describe(
+          'Always "ZAR": the camp records money in rands only.',
+        ),
         accountType: AccountTypeEnum,
         accountDetails: z
           .string()
@@ -70,7 +72,7 @@ export function registerReimbursementTools(server: McpServer): void {
           // guard, for a caller that reaches it without that check.
           const currency = Currency.safeParse(args.currency);
           if (!currency.success) {
-            throw new ToolError("Currency must be ZAR, USD or EUR.");
+            throw new ToolError("Money is recorded in rands (ZAR) only.");
           }
           return await submitReimbursement({
             submitterId: scope.campUserId,

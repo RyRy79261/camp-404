@@ -232,7 +232,7 @@ describe("submit_reimbursement", () => {
   const CLAIM_ARGS = {
     team: "kitchen",
     amount: "12.34",
-    currency: "EUR",
+    currency: "ZAR",
     accountType: "international",
     accountDetails: "IBAN 0000",
     description: "Tape",
@@ -248,16 +248,16 @@ describe("submit_reimbursement", () => {
       submitterId: MEMBER,
       team: "kitchen",
       amount: "12.34",
-      currency: "EUR",
+      currency: "ZAR",
     });
     expect(input.accountDetailsEncrypted).not.toContain("IBAN 0000");
   });
 
-  it("refuses a currency the camp does not take, and writes nothing", async () => {
-    for (const currency of ["GBP", "eur"]) {
+  it("refuses any currency but rands, and writes nothing", async () => {
+    for (const currency of ["USD", "EUR", "GBP", "zar"]) {
       expect(
         await call("submit_reimbursement", { ...CLAIM_ARGS, currency }, MEMBER),
-      ).toEqual({ error: "Currency must be ZAR, USD or EUR." });
+      ).toEqual({ error: "Money is recorded in rands (ZAR) only." });
     }
     expect(submitReimbursement).not.toHaveBeenCalled();
   });
@@ -283,21 +283,21 @@ describe("set_team_budget", () => {
     });
   });
 
-  it("refuses a currency the camp does not take, and sets nothing", async () => {
-    for (const currency of ["GBP", "usd"]) {
+  it("refuses any currency but rands, and sets nothing", async () => {
+    for (const currency of ["USD", "EUR", "GBP", "zar"]) {
       expect(
         await call("set_team_budget", { team: "kitchen", currency }, CAPTAIN),
-      ).toEqual({ error: "Currency must be ZAR, USD or EUR." });
+      ).toEqual({ error: "Money is recorded in rands (ZAR) only." });
     }
     expect(setTeamBudget).not.toHaveBeenCalled();
     await call(
       "set_team_budget",
-      { team: "kitchen", currency: "USD" },
+      { team: "kitchen", currency: "ZAR" },
       CAPTAIN,
     );
     expect(setTeamBudget).toHaveBeenCalledWith({
       team: "kitchen",
-      change: { currency: "USD" },
+      change: { currency: "ZAR" },
       actorId: CAPTAIN,
     });
   });

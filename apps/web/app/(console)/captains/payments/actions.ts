@@ -4,10 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   DEFAULT_CURRENCY,
-  isCurrency,
   PAYMENT_STATUSES,
   parseMoneyToMinor,
 } from "@camp404/core";
+import { Currency } from "@camp404/types";
 import { runAction } from "@/lib/action-result";
 import { captainActionGate } from "@/lib/captain-gate";
 import { recordPayment, setPaymentStatus } from "@/lib/payments";
@@ -36,7 +36,7 @@ export async function recordPaymentAction(input: {
   amount: string;
   status: string;
   note?: string;
-  /** ZAR, USD or EUR. Left out, the payment is in rands. */
+  /** Only "ZAR", the camp's one currency; left out, the payment is in rands. */
   currency?: string;
 }): Promise<PaymentActionResult> {
   return runAction("recordPaymentAction", async () => {
@@ -46,16 +46,18 @@ export async function recordPaymentAction(input: {
     if (!Id.safeParse(input?.userId).success) {
       return { ok: false, error: "Pick the member who paid." };
     }
-    // Strict: "usd" is refused, not fixed up, like every money write path.
-    const currency = input.currency ?? DEFAULT_CURRENCY;
-    if (!isCurrency(currency)) {
-      return { ok: false, error: "Pick ZAR, USD or EUR." };
+    // Money is in rands only. A caller that says another currency is refused,
+    // not recorded as the same number of rands; "zar" is refused too, not
+    // fixed up, like every money write path.
+    const currency = Currency.safeParse(input.currency ?? DEFAULT_CURRENCY);
+    if (!currency.success) {
+      return { ok: false, error: "Payments are recorded in rands (ZAR) only." };
     }
-    const amountCents = parseMoneyToMinor(String(input.amount ?? ""), currency);
+    const amountCents = parseMoneyToMinor(String(input.amount ?? ""));
     if (amountCents === null) {
       return {
         ok: false,
-        error: "Type the amount like 1250 or 1250,50.",
+        error: "Type the amount in rands, like 1250 or 1250,50.",
       };
     }
     const status = Status.safeParse(input.status);
@@ -73,7 +75,7 @@ export async function recordPaymentAction(input: {
     const { reference } = await recordPayment({
       userId: input.userId,
       amountCents,
-      currency,
+      currency: currency.data,
       status: status.data,
       note: note || null,
       recordedByUserId: gate.campUser.id,

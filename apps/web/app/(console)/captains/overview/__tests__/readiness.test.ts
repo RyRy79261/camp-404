@@ -197,31 +197,21 @@ describe("deriveKpis", () => {
     });
   });
 
-  it("names the money in one total per currency, never one mixed sum", () => {
+  it("names the rands received beside the count", () => {
     const rows = rowsOf(member({ duesPaid: true }), member(), member());
-    const kpis = deriveKpis(rows, 0, { dues: true }, [
-      { currency: "ZAR", amountMinor: 1234 },
-      { currency: "USD", amountMinor: 500 },
-    ]);
-    const hint = kpi(kpis, "dues").hint;
+    const kpis = deriveKpis(rows, 0, { dues: true }, 1234);
     // Intl writes no-break spaces, so the rand amount is matched with \s.
-    expect(hint).toMatch(/^of 3 approved · R\s12,34 · US\$5,00$/);
-    expect(hint).not.toMatch(/17,34/);
+    expect(kpi(kpis, "dues").hint).toMatch(/^of 3 approved · R\s12,34$/);
     expect(kpi(kpis, "dues").value).toBe(1);
 
     // Nothing received yet is a real R 0,00, once the ledger can be read.
-    expect(kpi(deriveKpis(rows, 0, { dues: true }, []), "dues").hint).toMatch(
+    expect(kpi(deriveKpis(rows, 0, { dues: true }, 0), "dues").hint).toMatch(
       /^of 3 approved · R\s0,00$/,
     );
     // An unreadable ledger names no money at all.
-    expect(
-      kpi(
-        deriveKpis(rows, 0, { dues: false }, [
-          { currency: "ZAR", amountMinor: 1234 },
-        ]),
-        "dues",
-      ).hint,
-    ).toBe("The ledger cannot be read here");
+    expect(kpi(deriveKpis(rows, 0, { dues: false }, 1234), "dues").hint).toBe(
+      "The ledger cannot be read here",
+    );
   });
 
   it("has no figure at all where the fact cannot be read", () => {

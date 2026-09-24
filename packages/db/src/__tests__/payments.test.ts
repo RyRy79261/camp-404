@@ -7,7 +7,7 @@ import { getCampManagementRoster } from "../roster";
 import {
   ensureMemberRefCode,
   listPayments,
-  receivedTotalsByCurrency,
+  receivedTotal,
   recordPayment,
   setPaymentStatus,
 } from "../payments";
@@ -176,7 +176,7 @@ describe("recordPayment and setPaymentStatus", () => {
 describe("the currency of a payment", () => {
   const h = useTestDb();
 
-  it("stores a payment in USD and audits its currency", async () => {
+  it("stores a payment in rands and audits its currency", async () => {
     const db = h.db();
     await foundedAt(db, 2027);
     const captain = await makeUser(db, { rank: "captain" });
@@ -184,26 +184,26 @@ describe("the currency of a payment", () => {
     await recordPayment({
       userId: member.id,
       amountCents: 1234,
-      currency: "USD",
+      currency: "ZAR",
       status: "pending",
       recordedByUserId: captain.id,
     });
 
     const [row] = await listPayments(2027);
-    expect(row).toMatchObject({ amountCents: 1234, currency: "USD" });
+    expect(row).toMatchObject({ amountCents: 1234, currency: "ZAR" });
     const [audit] = await db
       .select()
       .from(schema.auditLog)
       .where(eq(schema.auditLog.action, "payment.recorded"));
-    expect(audit!.metadata).toMatchObject({ currency: "USD" });
+    expect(audit!.metadata).toMatchObject({ currency: "ZAR" });
   });
 
-  it("refuses GBP or a lower-case code before writing anything", async () => {
+  it("refuses dollars, euros or a lower-case code before writing anything", async () => {
     const db = h.db();
     await foundedAt(db, 2027);
     const captain = await makeUser(db, { rank: "captain" });
     const member = await makeUser(db);
-    for (const currency of ["GBP", "zar"]) {
+    for (const currency of ["USD", "EUR", "GBP", "zar"]) {
       await expect(
         recordPayment({
           userId: member.id,
@@ -226,33 +226,30 @@ describe("the currency of a payment", () => {
   });
 });
 
-describe("money received per currency", () => {
+describe("money received", () => {
   const h = useTestDb();
 
-  it("totals each currency apart, and counts only what reached the bank this year", async () => {
+  it("totals the rands that reached the bank this year", async () => {
     const db = h.db();
     await foundedAt(db, 2027);
     const captain = await makeUser(db, { rank: "captain" });
     const member = await makeUser(db);
     const record = (
       amountCents: number,
-      currency: "ZAR" | "USD" | "EUR",
       status: "pending" | "reconciled" | "waived",
     ) =>
       recordPayment({
         userId: member.id,
         amountCents,
-        currency,
+        currency: "ZAR",
         status,
         recordedByUserId: captain.id,
       });
-    await record(1234, "ZAR", "reconciled");
-    await record(1000, "ZAR", "reconciled");
-    await record(500, "USD", "reconciled");
+    await record(1234, "reconciled");
+    await record(1000, "reconciled");
     // Promised, and let off: neither is money that came in.
-    await record(700, "EUR", "pending");
-    await record(9900, "ZAR", "waived");
-    await record(300, "USD", "pending");
+    await record(700, "pending");
+    await record(9900, "waived");
     // Last year's money is last year's.
     await db.insert(schema.payments).values({
       userId: member.id,
@@ -263,14 +260,9 @@ describe("money received per currency", () => {
       status: "reconciled",
     });
 
-    expect(await receivedTotalsByCurrency(2027)).toEqual([
-      { currency: "ZAR", amountMinor: 2234 },
-      { currency: "USD", amountMinor: 500 },
-    ]);
-    expect(await receivedTotalsByCurrency(2026)).toEqual([
-      { currency: "ZAR", amountMinor: 88800 },
-    ]);
-    expect(await receivedTotalsByCurrency(2025)).toEqual([]);
+    expect(await receivedTotal(2027)).toBe(2234);
+    expect(await receivedTotal(2026)).toBe(88800);
+    expect(await receivedTotal(2025)).toBe(0);
   });
 });
 

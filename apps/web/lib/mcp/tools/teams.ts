@@ -60,7 +60,9 @@ export function registerTeamTools(server: McpServer): void {
         team: TeamEnum,
         assignedAmount: Amount.nullable().optional(),
         perceivedAmount: Amount.nullable().optional(),
-        currency: Currency.optional(),
+        currency: Currency.optional().describe(
+          'Always "ZAR" when given: the camp records money in rands only.',
+        ),
         notes: z.string().max(2000).nullable().optional(),
       },
     },
@@ -89,7 +91,7 @@ export function registerTeamTools(server: McpServer): void {
             change.currency !== undefined &&
             !Currency.safeParse(change.currency).success
           ) {
-            throw new ToolError("Currency must be ZAR, USD or EUR.");
+            throw new ToolError("Money is recorded in rands (ZAR) only.");
           }
           return await setTeamBudget({
             team,

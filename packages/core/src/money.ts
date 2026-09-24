@@ -1,41 +1,30 @@
-// Money (#237). Members pay from several countries, so every amount the camp
-// keeps says its currency, and the app only ever handles ZAR, USD and EUR.
-// Amounts are whole minor units (cents) in the ledger; the numeric(12,2)
-// columns (reimbursements, team budgets) come through decimalToMinor.
+// Money. Owner's call (2026-09-24): "Everything should be in South African
+// rands. I don't want to deal with other currencies other than just being able
+// to say what it is." So the camp records and totals money in ZAR only.
+// Amounts are whole cents in the ledger; the numeric(12,2) columns
+// (reimbursements, team budgets) come through decimalToMinor.
 //
 // The rules this module holds, so no screen or write path has its own:
-// - a code is one of CURRENCIES exactly: "zar" or " ZAR" is refused, never
-//   quietly fixed up;
+// - a currency code is "ZAR" exactly: "zar", " ZAR" or "USD" is refused, never
+//   quietly fixed up or converted;
 // - money is formatted only by formatMoney, the South African way
-//   ("R 1 234,50", "US$12,34", "€12,34");
-// - totals are one per currency (sumByCurrency). No FX: amounts in different
-//   currencies are never added together. Pure.
+//   ("R 1 234,50");
+// - a total is a plain sum of cents (sumMinor), so it is a rand total;
+// - a foreign amount is a LABEL only (formatForeignEquivalent), worked out
+//   from a rate a captain typed. The app never fetches a rate and never stores
+//   a foreign amount. Pure.
 
 import { CURRENCY_CODES, type Currency } from "@camp404/types";
 
 export type { Currency };
 
-/** Every currency the camp handles, ZAR first. */
+/** Every currency the camp records money in: rands only. */
 export const CURRENCIES = CURRENCY_CODES;
 
-/** The camp's home currency: what an amount is in when nobody says. */
+/** The camp's one currency. */
 export const DEFAULT_CURRENCY: Currency = "ZAR";
 
-export interface CurrencyInfo {
-  /** What a person types or reads in front of the amount. */
-  symbol: string;
-  /** Minor units per major unit, as a power of ten. */
-  decimals: 2;
-  name: string;
-}
-
-export const CURRENCY_INFO: Readonly<Record<Currency, CurrencyInfo>> = {
-  ZAR: { symbol: "R", decimals: 2, name: "South African rand" },
-  USD: { symbol: "US$", decimals: 2, name: "US dollar" },
-  EUR: { symbol: "€", decimals: 2, name: "Euro" },
-};
-
-/** A currency code the camp handles. Strict: case and spaces must match. */
+/** The camp's currency code. Strict: case and spaces must match. */
 export function isCurrency(value: unknown): value is Currency {
   return (
     typeof value === "string" &&
@@ -43,68 +32,52 @@ export function isCurrency(value: unknown): value is Currency {
   );
 }
 
-/** Thrown by every money write path, and by formatMoney, for a code not in CURRENCIES. */
+/** Thrown by every money write path, and by formatMoney, for any code but ZAR. */
 export class UnknownCurrencyError extends Error {
   constructor(readonly currency: unknown) {
     super(
-      `Unknown currency ${JSON.stringify(currency)}: must be ${CURRENCIES.join(", ")}.`,
+      `Unknown currency ${JSON.stringify(currency)}: the camp records money in ZAR only.`,
     );
     this.name = "UnknownCurrencyError";
   }
 }
 
-const formatters = new Map<Currency, Intl.NumberFormat>();
-
-function formatterFor(currency: Currency): Intl.NumberFormat {
-  let formatter = formatters.get(currency);
-  if (!formatter) {
-    formatter = new Intl.NumberFormat("en-ZA", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-    formatters.set(currency, formatter);
-  }
-  return formatter;
-}
+const rands = new Intl.NumberFormat("en-ZA", {
+  style: "currency",
+  currency: "ZAR",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 /**
- * Minor units as money, the way a South African reads it: `R 1 234,50`,
- * `US$12,34`, `€12,34` (the spaces are no-break spaces). Throws for a currency
- * the camp does not handle, and for an amount that is not whole minor units.
+ * Cents as rands, the way a South African reads them: `R 1 234,50` (the
+ * spaces are no-break spaces). `currency` is the stored code, when the caller
+ * has one: anything but ZAR throws rather than print a foreign amount as
+ * rands. Throws too for an amount that is not whole cents.
  */
-export function formatMoney(amountMinor: number, currency: string): string {
+export function formatMoney(
+  amountMinor: number,
+  currency: string = DEFAULT_CURRENCY,
+): string {
   if (!isCurrency(currency)) throw new UnknownCurrencyError(currency);
   if (!Number.isSafeInteger(amountMinor)) {
     throw new RangeError(
-      `formatMoney: ${amountMinor} is not a whole number of minor units.`,
+      `formatMoney: ${amountMinor} is not a whole number of cents.`,
     );
   }
-  return formatterFor(currency).format(amountMinor / 100);
+  return rands.format(amountMinor / 100);
 }
 
-/** What may stand in front of a typed amount, longest first. */
-const PREFIXES: Readonly<Record<Currency, readonly string[]>> = {
-  ZAR: ["ZAR", "R"],
-  USD: ["USD", "US$", "$"],
-  EUR: ["EUR", "€"],
-};
-
 /**
- * An amount a person typed ("1250", "1 250,50", "R1250.5", "US$ 12,34") as
- * whole minor units of `currency`, or null when it is not one. Only that
- * currency's own symbol or code may lead. At most two decimals, never
- * negative.
+ * Rands a person typed ("1250", "1 250,50", "R1250.5", "ZAR 12,34") as whole
+ * cents, or null when it is not an amount. Only "R" or "ZAR" may lead, so a
+ * dollar or euro amount is refused rather than read as rands. At most two
+ * decimals, never negative.
  */
-export function parseMoneyToMinor(
-  input: string,
-  currency: Currency,
-): number | null {
-  if (!isCurrency(currency)) return null;
+export function parseMoneyToMinor(input: string): number | null {
   let rest = input.trim();
   const upper = rest.toUpperCase();
-  const prefix = PREFIXES[currency].find((p) => upper.startsWith(p));
+  const prefix = ["ZAR", "R"].find((p) => upper.startsWith(p));
   if (prefix) rest = rest.slice(prefix.length);
   // \s covers the no-break spaces Intl writes, so a pasted amount parses.
   const cleaned = rest.replace(/\s/g, "");
@@ -115,8 +88,8 @@ export function parseMoneyToMinor(
 }
 
 /**
- * A numeric(12,2) column's value ("12.34", "999") as minor units, or null
- * when it is not a plain non-negative decimal with at most two places.
+ * A numeric(12,2) column's value ("12.34", "999") as cents, or null when it
+ * is not a plain non-negative decimal with at most two places.
  */
 export function decimalToMinor(amount: string): number | null {
   if (typeof amount !== "string" || !/^\d+(\.\d{1,2})?$/.test(amount)) {
@@ -127,43 +100,116 @@ export function decimalToMinor(amount: string): number | null {
   return Number.isSafeInteger(minor) ? minor : null;
 }
 
-export interface MoneyTotal {
-  currency: Currency;
-  amountMinor: number;
+/**
+ * The rand total of some amounts in cents. Each amount must be whole cents
+ * before it is added, because two halves can sum to a whole and hide a bad
+ * row; the total must stay a safe integer.
+ */
+export function sumMinor(amounts: readonly number[]): number {
+  let total = 0;
+  for (const amount of amounts) {
+    if (!Number.isSafeInteger(amount)) {
+      throw new RangeError("sumMinor: an amount is not whole cents.");
+    }
+    total += amount;
+    if (!Number.isSafeInteger(total)) {
+      throw new RangeError("sumMinor: the total is not whole cents.");
+    }
+  }
+  return total;
+}
+
+// --- A foreign amount, as a label only -----------------------------------
+
+/** The currencies a rand amount may be LABELLED in. Nothing is stored in them. */
+export const FOREIGN_CURRENCIES = ["USD", "EUR"] as const;
+export type ForeignCurrency = (typeof FOREIGN_CURRENCIES)[number];
+
+const FOREIGN_SYMBOLS: Readonly<Record<ForeignCurrency, string>> = {
+  USD: "US$",
+  EUR: "€",
+};
+
+// No-break spaces group the thousands, so a label never wraps inside a number.
+const NBSP = "\u00a0";
+
+/** A plain number with thousands grouped by no-break spaces and a "." point. */
+function grouped(value: number, minDecimals: number, maxDecimals: number) {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: minDecimals,
+    maximumFractionDigits: maxDecimals,
+    useGrouping: true,
+  })
+    .format(value)
+    .replaceAll(",", NBSP);
+}
+
+/** Cents as a short amount: whole units drop the decimals ("6 300"). */
+function shortAmount(minor: number): string {
+  return minor % 100 === 0
+    ? grouped(minor / 100, 0, 0)
+    : grouped(minor / 100, 2, 2);
+}
+
+const month = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  timeZone: "UTC",
+});
+
+/** A YYYY-MM-DD calendar date as "24 Sep 2026", or throws when it is not one. */
+function rateDay(rateDate: string): string {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(rateDate)
+    ? new Date(`${rateDate}T00:00:00.000Z`)
+    : null;
+  // The UTC round trip refuses a day that does not exist ("2026-02-30").
+  if (!date || Number.isNaN(date.getTime())) {
+    throw new RangeError(`${JSON.stringify(rateDate)} is not a date.`);
+  }
+  if (date.toISOString().slice(0, 10) !== rateDate) {
+    throw new RangeError(`${JSON.stringify(rateDate)} is not a date.`);
+  }
+  return `${date.getUTCDate()} ${month.format(date)} ${date.getUTCFullYear()}`;
+}
+
+export interface ForeignEquivalentInput {
+  /** The rand amount, in cents. */
+  amountZarMinor: number;
+  /** The currency to say it in. */
+  currency: ForeignCurrency;
+  /** Rands per one unit of `currency`, as a captain typed it (18 for R18.00). */
+  ratePerUnit: number;
+  /** The day of that rate, YYYY-MM-DD. */
+  rateDate: string;
 }
 
 /**
- * One total per currency, in CURRENCIES order, only for the currencies
- * present. Never adds across currencies. Throws for an unknown code.
+ * A rand amount with what it comes to in dollars or euros, at a rate a captain
+ * typed: `R6 300 ≈ US$350 at R18.00 on 24 Sep 2026`. A label only: the rand
+ * amount is the money, and the foreign figure is rounded to the cent. The app
+ * never fetches a rate. Throws for a currency other than USD or EUR, an amount
+ * that is not whole non-negative cents, a rate that is not a positive number,
+ * or a date that is not a YYYY-MM-DD day.
  */
-export function sumByCurrency(
-  rows: readonly { amountMinor: number; currency: string }[],
-): MoneyTotal[] {
-  const totals = new Map<Currency, number>();
-  for (const row of rows) {
-    if (!isCurrency(row.currency)) throw new UnknownCurrencyError(row.currency);
-    // Checked per row as well as on the total, so the error names the amount.
-    if (!Number.isSafeInteger(row.amountMinor)) {
-      throw new RangeError(
-        "sumByCurrency: an amount is not whole minor units.",
-      );
-    }
-    const sum = (totals.get(row.currency) ?? 0) + row.amountMinor;
-    if (!Number.isSafeInteger(sum)) {
-      throw new RangeError(
-        "sumByCurrency: the total is not whole minor units.",
-      );
-    }
-    totals.set(row.currency, sum);
+export function formatForeignEquivalent(input: ForeignEquivalentInput): string {
+  const { amountZarMinor, currency, ratePerUnit, rateDate } = input;
+  if (!(FOREIGN_CURRENCIES as readonly string[]).includes(currency)) {
+    throw new UnknownCurrencyError(currency);
   }
-  return CURRENCIES.filter((c) => totals.has(c)).map((currency) => ({
-    currency,
-    amountMinor: totals.get(currency)!,
-  }));
-}
-
-/** Totals for a screen: `R 12,34 · US$5,00`, or `R 0,00` when there are none. */
-export function formatMoneyTotals(totals: readonly MoneyTotal[]): string {
-  if (totals.length === 0) return formatMoney(0, DEFAULT_CURRENCY);
-  return totals.map((t) => formatMoney(t.amountMinor, t.currency)).join(" · ");
+  if (!Number.isSafeInteger(amountZarMinor) || amountZarMinor < 0) {
+    throw new RangeError(
+      `formatForeignEquivalent: ${amountZarMinor} is not whole cents.`,
+    );
+  }
+  if (!Number.isFinite(ratePerUnit) || ratePerUnit <= 0) {
+    throw new RangeError(
+      `formatForeignEquivalent: the rate ${ratePerUnit} is not a positive number.`,
+    );
+  }
+  const foreignMinor = Math.round(amountZarMinor / ratePerUnit);
+  const rate = grouped(ratePerUnit, 2, 4);
+  return (
+    `R${shortAmount(amountZarMinor)} ≈ ` +
+    `${FOREIGN_SYMBOLS[currency]}${shortAmount(foreignMinor)} ` +
+    `at R${rate} on ${rateDay(rateDate)}`
+  );
 }

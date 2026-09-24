@@ -46,7 +46,7 @@ export type ReimbursementAccount = z.infer<typeof ReimbursementAccount>;
 export const ReimbursementInput = z
   .object({
     amount: z.number().positive(),
-    // The currency the member actually paid in: ZAR, USD or EUR.
+    // Always "ZAR": a claim is made in rands, the camp's only currency.
     currency: Currency,
     // The team the claim is lodged under. null = "general".
     team: Team.nullable().default(null),

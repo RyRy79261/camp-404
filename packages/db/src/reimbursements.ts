@@ -7,8 +7,8 @@ import * as schema from "./schema";
 
 // A member's claim for money they spent for the camp, and its review.
 //
-// Submitting: any member may lodge a claim; the claim's currency must be one
-// the camp handles, checked here as well as at the MCP tool.
+// Submitting: any member may lodge a claim, in rands: the camp records money
+// in ZAR only, checked here as well as at the MCP tool.
 //
 // Review: the moves a claim may make after a member submits it,
 // each one a compare-and-set on the status it was read in, with its audit row
@@ -200,7 +200,7 @@ export interface SubmitReimbursementInput {
   team: ReimbursementTeam | null;
   /** A decimal string with up to 2 places, e.g. "12.34". */
   amount: string;
-  /** ZAR, USD or EUR; anything else is refused before writing. */
+  /** Always ZAR; any other code is refused before writing. */
   currency: Currency;
   accountType: (typeof schema.reimbursementAccountTypeEnum.enumValues)[number];
   /** Already encrypted by the caller: plaintext never reaches this module. */
@@ -211,7 +211,7 @@ export interface SubmitReimbursementInput {
   voiceMemoBlobUrl?: string | null;
 }
 
-/** Lodge a member's claim. Refuses a currency the camp does not handle. */
+/** Lodge a member's claim. Refuses any currency but ZAR. */
 export async function submitReimbursement(
   input: SubmitReimbursementInput,
 ): Promise<{ id: string; status: ReimbursementStatus }> {

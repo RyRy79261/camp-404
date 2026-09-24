@@ -44,7 +44,7 @@ export interface TeamBudgetChange {
   /** A decimal string with up to 2 places, or null to clear. */
   assignedAmount?: string | null;
   perceivedAmount?: string | null;
-  /** ZAR, USD or EUR; anything else is refused before writing. */
+  /** Always ZAR; any other code is refused before writing. */
   currency?: Currency;
   notes?: string | null;
 }

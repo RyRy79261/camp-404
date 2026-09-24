@@ -11,7 +11,7 @@ import {
 import { auditEntry } from "@/lib/audit-format";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { toRosterRow } from "@/lib/camp-roster";
-import { ledgerCycle, receivedTotalsByCurrency } from "@/lib/payments";
+import { ledgerCycle, receivedTotal } from "@/lib/payments";
 import {
   listOpenSendBlocking,
   listOpenSendGates,
@@ -68,7 +68,7 @@ export async function CaptainStatusBoard() {
       getTeamCoverage(),
       overviewTeamsConfig(),
       listOpenSendGates(),
-      ledgerCycle().then((cycle) => receivedTotalsByCurrency(cycle)),
+      ledgerCycle().then((cycle) => receivedTotal(cycle)),
     ]);
   const rows = members.map(toRosterRow);
   // Every deployment reads the payments ledger (the test store keeps a twin),
@@ -88,7 +88,7 @@ export async function CaptainStatusBoard() {
   const sends = deriveSendCompletion(gates);
   // The unknown the completion card respects, said in the KPI row's own
   // shape: no open-send list means that card has no figure, not a figure of 0.
-  // The dues card reads the ledger and names the money in, per currency.
+  // The dues card reads the ledger and names the rands received.
   const kpis = deriveKpis(
     rows,
     readable ? openSends.size : null,

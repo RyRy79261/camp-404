@@ -5,14 +5,9 @@ import { useRouter } from "next/navigation";
 import { Loader2, Wallet } from "lucide-react";
 import {
   CAMP_TIME_ZONE,
-  CURRENCIES,
-  CURRENCY_INFO,
-  DEFAULT_CURRENCY,
   formatMoney,
-  formatMoneyTotals,
   readRate,
-  sumByCurrency,
-  type Currency,
+  sumMinor,
   type PaymentStatus,
 } from "@camp404/core";
 import type { PaymentRow } from "@camp404/db/payments";
@@ -45,9 +40,8 @@ import { recordPaymentAction, setPaymentStatusAction } from "./actions";
 // form; a failed one-tap move on a ledger row is a toast. Only the control that
 // was used spins, and no second change starts while one runs.
 //
-// Money is kept in the currency it was paid in (ZAR, USD or EUR) and the
-// "Dues paid" card totals it one currency at a time: there is no FX, so a sum
-// across currencies would be a number nobody can bank.
+// Money is in rands only (owner's call, 2026-09-24), so the "Dues paid" card's
+// totals are plain rand totals.
 
 export interface LedgerMember {
   id: string;
@@ -76,13 +70,13 @@ const when = new Intl.DateTimeFormat("en-ZA", {
   timeZone: CAMP_TIME_ZONE,
 });
 
-/** This year's rows with one status, totalled per currency. */
-function totalsOf(payments: readonly PaymentRow[], status: PaymentStatus) {
-  return sumByCurrency(
-    payments
-      .filter((p) => p.status === status)
-      .map((p) => ({ amountMinor: p.amountCents, currency: p.currency })),
-  );
+/** This year's rows with one status, and their rand total in cents. */
+function totalOf(payments: readonly PaymentRow[], status: PaymentStatus) {
+  const rows = payments.filter((p) => p.status === status);
+  return {
+    count: rows.length,
+    cents: sumMinor(rows.map((p) => p.amountCents)),
+  };
 }
 
 const selectClass =
@@ -107,7 +101,6 @@ export function PaymentsManager({
   const pending = recording || moving;
   const [confirm, confirmDialog] = useConfirm();
   const [userId, setUserId] = useState("");
-  const [currency, setCurrency] = useState<Currency>(DEFAULT_CURRENCY);
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<PaymentStatus>("reconciled");
   const [note, setNote] = useState("");
@@ -119,19 +112,13 @@ export function PaymentsManager({
   );
   // Received counts only money seen in the bank: a waived payment settles dues
   // but brings nothing in, and a pending one has not arrived.
-  const received = totalsOf(payments, "reconciled");
-  const promised = totalsOf(payments, "pending");
+  const received = totalOf(payments, "reconciled");
+  const promised = totalOf(payments, "pending");
 
   function record() {
     setError(null);
     startRecord(async () => {
-      const res = await recordPaymentAction({
-        userId,
-        amount,
-        currency,
-        status,
-        note,
-      });
+      const res = await recordPaymentAction({ userId, amount, status, note });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -329,14 +316,14 @@ export function PaymentsManager({
               <p role="status">
                 <span className="text-muted-foreground">Received: </span>
                 <span className="font-medium tabular-nums">
-                  {formatMoneyTotals(received)}
+                  {formatMoney(received.cents)}
                 </span>
               </p>
-              {promised.length > 0 && (
+              {promised.count > 0 && (
                 <p role="status">
                   <span className="text-muted-foreground">Pending: </span>
                   <span className="font-medium tabular-nums">
-                    {formatMoneyTotals(promised)}
+                    {formatMoney(promised.cents)}
                   </span>
                 </p>
               )}
@@ -369,24 +356,8 @@ export function PaymentsManager({
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="payment-currency">Currency</Label>
-              <select
-                id="payment-currency"
-                className={selectClass}
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value as Currency)}
-                disabled={pending}
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c} ({CURRENCY_INFO[c].symbol})
-                  </option>
-                ))}
-              </select>
-            </div>
             <InputField
-              label={`Amount (${CURRENCY_INFO[currency].symbol})`}
+              label="Amount (R)"
               inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.currentTarget.value)}

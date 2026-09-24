@@ -5,8 +5,8 @@ import { makeUser } from "./_factories";
 import { submitReimbursement } from "../reimbursements";
 import * as schema from "../schema";
 
-// Lodging a claim: any member may, in a currency the camp takes. Amounts and
-// account details here are made up.
+// Lodging a claim: any member may, in rands, the camp's only currency. Amounts
+// and account details here are made up.
 
 describe("submitReimbursement", () => {
   const h = useTestDb();
@@ -22,10 +22,10 @@ describe("submitReimbursement", () => {
     receiptBlobUrl: "https://example.com/receipt.jpg",
   });
 
-  it("stores a claim in EUR as submitted", async () => {
+  it("stores a claim in rands as submitted", async () => {
     const db = h.db();
     const member = await makeUser(db);
-    const result = await submitReimbursement(claim(member.id, "EUR"));
+    const result = await submitReimbursement(claim(member.id, "ZAR"));
     expect(result.status).toBe("submitted");
 
     const rows = await db.select().from(schema.reimbursements);
@@ -34,16 +34,16 @@ describe("submitReimbursement", () => {
       id: result.id,
       submitterId: member.id,
       amount: "12.34",
-      currency: "EUR",
+      currency: "ZAR",
       accountDetailsEncrypted: "ciphertext",
       itemPhotoBlobUrl: null,
     });
   });
 
-  it("refuses GBP or a lower-case code, and writes no row", async () => {
+  it("refuses dollars, euros or a misspelt code, and writes no row", async () => {
     const db = h.db();
     const member = await makeUser(db);
-    for (const currency of ["GBP", "eur", " ZAR"]) {
+    for (const currency of ["USD", "EUR", "GBP", "zar", " ZAR"]) {
       await expect(
         submitReimbursement(claim(member.id, currency)),
       ).rejects.toThrow(UnknownCurrencyError);

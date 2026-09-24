@@ -70,11 +70,11 @@ describe("team budgets", () => {
     ]);
   });
 
-  it("refuses a currency the camp does not take, and creates no row", async () => {
+  it("refuses any currency but rands, and creates no row", async () => {
     const db = h.db();
     const lead = await makeUser(db);
     await setYears(db, OPEN_2027);
-    for (const currency of ["usd", "GBP"]) {
+    for (const currency of ["USD", "EUR", "zar", "GBP"]) {
       await expect(
         setTeamBudget({
           team: "kitchen",
@@ -88,10 +88,10 @@ describe("team budgets", () => {
 
     const row = await setTeamBudget({
       team: "kitchen",
-      change: { assignedAmount: "999.00", currency: "USD" },
+      change: { assignedAmount: "999.00", currency: "ZAR" },
       actorId: lead.id,
     });
-    expect(row).toMatchObject({ assignedAmount: "999.00", currency: "USD" });
+    expect(row).toMatchObject({ assignedAmount: "999.00", currency: "ZAR" });
   });
 
   it("reads only the current year", async () => {
