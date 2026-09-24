@@ -16,12 +16,11 @@ import type { ProofreadProgress, RecipeDetail } from "@/lib/recipes";
 // Claude's questions wait, read on the server), the "Proofread for N plates"
 // button and the Decision buttons render for a Kitchen lead or a captain (2A),
 // no run counter or daily limit renders for anyone, and a recipe that is not
-// in the book is a 404 for anyone but its submitter and the Kitchen's reviewers. In
-// the book it has two tabs, the choice in the address: Recipe (the plate
-// selector from the meal plan, the reader, "How this was scaled") and History
-// (where it came from, the list of recipe versions and the list of source
-// versions, each opening on its own page and never in place, Claude's reports
-// and the activity log).
+// in the book is a 404 for anyone but its submitter and the Kitchen's
+// reviewers. In the book it has two tabs, the choice in the address: Recipe
+// (the plate selector from the meal plan, the reader, "How this was scaled")
+// and History (where it came from, the list of recipe versions and the list
+// of source versions, each opening on its own page and never in place).
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn() }));
@@ -595,7 +594,7 @@ describe("recipe page", () => {
     expect(listRecipeSources).not.toHaveBeenCalled();
   });
 
-  it("keeps the History tab in the address: where it came from, lists of versions that open on their own pages, and the activity", async () => {
+  it("keeps the History tab in the address: where it came from, and lists of versions that open on their own pages", async () => {
     const recipe = inBook({
       acceptedVersionId: "v2",
       versions: [
@@ -658,7 +657,6 @@ describe("recipe page", () => {
     ).toBeNull();
     expect(screen.queryByText("LESSON-ON-V1")).toBeNull();
     expect(screen.queryByRole("button", { name: "Add lesson" })).toBeNull();
-    expect(screen.getByRole("article", { name: "Activity" })).toBeTruthy();
 
     // Not the member's words: no original text, no source versions.
     expect(screen.queryByText("Original text")).toBeNull();
@@ -758,7 +756,7 @@ describe("recipe page", () => {
     );
   });
 
-  it("gives a member no report, and a Kitchen reviewer every report on the History tab", async () => {
+  it("shows no one Claude's reports or an Activity card on the History tab", async () => {
     vi.mocked(getPlateCount).mockImplementation(async (_v, plates) =>
       plates === 60 ? FOR_60 : null,
     );
@@ -770,24 +768,26 @@ describe("recipe page", () => {
         },
       ],
     });
-    await renderAs({ id: "someone", rank: "camp_member" }, [], recipe, {
-      tab: "history",
-    });
-    expect(screen.queryByText("SECRET-VERSION-REPORT")).toBeNull();
-    expect(screen.queryByText("SECRET-COUNT-REPORT")).toBeNull();
-    expect(
-      screen.queryByRole("article", { name: "Claude's reports" }),
-    ).toBeNull();
-    cleanup();
-
-    await renderAs({ id: "lead", rank: "team_lead" }, ["kitchen"], recipe, {
-      tab: "history",
-    });
-    const report = screen.getByRole("article", { name: "Claude's reports" });
-    expect(within(report).getByText("SECRET-VERSION-REPORT")).toBeTruthy();
-    expect(within(report).getByText("SECRET-COUNT-REPORT")).toBeTruthy();
-    expect(within(report).getByText("Version 1, for 60 plates")).toBeTruthy();
-    cleanup();
+    for (const [viewer, leads] of [
+      [{ id: "someone", rank: "camp_member" }, []],
+      [{ id: "lead", rank: "team_lead" }, ["kitchen"]],
+      [{ id: "cap", rank: "captain" }, []],
+    ] as const) {
+      await renderAs(viewer, [...leads], recipe, { tab: "history" });
+      // The tab has rendered: its version list is there.
+      expect(
+        screen.getByRole("article", { name: "Recipe versions" }),
+      ).toBeTruthy();
+      expect(
+        screen.queryByRole("article", { name: "Claude's reports" }),
+      ).toBeNull();
+      expect(screen.queryByRole("article", { name: "Activity" })).toBeNull();
+      expect(screen.queryByText("SECRET-VERSION-REPORT")).toBeNull();
+      expect(screen.queryByText("SECRET-COUNT-REPORT")).toBeNull();
+      // Nor are the counts' reports read for it.
+      expect(getPlateCount).not.toHaveBeenCalled();
+      cleanup();
+    }
 
     // Not on the Recipe tab.
     await renderAs({ id: "lead", rank: "team_lead" }, ["kitchen"], recipe);

@@ -166,8 +166,8 @@ test.describe("recipe plate counts (test-mode)", () => {
     await expect(chip(page, 3)).toContainText("2.5 kg");
 
     // 5. The History tab, kept in the address through a reload with the
-    //    plate count: lists of versions, nothing opened in place, and the
-    //    activity log.
+    //    plate count: lists of versions, nothing opened in place, and no
+    //    Activity or Claude's reports.
     await page
       .getByRole("navigation", { name: "Recipe tabs" })
       .getByRole("link", { name: "History" })
@@ -179,7 +179,12 @@ test.describe("recipe plate counts (test-mode)", () => {
     await expect(
       page.getByRole("article", { name: "Source versions" }),
     ).toBeVisible();
-    await expect(page.getByRole("article", { name: "Activity" })).toBeVisible();
+    await expect(page.getByRole("article", { name: "Activity" })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole("article", { name: "Claude's reports" }),
+    ).toHaveCount(0);
     await expect(page.getByRole("list", { name: "Step 1 uses" })).toHaveCount(
       0,
     );

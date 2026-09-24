@@ -81,8 +81,7 @@ export const metadata = { title: "Recipe — Camp 404" };
 //  - History: where it came from with the original text, the list of recipe
 //    versions and the list of source versions (each opens on its own page,
 //    read only: versions/[version] and sources/[version], where a version's
-//    notes, the lessons learned cooking it, live), Claude's reports and the
-//    activity log. Nothing opens in place.
+//    notes, the lessons learned cooking it, live). Nothing opens in place.
 //
 // BEFORE THE BOOK: composed like the AfrikaBurn console's registration
 // review: a breadcrumb, the heading with the status and a meta line, a main
@@ -105,7 +104,7 @@ export const metadata = { title: "Recipe — Camp 404" };
 //    "Proofread for N plates" render for a Kitchen lead or a captain (sending
 //    to Claude is theirs too, the owner's decision 2A). The actions and the
 //    writes check again. There is no daily limit and no run counter.
-//  - Claude's reports and unaccepted drafts render for a Kitchen lead or a
+//  - unaccepted drafts, with Claude's report, render for a Kitchen lead or a
 //    captain only; the original text, the source versions and the member's
 //    note for them and the submitter. What is not rendered here never reaches
 //    the browser.
@@ -612,7 +611,6 @@ export default async function RecipePage({
       run={openRun}
     />
   );
-  const history = historyOf(detail);
 
   if (current) {
     // --- In the book: two tabs. --------------------------------------------
@@ -643,30 +641,6 @@ export default async function RecipePage({
 
     if (tab === "history") {
       const sources = privileged ? await listRecipeSources(detail.id) : [];
-      const countReports = reviewer
-        ? await Promise.all(
-            detail.plateCounts
-              .filter((c) => c.source === "proofread")
-              .map((c) => getPlateCount(current.id, c.plates)),
-          )
-        : [];
-      const reports = reviewer
-        ? [
-            ...detail.versions.map((v) =>
-              v.report
-                ? { heading: `Version ${v.version}`, report: v.report }
-                : null,
-            ),
-            ...countReports.map((c) =>
-              c?.report
-                ? {
-                    heading: `Version ${current.version}, for ${platesLabel(c.plates)}`,
-                    report: c.report,
-                  }
-                : null,
-            ),
-          ].filter((r): r is { heading: string; report: DraftReport } => !!r)
-        : [];
 
       return (
         <div className="flex min-w-0 flex-col gap-8">
@@ -705,26 +679,6 @@ export default async function RecipePage({
                 <SourceVersionList recipeId={detail.id} sources={sources} />
               </Rail>
             )}
-
-            {reports.length > 0 && (
-              <Rail
-                id="recipe-report"
-                title="Claude's reports"
-                description="What Claude changed and was unsure of. For the Kitchen's reviewers."
-              >
-                {reports.map((r) => (
-                  <ReportLists
-                    key={r.heading}
-                    heading={r.heading}
-                    report={r.report}
-                  />
-                ))}
-              </Rail>
-            )}
-
-            <Rail id="recipe-activity" title="Activity">
-              <HistoryList items={history} />
-            </Rail>
           </div>
         </div>
       );
@@ -881,7 +835,7 @@ export default async function RecipePage({
           </Rail>
 
           <Rail id="recipe-history" title="History">
-            <HistoryList items={history} />
+            <HistoryList items={historyOf(detail)} />
           </Rail>
         </aside>
       </div>
