@@ -6,7 +6,7 @@ import * as schema from "../schema";
 import { makeUser } from "./_factories";
 import { useTestDb } from "./_harness";
 
-// 0054 maps the stored recipe statuses onto the new lifecycle (#243), and 0055
+// 0055 maps the stored recipe statuses onto the new lifecycle (#243), and 0056
 // (generated) rebuilds the recipe_status type, adds every Kitchen table and
 // column (the meal plan's too) and makes recipes.submitter_id nullable. The harness has applied both to an
 // empty database, so each test first puts the database back the way
@@ -25,8 +25,8 @@ function migration(name: string): string[] {
     .filter((statement) => statement.length > 0);
 }
 
-const TO_TEXT = migration("0054_recipe_status_to_text");
-const KITCHEN = migration("0055_recipe_kitchen");
+const TO_TEXT = migration("0055_recipe_status_to_text");
+const KITCHEN = migration("0056_recipe_kitchen");
 
 const LEGACY_STATUSES = [
   "pending",
@@ -55,7 +55,6 @@ const ADDED_RECIPE_COLUMNS = [
   "rerun_requested_at",
   "latest_run_id",
   "accepted_version_id",
-  "variant_of_recipe_id",
 ];
 
 /** The Postgres error code, wherever drizzle nested it. */
@@ -69,7 +68,7 @@ function sqlState(err: unknown): string | undefined {
   return undefined;
 }
 
-describe("0054_recipe_status_to_text and 0055_recipe_kitchen", () => {
+describe("0055_recipe_status_to_text and 0056_recipe_kitchen", () => {
   const h = useTestDb();
 
   async function run(statements: string[]) {
@@ -97,8 +96,6 @@ describe("0054_recipe_status_to_text and 0055_recipe_kitchen", () => {
       ${ADDED_RECIPE_COLUMNS.map(
         (c) => `ALTER TABLE "recipes" DROP COLUMN IF EXISTS "${c}";`,
       ).join("\n")}
-      ALTER TABLE "camp_settings" DROP COLUMN IF EXISTS "kitchen_largest_pot_litres";
-      ALTER TABLE "camp_settings" DROP COLUMN IF EXISTS "kitchen_burner_count";
       DROP TYPE IF EXISTS "recipe_run_outcome", "recipe_unit",
         "recipe_scaling_class", "ingredient_keeping_class";
       ALTER TABLE "recipes" ALTER COLUMN "status" DROP DEFAULT;
@@ -131,7 +128,7 @@ describe("0054_recipe_status_to_text and 0055_recipe_kitchen", () => {
     return Object.fromEntries(res.rows.map((r) => [r.raw_text, r.status]));
   }
 
-  it("maps every old status onto the new lifecycle, and a second run of 0054 changes nothing", () =>
+  it("maps every old status onto the new lifecycle, and a second run of 0055 changes nothing", () =>
     onLegacyDb(async () => {
       const user = await makeUser(h.db());
       await storeLegacyRecipes(user.id);
@@ -165,14 +162,14 @@ describe("0054_recipe_status_to_text and 0055_recipe_kitchen", () => {
       expect(sqlState(err)).toBe("22P02");
     }));
 
-  it("cannot rebuild the type without 0054 first, because an old status has no place in it", () =>
+  it("cannot rebuild the type without 0055 first, because an old status has no place in it", () =>
     onLegacyDb(async () => {
       const user = await makeUser(h.db());
       await storeLegacyRecipes(user.id);
 
-      await h.client().exec("SAVEPOINT without_0054");
+      await h.client().exec("SAVEPOINT without_0055");
       const err = await run(KITCHEN).catch((e: unknown) => e);
-      await h.client().exec("ROLLBACK TO SAVEPOINT without_0054");
+      await h.client().exec("ROLLBACK TO SAVEPOINT without_0055");
       expect(sqlState(err)).toBe("22P02");
     }));
 
@@ -198,41 +195,14 @@ describe("0054_recipe_status_to_text and 0055_recipe_kitchen", () => {
       );
     }));
 
-  it("adds only the pot and the burners to camp_settings, held to their bounds", async () => {
-    await h.db().insert(schema.campSettings).values({ id: true });
-    const [row] = await h.db().select().from(schema.campSettings);
-    // No daily cap and no per-meal plates: the meal plan holds the plates.
+  it("adds no Kitchen setting to camp_settings: no pot, no burners, no daily cap, no plates", async () => {
     const columns = await h.client().query<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns
        WHERE table_name = 'camp_settings'
          AND (column_name LIKE 'kitchen_%' OR column_name LIKE 'recipe_%')
        ORDER BY column_name`,
     );
-    expect(columns.rows.map((r) => r.column_name)).toEqual([
-      "kitchen_burner_count",
-      "kitchen_largest_pot_litres",
-    ]);
-    expect(row!.kitchenLargestPotLitres).toBeNull();
-    expect(row!.kitchenBurnerCount).toBeNull();
-
-    for (const bad of [
-      { kitchenLargestPotLitres: 0 },
-      { kitchenLargestPotLitres: 501 },
-      { kitchenBurnerCount: 0 },
-      { kitchenBurnerCount: 21 },
-    ]) {
-      const err = await h
-        .db()
-        .update(schema.campSettings)
-        .set(bad)
-        .catch((e: unknown) => e);
-      expect(sqlState(err), JSON.stringify(bad)).toBe("23514");
-    }
-
-    await h.db().update(schema.campSettings).set({
-      kitchenLargestPotLitres: 500,
-      kitchenBurnerCount: 20,
-    });
+    expect(columns.rows.map((r) => r.column_name)).toEqual([]);
   });
 
   it("matches ingredient names without regard to case", async () => {
@@ -249,14 +219,14 @@ describe("0054_recipe_status_to_text and 0055_recipe_kitchen", () => {
   });
 });
 
-// 0055 (generated) adds recipe_versions.body and the plate-count table next
-// to the first draft's recipe_version_ingredients; 0056 (custom) converts any
+// 0056 (generated) adds recipe_versions.body and the plate-count table next
+// to the first draft's recipe_version_ingredients; 0057 (custom) converts any
 // version written without a body, from its method and ingredient rows, into a
 // body in Noble Notations' shape and gives each its own plate-count row. Each
 // test stores such versions inside a transaction that is rolled back.
-describe("0056_recipe_versions_body", () => {
+describe("0057_recipe_versions_body", () => {
   const h = useTestDb();
-  const CONVERT = migration("0056_recipe_versions_body");
+  const CONVERT = migration("0057_recipe_versions_body");
 
   async function run(statements: string[]) {
     for (const statement of statements) await h.client().exec(statement);
@@ -479,13 +449,13 @@ describe("0056_recipe_versions_body", () => {
     }));
 });
 
-// 0057 (custom) gives every recipe with pasted text version 1 of its source,
+// 0058 (custom) gives every recipe with pasted text version 1 of its source,
 // all of it in Steps, one paragraph per non-blank line. The harness has
 // applied it to an empty database, so each test stores recipes the way the
 // app wrote them before the source editor and runs the migration's SQL again.
-describe("0057_recipe_sources_seed", () => {
+describe("0058_recipe_sources_seed", () => {
   const h = useTestDb();
-  const SEED = migration("0057_recipe_sources_seed");
+  const SEED = migration("0058_recipe_sources_seed");
   const EMPTY = { type: "doc", content: [{ type: "paragraph" }] };
 
   async function run(statements: string[]) {
