@@ -120,6 +120,15 @@ Sign-in rules worth knowing before you touch `packages/auth`:
   (camp-404.com) scopes them so the bare domain and `www` share one. Changing
   the domain means every member re-enrols their passkeys (passwords keep
   working).
+- **Google on a preview goes through production** (Better Auth's OAuth
+  proxy, `packages/auth/src/oauth-proxy.ts`): Google calls back only the
+  registered production URI, which hands the member back to the preview, and
+  the preview signs them in against its own database. It needs
+  `AUTH_OAUTH_PROXY_SECRET` (the same value on Production and Preview) and,
+  on Preview, `AUTH_OAUTH_PROXY_URL`; without them it stays off and Google
+  fails on a preview as before. Only this project's preview hosts are
+  accepted (`isProjectPreviewOrigin`, pinned to the `ryry79261s-projects`
+  scope); a renamed project or scope needs that pattern changed.
 - **Keep `changeEmail` unmounted** until a flow that notifies the CURRENT
   address exists (AfrikaBurn's finding: the stock flow turns a stolen session
   into an account takeover).

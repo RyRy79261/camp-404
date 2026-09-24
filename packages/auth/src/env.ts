@@ -37,6 +37,13 @@ export interface AuthEnv {
   AUTH_RATE_LIMIT_MAX?: string | undefined;
   GOOGLE_CLIENT_ID?: string | undefined;
   GOOGLE_CLIENT_SECRET?: string | undefined;
+  /**
+   * Google sign-in on a preview (see resolveOAuthProxy). The same value on
+   * Production and Preview: production decrypts what a preview encrypted.
+   */
+  AUTH_OAUTH_PROXY_SECRET?: string | undefined;
+  /** Preview only: the production origin Google calls back, e.g. https://www.camp-404.com. */
+  AUTH_OAUTH_PROXY_URL?: string | undefined;
   NODE_ENV?: string | undefined;
   /** The e2e harness switch. The app refuses to boot with it on Vercel. */
   E2E_TEST_MODE?: string | undefined;
@@ -301,6 +308,105 @@ export function resolvePasskeyOrigins(env: AuthEnv): string[] | undefined {
   });
 }
 
+/**
+ * The hosts Vercel serves this project's previews on, measured from the Vercel
+ * API on 2026-09-24:
+ *
+ *   camp-404-y0kcnxz7w-ryry79261s-projects.vercel.app            (a deployment)
+ *   camp-404-web-git-feat-kitchen-recipes-ryry79261s-projects.vercel.app (a branch)
+ *
+ * Pinned to this project and this Vercel scope, never `*.vercel.app`: anyone
+ * can deploy to vercel.app. A renamed project or scope needs this changed.
+ * A host name alone cannot rule out a Vercel scope whose own slug ends in
+ * `-ryry79261s-projects`, so this is the second lock; the shared proxy
+ * secret is the first.
+ */
+const PROJECT_PREVIEW_HOST =
+  /^camp-404-(?:[a-z0-9]{9}|web-git-[a-z0-9]+(?:-[a-z0-9]+)*)-ryry79261s-projects\.vercel\.app$/;
+
+/** True for an https origin (or URL) on one of this project's preview hosts. */
+export function isProjectPreviewOrigin(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return (
+      u.protocol === "https:" &&
+      u.port === "" &&
+      u.username === "" &&
+      u.password === "" &&
+      PROJECT_PREVIEW_HOST.test(u.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** The shortest secret the OAuth proxy accepts, as for BETTER_AUTH_SECRET. */
+export const OAUTH_PROXY_SECRET_MIN_LENGTH = 32;
+
+/**
+ * Google sign-in on preview deployments, through Better Auth's OAuth proxy.
+ *
+ * Google only calls back a redirect URI registered in Google Cloud, and every
+ * preview has a new host. So a preview sends Google PRODUCTION's callback
+ * (https://www.camp-404.com/api/auth/callback/google), with its state sealed
+ * under the shared secret. Production opens the seal, swaps the code for
+ * Google's profile, seals the profile, and sends the browser back to the
+ * preview's /api/auth/oauth-proxy-callback. The preview checks the state it
+ * issued, and signs the member in against its OWN database. Production writes
+ * nothing, so a preview on its own Neon branch works the same as one on the
+ * production database.
+ *
+ * - `production`: decrypts proxied callbacks, and only for a preview host of
+ *   this project (the guard in oauth-proxy.ts). Its own sign-ins are never
+ *   proxied (`currentURL` is pinned to itself) and it does not mount the
+ *   profile-replay endpoint, so a production sign-in runs exactly as before.
+ * - `preview`: sends its Google sign-ins through production.
+ *
+ * Undefined — no proxy, today's behaviour — unless Google is configured, the
+ * deployment may serve (a real BETTER_AUTH_SECRET), the proxy secret is set
+ * and long enough, and (on a preview) the production URL is an https origin
+ * and this deployment is one of this project's preview hosts. Never locally.
+ */
+export type OAuthProxyMode = {
+  role: "production" | "preview";
+  /** The origin Google calls back (production's base URL). */
+  productionURL: string;
+  secret: string;
+};
+
+export function resolveOAuthProxy(env: AuthEnv): OAuthProxyMode | undefined {
+  if (!isGoogleConfigured(env) || !isAuthConfigured(env)) return undefined;
+  const secret = trimmed(env.AUTH_OAUTH_PROXY_SECRET);
+  if (!secret || secret.length < OAUTH_PROXY_SECRET_MIN_LENGTH) {
+    return undefined;
+  }
+  const originOf = (url: string | undefined): string | undefined => {
+    if (!url) return undefined;
+    try {
+      const u = new URL(url);
+      return u.protocol === "https:" ? u.origin : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  if (env.VERCEL_ENV === "production") {
+    const productionURL = originOf(resolveBaseURL(env));
+    return productionURL
+      ? { role: "production", productionURL, secret }
+      : undefined;
+  }
+  if (env.VERCEL_ENV === "preview") {
+    const productionURL = originOf(trimmed(env.AUTH_OAUTH_PROXY_URL));
+    if (!productionURL || isProjectPreviewOrigin(productionURL))
+      return undefined;
+    if (!isProjectPreviewOrigin(https(env.VERCEL_URL))) return undefined;
+    return { role: "preview", productionURL, secret };
+  }
+  return undefined;
+}
+
 /** Plain-words warnings for a misconfigured auth stack, printed at boot. */
 export function authConfigWarnings(env: AuthEnv): string[] {
   const warnings: string[] = [];
@@ -326,6 +432,19 @@ export function authConfigWarnings(env: AuthEnv): string[] {
     warnings.push(
       "BETTER_AUTH_URL is not set — auth links use Vercel's production host. " +
         "Set it to the address members actually visit.",
+    );
+  }
+  if (
+    env.VERCEL_ENV === "preview" &&
+    isAuthConfigured(env) &&
+    isGoogleConfigured(env) &&
+    !resolveOAuthProxy(env)
+  ) {
+    warnings.push(
+      "Google sign-in cannot finish on this preview: Google only calls back " +
+        "production. Set AUTH_OAUTH_PROXY_SECRET (the same value as " +
+        "production's, 32+ characters) and AUTH_OAUTH_PROXY_URL (production's " +
+        "origin) for Preview.",
     );
   }
   return warnings;
