@@ -63,8 +63,14 @@ export type {
   PublishResult,
 };
 
+/** See countUnread in @camp404/db/broadcasts. */
+export interface CountUnreadOptions {
+  /** Waiting questionnaire sends whose own notice must not count again. */
+  exceptActivationIds?: readonly string[];
+}
+
 interface NotificationsBackend {
-  countUnread(userId: string): Promise<number>;
+  countUnread(userId: string, options?: CountUnreadOptions): Promise<number>;
   countUnreadByTeam(userId: string): Promise<Partial<Record<string, number>>>;
   listInbox(
     userId: string,
@@ -158,8 +164,8 @@ const testBackend: NotificationsBackend = {
   async countUnreadByTeam(userId) {
     return testStore.countUnreadByTeam(userId);
   },
-  async countUnread(userId) {
-    return testStore.countUnread(userId);
+  async countUnread(userId, options) {
+    return testStore.countUnread(userId, options);
   },
   async listInbox(userId, options) {
     return testStore.listInbox(userId, options);
@@ -231,8 +237,11 @@ export function countUnreadByTeam(
   return backend().countUnreadByTeam(userId);
 }
 
-export function countUnread(userId: string): Promise<number> {
-  return backend().countUnread(userId);
+export function countUnread(
+  userId: string,
+  options?: CountUnreadOptions,
+): Promise<number> {
+  return backend().countUnread(userId, options);
 }
 
 export function listInbox(

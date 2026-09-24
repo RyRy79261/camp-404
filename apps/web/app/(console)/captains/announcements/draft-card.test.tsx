@@ -54,7 +54,21 @@ function draft(
 }
 
 function cardFor(title: string) {
-  return screen.getByRole("heading", { name: title }).closest("li")!;
+  // `hidden`: an open dialog marks the page behind it aria-hidden, and the
+  // tests still read the card's spinner while the confirmation is pending.
+  return screen
+    .getByRole("heading", { name: title, hidden: true })
+    .closest("li")!;
+}
+
+/** Delete a draft the way a captain does: the card's Delete, then confirm. */
+function deleteAndConfirm(card: ReturnType<typeof within>) {
+  fireEvent.click(card.getByRole("button", { name: /Delete/ }));
+  fireEvent.click(
+    within(
+      screen.getByRole("dialog", { name: "Delete this draft?" }),
+    ).getByRole("button", { name: "Delete draft" }),
+  );
 }
 
 describe("DraftCard", () => {
@@ -119,33 +133,28 @@ describe("draft actions", () => {
     const first = within(cardFor("First"));
     const second = within(cardFor("Second"));
 
-    fireEvent.click(first.getByRole("button", { name: /Delete/ }));
+    deleteAndConfirm(first);
 
+    // The page sits behind the still-open dialog, so its buttons are hidden.
+    const button = (card: typeof first, name: RegExp) =>
+      card.getByRole("button", { name, hidden: true });
     await waitFor(() =>
       expect(
-        first
-          .getByRole("button", { name: /Delete/ })
-          .querySelector(".animate-spin"),
+        button(first, /^Delete$/).querySelector(".animate-spin"),
       ).not.toBeNull(),
     );
     expect(
-      first
-        .getByRole("button", { name: /Publish to camp/ })
-        .querySelector(".animate-spin"),
+      button(first, /Publish to camp/).querySelector(".animate-spin"),
     ).toBeNull();
     expect(
-      second
-        .getByRole("button", { name: /Delete/ })
-        .querySelector(".animate-spin"),
+      button(second, /^Delete$/).querySelector(".animate-spin"),
     ).toBeNull();
-    expect(second.getByRole("button", { name: /Delete/ })).toHaveProperty(
-      "disabled",
-      true,
-    );
+    expect(button(second, /^Delete$/)).toHaveProperty("disabled", true);
 
     finish({ ok: true, data: undefined });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() =>
-      expect(second.getByRole("button", { name: /Delete/ })).toHaveProperty(
+      expect(second.getByRole("button", { name: /^Delete$/ })).toHaveProperty(
         "disabled",
         false,
       ),
@@ -164,7 +173,7 @@ describe("draft actions", () => {
     renderTwoDrafts();
     const first = within(cardFor("First"));
 
-    fireEvent.click(first.getByRole("button", { name: /Delete/ }));
+    deleteAndConfirm(first);
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("That draft is gone."),
     );
@@ -179,6 +188,38 @@ describe("draft actions", () => {
       expect(toast.error).toHaveBeenCalledWith("Pick an active team."),
     );
     expect(screen.queryByText("That draft is gone.")).toBeNull();
+  });
+
+  it("asks before deleting a draft, and Cancel keeps it", async () => {
+    renderTwoDrafts();
+
+    fireEvent.click(
+      within(cardFor("First")).getByRole("button", { name: /Delete/ }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Delete this draft?" });
+    expect(dialog.textContent).toContain('"First" will be deleted');
+    expect(deleteDraftAction).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(deleteDraftAction).not.toHaveBeenCalled();
+  });
+
+  it("deletes the draft once the captain confirms", async () => {
+    vi.mocked(deleteDraftAction).mockResolvedValue({
+      ok: true,
+      data: undefined,
+    } as never);
+    renderTwoDrafts();
+
+    deleteAndConfirm(within(cardFor("Second")));
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Draft deleted"),
+    );
+    expect(deleteDraftAction).toHaveBeenCalledTimes(1);
+    expect(deleteDraftAction).toHaveBeenCalledWith("d2");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   it("puts the cursor in the title when a draft is opened for editing", async () => {

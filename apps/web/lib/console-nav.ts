@@ -39,6 +39,7 @@ export const CONSOLE_NAV: readonly ConsoleNavEntry[] = [
   { href: "/captains/payments", label: "Payments", rank: "captain" },
   { href: "/captains/camp-settings", label: "Camp settings", rank: "captain" },
   { href: "/captains/audit", label: "Audit", rank: "captain" },
+  { href: "/captains/system", label: "System status", rank: "captain" },
   { href: "/tools/forms", label: "My forms", rank: "camp_member" },
   { href: "/family-tree", label: "Family tree", rank: "camp_member" },
   { href: "/tools/invite", label: "Invite", rank: "camp_member" },

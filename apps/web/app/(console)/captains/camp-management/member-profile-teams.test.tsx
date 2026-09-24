@@ -40,6 +40,7 @@ const row: RosterRow = {
   awaitingApproval: false,
   onboardingComplete: true,
   pendingRequiredActions: 0,
+  outstanding: [],
   requiredComplete: true,
   isDriver: false,
   driverProfileComplete: false,

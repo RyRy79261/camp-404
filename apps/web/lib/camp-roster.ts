@@ -1,5 +1,6 @@
 import type { CampManagementMember } from "@camp404/db/roster";
 import { COUNTRIES } from "./countries";
+import { requiredActionName } from "./required-actions";
 
 // View-model for one row in the captains' camp-management roster. Keeps the
 // rendering layer dumb: every flag/label a cell needs is derived here, in one
@@ -137,6 +138,12 @@ export interface RosterRow extends PublicRosterRow {
   awaitingApproval: boolean;
   onboardingComplete: boolean;
   pendingRequiredActions: number;
+  /**
+   * What the member still owes, by name and oldest first ("Burner profile",
+   * "Dietary questionnaire"), so a captain can say what to finish. Captain-
+   * only: it is never mapped onto a PublicRosterRow.
+   */
+  outstanding: string[];
   /** All blocking questionnaires/actions done. */
   requiredComplete: boolean;
   isDriver: boolean;
@@ -197,6 +204,9 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
     awaitingApproval,
     onboardingComplete: member.onboardingComplete,
     pendingRequiredActions: member.pendingRequiredActions,
+    outstanding: member.pendingRequiredActionItems.map((a) =>
+      requiredActionName(a.key, a.title),
+    ),
     requiredComplete,
     isDriver: member.intendsToDrive,
     driverProfileComplete: member.driverProfileComplete,

@@ -7,6 +7,7 @@ import {
   matchesTeam,
   rankLabel,
   sortRosterRows,
+  toPublicRosterRow,
   toRosterRow,
 } from "@/lib/camp-roster";
 
@@ -25,6 +26,7 @@ function member(
     membershipTier: "full",
     onboardingComplete: true,
     pendingRequiredActions: 0,
+    pendingRequiredActionItems: [],
     intendsToDrive: false,
     driverProfileComplete: false,
     country: "ZA",
@@ -126,6 +128,25 @@ describe("toRosterRow derivations", () => {
   it("surfaces driver intent", () => {
     expect(toRosterRow(member({ intendsToDrive: true })).isDriver).toBe(true);
     expect(toRosterRow(member({ intendsToDrive: false })).isDriver).toBe(false);
+  });
+
+  it("names what the member still owes on the captain row, in order", () => {
+    const owing = member({
+      pendingRequiredActions: 2,
+      pendingRequiredActionItems: [
+        { key: "burner_profile", title: "Complete your burner profile" },
+        { key: "def_dietary", title: "Dietary questionnaire" },
+      ],
+    });
+    expect(toRosterRow(owing).outstanding).toEqual([
+      "Burner profile",
+      "Dietary questionnaire",
+    ]);
+    expect(toRosterRow(member()).outstanding).toEqual([]);
+    // The member's view of the same person carries none of it.
+    const pub = toPublicRosterRow(owing) as unknown as Record<string, unknown>;
+    expect(pub.outstanding).toBeUndefined();
+    expect(JSON.stringify(pub)).not.toMatch(/burner.profile|dietary/i);
   });
 
   it("falls back to a placeholder name when unnamed", () => {

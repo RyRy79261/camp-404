@@ -8,8 +8,9 @@
 //   Client (apps/web/lib/auth-client.ts): built per app, client-only.
 //
 // The pure env resolvers are also published as `@camp404/auth/env`, which
-// reads how auth is configured without constructing an instance (the captain
-// system-status board uses that).
+// reads how auth is configured without constructing an instance. (The captain
+// System status page, /captains/system, does not import it: its Sign-in check
+// in apps/web/lib/system-status.ts reads the same env names itself.)
 
 export { auth, createAuth, buildAuthOptions, type Auth } from "./config";
 export { sendAuthEmail, buildAuthEmail, type AuthEmailKind } from "./email";

@@ -31,6 +31,7 @@ function detail(overrides: Partial<CampMemberDetail> = {}): CampMemberDetail {
     inviteCode: "berlin-crew",
     inviteNote: "Kitchen lead from last burn",
     invitedByName: "Alice",
+    isFounder: false,
     createdAt: new Date("2026-03-01T08:00:00.000Z"),
     ...overrides,
   };
@@ -69,14 +70,35 @@ describe("presentMemberDetail — overview", () => {
     expect(valueOf(m.overview, "Onboarding")).toBe("Incomplete");
     expect(m.overview.some((i) => i.label === "Invited by")).toBe(false);
     expect(m.overview.some((i) => i.label === "Invite note")).toBe(false);
-    // A null invite code still renders a row, marked as a founder/god account.
-    expect(valueOf(m.overview, "Invite code")).toMatch(/founder|god/i);
+    // A null invite code still renders a row: a founder address got in
+    // without one. The app never says "god".
+    expect(valueOf(m.overview, "Invite code")).toBe("None (founder address)");
+  });
+
+  it("names only the account that ran setup as the founder, not the crew on the root code", () => {
+    const founder = presentMemberDetail(
+      detail({ inviteCode: "meowzit", isFounder: true }),
+    );
+    expect(valueOf(founder.overview, "Invite code")).toBe("meowzit (founder)");
+    // The crew redeem the same root code; that does not make them the founder.
+    const crew = presentMemberDetail(
+      detail({ inviteCode: "meowzit", isFounder: false }),
+    );
+    expect(valueOf(crew.overview, "Invite code")).toBe(
+      "meowzit (camp root invite)",
+    );
+    expect(
+      valueOf(
+        presentMemberDetail(detail({ inviteCode: "neon-toaster" })).overview,
+        "Invite code",
+      ),
+    ).toBe("neon-toaster");
   });
 
   it("falls back to a placeholder display name", () => {
-    expect(presentMemberDetail(detail({ displayName: "   " })).displayName).toBe(
-      "Unnamed burner",
-    );
+    expect(
+      presentMemberDetail(detail({ displayName: "   " })).displayName,
+    ).toBe("Unnamed burner");
     expect(presentMemberDetail(detail({ displayName: null })).displayName).toBe(
       "Unnamed burner",
     );
@@ -115,9 +137,9 @@ describe("presentMemberDetail — profile sections", () => {
       (s) => s.title === "Leadership & logistics",
     );
     // single_select value → option label
-    expect(valueOf(logistics!.items, "Will you be driving a car to the burn?")).toBe(
-      "Yes",
-    );
+    expect(
+      valueOf(logistics!.items, "Will you be driving a car to the burn?"),
+    ).toBe("Yes");
     // multi_select → comma-joined option labels
     expect(
       valueOf(logistics!.items, "I would like to be a team lead of…"),
@@ -211,7 +233,8 @@ describe("presentMemberDetail — bio promotion", () => {
   it("leaves bio null when unanswered or blank", () => {
     expect(presentMemberDetail(detail({ responses: {} })).bio).toBeNull();
     expect(
-      presentMemberDetail(detail({ responses: { "bio.statement": "   " } })).bio,
+      presentMemberDetail(detail({ responses: { "bio.statement": "   " } }))
+        .bio,
     ).toBeNull();
   });
 });

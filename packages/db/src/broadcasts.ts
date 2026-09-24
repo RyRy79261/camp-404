@@ -7,6 +7,7 @@ import {
   isNull,
   lte,
   ne,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -15,6 +16,7 @@ import { writeAuditEvent, type DbOrTx } from "./audit";
 import {
   announcementNotification,
   notificationLink,
+  QUESTIONNAIRE_REF_TYPE,
   scheduledBroadcastNotification,
   sortPinned,
   type NotificationKind,
@@ -1270,16 +1272,39 @@ export async function getAnnouncementForMember(
   };
 }
 
-/** Count of a user's unread deliveries — drives the header bell badge. */
-export async function countUnread(userId: string): Promise<number> {
+/**
+ * Count of a user's unread deliveries — the notices half of the inbox badge.
+ *
+ * `exceptActivationIds` names questionnaire sends the caller already counts
+ * as waiting. The notice that announced each of them (`refType =
+ * 'questionnaire_activation'`, `refId` = the activation) is left out, so one
+ * form is one on the badge, not two. Every other delivery counts as before,
+ * including a questionnaire notice whose form is already answered.
+ */
+export async function countUnread(
+  userId: string,
+  options: { exceptActivationIds?: readonly string[] } = {},
+): Promise<number> {
+  const except = [...new Set(options.exceptActivationIds ?? [])];
+  const d = schema.notificationDeliveries;
   const db = createHttpDb();
   const [row] = await db
     .select({ count: sql<number>`count(*)::int` })
-    .from(schema.notificationDeliveries)
+    .from(d)
     .where(
       and(
-        eq(schema.notificationDeliveries.userId, userId),
-        isNull(schema.notificationDeliveries.readAt),
+        eq(d.userId, userId),
+        isNull(d.readAt),
+        except.length > 0
+          ? // Spelled out with IS NULL arms: a bare NOT(ref_type = … AND …)
+            // is NULL for a row with no ref, and would drop it.
+            or(
+              isNull(d.refType),
+              ne(d.refType, QUESTIONNAIRE_REF_TYPE),
+              isNull(d.refId),
+              notInArray(d.refId, except),
+            )
+          : undefined,
       ),
     );
   return row?.count ?? 0;

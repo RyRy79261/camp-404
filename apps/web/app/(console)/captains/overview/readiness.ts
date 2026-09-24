@@ -40,9 +40,10 @@ export interface ReadinessFunnel {
 
 /**
  * Which facts of the roster this deployment can actually answer. The E2E test
- * store models no payments ledger and no `required_actions`, so it reports
- * `duesPaid: false` and `pendingRequiredActions: 0` for everyone — figures that
- * would read as "nobody has paid" and "the whole camp is clear". Those stages
+ * store models no payments ledger, and of `required_actions` only the burner
+ * profile gate (no questionnaire sends), so it reports `duesPaid: false` for
+ * everyone and a `pendingRequiredActions` that misses every send — figures
+ * that would read as "nobody has paid" and "the camp is clear". Those stages
  * are marked unknown instead.
  */
 export interface KnownFacts {

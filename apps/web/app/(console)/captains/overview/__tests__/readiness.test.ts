@@ -31,6 +31,7 @@ function member(
     membershipTier: "full",
     onboardingComplete: true,
     pendingRequiredActions: 0,
+    pendingRequiredActionItems: [],
     intendsToDrive: false,
     driverProfileComplete: false,
     country: "ZA",

@@ -4,6 +4,8 @@ import { redactSecrets } from "@camp404/core";
 import { createHttpDb } from "@camp404/db";
 import { getBootstrapState } from "@camp404/db/bootstrap";
 import { sql } from "drizzle-orm";
+import { usesTestStore } from "./test-mode";
+import { testStore } from "./test-store";
 import {
   deriveSystemStatus,
   type DatabaseProbe,
@@ -49,6 +51,17 @@ async function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
  * not isCampBootstrapped, which answers true in E2E test mode.
  */
 export async function probeDatabase(): Promise<DatabaseProbe> {
+  // The E2E twin: the in-memory store stands in for the database, and an E2E
+  // run may have no DATABASE_URL at all. lib/bootstrap.ts treats the test
+  // store as set up too.
+  if (usesTestStore()) {
+    return {
+      kind: "ok",
+      latencyMs: 0,
+      captainCount: testStore.countCaptains(),
+      bootstrapped: true,
+    };
+  }
   // Checked directly: the db client swaps in a build placeholder URL when this
   // is unset, and a probe against the placeholder would report "unreachable"
   // for what is really "not set".

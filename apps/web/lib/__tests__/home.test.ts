@@ -7,6 +7,11 @@ import { buildHome, type HomeInput } from "../home";
 // 10:00 on Wed 23 Sep 2026 in Johannesburg.
 const NOW = new Date("2026-09-23T08:00:00Z");
 
+/** An inbox badge as getInboxBadge builds it. */
+function inbox(notices: number, waiting: number): HomeInput["inbox"] {
+  return { notices, waiting, total: notices + waiting };
+}
+
 function member(over: Partial<HomeInput> = {}): HomeInput {
   return {
     now: NOW,
@@ -15,7 +20,7 @@ function member(over: Partial<HomeInput> = {}): HomeInput {
     isCaptain: false,
     teams: [],
     pending: [],
-    unread: 0,
+    inbox: inbox(0, 0),
     lift: null,
     calendar: { status: "ok", events: [] },
     secured: true,
@@ -259,7 +264,7 @@ describe("buildHome", () => {
   it("puts new announcements and waiting forms on their tiles, and nothing when there are none", () => {
     const busy = buildHome(
       member({
-        unread: 3,
+        inbox: inbox(3, 2),
         pending: [
           { activationId: "a", title: "A", blocking: false, dueAt: null },
           { activationId: "b", title: "B", blocking: false, dueAt: null },
@@ -267,12 +272,37 @@ describe("buildHome", () => {
       }),
     );
     expect(busy.modules.map((m) => [m.id, m.badge])).toEqual([
-      ["announcements", 3],
+      ["announcements", 5],
       ["forms", 2],
     ]);
     expect(buildHome(member()).modules.map((m) => m.badge)).toEqual([
       null,
       null,
+    ]);
+  });
+
+  it("shows the inbox total on the Notifications tile, the bell's number, not the notices alone", () => {
+    const home = buildHome(
+      member({
+        inbox: inbox(5, 1),
+        pending: [
+          { activationId: "a", title: "A", blocking: false, dueAt: null },
+        ],
+      }),
+    );
+    // Named as the inbox it opens, and the count is said to be "waiting", not
+    // "new": part of it may be forms, not announcements.
+    expect(home.modules.find((m) => m.id === "announcements")).toMatchObject({
+      label: "Notifications",
+      badge: 6,
+      badgeSays: "waiting",
+    });
+    // Waiting for approval, the tile still counts the waiting form.
+    const waiting = buildHome(
+      member({ approval: "pending", inbox: inbox(2, 1) }),
+    );
+    expect(waiting.modules).toEqual([
+      expect.objectContaining({ id: "announcements", badge: 3 }),
     ]);
   });
 

@@ -2,11 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getCampMemberDetail } from "@camp404/db/roster";
-import { listMemberQuestionnaireGates } from "@camp404/db/activations";
 import {
   assignTeam,
-  getTeamMemberships,
   removeTeam,
   setLead,
   type TeamMembership,
@@ -15,9 +12,16 @@ import { decryptField } from "@camp404/db/crypto";
 import {
   MAX_MEMBER_NOTE_LENGTH,
   addMemberNote,
-  listMemberNotes,
   type MemberNote,
 } from "@camp404/db/member-notes";
+// The reads route through the roster facade, so the E2E test store can answer
+// them and Playwright can open a member's panel.
+import {
+  getCampMemberDetail,
+  getTeamMemberships,
+  listMemberNotes,
+  listMemberQuestionnaireGates,
+} from "@/lib/roster";
 import { ID_UNREADABLE_LABEL, mergeIdNumber } from "@camp404/db/id-documents";
 import {
   availableReviewActions,
@@ -612,7 +616,8 @@ export async function sendCaptainPromotionAction(
     if (!guard.ok) {
       return {
         ok: false,
-        error: SEND_PROMOTION_COPY[guard.reason] ?? "Couldn't send the request.",
+        error:
+          SEND_PROMOTION_COPY[guard.reason] ?? "Couldn't send the request.",
       };
     }
 

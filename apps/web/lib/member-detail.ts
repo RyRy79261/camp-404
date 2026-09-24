@@ -1,4 +1,4 @@
-import { CAMP_TIME_ZONE } from "@camp404/core";
+import { CAMP_TIME_ZONE, FOUNDER_CODE } from "@camp404/core";
 import {
   pageQuestions,
   questionIdForRole,
@@ -97,6 +97,16 @@ function renderAnswer(question: Question, raw: unknown): string | null {
   }
 }
 
+// The founder is the account that ran first-time setup, not everyone holding
+// the root code: setup hands that code to the first crew as well. A null code
+// is a founder address (FOUNDER_EMAILS) that got in without one.
+function inviteCodeLabel(detail: CampMemberDetail): string {
+  const code = detail.inviteCode;
+  if (detail.isFounder) return code ? `${code} (founder)` : "None (founder)";
+  if (code === FOUNDER_CODE) return `${code} (camp root invite)`;
+  return code ?? "None (founder address)";
+}
+
 /**
  * Build the captain panel's view of a member. `safety` carries the emergency
  * contacts when the caller read them through resolveSafetyDataForViewer (which
@@ -161,10 +171,7 @@ export function presentMemberDetail(
     label: "Onboarding",
     value: detail.onboardingComplete ? "Complete" : "Incomplete",
   });
-  overview.push({
-    label: "Invite code",
-    value: detail.inviteCode ?? "— (founder / god account)",
-  });
+  overview.push({ label: "Invite code", value: inviteCodeLabel(detail) });
   if (detail.invitedByName) {
     overview.push({ label: "Invited by", value: detail.invitedByName });
   }

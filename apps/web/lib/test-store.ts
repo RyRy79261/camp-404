@@ -7,6 +7,7 @@ import {
   captainPromotionNotification,
   normalizeInviteCode,
   notificationLink,
+  QUESTIONNAIRE_REF_TYPE,
   sortPinned,
   type NotificationKind,
   type NotificationPayload,
@@ -27,7 +28,11 @@ import {
   type PinnedAnnouncement,
   type PinResult,
 } from "@camp404/db/broadcasts";
-import type { CampManagementMember } from "@camp404/db/roster";
+import type {
+  CampManagementMember,
+  CampMemberDetail,
+  CampMemberDetailOptions,
+} from "@camp404/db/roster";
 import {
   CANNOT_MOVE,
   CANNOT_REMOVE,
@@ -203,6 +208,8 @@ interface TestRequiredAction {
   blocking: boolean;
   dueAt: null;
   status: "pending" | "completed";
+  /** Set when the gate is satisfied, as `required_actions.completed_at` is. */
+  completedAt: Date | null;
   createdAt: Date;
 }
 
@@ -395,6 +402,14 @@ export const testStore = {
   findUserById(userId: string): TestUser | null {
     return findUserById(userId);
   },
+  /** How many captains there are (the system-status probe's twin). */
+  countCaptains(): number {
+    let count = 0;
+    for (const user of usersByAuthId.values()) {
+      if (user.rank === "captain") count++;
+    }
+    return count;
+  },
   setUserInviteCode(userId: string, code: string): void {
     for (const user of usersByAuthId.values()) {
       if (user.id === userId) {
@@ -548,6 +563,7 @@ export const testStore = {
       blocking: true,
       dueAt: null,
       status: "pending",
+      completedAt: null,
       createdAt: new Date(),
     });
   },
@@ -564,6 +580,7 @@ export const testStore = {
     );
     if (!action) return false;
     action.status = "completed";
+    action.completedAt = new Date();
     return true;
   },
   /** Twin of getPendingRequiredActions: pending and blocking, oldest first. */
@@ -1101,9 +1118,26 @@ export const testStore = {
       nextCursor: hasMore && page.length ? cursorOf(page.at(-1)!) : null,
     };
   },
-  countUnread(userId: string): number {
-    return deliveries.filter((d) => d.userId === userId && d.readAt === null)
-      .length;
+  /**
+   * Twin of countUnread in @camp404/db/broadcasts, including its
+   * `exceptActivationIds`: the notice of a questionnaire the caller already
+   * counts as waiting is left out.
+   */
+  countUnread(
+    userId: string,
+    options: { exceptActivationIds?: readonly string[] } = {},
+  ): number {
+    const except = new Set(options.exceptActivationIds ?? []);
+    return deliveries.filter(
+      (d) =>
+        d.userId === userId &&
+        d.readAt === null &&
+        !(
+          d.refType === QUESTIONNAIRE_REF_TYPE &&
+          d.refId !== null &&
+          except.has(d.refId)
+        ),
+    ).length;
   },
   /** Twin of countUnreadByTeam in @camp404/db/broadcasts. */
   countUnreadByTeam(userId: string): Record<string, number> {
@@ -1378,9 +1412,12 @@ export const testStore = {
   },
 
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
-  // The test store models users, burner profiles and team memberships, but not
-  // driver profiles / required-actions, so those facets still default (false /
-  // 0) — enough for the captain roster to render in E2E without touching Neon.
+  // The test store models users, burner profiles, team memberships and the
+  // required_actions twin, but not driver profiles or the payments ledger, so
+  // those facets still default (false) — enough for the captain roster to
+  // render in E2E without touching Neon. What a member still owes comes from
+  // `requiredActions` with the real query's predicate (pending AND blocking,
+  // oldest first), so the count and the named list agree.
   // `isLead` and `teams` come from the membership rows and are year-scoped, the
   // same two facts the real query aggregates out of `team_memberships`.
   getCampManagementRoster(
@@ -1391,6 +1428,7 @@ export const testStore = {
     return Array.from(usersByAuthId.values())
       .map((u): CampManagementMember => {
         const mine = thisYear.filter((m) => m.userId === u.id);
+        const owed = this.getPendingRequiredActions(u.id);
         const profile = profilesByUserId.get(u.id) ?? null;
         const country =
           profile && typeof profile.responses["country"] === "string"
@@ -1407,7 +1445,11 @@ export const testStore = {
           duesPaid: false,
           membershipTier: null,
           onboardingComplete: profile?.completedAt != null,
-          pendingRequiredActions: 0,
+          pendingRequiredActions: owed.length,
+          pendingRequiredActionItems: owed.map((a) => ({
+            key: a.actionKey,
+            title: a.title,
+          })),
           intendsToDrive: false,
           driverProfileComplete: false,
           country,
@@ -1417,6 +1459,67 @@ export const testStore = {
         };
       })
       .sort((a, b) => (a.displayName ?? "").localeCompare(b.displayName ?? ""));
+  },
+
+  // The captain member panel's detail read (mirrors
+  // @camp404/db/roster.getCampMemberDetail), so Playwright can open a member.
+  // The store keeps no ID ciphertext, sign-in email or driver profile, so those
+  // come back null when asked for, never absent: the shape a captain gets.
+  getCampMemberDetail(
+    userId: string,
+    options: CampMemberDetailOptions = {},
+  ): CampMemberDetail | null {
+    const u = this.findUserById(userId);
+    if (!u) return null;
+    const profile = profilesByUserId.get(u.id) ?? null;
+    const invite = u.inviteCode
+      ? (inviteCodes.get(u.inviteCode) ?? null)
+      : null;
+    const nameOf = (id: string | null) =>
+      id ? (this.findUserById(id)?.displayName ?? null) : null;
+    return {
+      id: u.id,
+      displayName: u.displayName,
+      rank: u.rank,
+      approvalStatus: u.approvalStatus,
+      approvalDecidedAt: u.approvalDecidedAt,
+      approvalDecidedByName: nameOf(u.approvalDecidedByUserId),
+      onboardingComplete: profile?.completedAt != null,
+      onboardingVersion: profile?.version ?? null,
+      responses: profile?.responses ?? {},
+      ...(options.includeIdDocuments
+        ? { passportEncrypted: null, saIdEncrypted: null }
+        : {}),
+      ...(options.includeEmail ? { email: null } : {}),
+      ...(options.includeArrival ? { arrivalAt: null } : {}),
+      inviteCode: u.inviteCode,
+      inviteNote: invite?.note ?? null,
+      invitedByName: nameOf(invite?.createdByUserId ?? null),
+      // The store keeps no setup latch, so it has no founder to name.
+      isFounder: false,
+      createdAt: u.createdAt,
+    };
+  },
+  /**
+   * Twin of listMemberQuestionnaireGates: the member's questionnaire gates,
+   * oldest first. Every store row is a questionnaire gate with no send behind
+   * it, which the real query keeps whatever its status. Ties on `createdAt`
+   * keep insertion order (the sort is stable), which stands in for the real
+   * query's `id` tie-break.
+   */
+  listMemberQuestionnaireGates(userId: string) {
+    return requiredActions
+      .filter((a) => a.userId === userId && a.type === "questionnaire")
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((a) => ({
+        actionKey: a.actionKey,
+        title: a.title,
+        status: a.status,
+        blocking: a.blocking,
+        dueAt: a.dueAt,
+        completedAt: a.completedAt,
+        createdAt: a.createdAt,
+      }));
   },
 
   // --- captain-promotion handshake (mirrors @camp404/db/captain-promotion) ---

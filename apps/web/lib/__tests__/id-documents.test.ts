@@ -29,8 +29,12 @@ describe("splitIdNumber", () => {
   });
 
   it("returns null idNumber when absent or empty", () => {
-    expect(splitIdNumber({ "id.type": "sa_id", "id.number": "" }).idNumber).toBeNull();
-    expect(splitIdNumber({ "id.type": "sa_id", "id.number": "   " }).idNumber).toBeNull();
+    expect(
+      splitIdNumber({ "id.type": "sa_id", "id.number": "" }).idNumber,
+    ).toBeNull();
+    expect(
+      splitIdNumber({ "id.type": "sa_id", "id.number": "   " }).idNumber,
+    ).toBeNull();
     expect(splitIdNumber({ phone: "x" }).idNumber).toBeNull();
   });
 });
@@ -46,12 +50,19 @@ describe("mergeIdNumber", () => {
   });
 
   it("is a no-op when idNumber is null", () => {
-    const merged = mergeIdNumber({ phone: "+27" }, { idType: null, idNumber: null });
+    const merged = mergeIdNumber(
+      { phone: "+27" },
+      { idType: null, idNumber: null },
+    );
     expect(merged["id.number"]).toBeUndefined();
   });
 
   it("round-trips with splitIdNumber", () => {
-    const original = { "id.type": "passport", "id.number": "A12345678", phone: "+27" };
+    const original = {
+      "id.type": "passport",
+      "id.number": "A12345678",
+      phone: "+27",
+    };
     const { cleaned, idType, idNumber } = splitIdNumber(original);
     expect(mergeIdNumber(cleaned, { idType, idNumber })).toEqual(original);
   });
@@ -92,6 +103,7 @@ describe("captain member-detail render", () => {
       inviteCode: null,
       inviteNote: null,
       invitedByName: null,
+      isFounder: false,
       createdAt: new Date(),
     };
     const flat = presentMemberDetail(

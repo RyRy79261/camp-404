@@ -124,6 +124,32 @@ test.describe("captain announcements (test-mode)", () => {
     expect(pending.ok()).toBeTruthy();
     expect((await pending.json()).pending).toHaveLength(0);
 
+    // The bell and Home's Notifications tile both open the inbox, so they must
+    // show one count (getInboxBadge). The acknowledged announcement was read,
+    // so it is counted by neither. The member finishes onboarding and is
+    // approved, so Home draws the header with the bell and the tiles.
+    // (Waiting questionnaires, the other half of the count, have no cover
+    // here: the test store models no questionnaire sends.)
+    await completeOnboarding(request, "member-auth");
+    const approved = await request.post("/api/test/set-approval", {
+      data: { authUserId: "member-auth", status: "approved" },
+    });
+    expect(approved.ok()).toBeTruthy();
+    await page.goto("/");
+    await expect(page).toHaveURL("/");
+    const inboxTile = page
+      .getByRole("navigation", { name: "Your modules" })
+      .getByRole("link", { name: /^Notifications/ });
+    await expect(inboxTile).toBeVisible();
+    const bellName = await page
+      .getByRole("button", { name: /^Notifications,/ })
+      .getAttribute("aria-label");
+    const tileName = await inboxTile.getAttribute("aria-label");
+    const countIn = (name: string | null) =>
+      Number(/(\d+)/.exec(name ?? "")?.[1] ?? 0);
+    expect(countIn(tileName)).toBe(countIn(bellName));
+    expect(bellName).toBe("Notifications, none unread");
+
     // 6. The inbox tabs are links: the filter lives in the URL, and it is
     //    applied to the list rather than to the tab strip.
     //
@@ -389,5 +415,38 @@ test.describe("captain announcements (test-mode)", () => {
       page.getByRole("heading", { level: 1, name: "Notifications" }),
     ).toBeVisible();
     await expect(page.getByText("Leads sync Tuesday")).toHaveCount(0);
+  });
+  test("deleting a draft asks first, and Cancel keeps it", async ({
+    page,
+    request,
+  }) => {
+    await login(page, { id: "del-cap", email: "god@example.com" });
+    await page.goto("/");
+    await completeOnboarding(request, "del-cap");
+    await setRank(request, "del-cap", "captain");
+
+    await page.goto("/captains/announcements");
+    await page.getByLabel("Title").fill("Ice run rota");
+    await page.getByLabel("Message").fill("Who fetches ice on Tuesday?");
+    await page.getByRole("button", { name: "Save draft" }).click();
+
+    const drafts = page.getByRole("region", { name: /^Drafts/ });
+    const draftTitle = drafts.getByRole("heading", { name: "Ice run rota" });
+    await expect(draftTitle).toBeVisible();
+
+    // One misclick on Delete used to lose the draft; now it asks.
+    await drafts.getByRole("button", { name: "Delete" }).click();
+    const confirm = page.getByRole("dialog", { name: "Delete this draft?" });
+    await expect(confirm).toBeVisible();
+    await expect(confirm.getByText(/"Ice run rota" will be deleted/)).toBeVisible();
+    await confirm.getByRole("button", { name: "Cancel" }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(draftTitle).toBeVisible();
+
+    await drafts.getByRole("button", { name: "Delete" }).click();
+    await confirm.getByRole("button", { name: "Delete draft" }).click();
+    await expect(page.getByText("Draft deleted")).toBeVisible();
+    await expect(drafts.getByText("No drafts.")).toBeVisible();
+    await expect(draftTitle).toHaveCount(0);
   });
 });

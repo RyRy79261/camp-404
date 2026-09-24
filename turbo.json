@@ -36,6 +36,7 @@
     "TELEGRAM_WEBHOOK_SECRET",
     "RESEND_API_KEY",
     "RESEND_FROM_EMAIL",
+    "FOUNDER_EMAILS",
     "GOD_EMAILS",
     "INVITE_CODES",
     "GITHUB_FEEDBACK_TOKEN",
@@ -51,7 +52,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "dist/**", "out/**"]
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "!.next/dev/**",
+        "dist/**",
+        "out/**"
+      ]
     },
     "dev": {
       "cache": false,

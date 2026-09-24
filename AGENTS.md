@@ -23,6 +23,7 @@ packages/
   core/       Framework-free domain logic: access, privacy, redaction, … (@camp404/core)
   ui/         Shared shadcn/ui components (@camp404/ui)
   db/         Drizzle schema + migrations (@camp404/db)
+  auth/       Self-hosted Better Auth server and client (@camp404/auth)
   types/      Zod schemas + shared TS types (@camp404/types)
   telegram/   Bot client and handlers; outbound built but off (@camp404/telegram)
   ai-prompts/ Versioned prompt templates (@camp404/ai-prompts)

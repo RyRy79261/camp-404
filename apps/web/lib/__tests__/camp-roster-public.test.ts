@@ -20,6 +20,8 @@ const PRIVATE_KEYS = [
   "awaitingApproval",
   "onboardingComplete",
   "pendingRequiredActions",
+  "pendingRequiredActionItems",
+  "outstanding",
   "requiredComplete",
   "isDriver",
   "driverProfileComplete",
@@ -63,6 +65,11 @@ function member(
     membershipTier: "full",
     onboardingComplete: false,
     pendingRequiredActions: 3,
+    pendingRequiredActionItems: [
+      { key: "burner_profile", title: "Complete your burner profile" },
+      { key: "dietary_requirements", title: "Dietary questionnaire" },
+      { key: "driver_profile", title: "Driver questionnaire" },
+    ],
     intendsToDrive: true,
     driverProfileComplete: false,
     country: "ZA",
@@ -120,6 +127,8 @@ describe("toPublicRosterRow", () => {
     for (const leaked of PRIVATE_KEYS) {
       expect(row[leaked]).toBeUndefined();
     }
+    // Nor under another key: what a member still owes is captain-only.
+    expect(JSON.stringify(row)).not.toMatch(/burner.profile|dietary/i);
   });
 
   it("matches the captain row on the shared public fields (single-sourced)", () => {

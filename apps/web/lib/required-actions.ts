@@ -38,3 +38,23 @@ export function nextGate(actions: PendingAction[]): string | null {
   }
   return null;
 }
+
+// What a captain calls each CODE questionnaire's action. Its stored title is
+// written to the member ("Complete your burner profile"); a captain reading a
+// list of what someone still owes wants the thing's name. Only keys the code
+// writes are here (grep `actionKey:`): dietary requirements and the driver
+// profile are builder questionnaires now, and their titles are already names.
+// A Map, not an object: a builder key is captain-typed, and "constructor" must
+// fall through to its title rather than hit Object.prototype.
+const ACTION_NAMES = new Map<string, string>([
+  ["burner_profile", "Burner profile"],
+]);
+
+/**
+ * A captain-facing name for one outstanding required action: the short name
+ * of a code questionnaire, otherwise the title stored on the row (a builder
+ * questionnaire's title, as the captain who wrote it named it).
+ */
+export function requiredActionName(actionKey: string, title: string): string {
+  return ACTION_NAMES.get(actionKey) ?? title;
+}

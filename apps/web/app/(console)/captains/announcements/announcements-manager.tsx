@@ -217,6 +217,9 @@ export function AnnouncementsManager({
     error: string | null;
   } | null>(null);
   const [publishing, startPublish] = useTransition();
+  // The draft waiting on the delete confirmation. A draft was never sent, but
+  // it is a captain's work, and one misclick on Delete used to lose it.
+  const [deleting, setDeleting] = useState<AnnouncementSummary | null>(null);
 
   const drafts = announcements.filter((a) => a.publishedAt === null);
   const published = announcements.filter((a) => a.publishedAt !== null);
@@ -300,10 +303,18 @@ export function AnnouncementsManager({
     titleRef.current?.focus({ preventScroll: true });
   }, [editingId, reducedMotion]);
 
-  const handleDelete = (id: string) => {
+  // A delete asks first (the ConfirmDialog below). Once confirmed it is still
+  // a one-tap change on a list row: only this card's Delete spins, and a
+  // failure is a toast. The dialog closes when the answer is in, as the task
+  // board's remove does.
+  const confirmDelete = () => {
+    const draft = deleting;
+    if (!draft) return;
+    const { id } = draft;
     setBusy({ id, action: "delete" });
     startRowAction(async () => {
       const result = await deleteDraftAction(id);
+      setDeleting(null);
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -394,7 +405,7 @@ export function AnnouncementsManager({
                     rowPending && busy?.id === a.id ? busy.action : null
                   }
                   onEdit={handleEdit}
-                  onDelete={handleDelete}
+                  onDelete={setDeleting}
                   onPublish={handlePublish}
                 />
               ))}
@@ -614,6 +625,22 @@ export function AnnouncementsManager({
         </CardContent>
       </Card>
 
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open && !rowPending) setDeleting(null);
+        }}
+        title="Delete this draft?"
+        description={
+          deleting
+            ? `"${deleting.title}" will be deleted. It was never sent, so nobody sees it go.`
+            : ""
+        }
+        confirmLabel="Delete draft"
+        destructive
+        pending={rowPending && busy?.action === "delete"}
+        onConfirm={confirmDelete}
+      />
       {confirming && (
         <PublishConfirm
           announcement={confirming.announcement}
@@ -802,7 +829,8 @@ function DraftCard({
   /** The button on this card whose action is running, if any. */
   busyAction: DraftAction | null;
   onEdit: (a: AnnouncementSummary) => void;
-  onDelete: (id: string) => void;
+  /** Asks to delete this draft; the manager confirms before it goes. */
+  onDelete: (a: AnnouncementSummary) => void;
   onPublish: (a: AnnouncementSummary) => void;
 }) {
   // Drafts belong to their author: the server refuses anyone else's edit,
@@ -835,7 +863,7 @@ function DraftCard({
                 variant="ghost"
                 size="sm"
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => onDelete(a.id)}
+                onClick={() => onDelete(a)}
                 disabled={disabled}
               >
                 <BusyIcon busy={busyAction === "delete"} icon={Trash2} /> Delete

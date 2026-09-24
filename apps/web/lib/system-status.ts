@@ -1,6 +1,6 @@
 // What this deployment is set up with, derived from its env and one database
-// probe. A library only: the owner chose no /captains/system page
-// (2026-09-16, no Pencil board draws one).
+// probe. Shown to captains on /captains/system (added 2026-09-24, reversing
+// the 2026-09-16 call to keep this a library with no page).
 //
 // Three rules:
 //
@@ -27,6 +27,8 @@ import {
   envList,
   feedbackTracker,
   firebaseAdminCredentials,
+  founderEmails,
+  founderEmailsUseOldName,
   isEmailConfigured,
   isWebPushConfigured,
   MIN_PREAPPROVED_ENV_CODE_LENGTH,
@@ -546,17 +548,19 @@ function inviteCodesCheck(env: EnvBag): SystemCheck {
 
 function recoveryEmailsCheck(env: EnvBag): SystemCheck {
   // Count only. The addresses are people's email addresses.
-  const count = envList(env.GOD_EMAILS).length;
+  const count = founderEmails(env).length;
   return {
     id: "recovery-emails",
-    label: "Recovery addresses",
-    env: ["GOD_EMAILS"],
+    label: "Founder addresses",
+    env: ["FOUNDER_EMAILS"],
     value: count === 0 ? "None" : plural(count, "address", "addresses"),
     tone: "info",
     detail:
       count === 0
         ? "No address can skip the invite and approval gates."
-        : "A listed address skips the invite and approval gates, but only once its email is verified.",
+        : founderEmailsUseOldName(env)
+          ? "A listed address skips the invite and approval gates, but only once its email is verified. The list is set under an old variable name: rename it to FOUNDER_EMAILS in Vercel. It keeps working until then."
+          : "A listed address skips the invite and approval gates, but only once its email is verified.",
   };
 }
 
