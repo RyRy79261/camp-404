@@ -197,10 +197,36 @@ describe("deriveKpis", () => {
     });
   });
 
+  it("names the money in one total per currency, never one mixed sum", () => {
+    const rows = rowsOf(member({ duesPaid: true }), member(), member());
+    const kpis = deriveKpis(rows, 0, { dues: true }, [
+      { currency: "ZAR", amountMinor: 1234 },
+      { currency: "USD", amountMinor: 500 },
+    ]);
+    const hint = kpi(kpis, "dues").hint;
+    // Intl writes no-break spaces, so the rand amount is matched with \s.
+    expect(hint).toMatch(/^of 3 approved · R\s12,34 · US\$5,00$/);
+    expect(hint).not.toMatch(/17,34/);
+    expect(kpi(kpis, "dues").value).toBe(1);
+
+    // Nothing received yet is a real R 0,00, once the ledger can be read.
+    expect(kpi(deriveKpis(rows, 0, { dues: true }, []), "dues").hint).toMatch(
+      /^of 3 approved · R\s0,00$/,
+    );
+    // An unreadable ledger names no money at all.
+    expect(
+      kpi(
+        deriveKpis(rows, 0, { dues: false }, [
+          { currency: "ZAR", amountMinor: 1234 },
+        ]),
+        "dues",
+      ).hint,
+    ).toBe("The ledger cannot be read here");
+  });
+
   it("has no figure at all where the fact cannot be read", () => {
-    // The E2E test store's shape: every roster row says `duesPaid: false` and
-    // the open-send list comes back empty, neither of which is a fact. A 0 here
-    // reads as "nobody has paid" and "no questionnaire is open".
+    // A deployment with no ledger and no open-send list: a 0 here would read as
+    // "nobody has paid" and "no questionnaire is open".
     const rows = rowsOf(member({ duesPaid: true }), member());
     const known = deriveKpis(rows, 0, { dues: true });
     const unknown = deriveKpis(rows, null, { dues: false });

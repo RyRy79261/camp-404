@@ -1,9 +1,11 @@
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
+  CURRENCIES,
   type Currency,
   formatMemberRefCode,
   isCurrency,
+  type MoneyTotal,
   paymentReference,
   type PaymentStatus,
   UnknownCurrencyError,
@@ -241,6 +243,44 @@ export async function listPayments(cycle: number): Promise<PaymentRow[]> {
     .leftJoin(recorder, eq(recorder.id, schema.payments.recordedByUserId))
     .where(eq(schema.payments.cycle, cycle))
     .orderBy(desc(schema.payments.createdAt), desc(schema.payments.id));
+}
+
+/**
+ * The money that came in for one burn year: one total per currency, in
+ * CURRENCIES order, only for the currencies present. Only payments seen in the
+ * bank (`reconciled`) count. A waived payment settles dues but brings in no
+ * money, and a pending one has not arrived yet. Never summed across
+ * currencies: there is no FX.
+ */
+export async function receivedTotalsByCurrency(
+  cycle: number,
+): Promise<MoneyTotal[]> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      currency: schema.payments.currency,
+      // bigint comes back as a string; a camp's year fits a safe integer.
+      amountMinor: sql<string>`sum(${schema.payments.amountCents})`,
+    })
+    .from(schema.payments)
+    .where(
+      and(
+        eq(schema.payments.cycle, cycle),
+        eq(schema.payments.status, "reconciled"),
+      ),
+    )
+    .groupBy(schema.payments.currency);
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    // The CHECK constraint keeps any other code out; this guards a reader
+    // against a database that somehow holds one.
+    if (!isCurrency(row.currency)) throw new UnknownCurrencyError(row.currency);
+    totals.set(row.currency, Number(row.amountMinor));
+  }
+  return CURRENCIES.filter((c) => totals.has(c)).map((currency) => ({
+    currency,
+    amountMinor: totals.get(currency)!,
+  }));
 }
 
 /**

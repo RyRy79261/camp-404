@@ -5,8 +5,14 @@ import { useRouter } from "next/navigation";
 import { Loader2, Wallet } from "lucide-react";
 import {
   CAMP_TIME_ZONE,
+  CURRENCIES,
+  CURRENCY_INFO,
+  DEFAULT_CURRENCY,
   formatMoney,
+  formatMoneyTotals,
   readRate,
+  sumByCurrency,
+  type Currency,
   type PaymentStatus,
 } from "@camp404/core";
 import type { PaymentRow } from "@camp404/db/payments";
@@ -38,6 +44,10 @@ import { recordPaymentAction, setPaymentStatusAction } from "./actions";
 // Feedback, as on every captain screen: a refused payment shows inline on the
 // form; a failed one-tap move on a ledger row is a toast. Only the control that
 // was used spins, and no second change starts while one runs.
+//
+// Money is kept in the currency it was paid in (ZAR, USD or EUR) and the
+// "Dues paid" card totals it one currency at a time: there is no FX, so a sum
+// across currencies would be a number nobody can bank.
 
 export interface LedgerMember {
   id: string;
@@ -66,6 +76,15 @@ const when = new Intl.DateTimeFormat("en-ZA", {
   timeZone: CAMP_TIME_ZONE,
 });
 
+/** This year's rows with one status, totalled per currency. */
+function totalsOf(payments: readonly PaymentRow[], status: PaymentStatus) {
+  return sumByCurrency(
+    payments
+      .filter((p) => p.status === status)
+      .map((p) => ({ amountMinor: p.amountCents, currency: p.currency })),
+  );
+}
+
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -88,6 +107,7 @@ export function PaymentsManager({
   const pending = recording || moving;
   const [confirm, confirmDialog] = useConfirm();
   const [userId, setUserId] = useState("");
+  const [currency, setCurrency] = useState<Currency>(DEFAULT_CURRENCY);
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<PaymentStatus>("reconciled");
   const [note, setNote] = useState("");
@@ -97,11 +117,21 @@ export function PaymentsManager({
     members.filter((m) => m.duesPaid).length,
     members.length,
   );
+  // Received counts only money seen in the bank: a waived payment settles dues
+  // but brings nothing in, and a pending one has not arrived.
+  const received = totalsOf(payments, "reconciled");
+  const promised = totalsOf(payments, "pending");
 
   function record() {
     setError(null);
     startRecord(async () => {
-      const res = await recordPaymentAction({ userId, amount, status, note });
+      const res = await recordPaymentAction({
+        userId,
+        amount,
+        currency,
+        status,
+        note,
+      });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -295,6 +325,22 @@ export function PaymentsManager({
             <p role="status" className="text-xs text-muted-foreground">
               {paid.read} of {paid.of} members have paid for {yearLabel}.
             </p>
+            <div className="mt-1 flex flex-col gap-1 border-t border-border pt-3 text-sm">
+              <p role="status">
+                <span className="text-muted-foreground">Received: </span>
+                <span className="font-medium tabular-nums">
+                  {formatMoneyTotals(received)}
+                </span>
+              </p>
+              {promised.length > 0 && (
+                <p role="status">
+                  <span className="text-muted-foreground">Pending: </span>
+                  <span className="font-medium tabular-nums">
+                    {formatMoneyTotals(promised)}
+                  </span>
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -323,8 +369,24 @@ export function PaymentsManager({
                 ))}
               </select>
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="payment-currency">Currency</Label>
+              <select
+                id="payment-currency"
+                className={selectClass}
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value as Currency)}
+                disabled={pending}
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c} ({CURRENCY_INFO[c].symbol})
+                  </option>
+                ))}
+              </select>
+            </div>
             <InputField
-              label="Amount (R)"
+              label={`Amount (${CURRENCY_INFO[currency].symbol})`}
               inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.currentTarget.value)}

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/captain-gate", () => ({ captainActionGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ findCampUserById: vi.fn() }));
-vi.mock("@camp404/db/payments", () => ({
+vi.mock("@/lib/payments", () => ({
   recordPayment: vi.fn(async () => ({
     id: "p1",
     reference: "C404-M017-2027-1",
@@ -17,7 +17,7 @@ vi.mock("@camp404/db/payments", () => ({
 import { revalidatePath } from "next/cache";
 import { captainActionGate } from "@/lib/captain-gate";
 import { findCampUserById } from "@/lib/users";
-import { recordPayment, setPaymentStatus } from "@camp404/db/payments";
+import { recordPayment, setPaymentStatus } from "@/lib/payments";
 import { recordPaymentAction, setPaymentStatusAction } from "./actions";
 
 beforeEach(() => {

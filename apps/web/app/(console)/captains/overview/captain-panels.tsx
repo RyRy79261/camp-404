@@ -11,6 +11,7 @@ import {
 import { auditEntry } from "@/lib/audit-format";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { toRosterRow } from "@/lib/camp-roster";
+import { ledgerCycle, receivedTotalsByCurrency } from "@/lib/payments";
 import {
   listOpenSendBlocking,
   listOpenSendGates,
@@ -58,23 +59,26 @@ const overviewTeamsConfig = cache(getTeamsConfig);
  * second `getCampManagementRoster()` on one render would be a second answer.
  */
 export async function CaptainStatusBoard() {
-  // Five independent reads, issued together. The two send reads are the ones
+  // Six independent reads, issued together. The two send reads are the ones
   // the test store cannot answer, and they answer empty there.
-  const [members, openSends, coverage, teamsConfig, gates] = await Promise.all([
-    getCampManagementRoster(),
-    listOpenSendBlocking(),
-    getTeamCoverage(),
-    overviewTeamsConfig(),
-    listOpenSendGates(),
-  ]);
+  const [members, openSends, coverage, teamsConfig, gates, received] =
+    await Promise.all([
+      getCampManagementRoster(),
+      listOpenSendBlocking(),
+      getTeamCoverage(),
+      overviewTeamsConfig(),
+      listOpenSendGates(),
+      ledgerCycle().then((cycle) => receivedTotalsByCurrency(cycle)),
+    ]);
   const rows = members.map(toRosterRow);
-  // The test store models no payments ledger, and no required_actions beyond
-  // the burner-profile gate, so those two rungs of the ladder are unknown
-  // there rather than a figure that misses most of it — the same
+  // Every deployment reads the payments ledger (the test store keeps a twin),
+  // so dues are known everywhere. The test store has no required_actions
+  // beyond the burner-profile gate, so that rung, and the dues rung below it,
+  // are unknown there rather than a figure that misses most of it — the same
   // guard RecentActivity makes for the audit trail it also cannot read.
   const readable = !usesTestStore();
   const funnel = deriveReadinessFunnel(rows, {
-    dues: readable,
+    dues: true,
     actions: readable,
   });
   // The WHOLE configured list, archived entries included: `deriveTeamCoverage`
@@ -82,12 +86,15 @@ export async function CaptainStatusBoard() {
   // under the label the captain gave it.
   const teams = deriveTeamCoverage(coverage, teamsConfig.teams);
   const sends = deriveSendCompletion(gates);
-  // The same two unknowns the funnel and the completion card respect, said in
-  // the KPI row's own shape: no open-send list and no ledger to read means
-  // those two cards have no figure, not a figure of 0.
-  const kpis = deriveKpis(rows, readable ? openSends.size : null, {
-    dues: readable,
-  });
+  // The unknown the completion card respects, said in the KPI row's own
+  // shape: no open-send list means that card has no figure, not a figure of 0.
+  // The dues card reads the ledger and names the money in, per currency.
+  const kpis = deriveKpis(
+    rows,
+    readable ? openSends.size : null,
+    { dues: true },
+    received,
+  );
 
   return (
     <>

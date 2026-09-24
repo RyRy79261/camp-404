@@ -378,6 +378,13 @@ All `/api/cron/*` routes require `Authorization: Bearer ${CRON_SECRET}`.
   `.returning()` tells the caller whether it won. A lost race returns a
   sentence the user can act on, never a silent overwrite. See
   `setUserApproval` and `decideCaptainPromotion`.
+- Money is stored in integer minor units (cents) with a currency from
+  `CURRENCIES` (ZAR, USD, EUR), and every write path checks the code with the
+  `Currency` Zod schema (`@camp404/types`) or `isCurrency`, at its boundary and
+  again in the db function (strict: `"usd"` is refused, not fixed). Only
+  `formatMoney` / `formatMoneyTotals` format money. Totals are one per
+  currency, never summed across them: there is no FX. The money rules live in
+  `packages/core/src/money.ts`.
 - A failed change is reported one way on every captain screen. A problem with
   what someone typed, in a form or a dialog, shows inline beside it. A one-tap
   change on a list row (move, archive, delete, tick) reports its failure as a

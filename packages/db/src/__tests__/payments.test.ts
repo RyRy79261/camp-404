@@ -7,6 +7,7 @@ import { getCampManagementRoster } from "../roster";
 import {
   ensureMemberRefCode,
   listPayments,
+  receivedTotalsByCurrency,
   recordPayment,
   setPaymentStatus,
 } from "../payments";
@@ -222,6 +223,54 @@ describe("the currency of a payment", () => {
       .from(schema.users)
       .where(eq(schema.users.id, member.id));
     expect(user!.refCode).toBeNull();
+  });
+});
+
+describe("money received per currency", () => {
+  const h = useTestDb();
+
+  it("totals each currency apart, and counts only what reached the bank this year", async () => {
+    const db = h.db();
+    await foundedAt(db, 2027);
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    const record = (
+      amountCents: number,
+      currency: "ZAR" | "USD" | "EUR",
+      status: "pending" | "reconciled" | "waived",
+    ) =>
+      recordPayment({
+        userId: member.id,
+        amountCents,
+        currency,
+        status,
+        recordedByUserId: captain.id,
+      });
+    await record(1234, "ZAR", "reconciled");
+    await record(1000, "ZAR", "reconciled");
+    await record(500, "USD", "reconciled");
+    // Promised, and let off: neither is money that came in.
+    await record(700, "EUR", "pending");
+    await record(9900, "ZAR", "waived");
+    await record(300, "USD", "pending");
+    // Last year's money is last year's.
+    await db.insert(schema.payments).values({
+      userId: member.id,
+      cycle: 2026,
+      amountCents: 88800,
+      currency: "ZAR",
+      reference: "C404-M999-2026-1",
+      status: "reconciled",
+    });
+
+    expect(await receivedTotalsByCurrency(2027)).toEqual([
+      { currency: "ZAR", amountMinor: 2234 },
+      { currency: "USD", amountMinor: 500 },
+    ]);
+    expect(await receivedTotalsByCurrency(2026)).toEqual([
+      { currency: "ZAR", amountMinor: 88800 },
+    ]);
+    expect(await receivedTotalsByCurrency(2025)).toEqual([]);
   });
 });
 

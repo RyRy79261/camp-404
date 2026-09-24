@@ -8,9 +8,9 @@ import {
   PAYMENT_STATUSES,
   parseMoneyToMinor,
 } from "@camp404/core";
-import { recordPayment, setPaymentStatus } from "@camp404/db/payments";
 import { runAction } from "@/lib/action-result";
 import { captainActionGate } from "@/lib/captain-gate";
+import { recordPayment, setPaymentStatus } from "@/lib/payments";
 import { findCampUserById } from "@/lib/users";
 
 // The payments ledger's writes. Captain-only. The database writes the audit
