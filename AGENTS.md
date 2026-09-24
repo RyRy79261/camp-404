@@ -160,6 +160,13 @@ frozen — never regenerate, edit, or delete an existing migration. Each
 change is a new `0001_*.sql`, `0002_*.sql`, … `pnpm --filter @camp404/db
 exec drizzle-kit check` validates consistency.
 
+**Two branches that both add migrations collide on the numbers.** When a
+branch rebases onto one whose migrations merged first, delete the branch's own
+unmerged migrations and regenerate them after the new last one. Never rename
+them into place: the migrator skips an entry whose journal `when` is older
+than the newest one applied, so a renamed migration never runs in production
+and no error says so. `migration-journal.test.ts` fails on it.
+
 **One-off data fixes are migrations too.** `vercel-build` runs
 `db:migrate` before `next build`, so a data fix written as a custom migration
 (`pnpm --filter @camp404/db db:generate --custom --name <name>`, then fill in
