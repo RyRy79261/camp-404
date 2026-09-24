@@ -35,11 +35,12 @@ export const SETUP_REFUSED_MESSAGE =
 /**
  * Whether this account may found the camp on a fresh database. Sign-up is
  * open, so "the first signed-in account" could be a stranger who beat the
- * founder to /setup. When founder addresses are set (FOUNDER_EMAILS), only one of those addresses may
- * found the camp, and only once it is verified: `primaryEmail` is already
- * null for an unverified god address (lib/session-user.ts), so a stranger
- * cannot claim the founder's address without proving they own it. With
- * GOD_EMAILS unset, anyone signed in may, which is how setup always worked.
+ * founder to /setup. When founder addresses are set (FOUNDER_EMAILS, or its
+ * old name GOD_EMAILS), only one of those addresses may found the camp, and
+ * only once it is verified: `primaryEmail` is already null for an unverified
+ * founder address (lib/session-user.ts), so a stranger cannot claim the
+ * founder's address without proving they own it. With both unset, anyone
+ * signed in may, which is how setup always worked.
  */
 export function mayFoundCamp(user: AuthenticatedUser): boolean {
   if (founderEmails(process.env).length === 0) return true;

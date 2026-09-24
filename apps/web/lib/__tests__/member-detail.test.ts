@@ -31,6 +31,7 @@ function detail(overrides: Partial<CampMemberDetail> = {}): CampMemberDetail {
     inviteCode: "berlin-crew",
     inviteNote: "Kitchen lead from last burn",
     invitedByName: "Alice",
+    isFounder: false,
     createdAt: new Date("2026-03-01T08:00:00.000Z"),
     ...overrides,
   };
@@ -74,9 +75,18 @@ describe("presentMemberDetail — overview", () => {
     expect(valueOf(m.overview, "Invite code")).toBe("None (founder address)");
   });
 
-  it("names the account that redeemed the root code as the founder", () => {
-    const m = presentMemberDetail(detail({ inviteCode: "meowzit" }));
-    expect(valueOf(m.overview, "Invite code")).toBe("meowzit (founder)");
+  it("names only the account that ran setup as the founder, not the crew on the root code", () => {
+    const founder = presentMemberDetail(
+      detail({ inviteCode: "meowzit", isFounder: true }),
+    );
+    expect(valueOf(founder.overview, "Invite code")).toBe("meowzit (founder)");
+    // The crew redeem the same root code; that does not make them the founder.
+    const crew = presentMemberDetail(
+      detail({ inviteCode: "meowzit", isFounder: false }),
+    );
+    expect(valueOf(crew.overview, "Invite code")).toBe(
+      "meowzit (camp root invite)",
+    );
     expect(
       valueOf(
         presentMemberDetail(detail({ inviteCode: "neon-toaster" })).overview,

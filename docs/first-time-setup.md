@@ -10,15 +10,15 @@ routed to the `/setup` wizard before any invite/onboarding gate. Who may
 complete it depends on `FOUNDER_EMAILS` (old name `GOD_EMAILS`; `mayFoundCamp` in
 `apps/web/lib/bootstrap.ts`):
 
-- **`FOUNDER_EMAILS` set:** only a **verified** founding address may found the
+- **`FOUNDER_EMAILS` (or `GOD_EMAILS`) set:** only a **verified** founding address may found the
   camp. Anyone else sees the refusal screen with a Sign out button. Sign-up is
   open, so without this a stranger could beat the founder to `/setup`. A
   founder whose address is not yet confirmed (they signed up with a password)
   gets the confirm-email card on the same screen, and the link brings them back
   to `/setup`. If the deployment cannot send email, the card says whoever runs
   it must set up email (or Google sign-in) first.
-- **`FOUNDER_EMAILS` unset:** the first signed-in account may found the camp, as it
-  always could.
+- **Neither `FOUNDER_EMAILS` nor `GOD_EMAILS` set:** the first signed-in
+  account may found the camp, as it always could.
 
 The steps, for an account that may:
 

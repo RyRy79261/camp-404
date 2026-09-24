@@ -120,16 +120,17 @@ function pick<T>(arr: readonly T[]): T {
 }
 
 /**
- * Generate a single fresh candidate code like "neon-toaster-mongoose".
- * Pure — the caller decides whether it's actually available.
- */
-/**
- * The fixed root invite code minted for the founding captain. Pinned so a
- * fresh camp always hands out the same first code; whoever redeemed it is the
- * founder account.
+ * The fixed root invite code minted at first-time setup. Pinned so a fresh camp
+ * always hands out the same first code. The founding captain holds it, and the
+ * first crew redeem it too (up to its use cap), so holding it does not make an
+ * account the founder: `camp_settings.bootstrapped_by_user_id` does.
  */
 export const FOUNDER_CODE = "meowzit";
 
+/**
+ * Generate a single fresh candidate code like "neon-toaster-mongoose".
+ * Pure — the caller decides whether it's actually available.
+ */
 export function generateInviteCode(): string {
   return `${pick(ADJECTIVES)}-${pick(NOUNS)}-${pick(NOUNS)}`;
 }
