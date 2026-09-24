@@ -6,6 +6,7 @@ import { currentCycle, resolveCycles, UNSET_CYCLE } from "./camp-config";
 import { meetsRequiredVersion } from "./versions";
 import { currentCycleNumber } from "./cycles";
 import type { DbOrTx } from "./audit";
+import { applyParticipationIntent } from "./participations";
 import type { QuestionnaireResponses, RoleMirror } from "@camp404/types";
 
 // The required_actions gating producer + satisfaction. A questionnaire
@@ -533,7 +534,10 @@ export async function listMemberQuestionnaireGates(userId: string): Promise<
     .from(schema.requiredActions)
     .leftJoin(
       schema.questionnaireActivations,
-      eq(schema.questionnaireActivations.id, schema.requiredActions.activationId),
+      eq(
+        schema.questionnaireActivations.id,
+        schema.requiredActions.activationId,
+      ),
     )
     .where(
       and(
@@ -546,7 +550,10 @@ export async function listMemberQuestionnaireGates(userId: string): Promise<
         ),
       ),
     )
-    .orderBy(asc(schema.requiredActions.createdAt), asc(schema.requiredActions.id));
+    .orderBy(
+      asc(schema.requiredActions.createdAt),
+      asc(schema.requiredActions.id),
+    );
 }
 
 /** One questionnaire a member still has to answer, from a send that is open. */
@@ -587,7 +594,10 @@ export async function listPendingQuestionnaires(
     .from(schema.requiredActions)
     .innerJoin(
       schema.questionnaireActivations,
-      eq(schema.requiredActions.activationId, schema.questionnaireActivations.id),
+      eq(
+        schema.requiredActions.activationId,
+        schema.questionnaireActivations.id,
+      ),
     )
     .where(
       and(
@@ -688,9 +698,10 @@ export async function getRequiredAction(
  * version rule (a completion against an older version leaves the gate open).
  */
 /**
- * Copy a submit's role answers into dietary_requirements (one row per member)
- * and driver_profiles (one row per member per year: the send's year). Only the
- * columns the questionnaire has a role question for are touched.
+ * Copy a submit's role answers into dietary_requirements (one row per member),
+ * driver_profiles and camp_participations (one row per member per year: the
+ * send's year). Only the columns the questionnaire has a role question for are
+ * touched.
  */
 async function writeRoleMirror(
   tx: DbOrTx,
@@ -735,8 +746,25 @@ async function writeRoleMirror(
       })
       .onConflictDoUpdate({
         target: [schema.driverProfiles.userId, schema.driverProfiles.cycle],
-        set: { ...driver, ...intent, version, completedAt: now, updatedAt: now },
+        set: {
+          ...driver,
+          ...intent,
+          version,
+          completedAt: now,
+          updatedAt: now,
+        },
       });
+  }
+  const participation = input.mirror?.participation;
+  if (participation) {
+    // The send's frozen year, on this transaction: the answer, the gate and
+    // the member's place commit together or not at all.
+    await applyParticipationIntent(tx, {
+      userId: input.userId,
+      cycle: input.cycle,
+      intent: participation.intent,
+      now,
+    });
   }
 }
 
@@ -804,8 +832,7 @@ export async function completeBuilderResponse(input: {
     if (
       ra &&
       ra.status === "pending" &&
-      (!ra.version ||
-        meetsRequiredVersion(ra.version, input.definitionVersion))
+      (!ra.version || meetsRequiredVersion(ra.version, input.definitionVersion))
     ) {
       await tx
         .update(schema.requiredActions)

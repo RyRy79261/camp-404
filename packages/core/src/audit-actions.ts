@@ -34,6 +34,8 @@ export const AUDIT_ACTION_LABELS = {
   "member.team_assigned": "Added a member to a team",
   "member.team_lead_set": "Changed a team lead",
   "member.team_removed": "Took a member off a team",
+  "participation.decided": "Decided a member's place this year",
+  "participation.withdrawn": "Withdrew from this year",
   "payment.recorded": "Recorded a payment",
   "payment.status_changed": "Changed a payment",
   "reimbursement.status_changed": "Moved a reimbursement",
@@ -83,6 +85,29 @@ const REIMBURSEMENT_WORDS: Record<string, string> = {
   rejected: "rejected",
 };
 
+// What a captain's decision on a member's place did, by the status it set.
+const PARTICIPATION_DECISION_WORDS: Record<string, string> = {
+  accepted: "Accepted",
+  waitlisted: "Put on the waiting list",
+};
+
+// What a member gave up by answering No, by the status they held.
+const PARTICIPATION_WITHDRAWN_WORDS: Record<string, string> = {
+  accepted: "Gave up a place",
+  waitlisted: "Left the waiting list",
+};
+
+function participationDetail(
+  words: Record<string, string>,
+  status: string | null,
+  cycle: number | null,
+): string | null {
+  const word =
+    status !== null && Object.hasOwn(words, status) ? words[status] : undefined;
+  if (word === undefined) return null;
+  return cycle === null ? word : `${word} for ${cycle}`;
+}
+
 // The database stores two ranks. A team lead is a member who leads a team.
 const RANK_WORDS: Record<string, string> = {
   captain: "captain",
@@ -126,6 +151,18 @@ export function auditDetail(
         ? `Now leads ${teamLabel(team)}`
         : `No longer leads ${teamLabel(team)}`;
     }
+    case "participation.decided":
+      return participationDetail(
+        PARTICIPATION_DECISION_WORDS,
+        text(metadata, "to"),
+        count(metadata, "cycle"),
+      );
+    case "participation.withdrawn":
+      return participationDetail(
+        PARTICIPATION_WITHDRAWN_WORDS,
+        text(metadata, "from"),
+        count(metadata, "cycle"),
+      );
     case "payment.recorded": {
       const reference = text(metadata, "reference");
       const status = text(metadata, "status");

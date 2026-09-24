@@ -85,3 +85,42 @@ describe("RosterToolbar — member view (publicOnly)", () => {
     expect(onChipChange).toHaveBeenCalledWith("pending");
   });
 });
+
+describe("RosterToolbar — This year", () => {
+  it("offers the captain every answer, and reports the one picked", () => {
+    const onChange = vi.fn();
+    setup({ thisYear: { value: "any", onChange } });
+    const select = screen.getByRole("combobox", {
+      name: "This year",
+    }) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.text)).toEqual([
+      "Any",
+      "Coming",
+      "Maybe",
+      "Accepted",
+      "Waiting list",
+      "Not coming",
+      "Not answered",
+    ]);
+    fireEvent.change(select, { target: { value: "maybe" } });
+    expect(onChange).toHaveBeenCalledWith("maybe");
+    fireEvent.change(select, { target: { value: "none" } });
+    expect(onChange).toHaveBeenCalledWith("none");
+  });
+
+  it("is not offered without the filter, nor ever in the member view", () => {
+    setup();
+    expect(screen.getByLabelText("Filter by team")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "This year" })).toBeNull();
+  });
+
+  it("is withheld from the member view even when passed", () => {
+    setup({
+      publicOnly: true,
+      stats: { members: 1, captains: 0, pending: 0 },
+      thisYear: { value: "any", onChange: vi.fn() },
+    });
+    expect(screen.getByLabelText("Filter by team")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "This year" })).toBeNull();
+  });
+});

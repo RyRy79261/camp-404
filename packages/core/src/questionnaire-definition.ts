@@ -26,6 +26,8 @@
 //     — anything else is a tracking pixel every member's browser would load);
 //   - a content page holds no inputs; the definition holds at least one;
 //   - a role the app copies into a table sits on one question only;
+//   - the "Coming this year" question offers exactly yes / maybe / no, and
+//     no "Other…", since its answer sets a member's place;
 //   - numeric ranges a respondent could never satisfy are refused;
 //   - the form shows at least one page before anything is answered.
 //
@@ -40,9 +42,11 @@ import {
   Questionnaire,
   SUBMIT_TARGET,
   choiceValues,
+  hasParticipationOptions,
   isAllowedBuilderImageUrl,
   isAnswerableBlock,
   pageBlocks,
+  participationOptionsMessage,
   visibleIfProblem,
   type PageBlock,
   type Question,
@@ -77,6 +81,7 @@ export type DefinitionIssueCode =
   | "image_host"
   | "input_on_content_page"
   | "duplicate_role"
+  | "participation_options"
   | "no_inputs"
   | "no_visible_page";
 
@@ -375,6 +380,18 @@ export function validateQuestionnaireDefinition(
         } else {
           roleOwners.set(role, block.prompt);
         }
+      }
+      if (
+        block.kind === "single_select" &&
+        block.role === "participation_intent" &&
+        !hasParticipationOptions(block)
+      ) {
+        publishIssues.push({
+          path: `${blockPath}.options`,
+          code: "participation_options",
+          message: participationOptionsMessage(block.prompt),
+          ...at,
+        });
       }
       // Registered AFTER its own condition was checked: a question may not
       // show-when on itself.

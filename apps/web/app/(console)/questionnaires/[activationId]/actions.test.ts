@@ -29,6 +29,7 @@ vi.mock("@/lib/questionnaire-definitions", () => ({
 import {
   BuilderQuestionnaire,
   Questionnaire,
+  attendanceQuestionnaire,
   fromBuilderQuestionnaire,
 } from "@camp404/types";
 import { redirect } from "next/navigation";
@@ -45,28 +46,40 @@ import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 
 // A builder-authored definition as the loader serves it: read as the unified
 // model (parsed, so Zod fills the defaulted field params — maxLength, …).
-const definition = fromBuilderQuestionnaire(BuilderQuestionnaire.parse({
-  version: "v2",
-  title: "Kitchen shift",
-  pages: [
-    {
-      id: "p1",
-      type: "question",
-      title: "Shifts",
-      blocks: [
-        {
-          kind: "question",
-          question: { id: "name", kind: "short_text", prompt: "Name", required: true },
-        },
-        { id: "hdr", kind: "header_break", headingText: "More" },
-        {
-          kind: "question",
-          question: { id: "notes", kind: "long_text", prompt: "Notes", required: false },
-        },
-      ],
-    },
-  ],
-}));
+const definition = fromBuilderQuestionnaire(
+  BuilderQuestionnaire.parse({
+    version: "v2",
+    title: "Kitchen shift",
+    pages: [
+      {
+        id: "p1",
+        type: "question",
+        title: "Shifts",
+        blocks: [
+          {
+            kind: "question",
+            question: {
+              id: "name",
+              kind: "short_text",
+              prompt: "Name",
+              required: true,
+            },
+          },
+          { id: "hdr", kind: "header_break", headingText: "More" },
+          {
+            kind: "question",
+            question: {
+              id: "notes",
+              kind: "long_text",
+              prompt: "Notes",
+              required: false,
+            },
+          },
+        ],
+      },
+    ],
+  }),
+);
 
 describe("saveBuilderResponses draft bounds", () => {
   beforeEach(() => {
@@ -101,7 +114,9 @@ describe("saveBuilderResponses draft bounds", () => {
       activationId: "act-1",
     } as never);
     vi.mocked(getBuilderDefinition).mockResolvedValue(definition);
-    vi.mocked(upsertQuestionnaireResponse).mockResolvedValue(undefined as never);
+    vi.mocked(upsertQuestionnaireResponse).mockResolvedValue(
+      undefined as never,
+    );
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -120,7 +135,8 @@ describe("saveBuilderResponses draft bounds", () => {
 
     expect(result.ok).toBe(true);
     expect(upsertQuestionnaireResponse).toHaveBeenCalledTimes(1);
-    const { responses } = vi.mocked(upsertQuestionnaireResponse).mock.calls[0]![0]!;
+    const { responses } = vi.mocked(upsertQuestionnaireResponse).mock
+      .calls[0]![0]!;
     expect(responses).toEqual({ name: "Ada" });
   });
 
@@ -133,16 +149,22 @@ describe("saveBuilderResponses draft bounds", () => {
     );
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.errors._form).toMatch(/unreadable or too large/i);
+    if (!result.ok)
+      expect(result.errors._form).toMatch(/unreadable or too large/i);
     expect(upsertQuestionnaireResponse).not.toHaveBeenCalled();
   });
 
   it("still succeeds with required fields empty on a non-final save", async () => {
     // The resume guarantee: `name` is required, and a draft may omit it.
-    const result = await saveBuilderResponses("act-1", { notes: "half typed" }, false);
+    const result = await saveBuilderResponses(
+      "act-1",
+      { notes: "half typed" },
+      false,
+    );
 
     expect(result.ok).toBe(true);
-    const { responses } = vi.mocked(upsertQuestionnaireResponse).mock.calls[0]![0]!;
+    const { responses } = vi.mocked(upsertQuestionnaireResponse).mock
+      .calls[0]![0]!;
     expect(responses).toEqual({ notes: "half typed" });
   });
 
@@ -162,7 +184,8 @@ describe("saveBuilderResponses draft bounds", () => {
     const result = await saveBuilderResponses("act-1", { name: "Ada" }, false);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.errors._form).toBe("This form is unavailable.");
+    if (!result.ok)
+      expect(result.errors._form).toBe("This form is unavailable.");
     expect(upsertQuestionnaireResponse).not.toHaveBeenCalled();
   });
 });
@@ -194,7 +217,9 @@ describe("saveBuilderResponses cycle stamping", () => {
       activationId: "act-1",
     } as never);
     vi.mocked(getBuilderDefinition).mockResolvedValue(definition);
-    vi.mocked(upsertQuestionnaireResponse).mockResolvedValue(undefined as never);
+    vi.mocked(upsertQuestionnaireResponse).mockResolvedValue(
+      undefined as never,
+    );
     vi.mocked(completeBuilderResponse).mockResolvedValue(undefined as never);
   });
 
@@ -206,7 +231,9 @@ describe("saveBuilderResponses cycle stamping", () => {
     const result = await saveBuilderResponses("act-1", { name: "Ada" }, false);
 
     expect(result.ok).toBe(true);
-    expect(vi.mocked(upsertQuestionnaireResponse).mock.calls[0]![0]).toMatchObject({
+    expect(
+      vi.mocked(upsertQuestionnaireResponse).mock.calls[0]![0],
+    ).toMatchObject({
       cycle: 3,
       completedAt: null,
     });
@@ -232,10 +259,13 @@ describe("saveBuilderResponses cycle stamping", () => {
 
   it("passes no role answers for a questionnaire without role questions", async () => {
     await saveBuilderResponses("act-1", { name: "Ada" }, true);
-    expect(vi.mocked(completeBuilderResponse).mock.calls[0]![0].mirror).toEqual({
-      dietary: null,
-      driver: null,
-    });
+    expect(vi.mocked(completeBuilderResponse).mock.calls[0]![0].mirror).toEqual(
+      {
+        dietary: null,
+        driver: null,
+        participation: null,
+      },
+    );
   });
 
   it("passes the answers marked for the app's tables with the final submit", async () => {
@@ -268,9 +298,29 @@ describe("saveBuilderResponses cycle stamping", () => {
 
     await saveBuilderResponses("act-1", { drives: true }, true);
 
-    expect(vi.mocked(completeBuilderResponse).mock.calls[0]![0].mirror).toEqual({
-      dietary: null,
-      driver: { intendsToDrive: true },
+    expect(vi.mocked(completeBuilderResponse).mock.calls[0]![0].mirror).toEqual(
+      {
+        dietary: null,
+        driver: { intendsToDrive: true },
+        participation: null,
+      },
+    );
+  });
+
+  it("passes a Coming this year answer with the send's year", async () => {
+    vi.mocked(getBuilderDefinition).mockResolvedValue(
+      attendanceQuestionnaire(),
+    );
+
+    await saveBuilderResponses("act-1", { coming: "maybe" }, true);
+
+    expect(vi.mocked(completeBuilderResponse).mock.calls[0]![0]).toMatchObject({
+      cycle: 3,
+      mirror: {
+        dietary: null,
+        driver: null,
+        participation: { intent: "maybe" },
+      },
     });
   });
 });
@@ -364,6 +414,10 @@ describe("saveBuilderResponses final submit on the unified model", () => {
       eat: "no",
       allergies: "Kept, but not asked",
     });
-    expect(call.mirror).toEqual({ dietary: { allergies: null }, driver: null });
+    expect(call.mirror).toEqual({
+      dietary: { allergies: null },
+      driver: null,
+      participation: null,
+    });
   });
 });

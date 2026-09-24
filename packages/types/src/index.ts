@@ -16,4 +16,5 @@ export * from "./reimbursement";
 export * from "./voice-intent";
 export * from "./task";
 export * from "./calendar";
+export * from "./participation";
 export * from "./power";

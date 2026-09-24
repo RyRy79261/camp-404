@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   BUILDER_LIMITS,
+  PARTICIPATION_INTENT_OPTIONS,
   SUBMIT_TARGET,
+  attendanceQuestionnaire,
   type Questionnaire,
 } from "@camp404/types";
 import {
@@ -240,6 +242,86 @@ describe("roles and ranges", () => {
       role: "emergency_contact_name",
     });
     expect(codes(onePage([contact("c1"), contact("c2")]))).toEqual([]);
+  });
+
+  it("publishes the one-click attendance questionnaire as it is built", () => {
+    const result = validateQuestionnaireDefinition(attendanceQuestionnaire());
+    expect(result.ok ? [] : result.issues).toEqual([]);
+  });
+
+  it("refuses a Coming this year question without exactly yes, maybe and no, or with Other", () => {
+    const coming = (over: Record<string, unknown> = {}) => ({
+      id: "coming",
+      kind: "single_select",
+      prompt: "Coming?",
+      role: "participation_intent",
+      options: PARTICIPATION_INTENT_OPTIONS,
+      ...over,
+    });
+    expect(codes(onePage([coming()]))).toEqual([]);
+    // Labels are the captain's to word; only the values are fixed.
+    expect(
+      codes(
+        onePage([
+          coming({
+            options: [
+              { value: "maybe", label: "Not sure" },
+              { value: "yes", label: "Yebo" },
+              { value: "no", label: "Nope" },
+            ],
+          }),
+        ]),
+      ),
+    ).toEqual([]);
+    expect(codes(onePage([coming({ allowOther: true })]))).toEqual([
+      "participation_options",
+    ]);
+    expect(
+      codes(
+        onePage([
+          coming({
+            options: [
+              { value: "yes", label: "Yes" },
+              { value: "no", label: "No" },
+            ],
+          }),
+        ]),
+      ),
+    ).toEqual(["participation_options"]);
+    expect(
+      codes(
+        onePage([
+          coming({
+            options: [
+              ...PARTICIPATION_INTENT_OPTIONS,
+              { value: "later", label: "Later" },
+            ],
+          }),
+        ]),
+      ),
+    ).toEqual(["participation_options"]);
+    const wrong = issues(
+      onePage([
+        coming({
+          options: [
+            { value: "option_1", label: "Yes" },
+            { value: "maybe", label: "Maybe" },
+            { value: "no", label: "No" },
+          ],
+        }),
+      ]),
+    );
+    expect(wrong).toEqual([
+      expect.objectContaining({
+        code: "participation_options",
+        path: expect.stringMatching(/^pages\[0\]\.questions\[\d+\]\.options$/),
+        blockId: "coming",
+      }),
+    ]);
+    // Only one question may set a member's place.
+    expect(codes(onePage([coming(), coming({ id: "again" })]))).toEqual([
+      "duplicate_role",
+    ]);
   });
 
   it("refuses a slider or number range nobody can answer", () => {

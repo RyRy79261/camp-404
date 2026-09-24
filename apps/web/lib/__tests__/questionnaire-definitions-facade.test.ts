@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The definitions facade is the one door between stored questionnaire JSON and
 // the rest of the app. Every read hands back the unified model whichever shape
@@ -25,11 +25,13 @@ vi.mock("../test-mode", () => ({ usesTestStore: vi.fn(() => false) }));
 
 import {
   Questionnaire,
+  attendanceQuestionnaire,
   flattenQuestions,
   type QuestionsPage,
 } from "@camp404/types";
 import { validateQuestionnaireDefinition } from "@camp404/core";
 import {
+  definitionKeyExists,
   getDefinitionRowForClone,
   getQuestionnaireDefinitionRow,
   getQuestionnaireVersionRow,
@@ -37,7 +39,9 @@ import {
   listDefinitionRows,
   updateDefinitionRow,
 } from "@camp404/db/questionnaire-definitions";
+import { ATTENDANCE_CHECK_KEY } from "../attendance-check";
 import {
+  createAttendanceCheck,
   createDraft,
   duplicateDefinition,
   getBuilderDefinition,
@@ -156,7 +160,12 @@ describe("writes store the unified model", () => {
       version: "1",
       title: "Gear check",
       pages: [
-        { kind: "questions", title: "Gear check", pageType: "question", questions: [] },
+        {
+          kind: "questions",
+          title: "Gear check",
+          pageType: "question",
+          questions: [],
+        },
       ],
     });
     // Blank is not publishable (nothing to answer) — but not for want of a
@@ -194,7 +203,10 @@ describe("writes store the unified model", () => {
       title: "Transport",
       definition: BUILDER_ROW,
     });
-    const key = await duplicateDefinition({ key: "transport", createdBy: "u2" });
+    const key = await duplicateDefinition({
+      key: "transport",
+      createdBy: "u2",
+    });
     expect(key).toBe("transport-copy");
     const inserted = vi.mocked(insertDefinitionDraft).mock.calls[0]![0];
     expect(inserted.title).toBe("Transport (copy)");
@@ -208,16 +220,66 @@ describe("writes store the unified model", () => {
 
   it("duplicates nothing for a missing, malformed or reserved row", async () => {
     vi.mocked(getDefinitionRowForClone).mockResolvedValueOnce(null);
-    expect(await duplicateDefinition({ key: "gone", createdBy: "u" })).toBeNull();
+    expect(
+      await duplicateDefinition({ key: "gone", createdBy: "u" }),
+    ).toBeNull();
     vi.mocked(getDefinitionRowForClone).mockResolvedValueOnce({
       title: "Bad",
       definition: { pages: [] },
     });
-    expect(await duplicateDefinition({ key: "bad", createdBy: "u" })).toBeNull();
+    expect(
+      await duplicateDefinition({ key: "bad", createdBy: "u" }),
+    ).toBeNull();
     expect(
       await duplicateDefinition({ key: "burner_profile", createdBy: "u" }),
     ).toBeNull();
     expect(insertDefinitionDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe("createAttendanceCheck", () => {
+  afterEach(() => {
+    vi.mocked(definitionKeyExists).mockImplementation(async () => false);
+    vi.mocked(insertDefinitionDraft).mockImplementation(async () => {});
+  });
+
+  it("inserts the fixed questionnaire once, fresh, and returns the same key after", async () => {
+    const keys = new Set<string>();
+    vi.mocked(definitionKeyExists).mockImplementation(async (key) =>
+      keys.has(key),
+    );
+    vi.mocked(insertDefinitionDraft).mockImplementation(async ({ key }) => {
+      keys.add(key);
+    });
+
+    expect(await createAttendanceCheck("captain-1")).toBe(ATTENDANCE_CHECK_KEY);
+    expect(insertDefinitionDraft).toHaveBeenCalledWith({
+      key: "coming-this-year",
+      title: "Coming this year?",
+      createdBy: "captain-1",
+      definition: attendanceQuestionnaire(),
+      carryOver: false,
+    });
+
+    expect(await createAttendanceCheck("captain-2")).toBe(ATTENDANCE_CHECK_KEY);
+    expect(insertDefinitionDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the key when another captain's insert won the race", async () => {
+    let exists = false;
+    vi.mocked(definitionKeyExists).mockImplementation(async () => exists);
+    vi.mocked(insertDefinitionDraft).mockImplementation(async () => {
+      exists = true;
+      throw new Error("duplicate key value violates unique constraint");
+    });
+    expect(await createAttendanceCheck("captain-1")).toBe(ATTENDANCE_CHECK_KEY);
+  });
+
+  it("keeps its key from a draft a captain names Coming this year? by hand", async () => {
+    vi.mocked(definitionKeyExists).mockResolvedValue(false);
+    expect(
+      await createDraft({ title: "Coming this year?", createdBy: "c1" }),
+    ).toBe("coming-this-year-2");
   });
 });
 

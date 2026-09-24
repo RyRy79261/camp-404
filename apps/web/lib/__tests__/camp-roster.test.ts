@@ -4,12 +4,16 @@ import {
   deriveRosterStats,
   matchesChip,
   matchesRosterQuery,
+  deriveThisYear,
   matchesTeam,
+  matchesThisYear,
   rankLabel,
   sortRosterRows,
   toPublicRosterRow,
   toRosterRow,
+  type ThisYearFilter,
 } from "@/lib/camp-roster";
+import type { ParticipationStatus } from "@camp404/types";
 
 function member(
   overrides: Partial<CampManagementMember> = {},
@@ -30,6 +34,7 @@ function member(
     intendsToDrive: false,
     driverProfileComplete: false,
     country: "ZA",
+    participation: null,
     createdAt: new Date("2026-01-01"),
     ...overrides,
   };
@@ -204,6 +209,99 @@ describe("matchesTeam", () => {
     expect(matchesTeam(toRosterRow(member({ teams: [] })), "kitchen")).toBe(
       false,
     );
+  });
+});
+
+describe("toRosterRow thisYear", () => {
+  it("carries this year's status on a captain's row, and null when unanswered", () => {
+    expect(toRosterRow(member({ participation: "maybe" })).thisYear).toBe(
+      "maybe",
+    );
+    const unanswered = toRosterRow(member({ participation: null }));
+    expect("thisYear" in unanswered).toBe(true);
+    expect(unanswered.thisYear).toBeNull();
+  });
+});
+
+describe("matchesThisYear", () => {
+  const STATUSES: (ParticipationStatus | null)[] = [
+    "applied",
+    "maybe",
+    "accepted",
+    "waitlisted",
+    "not_attending",
+    null,
+  ];
+  const rows = STATUSES.map((participation) =>
+    toRosterRow(member({ participation })),
+  );
+  const shown = (filter: ThisYearFilter) =>
+    rows.filter((r) => matchesThisYear(r, filter)).map((r) => r.thisYear);
+
+  it("lets every row through under Any", () => {
+    expect(shown("any")).toEqual(STATUSES);
+  });
+
+  it("keeps exactly one status under each status option", () => {
+    for (const status of STATUSES.filter((s) => s !== null)) {
+      expect(shown(status)).toEqual([status]);
+    }
+  });
+
+  it("keeps only the unanswered under Not answered", () => {
+    expect(shown("none")).toEqual([null]);
+  });
+
+  it("treats a row without the key as not answered", () => {
+    const pub = toPublicRosterRow(member({ participation: "accepted" }));
+    expect(matchesThisYear(pub, "none")).toBe(true);
+    expect(matchesThisYear(pub, "accepted")).toBe(false);
+  });
+});
+
+describe("deriveThisYear", () => {
+  it("counts each status once, over approved members only", () => {
+    const rows = [
+      member({ id: "a", participation: "applied" }),
+      member({ id: "b", participation: "applied" }),
+      member({ id: "c", participation: "maybe" }),
+      member({ id: "d", participation: "accepted" }),
+      member({ id: "e", participation: "waitlisted" }),
+      member({ id: "f", participation: "not_attending" }),
+      member({ id: "g", participation: null }),
+      // Not in camp, whatever they answered: pending and declined sign-ups.
+      member({ id: "p", approvalStatus: "pending", participation: "applied" }),
+      member({ id: "q", approvalStatus: "pending", participation: null }),
+      member({ id: "r", approvalStatus: "rejected", participation: "maybe" }),
+    ].map(toRosterRow);
+
+    expect(deriveThisYear(rows)).toEqual({
+      coming: 2,
+      maybe: 1,
+      accepted: 1,
+      waitlisted: 1,
+      notComing: 1,
+      notAnswered: 1,
+      total: 7,
+    });
+  });
+
+  it("is all zeros with nobody approved", () => {
+    expect(
+      deriveThisYear([
+        toRosterRow(
+          member({ approvalStatus: "pending", participation: "applied" }),
+        ),
+      ]),
+    ).toEqual({
+      coming: 0,
+      maybe: 0,
+      accepted: 0,
+      waitlisted: 0,
+      notComing: 0,
+      notAnswered: 0,
+      total: 0,
+    });
   });
 });
 

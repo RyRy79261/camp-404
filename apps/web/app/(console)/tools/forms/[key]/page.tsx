@@ -63,6 +63,13 @@ export default async function FormReplayPage({
           title={form.title}
           description={`Step back through the form and update anything that's changed. Last edited ${dateFmt.format(new Date(lastEdited))}.`}
         />
+        {/* What a change would cost, said before it is made (a member who
+            holds a place, answering Coming this year?). */}
+        {state.notice && (
+          <p className="-mt-3 mb-6 max-w-2xl text-sm text-muted-foreground">
+            {state.notice}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

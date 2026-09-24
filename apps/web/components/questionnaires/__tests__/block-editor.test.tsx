@@ -150,6 +150,58 @@ describe("BlockEditor — what the app uses the answer for", () => {
     expect("role" in lastChange(onChange)).toBe(false);
   });
 
+  it("fills in Yes / Maybe / No and turns Other off when a choice becomes the attendance question", async () => {
+    const { onChange } = renderEditor(
+      Question.parse({
+        id: "coming",
+        kind: "single_select",
+        prompt: "Coming?",
+        allowOther: true,
+        otherLabel: "Something else",
+        options: [
+          { value: "option_1", label: "Sure" },
+          { value: "option_2", label: "Nope" },
+        ],
+      }),
+    );
+    await choose(
+      screen.getByRole("combobox", { name: "The app uses this answer as" }),
+      /^Coming this year/,
+    );
+    const next = lastChange(onChange);
+    expect(next.role).toBe("participation_intent");
+    expect(next.options).toEqual([
+      { value: "yes", label: "Yes, I'm coming" },
+      { value: "maybe", label: "Maybe" },
+      { value: "no", label: "No, not this year" },
+    ]);
+    expect("allowOther" in next || "otherLabel" in next).toBe(false);
+  });
+
+  it("leaves the options alone when the attendance use is removed", async () => {
+    const options = [
+      { value: "yes", label: "Yes, I'm coming" },
+      { value: "maybe", label: "Maybe" },
+      { value: "no", label: "No, not this year" },
+    ];
+    const { onChange } = renderEditor(
+      Question.parse({
+        id: "coming",
+        kind: "single_select",
+        prompt: "Coming?",
+        role: "participation_intent",
+        options,
+      }),
+    );
+    await choose(
+      screen.getByRole("combobox", { name: "The app uses this answer as" }),
+      "Nothing else",
+    );
+    const next = lastChange(onChange);
+    expect("role" in next).toBe(false);
+    expect(next.options).toEqual(options);
+  });
+
   it("offers nothing for a kind no use fits, but shows a use set elsewhere", () => {
     renderEditor(
       Question.parse({ id: "n", kind: "number", prompt: "How many?" }),

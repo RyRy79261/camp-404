@@ -19,6 +19,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh }),
 }));
 vi.mock("../actions", () => ({
+  createAttendanceCheckAction: vi.fn(),
   createDraftAction: vi.fn(),
   deleteDraftAction: vi.fn(),
   duplicateDraftAction: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("@camp404/ui/components/toast", () => ({
 
 import { toast } from "@camp404/ui/components/toast";
 import {
+  createAttendanceCheckAction,
   createDraftAction,
   deleteDraftAction,
   duplicateDraftAction,
@@ -222,5 +224,72 @@ describe("QuestionnaireHub — the list", () => {
       expect(deleteDraftAction).toHaveBeenCalledWith("gear-check"),
     );
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+});
+
+describe("QuestionnaireHub — this year's attendance check", () => {
+  const CREATE = "Create this year's attendance check";
+  const SEND = "Send this year's attendance check";
+
+  function renderAsCaptain(items: HubItem[], captain = true) {
+    render(
+      <QuestionnaireHub
+        heading={HEADING}
+        items={items}
+        canCreateAttendanceCheck={captain}
+      />,
+    );
+  }
+
+  it("is offered to a captain only", () => {
+    renderAsCaptain([item({})], false);
+    expect(screen.queryByRole("button", { name: CREATE })).toBeNull();
+    expect(screen.queryByRole("button", { name: SEND })).toBeNull();
+    // The heading still renders, so the absence is not an empty page.
+    expect(
+      screen.getByRole("button", { name: "New questionnaire" }),
+    ).toBeTruthy();
+  });
+
+  it("reads Create until the check exists, then Send", () => {
+    renderAsCaptain([item({})]);
+    expect(screen.getByRole("button", { name: CREATE })).toBeTruthy();
+    cleanup();
+    renderAsCaptain([
+      item({}),
+      item({ key: "coming-this-year", title: "Coming this year?" }),
+    ]);
+    expect(screen.getByRole("button", { name: SEND })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: CREATE })).toBeNull();
+  });
+
+  it("creates and publishes it, then opens its Send page", async () => {
+    vi.mocked(createAttendanceCheckAction).mockResolvedValue({
+      ok: true,
+      key: "coming-this-year",
+    });
+    renderAsCaptain([]);
+    fireEvent.click(screen.getByRole("button", { name: CREATE }));
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith(
+        "/captains/questionnaires/coming-this-year/send",
+      ),
+    );
+    expect(createAttendanceCheckAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a refusal under the button and stays put", async () => {
+    vi.mocked(createAttendanceCheckAction).mockResolvedValue({
+      ok: false,
+      error: "Only captains can publish or send.",
+    });
+    renderAsCaptain([]);
+    const button = screen.getByRole("button", { name: CREATE });
+    fireEvent.click(button);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("Only captains can publish or send.");
+    expect(button.getAttribute("aria-describedby")).toBe(alert.id);
+    expect(push).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

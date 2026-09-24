@@ -6,6 +6,7 @@ import type {
   ReadinessFunnel,
   SendCompletion,
   TeamCoverageRow,
+  ThisYearCounts,
 } from "./readiness";
 
 // The captain Overview's status board, composed from AfrikaBurn's organiser
@@ -329,6 +330,99 @@ export function SendCompletionCard({ sends }: { sends: SendCompletion[] }) {
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
         </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// --- Who is coming this year ----------------------------------------------
+
+/**
+ * Who is coming this year — AfrikaBurn's `SupplierOnboardingCard`
+ * (apps/org/components/status-board/coverage.tsx): the rail head, one stacked
+ * bar and a legend with a count per segment, over the approved members' answers
+ * and the captains' decisions.
+ *
+ * Counted over APPROVED members only, the people "Everyone" reaches, so "Not
+ * answered" is an approved member with no answer for this year.
+ */
+export function ThisYearCard({ counts }: { counts: ThisYearCounts }) {
+  const { total } = counts;
+  const segments = [
+    { key: "coming", label: "Coming", n: counts.coming, bar: "bg-primary" },
+    {
+      key: "maybe",
+      label: "Maybe",
+      n: counts.maybe,
+      bar: "bg-muted-foreground",
+    },
+    {
+      key: "accepted",
+      label: "Accepted",
+      n: counts.accepted,
+      bar: "bg-success",
+    },
+    {
+      key: "waitlisted",
+      label: "Waiting list",
+      n: counts.waitlisted,
+      bar: "bg-warning",
+    },
+    {
+      key: "not-coming",
+      label: "Not coming",
+      n: counts.notComing,
+      bar: "bg-muted-foreground/40",
+    },
+    {
+      key: "not-answered",
+      label: "Not answered",
+      n: counts.notAnswered,
+      bar: "bg-muted",
+    },
+  ] as const;
+
+  return (
+    <Card aria-label="This year" role="article" className="h-full">
+      <CardContent className="flex h-full flex-col gap-3 p-5">
+        <RailHead
+          title="This year"
+          meta={`${total} approved member${total === 1 ? "" : "s"}`}
+        />
+        {total === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No approved members yet.
+          </p>
+        ) : (
+          <>
+            <span className="flex h-3.5 w-full gap-0.5 overflow-hidden rounded-full bg-muted">
+              {segments.map((s) =>
+                s.n === 0 ? null : (
+                  <span
+                    key={s.key}
+                    className={`block h-full ${s.bar}`}
+                    style={{ width: `${(s.n / total) * 100}%` }}
+                    aria-hidden
+                  />
+                ),
+              )}
+            </span>
+            <ul className="flex flex-col gap-1 text-xs">
+              {segments.map((s) => (
+                <li
+                  key={s.key}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <LegendDot className={s.bar} />
+                    {s.label}
+                  </span>
+                  <span className="font-semibold tabular-nums">{s.n}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </CardContent>
     </Card>
   );

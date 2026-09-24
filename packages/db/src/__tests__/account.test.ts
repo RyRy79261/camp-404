@@ -159,6 +159,34 @@ describe("sanitiseAccount", () => {
     expect(await responsesFor(db, other.id)).toHaveLength(1);
   });
 
+  it("removes every year's attendance answer, with the captain's decision on it", async () => {
+    // The kept users row means the FK cascade never fires; without an explicit
+    // delete an erased member's "coming / accepted by X" stays on file.
+    const db = h.db();
+    const member = await makeUser(db);
+    const captain = await makeUser(db, { rank: "captain" });
+    const other = await makeUser(db);
+    await db.insert(schema.campParticipations).values([
+      { userId: member.id, cycle: 2026, status: "not_attending", intent: "no" },
+      {
+        userId: member.id,
+        cycle: 2027,
+        status: "accepted",
+        intent: "maybe",
+        decidedByUserId: captain.id,
+        decidedAt: new Date(),
+      },
+      { userId: other.id, cycle: 2027, status: "applied", intent: "yes" },
+    ]);
+
+    expect(await sanitiseAccount(member.id)).toMatchObject({ ok: true });
+
+    const left = await db
+      .select({ userId: schema.campParticipations.userId })
+      .from(schema.campParticipations);
+    expect(left).toEqual([{ userId: other.id }]);
+  });
+
   it("deletes captains' notes about the member, and keeps the notes they wrote", async () => {
     const db = h.db();
     const member = await makeUser(db, { rank: "captain" });

@@ -29,6 +29,9 @@ import type {
   SendCompletion,
   TeamCoverageRow,
 } from "../readiness";
+// Who is coming this year (the attendance card), kept in its own block.
+import { ThisYearCard } from "../status-board";
+import type { ThisYearCounts } from "../readiness";
 
 afterEach(cleanup);
 
@@ -316,5 +319,89 @@ describe("SendCompletionCard", () => {
       screen.getByText(/No questionnaires are open right now/),
     ).toBeTruthy();
     expect(screen.getByText("0 open sends")).toBeTruthy();
+  });
+});
+
+describe("ThisYearCard", () => {
+  const counts: ThisYearCounts = {
+    coming: 3,
+    maybe: 2,
+    accepted: 4,
+    waitlisted: 1,
+    notComing: 1,
+    notAnswered: 5,
+    total: 16,
+  };
+
+  it("counts every segment over the approved members, with one bar", () => {
+    const { container } = render(<ThisYearCard counts={counts} />);
+    const card = screen.getByRole("article", { name: "This year" });
+    expect(within(card).getByText("16 approved members")).toBeTruthy();
+    const legend = within(card).getAllByRole("listitem");
+    expect(legend.map((li) => li.textContent)).toEqual([
+      "Coming3",
+      "Maybe2",
+      "Accepted4",
+      "Waiting list1",
+      "Not coming1",
+      "Not answered5",
+    ]);
+    // One bar segment per non-zero count, sized from the number beside it.
+    const bars = container.querySelectorAll<HTMLElement>(
+      "span[aria-hidden][style]",
+    );
+    expect(bars).toHaveLength(6);
+    expect(bars[2]!.style.width).toBe("25%");
+  });
+
+  it("draws no segment for a zero count, but keeps it in the legend", () => {
+    const { container } = render(
+      <ThisYearCard
+        counts={{ ...counts, maybe: 0, waitlisted: 0, total: 13 }}
+      />,
+    );
+    expect(container.querySelectorAll("span[aria-hidden][style]")).toHaveLength(
+      4,
+    );
+    expect(screen.getAllByRole("listitem")).toHaveLength(6);
+  });
+
+  it("says so, with no bar, when nobody is approved yet", () => {
+    const { container } = render(
+      <ThisYearCard
+        counts={{
+          coming: 0,
+          maybe: 0,
+          accepted: 0,
+          waitlisted: 0,
+          notComing: 0,
+          notAnswered: 0,
+          total: 0,
+        }}
+      />,
+    );
+    expect(screen.getByText("0 approved members")).toBeTruthy();
+    expect(screen.getByText("No approved members yet.")).toBeTruthy();
+    expect(container.querySelectorAll("span[aria-hidden][style]")).toHaveLength(
+      0,
+    );
+    expect(screen.queryByRole("listitem")).toBeNull();
+  });
+
+  it("says member, not members, for one", () => {
+    render(
+      <ThisYearCard
+        counts={{
+          coming: 1,
+          maybe: 0,
+          accepted: 0,
+          waitlisted: 0,
+          notComing: 0,
+          notAnswered: 0,
+          total: 1,
+        }}
+      />,
+    );
+    expect(screen.getByText("1 approved member")).toBeTruthy();
   });
 });

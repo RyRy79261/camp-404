@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  attendanceQuestionnaire,
   flattenQuestions,
   safeParseStoredDefinition,
   type Questionnaire,
@@ -28,6 +29,7 @@ import {
   listOpenSendGates as dbListOpenSendGates,
   type OpenSendGateRow,
 } from "@camp404/db/questionnaire-results";
+import { ATTENDANCE_CHECK_KEY } from "./attendance-check";
 import { BURNER_PROFILE_TEMPLATE, readStoredDefinition } from "./questionnaire";
 import { usesTestStore } from "./test-mode";
 
@@ -119,7 +121,11 @@ function blankDefinition(title: string): Questionnaire {
  */
 export async function generateDefinitionKey(title: string): Promise<string> {
   const base = slugify(title) || "questionnaire";
-  if (!(await definitionKeyExists(base))) return base;
+  // The attendance check's key is kept for createAttendanceCheck: a draft a
+  // captain names "Coming this year?" by hand must not take it.
+  if (base !== ATTENDANCE_CHECK_KEY && !(await definitionKeyExists(base))) {
+    return base;
+  }
   for (let n = 2; n < 1000; n++) {
     const candidate = `${base}-${n}`;
     if (!(await definitionKeyExists(candidate))) return candidate;
@@ -140,6 +146,35 @@ export async function createDraft(input: {
     createdBy: input.createdBy,
     definition: blankDefinition(title),
   });
+  return key;
+}
+
+/**
+ * Create the camp's "Coming this year?" questionnaire under its fixed key, as
+ * a fresh draft (carryOver false: nobody's answer survives a rollover, so the
+ * same questionnaire asks again each year). Idempotent: when the key already
+ * exists, it is returned untouched, whatever state it is in.
+ */
+export async function createAttendanceCheck(
+  createdBy: string,
+): Promise<string> {
+  const key = ATTENDANCE_CHECK_KEY;
+  if (await definitionKeyExists(key)) return key;
+  const definition = attendanceQuestionnaire();
+  try {
+    await insertDefinitionDraft({
+      key,
+      title: definition.title ?? "Coming this year?",
+      createdBy,
+      definition,
+      carryOver: false,
+    });
+  } catch (error) {
+    // Two captains clicked at once and the other insert won: theirs is the
+    // same questionnaire.
+    if (await definitionKeyExists(key)) return key;
+    throw error;
+  }
   return key;
 }
 

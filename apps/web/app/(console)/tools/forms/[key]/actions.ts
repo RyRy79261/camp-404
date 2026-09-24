@@ -2,17 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import {
-  diffResponses,
-  incompleteContactErrors,
-  validateResponses,
-} from "@camp404/types";
+import { diffResponses } from "@camp404/types";
 import { ID_NUMBER_KEY } from "@camp404/db/id-documents";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getReplayableForm } from "@/lib/forms";
-import { identityAnswerErrors } from "@/lib/id-validation";
-import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
 
 export type SaveResult =
   | { ok: true }
@@ -53,32 +47,10 @@ export async function saveFormReplay(
   // Nothing to persist until the user commits the whole form.
   if (!final) return { ok: true };
 
-  // Validate + diff against ALL teams (incl. archived), not the active-only
-  // picker (form.questionnaire) the user saw: the multi_select validator
-  // silently DROPS values not in its options, so validating an old response
-  // that picked a since-archived team against the active set would erase it on
-  // re-save. The full catalogue is the superset that keeps it valid + labelled.
-  const catalogue = await getQuestionnaireForResponses();
-  const result = validateResponses(catalogue, rawResponses);
+  // Each form owns its server checks, and names what to diff against (the
+  // burner profile: every team, including archived ones).
+  const result = await form.validate(rawResponses, new Date());
   if (!result.ok) return { ok: false, errors: result.errors };
-  // The wizard checks these before it submits; a direct POST skips it.
-  const identity = identityAnswerErrors(result.responses, new Date());
-  if (Object.keys(identity).length > 0) {
-    return {
-      ok: false,
-      errors: { ...identity, _root: "Check your ID number and date of birth." },
-    };
-  }
-  const contactErrors = incompleteContactErrors(catalogue, result.responses);
-  if (Object.keys(contactErrors).length > 0) {
-    return {
-      ok: false,
-      errors: {
-        ...contactErrors,
-        _root: "Finish or clear your second emergency contact.",
-      },
-    };
-  }
 
   const state = await form.load(campUser.id);
   if (!state?.completedAt) {
@@ -92,7 +64,7 @@ export async function saveFormReplay(
   // never lands in questionnaire_edits (it lives encrypted on users, and the
   // owner's load() merges it back into both sides of the diff).
   const changes = diffResponses(
-    catalogue,
+    result.diffAgainst,
     state.responses,
     result.responses,
   ).filter((c) => c.fieldId !== ID_NUMBER_KEY);

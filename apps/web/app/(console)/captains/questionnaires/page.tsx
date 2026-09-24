@@ -67,7 +67,11 @@ export default async function QuestionnairesPage() {
   // The hub island draws the heading itself: "New questionnaire" is its action,
   // and it opens the island's own composer.
   return canAuthor ? (
-    <QuestionnaireHub heading={HEADING} items={items} />
+    <QuestionnaireHub
+      heading={HEADING}
+      items={items}
+      canCreateAttendanceCheck={rank === "captain"}
+    />
   ) : (
     <div className="flex flex-col">
       <PageHeading {...HEADING} />

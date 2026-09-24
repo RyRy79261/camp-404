@@ -210,6 +210,7 @@ describe("every member-data column has a reader in the field-access list", () =>
     driverProfiles: schema.driverProfiles,
     carMembers: schema.carMembers,
     teamMemberships: schema.teamMemberships,
+    campParticipations: schema.campParticipations,
     payments: schema.payments,
     // The sign-in identity: it holds member email.
     user: schema.user,

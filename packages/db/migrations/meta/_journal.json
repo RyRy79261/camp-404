@@ -379,6 +379,13 @@
       "when": 1790250141199,
       "tag": "0053_power_runs_all_day",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790258472111,
+      "tag": "0054_camp_participations",
+      "breakpoints": true
     }
   ]
 }

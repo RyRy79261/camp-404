@@ -11,6 +11,10 @@ import {
   VisibleIf,
   validateOne,
 } from "./questionnaire";
+import {
+  hasParticipationOptions,
+  participationOptionsMessage,
+} from "./builder-roles";
 
 // --- In-app questionnaire builder model ----------------------------------
 // A BuilderQuestionnaire is the shape Camp 404's in-app builder authors and
@@ -68,7 +72,9 @@ export const BUILDER_QUESTION_KINDS = [
 ] as const satisfies readonly Question["kind"][];
 export type BuilderQuestionKind = (typeof BUILDER_QUESTION_KINDS)[number];
 
-export function isBuilderQuestionKind(kind: string): kind is BuilderQuestionKind {
+export function isBuilderQuestionKind(
+  kind: string,
+): kind is BuilderQuestionKind {
   return (BUILDER_QUESTION_KINDS as readonly string[]).includes(kind);
 }
 
@@ -86,7 +92,12 @@ function toBuilderFields(q: Question): Question {
   switch (q.kind) {
     case "single_select":
       return {
-        ...omitKeys(q, ["visibleIf", "display", "otherLabel", "shuffleOptions"]),
+        ...omitKeys(q, [
+          "visibleIf",
+          "display",
+          "otherLabel",
+          "shuffleOptions",
+        ]),
         options: q.options.map(({ value, label }) => ({ value, label })),
       };
     case "multi_select":
@@ -449,7 +460,6 @@ export function validateBuilderResponses(
 // input. `toggle` is omitted — it isn't authorable in the builder palette.
 const OPTION_KINDS = new Set(["single_select", "multi_select", "combobox"]);
 
-
 /**
  * Ranges a respondent could never satisfy. Returns member-visible messages.
  * `slider` and `number` are the only kinds carrying a numeric range; both are
@@ -568,6 +578,7 @@ export type BuilderDefinitionIssueCode =
   | "reserved_option_value"
   | "invalid_range"
   | "duplicate_role"
+  | "participation_options"
   | "no_inputs"
   | "no_visible_page";
 
@@ -692,7 +703,11 @@ export function builderQuestionnaireIssues(
       }
       if (block.kind === "image_block") {
         if (block.imageUrl.trim().length === 0) {
-          add("image_missing", `An image on ${pageLabel} has no picture yet.`, at);
+          add(
+            "image_missing",
+            `An image on ${pageLabel} has no picture yet.`,
+            at,
+          );
         } else if (!isAllowedBuilderImageUrl(block.imageUrl)) {
           add("image_host", IMAGE_HOST_ERROR(pageLabel), at);
         }
@@ -716,7 +731,11 @@ export function builderQuestionnaireIssues(
         "options" in field &&
         field.options.length < 2
       ) {
-        add("too_few_options", `"${field.prompt}" needs at least 2 options.`, at);
+        add(
+          "too_few_options",
+          `"${field.prompt}" needs at least 2 options.`,
+          at,
+        );
       }
       // Two options with one value store the same answer, so a member's pick
       // cannot be told apart, and results count them as one.
@@ -744,6 +763,17 @@ export function builderQuestionnaireIssues(
         add("invalid_range", message, at);
       }
       earlier.set(field.id, field);
+      if (
+        field.kind === "single_select" &&
+        field.role === "participation_intent" &&
+        !hasParticipationOptions(field)
+      ) {
+        add(
+          "participation_options",
+          participationOptionsMessage(field.prompt),
+          at,
+        );
+      }
       const role = "role" in field ? field.role : undefined;
       if (role && !role.startsWith("emergency_contact_")) {
         const owner = roleOwners.get(role);

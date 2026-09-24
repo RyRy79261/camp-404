@@ -96,6 +96,7 @@ export type FoundingReportView = {
   carSeatsStamped: number;
   teamBudgetsStamped: number;
   adopteesStamped: number;
+  participationsStamped: number;
   auditLogId: string;
 };
 
@@ -162,6 +163,7 @@ function FoundedNotice({ report }: { report: FoundingReportView }) {
     [report.carSeatsStamped, "car seat", "car seats"],
     [report.teamBudgetsStamped, "team budget", "team budgets"],
     [report.adopteesStamped, "adoption slot", "adoption slots"],
+    [report.participationsStamped, "attendance answer", "attendance answers"],
   ];
   const moved = counted.filter(([count]) => count > 0);
   const total = moved.reduce((sum, [count]) => sum + count, 0);

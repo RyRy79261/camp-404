@@ -37,7 +37,8 @@ export async function buildAndPublish(
   await captain.goto("/captains/questionnaires");
   await captain.getByRole("button", { name: "New questionnaire" }).click();
   await captain.getByLabel("Questionnaire name").fill(input.title);
-  await captain.getByRole("button", { name: "Create" }).click();
+  // Exact: the hub also has "Create this year's attendance check".
+  await captain.getByRole("button", { name: "Create", exact: true }).click();
   // Create navigates to the builder once its page has rendered. Under next
   // dev the builder (the largest client bundle in the app) compiles on its
   // first visit, which can outlast the 15 s default on a busy machine.

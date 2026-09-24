@@ -160,11 +160,15 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .delete(schema.requiredActions)
       .where(eq(schema.requiredActions.userId, userId));
     // Deliberately NOT year-scoped, unlike every read of these tables:
-    // erasure is erasure, so every year's memberships, seats and driver
-    // profiles go. (driver_profiles above cascades to this user's car seats.)
+    // erasure is erasure, so every year's memberships, attendance answers
+    // (with the captains' decisions on them), seats and driver profiles go.
+    // (driver_profiles above cascades to this user's car seats.)
     await tx
       .delete(schema.teamMemberships)
       .where(eq(schema.teamMemberships.userId, userId));
+    await tx
+      .delete(schema.campParticipations)
+      .where(eq(schema.campParticipations.userId, userId));
     // car_members is a join table — remove the user whether they were the
     // driver or a passenger.
     await tx

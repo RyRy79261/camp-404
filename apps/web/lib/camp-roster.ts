@@ -1,4 +1,5 @@
 import type { CampManagementMember } from "@camp404/db/roster";
+import type { ParticipationStatus } from "@camp404/types";
 import { COUNTRIES } from "./countries";
 import { requiredActionName } from "./required-actions";
 
@@ -119,6 +120,13 @@ export interface PublicRosterRow {
    * owner's 2026-09-22 ruling, and the one approval fact on this row.
    */
   standing: PublicStanding | null;
+  /**
+   * Where the member stands for THIS year (camp_participations), or null when
+   * they have not answered. Team lead and up (`campParticipations.status` in
+   * MEMBER_FIELD_READERS), so the key is ABSENT on a plain member's row, not
+   * merely null: `toPublicRosterRow` sets it only when asked to.
+   */
+  thisYear?: ParticipationStatus | null;
 }
 
 /**
@@ -150,6 +158,8 @@ export interface RosterRow extends PublicRosterRow {
   driverProfileComplete: boolean;
   /** Dues settled for this year in the payments ledger (received or waived). */
   duesPaid: boolean;
+  /** This year's attendance status; always present on a captain's row. */
+  thisYear: ParticipationStatus | null;
 }
 
 /**
@@ -197,6 +207,7 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
 
   return {
     ...toPublicRosterRow(member),
+    thisYear: member.participation,
     email: member.email ?? null,
     status,
     statusLabel: STATUS_LABEL[status],
@@ -221,11 +232,16 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
  * onboarding / driver / dues ones, so those private fields are impossible to
  * leak to a member through the row. Single-sourced by `toRosterRow`
  * (the captain row spreads this), so the public columns can never drift apart.
+ *
+ * `withThisYear` adds this year's attendance status, for a viewer who may read
+ * it (a team lead). Without it the `thisYear` key is left off entirely, so a
+ * plain member's row does not even say that there is something withheld.
  */
 export function toPublicRosterRow(
   member: CampManagementMember,
+  { withThisYear = false }: { withThisYear?: boolean } = {},
 ): PublicRosterRow {
-  return {
+  const row: PublicRosterRow = {
     id: member.id,
     displayName: member.displayName?.trim() || "Unnamed burner",
     handle: member.handle,
@@ -246,6 +262,8 @@ export function toPublicRosterRow(
           ? "rejected"
           : null,
   };
+  if (withThisYear) row.thisYear = member.participation;
+  return row;
 }
 
 /** Captain outranks team lead outranks plain member. */
@@ -334,6 +352,83 @@ export function matchesPublicChip(
 /** Whether a row is a member of the given team (the parameterised Team filter). */
 export function matchesTeam(row: PublicRosterRow, team: string): boolean {
   return row.teams.includes(team);
+}
+
+/**
+ * The captain's "This year" filter: any row, one attendance status, or `none`
+ * for a member with no answer for the year.
+ */
+export type ThisYearFilter = "any" | ParticipationStatus | "none";
+
+/** Whether a row belongs under the "This year" filter. */
+export function matchesThisYear(
+  row: Pick<PublicRosterRow, "thisYear">,
+  filter: ThisYearFilter,
+): boolean {
+  if (filter === "any") return true;
+  const status = row.thisYear ?? null;
+  return filter === "none" ? status === null : status === filter;
+}
+
+/** The Overview's "This year" counts, one per status plus the unanswered. */
+export interface ThisYearCounts {
+  /** Said Yes (`applied`), not yet decided by a captain. */
+  coming: number;
+  maybe: number;
+  accepted: number;
+  waitlisted: number;
+  notComing: number;
+  notAnswered: number;
+  /** Every approved member: the sum of the six above. */
+  total: number;
+}
+
+/**
+ * Who is coming this year, counted over APPROVED members only: the people the
+ * "Everyone" audience reaches, so a count here is a count of people a send
+ * asked. A pending or declined sign-up is not in camp, whatever they answered.
+ */
+export function deriveThisYear(
+  rows: readonly Pick<RosterRow, "approvalStatus" | "thisYear">[],
+): ThisYearCounts {
+  const counts: ThisYearCounts = {
+    coming: 0,
+    maybe: 0,
+    accepted: 0,
+    waitlisted: 0,
+    notComing: 0,
+    notAnswered: 0,
+    total: 0,
+  };
+  for (const row of rows) {
+    if (row.approvalStatus !== "approved") continue;
+    counts.total++;
+    switch (row.thisYear) {
+      case "applied":
+        counts.coming++;
+        break;
+      case "maybe":
+        counts.maybe++;
+        break;
+      case "accepted":
+        counts.accepted++;
+        break;
+      case "waitlisted":
+        counts.waitlisted++;
+        break;
+      case "not_attending":
+        counts.notComing++;
+        break;
+      case null:
+        counts.notAnswered++;
+        break;
+      default: {
+        const _exhaustive: never = row.thisYear;
+        return _exhaustive;
+      }
+    }
+  }
+  return counts;
 }
 
 /**
@@ -431,18 +526,23 @@ export type RosterForViewer =
  *
  * `seeRejected` defaults to the constant; only a test passes it, so that the
  * owner's flip is exercised through the REAL fork rather than trusted.
+ *
+ * `thisYearForLead` is for a non-captain who leads a team (any team: the role
+ * is camp-wide): their public rows also carry this year's attendance status,
+ * and nothing else of the captain's view. A plain member's rows never do.
  */
 export function rosterForViewer(
   members: CampManagementMember[],
   isCaptain: boolean,
   seeRejected: boolean = MEMBERS_SEE_REJECTED,
+  { thisYearForLead = false }: { thisYearForLead?: boolean } = {},
 ): RosterForViewer {
   return isCaptain
     ? { isCaptain: true, rows: members.map(toRosterRow) }
     : {
         isCaptain: false,
-        rows: membersVisibleTo(members, false, seeRejected).map(
-          toPublicRosterRow,
+        rows: membersVisibleTo(members, false, seeRejected).map((m) =>
+          toPublicRosterRow(m, { withThisYear: thisYearForLead }),
         ),
       };
 }
