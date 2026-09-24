@@ -7,17 +7,17 @@ onboarded captain — with **no hand-run SQL**. Shipped in PR #98.
 
 On a **fresh system** (no captain exists yet), every signed-in visit is
 routed to the `/setup` wizard before any invite/onboarding gate. Who may
-complete it depends on `GOD_EMAILS` (`mayFoundCamp` in
+complete it depends on `FOUNDER_EMAILS` (old name `GOD_EMAILS`; `mayFoundCamp` in
 `apps/web/lib/bootstrap.ts`):
 
-- **`GOD_EMAILS` set:** only a **verified** founding address may found the
+- **`FOUNDER_EMAILS` set:** only a **verified** founding address may found the
   camp. Anyone else sees the refusal screen with a Sign out button. Sign-up is
   open, so without this a stranger could beat the founder to `/setup`. A
   founder whose address is not yet confirmed (they signed up with a password)
   gets the confirm-email card on the same screen, and the link brings them back
   to `/setup`. If the deployment cannot send email, the card says whoever runs
   it must set up email (or Google sign-in) first.
-- **`GOD_EMAILS` unset:** the first signed-in account may found the camp, as it
+- **`FOUNDER_EMAILS` unset:** the first signed-in account may found the camp, as it
   always could.
 
 The steps, for an account that may:
@@ -115,7 +115,7 @@ Then sign in → `/setup` runs again.
 
 ## Notes / follow-ups
 
-- **God-emails** (`GOD_EMAILS`) stay as a recovery path, and when set they
+- **Founder addresses** (`FOUNDER_EMAILS`, formerly `GOD_EMAILS`) stay as a recovery path, and when set they
   also decide who may run setup (see The flow). A god address only counts once the auth server has
   verified it (owner's call, 2026-09-16): an unverified session that claims
   one keeps its account but not the email (`apps/web/lib/session-user.ts`),

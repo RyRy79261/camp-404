@@ -1,4 +1,4 @@
-import { CAMP_TIME_ZONE } from "@camp404/core";
+import { CAMP_TIME_ZONE, FOUNDER_CODE } from "@camp404/core";
 import {
   pageQuestions,
   questionIdForRole,
@@ -163,7 +163,10 @@ export function presentMemberDetail(
   });
   overview.push({
     label: "Invite code",
-    value: detail.inviteCode ?? "— (founder / god account)",
+    value:
+      detail.inviteCode === FOUNDER_CODE
+        ? `${FOUNDER_CODE} (founder)`
+        : (detail.inviteCode ?? "None (founder address)"),
   });
   if (detail.invitedByName) {
     overview.push({ label: "Invited by", value: detail.invitedByName });

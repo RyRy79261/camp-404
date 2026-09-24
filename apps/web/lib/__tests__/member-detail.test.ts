@@ -69,14 +69,26 @@ describe("presentMemberDetail — overview", () => {
     expect(valueOf(m.overview, "Onboarding")).toBe("Incomplete");
     expect(m.overview.some((i) => i.label === "Invited by")).toBe(false);
     expect(m.overview.some((i) => i.label === "Invite note")).toBe(false);
-    // A null invite code still renders a row, marked as a founder/god account.
-    expect(valueOf(m.overview, "Invite code")).toMatch(/founder|god/i);
+    // A null invite code still renders a row: a founder address got in
+    // without one. The app never says "god".
+    expect(valueOf(m.overview, "Invite code")).toBe("None (founder address)");
+  });
+
+  it("names the account that redeemed the root code as the founder", () => {
+    const m = presentMemberDetail(detail({ inviteCode: "meowzit" }));
+    expect(valueOf(m.overview, "Invite code")).toBe("meowzit (founder)");
+    expect(
+      valueOf(
+        presentMemberDetail(detail({ inviteCode: "neon-toaster" })).overview,
+        "Invite code",
+      ),
+    ).toBe("neon-toaster");
   });
 
   it("falls back to a placeholder display name", () => {
-    expect(presentMemberDetail(detail({ displayName: "   " })).displayName).toBe(
-      "Unnamed burner",
-    );
+    expect(
+      presentMemberDetail(detail({ displayName: "   " })).displayName,
+    ).toBe("Unnamed burner");
     expect(presentMemberDetail(detail({ displayName: null })).displayName).toBe(
       "Unnamed burner",
     );
@@ -115,9 +127,9 @@ describe("presentMemberDetail — profile sections", () => {
       (s) => s.title === "Leadership & logistics",
     );
     // single_select value → option label
-    expect(valueOf(logistics!.items, "Will you be driving a car to the burn?")).toBe(
-      "Yes",
-    );
+    expect(
+      valueOf(logistics!.items, "Will you be driving a car to the burn?"),
+    ).toBe("Yes");
     // multi_select → comma-joined option labels
     expect(
       valueOf(logistics!.items, "I would like to be a team lead of…"),
@@ -211,7 +223,8 @@ describe("presentMemberDetail — bio promotion", () => {
   it("leaves bio null when unanswered or blank", () => {
     expect(presentMemberDetail(detail({ responses: {} })).bio).toBeNull();
     expect(
-      presentMemberDetail(detail({ responses: { "bio.statement": "   " } })).bio,
+      presentMemberDetail(detail({ responses: { "bio.statement": "   " } }))
+        .bio,
     ).toBeNull();
   });
 });

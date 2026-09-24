@@ -5,15 +5,16 @@ import {
   getBootstrapState,
 } from "@camp404/db/bootstrap";
 import { isGodEmail } from "./access-control";
-import { envList } from "./integration-config";
+import { founderEmails } from "./integration-config";
 import { usesTestStore } from "./test-mode";
 import { seedBurnerProfileAction } from "./users";
 import type { AuthenticatedUser } from "./auth";
 
-// The fixed root invite code minted for the founding captain. Pinned so a
-// fresh camp always hands out the same first code (matches the admin-CLI
-// `bootstrap-founder` slug).
-export const FOUNDER_CODE = "meowzit";
+// The fixed root invite code minted for the founding captain (matches the
+// admin-CLI `bootstrap-founder` slug). It lives in core so pure code can
+// name the founder too.
+export { FOUNDER_CODE } from "@camp404/core";
+import { FOUNDER_CODE } from "@camp404/core";
 
 /**
  * Whether the camp has completed first-time setup — i.e. a captain exists (the
@@ -34,14 +35,14 @@ export const SETUP_REFUSED_MESSAGE =
 /**
  * Whether this account may found the camp on a fresh database. Sign-up is
  * open, so "the first signed-in account" could be a stranger who beat the
- * founder to /setup. When GOD_EMAILS is set, only one of those addresses may
+ * founder to /setup. When founder addresses are set (FOUNDER_EMAILS), only one of those addresses may
  * found the camp, and only once it is verified: `primaryEmail` is already
  * null for an unverified god address (lib/session-user.ts), so a stranger
  * cannot claim the founder's address without proving they own it. With
  * GOD_EMAILS unset, anyone signed in may, which is how setup always worked.
  */
 export function mayFoundCamp(user: AuthenticatedUser): boolean {
-  if (envList(process.env.GOD_EMAILS).length === 0) return true;
+  if (founderEmails(process.env).length === 0) return true;
   return isGodEmail(user.primaryEmail);
 }
 

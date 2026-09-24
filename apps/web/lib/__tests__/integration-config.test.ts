@@ -3,10 +3,35 @@ import {
   envList,
   feedbackTracker,
   firebaseAdminCredentials,
+  founderEmails,
+  founderEmailsUseOldName,
   isEmailConfigured,
   isWebPushConfigured,
   webPushConfigFromEnv,
 } from "../integration-config";
+
+describe("founder addresses", () => {
+  it("reads FOUNDER_EMAILS first, and the old GOD_EMAILS name only when it is empty", () => {
+    expect(
+      founderEmails({ FOUNDER_EMAILS: "a@x.io", GOD_EMAILS: "b@x.io" }),
+    ).toEqual(["a@x.io"]);
+    expect(
+      founderEmails({ FOUNDER_EMAILS: " ", GOD_EMAILS: "b@x.io" }),
+    ).toEqual(["b@x.io"]);
+    expect(founderEmails({})).toEqual([]);
+  });
+
+  it("says when only the old name is set", () => {
+    expect(founderEmailsUseOldName({ GOD_EMAILS: "b@x.io" })).toBe(true);
+    expect(
+      founderEmailsUseOldName({
+        FOUNDER_EMAILS: "a@x.io",
+        GOD_EMAILS: "b@x.io",
+      }),
+    ).toBe(false);
+    expect(founderEmailsUseOldName({})).toBe(false);
+  });
+});
 
 describe("integration config", () => {
   it("splits an env list and drops empty entries", () => {

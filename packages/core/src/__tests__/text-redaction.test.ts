@@ -218,9 +218,9 @@ describe("redactSecrets", () => {
     );
   });
 
-  it("covers Camp 404's eighteen secret-bearing env names", () => {
-    expect(SECRET_ENV_KEYS).toHaveLength(18);
-    expect(new Set(SECRET_ENV_KEYS).size).toBe(18);
+  it("covers Camp 404's nineteen secret-bearing env names", () => {
+    expect(SECRET_ENV_KEYS).toHaveLength(19);
+    expect(new Set(SECRET_ENV_KEYS).size).toBe(19);
     // The calendar's own service account (2026-09-23), apart from Firebase's.
     expect(SECRET_ENV_KEYS).toContain("GOOGLE_CALENDAR_PRIVATE_KEY");
     // The sign-in signing secret replaced Neon Auth's cookie secret; the old
