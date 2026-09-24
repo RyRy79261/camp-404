@@ -12,6 +12,14 @@ function inbox(notices: number, waiting: number): HomeInput["inbox"] {
   return { notices, waiting, total: notices + waiting };
 }
 
+/** The camp's teams by key, an archived one included. */
+const TEAM_LABELS = {
+  kitchen: "Kitchen",
+  finance: "Finance",
+  art: "Art Car",
+  logistics: "Logistics",
+};
+
 function member(over: Partial<HomeInput> = {}): HomeInput {
   return {
     now: NOW,
@@ -24,6 +32,7 @@ function member(over: Partial<HomeInput> = {}): HomeInput {
     myTasks: { items: [], total: 0 },
     lift: null,
     calendar: { status: "ok", events: [] },
+    teamLabels: TEAM_LABELS,
     secured: true,
     ...over,
   };
@@ -72,6 +81,7 @@ describe("buildHome", () => {
               start: "2026-10-01",
               allDay: true,
               location: null,
+              teamTag: null,
             },
           ],
         },
@@ -154,6 +164,7 @@ describe("buildHome", () => {
               start: "2026-09-24T17:00:00Z",
               allDay: false,
               location: "Rondebosch",
+              teamTag: null,
             },
             {
               id: "e1",
@@ -161,6 +172,7 @@ describe("buildHome", () => {
               start: "2026-10-03",
               allDay: true,
               location: null,
+              teamTag: null,
             },
           ],
         },
@@ -185,6 +197,86 @@ describe("buildHome", () => {
     });
   });
 
+  describe("whose event", () => {
+    function event(id: string, title: string, teamTag: string | null) {
+      return {
+        id,
+        title,
+        start: "2026-10-01T16:00:00Z",
+        allDay: false,
+        location: null,
+        teamTag,
+      };
+    }
+
+    const calendar: HomeInput["calendar"] = {
+      status: "ok",
+      events: [
+        event("k", "Kitchen briefing", "kitchen"),
+        event("f", "Budget review", " finance "),
+        event("a", "Art Car wash", "art car"),
+        event("b", "Build day", null),
+        event("x", "Moon party", "Moon"),
+      ],
+    };
+
+    const teamsOf = (home: ReturnType<typeof buildHome>) =>
+      Object.fromEntries(home.upcoming.map((u) => [u.title, u.team]));
+
+    it("marks the viewer's own team's event as theirs, and another team's with its name", () => {
+      const home = buildHome(
+        member({
+          calendar,
+          teams: [
+            { key: "kitchen", label: "Kitchen", isLead: false, unread: 0 },
+          ],
+        }),
+      );
+      expect(teamsOf(home)).toEqual({
+        "Kitchen briefing": { label: "Kitchen", mine: true },
+        "Budget review": { label: "Finance", mine: false },
+        // A tag matches a team's name as well as its key, in any case.
+        "Art Car wash": { label: "Art Car", mine: false },
+        // Untagged is camp-wide; a tag naming no team is not a team's.
+        "Build day": null,
+        "Moon party": null,
+      });
+    });
+
+    it("marks every team the viewer is on, led or not", () => {
+      const home = buildHome(
+        member({
+          calendar,
+          teams: [
+            { key: "finance", label: "Finance", isLead: true, unread: 0 },
+            { key: "art", label: "Art Car", isLead: false, unread: 0 },
+          ],
+        }),
+      );
+      expect(teamsOf(home)).toMatchObject({
+        "Kitchen briefing": { mine: false },
+        "Budget review": { mine: true },
+        "Art Car wash": { mine: true },
+      });
+    });
+
+    it("leaves travel unmarked", () => {
+      const home = buildHome(
+        member({
+          lift: {
+            role: "rider",
+            driverName: "Ada",
+            vehicle: "Toyota Hilux",
+            departureCity: null,
+            arrivalAt: new Date("2026-09-30T06:00:00Z"),
+            departureAt: null,
+          },
+        }),
+      );
+      expect(home.upcoming.map((u) => u.team)).toEqual([null]);
+    });
+  });
+
   it("says when the calendar is not set up, instead of implying nothing is on", () => {
     expect(
       buildHome(member({ calendar: { status: "not_configured" } }))
@@ -195,7 +287,7 @@ describe("buildHome", () => {
     ).toBe("unavailable");
   });
 
-  it("gives a team lead the tiles to message and send a form to their team; a member neither", () => {
+  it("gives a team lead the tiles to message, send a form and add an event; a member none", () => {
     const lead = buildHome(
       member({
         teams: [{ key: "kitchen", label: "Cuisine", isLead: true, unread: 0 }],
@@ -208,6 +300,7 @@ describe("buildHome", () => {
       "tasks",
       "message",
       "form",
+      "event",
     ]);
 
     const crew = buildHome(
@@ -279,6 +372,7 @@ describe("buildHome", () => {
       "tasks",
       "message",
       "form",
+      "event",
       "overview",
     ]);
   });

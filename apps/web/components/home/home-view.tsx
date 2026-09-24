@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   CalendarDays,
+  CalendarPlus,
   Car,
   ChefHat,
   CheckCircle2,
@@ -211,6 +212,19 @@ function ComingUpCard({
                         : item.when}
                     </span>
                   </span>
+                  {/* A team's event: yours when you are on the team. A
+                      camp-wide event wears no badge. */}
+                  {item.team ? (
+                    item.team.mine ? (
+                      <Badge className="shrink-0">
+                        Yours · {item.team.label}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="shrink-0">
+                        {item.team.label}
+                      </Badge>
+                    )
+                  ) : null}
                 </Row>
               </li>
             ))}
@@ -323,6 +337,7 @@ const MODULE_ICONS: Record<HomeModuleIcon, LucideIcon> = {
   "send-form": ClipboardList,
   overview: LayoutDashboard,
   tasks: SquareKanban,
+  "add-event": CalendarPlus,
 };
 
 /** A small count in the corner of a tile or icon. */

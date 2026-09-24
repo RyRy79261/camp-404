@@ -43,6 +43,11 @@ export interface HomeInput {
   myTasks: { items: readonly MyOpenTask[]; total: number };
   lift: MyLift | null;
   calendar: CalendarResult | null;
+  /**
+   * Every team in the camp config by key, archived ones too, so a calendar
+   * event tagged with a team's key or its name finds the team.
+   */
+  teamLabels: Readonly<Record<string, string>>;
   /** Two-factor or a passkey is on. Null when it could not be read. */
   secured: boolean | null;
 }
@@ -79,6 +84,12 @@ export interface HomeUpcoming {
   location: string | null;
   kind: "event" | "travel";
   sortKey: string;
+  /**
+   * The team a calendar event is for, and whether the viewer is on it this
+   * year. Null for a camp-wide event, an event tagged with no known team, and
+   * travel.
+   */
+  team: { label: string; mine: boolean } | null;
 }
 
 /** The module tiles. `icon` is a key the view maps to a picture. */
@@ -88,7 +99,8 @@ export type HomeModuleIcon =
   | "message"
   | "send-form"
   | "overview"
-  | "tasks";
+  | "tasks"
+  | "add-event";
 
 export interface HomeModule {
   id: string;
@@ -189,12 +201,35 @@ function tidy(text: string): string {
   return text.replace(",", "");
 }
 
+/**
+ * The team a calendar event's tag names: a team key or a team's name, either
+ * way case-insensitive and trimmed. Null when it names no team.
+ */
+function teamForTag(
+  tag: string | null,
+  teamLabels: Readonly<Record<string, string>>,
+): { key: string; label: string } | null {
+  const wanted = tag?.trim().toLowerCase();
+  if (!wanted) return null;
+  const entries = Object.entries(teamLabels);
+  const match =
+    entries.find(([key]) => key.toLowerCase() === wanted) ??
+    entries.find(([, label]) => label.trim().toLowerCase() === wanted);
+  return match ? { key: match[0], label: match[1] } : null;
+}
+
 function upcomingFromCalendar(
   calendar: CalendarResult | null,
   today: string,
+  teamLabels: Readonly<Record<string, string>>,
+  myTeams: ReadonlySet<string>,
 ): HomeUpcoming[] {
   if (calendar?.status !== "ok") return [];
   return calendar.events.map((event) => {
+    const found = teamForTag(event.teamTag, teamLabels);
+    const team = found
+      ? { label: found.label, mine: myTeams.has(found.key) }
+      : null;
     if (event.allDay) {
       // An all-day event is a date, not an instant: shown as that date in
       // every time zone.
@@ -207,6 +242,7 @@ function upcomingFromCalendar(
         location: event.location,
         kind: "event" as const,
         sortKey: `${day}T00:00`,
+        team,
       };
     }
     const at = new Date(event.start);
@@ -219,6 +255,7 @@ function upcomingFromCalendar(
       location: event.location,
       kind: "event" as const,
       sortKey: `${day}T${TIME.format(at)}`,
+      team,
     };
   });
 }
@@ -239,6 +276,7 @@ function upcomingFromLift(lift: MyLift | null, today: string): HomeUpcoming[] {
       location: null,
       kind: "travel",
       sortKey: `${day}T${TIME.format(at)}`,
+      team: null,
     });
   };
   add("travel:arrive", "You arrive at camp", lift.arrivalAt);
@@ -339,7 +377,12 @@ export function buildHome(input: HomeInput): HomeModel {
   // Coming up: the camp calendar and your own travel dates, soonest first.
   const upcoming = approved
     ? [
-        ...upcomingFromCalendar(input.calendar, today),
+        ...upcomingFromCalendar(
+          input.calendar,
+          today,
+          input.teamLabels,
+          new Set(input.teams.map((t) => t.key)),
+        ),
         ...upcomingFromLift(input.lift, today),
       ]
         .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
@@ -396,6 +439,15 @@ export function buildHome(input: HomeInput): HomeModel {
           href: "/captains/questionnaires",
           label: "Send form",
           icon: "send-form",
+          badge: null,
+        },
+        // The camp calendar: a lead adds events for a team they lead, a
+        // captain for any team or the whole camp.
+        {
+          id: "event",
+          href: "/captains/calendar",
+          label: "Add event",
+          icon: "add-event",
           badge: null,
         },
       );

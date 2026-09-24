@@ -2,6 +2,8 @@ import "server-only";
 
 import {
   announcementNotification,
+  campDayStart,
+  nextCampDay,
   approvalNotification,
   isReviewTransition,
   captainPromotionNotification,
@@ -54,6 +56,10 @@ import {
   type TaskWriteResult,
 } from "@camp404/db/tasks";
 import {
+  calendarEventRefusal,
+  type AddCalendarEventResult,
+} from "@camp404/db/calendar-events";
+import {
   ANNOUNCEMENT_NOTIFICATION_KINDS,
   type InboxFilter,
   type ReferralUser,
@@ -79,6 +85,12 @@ import type {
   QuestionnaireFieldChange,
   Team,
 } from "@camp404/types";
+
+import {
+  CALENDAR_MAX_EVENTS,
+  CALENDAR_WINDOW_DAYS,
+  type CalendarEvent,
+} from "./google-calendar";
 
 // Process-scoped in-memory replacement for the Neon-backed user and
 // burner-profile tables. Only used when isE2ETestMode() is true.
@@ -218,6 +230,17 @@ interface TestRequiredAction {
   createdAt: Date;
 }
 
+/**
+ * An event on the stand-in camp calendar. Under E2E the calendar is connected
+ * and starts empty; events added through the page land here, in the shape the
+ * Google read returns.
+ */
+interface TestCalendarEvent extends CalendarEvent {
+  /** When it starts, for the window and the order. */
+  startsAt: Date;
+  createdById: string;
+}
+
 interface TestTask {
   id: string;
   title: string;
@@ -249,6 +272,7 @@ interface TestStoreState {
   teamMemberships: TestTeamMembership[];
   requiredActions: TestRequiredAction[];
   tasks: TestTask[];
+  calendarEvents: TestCalendarEvent[];
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -286,6 +310,7 @@ function globalState(): TestStoreState {
       teamMemberships: [] as TestTeamMembership[],
       requiredActions: [] as TestRequiredAction[],
       tasks: [] as TestTask[],
+      calendarEvents: [] as TestCalendarEvent[],
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -333,6 +358,10 @@ const promotionRequests = S.promotionRequests;
 const teamMemberships = S.teamMemberships;
 const requiredActions = S.requiredActions;
 const tasks = S.tasks;
+// A dev server that was running before this field existed has a state object
+// without it; give it one rather than crash.
+S.calendarEvents ??= [];
+const calendarEvents = S.calendarEvents;
 
 /**
  * The camp's current year, resolved the way `currentCycleNumber()` resolves it
@@ -1831,6 +1860,64 @@ export const testStore = {
     return { ok: true };
   },
 
+  /**
+   * Twin of the Google read (getUpcomingEvents): the next events from now up to
+   * CALENDAR_WINDOW_DAYS ahead, soonest first, at most CALENDAR_MAX_EVENTS. An
+   * all-day event counts for its whole camp day.
+   */
+  listCalendarEvents(now: Date): { status: "ok"; events: CalendarEvent[] } {
+    const until = now.getTime() + CALENDAR_WINDOW_DAYS * 86_400_000;
+    const events = calendarEvents
+      .filter((e) => {
+        const ends = e.allDay
+          ? campDayStart(nextCampDay(e.start)).getTime()
+          : e.startsAt.getTime();
+        return ends > now.getTime() && e.startsAt.getTime() <= until;
+      })
+      .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+      .slice(0, CALENDAR_MAX_EVENTS)
+      .map((e) => ({
+        id: e.id,
+        title: e.title,
+        start: e.start,
+        allDay: e.allDay,
+        location: e.location,
+        teamTag: e.teamTag,
+      }));
+    return { status: "ok", events };
+  },
+
+  /** Twin of addCampCalendarEvent: the same reach rule, then the event. */
+  addCalendarEvent(input: {
+    actorId: string;
+    team: Team | null;
+    title: string;
+    date: string;
+    allDay: boolean;
+    start?: string;
+  }): AddCalendarEventResult {
+    const refusal = calendarEventRefusal(
+      testStore.senderReach(input.actorId),
+      input.team,
+    );
+    if (refusal) return { ok: false, error: refusal };
+    const id = `test-event-${S.nextSerial++}`;
+    const start = input.allDay
+      ? input.date
+      : `${input.date}T${input.start ?? "00:00"}:00+02:00`;
+    calendarEvents.push({
+      id,
+      title: input.title,
+      start,
+      allDay: input.allDay,
+      location: null,
+      teamTag: input.team,
+      startsAt: input.allDay ? campDayStart(input.date) : new Date(start),
+      createdById: input.actorId,
+    });
+    return { ok: true, eventId: id };
+  },
+
   reset(): void {
     usersByAuthId.clear();
     profilesByUserId.clear();
@@ -1844,6 +1931,7 @@ export const testStore = {
     teamMemberships.length = 0;
     requiredActions.length = 0;
     tasks.length = 0;
+    calendarEvents.length = 0;
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },

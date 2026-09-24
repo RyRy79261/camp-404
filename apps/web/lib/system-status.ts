@@ -374,7 +374,7 @@ function calendarCheck(env: EnvBag): SystemCheck {
       value: "Not connected",
       tone: "degraded",
       detail:
-        "Home's \"Coming up\" shows no camp events. Share the Google Calendar with the calendar's service account (its GOOGLE_CALENDAR_CLIENT_EMAIL address), then set GOOGLE_CALENDAR_ID.",
+        'Home\'s "Coming up" shows no camp events, and nobody can add one. Share the Google Calendar with the calendar\'s service account (its GOOGLE_CALENDAR_CLIENT_EMAIL address) with "Make changes to events", then set GOOGLE_CALENDAR_ID.',
     };
   }
   // The same answer the calendar read itself gets (calendarCredentials), so
@@ -393,7 +393,7 @@ function calendarCheck(env: EnvBag): SystemCheck {
     value: "Set",
     tone: "ok",
     detail:
-      'Home reads the next events from the camp calendar. If "Coming up" says it couldn\'t reach the calendar, check the calendar is shared with the service account.',
+      'Home reads the next events from the camp calendar, and captains and team leads add events to it. If "Coming up" says it couldn\'t reach the calendar, or adding an event fails, check the calendar is shared with the service account with "Make changes to events".',
   };
 }
 

@@ -7,6 +7,7 @@ export const AUDIT_ACTION_LABELS = {
   "account.sanitized": "Erased their account",
   "announcement.pinned": "Pinned an announcement",
   "announcement.unpinned": "Unpinned an announcement",
+  "calendar.event_created": "Added a calendar event",
   "car.rider_added": "Put a member in a car",
   "car.rider_removed": "Took a member out of a car",
   "camp.cycle.advanced": "Moved the camp to a new year",
@@ -175,6 +176,14 @@ export function auditDetail(
       if (scope === "everyone") return "The whole camp";
       const team = text(metadata, "team");
       return scope === "team" && team ? teamLabel(team) : null;
+    }
+    // The event's title, and the team it is for; a whole-camp event names
+    // no team.
+    case "calendar.event_created": {
+      const title = text(metadata, "title");
+      if (!title) return null;
+      const team = text(metadata, "team");
+      return team ? `${title} · ${teamLabel(team)}` : title;
     }
     case "camp.cycle.renamed": {
       const to = text(metadata, "to");

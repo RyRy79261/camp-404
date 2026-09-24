@@ -3,7 +3,7 @@ import { deriveViewerRank } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { isCampBootstrapped } from "@/lib/bootstrap";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
-import { getUpcomingEvents } from "@/lib/google-calendar";
+import { getUpcomingEvents } from "@/lib/camp-calendar";
 import { buildHome } from "@/lib/home";
 import { getInboxBadge } from "@/lib/inbox-badge";
 import { getMyLift } from "@/lib/lifts";
@@ -101,6 +101,7 @@ export default async function HomePage() {
     myTasks,
     lift,
     calendar,
+    teamLabels: labels,
     secured,
   });
 

@@ -35,7 +35,7 @@ vi.mock("@/lib/camp-config", async (importActual) => ({
   ...(await importActual<typeof CampConfig>()),
   getTeamsConfig: vi.fn(async () => ({ teams: [] })),
 }));
-vi.mock("@/lib/google-calendar", () => ({
+vi.mock("@/lib/camp-calendar", () => ({
   getUpcomingEvents: vi.fn(async () => ({ status: "ok", events: [] })),
 }));
 // The notices half. By default the real facade (the in-memory test backend

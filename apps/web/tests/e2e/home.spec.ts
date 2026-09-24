@@ -60,11 +60,9 @@ test.describe("a member's own home", () => {
       page.getByRole("heading", { level: 1, name: "Hi Nova" }),
     ).toBeVisible();
     await expect(page.getByText("You’re all caught up.")).toBeVisible();
-    // The e2e server has no calendar, and the page says so rather than
-    // implying nothing is on.
-    await expect(
-      page.getByText("The camp calendar isn't connected yet."),
-    ).toBeVisible();
+    // The e2e store stands in for a connected calendar that starts empty.
+    // The "not connected" wording is covered by unit tests.
+    await expect(page.getByText("Nothing on the calendar yet.")).toBeVisible();
     const shortcuts = page.getByRole("navigation", { name: "Your modules" });
     await expect(
       shortcuts.getByRole("link", { name: /^Notifications/ }),
