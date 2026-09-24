@@ -178,6 +178,13 @@ describe("Google sign-in on a preview", () => {
 
     const start = await startGoogleSignIn(preview, BRANCH);
     expect(start.redirectURI).toBe(`${PROD}/api/auth/callback/google`);
+    // The sealed state names the preview's own proxy callback, and nothing
+    // else, as where production must send the member back.
+    const destination = await proxyDestination(PROXY_SECRET, start.state);
+    expect(destination).toBeTruthy();
+    const sealed = new URL(destination!);
+    expect(sealed.origin).toBe(BRANCH);
+    expect(sealed.pathname).toBe("/api/auth/oauth-proxy-callback");
 
     // Google calls production back. Production swaps the code with ITS
     // redirect URI (Google insists they match) and sends the browser back to
