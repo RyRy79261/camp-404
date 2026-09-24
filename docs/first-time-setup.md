@@ -43,13 +43,17 @@ can read the word. It is therefore minted so that it cannot wave anyone in:
 
 - **Every redeemer waits for a captain** (`requiresApproval = true`). They land
   on the approval queue in camp management, not in the camp.
-- **The uses are capped** at `FOUNDER_CODE_MAX_USES` (100,
-  `packages/db/src/bootstrap.ts`). After that, members invite members from
-  `/tools/invite`.
+- **It is single-use** (`FOUNDER_CODE_MAX_USES` = 1,
+  `packages/db/src/bootstrap.ts`; owner's call, 2026-09-24). Only the founder
+  joins with it. Codes minted before this carried 100 uses, and the redeem path
+  (`rootCodeUnused` in `packages/db/src/invite-codes.ts`) holds them to one.
+  Everyone else is invited from `/tools/invite`.
 - **It has no creator** (`createdByUserId = null`), so the founder is a clean
   family-tree root and members who redeem it attach beneath the root.
 
 This is the owner's call (2026-09-16): keep the word, add approval and a cap.
+[CORRECTION 2026-09-24] The cap is now one use: the owner ruled the root code
+single-use.
 Migration `0022_founder_code_policy` applies the same policy to a root code
 minted before the change.
 

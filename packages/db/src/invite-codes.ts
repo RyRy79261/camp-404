@@ -1,6 +1,6 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, desc, eq, isNull, or, sql, gt } from "drizzle-orm";
-import { normalizeInviteCode } from "@camp404/core";
+import { and, desc, eq, isNull, ne, or, sql, gt } from "drizzle-orm";
+import { FOUNDER_CODE, normalizeInviteCode } from "@camp404/core";
 import { writeAuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
@@ -20,6 +20,17 @@ export interface InviteCodeRow {
   requiresApproval: boolean;
   createdAt: Date;
 }
+
+/**
+ * The root code is single-use (owner, 2026-09-24): it is a fixed word in a
+ * public repo, and only the founder should get in with it. Enforced here, on
+ * every read and redeem, whatever cap its stored row still carries from before
+ * (setup minted it with 100 uses).
+ */
+const rootCodeUnused = or(
+  ne(schema.inviteCodes.code, FOUNDER_CODE),
+  eq(schema.inviteCodes.useCount, 0),
+);
 
 /**
  * Look up an invite code that is currently usable (not revoked, not
@@ -46,6 +57,7 @@ export async function findUsableInviteCode(
           isNull(schema.inviteCodes.maxUses),
           gt(schema.inviteCodes.maxUses, schema.inviteCodes.useCount),
         ),
+        rootCodeUnused,
       ),
     )
     .limit(1);
@@ -77,6 +89,7 @@ export async function consumeInviteCode(
           isNull(schema.inviteCodes.maxUses),
           gt(schema.inviteCodes.maxUses, schema.inviteCodes.useCount),
         ),
+        rootCodeUnused,
       ),
     )
     .returning();

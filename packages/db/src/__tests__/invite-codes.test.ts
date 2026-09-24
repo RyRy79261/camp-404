@@ -77,3 +77,30 @@ describe("invite codes are case-insensitive", () => {
     expect(await codeOf(envUser.id)).toBe("test-invite");
   });
 });
+
+describe("the root code", () => {
+  useTestDb();
+
+  it("lets exactly one person in, whatever cap its row still carries", async () => {
+    // Setup used to mint it with 100 uses; the owner made it single-use.
+    await createInviteCode({
+      code: "meowzit",
+      createdByUserId: null,
+      maxUses: 100,
+    });
+    expect((await findUsableInviteCode("meowzit"))?.code).toBe("meowzit");
+    expect((await consumeInviteCode("meowzit"))?.useCount).toBe(1);
+    expect(await findUsableInviteCode("Meowzit")).toBeNull();
+    expect(await consumeInviteCode("meowzit")).toBeNull();
+  });
+
+  it("leaves any other code's cap alone", async () => {
+    await createInviteCode({
+      code: "berlin-crew",
+      createdByUserId: null,
+      maxUses: 3,
+    });
+    await consumeInviteCode("berlin-crew");
+    expect((await consumeInviteCode("berlin-crew"))?.useCount).toBe(2);
+  });
+});
