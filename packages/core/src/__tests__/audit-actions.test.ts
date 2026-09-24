@@ -25,6 +25,54 @@ describe("auditActionLabel", () => {
 describe("auditDetail", () => {
   const teams = (key: string) => ({ kitchen: "Kitchen" })[key] ?? key;
 
+  it("labels and says a captain's decision on a member's place", () => {
+    expect(auditActionLabel("participation.decided")).toBe(
+      "Decided a member's place this year",
+    );
+    expect(
+      auditDetail("participation.decided", {
+        cycle: 2027,
+        from: "applied",
+        to: "accepted",
+      }),
+    ).toBe("Accepted for 2027");
+    expect(
+      auditDetail("participation.decided", {
+        cycle: 2027,
+        from: "accepted",
+        to: "waitlisted",
+      }),
+    ).toBe("Put on the waiting list for 2027");
+    // A status that is not a decision, or no status at all, adds nothing.
+    expect(
+      auditDetail("participation.decided", { cycle: 2027, to: "maybe" }),
+    ).toBeNull();
+    expect(
+      auditDetail("participation.decided", { cycle: 2027, to: "toString" }),
+    ).toBeNull();
+    expect(auditDetail("participation.decided", { to: "accepted" })).toBe(
+      "Accepted",
+    );
+  });
+
+  it("labels and says a member's withdrawal from this year", () => {
+    expect(auditActionLabel("participation.withdrawn")).toBe(
+      "Withdrew from this year",
+    );
+    expect(
+      auditDetail("participation.withdrawn", { cycle: 2027, from: "accepted" }),
+    ).toBe("Gave up a place for 2027");
+    expect(
+      auditDetail("participation.withdrawn", {
+        cycle: 2027,
+        from: "waitlisted",
+      }),
+    ).toBe("Left the waiting list for 2027");
+    expect(
+      auditDetail("participation.withdrawn", { cycle: 2027, from: "maybe" }),
+    ).toBeNull();
+  });
+
   it("says how an application was decided", () => {
     expect(
       auditDetail("member.approval_decided", {

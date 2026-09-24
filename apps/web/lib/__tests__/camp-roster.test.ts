@@ -30,6 +30,7 @@ function member(
     intendsToDrive: false,
     driverProfileComplete: false,
     country: "ZA",
+    participation: null,
     createdAt: new Date("2026-01-01"),
     ...overrides,
   };

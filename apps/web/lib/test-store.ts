@@ -9,8 +9,10 @@ import {
   FOUNDER_CODE,
   formatMemberRefCode,
   isCurrency,
+  isParticipationDecision,
   isReviewTransition,
   normalizeInviteCode,
+  participationAfterIntent,
   type NotificationKind,
   notificationLink,
   type NotificationPayload,
@@ -44,6 +46,10 @@ import type {
   CampMemberDetailOptions,
 } from "@camp404/db/roster";
 import type { PaymentRow, RecordPaymentInput } from "@camp404/db/payments";
+import type {
+  ParticipationIntentResult,
+  ParticipationRow,
+} from "@camp404/db/participations";
 import {
   CANNOT_EDIT,
   CANNOT_MOVE,
@@ -91,6 +97,8 @@ import type {
 import type {
   EmergencyContact,
   IncomingPromotionRequest,
+  ParticipationIntent,
+  ParticipationStatus,
   QuestionnaireFieldChange,
   Team,
 } from "@camp404/types";
@@ -280,6 +288,9 @@ interface TestPayment {
   updatedAt: Date;
 }
 
+/** One member's answer for one year (mirrors `camp_participations`). */
+type TestParticipation = ParticipationRow;
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -300,6 +311,8 @@ interface TestStoreState {
   payments: TestPayment[];
   /** `users.ref_code`: each member's payment reference, given out once. */
   memberRefCodes: Map<string, string>;
+  /** `camp_participations`, keyed `${userId}:${cycle}` like its primary key. */
+  participations: Map<string, TestParticipation>;
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -340,6 +353,7 @@ function globalState(): TestStoreState {
       calendarEvents: [] as TestCalendarEvent[],
       payments: [] as TestPayment[],
       memberRefCodes: new Map<string, string>(),
+      participations: new Map<string, TestParticipation>(),
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -393,6 +407,10 @@ S.calendarEvents ??= [];
 const calendarEvents = S.calendarEvents;
 S.payments ??= [];
 S.memberRefCodes ??= new Map<string, string>();
+S.participations ??= new Map<string, TestParticipation>();
+const participations = S.participations;
+const participationKey = (userId: string, cycle: number) =>
+  `${userId}:${cycle}`;
 const payments = S.payments;
 const memberRefCodes = S.memberRefCodes;
 
@@ -1482,6 +1500,111 @@ export const testStore = {
       .sort((a, b) => (a.displayName ?? "").localeCompare(b.displayName ?? ""));
   },
 
+  // --- Who is coming this year (mirrors @camp404/db/participations) -----
+
+  /** A member's own row for one year, or null when they have not answered. */
+  getParticipation(userId: string, cycle: number): TestParticipation | null {
+    const row = participations.get(participationKey(userId, cycle));
+    return row ? { ...row } : null;
+  },
+
+  /**
+   * A member's Yes / Maybe / No, by the same rule as production
+   * (participationAfterIntent). The withdrawal audit row is not modelled: the
+   * store keeps no audit log.
+   */
+  applyParticipationIntent(input: {
+    userId: string;
+    cycle: number;
+    intent: ParticipationIntent;
+    now?: Date;
+  }): ParticipationIntentResult {
+    if (!findUserById(input.userId)) {
+      throw new Error(`No test user with id ${input.userId}`);
+    }
+    const now = input.now ?? new Date();
+    const key = participationKey(input.userId, input.cycle);
+    const row = participations.get(key);
+    const change = participationAfterIntent(row?.status ?? null, input.intent);
+    if (!change) {
+      // Only an existing row can answer "no change".
+      return { status: row!.status, changed: false, withdrew: false };
+    }
+    if (row) {
+      row.status = change.next;
+      row.updatedAt = now;
+    } else {
+      participations.set(key, {
+        userId: input.userId,
+        cycle: input.cycle,
+        status: change.next,
+        decidedByUserId: null,
+        decidedAt: null,
+        reason: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    return { status: change.next, changed: true, withdrew: change.withdrew };
+  },
+
+  /**
+   * A captain's Accept / Waiting list for THIS year: the same compare-and-set
+   * as production (false when the row is no longer at `from`), without the
+   * audit row. A move that is not a decision throws.
+   */
+  decideParticipation(input: {
+    userId: string;
+    from: ParticipationStatus;
+    to: ParticipationStatus;
+    decidedByUserId: string;
+  }): boolean {
+    if (!isParticipationDecision(input.from, input.to)) {
+      throw new Error(
+        `decideParticipation: ${input.from} -> ${input.to} is not a decision`,
+      );
+    }
+    const row = participations.get(
+      participationKey(input.userId, currentCycleNumber()),
+    );
+    if (!row || row.status !== input.from) return false;
+    const now = new Date();
+    row.status = input.to;
+    row.decidedByUserId = input.decidedByUserId;
+    row.decidedAt = now;
+    row.reason = null;
+    row.updatedAt = now;
+    return true;
+  },
+
+  /**
+   * Put a member at any status for a year (this year unless `cycle` is
+   * given): a fixture, not a production path. Replaces an existing row, as
+   * the primary key would.
+   */
+  seedParticipation(input: {
+    userId: string;
+    status: ParticipationStatus;
+    cycle?: number;
+  }): TestParticipation {
+    if (!findUserById(input.userId)) {
+      throw new Error(`No test user with id ${input.userId}`);
+    }
+    const now = new Date();
+    const row: TestParticipation = {
+      userId: input.userId,
+      cycle: input.cycle ?? currentCycleNumber(),
+      status: input.status,
+      decidedByUserId: null,
+      decidedAt: null,
+      reason: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    participations.set(participationKey(row.userId, row.cycle), row);
+    return { ...row };
+  },
+
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
   // The test store models users, burner profiles, team memberships, the
   // payments ledger and the required_actions twin, but not driver profiles, so
@@ -1530,6 +1653,8 @@ export const testStore = {
           intendsToDrive: false,
           driverProfileComplete: false,
           country,
+          participation:
+            participations.get(participationKey(u.id, cycle))?.status ?? null,
           // The test store keeps no sign-in email for a member.
           ...(options.includeEmail ? { email: null } : {}),
           createdAt: u.createdAt,
@@ -2087,6 +2212,7 @@ export const testStore = {
     calendarEvents.length = 0;
     payments.length = 0;
     memberRefCodes.clear();
+    participations.clear();
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },
@@ -2101,4 +2227,5 @@ export type {
   TestTeamMembership,
   TestRequiredAction,
   TestPayment,
+  TestParticipation,
 };

@@ -1,4 +1,6 @@
 import { and, eq, ne, sql } from "drizzle-orm";
+import type { ParticipationStatus } from "@camp404/types";
+import { currentCycleNumber } from "./cycles";
 import { createHttpDb, LOCAL_PROXY_HOST, withTransaction } from "./index";
 import * as schema from "./schema";
 
@@ -77,6 +79,28 @@ export async function upsertE2EAuthUser(input: {
 }
 
 /** Force a member's approval status, as /api/test/set-approval does in the store. */
+/**
+ * Put a member at any attendance status for the camp's current year, replacing
+ * what is there. A fixture: no production path sets a status directly.
+ */
+export async function seedParticipationForE2E(
+  userId: string,
+  status: ParticipationStatus,
+): Promise<void> {
+  assertLocalE2EDatabase();
+  const cycle = await currentCycleNumber();
+  await createHttpDb()
+    .insert(schema.campParticipations)
+    .values({ userId, cycle, status })
+    .onConflictDoUpdate({
+      target: [
+        schema.campParticipations.userId,
+        schema.campParticipations.cycle,
+      ],
+      set: { status, updatedAt: new Date() },
+    });
+}
+
 export async function setApprovalForE2E(
   userId: string,
   status: "pending" | "approved" | "rejected",

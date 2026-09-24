@@ -1166,4 +1166,39 @@ describe("setFoundingYear adopts the year-scoped roster facts", () => {
       carSeatsStamped: 1,
     });
   });
+
+  it("adopts an attendance answer given before the camp had a year", async () => {
+    const db = h.db();
+    const early = await makeUser(db);
+    const other = await makeUser(db);
+    // Answered before the year was named: the column default, the sentinel.
+    await db
+      .insert(schema.campParticipations)
+      .values({ userId: early.id, status: "applied" });
+    // A row already under a real year is not the sentinel's and stays put.
+    await db
+      .insert(schema.campParticipations)
+      .values({ userId: other.id, cycle: 2025, status: "accepted" });
+
+    const res = await setFoundingYear({ year: 2026, actorUserId: null });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.report.participationsStamped).toBe(1);
+
+    const rows = await db
+      .select({
+        userId: schema.campParticipations.userId,
+        cycle: schema.campParticipations.cycle,
+      })
+      .from(schema.campParticipations);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { userId: early.id, cycle: 2026 },
+        { userId: other.id, cycle: 2025 },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+    const [audit] = await db.select().from(schema.auditLog);
+    expect(audit!.metadata).toMatchObject({ participationsStamped: 1 });
+  });
 });

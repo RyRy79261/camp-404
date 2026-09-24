@@ -20,6 +20,7 @@ import {
 import { sql } from "drizzle-orm";
 import {
   NOTIFICATION_KINDS,
+  PARTICIPATION_STATUSES,
   type BuilderQuestionnaire,
   type Questionnaire,
   type QuestionnaireFieldChange,
@@ -184,6 +185,14 @@ export const broadcastKindEnum = pgEnum("broadcast_kind", [
 export const notificationKindEnum = pgEnum(
   "notification_kind",
   NOTIFICATION_KINDS,
+);
+
+// Where a member stands for one burn year (PARTICIPATION_STATUSES in
+// @camp404/types is the one list; how an answer moves it is
+// participationAfterIntent in @camp404/core).
+export const participationStatusEnum = pgEnum(
+  "participation_status",
+  PARTICIPATION_STATUSES,
 );
 
 export const broadcastScopeEnum = pgEnum("broadcast_scope", [
@@ -770,6 +779,45 @@ export const teamMemberships = pgTable(
     // at most once in either.
     pk: primaryKey({ columns: [tm.userId, tm.team, tm.cycle] }),
     teamIdx: index("team_memberships_team_idx").on(tm.team),
+  }),
+);
+
+// --- Camp participations --------------------------------------------------
+// Who is coming this year: one row per member per burn year. The member writes
+// it by answering Yes / Maybe / No (applied / maybe / not_attending); a captain
+// then accepts them or puts them on the waiting list, a compare-and-set on the
+// status they saw, audited. Year-scoped like team_memberships, so a new year
+// starts with nobody answered and last year's answers stay on file. Written
+// only through @camp404/db/participations.
+
+export const campParticipations = pgTable(
+  "camp_participations",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The burn year. Defaults to the UNSET_CYCLE sentinel (1) like
+    // driver_profiles: a row written before the camp names its founding year
+    // is adopted into that year by setFoundingYear().
+    cycle: integer("cycle").notNull().default(1),
+    status: participationStatusEnum("status").notNull(),
+    // The captain who last accepted or waitlisted this member, and when. Null
+    // until a captain decides.
+    decidedByUserId: uuid("decided_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedAt: timestamp("decided_at", { mode: "date" }),
+    // Why, when a captain gives one. Nothing writes it yet.
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (cp) => ({
+    pk: primaryKey({ columns: [cp.userId, cp.cycle] }),
+    cycleStatusIdx: index("camp_participations_cycle_status_idx").on(
+      cp.cycle,
+      cp.status,
+    ),
   }),
 );
 

@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test";
 import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
+import type { ParticipationStatus } from "@camp404/types";
 
 /**
  * Test-mode helpers. These hit `/api/test/*` endpoints that are only
@@ -115,6 +116,21 @@ export async function seedTeam(
     data: { authUserId, team, isLead },
   });
   if (!res.ok()) throw new Error(`seedTeam failed: ${res.status()}`);
+}
+
+/**
+ * Put a test user at an attendance status for this year (applied, maybe,
+ * accepted, waitlisted or not_attending). The user must have loaded a page.
+ */
+export async function seedParticipation(
+  request: APIRequestContext,
+  authUserId: string,
+  status: ParticipationStatus,
+): Promise<void> {
+  const res = await request.post("/api/test/seed-participation", {
+    data: { authUserId, status },
+  });
+  if (!res.ok()) throw new Error(`seedParticipation failed: ${res.status()}`);
 }
 
 /** Clear cookies for an existing Browser context. */

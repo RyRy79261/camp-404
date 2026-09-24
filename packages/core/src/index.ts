@@ -87,6 +87,10 @@
 //     in (./time-zone)
 //   - questionnaire status: memberQuestionnaireStatuses — where each
 //     questionnaire stands for one member (./questionnaire-status)
+//   - participation: participationAfterIntent, isParticipationDecision,
+//     PARTICIPATION_LABEL, NOT_ANSWERED_LABEL — who is coming this year, how a
+//     member's answer moves it and which moves a captain may make
+//     (./participation)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -129,3 +133,4 @@ export * from "./notification-email";
 export * from "./time-zone";
 export * from "./questionnaire-status";
 export * from "./password";
+export * from "./participation";

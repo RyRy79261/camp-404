@@ -26,6 +26,9 @@ const PRIVATE_KEYS = [
   "isDriver",
   "driverProfileComplete",
   "duesPaid",
+  // This year's attendance status: team lead and up, so never on a member's
+  // row (the fixture below carries one, so a leak would show).
+  "participation",
 ] as const;
 
 // Every key the PUBLIC row is allowed to carry. The privacy test below compares
@@ -73,6 +76,7 @@ function member(
     intendsToDrive: true,
     driverProfileComplete: false,
     country: "ZA",
+    participation: "accepted",
     createdAt: new Date("2026-01-01"),
     ...overrides,
   };
