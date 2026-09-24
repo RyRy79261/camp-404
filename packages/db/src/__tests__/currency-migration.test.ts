@@ -57,7 +57,7 @@ describe("0046_normalise_currency_codes and 0047_currency_check", () => {
       .values({
         userId,
         cycle: 2026,
-        amountCents: 150000,
+        amountCents: 1234,
         currency,
         reference: `C404-TEST-${++refSeq}`,
       });
@@ -66,7 +66,7 @@ describe("0046_normalise_currency_codes and 0047_currency_check", () => {
   async function storeClaim(submitterId: string, currency: string) {
     await h.db().insert(schema.reimbursements).values({
       submitterId,
-      amount: "120.50",
+      amount: "12.34",
       currency,
       accountType: "sa",
       accountDetailsEncrypted: "fake-ciphertext",
@@ -82,7 +82,7 @@ describe("0046_normalise_currency_codes and 0047_currency_check", () => {
       team,
       cycle: 2026,
       currency,
-      assignedAmount: "5000.00",
+      assignedAmount: "999.00",
     });
   }
 

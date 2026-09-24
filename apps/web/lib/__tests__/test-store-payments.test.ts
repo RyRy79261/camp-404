@@ -43,14 +43,14 @@ describe("recordPayment and setPaymentStatus (store)", () => {
 
     const first = testStore.recordPayment({
       userId: member.id,
-      amountCents: 50000,
+      amountCents: 1234,
       currency: "ZAR",
       status: "pending",
       recordedByUserId: captain.id,
     });
     const second = testStore.recordPayment({
       userId: member.id,
-      amountCents: 75000,
+      amountCents: 5678,
       currency: "ZAR",
       status: "reconciled",
       note: "  FNB 12 Mar  ",
@@ -63,8 +63,8 @@ describe("recordPayment and setPaymentStatus (store)", () => {
     expect(
       rows.map((r) => [r.reference, r.amountCents, r.status, r.note]),
     ).toEqual([
-      [second.reference, 75000, "reconciled", "FNB 12 Mar"],
-      [first.reference, 50000, "pending", null],
+      [second.reference, 5678, "reconciled", "FNB 12 Mar"],
+      [first.reference, 1234, "pending", null],
     ]);
     expect(rows[0]).toMatchObject({
       memberName: "Nova",
@@ -102,7 +102,7 @@ describe("recordPayment and setPaymentStatus (store)", () => {
     const member = makeUser("Nova");
     const { id } = testStore.recordPayment({
       userId: member.id,
-      amountCents: 50000,
+      amountCents: 1234,
       currency: "ZAR",
       status: "pending",
       recordedByUserId: captain.id,
@@ -236,7 +236,7 @@ describe("dues paid on the store's roster", () => {
     ] as const) {
       testStore.recordPayment({
         userId,
-        amountCents: 50000,
+        amountCents: 1234,
         currency: "ZAR",
         status,
         recordedByUserId: captain.id,

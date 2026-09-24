@@ -479,7 +479,7 @@ function TeamIcons({ teams }: { teams: HomeModel["teams"] }) {
                     />
                   ) : null}
                 </span>
-                <span className="line-clamp-2 w-full text-center text-xs leading-tight text-muted-foreground group-hover:text-foreground">
+                <span className="line-clamp-2 w-full hyphens-auto break-words text-center text-xs leading-tight text-muted-foreground group-hover:text-foreground">
                   {team.label}
                 </span>
               </Link>

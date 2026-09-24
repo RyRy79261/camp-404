@@ -84,7 +84,7 @@ function claim(
     submitterName: "Member",
     submitterAiDataConsent: true,
     team: "kitchen",
-    amount: "120.50",
+    amount: "12.34",
     currency: "ZAR",
     accountType: "sa",
     accountDetailsEncrypted: encrypt("FNB 123456"),

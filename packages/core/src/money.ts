@@ -115,7 +115,7 @@ export function parseMoneyToMinor(
 }
 
 /**
- * A numeric(12,2) column's value ("120.50", "5000") as minor units, or null
+ * A numeric(12,2) column's value ("12.34", "999") as minor units, or null
  * when it is not a plain non-negative decimal with at most two places.
  */
 export function decimalToMinor(amount: string): number | null {
