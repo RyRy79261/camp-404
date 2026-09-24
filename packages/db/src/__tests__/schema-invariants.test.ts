@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Column, SQL, StringChunk, getTableColumns, is } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
-import { MEMBER_FIELD_READERS } from "@camp404/core";
+import {
+  CURRENCIES,
+  DEFAULT_CURRENCY,
+  MEMBER_FIELD_READERS,
+} from "@camp404/core";
 import { Team } from "@camp404/types";
 import * as schema from "../schema";
 
@@ -236,5 +240,57 @@ describe("the team list agrees across packages", () => {
   // refused by Postgres.
   it("Team in @camp404/types names exactly the database enum's values, in order", () => {
     expect(Team.options).toEqual(schema.teamEnum.enumValues);
+  });
+});
+
+describe("money columns", () => {
+  // Every write path refuses a code outside CURRENCIES, and the CHECK
+  // constraint is the last guard: a total over a column that can hold "usd"
+  // or "GBP" would add it up as a currency of its own. A new money table
+  // without the constraint, or a currency added to one list and not the
+  // other, fails here.
+  const moneyColumns = configs.flatMap((config) =>
+    config.columns
+      .filter((column) => column.name === "currency")
+      .map((column) => ({ config, column })),
+  );
+
+  it("are found, so the checks below do not pass on an empty list", () => {
+    expect(moneyColumns.map(({ config }) => config.name).sort()).toEqual(
+      expect.arrayContaining(["payments", "reimbursements", "team_budgets"]),
+    );
+  });
+
+  it("each hold only CURRENCIES, in order, through a check constraint", () => {
+    const codesByColumn = moneyColumns.map(({ config }) => {
+      const check = config.checks.find((c) =>
+        /\bcurrency\b/.test(predicateText(c.value)),
+      );
+      const codes = check
+        ? [...predicateText(check.value).matchAll(/'([A-Z]{3})'/g)].map(
+            (match) => match[1],
+          )
+        : null;
+      return { table: config.name, codes };
+    });
+    expect(codesByColumn).toEqual(
+      moneyColumns.map(({ config }) => ({
+        table: config.name,
+        codes: [...CURRENCIES],
+      })),
+    );
+  });
+
+  it("default to DEFAULT_CURRENCY where they have a default", () => {
+    const defaults = moneyColumns
+      .filter(({ column }) => column.hasDefault)
+      .map(({ config, column }) => ({
+        table: config.name,
+        default: column.default,
+      }));
+    expect(defaults.length).toBeGreaterThan(0);
+    expect(defaults).toEqual(
+      defaults.map(({ table }) => ({ table, default: DEFAULT_CURRENCY })),
+    );
   });
 });

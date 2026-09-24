@@ -323,6 +323,20 @@
       "when": 1790212987743,
       "tag": "0045_new_teams_in_camp_config",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790214501899,
+      "tag": "0046_normalise_currency_codes",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790214540964,
+      "tag": "0047_currency_check",
+      "breakpoints": true
     }
   ]
 }
