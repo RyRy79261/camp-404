@@ -49,6 +49,7 @@ test("the terminal runs commands and opens APPLY.EXE", async ({ page }) => {
 });
 
 test("APPLY links to sign-up and asks for an invite code", async ({ page }) => {
+  await page.getByRole("button", { name: "Close README.TXT" }).click();
   await page.getByRole("button", { name: "Open APPLY.EXE" }).click();
   const apply = page
     .getByRole("dialog", { name: "APPLY.EXE" })
