@@ -120,12 +120,6 @@ export function lyingDown(sprite: Sprite): Sprite {
   return rows;
 }
 
-/** A 3 × 5 pixel font, for the "404" on the wall. */
-export const DIGITS: Record<string, Sprite> = {
-  "4": ["S.S", "S.S", "SSS", "..S", "..S"],
-  "0": ["SSS", "S.S", "S.S", "S.S", "SSS"],
-};
-
 export function drawSprite(
   ctx: CanvasRenderingContext2D,
   sprite: Sprite,

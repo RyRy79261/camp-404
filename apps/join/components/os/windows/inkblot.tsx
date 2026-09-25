@@ -21,7 +21,6 @@ import {
 import { CAT_FRAMES, CAT_H, CAT_W } from "../inkblot-cat";
 import {
   COLOURS,
-  DIGITS,
   ITEMS,
   PX,
   drawSprite,
@@ -231,6 +230,7 @@ function drawScene(
   game: Game,
   t: number,
   lowW: number,
+  photo: HTMLImageElement | null,
 ) {
   const cam = Math.round(cameraX(game, lowW * PX) / PX);
 
@@ -243,17 +243,19 @@ function drawScene(
       ctx.fillRect(x, y, 1, 1);
   }
 
-  // Framed "404"s on the wall.
+  // The crew photo, framed on the wall (owner, 2026-09-25): a 30 × 22,
+  // 16-colour copy of the camp's group shot, public/inkblot/crew.png.
   for (const wx of [125, 440, 740, 1040]) {
     const fx = wx - cam;
     if (fx < -40 || fx > lowW) continue;
-    rect(ctx, COLOURS.outline, fx, 18, 32, 21);
-    rect(ctx, COLOURS.frame, fx + 1, 19, 30, 19);
-    rect(ctx, COLOURS.wall, fx + 3, 21, 26, 15);
-    const digits = { S: COLOURS.pink };
-    drawSprite(ctx, DIGITS["4"]!, fx + 8, 26, false, digits);
-    drawSprite(ctx, DIGITS["0"]!, fx + 12, 26, false, digits);
-    drawSprite(ctx, DIGITS["4"]!, fx + 16, 26, false, digits);
+    rect(ctx, COLOURS.outline, fx, 14, 36, 28);
+    rect(ctx, COLOURS.pinkDark, fx + 1, 15, 34, 26);
+    rect(ctx, COLOURS.pinkLight, fx + 1, 15, 34, 1);
+    rect(ctx, COLOURS.pinkLight, fx + 1, 15, 1, 26);
+    rect(ctx, COLOURS.outline, fx + 2, 16, 32, 24);
+    if (photo?.complete && photo.naturalWidth > 0) {
+      ctx.drawImage(photo, fx + 3, 17, 30, 22);
+    }
   }
 
   // Skirting board and floorboards.
@@ -428,6 +430,8 @@ export function InkblotWindow() {
       (window as unknown as { __inkblot?: () => Game }).__inkblot = () =>
         game.current;
     }
+    const photo = new Image();
+    photo.src = "/inkblot/crew.png";
     const low = document.createElement("canvas");
     const lowCtx = low.getContext("2d")!;
     const font =
@@ -458,7 +462,7 @@ export function InkblotWindow() {
           low.height = LOW_H;
         }
         const t = now / 1000;
-        drawScene(lowCtx, game.current, t, lowW);
+        drawScene(lowCtx, game.current, t, lowW, photo);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(low, 0, 0, c.width, c.height);
         drawHud(ctx, game.current, t, c.width, c.height, n, font);
