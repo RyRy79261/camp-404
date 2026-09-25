@@ -9,6 +9,8 @@ import {
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { requireMemberPage } from "@/lib/member-gate";
 import { ProfileSections } from "@/components/profile/profile-sections";
+import { getCampBlurb } from "@/lib/join-site";
+import { CampBlurbForm } from "./camp-blurb-form";
 import { ProfileEditForm } from "./edit-form";
 import { DeleteAccountForm } from "./delete-account";
 
@@ -23,6 +25,7 @@ export const metadata = { title: "Edit profile — Camp 404" };
 export default async function ProfileEditPage() {
   const { authUser, campUser } = await requireMemberPage();
 
+  const campBlurb = await getCampBlurb(campUser.id);
   const initialDisplayName =
     campUser.displayName ?? authUser.primaryEmail ?? "";
 
@@ -49,6 +52,22 @@ export default async function ProfileEditPage() {
               <ProfileEditForm
                 initialDisplayName={initialDisplayName}
                 initialImageUrl={campUser.profileImageUrl}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">What I am in camp</CardTitle>
+              <CardDescription>
+                Optional. What you do in camp, in your own words. A
+                captain&apos;s can also go on join.camp-404.com.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CampBlurbForm
+                initial={campBlurb}
+                isCaptain={campUser.rank === "captain"}
               />
             </CardContent>
           </Card>

@@ -215,3 +215,54 @@ export async function getJoinSitePublic(
     headcount,
   };
 }
+
+/** "What I am in camp": the member's own optional title and blurb. */
+export type CampBlurb = {
+  title: string | null;
+  blurb: string | null;
+  /** A captain's card on join.camp-404.com; only captains' cards are shown. */
+  showOnJoin: boolean;
+};
+
+export const MAX_CAMP_TITLE_LENGTH = 60;
+export const MAX_CAMP_BLURB_LENGTH = 280;
+
+export async function getCampBlurb(
+  userId: string,
+  db: DbOrTx = createHttpDb(),
+): Promise<CampBlurb> {
+  const [row] = await db
+    .select({
+      title: schema.users.campTitle,
+      blurb: schema.users.campBlurb,
+      showOnJoin: schema.users.showOnJoin,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  return row ?? { title: null, blurb: null, showOnJoin: false };
+}
+
+/**
+ * The member's own words about themselves, written from their profile. Their
+ * own data, so no audit row (like their display name). Blank reads as none.
+ */
+export async function setCampBlurb(
+  userId: string,
+  input: CampBlurb,
+  db: DbOrTx = createHttpDb(),
+): Promise<void> {
+  const clean = (v: string | null, max: number) => {
+    const t = (v ?? "").trim().slice(0, max);
+    return t === "" ? null : t;
+  };
+  await db
+    .update(schema.users)
+    .set({
+      campTitle: clean(input.title, MAX_CAMP_TITLE_LENGTH),
+      campBlurb: clean(input.blurb, MAX_CAMP_BLURB_LENGTH),
+      showOnJoin: input.showOnJoin,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.users.id, userId));
+}

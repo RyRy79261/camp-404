@@ -248,6 +248,7 @@ import type {
 import type {
   EmergencyContact,
   IncomingPromotionRequest,
+  JoinSiteContent,
   ParticipationIntent,
   ParticipationStatus,
   QuestionnaireFieldChange,
@@ -633,7 +634,17 @@ interface TestStoreState {
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
   // deep clone of DEFAULT_CAMP_CONFIG so edits never mutate the shared const.
   teamsConfig: TeamsConfig;
+  /** join_site_content, by year: the saved sections only. */
+  joinContent: Map<number, Partial<JoinSiteContent>>;
+  /** users.camp_title / camp_blurb / show_on_join, by user id. */
+  campBlurbs: Map<string, TestCampBlurb>;
 }
+
+export type TestCampBlurb = {
+  title: string | null;
+  blurb: string | null;
+  showOnJoin: boolean;
+};
 
 // Next.js gives RSC renders and route handlers SEPARATE module graphs in the
 // same process (pronounced under Turbopack dev), so a plain module-level
@@ -685,6 +696,8 @@ function globalState(): TestStoreState {
       mealPlans: new Map<number, MealPlan>(),
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
+      joinContent: new Map<number, Partial<JoinSiteContent>>(),
+      campBlurbs: new Map<string, TestCampBlurb>(),
     } satisfies TestStoreState;
   }
   return g[GLOBAL_KEY] as TestStoreState;
@@ -5033,6 +5046,32 @@ export const testStore = {
     S.mealPlans.clear();
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
+    S.joinContent.clear();
+    S.campBlurbs.clear();
+  },
+
+  // --- join.camp-404.com (the twin of @camp404/db/join-site) --------------
+  getJoinContent(year: number): Partial<JoinSiteContent> | null {
+    let best: number | null = null;
+    for (const y of S.joinContent.keys()) {
+      if (y <= year && (best === null || y > best)) best = y;
+    }
+    return best === null ? null : S.joinContent.get(best)!;
+  },
+  setJoinContent(year: number, content: JoinSiteContent): void {
+    S.joinContent.set(year, structuredClone(content));
+  },
+  getCampBlurb(userId: string): TestCampBlurb {
+    return (
+      S.campBlurbs.get(userId) ?? {
+        title: null,
+        blurb: null,
+        showOnJoin: false,
+      }
+    );
+  },
+  setCampBlurb(userId: string, blurb: TestCampBlurb): void {
+    S.campBlurbs.set(userId, { ...blurb });
   },
 };
 
