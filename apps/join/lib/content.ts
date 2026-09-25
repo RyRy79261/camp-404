@@ -13,6 +13,9 @@ export const SIGNUP_URL = "https://camp-404.com/auth/sign-up";
 // which is past. The owner chose to say 2027 and mark its dates TBC.
 export const BURN_YEAR = 2027;
 
+/** AfrikaBurn 2027, first and last day (owner, 2026-09-25). */
+export const BURN_DATES = { start: "2027-04-26", end: "2027-05-02" } as const;
+
 export const BOOT_LINES: readonly string[] = [
   "CAMP 404 OS v4.0.4",
   `TANKWA TOWN BUILD ${BURN_YEAR}`,
@@ -271,7 +274,7 @@ export type ScheduleEntry = { when: string; what: string; allHands?: boolean };
 
 export const SCHEDULE = {
   title: "SCHEDULE.CAL",
-  datesNote: `How the 2026 Burn ran. ${BURN_YEAR} dates to be confirmed.`,
+  datesNote: `AfrikaBurn ${BURN_YEAR}: 26 April – 2 May. Below is how the 2026 Burn ran; our ${BURN_YEAR} dates are to be confirmed.`,
   before: [
     { when: "Nov / Dec", what: "Kick-off, about six months out." },
     {

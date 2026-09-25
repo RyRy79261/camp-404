@@ -76,18 +76,24 @@ test("the fee scale moves between tiers", async ({ page }) => {
   await expect(slider).toHaveAttribute("aria-valuetext", /Subsidy/);
 });
 
-test("a window minimises to the tray, comes back, goes full screen and resizes", async ({
+test("a window minimises to the taskbar, comes back, goes full screen and resizes", async ({
   page,
 }, testInfo) => {
   const readme = page.getByRole("dialog", { name: "README.TXT" });
 
   await page.getByRole("button", { name: "Minimise README.TXT" }).click();
   await expect(readme).toBeHidden();
-  await page.getByRole("button", { name: "Bring back README.TXT" }).click();
+  // Its taskbar button brings it back, and minimises it again when on top.
+  const task = page
+    .getByRole("toolbar", { name: "Taskbar" })
+    .getByRole("button", { name: "README.TXT", exact: true });
+  await task.click();
   await expect(readme).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Bring back README.TXT" }),
-  ).toHaveCount(0);
+  await expect(task).toHaveAttribute("aria-pressed", "true");
+  await task.click();
+  await expect(readme).toBeHidden();
+  await task.click();
+  await expect(readme).toBeVisible();
 
   // A phone window is already full screen and has no grips.
   test.skip(testInfo.project.name === "phone", "desktop only");
@@ -112,4 +118,19 @@ test("a window minimises to the tray, comes back, goes full screen and resizes",
   expect(Math.round((await readme.boundingBox())!.width)).toBe(
     Math.round(after.width),
   );
+});
+
+test("the Start menu opens any program", async ({ page }) => {
+  await page.getByRole("button", { name: "Start" }).click();
+  const menu = page.getByRole("menu", { name: "Start" });
+  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+  await menu.getByRole("menuitem", { name: "MAP.GPS" }).click();
+  await expect(menu).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "MAP.GPS" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Start" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu", { name: "Start" })).toHaveCount(0);
+  // Esc shut the menu, not the window under it.
+  await expect(page.getByRole("dialog", { name: "MAP.GPS" })).toBeVisible();
 });

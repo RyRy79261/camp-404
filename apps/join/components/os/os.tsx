@@ -19,6 +19,7 @@ import {
 import { Boot } from "./boot";
 import { Desktop } from "./desktop";
 import { OsWindowFrame } from "./os-window";
+import { Taskbar } from "./taskbar";
 import { WindowContent } from "./windows";
 
 const PHONE_QUERY = "(max-width: 767px)";
@@ -98,7 +99,7 @@ export function Os() {
     dispatch({ type: "minimize", id });
     requestAnimationFrame(() =>
       document
-        .querySelector<HTMLElement>(`[data-tray="${id}"]`)
+        .querySelector<HTMLElement>(`[data-task="${id}"]`)
         ?.focus({ preventScroll: true }),
     );
   }
@@ -116,7 +117,6 @@ export function Os() {
   // history. A minimised one is hidden; on a phone only the top one shows.
   const hiddenWin = (w: (typeof wm.windows)[number]) =>
     !!w.minimized || (phone && w.id !== top?.id);
-  const minimized = wm.windows.filter((w) => w.minimized);
 
   return (
     <>
@@ -165,32 +165,15 @@ export function Os() {
           ))}
         </div>
       </Desktop>
-      {minimized.length > 0 && (
-        <nav
-          aria-label="Minimised windows"
-          className={`fixed z-[90] flex gap-1 ${
-            phone
-              ? "inset-x-0 bottom-0 overflow-x-auto border-t border-os-primary bg-os-chrome p-1"
-              : "bottom-4 left-4"
-          }`}
-        >
-          {minimized.map((w) => (
-            <button
-              key={w.id}
-              type="button"
-              data-tray={w.id}
-              onClick={() => restoreApp(w.id)}
-              aria-label={`Bring back ${appById(w.id).label}`}
-              className="flex h-8 shrink-0 items-center gap-2 border border-os-line bg-os-panel px-3 font-pixel text-[10px] uppercase text-os-fg shadow-[4px_4px_0_0_rgb(0_0_0/0.4)] hover:border-os-primary"
-            >
-              <span aria-hidden className="text-os-primary">
-                ▭
-              </span>
-              {appById(w.id).label}
-            </button>
-          ))}
-        </nav>
-      )}
+      <Taskbar
+        windows={wm.windows}
+        topId={top?.id}
+        onOpen={openApp}
+        onToggleWindow={(id) =>
+          id === top?.id ? minimizeApp(id) : restoreApp(id)
+        }
+        onReboot={reboot}
+      />
       {booting && <Boot onDone={finishBoot} />}
     </>
   );

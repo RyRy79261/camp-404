@@ -129,7 +129,7 @@ export function OsWindowFrame({
       style={placement}
       className={`os-window-in pointer-events-auto flex flex-col border outline-none ${
         phone
-          ? "fixed inset-0"
+          ? "fixed inset-x-0 top-0 bottom-10"
           : win.maximized
             ? "absolute inset-0"
             : "absolute"

@@ -75,7 +75,7 @@ export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
 
   if (phone) {
     return (
-      <main className="relative min-h-dvh overflow-x-clip bg-os-bg pb-6">
+      <main className="relative min-h-dvh overflow-x-clip bg-os-bg pb-16">
         <Surface />
         <h1 className="sr-only">Camp 404</h1>
         <div className="pointer-events-none relative flex flex-col items-center gap-2 pt-10">
@@ -125,10 +125,11 @@ export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
       >
         {icons}
       </nav>
-      <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10">
+      <div className="pointer-events-none absolute inset-x-0 bottom-14 z-10">
         <Footer onReboot={onReboot} />
       </div>
-      <div className="absolute inset-0 z-20 pointer-events-none">
+      {/* Windows stop above the taskbar, so full screen never covers it. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 bottom-10 z-20">
         {children}
       </div>
     </main>

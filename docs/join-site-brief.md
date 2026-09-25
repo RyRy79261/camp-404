@@ -245,3 +245,6 @@ Transport & Travel team makes sure everyone and everything has a ride.
   (AfrikaBurn's raised-arms figure without its roots, ringed by flame emojis),
   the main fire performance, which Camp 404 manages and coordinates;
   artworks and activities.
+- Windows minimise, go full screen and resize from any edge. A taskbar along
+  the bottom has a Start menu, a button per open window, and a countdown to
+  AfrikaBurn 2027 (26 April – 2 May, owner) in place of a clock.
