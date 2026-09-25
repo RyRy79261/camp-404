@@ -204,21 +204,9 @@ it appear — you still help build it.
 floating scale, shown in rands with a dollar label beside it. Essential ≈ $200,
 Reasonable ≈ $350, Ideal ≈ $400 (where most people should land), Perfect World
 ≈ $800, and a subsidy below Essential for South Africans, students and anyone
-short on cash. FEE.CALC draws it as a slider. [UNRESOLVED 2026-09-25] The rate
-R18 = $1 is ours, not the owner's (`FEE.usdRate` in
-`apps/join/lib/content.ts`); the owner should confirm it.
-[CORRECTION 2026-09-25] The copy was written for the 2026 Burn, which is past.
-The owner chose to say 2027, with the 2026 timeline shown as "2027 dates to be
-confirmed".
-[CORRECTION 2026-09-25] CREW.DB shows only what is known: the 2027 captain is
-Ryan alone, and crew size, orphan beds and the new/seasoned split are not known
-yet, so the site does not show them. TRUCK.LOG: one big truck and a couple of
-trailers.
-Guidance: start from what you'd spend on food for ~10 days, plus your usual
-camping basics (R2,000–R8,000). Or set your total Burn budget and fill it:
-ticket, petrol, drugs/alcohol, extra food, gifts, then camp fees. "A Burn
-usually costs me R5–10K… we have at least one person paying nothing, and at
-least two paying over USD1000. It's relative, it's flexible, it's up to you."
+short on cash. FEE.CALC draws it as a slider. [CORRECTION 2026-09-25] The owner set the rate: $1 = R16, so the tiers are
+R3,200 / R5,600 / R6,400 / R12,800 (`FEE.usdRate` and `FEE.tiers` in
+`apps/join/lib/content.ts`). The rate moves; a camp setting will set it later.
 
 **Perks.** Two vegan meals a day (brunch & "lupper") and snacks; a full
 kitchen and braai; sheltered sleeping; a public lounge; a public service to

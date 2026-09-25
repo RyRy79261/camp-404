@@ -265,23 +265,24 @@ export const FEE = {
   // The owner's sliding scale (2026-09-25): not a fixed fee. The owner gave
   // the tiers in dollars; the site keeps them in rands, as the camp keeps all
   // money, and shows a dollar figure only as a label at `usdRate`.
-  // [UNRESOLVED 2026-09-25] R18.00 = $1 is our assumption, not the owner's.
-  // Change the rate (and the rand figures, if the dollar labels should stay
-  // round) when the owner names one.
-  usdRate: { randsPerDollar: 18, asOf: "September 2026" },
+  // The owner's rate, 2026-09-25: $1 = R16. The rate moves; when it does,
+  // change it here with the rand figures (tier dollars × rate), so the dollar
+  // labels stay the owner's round numbers. Later a camp setting in the main
+  // app sets it, as the app's own foreign labels use a rate a captain typed.
+  usdRate: { randsPerDollar: 16, asOf: "September 2026" },
   tiers: [
-    { key: "essential", name: "Essential", rands: 3_600 },
-    { key: "reasonable", name: "Reasonable", rands: 6_300 },
+    { key: "essential", name: "Essential", rands: 3_200 },
+    { key: "reasonable", name: "Reasonable", rands: 5_600 },
     {
       key: "ideal",
       name: "Ideal",
-      rands: 7_200,
+      rands: 6_400,
       note: "Where we hope most people can land.",
     },
     {
       key: "perfect",
       name: "Perfect World",
-      rands: 14_400,
+      rands: 12_800,
       note: "More helps subsidise the starving artists.",
     },
   ] satisfies FeeTier[],
