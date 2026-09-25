@@ -81,8 +81,9 @@ Four traps that already cost real time:
 **The look is the AfrikaBurn contributors app's organiser console** (owner's
 call, 2026-09-17): a desktop dashboard with a sticky header and nav, AfrikaBurn's
 tokens and kit, and Camp 404 magenta as the accent skin. The earlier Pencil
-boards in `design/` are history, not the target; do not keep a phone-only
-layout because a board drew one. For a new surface, copy the composition of
+boards are gone (the `design/` folder was deleted, owner 2026-09-25: "its
+completely deprecated"); do not keep a phone-only layout because a board drew
+one. For a new surface, copy the composition of
 AfrikaBurn's nearest equivalent (`apps/org/app/(console)/**` in that repo) and
 restyle only with tokens; do not invent a design.
 

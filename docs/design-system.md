@@ -1,8 +1,7 @@
 # Camp 404 — Design System
 
-Reference for the `@camp404/ui` package so any design-to-code tool (see
-[`design-tooling.md`](design-tooling.md)) maps onto what already exists
-instead of inventing off-brand markup.
+Reference for the `@camp404/ui` package so any design-to-code tool maps onto
+what already exists instead of inventing off-brand markup.
 
 `@camp404/ui` is a shadcn/ui-style component library: Radix primitives,
 Tailwind v4, CVA variants, OKLCH design tokens.
