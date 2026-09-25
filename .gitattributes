@@ -8,11 +8,6 @@
 # `linguist-generated=true` collapses them in GitHub diffs — nobody reviews
 # these by hand.
 
-# The Pencil design canvas: 45k lines of JSON in one file, rewritten wholesale
-# by the Pencil CLI. A blended merge yields a structurally valid canvas with
-# semantically wrong geometry/ownership, and nothing downstream would flag it.
-*.pen -merge linguist-generated=true
-
 # pnpm lockfile. A blended merge can pair a package entry from one side with a
 # peer resolution from the other: it installs, and CI's --frozen-lockfile is
 # happy, but the resolved graph is one neither branch tested. Resolve by taking
