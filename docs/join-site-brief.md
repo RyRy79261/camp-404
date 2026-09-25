@@ -243,4 +243,5 @@ Transport & Travel team makes sure everyone and everything has a ride.
 - GIFTS.EXE: icons in animated progress rings, primary gifts in the top row.
   Secondary: Now Now Meow Meow (drawn from a photo), the Dance of 1000 Flames
   (AfrikaBurn's raised-arms figure without its roots, ringed by flame emojis),
+  the main fire performance, which Camp 404 manages and coordinates;
   artworks and activities.

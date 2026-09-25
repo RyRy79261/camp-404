@@ -213,7 +213,7 @@ export const GIFTS = {
     {
       icon: "flames",
       name: "Dance of 1000 Flames",
-      text: "We join the Dance of 1000 Flames.",
+      text: "The main fire performance of the Burn. We manage and coordinate it.",
     },
     {
       icon: "art",
