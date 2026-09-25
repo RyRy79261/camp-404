@@ -56,6 +56,7 @@ test.describe("console nav — menus (test-mode)", () => {
       "Announcements",
       "Payments",
       "Camp settings",
+      "Join site",
       "Audit",
       "System status",
     ]);
