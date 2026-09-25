@@ -14,6 +14,7 @@ vi.mock("@/lib/users", () => ({
   hasCampAccess: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@camp404/db/activations", () => ({
   completeBuilderResponse: vi.fn(),
   getActivationById: vi.fn(),
@@ -32,6 +33,7 @@ import {
   attendanceQuestionnaire,
   fromBuilderQuestionnaire,
 } from "@camp404/types";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { saveBuilderResponses } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
@@ -242,6 +244,9 @@ describe("saveBuilderResponses cycle stamping", () => {
   it("sends a finished submit to the completion screen", async () => {
     await saveBuilderResponses("act-1", { name: "Ada" }, true);
     expect(redirect).toHaveBeenCalledWith("/questionnaires/act-1/complete");
+    // The held member's bare console layout is redrawn from the root down, or
+    // the completion screen and every page after it stay headerless.
+    expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
   });
 
   it("stamps the activation's cycle on the final submit", async () => {
