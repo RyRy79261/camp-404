@@ -49,6 +49,14 @@ describe("runCommand", () => {
     expect(text("sudo rm -rf /")).toContain("Chief Cat Herder");
   });
 
+  it("keeps a secret: jinn-is-best opens INKBLOT.EXE, and help never says so", () => {
+    expect(runCommand("jinn-is-best").open).toBe("inkblot");
+    expect(runCommand("JINN-IS-BEST").open).toBe("inkblot");
+    expect(text("help").toLowerCase()).not.toContain("inkblot");
+    expect(text("ls").toLowerCase()).not.toContain("inkblot");
+    expect(runCommand("open inkblot").open).toBeUndefined();
+  });
+
   it("clear and exit say so; blank input does nothing", () => {
     expect(runCommand("clear").clear).toBe(true);
     expect(runCommand("exit").exit).toBe(true);

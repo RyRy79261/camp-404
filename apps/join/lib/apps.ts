@@ -1,4 +1,4 @@
-import { APP_LABELS } from "./content";
+import { APP_LABELS, INKBLOT } from "./content";
 import { APP_IDS, type AppId } from "./window-manager";
 
 // Each program's opening size on a desktop. On a phone every window is full
@@ -15,6 +15,7 @@ const SIZES: Record<AppId, { w: number; h: number }> = {
   truck: { w: 520, h: 360 },
   terminal: { w: 640, h: 400 },
   apply: { w: 460, h: 300 },
+  inkblot: { w: 700, h: 480 },
 };
 
 export type AppDef = {
@@ -29,6 +30,11 @@ export const APPS: readonly AppDef[] = APP_IDS.map((id) => ({
   size: SIZES[id],
 }));
 
+// The secret programs: openable, never listed.
+const SECRET_APPS: readonly AppDef[] = [
+  { id: "inkblot", label: INKBLOT.title, size: SIZES.inkblot },
+];
+
 export function appById(id: AppId): AppDef {
-  return APPS.find((a) => a.id === id)!;
+  return [...APPS, ...SECRET_APPS].find((a) => a.id === id)!;
 }

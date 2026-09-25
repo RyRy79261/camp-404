@@ -15,7 +15,10 @@ export const APP_IDS = [
   "apply",
 ] as const;
 
-export type AppId = (typeof APP_IDS)[number];
+/** Programs with no desktop icon and no Start menu entry: found, not shown. */
+export const SECRET_APP_IDS = ["inkblot"] as const;
+
+export type AppId = (typeof APP_IDS)[number] | (typeof SECRET_APP_IDS)[number];
 
 export function isAppId(value: string): value is AppId {
   return (APP_IDS as readonly string[]).includes(value);

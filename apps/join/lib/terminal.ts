@@ -7,6 +7,7 @@ import {
   SIGNUP_URL,
   CREW,
   FEE,
+  INKBLOT,
   PERKS,
   README,
   TEAMS,
@@ -53,7 +54,7 @@ const DUCK = [
   "   `---'   grey water emptied. the duck thanks you.",
 ];
 
-function findApp(name: string): AppId | undefined {
+function findApp(name: string): (typeof APP_IDS)[number] | undefined {
   const n = name.toLowerCase().replace(/\/$/, "");
   return APP_IDS.find(
     (id) => id === n || APP_LABELS[id].toLowerCase().replace(/\/$/, "") === n,
@@ -83,6 +84,12 @@ export function runCommand(input: string): TermResult {
   const lower = line.toLowerCase();
 
   // Easter eggs first: they are whole phrases, not commands.
+  if (lower === INKBLOT.password) {
+    return {
+      lines: INKBLOT.unlocked.map((t, i) => (i === 0 ? hi(t) : out(t))),
+      open: "inkblot",
+    };
+  }
   if (lower === "sudo coup chef" || lower === "sudo overthrow chef") {
     return {
       lines: [

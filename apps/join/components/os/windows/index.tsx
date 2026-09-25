@@ -3,6 +3,7 @@ import { ApplyWindow } from "./apply";
 import { CrewWindow } from "./crew";
 import { FeeWindow } from "./fee";
 import { GiftsWindow } from "./gifts";
+import { InkblotWindow } from "./inkblot";
 import { MapWindow } from "./map";
 import { PerksWindow } from "./perks";
 import { ReadmeWindow } from "./readme";
@@ -43,5 +44,7 @@ export function WindowContent({
       return <TerminalWindow openApp={openApp} close={close} />;
     case "apply":
       return <ApplyWindow />;
+    case "inkblot":
+      return <InkblotWindow />;
   }
 }

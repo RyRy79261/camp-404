@@ -248,3 +248,8 @@ Transport & Travel team makes sure everyone and everything has a ride.
 - Windows minimise, go full screen and resize from any edge. A taskbar along
   the bottom has a Start menu, a button per open window, and a countdown to
   AfrikaBurn 2027 (26 April – 2 May, owner) in place of a clock.
+- A secret (owner, 2026-09-25): typing `jinn-is-best` in TERMINAL opens
+  INKBLOT.EXE, a side-scroller where a black cat jumps onto furniture and
+  knocks everything off. It is on no desktop, menu or `help` list. The rules
+  are in `apps/join/lib/inkblot.ts`, tested; the drawing is in
+  `components/os/windows/inkblot.tsx`.

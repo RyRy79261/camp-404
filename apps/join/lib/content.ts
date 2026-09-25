@@ -437,6 +437,22 @@ export const APPLY = {
   button: "SIGN UP",
 } as const;
 
+/** The terminal's secret game. Not in `help`, not on the desktop. */
+export const INKBLOT = {
+  title: "INKBLOT.EXE",
+  password: "jinn-is-best",
+  unlocked: [
+    "ACCESS GRANTED. Jinn is, in fact, best.",
+    "Launching INKBLOT.EXE…",
+  ],
+  tagline: "You are a black cat. Everything on every surface must go.",
+  controls: "← → move · ↑ or Space jump · ↓ hop down · X swipe · R restart",
+  touch: "Use the buttons below to move, jump and swipe.",
+  start: "Press any key or tap to start",
+  won: "EVERYTHING IS ON THE FLOOR. GOOD CAT.",
+  again: "Press R or tap to knock it all over again",
+} as const;
+
 /** Desktop icon labels, in desktop order. The label is also the window title. */
 export const APP_LABELS = {
   readme: "README.TXT",

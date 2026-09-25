@@ -135,3 +135,19 @@ test("the Start menu opens any program", async ({ page }) => {
   // Esc shut the menu, not the window under it.
   await expect(page.getByRole("dialog", { name: "MAP.GPS" })).toBeVisible();
 });
+
+test("the terminal hides a game behind jinn-is-best", async ({ page }) => {
+  await page.getByRole("button", { name: "Close README.TXT" }).click();
+  // Not on the desktop, not in the Start menu.
+  await expect(page.getByRole("button", { name: /INKBLOT/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Open TERMINAL" }).click();
+  const prompt = page.getByLabel("burner@404:~$");
+  await prompt.fill("jinn-is-best");
+  await prompt.press("Enter");
+  const game = page.getByRole("dialog", { name: "INKBLOT.EXE" });
+  await expect(game).toBeVisible();
+  await expect(game.getByRole("application")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(game).toHaveCount(0);
+});

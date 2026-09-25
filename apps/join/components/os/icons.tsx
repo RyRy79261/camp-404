@@ -80,6 +80,13 @@ const PATHS: Record<AppId, ReactNode> = {
       <path d="M11 21l6 5-6 5M20 32h9" />
     </>
   ),
+  inkblot: (
+    <>
+      <path d="M12 38c-4-2-5-8-2-12 1-6 7-9 12-8l3-8 4 7c4 0 8 2 10 5l6-6-1 9c3 4 2 10-2 13-6 4-24 4-30 0z" />
+      <path d="M18 28h0M30 28h0" strokeWidth={3} />
+      <path d="M40 38c4 1 6 4 4 7" />
+    </>
+  ),
   apply: (
     <>
       <path d="M10 20V7l8 7h12l8-7v13" />
