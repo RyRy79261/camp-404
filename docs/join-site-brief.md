@@ -1,7 +1,9 @@
 # join.camp-404.com — build brief
 
-Handoff notes for building the Camp 404 recruitment site. Nothing is built
-yet; this is the plan agreed in chat on 2026-09-25.
+Handoff notes for building the Camp 404 recruitment site, agreed in chat on
+2026-09-25. [CORRECTION 2026-09-25] It is now built: `apps/join`. The owner's
+answers below settle the open questions; the copy lives in
+`apps/join/lib/content.ts`.
 
 ## What it is
 
@@ -44,8 +46,10 @@ Copy the interaction model, not their assets or wording.
 **Owner, 2026-09-25: "Use the same color scheme and vibes as the rest of the
 site."** Not Dimensional's cyan.
 
-[UNRESOLVED 2026-09-25] "The rest of the site" has two looks; confirm which
-with the owner before styling:
+[CORRECTION 2026-09-25] The owner picked **the public landing page's glitch
+look**. Of three prototype desktops (kept on the local
+`prototype/join-desktops` branch) the owner picked the Dimensional-style one.
+The two looks were:
 
 - **The public landing page** (`apps/web/app/landing-hero.tsx`): Camp 404's
   own glitch design — deep purple background `oklch(0.15 0.05 295)`, hot
@@ -190,9 +194,13 @@ water (R50K), 24/7 power & lights (R10K), decor (R10K), gifts and artworks,
 transport & storage (R100K). Finances fully transparent. Paying doesn't make
 it appear — you still help build it.
 **Camp fee (required): USD 404–1404 recommended. Tent fee (optional): TBC.**
-[UNRESOLVED 2026-09-25] AGENTS.md says money is in South African rands only;
-that rule covers the app's ledger, but check with the owner whether the join
-site should show the fee in rands too.
+[CORRECTION 2026-09-25] The owner chose rands. [UNRESOLVED 2026-09-25] The
+rand range is not given yet; the site shows a placeholder R4,040–R14,040
+(`FEE.recommended` in `apps/join/lib/content.ts`) until the owner sets it.
+[CORRECTION 2026-09-25] The copy was written for the 2026 Burn, which is past.
+The owner chose to say 2027, with the 2026 timeline shown as "2027 dates to be
+confirmed". The Google Form link is still the 2026 one; swap `APPLY_URL` when
+the 2027 form exists.
 Guidance: start from what you'd spend on food for ~10 days, plus your usual
 camping basics (R2,000–R8,000). Or set your total Burn budget and fill it:
 ticket, petrol, drugs/alcohol, extra food, gifts, then camp fees. "A Burn

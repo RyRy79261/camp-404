@@ -16,16 +16,8 @@ import {
   type AppId,
   type Viewport,
 } from "@/lib/window-manager";
-import { PrototypeSwitcher } from "../prototype-switcher";
 import { Boot } from "./boot";
-import {
-  DesktopA,
-  DesktopB,
-  DesktopC,
-  PhoneDesktop,
-  VARIANTS,
-  type VariantKey,
-} from "./desktops.prototype";
+import { Desktop } from "./desktop";
 import { OsWindowFrame } from "./os-window";
 import { WindowContent } from "./windows";
 
@@ -43,19 +35,11 @@ function usePhone() {
   );
 }
 
-function readVariant(): VariantKey {
-  const v = new URLSearchParams(window.location.search).get("variant");
-  return v && v in VARIANTS ? (v as VariantKey) : "A";
-}
-
 export function Os() {
   const [booting, setBooting] = useState(true);
   const [wm, dispatch] = useReducer(wmReducer, INITIAL_WM);
-  const [variant, setVariant] = useState<VariantKey>("A");
   const phone = usePhone();
   const layer = useRef<HTMLDivElement>(null);
-
-  useEffect(() => setVariant(readVariant()), []);
 
   const viewport = useCallback((): Viewport => {
     const r = layer.current?.getBoundingClientRect();
@@ -110,19 +94,6 @@ export function Os() {
     setBooting(true);
   }
 
-  function changeVariant(key: VariantKey) {
-    setVariant(key);
-    const url = new URL(window.location.href);
-    url.searchParams.set("variant", key);
-    window.history.replaceState(null, "", url);
-    dispatch({ type: "closeAll" });
-    requestAnimationFrame(() => openApp("readme"));
-  }
-
-  const Desktop = phone
-    ? PhoneDesktop
-    : { A: DesktopA, B: DesktopB, C: DesktopC }[variant];
-
   // On a phone the stack shows only its top window; the rest wait under it.
   const shown = phone && top ? [top] : wm.windows;
 
@@ -130,7 +101,7 @@ export function Os() {
     <>
       <Desktop
         windows={wm.windows}
-        topId={top?.id}
+        phone={phone}
         onOpen={openApp}
         onReboot={reboot}
       >
@@ -157,19 +128,16 @@ export function Os() {
                 })
               }
             >
-              <WindowContent id={w.id} openApp={openApp} />
+              <WindowContent
+                id={w.id}
+                openApp={openApp}
+                close={() => closeApp(w.id)}
+              />
             </OsWindowFrame>
           ))}
         </div>
       </Desktop>
       {booting && <Boot onDone={finishBoot} />}
-      {!phone && (
-        <PrototypeSwitcher
-          variants={VARIANTS}
-          current={variant}
-          onChange={changeVariant}
-        />
-      )}
     </>
   );
 }

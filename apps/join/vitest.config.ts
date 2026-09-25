@@ -9,6 +9,8 @@ export default defineConfig({
       include: ["lib/**/*.ts"],
       exclude: ["**/*.test.ts"],
       reporter: ["text-summary", "json-summary"],
+      // Measured on 2026-09-25 minus 3 points, as apps/web does.
+      thresholds: { statements: 75, branches: 69, functions: 71, lines: 77 },
     },
   },
 });

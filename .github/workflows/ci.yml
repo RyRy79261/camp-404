@@ -249,6 +249,36 @@ jobs:
   # questionnaire engine and the year rollover, which the in-memory store
   # cannot run (owner's call E2E-DB). Postgres and the local Neon proxy run as
   # service containers, so it needs no Neon branch and no secrets.
+  # join.camp-404.com's smoke test (apps/join): the boot skips, an icon opens
+  # its window, Esc closes it, APPLY links to the form. The site is static, so
+  # this needs no database and no secrets.
+  e2e-join:
+    needs: [changes]
+    if: needs.changes.outputs.src == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright browser + system deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @camp404/join exec playwright install --with-deps chromium
+      - name: Install Playwright system deps (cached browser)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @camp404/join exec playwright install-deps chromium
+      - name: Run join smoke tests
+        run: pnpm --filter @camp404/join test:e2e
+
   e2e-db:
     needs: [changes]
     if: needs.changes.outputs.src == 'true'
@@ -332,7 +362,20 @@ jobs:
 
   ci-pass:
     if: always()
-    needs: [changes, lint, typecheck, test, build, e2e, e2e-db, schema-migration, supply-chain, commitlint]
+    needs:
+      [
+        changes,
+        lint,
+        typecheck,
+        test,
+        build,
+        e2e,
+        e2e-join,
+        e2e-db,
+        schema-migration,
+        supply-chain,
+        commitlint,
+      ]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -357,6 +400,7 @@ jobs:
           echo "=== Gated jobs (success or skipped) ==="
           echo "test: ${{ needs.test.result }}"
           echo "e2e: ${{ needs.e2e.result }}"
+          echo "e2e-join: ${{ needs.e2e-join.result }}"
           echo "e2e-db: ${{ needs.e2e-db.result }}"
           echo "schema-migration: ${{ needs.schema-migration.result }}"
           echo "commitlint: ${{ needs.commitlint.result }}"
@@ -365,6 +409,7 @@ jobs:
           for result in \
             "${{ needs.test.result }}" \
             "${{ needs.e2e.result }}" \
+            "${{ needs.e2e-join.result }}" \
             "${{ needs.e2e-db.result }}" \
             "${{ needs.schema-migration.result }}" \
             "${{ needs.commitlint.result }}"; do

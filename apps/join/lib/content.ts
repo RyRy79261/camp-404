@@ -4,7 +4,9 @@
 
 export const APPLY_URL = "https://forms.gle/MWFrCzQzvF3EG7n57";
 
-export const BURN_YEAR = 2026;
+// [CORRECTION 2026-09-25] The Notion page was written for the 2026 Burn,
+// which is past. The owner chose to say 2027 and mark its dates TBC.
+export const BURN_YEAR = 2027;
 
 export const BOOT_LINES: readonly string[] = [
   "CAMP 404 OS v4.0.4",
@@ -26,10 +28,11 @@ export const DESKTOP = {
   wordmark: "CAMP 404",
   tagline: `VERSION ${BURN_YEAR} — A PLACE FOR THE LOST`,
   footer: [
-    `© ${BURN_YEAR} CAMP 404. A THEME CAMP AT AFRIKABURN, TANKWA TOWN.`,
+    "© CAMP 404. A THEME CAMP AT AFRIKABURN, TANKWA TOWN.",
     "THIS INTERFACE IS PART OF THE BLANKET FORT OF OPPORTUNITY.",
     "UNAUTHORISED FUN, TOMFOOLERY OR COUPS AGAINST THE CHEF ARE ENCOURAGED.",
   ],
+  location: "Tankwa Town · AfrikaBurn",
   reboot: "[REBOOT]",
 } as const;
 
@@ -161,7 +164,7 @@ export const GIFTS = {
     },
     {
       name: "Artworks & activities",
-      text: `${BURN_YEAR}: Chris is making something big and burnable. Always space for more: slam poetry, carrot readings, How to be a Duck workshops.`,
+      text: "Something big and burnable, and always space for more: slam poetry, carrot readings, How to be a Duck workshops.",
     },
   ],
 } as const;
@@ -170,7 +173,7 @@ export const MAP = {
   title: "MAP.GPS",
   plot: "#43",
   lines: [
-    `Plot #43 in 2025. We plan the same block for ${BURN_YEAR}.`,
+    "Plot #43 in 2025. We plan to keep the same block.",
     "A row of toilets directly behind us.",
     "A semi-loud area, but the back (sleeping) borders a sand dune.",
     "Not a sound camp. The lounge sound points away from sleeping, with a long distance between.",
@@ -212,6 +215,7 @@ export type ScheduleEntry = { when: string; what: string; allHands?: boolean };
 
 export const SCHEDULE = {
   title: "SCHEDULE.CAL",
+  datesNote: `How the 2026 Burn ran. ${BURN_YEAR} dates to be confirmed.`,
   before: [
     { when: "Nov / Dec", what: "Kick-off, about six months out." },
     {
@@ -228,7 +232,7 @@ export const SCHEDULE = {
     { when: "21 April", what: "Core crew sets up the stretch tents." },
     {
       when: "22–25 April",
-      what: `Everyone arrives, no later than Saturday 25 April ${BURN_YEAR}.`,
+      what: "Everyone arrives, no later than the Saturday.",
     },
     { when: "26 April", what: "Set-up day.", allHands: true },
     { when: "27 April", what: "The Burn starts." },
