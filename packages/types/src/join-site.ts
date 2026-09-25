@@ -178,17 +178,17 @@ export const DEFAULT_JOIN_CONTENT: JoinSiteContent = {
         name: "The lounge",
         text: "Comfort and entertainment: a safe space to rest, relax, connect and have fun.",
       },
-      {
-        icon: "flames",
-        name: "Dance of 1000 Flames",
-        text: "The main fire performance of the Burn. We manage and coordinate it.",
-      },
     ],
     secondary: [
       {
         icon: "meow",
         name: "Now Now Meow Meow",
         text: "Our Mutant Vehicle, by Kyle & Robyn.",
+      },
+      {
+        icon: "flames",
+        name: "Dance of 1000 Flames",
+        text: "The main fire performance of the Burn. We manage and coordinate it.",
       },
       {
         icon: "art",

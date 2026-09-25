@@ -139,13 +139,16 @@ export function InkblotWin({
             aria-hidden
             className="absolute inset-x-[-2.5rem] bottom-[-0.5rem] top-0 rounded-full bg-[radial-gradient(closest-side,oklch(0.65_0.27_340/0.55),transparent)]"
           />
+          {/* Jinn's head is on the right of his 17-pixel frame (columns
+              8–14, ears on row 4), so the crown moves right and down onto
+              it: at 4 px a pixel, 12 px right and onto the ear tips. */}
           <SpriteSvg
             sprite={CROWN}
-            className="inkblot-bounce relative h-5 w-auto"
+            className="inkblot-bounce relative z-10 h-5 w-auto translate-x-3"
           />
           <SpriteSvg
             sprite={CAT_FRAMES.idle[0]!}
-            className="inkblot-bounce relative -mt-1 h-16 w-auto"
+            className="inkblot-bounce relative -mt-[16px] h-16 w-auto"
           />
         </div>
         <h3

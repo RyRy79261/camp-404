@@ -44,7 +44,7 @@ describe("consoleNavFor", () => {
 
   it("gives a captain the whole Captains menu, in order", () => {
     expect(outline(consoleNavFor("captain")).at(-1)).toBe(
-      "Captains: Camp overview, Questionnaires, Announcements, Payments, Camp settings, Audit, System status",
+      "Captains: Camp overview, Questionnaires, Announcements, Payments, Camp settings, Join site, Audit, System status",
     );
   });
 
