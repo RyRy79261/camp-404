@@ -60,3 +60,11 @@ describe("the join page's Markdown round trip", () => {
     expect(roundTrip("").trim()).toBe("");
   });
 });
+
+describe("Notion's callouts", () => {
+  it("keeps a callout's words when pasted, and drops its <aside> tags", () => {
+    const out = roundTrip("<aside>\n💡 Bring earplugs.\n</aside>\n\nAfter.");
+    expect(out).toContain("Bring earplugs.");
+    expect(out).not.toContain("<aside>");
+  });
+});

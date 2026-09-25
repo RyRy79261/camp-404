@@ -70,6 +70,15 @@ describe("JoinPageBody", () => {
   });
 });
 
+describe("Notion callouts", () => {
+  it("keeps a callout's words even with no blank line after <aside>", () => {
+    const root = html("<aside>\n💡 Bring earplugs.\n</aside>\n\nAfter.");
+    expect(root.textContent).toContain("Bring earplugs.");
+    expect(root.textContent).toContain("After.");
+    expect(root.querySelector("aside")).toBeNull();
+  });
+});
+
 describe("isJoinLinkUrl", () => {
   it("allows web, mail and anchor links only", () => {
     expect(isJoinLinkUrl("https://camp-404.com")).toBe(true);

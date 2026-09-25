@@ -197,26 +197,27 @@ export function JoinPageEditor({
     setSlash(next);
   }, []);
 
-  const insertPictures = React.useCallback(
-    async (files: File[], at?: number) => {
-      const editor = editorRef.current;
-      if (!editor || files.length === 0) return;
-      setUploading((n) => n + files.length);
-      try {
-        for (const file of files) {
-          const url = await uploadPicture(file);
-          if (!url) continue;
-          const chain = editor.chain().focus();
-          (at === undefined ? chain : chain.setTextSelection(at))
-            .setImage({ src: url, alt: altFromFileName(file.name) })
-            .run();
-        }
-      } finally {
-        setUploading((n) => n - files.length);
+  const insertPictures = React.useCallback(async (files: File[]) => {
+    const editor = editorRef.current;
+    if (!editor || files.length === 0) return;
+    setUploading((n) => n + files.length);
+    try {
+      // Each picture goes in at the caret when its upload finishes. A
+      // position taken before the upload could point anywhere by then, if
+      // the captain kept typing.
+      for (const file of files) {
+        const url = await uploadPicture(file);
+        if (!url) continue;
+        editor
+          .chain()
+          .focus()
+          .setImage({ src: url, alt: altFromFileName(file.name) })
+          .run();
       }
-    },
-    [],
-  );
+    } finally {
+      setUploading((n) => n - files.length);
+    }
+  }, []);
 
   // Read the text before the caret and open, move or close the "/" menu.
   const syncSlash = React.useCallback(
@@ -340,11 +341,14 @@ export function JoinPageEditor({
       handleDrop: (view, event) => {
         const pictures = imageFiles(event.dataTransfer?.files);
         if (pictures.length === 0) return false;
+        // Put the caret where the picture was dropped now, while that
+        // position still means that place; the upload inserts at the caret.
         const at = view.posAtCoords({
           left: event.clientX,
           top: event.clientY,
         })?.pos;
-        void insertPictures(pictures, at);
+        if (at !== undefined) editorRef.current?.commands.setTextSelection(at);
+        void insertPictures(pictures);
         return true;
       },
     },

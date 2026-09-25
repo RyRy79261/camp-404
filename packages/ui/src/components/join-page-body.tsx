@@ -67,6 +67,17 @@ export function isJoinLinkUrl(url: string): boolean {
   return /^(?:https?:\/\/|mailto:)/i.test(trimmed);
 }
 
+/**
+ * Notion wraps a callout in <aside> tags. In Markdown an HTML block runs to
+ * the next blank line, so `<aside>` followed directly by text would take the
+ * text with it when raw HTML is dropped. Each tag line becomes a blank line,
+ * and the callout's words stay. (The editor already drops the tags on paste;
+ * this keeps the page safe for any text that reaches it another way.)
+ */
+export function unwrapCallouts(markdown: string): string {
+  return markdown.replace(/^[ \t]*<\/?aside\b[^>\n]*>[ \t]*$/gim, "");
+}
+
 function joinUrl(value: string, key: string): string {
   if (key === "src") return isJoinImageUrl(value) ? value.trim() : "";
   if (key === "href") return isJoinLinkUrl(value) ? value.trim() : "";
@@ -137,7 +148,7 @@ export function JoinPageBody({ markdown, className }: JoinPageBodyProps) {
             ),
         }}
       >
-        {markdown}
+        {unwrapCallouts(markdown)}
       </Markdown>
     </div>
   );
