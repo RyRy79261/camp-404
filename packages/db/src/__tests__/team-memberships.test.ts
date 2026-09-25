@@ -6,6 +6,7 @@ import {
   assignTeam,
   getTeamCoverage,
   getTeamMemberships,
+  listTeamPeople,
   removeTeam,
   setLead,
 } from "../team-memberships";
@@ -462,5 +463,99 @@ describe("getTeamCoverage", () => {
     expect(await getTeamCoverage()).toEqual([
       { team: "kitchen", members: 1, leads: 0, cycle: 1 },
     ]);
+  });
+});
+
+describe("listTeamPeople", () => {
+  const h = useTestDb();
+
+  it("lists this year's team, leads first, then by name, with only roster facts", async () => {
+    const db = h.db();
+    const zed = await makeUser(db, {
+      displayName: "Zed",
+      telegramHandle: "zed",
+    });
+    const amy = await makeUser(db, { displayName: "Amy" });
+    const lee = await makeUser(db, { displayName: "Lee", rank: "captain" });
+    const other = await makeUser(db, { displayName: "Otto" });
+    await makeMembership(db, { userId: zed.id, team: "kitchen" });
+    await makeMembership(db, { userId: amy.id, team: "kitchen" });
+    await makeMembership(db, { userId: lee.id, team: "kitchen", isLead: true });
+    // Another team's member is not on this page.
+    await makeMembership(db, { userId: other.id, team: "finance" });
+
+    expect(await listTeamPeople("kitchen")).toEqual([
+      {
+        id: lee.id,
+        displayName: "Lee",
+        handle: null,
+        rank: "captain",
+        isLead: true,
+      },
+      {
+        id: amy.id,
+        displayName: "Amy",
+        handle: null,
+        rank: "member",
+        isLead: false,
+      },
+      {
+        id: zed.id,
+        displayName: "Zed",
+        handle: "zed",
+        rank: "member",
+        isLead: false,
+      },
+    ]);
+    expect(await listTeamPeople("structures")).toEqual([]);
+  });
+
+  it("reads THIS year only: last year's lead is not this year's", async () => {
+    const db = h.db();
+    const veteran = await makeUser(db, { displayName: "Vet" });
+    const cook = await makeUser(db, { displayName: "Cook" });
+    await foundedAt(db, 2027);
+    await makeMembership(db, {
+      userId: veteran.id,
+      team: "kitchen",
+      isLead: true,
+      cycle: 2026,
+    });
+    await assignTeam({ userId: cook.id, team: "kitchen" });
+
+    expect((await listTeamPeople("kitchen")).map((p) => p.id)).toEqual([
+      cook.id,
+    ]);
+  });
+
+  it("leaves out system actors, erased accounts and declined sign-ups", async () => {
+    const db = h.db();
+    const cook = await makeUser(db, { displayName: "Cook" });
+    const pending = await makeUser(db, {
+      displayName: "Applicant",
+      approvalStatus: "pending",
+    });
+    const bot = await makeUser(db, { isSystem: true });
+    const lostCat = await makeUser(db, { sanitised: true });
+    const declined = await makeUser(db, { approvalStatus: "rejected" });
+    for (const u of [cook, pending, bot, lostCat, declined]) {
+      await makeMembership(db, { userId: u.id, team: "kitchen" });
+    }
+
+    // An applicant still waiting is on the roster a member browses, so here too.
+    expect((await listTeamPeople("kitchen")).map((p) => p.id)).toEqual([
+      pending.id,
+      cook.id,
+    ]);
+  });
+
+  it("names a member with no name the way the roster does", async () => {
+    const db = h.db();
+    const blank = await makeUser(db, { displayName: "  " });
+    await makeMembership(db, { userId: blank.id, team: "kitchen" });
+
+    expect((await listTeamPeople("kitchen"))[0]?.displayName).toBe(
+      "Unnamed burner",
+    );
   });
 });

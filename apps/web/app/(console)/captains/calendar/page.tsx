@@ -51,8 +51,8 @@ export default async function AddCalendarEventPage() {
         title="Add an event"
         description={
           isCaptain
-            ? "Put an event on the camp's shared Google Calendar, for the whole camp or one team. It shows on Home under Coming up."
-            : "Put an event on the camp's shared Google Calendar for a team you lead. It shows on Home under Coming up."
+            ? "Put an event on the camp's shared Google Calendar, for the whole camp or one team. It shows on the Calendar and on Home under Coming up."
+            : "Put an event on the camp's shared Google Calendar for a team you lead. It shows on the Calendar and on Home under Coming up."
         }
       />
 

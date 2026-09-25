@@ -104,14 +104,19 @@ test.describe("camp calendar (test-mode)", () => {
 
     await login(page, { id: "cal-cook", email: "cal-cook@example.com" });
     const mine = await comingUp(page, "Kitchen briefing");
-    await expect(mine.getByText("Yours · Kitchen")).toBeVisible();
+    // One of your teams' events: a border and a star, and the plain badge.
+    await expect(mine.getByText("Kitchen", { exact: true })).toBeVisible();
+    await expect(mine.locator("[data-mine]")).toHaveCount(1);
+    await expect(mine.locator("svg.lucide-star")).toHaveCount(1);
+    await expect(mine.getByText(/Yours/)).toHaveCount(0);
     await expect(mine.getByText("In 7 days")).toBeVisible();
     await expect(mine.getByText(/· 18:00$/)).toBeVisible();
 
     await login(page, { id: "cal-money", email: "cal-money@example.com" });
     const theirs = await comingUp(page, "Kitchen briefing");
     await expect(theirs.getByText("Kitchen", { exact: true })).toBeVisible();
-    await expect(theirs.getByText(/Yours/)).toHaveCount(0);
+    await expect(theirs.locator("[data-mine]")).toHaveCount(0);
+    await expect(theirs.locator("svg.lucide-star")).toHaveCount(0);
   });
 
   test("a captain adds an all-day event for the whole camp, which wears no badge", async ({
@@ -137,7 +142,7 @@ test.describe("camp calendar (test-mode)", () => {
     await login(page, { id: "cal-crew", email: "cal-crew@example.com" });
     const row = await comingUp(page, "Build day");
     await expect(row.getByText("In 7 days")).toBeVisible();
-    await expect(row.getByText(/Yours/)).toHaveCount(0);
+    await expect(row.locator("[data-mine]")).toHaveCount(0);
     await expect(row.getByText("Kitchen", { exact: true })).toHaveCount(0);
   });
 
@@ -166,5 +171,111 @@ test.describe("camp calendar (test-mode)", () => {
     ).toBeVisible();
     await expect(page.getByText("Team leads and captains only")).toBeVisible();
     await expect(page.locator("#event-team")).toHaveCount(0);
+  });
+
+  test("the Calendar page lists events by day, filters by team, and opens a team's page", async ({
+    page,
+    request,
+  }) => {
+    await approvedMember(page, request, "cal-money", "Finance Crew");
+    await seedTeam(request, "cal-money", "finance");
+    await approvedMember(page, request, "cal-lead", "Kitchen Lead");
+    await seedTeam(request, "cal-lead", "kitchen", true);
+
+    // The lead adds a Kitchen event: Google would hold it as "Kitchen Team -
+    // Kitchen briefing" (the store keeps it the same way).
+    await page.goto("/captains/calendar");
+    await page.locator("#event-team").click();
+    await page.getByRole("option", { name: "Kitchen" }).click();
+    await expect(
+      page.getByText("Google Calendar shows it as “Kitchen Team - …”."),
+    ).toBeVisible();
+    // The preview says whose view it is: the team's, with its border and star.
+    await expect(
+      page.getByText("Preview — how the Kitchen team sees it on Home"),
+    ).toBeVisible();
+    await fillEvent(page, {
+      title: "Kitchen briefing",
+      start: "18:00",
+      end: "19:30",
+    });
+
+    await login(page, {
+      id: "cal-cap",
+      email: "god@example.com",
+      displayName: "Cap Tain",
+    });
+    await page.goto("/");
+    await completeOnboarding(request, "cal-cap");
+    await setRank(request, "cal-cap", "captain");
+    await page.goto("/captains/calendar");
+    await fillEvent(page, { title: "Build day" });
+
+    // Any member reaches the calendar from the nav.
+    await login(page, { id: "cal-money", email: "cal-money@example.com" });
+    await page.goto("/");
+    await page
+      .getByRole("navigation", { name: "Console" })
+      .getByRole("link", { name: "Calendar" })
+      .click();
+    await expect(page).toHaveURL(/\/calendar$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Calendar" }),
+    ).toBeVisible();
+    // A plain member adds nothing here.
+    await expect(page.getByRole("link", { name: "Add event" })).toHaveCount(0);
+
+    // Both events sit under the same day, the team's with its badge, the
+    // title without the team's prefix.
+    const day = page.getByRole("list").filter({ hasText: "Kitchen briefing" });
+    await expect(day.getByText("Build day")).toBeVisible();
+    await expect(day.getByText("All day")).toBeVisible();
+    await expect(day.getByText("18:00")).toBeVisible();
+    await expect(day.getByText("Kitchen Team - Kitchen briefing")).toHaveCount(
+      0,
+    );
+
+    // The filter keeps one team's events.
+    await page.locator("#calendar-filter-team").click();
+    await page.getByRole("option", { name: "Kitchen", exact: true }).click();
+    await expect(page).toHaveURL(/\/calendar\?team=kitchen$/);
+    await expect(page.getByText("Kitchen briefing")).toBeVisible();
+    await expect(page.getByText("Build day")).toHaveCount(0);
+
+    await page.locator("#calendar-filter-team").click();
+    await page.getByRole("option", { name: "Whole camp" }).click();
+    await expect(page).toHaveURL(/\/calendar\?team=camp$/);
+    await expect(page.getByText("Build day")).toBeVisible();
+    await expect(page.getByText("Kitchen briefing")).toHaveCount(0);
+
+    await page.locator("#calendar-filter-team").click();
+    await page.getByRole("option", { name: "Finance", exact: true }).click();
+    await expect(page.getByText("No Finance events coming up.")).toBeVisible();
+
+    // A team's badge opens that team's page.
+    await page.goto("/calendar");
+    await page.getByRole("link", { name: "Kitchen", exact: true }).click();
+    await expect(page).toHaveURL(/\/teams\/kitchen$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Kitchen" }),
+    ).toBeVisible();
+  });
+
+  test("a lead sees Add event on the Calendar page", async ({
+    page,
+    request,
+  }) => {
+    await approvedMember(page, request, "cal-lead", "Kitchen Lead");
+    await seedTeam(request, "cal-lead", "kitchen", true);
+
+    await page.goto("/calendar");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Calendar" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Nothing on the calendar for the year ahead."),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "Add event" }).click();
+    await expect(page).toHaveURL(/\/captains\/calendar$/);
   });
 });

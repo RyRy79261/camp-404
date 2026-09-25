@@ -11,6 +11,8 @@ import {
   type CalendarEventBody,
   forgetCalendarCache,
   getUpcomingEvents as readGoogleCalendar,
+  HOME_RANGE,
+  type CalendarRange,
   type CalendarResult,
 } from "./google-calendar";
 import { usesTestStore } from "./test-mode";
@@ -34,11 +36,18 @@ export const CALENDAR_UNREACHABLE =
 export const CALENDAR_NOT_RECORDED =
   "Couldn't record the event, so it wasn't added. Try again.";
 
-/** The next events on the camp calendar, for Home's "Coming up". */
-export async function getUpcomingEvents(): Promise<CalendarResult> {
+/**
+ * The next events on the camp calendar: by default Home's "Coming up" (the
+ * next CALENDAR_WINDOW_DAYS, a handful); the Calendar and team pages pass
+ * CALENDAR_PAGE_RANGE.
+ */
+export async function getUpcomingEvents(
+  range: CalendarRange = HOME_RANGE,
+): Promise<CalendarResult> {
+  const now = new Date();
   return usesTestStore()
-    ? testStore.listCalendarEvents(new Date())
-    : readGoogleCalendar();
+    ? testStore.listCalendarEvents(now, range)
+    : readGoogleCalendar(process.env, now, undefined, range);
 }
 
 /** Whether the add-event page can write anywhere. */
@@ -65,6 +74,7 @@ export async function addCalendarEvent(input: {
     return testStore.addCalendarEvent({
       actorId,
       team: event.team,
+      teamLabel: event.team ? (input.teamLabel ?? event.team) : null,
       title: event.title,
       date: event.date,
       allDay: event.allDay,

@@ -21,6 +21,9 @@ export const CONSOLE_NAV: readonly ConsoleNavEntry[] = [
   { href: "/", label: "Home", rank: "camp_member" },
   // The shared task board: every approved member sees every task.
   { href: "/tasks", label: "Tasks", rank: "camp_member" },
+  // The camp calendar, by day, with a team filter; each team's badge opens
+  // that team's page. Adding an event stays with captains and leads.
+  { href: "/calendar", label: "Calendar", rank: "camp_member" },
   // The power plan: every member reads the load list and the fuel estimate;
   // Power & Lighting leads and captains edit them. /power sends on to the load
   // list, and the entry stays lit on both pages beneath it.

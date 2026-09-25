@@ -12,12 +12,15 @@ import {
   assignTeam as dbAssignTeam,
   getTeamCoverage as dbGetTeamCoverage,
   getTeamMemberships as dbGetTeamMemberships,
+  listTeamPeople as dbListTeamPeople,
   removeTeam as dbRemoveTeam,
   setLead as dbSetLead,
   type SetLeadResult,
   type TeamCoverage,
   type TeamMembership,
+  type TeamPerson,
   type TeamWriteInput,
+  type Team,
 } from "@camp404/db/team-memberships";
 import { listMemberQuestionnaireGates as dbListMemberQuestionnaireGates } from "@camp404/db/activations";
 import {
@@ -34,7 +37,7 @@ import { testStore } from "./test-store";
 // Playwright runs. The captain pages import the read from here; the pure
 // view-models stay in `lib/camp-roster.ts`.
 
-export type { CampManagementMember, TeamCoverage };
+export type { CampManagementMember, TeamCoverage, TeamPerson };
 
 type QuestionnaireGate = Awaited<
   ReturnType<typeof dbListMemberQuestionnaireGates>
@@ -45,6 +48,7 @@ interface RosterBackend {
     options?: CampManagementRosterOptions,
   ): Promise<CampManagementMember[]>;
   getTeamCoverage(): Promise<TeamCoverage[]>;
+  listTeamPeople(team: Team): Promise<TeamPerson[]>;
   getCampMemberDetail(
     userId: string,
     options?: CampMemberDetailOptions,
@@ -66,6 +70,7 @@ interface RosterBackend {
 const realBackend: RosterBackend = {
   getCampManagementRoster: (options) => dbGetCampManagementRoster(options),
   getTeamCoverage: () => dbGetTeamCoverage(),
+  listTeamPeople: (team) => dbListTeamPeople(team),
   getCampMemberDetail: (userId, options) =>
     dbGetCampMemberDetail(userId, options),
   getTeamMemberships: (userId) => dbGetTeamMemberships(userId),
@@ -83,6 +88,9 @@ const testBackend: RosterBackend = {
   },
   async getTeamCoverage() {
     return testStore.getTeamCoverage();
+  },
+  async listTeamPeople(team) {
+    return testStore.listTeamPeople(team);
   },
   async getCampMemberDetail(userId, options) {
     return testStore.getCampMemberDetail(userId, options);
@@ -128,6 +136,15 @@ export function getCampManagementRoster(
  */
 export function getTeamCoverage(): Promise<TeamCoverage[]> {
   return backend().getTeamCoverage();
+}
+
+/**
+ * Everyone on one team this year, leads first — the team page's people. Only
+ * what the member roster shows every approved member, so any approved member's
+ * page may read it.
+ */
+export function listTeamPeople(team: Team): Promise<TeamPerson[]> {
+  return backend().listTeamPeople(team);
 }
 
 // --- The captain member panel's reads ----------------------------------------

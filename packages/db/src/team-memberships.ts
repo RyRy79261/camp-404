@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { writeAuditEvent } from "./audit";
@@ -214,7 +214,8 @@ export async function setLead(
       )
       .limit(1);
 
-    if (!existing) return { ok: false as const, reason: "not_a_member" as const };
+    if (!existing)
+      return { ok: false as const, reason: "not_a_member" as const };
     if (existing.isLead === input.isLead) {
       return { ok: true as const, changed: false };
     }
@@ -288,4 +289,57 @@ export async function getTeamCoverage(): Promise<TeamCoverage[]> {
     .groupBy(schema.teamMemberships.team)
     .orderBy(asc(schema.teamMemberships.team));
   return rows.map((row) => ({ ...row, cycle }));
+}
+
+/** One person on a team this year, as any approved member may read them. */
+export interface TeamPerson {
+  id: string;
+  displayName: string;
+  /** Display handle (reuses telegram_handle); null when unset. */
+  handle: string | null;
+  rank: "captain" | "member";
+  /** Leads this team this year. */
+  isLead: boolean;
+}
+
+/**
+ * Everyone on `team` THIS YEAR, leads first, then by name — the team page's
+ * people. Only what the member roster already shows every approved member
+ * (name, handle, rank, and who leads which team: `teamMemberships.isLead` is
+ * `camp_member` in MEMBER_FIELD_READERS); nothing else of theirs is read.
+ *
+ * The same population as the roster a member browses: no AI / voice actors,
+ * no erased "Lost Cat" stubs, and no declined sign-up.
+ */
+export async function listTeamPeople(team: Team): Promise<TeamPerson[]> {
+  const db = createHttpDb();
+  const cycle = await currentCycleNumber();
+  const rows = await db
+    .select({
+      id: schema.users.id,
+      displayName: schema.users.displayName,
+      handle: schema.users.telegramHandle,
+      rank: schema.users.rank,
+      isLead: schema.teamMemberships.isLead,
+    })
+    .from(schema.teamMemberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.teamMemberships.userId))
+    .where(
+      and(
+        eq(schema.teamMemberships.team, team),
+        eq(schema.teamMemberships.cycle, cycle),
+        eq(schema.users.isSystem, false),
+        eq(schema.users.sanitised, false),
+        ne(schema.users.approvalStatus, "rejected"),
+      ),
+    )
+    .orderBy(
+      desc(schema.teamMemberships.isLead),
+      asc(schema.users.displayName),
+      asc(schema.users.id),
+    );
+  return rows.map((r) => ({
+    ...r,
+    displayName: r.displayName?.trim() || "Unnamed burner",
+  }));
 }

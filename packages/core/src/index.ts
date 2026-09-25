@@ -105,6 +105,10 @@
 //   - recipe sources: sourceText (the Markdown-like text Claude reads),
 //     sourceFromText (pasted text into sections), emptySourceSections,
 //     sameSections and sameSource (./recipe-source)
+//   - calendar titles: teamEventTitle (the "Power and Lighting Team -
+//     General meeting" convention), teamEventName, readTeamEvent (an event's
+//     team and bare title, either convention), parseTeamTag, teamForTag
+//     (./calendar-titles)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -151,3 +155,4 @@ export * from "./participation";
 export * from "./power";
 export * from "./recipes";
 export * from "./recipe-source";
+export * from "./calendar-titles";

@@ -468,3 +468,69 @@ describe("the lead the store produces is the lead the send gate sees", () => {
     expect(canSendToAudience(actor, { scope: "everyone" })).toBe(false);
   });
 });
+
+describe("testStore.listTeamPeople — the team page's read, mirrored", () => {
+  it("lists this year's team, leads first, then by name", () => {
+    const zed = makeUser("Zed");
+    const amy = makeUser("Amy");
+    const lee = makeUser("Lee", "captain");
+    const other = makeUser("Otto");
+    testStore.seedTeamMembership({ userId: zed.id, team: "kitchen" });
+    testStore.seedTeamMembership({ userId: amy.id, team: "kitchen" });
+    testStore.seedTeamMembership({
+      userId: lee.id,
+      team: "kitchen",
+      isLead: true,
+    });
+    testStore.seedTeamMembership({ userId: other.id, team: "finance" });
+
+    expect(testStore.listTeamPeople("kitchen")).toEqual([
+      {
+        id: lee.id,
+        displayName: "Lee",
+        handle: null,
+        rank: "captain",
+        isLead: true,
+      },
+      {
+        id: amy.id,
+        displayName: "Amy",
+        handle: null,
+        rank: "member",
+        isLead: false,
+      },
+      {
+        id: zed.id,
+        displayName: "Zed",
+        handle: null,
+        rank: "member",
+        isLead: false,
+      },
+    ]);
+    expect(testStore.listTeamPeople("structures")).toEqual([]);
+  });
+
+  it("reads THIS year only, and leaves out a declined sign-up", () => {
+    const veteran = makeUser("Vet");
+    const cook = makeUser("Cook");
+    const declined = testStore.createUser({
+      authUserId: "auth-declined",
+      displayName: "Declined",
+      inviteCode: "seeded",
+      approvalStatus: "rejected",
+    });
+    foundedAt(2027);
+    testStore.seedTeamMembership({
+      userId: veteran.id,
+      team: "kitchen",
+      isLead: true,
+      cycle: 2026,
+    });
+    testStore.assignTeam({ userId: cook.id, team: "kitchen" });
+    testStore.seedTeamMembership({ userId: declined.id, team: "kitchen" });
+
+    expect(testStore.listTeamPeople("kitchen").map((p) => p.id)).toEqual([
+      cook.id,
+    ]);
+  });
+});

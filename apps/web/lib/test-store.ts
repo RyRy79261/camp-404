@@ -31,6 +31,7 @@ import {
   sameSections,
   sourceFromText,
   sourceText,
+  teamEventTitle,
   type AuditAction,
 } from "@camp404/core";
 import {
@@ -227,6 +228,7 @@ import type {
   SetLeadResult,
   TeamCoverage,
   TeamMembership,
+  TeamPerson,
 } from "@camp404/db/team-memberships";
 import type {
   EmergencyContact,
@@ -241,6 +243,7 @@ import {
   CALENDAR_MAX_EVENTS,
   CALENDAR_WINDOW_DAYS,
   type CalendarEvent,
+  type CalendarRange,
 } from "./google-calendar";
 
 // Process-scoped in-memory replacement for the Neon-backed user and
@@ -2231,6 +2234,36 @@ export const testStore = {
       .sort((a, b) => a.team.localeCompare(b.team));
   },
 
+  /**
+   * Everyone on one team THIS YEAR, leads first, then by name — the twin of
+   * @camp404/db/team-memberships.listTeamPeople: no declined sign-up, and a
+   * membership whose member is gone is not listed.
+   */
+  listTeamPeople(team: Team): TeamPerson[] {
+    const cycle = currentCycleNumber();
+    return teamMemberships
+      .filter((m) => m.team === team && m.cycle === cycle)
+      .flatMap((m) => {
+        const user = findUserById(m.userId);
+        if (!user || user.approvalStatus === "rejected") return [];
+        return [
+          {
+            id: user.id,
+            displayName: user.displayName?.trim() || "Unnamed burner",
+            handle: user.telegramHandle,
+            rank: user.rank,
+            isLead: m.isLead,
+          },
+        ];
+      })
+      .sort(
+        (a, b) =>
+          Number(b.isLead) - Number(a.isLead) ||
+          a.displayName.localeCompare(b.displayName) ||
+          a.id.localeCompare(b.id),
+      );
+  },
+
   // The family tree's referral list: every user with the id of whoever made
   // the invite code they redeemed, by name, as @camp404/db/relations does.
   getReferralRoster(): ReferralUser[] {
@@ -2793,11 +2826,18 @@ export const testStore = {
 
   /**
    * Twin of the Google read (getUpcomingEvents): the next events from now up to
-   * CALENDAR_WINDOW_DAYS ahead, soonest first, at most CALENDAR_MAX_EVENTS. An
-   * all-day event counts for its whole camp day.
+   * `range.days` ahead (Home: CALENDAR_WINDOW_DAYS), soonest first, at most
+   * `range.max` (Home: CALENDAR_MAX_EVENTS). An all-day event counts for its
+   * whole camp day.
    */
-  listCalendarEvents(now: Date): { status: "ok"; events: CalendarEvent[] } {
-    const until = now.getTime() + CALENDAR_WINDOW_DAYS * 86_400_000;
+  listCalendarEvents(
+    now: Date,
+    range: CalendarRange = {
+      days: CALENDAR_WINDOW_DAYS,
+      max: CALENDAR_MAX_EVENTS,
+    },
+  ): { status: "ok"; events: CalendarEvent[] } {
+    const until = now.getTime() + range.days * 86_400_000;
     const events = calendarEvents
       .filter((e) => {
         const ends = e.allDay
@@ -2806,7 +2846,7 @@ export const testStore = {
         return ends > now.getTime() && e.startsAt.getTime() <= until;
       })
       .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
-      .slice(0, CALENDAR_MAX_EVENTS)
+      .slice(0, range.max)
       .map((e) => ({
         id: e.id,
         title: e.title,
@@ -2818,10 +2858,15 @@ export const testStore = {
     return { status: "ok", events };
   },
 
-  /** Twin of addCampCalendarEvent: the same reach rule, then the event. */
+  /**
+   * Twin of addCampCalendarEvent: the same reach rule, then the event, titled
+   * as Google would hold it ("Kitchen Team - Briefing") with its team key as
+   * the private property.
+   */
   addCalendarEvent(input: {
     actorId: string;
     team: Team | null;
+    teamLabel: string | null;
     title: string;
     date: string;
     allDay: boolean;
@@ -2838,7 +2883,7 @@ export const testStore = {
       : `${input.date}T${input.start ?? "00:00"}:00+02:00`;
     calendarEvents.push({
       id,
-      title: input.title,
+      title: teamEventTitle(input.teamLabel, input.title),
       start,
       allDay: input.allDay,
       location: null,

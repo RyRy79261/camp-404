@@ -42,6 +42,7 @@ import {
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { cn } from "@camp404/ui/lib/utils";
 import type { HomeModel, HomeModuleIcon } from "@/lib/home";
+import { MINE_ROW, MineStar } from "@/components/calendar/calendar-days";
 
 // A member's own home: what to do, what's coming, and the few places that are
 // theirs. Built for someone easily overwhelmed (owner, 2026-09-23): short
@@ -203,12 +204,21 @@ function ComingUpCard({
           <ul aria-label="Coming up" className="-my-3 divide-y divide-border">
             {upcoming.map((item) => (
               <li key={item.id}>
-                <Row>
-                  <span className="w-24 shrink-0 text-xs font-semibold uppercase tracking-wide text-accent">
+                {/* On a phone the badge drops under the title, so a long team
+                    name never pushes the card wider than the screen. */}
+                <div
+                  data-mine={item.team?.mine ? "" : undefined}
+                  className={cn(
+                    "grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 sm:grid-cols-[6rem_minmax(0,1fr)_auto]",
+                    item.team?.mine && MINE_ROW,
+                  )}
+                >
+                  <span className="text-xs font-semibold uppercase tracking-wide text-accent">
                     {item.relative}
                   </span>
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">
+                      {item.team?.mine ? <MineStar /> : null}
                       {item.title}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
@@ -217,20 +227,15 @@ function ComingUpCard({
                         : item.when}
                     </span>
                   </span>
-                  {/* A team's event: yours when you are on the team. A
-                      camp-wide event wears no badge. */}
+                  {/* A team's event wears the team's badge; one of your
+                      teams' events also gets the border and star. A camp-wide
+                      event wears no badge. */}
                   {item.team ? (
-                    item.team.mine ? (
-                      <Badge className="shrink-0">
-                        Yours · {item.team.label}
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="shrink-0">
-                        {item.team.label}
-                      </Badge>
-                    )
+                    <span className="col-start-2 justify-self-start sm:col-start-3 sm:row-start-1 sm:justify-self-end">
+                      <Badge variant="outline">{item.team.label}</Badge>
+                    </span>
                   ) : null}
-                </Row>
+                </div>
               </li>
             ))}
           </ul>
@@ -238,6 +243,12 @@ function ComingUpCard({
         {upcoming.length > 0 && note ? (
           <p className="text-xs text-muted-foreground">{note}</p>
         ) : null}
+        <Link
+          href="/calendar"
+          className="mt-3 self-start text-xs font-medium text-accent hover:underline"
+        >
+          See the calendar
+        </Link>
       </CardContent>
     </Card>
   );
@@ -509,7 +520,9 @@ export function HomeView({ home }: { home: HomeModel }) {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* One column on a phone that never grows past the screen: an auto
+          column would take the width of the longest task title. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
           <ModuleGrid modules={home.modules} />
           {home.waitingForApproval ? (
