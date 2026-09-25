@@ -12,15 +12,15 @@ test.beforeEach(async ({ page }) => {
   await page.keyboard.press("Space");
   await expect(page.getByRole("status")).toHaveCount(0);
   // README.TXT opens once the boot ends.
-  await expect(page.getByRole("dialog", { name: "README.TXT" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "README.TXT" })).toBeVisible();
 });
 
 test("an icon opens its window and Esc closes it", async ({ page }) => {
   await page.getByRole("button", { name: "Close README.TXT" }).click();
-  await expect(page.getByRole("dialog", { name: "README.TXT" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "README.TXT" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Open CREW.DB" }).click();
-  const crew = page.getByRole("dialog", { name: "CREW.DB" });
+  const crew = page.getByRole("region", { name: "CREW.DB" });
   await expect(crew).toBeVisible();
   await expect(crew).toBeFocused();
   await expect(crew.getByRole("row", { name: /Ryan/ })).toBeVisible();
@@ -45,17 +45,17 @@ test("the terminal runs commands and opens APPLY.EXE", async ({ page }) => {
 
   await prompt.fill("apply");
   await prompt.press("Enter");
-  await expect(page.getByRole("dialog", { name: "APPLY.EXE" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "APPLY.EXE" })).toBeVisible();
 });
 
 test("APPLY links to sign-up and asks for an invite code", async ({ page }) => {
   await page.getByRole("button", { name: "Close README.TXT" }).click();
   await page.getByRole("button", { name: "Open APPLY.EXE" }).click();
   const apply = page
-    .getByRole("dialog", { name: "APPLY.EXE" })
+    .getByRole("region", { name: "APPLY.EXE" })
     .getByRole("link", { name: /sign up/i });
   await expect(apply).toHaveAttribute("href", SIGNUP_URL);
-  await expect(page.getByRole("dialog", { name: "APPLY.EXE" })).toContainText(
+  await expect(page.getByRole("region", { name: "APPLY.EXE" })).toContainText(
     "invite code",
   );
 });
@@ -63,7 +63,7 @@ test("APPLY links to sign-up and asks for an invite code", async ({ page }) => {
 test("the fee scale moves between tiers", async ({ page }) => {
   await page.getByRole("button", { name: "Close README.TXT" }).click();
   await page.getByRole("button", { name: "Open FEE.CALC" }).click();
-  const fee = page.getByRole("dialog", { name: "FEE.CALC" });
+  const fee = page.getByRole("region", { name: "FEE.CALC" });
   const slider = fee.getByRole("slider", {
     name: "What I could pay, in rands",
   });
@@ -80,7 +80,7 @@ test("the fee scale moves between tiers", async ({ page }) => {
 test("a window minimises to the taskbar, comes back, goes full screen and resizes", async ({
   page,
 }, testInfo) => {
-  const readme = page.getByRole("dialog", { name: "README.TXT" });
+  const readme = page.getByRole("region", { name: "README.TXT" });
 
   await page.getByRole("button", { name: "Minimise README.TXT" }).click();
   await expect(readme).toBeHidden();
@@ -127,13 +127,13 @@ test("the Start menu opens any program", async ({ page }) => {
   await expect(menu.getByRole("menuitem").first()).toBeFocused();
   await menu.getByRole("menuitem", { name: "MAP.GPS" }).click();
   await expect(menu).toHaveCount(0);
-  await expect(page.getByRole("dialog", { name: "MAP.GPS" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "MAP.GPS" })).toBeVisible();
 
   await page.getByRole("button", { name: "Start" }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu", { name: "Start" })).toHaveCount(0);
   // Esc shut the menu, not the window under it.
-  await expect(page.getByRole("dialog", { name: "MAP.GPS" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "MAP.GPS" })).toBeVisible();
 });
 
 test("the terminal hides a game behind jinn-is-best", async ({ page }) => {
@@ -151,7 +151,7 @@ test("the terminal hides a game behind jinn-is-best", async ({ page }) => {
   const prompt = page.getByLabel("burner@404:~$");
   await prompt.fill("jinn-is-best");
   await prompt.press("Enter");
-  const game = page.getByRole("dialog", { name: "INKBLOT.EXE" });
+  const game = page.getByRole("region", { name: "INKBLOT.EXE" });
   await expect(game).toBeVisible();
   await expect(game.getByRole("application")).toBeFocused();
   await page.keyboard.press("Escape");
@@ -166,7 +166,7 @@ test("clearing INKBLOT.EXE says GOODEST BOI and keeps a speed-of-chaos board", a
   const prompt = page.getByLabel("burner@404:~$");
   await prompt.fill("jinn-is-best");
   await prompt.press("Enter");
-  const game = page.getByRole("dialog", { name: "INKBLOT.EXE" });
+  const game = page.getByRole("region", { name: "INKBLOT.EXE" });
   await game.getByRole("application").press("Enter");
 
   // Development builds expose the game so a test can finish it at once.

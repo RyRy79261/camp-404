@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SIGNUP_URL } from "./content";
 import { DEFAULT_JOIN_DATA, type JoinData } from "./join-data";
-import { runCommand as run } from "./terminal";
+import { runCommand as run } from "./terminal-commands";
 
 const TEAMS = DEFAULT_JOIN_DATA.teams;
 const runCommand = (input: string, data: JoinData = DEFAULT_JOIN_DATA) =>
@@ -54,6 +54,29 @@ describe("runCommand", () => {
     expect(text("sudo rm -rf /")).toContain("Chief Cat Herder");
   });
 
+  it("keeps the rest of its answers and eggs", () => {
+    expect(text("whoami")).toContain("You are lost");
+    expect(text("pwd")).toBe("/tankwa-town/plot-43/blanket-fort");
+    expect(text("cd /")).toContain("you can't leave");
+    expect(text("echo  lost   again")).toBe("lost again");
+    expect(text("hello")).toBe("Hello, lost one.");
+    expect(text("hi")).toBe("Hello, lost one.");
+    expect(text("rm -rf /")).toContain("MOOP detected");
+    expect(text("404")).toBe("ERROR 404: YOU ARE HERE");
+    expect(text("meow")).toContain("Now Now Meow Meow");
+    expect(text("make coffee")).toContain("418");
+    expect(text("coffee")).toContain("418");
+    expect(text("cat quote")).toMatch(/^“.+”$/);
+    expect(text("cat")).toContain("which file?");
+    expect(text("cat nothing.txt")).toContain("No such file");
+    expect(text("ls perks")).toBe(
+      DEFAULT_JOIN_DATA.content.perks.files.map((f) => f.file).join("\n"),
+    );
+    expect(text("ls nowhere")).toContain("No such directory");
+    const perk = DEFAULT_JOIN_DATA.content.perks.files[0]!;
+    expect(runCommand(`cat ${perk.file}`).lines[0]?.text).toBe(perk.name);
+  });
+
   it("keeps a secret: jinn-is-best opens INKBLOT.EXE, and help never says so", () => {
     expect(runCommand("jinn-is-best").open).toBe("inkblot");
     expect(runCommand("JINN-IS-BEST").open).toBe("inkblot");
@@ -75,15 +98,11 @@ describe("runCommand", () => {
     expect(runCommand("captains", data).lines[0]?.text).toContain("herded");
   });
 
-  it("clear and exit say so; blank input does nothing", () => {
+  it("keeps the shell's own clear, exit and 404", () => {
     expect(runCommand("clear").clear).toBe(true);
     expect(runCommand("exit").exit).toBe(true);
-    expect(runCommand("   ").lines).toEqual([]);
-  });
-
-  it("answers an unknown command with a 404", () => {
-    const r = runCommand("frobnicate now");
-    expect(r.lines[0]).toMatchObject({ kind: "err" });
-    expect(r.lines[0]!.text).toContain("404: command not found: frobnicate");
+    expect(text("frobnicate now")).toContain(
+      "404: command not found: frobnicate",
+    );
   });
 });

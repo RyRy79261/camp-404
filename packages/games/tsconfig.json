@@ -1,0 +1,9 @@
+{
+  "extends": "@camp404/typescript-config/react-library.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "compilerOptions": {
+    "outDir": "dist",
+    // INKBLOT.EXE reads process.env.NODE_ENV, which the app's bundler fills in.
+    "types": ["node"]
+  }
+}

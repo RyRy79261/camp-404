@@ -8,7 +8,7 @@ import {
   step,
   type Game,
   type Input,
-} from "./inkblot";
+} from "./game";
 
 const DT = 1 / 60;
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { INKBLOT } from "@/lib/content";
 import {
   FLOOR_Y,
   NO_INPUT,
@@ -17,8 +16,9 @@ import {
   type Game,
   type Input,
   type Item,
-} from "@/lib/inkblot";
-import { CAT_FRAMES, CAT_H, CAT_W } from "../inkblot-cat";
+} from "./game";
+import { CAT_FRAMES, CAT_H, CAT_W } from "./cat";
+import type { InkblotCopy } from "./copy";
 import {
   COLOURS,
   ITEMS,
@@ -26,12 +26,13 @@ import {
   drawSprite,
   lyingDown,
   type Sprite,
-} from "../inkblot-sprites";
+} from "./sprites";
 import { InkblotWin } from "./inkblot-win";
 
 // INKBLOT.EXE's screen, in 16-bit pixel art (owner, 2026-09-25). The scene is
 // drawn on a small canvas, one pixel per PX world units, then blown up with
-// sharp square pixels. The rules live in lib/inkblot.ts.
+// sharp square pixels. The rules live in game.ts; the words are the app's
+// (InkblotCopy).
 
 const LOW_H = VIEW_H / PX;
 const FLOOR = FLOOR_Y / PX;
@@ -232,24 +233,24 @@ const camPx = (game: Game, lowW: number) =>
 /**
  * The camp's photos, framed along the wall (owner, 2026-09-25): x in level
  * art pixels, and each photo's size in art pixels (wide 30 × 22, tall
- * 20 × 28), matching the files in public/inkblot/.
+ * 20 × 28). The app serves the files (Join: apps/join/public/inkblot/).
  */
 const WIDE = { w: 30, h: 22 };
 const TALL = { w: 20, h: 28 };
 // Spaced along the level's 1080 art pixels, clear of the bookcase's top
 // (art x 310–355), which reaches up into the frames' height.
 const FRAMES = [
-  { x: 20, src: "/inkblot/crew.jpg", ...WIDE },
-  { x: 100, src: "/inkblot/mushrooms.jpg", ...TALL },
-  { x: 170, src: "/inkblot/led-sculpture-night.jpg", ...WIDE },
-  { x: 250, src: "/inkblot/neon-404.jpg", ...WIDE },
-  { x: 380, src: "/inkblot/string-star.jpg", ...WIDE },
-  { x: 460, src: "/inkblot/lounge-2019.jpg", ...WIDE },
-  { x: 540, src: "/inkblot/led-sculpture-build.jpg", ...TALL },
-  { x: 620, src: "/inkblot/lantern.jpg", ...TALL },
-  { x: 700, src: "/inkblot/lounge-pink.jpg", ...WIDE },
-  { x: 800, src: "/inkblot/welcome-home.jpg", ...WIDE },
-  { x: 930, src: "/inkblot/crew-film.jpg", ...WIDE },
+  { x: 20, file: "crew.jpg", ...WIDE },
+  { x: 100, file: "mushrooms.jpg", ...TALL },
+  { x: 170, file: "led-sculpture-night.jpg", ...WIDE },
+  { x: 250, file: "neon-404.jpg", ...WIDE },
+  { x: 380, file: "string-star.jpg", ...WIDE },
+  { x: 460, file: "lounge-2019.jpg", ...WIDE },
+  { x: 540, file: "led-sculpture-build.jpg", ...TALL },
+  { x: 620, file: "lantern.jpg", ...TALL },
+  { x: 700, file: "lounge-pink.jpg", ...WIDE },
+  { x: 800, file: "welcome-home.jpg", ...WIDE },
+  { x: 930, file: "crew-film.jpg", ...WIDE },
 ] as const;
 const FRAME_Y = 14;
 
@@ -349,6 +350,7 @@ function drawHud(
   height: number,
   n: number,
   font: string,
+  copy: InkblotCopy,
 ) {
   const px = (size: number) => `${Math.round(size * n)}px ${font}`;
   const m = Math.floor(game.seconds / 60);
@@ -375,23 +377,17 @@ function drawHud(
       // The win screen is HTML over the canvas (InkblotWin).
     } else {
       ctx.font = px(narrow ? 12 : 15);
-      y = centred(ctx, INKBLOT.title, width, y, 16 * n) + 4 * n;
+      y = centred(ctx, copy.title, width, y, 16 * n) + 4 * n;
       ctx.fillStyle = COLOURS.W;
       ctx.font = px(6);
-      y = centred(ctx, INKBLOT.tagline, width, y, 9 * n) + 6 * n;
+      y = centred(ctx, copy.tagline, width, y, 9 * n) + 6 * n;
       ctx.fillStyle = COLOURS.frame;
       y =
-        centred(
-          ctx,
-          narrow ? INKBLOT.touch : INKBLOT.controls,
-          width,
-          y,
-          9 * n,
-        ) +
+        centred(ctx, narrow ? copy.touch : copy.controls, width, y, 9 * n) +
         10 * n;
       if (Math.floor(t * 2) % 2 === 0) {
         ctx.fillStyle = COLOURS.M;
-        centred(ctx, INKBLOT.start, width, y, 9 * n);
+        centred(ctx, copy.start, width, y, 9 * n);
       }
     }
     ctx.textAlign = "left";
@@ -412,7 +408,14 @@ const KEYS: Record<string, keyof Input> = {
   j: "swipe",
 };
 
-export function InkblotWindow() {
+export function InkblotWindow({
+  copy,
+  photoBase,
+}: {
+  copy: InkblotCopy;
+  /** Where the app serves the wall's photos, e.g. "/inkblot". */
+  photoBase: string;
+}) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const game = useRef<Game>(createGame());
@@ -420,6 +423,23 @@ export function InkblotWindow() {
   const [won, setWon] = useState<{ seconds: number; knocked: number } | null>(
     null,
   );
+  // The canvas loop runs once for the window's life; it reads the copy here.
+  const copyRef = useRef(copy);
+  useEffect(() => {
+    copyRef.current = copy;
+  }, [copy]);
+
+  // The game takes the keyboard as it arrives. An app loads it late (with
+  // next/dynamic), after its window has already taken focus for it, so it
+  // takes focus from the frame around it; focus the player moved elsewhere
+  // in the meantime stays where it is.
+  useEffect(() => {
+    const el = wrap.current;
+    const active = document.activeElement;
+    if (el && (!active || active === document.body || active.contains(el))) {
+      el.focus({ preventScroll: true });
+    }
+  }, []);
 
   function begin() {
     game.current = start(game.current);
@@ -468,7 +488,7 @@ export function InkblotWindow() {
     }
     const photos = FRAMES.map((f) => {
       const img = new Image();
-      img.src = f.src;
+      img.src = `${photoBase}/${f.file}`;
       return img;
     });
     const low = document.createElement("canvas");
@@ -477,7 +497,7 @@ export function InkblotWindow() {
     const frontCtx = front.getContext("2d")!;
     const font =
       getComputedStyle(document.documentElement)
-        .getPropertyValue("--font-silkscreen")
+        .getPropertyValue("--os-font-pixel")
         .trim() || "monospace";
     let raf = 0;
     let last = performance.now();
@@ -522,13 +542,22 @@ export function InkblotWindow() {
         });
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(front, 0, 0, c.width, c.height);
-        drawHud(ctx, game.current, t, c.width, c.height, n, font);
+        drawHud(
+          ctx,
+          game.current,
+          t,
+          c.width,
+          c.height,
+          n,
+          font,
+          copyRef.current,
+        );
       }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [photoBase]);
 
   function onKey(e: React.KeyboardEvent, down: boolean) {
     if (e.key === "Escape" || e.key === "Tab") return;
@@ -589,7 +618,7 @@ export function InkblotWindow() {
         tabIndex={0}
         data-autofocus
         role="application"
-        aria-label={`${INKBLOT.title}. ${INKBLOT.tagline} ${INKBLOT.controls}`}
+        aria-label={`${copy.title}. ${copy.tagline} ${copy.controls}`}
         onPointerDown={() => {
           if (game.current.phase === "title") begin();
         }}
@@ -598,6 +627,7 @@ export function InkblotWindow() {
         <canvas ref={canvas} className="block [image-rendering:pixelated]" />
         {won && (
           <InkblotWin
+            copy={copy}
             seconds={won.seconds}
             knocked={won.knocked}
             onAgain={restart}

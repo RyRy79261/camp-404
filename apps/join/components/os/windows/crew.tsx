@@ -96,7 +96,7 @@ function CapacityBar({ count }: { count: Headcount | null }) {
       ) : (
         <div className="space-y-1">
           <p className="font-pixel text-2xl uppercase">
-            NULL<span className="camp404-cursor">_</span>
+            NULL<span className="os-cursor">_</span>
             <span className="text-base text-os-muted"> / {max} places</span>
           </p>
           <p>{crew.counting}</p>

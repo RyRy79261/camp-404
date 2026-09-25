@@ -1,46 +1,29 @@
 "use client";
 
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
-  useCallback,
-  useEffect,
-  useReducer,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
-import { appById } from "@/lib/apps";
-import {
+  Boot,
   INITIAL_WM,
+  OsWindowFrame,
   topWindow,
+  usePhone,
   wmReducer,
-  type AppId,
   type Viewport,
-} from "@/lib/window-manager";
-import { Boot } from "./boot";
+} from "@camp404/os";
+import { appById } from "@/lib/apps";
+import { BOOT_ERROR, bootLines } from "@/lib/content";
+import type { AppId } from "@/lib/window-manager";
 import { Desktop } from "./desktop";
-import { OsWindowFrame } from "./os-window";
 import { Taskbar } from "./taskbar";
 import { JoinDataProvider } from "./join-data";
 import type { JoinData } from "@/lib/join-data";
 import { WindowContent } from "./windows";
 
-const PHONE_QUERY = "(max-width: 767px)";
-
-function usePhone() {
-  return useSyncExternalStore(
-    (cb) => {
-      const mq = window.matchMedia(PHONE_QUERY);
-      mq.addEventListener("change", cb);
-      return () => mq.removeEventListener("change", cb);
-    },
-    () => window.matchMedia(PHONE_QUERY).matches,
-    () => false,
-  );
-}
-
+// join.camp-404.com's desktop, on the shared 404 OS engine (@camp404/os):
+// Join decides which programs there are and what they show.
 export function Os({ data }: { data: JoinData }) {
   const [booting, setBooting] = useState(true);
-  const [wm, dispatch] = useReducer(wmReducer, INITIAL_WM);
+  const [wm, dispatch] = useReducer(wmReducer<AppId>, INITIAL_WM);
   const phone = usePhone();
   const layer = useRef<HTMLDivElement>(null);
 
@@ -81,11 +64,12 @@ export function Os({ data }: { data: JoinData }) {
   }, [booting, openApp]);
 
   // Esc with focus on the desktop (not in a window) closes the top window.
+  // A window answers its own Esc, and one already used is left alone.
   const top = topWindow(wm);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape" || booting || !top) return;
-      if ((e.target as HTMLElement | null)?.closest("[role=dialog]")) return;
+      if (e.key !== "Escape" || e.defaultPrevented || booting || !top) return;
+      if ((e.target as HTMLElement | null)?.closest("[data-window]")) return;
       closeApp(top.id);
     }
     window.addEventListener("keydown", onKey);
@@ -140,6 +124,8 @@ export function Os({ data }: { data: JoinData }) {
               win={w}
               hidden={hiddenWin(w)}
               title={appById(w.id).label}
+              // Join's window bodies start at h3, under this h2.
+              titleHeading
               isTop={w.id === top?.id}
               phone={phone}
               onFocus={() => dispatch({ type: "focus", id: w.id })}
@@ -181,7 +167,14 @@ export function Os({ data }: { data: JoinData }) {
         }
         onReboot={reboot}
       />
-      {booting && <Boot onDone={finishBoot} />}
+      {booting && (
+        <Boot
+          lines={bootLines(data.year)}
+          finale={BOOT_ERROR}
+          label="Starting Camp 404 OS"
+          onDone={finishBoot}
+        />
+      )}
     </JoinDataProvider>
   );
 }

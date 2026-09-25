@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
-import { INKBLOT } from "@/lib/content";
+import { CAT_FRAMES } from "./cat";
+import type { InkblotCopy } from "./copy";
 import {
   addEntry,
   cleanInitials,
@@ -10,9 +11,8 @@ import {
   qualifies,
   saveBoard,
   type Entry,
-} from "@/lib/leaderboard";
-import { CAT_FRAMES } from "../inkblot-cat";
-import { COLOURS, type Sprite } from "../inkblot-sprites";
+} from "./leaderboard";
+import { COLOURS, type Sprite } from "./sprites";
 
 /** A pixel sprite as crisp SVG squares, for the page around the canvas. */
 function SpriteSvg({
@@ -62,10 +62,12 @@ const CONFETTI = Array.from({ length: 28 }, (_, i) => ({
 // The win screen (owner, 2026-09-25: "very extra", GOODEST BOI, and a
 // leaderboard for speed of chaos).
 export function InkblotWin({
+  copy,
   seconds,
   knocked,
   onAgain,
 }: {
+  copy: InkblotCopy;
   seconds: number;
   knocked: number;
   onAgain: () => void;
@@ -153,10 +155,10 @@ export function InkblotWin({
         </div>
         <h3
           id={`${id}-title`}
-          aria-label={INKBLOT.winTitle}
-          className="camp404-chromatic font-pixel text-4xl uppercase leading-none sm:text-5xl"
+          aria-label={copy.winTitle}
+          className="os-chromatic font-pixel text-4xl uppercase leading-none sm:text-5xl"
         >
-          {[...INKBLOT.winTitle].map((ch, i) => (
+          {[...copy.winTitle].map((ch, i) => (
             <span
               key={i}
               aria-hidden
@@ -168,10 +170,10 @@ export function InkblotWin({
           ))}
         </h3>
         <p className="font-pixel text-[10px] uppercase tracking-widest text-os-muted">
-          {INKBLOT.winLine}
+          {copy.winLine}
         </p>
 
-        <div className="mt-1 border-2 border-os-primary bg-os-bg px-5 py-2 shadow-[4px_4px_0_0_var(--color-os-accent)]">
+        <div className="mt-1 border-2 border-os-primary bg-os-bg px-5 py-2 shadow-[4px_4px_0_0_var(--os-accent)]">
           <p className="font-pixel text-[10px] uppercase tracking-widest text-os-accent">
             Speed of chaos
           </p>
@@ -201,7 +203,7 @@ export function InkblotWin({
               />
               <button
                 type="submit"
-                className="border-2 border-os-fg bg-os-fg px-3 font-pixel text-xs uppercase text-os-bg shadow-[3px_3px_0_0_var(--color-os-primary)] hover:bg-os-primary hover:text-os-primary-fg"
+                className="border-2 border-os-fg bg-os-fg px-3 font-pixel text-xs uppercase text-os-bg shadow-[3px_3px_0_0_var(--os-primary)] hover:bg-os-primary hover:text-os-primary-fg"
               >
                 Save
               </button>
@@ -247,7 +249,7 @@ export function InkblotWin({
             </p>
           )}
           <p className="mt-1 font-mono text-[10px] text-os-muted">
-            {INKBLOT.boardNote}
+            {copy.boardNote}
           </p>
         </section>
 
@@ -255,9 +257,9 @@ export function InkblotWin({
           type="button"
           ref={againRef}
           onClick={onAgain}
-          className="mt-1 border-2 border-os-primary bg-os-primary px-5 py-2 font-pixel text-sm uppercase text-os-primary-fg shadow-[4px_4px_0_0_var(--color-os-fg)] hover:bg-os-fg hover:text-os-bg"
+          className="mt-1 border-2 border-os-primary bg-os-primary px-5 py-2 font-pixel text-sm uppercase text-os-primary-fg shadow-[4px_4px_0_0_var(--os-fg)] hover:bg-os-fg hover:text-os-bg"
         >
-          {INKBLOT.againButton}
+          {copy.againButton}
         </button>
       </div>
     </div>

@@ -1,10 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { DesktopIcon, IconGroup } from "@camp404/os";
 import { APPS } from "@/lib/apps";
 import { DESKTOP } from "@/lib/content";
-import type { AppId, OsWindow } from "@/lib/window-manager";
-import { DesktopIcon } from "./desktop-icon";
+import type { AppId, JoinWindow } from "@/lib/window-manager";
+import { AppIcon } from "./icons";
 import { useJoinData } from "./join-data";
 import { GlitchWordmark } from "./glitch-wordmark";
 
@@ -14,7 +15,7 @@ import { GlitchWordmark } from "./glitch-wordmark";
 // and a mock-legal footer. Below md it becomes a phone home screen.
 
 type Props = {
-  windows: OsWindow[];
+  windows: JoinWindow[];
   phone: boolean;
   onOpen: (id: AppId) => void;
   onReboot: () => void;
@@ -31,7 +32,7 @@ function Surface() {
       />
       <div
         aria-hidden
-        className="camp404-scanlines pointer-events-none absolute inset-0"
+        className="os-scanlines pointer-events-none absolute inset-0"
       />
       <div
         aria-hidden
@@ -68,7 +69,9 @@ export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
   const icons = APPS.map((app) => (
     <DesktopIcon
       key={app.id}
-      app={app}
+      id={app.id}
+      label={app.label}
+      icon={(className) => <AppIcon id={app.id} className={className} />}
       open={open.has(app.id)}
       onOpen={() => onOpen(app.id)}
       size={phone ? "md" : "sm"}
@@ -82,16 +85,16 @@ export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
         <h1 className="sr-only">Camp 404</h1>
         <div className="pointer-events-none relative flex flex-col items-center gap-2 pt-10">
           <GlitchWordmark text="404" size="clamp(5rem, 34vw, 9rem)" />
-          <p className="camp404-chromatic px-4 text-center font-mono text-[10px] uppercase tracking-[0.3em] text-os-fg">
+          <p className="os-chromatic px-4 text-center font-mono text-[10px] uppercase tracking-[0.3em] text-os-fg">
             {DESKTOP.tagline(year)}
           </p>
         </div>
-        <nav
-          aria-label="Desktop"
+        <IconGroup
+          label="Desktop"
           className="relative mx-auto mt-8 grid max-w-sm grid-cols-3 justify-items-center gap-y-5 px-2"
         >
           {icons}
-        </nav>
+        </IconGroup>
         <div className="relative mt-10 px-4">
           <Footer onReboot={onReboot} />
         </div>
@@ -117,16 +120,16 @@ export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
           text={DESKTOP.wordmark}
           size="clamp(3rem, 7vw, 5.5rem)"
         />
-        <p className="camp404-chromatic font-mono text-[11px] uppercase tracking-[0.3em] text-os-fg">
+        <p className="os-chromatic font-mono text-[11px] uppercase tracking-[0.3em] text-os-fg">
           {DESKTOP.tagline(year)}
         </p>
       </div>
-      <nav
-        aria-label="Desktop"
+      <IconGroup
+        label="Desktop"
         className="absolute left-4 top-20 z-10 grid grid-cols-2 gap-x-1 gap-y-3"
       >
         {icons}
-      </nav>
+      </IconGroup>
       <div className="pointer-events-none absolute inset-x-0 bottom-14 z-10">
         <Footer onReboot={onReboot} />
       </div>

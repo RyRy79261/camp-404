@@ -1,4 +1,4 @@
-import type { ItemKind } from "@/lib/inkblot";
+import type { ItemKind } from "./game";
 
 // INKBLOT.EXE's 16-bit art. Each sprite is a grid of palette letters, one per
 // screen pixel; "." is see-through. One screen pixel is PX world units.

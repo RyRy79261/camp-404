@@ -250,9 +250,12 @@ Transport & Travel team makes sure everyone and everything has a ride.
   AfrikaBurn 2027 (26 April – 2 May, owner) in place of a clock.
 - A secret (owner, 2026-09-25): typing `jinn-is-best` in TERMINAL opens
   INKBLOT.EXE, a side-scroller where a black cat jumps onto furniture and
-  knocks everything off. It is on no desktop, menu or `help` list. The rules
-  are in `apps/join/lib/inkblot.ts`, tested; the drawing is in
-  `components/os/windows/inkblot.tsx`.
+  knocks everything off. It is on no desktop, menu or `help` list. It lives
+  in the shared games package: the rules are in
+  `packages/games/src/inkblot/game.ts` (tested in `game.test.ts`), the
+  drawing in `packages/games/src/inkblot/inkblot-window.tsx`. Join passes in
+  its copy (`INKBLOT` in `apps/join/lib/content.ts`) and serves the wall
+  photos from `apps/join/public/inkblot/`.
 - INKBLOT.EXE is 16-bit pixel art (owner). The cat's frames come from the
   owner's bat-cat repo (`tools/assets/cat_sheet.png`), recoloured black.
   [UNRESOLVED 2026-09-25] bat-cat does not record where that sheet came from
