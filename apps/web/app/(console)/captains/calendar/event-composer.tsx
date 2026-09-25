@@ -22,6 +22,8 @@ import { Switch } from "@camp404/ui/components/switch";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { addCalendarEventAction } from "./actions";
+import { MineStar } from "@/components/calendar/calendar-days";
+import { cn } from "@camp404/ui/lib/utils";
 
 // The add-event form, laid out like AfrikaBurn's bulletin composer: the fields
 // in a card, the all-day switch in its own bordered row, a note, then the
@@ -303,22 +305,28 @@ export function EventComposer({
         <Card>
           {/* The badge under the title, as Home draws it on a phone, so a
               long team name never hides the title in this narrow column. */}
-          <CardContent className="flex flex-col items-start gap-1.5 p-4">
+          <CardContent
+            className={cn(
+              "flex flex-col items-start gap-1.5 p-4",
+              teamLabel && "m-2 rounded-lg border border-accent/60",
+            )}
+          >
             <span className="w-full min-w-0">
               <span className="block truncate text-sm font-medium">
+                {teamLabel ? <MineStar /> : null}
                 {previewTitle}
               </span>
               <span className="block truncate text-xs text-muted-foreground">
                 {previewWhen}
               </span>
             </span>
-            {teamLabel ? <Badge>Yours · {teamLabel}</Badge> : null}
+            {teamLabel ? <Badge variant="outline">{teamLabel}</Badge> : null}
           </CardContent>
         </Card>
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <CalendarDays className="h-3.5 w-3.5" aria-hidden />
           {teamLabel
-            ? `Other teams see a plain “${teamLabel}” badge.`
+            ? `The team sees it with a border and a star; everyone else sees the “${teamLabel}” badge.`
             : "A whole-camp event wears no badge."}
         </p>
       </aside>
