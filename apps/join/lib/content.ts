@@ -203,17 +203,17 @@ export const GIFTS = {
       name: "The lounge",
       text: "Comfort and entertainment: a safe space to rest, relax, connect and have fun.",
     },
+    {
+      icon: "flames",
+      name: "Dance of 1000 Flames",
+      text: "The main fire performance of the Burn. We manage and coordinate it.",
+    },
   ] satisfies Gift[],
   secondary: [
     {
       icon: "meow",
       name: "Now Now Meow Meow",
       text: "Our Mutant Vehicle, by Kyle & Robyn.",
-    },
-    {
-      icon: "flames",
-      name: "Dance of 1000 Flames",
-      text: "The main fire performance of the Burn. We manage and coordinate it.",
     },
     {
       icon: "art",
@@ -421,7 +421,7 @@ export const TRUCK = {
   title: "TRUCK.LOG",
   entries: [
     "One big truck carries the camp: infrastructure, furniture, freezers, gas, decor.",
-    "A couple of trailers, towed by members' own cars, carry the food, the bikes, and the rubbish home. (MOOP goes home with us. All of it.)",
+    "A couple of trailers, towed by members' own cars, carry everything else.",
     "The Transport & Travel team makes sure everyone and everything has a ride.",
   ],
 } as const;

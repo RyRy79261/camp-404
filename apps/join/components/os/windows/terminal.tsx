@@ -8,7 +8,8 @@ type Entry = TermLine | { kind: "in"; text: string };
 
 const COLOURS: Record<Entry["kind"], string> = {
   in: "text-os-fg",
-  out: "text-os-muted",
+  // A solid colour, not an alpha one, so the text keeps crisp edges.
+  out: "text-[color-mix(in_oklch,var(--color-os-fg)_82%,var(--color-os-bg))]",
   hi: "text-os-primary",
   err: "text-os-accent",
 };
@@ -59,7 +60,7 @@ export function TerminalWindow({
 
   return (
     <div
-      className="min-h-full bg-os-bg/90 p-4 font-mono text-xs leading-relaxed"
+      className="min-h-full bg-os-bg p-4 font-mono text-[13px] leading-relaxed"
       onClick={() => input.current?.focus()}
     >
       <div role="log" aria-live="polite" aria-label="Terminal output">

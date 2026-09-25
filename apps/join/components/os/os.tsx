@@ -94,8 +94,29 @@ export function Os() {
     setBooting(true);
   }
 
-  // On a phone the stack shows only its top window; the rest wait under it.
-  const shown = phone && top ? [top] : wm.windows;
+  function minimizeApp(id: AppId) {
+    dispatch({ type: "minimize", id });
+    requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLElement>(`[data-tray="${id}"]`)
+        ?.focus({ preventScroll: true }),
+    );
+  }
+
+  function restoreApp(id: AppId) {
+    dispatch({ type: "focus", id });
+    requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLElement>(`[data-window="${id}"]`)
+        ?.focus({ preventScroll: true }),
+    );
+  }
+
+  // Every open window stays mounted, so a minimised terminal keeps its
+  // history. A minimised one is hidden; on a phone only the top one shows.
+  const hiddenWin = (w: (typeof wm.windows)[number]) =>
+    !!w.minimized || (phone && w.id !== top?.id);
+  const minimized = wm.windows.filter((w) => w.minimized);
 
   return (
     <>
@@ -106,24 +127,31 @@ export function Os() {
         onReboot={reboot}
       >
         <div ref={layer} className="pointer-events-none absolute inset-0">
-          {shown.map((w) => (
+          {wm.windows.map((w) => (
             <OsWindowFrame
               key={w.id}
               win={w}
+              hidden={hiddenWin(w)}
               title={appById(w.id).label}
               isTop={w.id === top?.id}
               phone={phone}
               onFocus={() => dispatch({ type: "focus", id: w.id })}
               onClose={() => closeApp(w.id)}
+              onMinimize={() => minimizeApp(w.id)}
+              onToggleMaximize={() =>
+                dispatch({ type: "toggleMaximize", id: w.id })
+              }
               onMove={(x, y) =>
                 dispatch({ type: "move", id: w.id, x, y, viewport: viewport() })
               }
-              onResize={(width, height) =>
+              onResize={(from, edge, dx, dy) =>
                 dispatch({
                   type: "resize",
                   id: w.id,
-                  w: width,
-                  h: height,
+                  from,
+                  edge,
+                  dx,
+                  dy,
                   viewport: viewport(),
                 })
               }
@@ -137,6 +165,32 @@ export function Os() {
           ))}
         </div>
       </Desktop>
+      {minimized.length > 0 && (
+        <nav
+          aria-label="Minimised windows"
+          className={`fixed z-[90] flex gap-1 ${
+            phone
+              ? "inset-x-0 bottom-0 overflow-x-auto border-t border-os-primary bg-os-chrome p-1"
+              : "bottom-4 left-4"
+          }`}
+        >
+          {minimized.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              data-tray={w.id}
+              onClick={() => restoreApp(w.id)}
+              aria-label={`Bring back ${appById(w.id).label}`}
+              className="flex h-8 shrink-0 items-center gap-2 border border-os-line bg-os-panel px-3 font-pixel text-[10px] uppercase text-os-fg shadow-[4px_4px_0_0_rgb(0_0_0/0.4)] hover:border-os-primary"
+            >
+              <span aria-hidden className="text-os-primary">
+                ▭
+              </span>
+              {appById(w.id).label}
+            </button>
+          ))}
+        </nav>
+      )}
       {booting && <Boot onDone={finishBoot} />}
     </>
   );

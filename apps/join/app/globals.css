@@ -32,22 +32,52 @@
   --font-pixel: var(--font-silkscreen), ui-monospace, monospace;
 }
 
-html,
-body {
-  height: 100%;
-  background: var(--color-os-bg);
-  color: var(--color-os-fg);
-  overscroll-behavior: none;
-}
+/* In the base layer, so a utility (focus-visible:outline-none on the
+   terminal prompt) can override it. Unlayered, it beat every utility. */
+@layer base {
+  html,
+  body {
+    height: 100%;
+    background: var(--color-os-bg);
+    color: var(--color-os-fg);
+    overscroll-behavior: none;
+  }
 
-::selection {
-  background: var(--color-os-primary);
-  color: var(--color-os-primary-fg);
-}
+  ::selection {
+    background: var(--color-os-primary);
+    color: var(--color-os-primary-fg);
+  }
 
-:focus-visible {
-  outline: 2px solid var(--color-os-primary);
-  outline-offset: 2px;
+  :focus-visible {
+    outline: 2px solid var(--color-os-primary);
+    outline-offset: 2px;
+  }
+
+  /* Scroll bars in the OS's own look: a square magenta thumb on the dark
+     track, thin. Firefox reads the first two lines, Chrome and Safari the
+     ::-webkit ones. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-os-primary) var(--color-os-bg);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-os-bg);
+    border-left: 1px solid var(--color-os-line);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-os-primary);
+    border: 2px solid var(--color-os-bg);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-os-fg);
+  }
+  ::-webkit-scrollbar-corner {
+    background: var(--color-os-bg);
+  }
 }
 
 /* ---- Desktop surface: the landing's scanlines and noise, plus a faint
@@ -331,7 +361,9 @@ body {
 
 /* A window arriving: a short CRT "power on" from a thin line. */
 .os-window-in {
-  animation: os-window-in 180ms steps(4) both;
+  /* backwards, not both: a filter or clip-path left on after the animation
+     makes the browser draw the window as an image, and its text goes soft. */
+  animation: os-window-in 180ms steps(4) backwards;
 }
 @keyframes os-window-in {
   from {

@@ -102,7 +102,7 @@ export function GiftsWindow() {
       </p>
       <section aria-labelledby="gifts-primary" className="space-y-3">
         <Eyebrow id="gifts-primary">Primary</Eyebrow>
-        <ul className="grid grid-cols-3 gap-3">
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {GIFTS.primary.map((g, i) => (
             <GiftRing key={g.name} gift={g} delay={i * 180} primary />
           ))}
@@ -110,12 +110,12 @@ export function GiftsWindow() {
       </section>
       <section aria-labelledby="gifts-secondary" className="space-y-3">
         <Eyebrow id="gifts-secondary">Secondary</Eyebrow>
-        <ul className="grid grid-cols-3 gap-3">
+        <ul className="mx-auto grid max-w-sm grid-cols-2 gap-3">
           {GIFTS.secondary.map((g, i) => (
             <GiftRing
               key={g.name}
               gift={g}
-              delay={540 + i * 180}
+              delay={720 + i * 180}
               primary={false}
             />
           ))}

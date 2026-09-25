@@ -3,6 +3,7 @@ import {
   CASCADE_STEP,
   INITIAL_WM,
   MIN_SIZE,
+  resizeRect,
   topWindow,
   wmReducer,
   type AppId,
@@ -60,11 +61,14 @@ describe("wmReducer", () => {
 
   it("never resizes below the minimum", () => {
     const s = open(INITIAL_WM, "readme");
+    const w = s.windows[0]!;
     const small = wmReducer(s, {
       type: "resize",
       id: "readme",
-      w: 10,
-      h: 10,
+      from: w,
+      edge: "se",
+      dx: -5000,
+      dy: -5000,
       viewport,
     });
     expect(small.windows[0]).toMatchObject(MIN_SIZE);
@@ -79,5 +83,70 @@ describe("wmReducer", () => {
     });
     expect(s.windows[0]!.w).toBeLessThanOrEqual(viewport.width);
     expect(s.windows[0]!.h).toBeLessThanOrEqual(viewport.height);
+  });
+});
+
+describe("resizeRect", () => {
+  const from = { x: 100, y: 100, w: 400, h: 300 };
+
+  it("pulls the right and bottom edges", () => {
+    expect(resizeRect(from, "se", 50, 20, viewport)).toEqual({
+      x: 100,
+      y: 100,
+      w: 450,
+      h: 320,
+    });
+  });
+
+  it("pulls the left and top edges, keeping the far edges put", () => {
+    expect(resizeRect(from, "nw", -40, -30, viewport)).toEqual({
+      x: 60,
+      y: 70,
+      w: 440,
+      h: 330,
+    });
+  });
+
+  it("stops the left edge at the minimum width", () => {
+    const r = resizeRect(from, "w", 5000, 0, viewport);
+    expect(r.w).toBe(MIN_SIZE.w);
+    expect(r.x + r.w).toBe(from.x + from.w);
+  });
+
+  it("never grows past the desktop", () => {
+    const r = resizeRect(from, "ne", 5000, -5000, viewport);
+    expect(r.x + r.w).toBe(viewport.width);
+    expect(r.y).toBe(0);
+  });
+});
+
+describe("minimise and full screen", () => {
+  it("a minimised window is never the top one", () => {
+    const s = open(open(INITIAL_WM, "readme"), "map");
+    const min = wmReducer(s, { type: "minimize", id: "map" });
+    expect(topWindow(min)?.id).toBe("readme");
+  });
+
+  it("focus or reopening restores a minimised window on top", () => {
+    const s = open(open(INITIAL_WM, "readme"), "map");
+    const min = wmReducer(s, { type: "minimize", id: "map" });
+    for (const back of [
+      wmReducer(min, { type: "focus", id: "map" }),
+      open(min, "map"),
+    ]) {
+      expect(back.windows.find((w) => w.id === "map")?.minimized).toBe(false);
+      expect(topWindow(back)?.id).toBe("map");
+    }
+  });
+
+  it("full screen toggles and keeps the window's own rect", () => {
+    const s = open(INITIAL_WM, "readme");
+    const max = wmReducer(s, { type: "toggleMaximize", id: "readme" });
+    expect(max.windows[0]?.maximized).toBe(true);
+    const back = wmReducer(max, { type: "toggleMaximize", id: "readme" });
+    expect(back.windows[0]).toMatchObject({
+      ...s.windows[0],
+      maximized: false,
+    });
   });
 });

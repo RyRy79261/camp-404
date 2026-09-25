@@ -23,7 +23,17 @@ export function isAppId(value: string): value is AppId {
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
-export type OsWindow = Rect & { id: AppId; z: number };
+export type OsWindow = Rect & {
+  id: AppId;
+  z: number;
+  /** In the tray: not drawn, not the top window, restored by focus. */
+  minimized?: boolean;
+  /** Fills the desktop; its own rect is kept for the restore. */
+  maximized?: boolean;
+};
+
+/** Which side or corner of a window a resize grip pulls. */
+export type Edge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 export type WmState = { windows: OsWindow[]; topZ: number };
 
@@ -39,7 +49,18 @@ export type WmAction =
   | { type: "close"; id: AppId }
   | { type: "focus"; id: AppId }
   | { type: "move"; id: AppId; x: number; y: number; viewport: Viewport }
-  | { type: "resize"; id: AppId; w: number; h: number; viewport: Viewport }
+  | {
+      type: "resize";
+      id: AppId;
+      /** The rect when the drag began, and how far the pointer has moved. */
+      from: Rect;
+      edge: Edge;
+      dx: number;
+      dy: number;
+      viewport: Viewport;
+    }
+  | { type: "minimize"; id: AppId }
+  | { type: "toggleMaximize"; id: AppId }
   | { type: "closeAll" };
 
 export const INITIAL_WM: WmState = { windows: [], topZ: 0 };
@@ -50,10 +71,45 @@ export const CASCADE_STEP = 28;
 /** A title bar may leave the screen, but this much of it stays reachable. */
 const GRAB_MARGIN = 64;
 
+/** The highest window still on the desktop; a minimised one never counts. */
 export function topWindow(state: WmState): OsWindow | undefined {
   let top: OsWindow | undefined;
-  for (const w of state.windows) if (!top || w.z > top.z) top = w;
+  for (const w of state.windows) {
+    if (w.minimized) continue;
+    if (!top || w.z > top.z) top = w;
+  }
   return top;
+}
+
+/**
+ * The rect after dragging one edge or corner by (dx, dy): never smaller than
+ * MIN_SIZE (the opposite edge stays put) and never past the desktop.
+ */
+export function resizeRect(
+  from: Rect,
+  edge: Edge,
+  dx: number,
+  dy: number,
+  viewport: Viewport,
+): Rect {
+  let { x, y, w, h } = from;
+  const right = from.x + from.w;
+  const bottom = from.y + from.h;
+  if (edge.includes("e")) {
+    w = Math.min(Math.max(from.w + dx, MIN_SIZE.w), viewport.width - from.x);
+  }
+  if (edge.includes("s")) {
+    h = Math.min(Math.max(from.h + dy, MIN_SIZE.h), viewport.height - from.y);
+  }
+  if (edge.includes("w")) {
+    x = Math.min(Math.max(from.x + dx, 0), right - MIN_SIZE.w);
+    w = right - x;
+  }
+  if (edge.includes("n")) {
+    y = Math.min(Math.max(from.y + dy, 0), bottom - MIN_SIZE.h);
+    h = bottom - y;
+  }
+  return { x, y, w, h };
 }
 
 function clampPosition(x: number, y: number, w: number, viewport: Viewport) {
@@ -98,15 +154,31 @@ export function wmReducer(state: WmState, action: WmAction): WmState {
       return { ...state, windows: [] };
     case "focus": {
       const target = state.windows.find((w) => w.id === action.id);
-      if (!target || target.z === state.topZ) return state;
+      if (!target || (target.z === state.topZ && !target.minimized)) {
+        return state;
+      }
       const z = state.topZ + 1;
       return {
         windows: state.windows.map((w) =>
-          w.id === action.id ? { ...w, z } : w,
+          w.id === action.id ? { ...w, z, minimized: false } : w,
         ),
         topZ: z,
       };
     }
+    case "minimize":
+      return {
+        ...state,
+        windows: state.windows.map((w) =>
+          w.id === action.id ? { ...w, minimized: true } : w,
+        ),
+      };
+    case "toggleMaximize":
+      return {
+        ...state,
+        windows: state.windows.map((w) =>
+          w.id === action.id ? { ...w, maximized: !w.maximized } : w,
+        ),
+      };
     case "move":
       return {
         ...state,
@@ -126,13 +198,12 @@ export function wmReducer(state: WmState, action: WmAction): WmState {
           w.id === action.id
             ? {
                 ...w,
-                w: Math.min(
-                  Math.max(action.w, MIN_SIZE.w),
-                  action.viewport.width - w.x,
-                ),
-                h: Math.min(
-                  Math.max(action.h, MIN_SIZE.h),
-                  action.viewport.height - w.y,
+                ...resizeRect(
+                  action.from,
+                  action.edge,
+                  action.dx,
+                  action.dy,
+                  action.viewport,
                 ),
               }
             : w,
