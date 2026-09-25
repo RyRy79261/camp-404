@@ -7,6 +7,7 @@ import {
   seedTeam,
   setRank,
 } from "./_helpers";
+import { goViaConsoleNav, navEntry, openConsoleNav } from "./lib/console-nav";
 
 // /captains/system: whether each service is set up and answering, and the
 // daily job schedule. Captain-only, preview-but-locked (D3): anyone else gets
@@ -43,11 +44,7 @@ test.describe("/captains/system (test-mode)", () => {
     await asRank(page, request, "system-captain", "captain");
 
     await page.goto("/");
-    await page
-      .getByRole("navigation", { name: "Console" })
-      .getByRole("link", { name: "System status" })
-      .filter({ visible: true })
-      .click();
+    await goViaConsoleNav(page, "System status", "Captains");
 
     await expect(page).toHaveURL("/captains/system");
     await expect(
@@ -109,11 +106,10 @@ test.describe("/captains/system (test-mode)", () => {
     ).toBeVisible();
     await expect(page.getByText("Background work")).toHaveCount(0);
     await expect(checkRow(page, "Database")).toHaveCount(0);
-    // A lead's nav has no link to it either.
-    await expect(
-      page
-        .getByRole("navigation", { name: "Console" })
-        .getByRole("link", { name: "System status" }),
-    ).toHaveCount(0);
+    // A lead's nav has no link to it either: their Captains menu holds the
+    // builder and nothing of a captain's.
+    const captains = await openConsoleNav(page, "Captains");
+    await expect(navEntry(captains, "Questionnaires")).toBeVisible();
+    await expect(navEntry(captains, "System status")).toHaveCount(0);
   });
 });

@@ -4,32 +4,18 @@ import {
   CalendarDays,
   CalendarPlus,
   Car,
-  CarFront,
-  ChefHat,
   CheckCircle2,
   Circle,
   ClipboardList,
   Crown,
-  Droplets,
   FileText,
-  Hammer,
-  HeartPulse,
   Hourglass,
   LayoutDashboard,
-  Laugh,
   ListTodo,
   Megaphone,
-  MessagesSquare,
-  Music,
-  Palette,
-  Recycle,
   Send,
-  Speaker,
   SquareKanban,
-  Truck,
   Users,
-  Wallet,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@camp404/ui/components/badge";
@@ -43,6 +29,7 @@ import { PageHeading } from "@camp404/ui/components/page-heading";
 import { cn } from "@camp404/ui/lib/utils";
 import type { HomeModel, HomeModuleIcon } from "@/lib/home";
 import { MINE_ROW, MineStar } from "@/components/calendar/calendar-days";
+import { TEAM_ICONS } from "@/lib/nav-icons";
 
 // A member's own home: what to do, what's coming, and the few places that are
 // theirs. Built for someone easily overwhelmed (owner, 2026-09-23): short
@@ -419,26 +406,6 @@ function ModuleGrid({ modules }: { modules: HomeModel["modules"] }) {
     </nav>
   );
 }
-
-/** A picture per team. Configurable labels, fixed keys: an unknown key gets a group. */
-const TEAM_ICONS: Record<string, LucideIcon> = {
-  kitchen: ChefHat,
-  structures: Hammer,
-  power_and_lighting: Zap,
-  // The key predates the split: this is Sanitation and MOOP, and Water has
-  // its own entry below.
-  sanitation_and_water: Recycle,
-  health_and_safety: HeartPulse,
-  art_and_activities: Palette,
-  ministry_of_memes: Laugh,
-  ministry_of_vibes: Music,
-  finance: Wallet,
-  transport_and_logistics: Truck,
-  communications_and_hr: MessagesSquare,
-  mutant_vehicle: CarFront,
-  sound: Speaker,
-  water: Droplets,
-};
 
 /**
  * The member's teams as icons. Several teams, several icons, and a team they

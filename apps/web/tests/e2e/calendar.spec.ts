@@ -12,6 +12,7 @@ import {
   seedTeam,
   setRank,
 } from "./_helpers";
+import { goViaConsoleNav } from "./lib/console-nav";
 
 // The camp calendar, part 2 (test-mode, where the store stands in for a
 // connected Google Calendar that starts empty). Captains and team leads add
@@ -214,10 +215,7 @@ test.describe("camp calendar (test-mode)", () => {
     // Any member reaches the calendar from the nav.
     await login(page, { id: "cal-money", email: "cal-money@example.com" });
     await page.goto("/");
-    await page
-      .getByRole("navigation", { name: "Console" })
-      .getByRole("link", { name: "Calendar" })
-      .click();
+    await goViaConsoleNav(page, "Calendar");
     await expect(page).toHaveURL(/\/calendar$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Calendar" }),

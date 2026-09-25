@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { completeOnboarding, login, resetTestState, setRank } from "./_helpers";
+import { consoleNavGroups, navEntry, openConsoleNav } from "./lib/console-nav";
 
 // Preview-but-locked (decision D3) for the two captain surfaces that used to
 // hard-redirect non-captains. A non-captain now gets a 200 with the page chrome
@@ -33,18 +34,11 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
 
     await page.goto("/");
 
-    const nav = page.getByRole("navigation", { name: "Console" });
-    await expect(nav.getByRole("link", { name: "Home" })).toBeVisible();
-    for (const name of [
-      "Camp overview",
-      "Questionnaires",
-      "Payments",
-      "Camp settings",
-      "Audit",
-      "System status",
-    ]) {
-      await expect(nav.getByRole("link", { name })).toHaveCount(0);
-    }
+    // The captain destinations all live in the Captains menu, and a member's
+    // nav draws no such menu. Read once the Me menu is on screen.
+    const groups = await consoleNavGroups(page);
+    expect(groups).toContain("Me");
+    expect(groups).not.toContain("Captains");
   });
 
   test("the console nav: a captain sees every destination", async ({
@@ -55,9 +49,12 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
 
     await page.goto("/");
 
-    const nav = page.getByRole("navigation", { name: "Console" });
+    const camp = await openConsoleNav(page, "Camp");
+    await expect(navEntry(camp, "Roster")).toBeVisible();
+    await page.keyboard.press("Escape");
+    const captains = await openConsoleNav(page, "Captains");
     for (const name of [
-      "Roster",
+      "Camp overview",
       "Questionnaires",
       "Announcements",
       "Payments",
@@ -65,7 +62,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
       "Audit",
       "System status",
     ]) {
-      await expect(nav.getByRole("link", { name })).toBeVisible();
+      await expect(navEntry(captains, name)).toBeVisible();
     }
   });
 

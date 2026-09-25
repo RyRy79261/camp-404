@@ -11,6 +11,7 @@ import {
   resetTestState,
   seedTeam,
 } from "./_helpers";
+import { navEntry, openConsoleNav } from "./lib/console-nav";
 
 // The team-lead persona end to end. Clearance to author is global once a
 // member leads any team this year (owner's call, 2026-09-16); a member on a
@@ -42,15 +43,15 @@ test.describe("team lead persona", () => {
     // The console nav offers a lead the builder and announcements, and none
     // of the captain-only destinations.
     await page.goto("/");
-    const nav = page.getByRole("navigation", { name: "Console" });
-    await expect(
-      nav.getByRole("link", { name: "Questionnaires" }),
-    ).toHaveAttribute("href", "/captains/questionnaires");
-    await expect(
-      nav.getByRole("link", { name: "Announcements" }),
-    ).toBeVisible();
-    await expect(nav.getByRole("link", { name: "Payments" })).toHaveCount(0);
-    await expect(nav.getByRole("link", { name: "Audit" })).toHaveCount(0);
+    const captains = await openConsoleNav(page, "Captains");
+    await expect(navEntry(captains, "Questionnaires")).toHaveAttribute(
+      "href",
+      "/captains/questionnaires",
+    );
+    await expect(navEntry(captains, "Announcements")).toBeVisible();
+    await expect(navEntry(captains, "Payments")).toHaveCount(0);
+    await expect(navEntry(captains, "Audit")).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
     await page.goto("/captains/questionnaires");
     await expect(

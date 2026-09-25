@@ -95,8 +95,11 @@ restyle only with tokens; do not invent a design.
 - Tokens: `packages/ui/src/styles/globals.css` (AfrikaBurn's file plus the
   `.camp-accent` skin on `<html>`). Montserrat, dark-first: `<html>` carries
   the `dark` class in `app/layout.tsx`.
-- Shell: `apps/web/app/(console)/layout.tsx` draws the header and a nav bar
-  filtered by rank on the server (`lib/console-nav.ts`). A page starts with
+- Shell: `apps/web/app/(console)/layout.tsx` draws the header and the nav,
+  filtered by rank on the server (`lib/console-nav.ts`): a few links, then the
+  Teams, Camp, Me and Captains menus (Teams read from camp settings), folded
+  into one "Menu" sheet below `md`. A new page goes into a menu there. E2E
+  specs reach the nav through `tests/e2e/lib/console-nav.ts`. A page starts with
   `PageHeading` (`@camp404/ui/components/page-heading`) and owns no container.
 - Loading: no `loading.tsx` in the console (see the gotcha under Commands);
   the pressed nav item pulses while the next page renders.
