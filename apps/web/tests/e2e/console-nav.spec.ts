@@ -221,7 +221,12 @@ test.describe("console nav — menus (test-mode)", () => {
     await expect(page).toHaveURL("/family-tree");
     await expect(sheet).toHaveCount(0);
 
-    // Back in the sheet, the section holding this page starts open.
+    // On a fresh load (nothing opened by hand), the section holding this page
+    // starts open, and the sheet starts on this page's tile.
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Family tree" }),
+    ).toBeVisible();
     await button.click();
     await expect(
       camp.getByRole("button", { name: "Camp", exact: true }),
@@ -230,5 +235,18 @@ test.describe("console nav — menus (test-mode)", () => {
       "aria-current",
       "page",
     );
+    await expect(navEntry(camp, "Family tree")).toBeFocused();
+
+    // With that section shut by hand, the sheet still opens with focus in it
+    // (its own first control), not on the hidden tile.
+    await camp.getByRole("button", { name: "Camp", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toHaveCount(0);
+    await button.click();
+    await expect(sheet).toBeVisible();
+    expect(
+      await sheet.evaluate((el) => el.contains(document.activeElement)),
+    ).toBe(true);
+    await expect(navEntry(camp, "Family tree")).toBeHidden();
   });
 });

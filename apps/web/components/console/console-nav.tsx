@@ -224,9 +224,11 @@ function NavSheet({
         // Start on the page open now, not the close button.
         onOpenAutoFocus={(event) => {
           const current = event.currentTarget as HTMLElement | null;
-          const here = current?.querySelector<HTMLElement>(
-            '[aria-current="page"]',
-          );
+          // Only a tile on screen: one in a closed section cannot take focus.
+          const here = Array.from(
+            current?.querySelectorAll<HTMLElement>('[aria-current="page"]') ??
+              [],
+          ).find((el) => !el.closest("[hidden]"));
           if (!here) return;
           event.preventDefault();
           here.focus();
