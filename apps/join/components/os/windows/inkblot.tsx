@@ -241,11 +241,11 @@ const TALL = { w: 20, h: 28 };
 const FRAMES = [
   { x: 20, src: "/inkblot/crew.jpg", ...WIDE },
   { x: 100, src: "/inkblot/mushrooms.jpg", ...TALL },
-  { x: 170, src: "/inkblot/art-night.jpg", ...WIDE },
+  { x: 170, src: "/inkblot/led-sculpture-night.jpg", ...WIDE },
   { x: 250, src: "/inkblot/neon-404.jpg", ...WIDE },
   { x: 380, src: "/inkblot/string-star.jpg", ...WIDE },
   { x: 460, src: "/inkblot/lounge-2019.jpg", ...WIDE },
-  { x: 540, src: "/inkblot/led-build.jpg", ...TALL },
+  { x: 540, src: "/inkblot/led-sculpture-build.jpg", ...TALL },
   { x: 620, src: "/inkblot/lantern.jpg", ...TALL },
   { x: 700, src: "/inkblot/lounge-pink.jpg", ...WIDE },
   { x: 800, src: "/inkblot/welcome-home.jpg", ...WIDE },
