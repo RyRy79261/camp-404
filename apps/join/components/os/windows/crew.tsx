@@ -44,56 +44,106 @@ export function CrewWindow() {
       <section aria-labelledby="crew-count" className="space-y-3">
         <Eyebrow id="crew-count">{CREW.headcountHeading}</Eyebrow>
         <p className="font-mono text-xs text-os-accent">
-          &gt; SELECT answer, COUNT(*) FROM coming_this_year GROUP BY answer;
+          &gt; SELECT status, COUNT(*) FROM coming_this_year GROUP BY status;
         </p>
-        {CREW.headcount ? (
-          <HeadcountBars count={CREW.headcount} />
-        ) : (
-          <div className="space-y-1">
-            <p className="font-pixel text-2xl uppercase">
-              NULL<span className="camp404-cursor">_</span>
-            </p>
-            <p>{CREW.counting}</p>
-          </div>
-        )}
+        <CapacityBar count={CREW.headcount} />
         <p className="text-xs text-os-muted">{CREW.headcountSource}</p>
       </section>
     </WinBody>
   );
 }
 
-function HeadcountBars({ count }: { count: Headcount }) {
-  const total = Math.max(count.yes + count.maybe, 1);
-  const rows = [
-    { label: "Said yes", n: count.yes, bar: "bg-os-primary" },
-    { label: "Maybe", n: count.maybe, bar: "bg-os-accent" },
-    { label: "Accepted", n: count.accepted, bar: "bg-os-fg" },
-  ];
+const SEGMENTS = [
+  { key: "accepted", label: "Accepted", swatch: "bg-os-primary" },
+  { key: "applied", label: "Said yes, waiting", swatch: "bg-os-primary/45" },
+  {
+    key: "maybe",
+    label: "Maybe",
+    swatch:
+      "bg-[repeating-linear-gradient(135deg,var(--color-os-accent)_0_3px,transparent_3px_6px)]",
+  },
+] as const;
+
+// One bar from 0 to the camp's capacity: accepted, then yes-and-waiting, then
+// maybe, with the minimum the camp needs marked on it.
+function CapacityBar({ count }: { count: Headcount | null }) {
+  const { min, max } = CREW.capacity;
+  const pct = (n: number) => `${(Math.min(n, max) / max) * 100}%`;
+  const accepted = count?.accepted ?? 0;
   return (
     <div className="space-y-3">
-      <p className="font-pixel text-3xl uppercase">
-        {count.yes + count.maybe}{" "}
-        <span className="text-base text-os-muted">humans answered</span>
-      </p>
-      <dl className="space-y-2">
-        {rows.map((r) => (
-          <div
-            key={r.label}
-            className="grid grid-cols-[6rem_1fr_2.5rem] items-center gap-3"
-          >
-            <dt className="font-mono text-[11px] uppercase text-os-muted">
-              {r.label}
-            </dt>
-            <div aria-hidden className="h-3 border border-os-line">
+      {count ? (
+        <p className="font-pixel text-3xl uppercase">
+          {accepted}
+          <span className="text-base text-os-muted">
+            {" "}
+            / {max} places filled
+          </span>
+        </p>
+      ) : (
+        <div className="space-y-1">
+          <p className="font-pixel text-2xl uppercase">
+            NULL<span className="camp404-cursor">_</span>
+            <span className="text-base text-os-muted"> / {max} places</span>
+          </p>
+          <p>{CREW.counting}</p>
+        </div>
+      )}
+
+      <div className="relative pb-10 pt-1">
+        <div
+          role="img"
+          aria-label={
+            count
+              ? `${count.accepted} accepted, ${count.applied} said yes and waiting, ${count.maybe} maybe, of ${max} places. The camp needs ${min}.`
+              : `Not counted yet. The camp needs ${min} and has room for ${max}.`
+          }
+          className="flex h-5 overflow-hidden border border-os-line bg-os-bg"
+        >
+          {count &&
+            SEGMENTS.map((s) => (
               <div
-                className={`h-full ${r.bar}`}
-                style={{ width: `${(r.n / total) * 100}%` }}
+                key={s.key}
+                className={`h-full ${s.swatch}`}
+                style={{ width: pct(count[s.key]) }}
               />
-            </div>
-            <dd className="text-right font-pixel text-sm">{r.n}</dd>
-          </div>
+            ))}
+        </div>
+        <div
+          aria-hidden
+          className="absolute top-0 h-7 w-0.5 -translate-x-1/2 bg-os-fg"
+          style={{ left: pct(min) }}
+        />
+        <p
+          aria-hidden
+          className="absolute top-8 -translate-x-1/2 whitespace-nowrap text-center font-mono text-[10px] uppercase text-os-fg"
+          style={{ left: pct(min) }}
+        >
+          {min} · {CREW.minLabel}
+        </p>
+        <p
+          aria-hidden
+          className="absolute right-0 top-8 font-mono text-[10px] uppercase text-os-muted"
+        >
+          {max} · {CREW.maxLabel}
+        </p>
+      </div>
+
+      <ul className="flex flex-wrap gap-x-4 gap-y-1">
+        {SEGMENTS.map((s) => (
+          <li
+            key={s.key}
+            className="flex items-center gap-2 font-mono text-[11px] uppercase text-os-muted"
+          >
+            <span
+              aria-hidden
+              className={`size-3 border border-os-line ${s.swatch}`}
+            />
+            {s.label}
+            {count && <span className="text-os-fg">{count[s.key]}</span>}
+          </li>
         ))}
-      </dl>
+      </ul>
     </div>
   );
 }

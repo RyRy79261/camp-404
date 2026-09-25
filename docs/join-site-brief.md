@@ -234,7 +234,8 @@ Transport & Travel team makes sure everyone and everything has a ride.
 - TRUCK.LOG: one big truck, no trailers of its own; the trailers are towed by
   members' own cars.
 - CREW.DB: "This year's captains" only, never a list of every member. Below it,
-  a headcount (said yes / maybe / accepted) that will come from the app's
+  a capacity bar (0 to 50, minimum 30 marked; accepted, said yes and waiting,
+  maybe) that will come from the app's
   "Coming this year?" answers (`camp_participations` for the current year),
   counts only. `CREW.headcount` is null until the main app feeds it; how is
   decided with the camp settings.

@@ -238,13 +238,13 @@ export const MAP = {
 export type Captain = { name: string; role: string; bio: string };
 
 /**
- * This year's answers to the app's "Coming this year?" question
- * (camp_participations for the current burn year): the members' own Yes and
- * Maybe, and how many a captain has accepted. Counts only, never names.
- * null until the main app feeds it (owner, 2026-09-25: wired up once this
- * site's presentation is settled); the window then says it is still counting.
+ * Where this year's members stand, from the app's "Coming this year?" answers
+ * (camp_participations.status for the current burn year): accepted by a
+ * captain, said Yes and waiting, or said Maybe. Each member counts once.
+ * Counts only, never names. null until the main app feeds it (owner,
+ * 2026-09-25: wired up once this site's presentation is settled).
  */
-export type Headcount = { yes: number; maybe: number; accepted: number };
+export type Headcount = { accepted: number; applied: number; maybe: number };
 
 export const CREW = {
   title: "CREW.DB",
@@ -253,7 +253,11 @@ export const CREW = {
   headcountSource:
     "Counted from the “Coming this year?” question in the Camp 404 app.",
   counting: "Counting starts when members answer. You could be one of them.",
+  minLabel: "Minimum to run",
+  maxLabel: "Full camp",
   headcount: null as Headcount | null,
+  // The owner's numbers, 2026-09-25: the camp runs from 30 and has room for 50.
+  capacity: { min: 30, max: 50 },
   captains: [
     {
       name: "Ryan",
