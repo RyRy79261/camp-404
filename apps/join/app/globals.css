@@ -344,6 +344,108 @@ body {
   }
 }
 
+/* TEAMS/ pixel icons: the colour copies sit a fraction of a pixel apart, and
+   jump on hover or when chosen, like the landing's glitched 404. */
+.pixel-glitch-m {
+  transform: translate(-0.35px, 0);
+}
+.pixel-glitch-c {
+  transform: translate(0.35px, 0);
+}
+.pixel-glitch-live .pixel-glitch-m,
+button:hover .pixel-glitch .pixel-glitch-m {
+  animation: pixel-glitch-m 1.6s steps(1) infinite;
+}
+.pixel-glitch-live .pixel-glitch-c,
+button:hover .pixel-glitch .pixel-glitch-c {
+  animation: pixel-glitch-c 1.6s steps(1) infinite;
+}
+@keyframes pixel-glitch-m {
+  0%,
+  100% {
+    transform: translate(-0.35px, 0);
+  }
+  20% {
+    transform: translate(-1px, 0.3px);
+  }
+  22% {
+    transform: translate(-0.35px, 0);
+  }
+  60% {
+    transform: translate(-0.8px, -0.3px);
+  }
+  62% {
+    transform: translate(-0.35px, 0);
+  }
+}
+@keyframes pixel-glitch-c {
+  0%,
+  100% {
+    transform: translate(0.35px, 0);
+  }
+  20% {
+    transform: translate(1px, -0.3px);
+  }
+  22% {
+    transform: translate(0.35px, 0);
+  }
+  60% {
+    transform: translate(0.8px, 0.3px);
+  }
+  62% {
+    transform: translate(0.35px, 0);
+  }
+}
+
+/* GIFTS.EXE: each ring fills once, then a bright segment keeps orbiting. */
+.gift-ring-fill {
+  stroke-dasharray: 100 100;
+  stroke-dashoffset: 100;
+  animation: gift-ring-fill 1.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation-delay: var(--delay, 0ms);
+}
+@keyframes gift-ring-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.gift-ring-orbit {
+  stroke-dasharray: 8 92;
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: gift-ring-orbit 2.8s linear infinite;
+  animation-delay: calc(var(--delay, 0ms) + 1.4s);
+  opacity: 0;
+  animation-fill-mode: backwards;
+}
+@keyframes gift-ring-orbit {
+  0% {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 1;
+  }
+}
+
+/* The Dance of 1000 Flames: each flame flickers on its own beat. */
+.gift-flame {
+  transform: translate(-50%, -50%);
+  animation: gift-flame 0.85s ease-in-out infinite alternate;
+  animation-delay: var(--flame-delay, 0ms);
+}
+@keyframes gift-flame {
+  from {
+    transform: translate(-50%, -50%) scale(0.8) rotate(-8deg);
+    opacity: 0.75;
+  }
+  to {
+    transform: translate(-50%, -60%) scale(1.1) rotate(6deg);
+    opacity: 1;
+  }
+}
+
 /* Reduced motion: stills, as the landing does. The fringes held apart, the
    beam and tears hidden, windows appear without the power-on. */
 @media (prefers-reduced-motion: reduce) {
@@ -353,8 +455,18 @@ body {
   }
   .camp404-glitch-shake,
   .camp404-cursor,
-  .os-window-in {
+  .os-window-in,
+  .pixel-glitch-live .pixel-glitch-m,
+  .pixel-glitch-live .pixel-glitch-c,
+  button:hover .pixel-glitch .pixel-glitch-m,
+  button:hover .pixel-glitch .pixel-glitch-c,
+  .gift-ring-orbit,
+  .gift-flame {
     animation: none;
+  }
+  .gift-ring-fill {
+    animation: none;
+    stroke-dashoffset: 0;
   }
   .camp404-glitch-rgb-magenta {
     animation: none;

@@ -5,8 +5,8 @@ import { APP_IDS, type AppId } from "./window-manager";
 // screen, so these only matter from the md breakpoint up.
 const SIZES: Record<AppId, { w: number; h: number }> = {
   readme: { w: 560, h: 520 },
-  teams: { w: 600, h: 460 },
-  gifts: { w: 520, h: 460 },
+  teams: { w: 620, h: 560 },
+  gifts: { w: 620, h: 620 },
   map: { w: 560, h: 480 },
   crew: { w: 560, h: 500 },
   schedule: { w: 600, h: 540 },

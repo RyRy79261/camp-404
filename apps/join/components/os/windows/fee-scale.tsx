@@ -36,7 +36,7 @@ export function FeeScale() {
         aria-live="polite"
         className="flex flex-wrap items-baseline gap-x-3 gap-y-1"
       >
-        <span className="os-glow font-pixel text-3xl">
+        <span className="font-pixel text-3xl text-os-fg">
           {formatRands(amount)}
         </span>
         <span className="font-mono text-sm text-os-muted">

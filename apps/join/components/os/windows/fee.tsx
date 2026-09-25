@@ -91,7 +91,7 @@ export function FeeWindow() {
           <span className="font-mono text-[11px] uppercase text-os-muted">
             Left for your camp fee
           </span>
-          <span className="os-glow block font-pixel text-2xl">
+          <span className="block font-pixel text-3xl text-os-fg">
             {formatRands(fee)}{" "}
             <span className="font-mono text-sm text-os-muted">
               {formatUsdLabel(fee)}

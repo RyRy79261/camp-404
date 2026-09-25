@@ -8,9 +8,9 @@ export function MapWindow() {
     <WinBody>
       <figure className="border border-os-line bg-os-bg/70 p-2">
         <svg
-          viewBox="0 0 400 260"
+          viewBox="0 0 400 292"
           role="img"
-          aria-label={`Plot ${MAP.plot}: the dune and a row of toilets at the back, the sleeping tent in front of them, the kitchen in the middle and the lounge at the front, its sound pointing away from sleeping.`}
+          aria-label={`${MAP.where}: the dune and a row of toilets at the back, the sleeping tent in front of them, the kitchen in the middle and the lounge at the front, its sound pointing away from sleeping, towards Street A.`}
           className="w-full font-mono"
           fill="none"
           stroke="currentColor"
@@ -54,7 +54,22 @@ export function MapWindow() {
             className="fill-os-muted text-[9px]"
             stroke="none"
           >
-            PLOT {MAP.plot}
+            {MAP.where.toUpperCase()}
+          </text>
+          <rect
+            x="0"
+            y="262"
+            width="400"
+            height="26"
+            className="fill-os-chrome text-os-line"
+          />
+          <path
+            d="M84 275 h316"
+            className="text-os-muted"
+            strokeDasharray="10 8"
+          />
+          <text x="12" y="279" className="fill-os-fg text-[9px]" stroke="none">
+            STREET A
           </text>
           <rect
             x="70"

@@ -60,7 +60,24 @@ export const README = {
   ],
 } as const;
 
+export type TeamIcon =
+  | "comms"
+  | "finance"
+  | "structures"
+  | "safety"
+  | "kitchen"
+  | "water"
+  | "sanitation"
+  | "vibes"
+  | "memes"
+  | "power"
+  | "art"
+  | "mutant"
+  | "transport";
+
 export type Team = {
+  /** Which pixel icon the TEAMS/ folder draws for it. */
+  icon: TeamIcon;
   /** File name in the TEAMS/ folder, also what `ls teams` prints. */
   file: string;
   name: string;
@@ -78,107 +95,139 @@ export const TEAMS_OUTRO = [
 
 export const TEAMS: readonly Team[] = [
   {
+    icon: "comms",
     file: "COMMS_HR.TXT",
     name: "Communications & HR",
     does: "Applications, tickets, messaging, the flow of information.",
   },
   {
+    icon: "finance",
     file: "FINANCE.XLS",
     name: "Finance",
     does: "Fees, budgeting, accounts.",
   },
   {
+    icon: "structures",
     file: "STRUCTURES.DWG",
     name: "Structures",
     does: "Shade, flooring, furniture, sleeping gear rental.",
   },
   {
+    icon: "safety",
     file: "SAFETY.SYS",
     name: "Safety",
     does: "First aid, extinguishers, Tankwa Town regulations.",
   },
   {
+    icon: "kitchen",
     file: "KITCHEN.EXE",
     name: "Kitchen",
     does: "Menu and recipes, equipment, shopping and storage, cooking shifts.",
   },
   {
+    icon: "water",
     file: "WATER.H2O",
     name: "Water",
     does: "Clean and grey water, plumbing, water shifts.",
   },
   {
+    icon: "sanitation",
     file: "SANITATION.BAT",
     name: "Sanitation & MOOP",
     does: "Cleaning, waste, MOOP shifts.",
   },
   {
+    icon: "vibes",
     file: "VIBES.CFG",
     name: "Ministry of Vibes",
     does: "Lounge decor and aesthetic.",
   },
   {
+    icon: "memes",
     file: "MEMES.GIF",
     name: "Ministry of Memes",
     does: "Memetic influence in Tankwa Town, onboarding, camp culture.",
     isNew: true,
   },
   {
+    icon: "power",
     file: "POWER.DRV",
     name: "Power, Lighting & Sound",
     does: "Generator and fuel, the grid, lights, DJ gear, genie shifts.",
   },
   {
+    icon: "art",
     file: "ART.BMP",
     name: "Artworks & Activities",
     does: "Art, the lounge activity and DJ schedule, breakfast vibes.",
   },
   {
+    icon: "mutant",
     file: "MUTANT.VEH",
     name: "Mutant Vehicle",
     does: "Build, transport, running, garage.",
   },
   {
+    icon: "transport",
     file: "TRANSPORT.LOG",
     name: "Transport & Travel",
     does: "Truck and trailer rental, packing, lifts.",
   },
 ];
 
+export type GiftIcon =
+  | "orphanage"
+  | "breakfast"
+  | "lounge"
+  | "meow"
+  | "flames"
+  | "art";
+export type Gift = { icon: GiftIcon; name: string; text: string };
+
 export const GIFTS = {
   title: "GIFTS.EXE",
   intro: "What Camp 404 gives to Tankwa Town.",
   primary: [
     {
+      icon: "orphanage",
       name: "The orphanage",
       text: "A home for stray Burners in need of care.",
     },
     {
+      icon: "breakfast",
       name: "Daily vegan breakfast",
       text: "Public breakfast every day, and snacks in the lounge.",
     },
     {
+      icon: "lounge",
       name: "The lounge",
       text: "Comfort and entertainment: a safe space to rest, relax, connect and have fun.",
     },
-  ],
+  ] satisfies Gift[],
   secondary: [
     {
+      icon: "meow",
       name: "Now Now Meow Meow",
       text: "Our Mutant Vehicle, by Kyle & Robyn.",
     },
     {
+      icon: "flames",
+      name: "Dance of 1000 Flames",
+      text: "We join the Dance of 1000 Flames.",
+    },
+    {
+      icon: "art",
       name: "Artworks & activities",
       text: "Something big and burnable, and always space for more: slam poetry, carrot readings, How to be a Duck workshops.",
     },
-  ],
+  ] satisfies Gift[],
 } as const;
 
 export const MAP = {
   title: "MAP.GPS",
-  plot: "#43",
+  where: "Block 3/4-ish · Street A",
   lines: [
-    "Plot #43 in 2025. We plan to keep the same block.",
+    "We're on the 3ish/4ish block, on Street A.",
     "A row of toilets directly behind us.",
     "A semi-loud area, but the back (sleeping) borders a sand dune.",
     "Not a sound camp. The lounge sound points away from sleeping, with a long distance between.",
@@ -188,11 +237,23 @@ export const MAP = {
 
 export type Captain = { name: string; role: string; bio: string };
 
-// Only what is known. Crew size, orphan beds and who is coming are not known
-// for the year ahead (owner, 2026-09-25), so the site does not guess them.
+/**
+ * This year's answers to the app's "Coming this year?" question
+ * (camp_participations for the current burn year): the members' own Yes and
+ * Maybe, and how many a captain has accepted. Counts only, never names.
+ * null until the main app feeds it (owner, 2026-09-25: wired up once this
+ * site's presentation is settled); the window then says it is still counting.
+ */
+export type Headcount = { yes: number; maybe: number; accepted: number };
+
 export const CREW = {
   title: "CREW.DB",
-  forming: "Still forming. You could be the next row.",
+  captainsHeading: `This year's captains (${BURN_YEAR})`,
+  headcountHeading: `Who's coming (${BURN_YEAR})`,
+  headcountSource:
+    "Counted from the “Coming this year?” question in the Camp 404 app.",
+  counting: "Counting starts when members answer. You could be one of them.",
+  headcount: null as Headcount | null,
   captains: [
     {
       name: "Ryan",
@@ -356,7 +417,7 @@ export const TRUCK = {
   title: "TRUCK.LOG",
   entries: [
     "One big truck carries the camp: infrastructure, furniture, freezers, gas, decor.",
-    "A couple of trailers carry the food, the bikes, and the rubbish home. (MOOP goes home with us. All of it.)",
+    "A couple of trailers, towed by members' own cars, carry the food, the bikes, and the rubbish home. (MOOP goes home with us. All of it.)",
     "The Transport & Travel team makes sure everyone and everything has a ride.",
   ],
 } as const;

@@ -226,3 +226,20 @@ shade cloth or ground sheet to share, a doormat blanket, a tent light.
 **Transport.** A truck carries the container (infrastructure, furniture,
 freezers, gas, decor); 2 trailers carry food, bikes, and rubbish home. The
 Transport & Travel team makes sure everyone and everything has a ride.
+
+## Owner's corrections, 2026-09-25 (round 3)
+
+- MAP.GPS: "We're on the 3ish/4ish block, on Street A." The dune and the toilets
+  behind are still from the 2025 plot (#43); confirm them.
+- TRUCK.LOG: one big truck, no trailers of its own; the trailers are towed by
+  members' own cars.
+- CREW.DB: "This year's captains" only, never a list of every member. Below it,
+  a headcount (said yes / maybe / accepted) that will come from the app's
+  "Coming this year?" answers (`camp_participations` for the current year),
+  counts only. `CREW.headcount` is null until the main app feeds it; how is
+  decided with the camp settings.
+- TEAMS/: pixel-art glitch icons in a folder, not a list. Vibes is a cat.
+- GIFTS.EXE: icons in animated progress rings, primary gifts in the top row.
+  Secondary: Now Now Meow Meow (drawn from a photo), the Dance of 1000 Flames
+  (AfrikaBurn's raised-arms figure without its roots, ringed by flame emojis),
+  artworks and activities.

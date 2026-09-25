@@ -1,13 +1,19 @@
 import { TRUCK } from "@/lib/content";
 import { WinBody } from "./ui";
 
-// One big truck pulling a couple of trailers.
+// One big truck; the trailers go behind members' own cars.
 const TRUCK_ART = [
-  "                              ____________________ _____",
-  " __________     __________   |                    ||__\\ \\__",
-  "|          |===|          |==|     CAMP  404      ||      __]",
-  "|__________|   |__________|  |____________________||_____|__|",
-  "   (o)            (o)          (@)(@)       (@)(@)     (@)",
+  " ____________________ _____",
+  "|                    ||__\\ \\__",
+  "|     CAMP  404      ||      __]",
+  "|____________________||_____|__|",
+  "   (@)(@)       (@)(@)     (@)",
+  "",
+  "    ______          _________",
+  "   /|_||_\\`.__      |  FOOD + |",
+  "  (   _    _ _\\=====|  BIKES  |",
+  "  =`-(_)--(_)-'     |_________|",
+  "                        (o)",
 ].join("\n");
 
 export function TruckWindow() {
