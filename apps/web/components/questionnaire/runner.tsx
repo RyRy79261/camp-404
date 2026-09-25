@@ -1,5 +1,7 @@
 "use client";
 
+import { unstable_rethrow } from "next/navigation";
+
 import * as React from "react";
 import { Check, CloudOff, Loader2 } from "lucide-react";
 import {
@@ -257,7 +259,12 @@ export function QuestionnaireRunner({
         submitting.current = false;
         if (autosave) setSaveState("saved");
         onOk();
-      } catch {
+      } catch (err) {
+        // A final submit ends in the server action's redirect to the
+        // completion screen, which reaches here as Next's NEXT_REDIRECT
+        // signal. It is not a failed save: hand it back to Next, or the form
+        // flashes "couldn't save" as it leaves (owner's report, 2026-09-25).
+        unstable_rethrow(err);
         submitting.current = false;
         setErrors((prev) => ({ ...prev, [FORM_ERROR_KEY]: SAVE_FAILED }));
       }

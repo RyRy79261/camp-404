@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { QuestionnaireResponses, type SaveResult } from "@camp404/types";
 import {
@@ -144,6 +145,11 @@ export async function saveBuilderResponses(
   // Every final submit lands on the S27 completion screen, which says what is
   // next: the next required questionnaire, or back to camp.
   if (final) {
+    // The console layout drew this member bare while the gate held them, and
+    // Next keeps a layout across in-app navigation, so without this the
+    // completion screen and every page after it stayed headerless until a
+    // reload (owner's report, 2026-09-25). Refresh from the root layout down.
+    revalidatePath("/", "layout");
     redirect(`/questionnaires/${activation.id}/complete`);
   }
   return { ok: true };
