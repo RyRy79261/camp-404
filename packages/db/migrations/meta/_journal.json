@@ -428,6 +428,13 @@
       "when": 1790283573218,
       "tag": "0060_founder_code_single_use",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790300799350,
+      "tag": "0061_meeting_notes",
+      "breakpoints": true
     }
   ]
 }

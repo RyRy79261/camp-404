@@ -4,10 +4,13 @@ import {
   CalendarDays,
   Circle,
   Crown,
+  NotebookPen,
+  Plus,
   SquareKanban,
   User,
   Users,
 } from "lucide-react";
+import { canWorkInTeam } from "@camp404/core";
 import { Team } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import {
@@ -18,11 +21,18 @@ import {
 } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { CalendarRow } from "@/components/calendar/calendar-days";
+import { MeetingRow } from "@/components/meetings/meeting-row";
 import { getUpcomingEvents } from "@/lib/camp-calendar";
 import { getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
 import { buildCalendarDays } from "@/lib/calendar-view";
 import { CALENDAR_PAGE_RANGE } from "@/lib/google-calendar";
+import { listMeetingNotes } from "@/lib/meeting-notes";
+import {
+  meetingsHref,
+  newMeetingHref,
+  TEAM_MEETING_LIMIT,
+} from "@/lib/meeting-notes-view";
 import { listTeamPeople, type TeamPerson } from "@/lib/roster";
 import { presentTask } from "@/lib/task-board";
 import { buildTeamPage } from "@/lib/team-page";
@@ -44,9 +54,11 @@ export async function generateMetadata({
 
 // A team's own page (owner, 2026-09-24: "team overviews that show team
 // events"): this year's leads and members, the team's upcoming events and its
-// open tasks. The first slice of the team dashboards (#267): the common frame
-// only, and read-only. Any approved member may open any team's page; it shows
-// only what the roster, the calendar and the task board already show them.
+// open tasks, and its meeting notes (#268). The first slice of the team
+// dashboards (#267): the common frame. Any approved member may open any team's
+// page; it shows only what the roster, the calendar, the task board and the
+// meetings list already show them. The one control on it is "New meeting",
+// for the team's members this year and captains.
 // The composition is Home's: the main cards on the left, the people beside.
 
 const DUE_VARIANT = {
@@ -105,11 +117,12 @@ export default async function TeamPage({
   if (!entry || !team.success) notFound();
 
   const now = new Date();
-  const [people, calendar, tasks, leadTeams] = await Promise.all([
+  const [people, calendar, tasks, leadTeams, meetings] = await Promise.all([
     listTeamPeople(team.data),
     getUpcomingEvents(CALENDAR_PAGE_RANGE),
     listBoardTasks(now),
     rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
+    listMeetingNotes({ team: team.data, limit: TEAM_MEETING_LIMIT }),
   ]);
   const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
   const teamLabels = Object.fromEntries(teams.map((t) => [t.key, t.label]));
@@ -137,13 +150,17 @@ export default async function TeamPage({
   });
 
   const calendarHref = `/calendar?team=${encodeURIComponent(key)}`;
+  // The team's members this year and captains write its meeting notes.
+  const canWriteNotes =
+    !entry.archived &&
+    canWorkInTeam(rank, page.viewer.onTeam ? [key] : [], key);
 
   return (
     <div className="flex flex-col">
       <PageHeading
         eyebrow="Camp / Teams"
         title={entry.label}
-        description="This year's leads and members, the team's upcoming events and its open tasks."
+        description="This year's leads and members, the team's upcoming events, its open tasks and its meetings."
       />
       <div className="-mt-3 mb-6 flex flex-wrap gap-2" aria-label="Team">
         {entry.archived ? <Badge variant="outline">Archived</Badge> : null}
@@ -263,6 +280,48 @@ export default async function TeamPage({
                 className="mt-3 self-start text-xs font-medium text-accent hover:underline"
               >
                 Open the task board
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <NotebookPen className="h-4 w-4 text-accent" aria-hidden />
+                Meetings
+              </CardTitle>
+              {canWriteNotes ? (
+                <Link
+                  href={newMeetingHref(key)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  New meeting
+                </Link>
+              ) : null}
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {meetings.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No meetings written up for this team yet.
+                </p>
+              ) : (
+                <ul
+                  aria-label="Team meetings"
+                  className="-my-3 divide-y divide-border"
+                >
+                  {meetings.map((note) => (
+                    <li key={note.id}>
+                      <MeetingRow note={note} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link
+                href={meetingsHref(key)}
+                className="mt-3 self-start text-xs font-medium text-accent hover:underline"
+              >
+                See all meetings
               </Link>
             </CardContent>
           </Card>

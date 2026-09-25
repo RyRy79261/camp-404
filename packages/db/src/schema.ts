@@ -2010,6 +2010,111 @@ export const taskDeadlineReminders = pgTable(
   }),
 );
 
+// --- Meeting notes (#268) ---------------------------------------------------
+
+// What a team's meeting, or the whole camp's, planned, decided and handed out.
+// A bespoke table (AGENTS.md "Bespoke over generic"), year-scoped by `cycle`,
+// stamped from the camp's current year when the note is written. `team` null
+// is a whole-camp meeting. Every approved member reads every note; a team's
+// members this year and captains write them (canWorkInTeam in @camp404/core).
+// Notes are camp-internal and never on a public page.
+export const meetingNotes = pgTable(
+  "meeting_notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    team: teamEnum("team"),
+    title: text("title").notNull(),
+    // When the meeting started, typed as a camp day and time.
+    heldAt: timestamp("held_at", { mode: "date" }).notNull(),
+    // The camp calendar's event for this meeting, when there is one. The
+    // event lives in Google; its title is kept as it was when it was linked,
+    // so the note still names it once the event has passed or gone.
+    calendarEventId: text("calendar_event_id"),
+    calendarEventTitle: text("calendar_event_title"),
+    // Markdown, rendered on the note's page.
+    agenda: text("agenda").notNull().default(""),
+    notes: text("notes").notNull().default(""),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+    // Bumped by every edit, so an edit is a compare-and-set against the
+    // version the editor opened.
+    version: integer("version").notNull().default(1),
+  },
+  (n) => ({
+    teamHeldIdx: index("meeting_notes_team_held_idx").on(n.team, n.heldAt),
+    cycleIdx: index("meeting_notes_cycle_idx").on(n.cycle),
+  }),
+);
+
+// Who was at the meeting: ticked from the team's members plus anyone else.
+export const meetingNoteAttendees = pgTable(
+  "meeting_note_attendees",
+  {
+    noteId: uuid("note_id")
+      .notNull()
+      .references(() => meetingNotes.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (a) => ({
+    pk: primaryKey({ columns: [a.noteId, a.userId] }),
+    userIdx: index("meeting_note_attendees_user_idx").on(a.userId),
+  }),
+);
+
+// What the meeting decided, one short line each, in the order written. Rows
+// of their own so a team's decisions this year can be listed across notes.
+export const meetingNoteDecisions = pgTable(
+  "meeting_note_decisions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    noteId: uuid("note_id")
+      .notNull()
+      .references(() => meetingNotes.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    text: text("text").notNull(),
+  },
+  (d) => ({
+    noteIdx: index("meeting_note_decisions_note_idx").on(d.noteId),
+  }),
+);
+
+// Who does what next. One click turns an item into a task on the board
+// (`task_id`), and the note then shows the task's live status. Once it is a
+// task the item's words are fixed: the task is where the work is tracked.
+export const meetingNoteActionItems = pgTable(
+  "meeting_note_action_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    noteId: uuid("note_id")
+      .notNull()
+      .references(() => meetingNotes.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    text: text("text").notNull(),
+    assigneeId: uuid("assignee_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // A camp day, YYYY-MM-DD: the task's deadline when it becomes one.
+    dueOn: date("due_on", { mode: "string" }),
+    taskId: uuid("task_id").references(() => tasks.id, {
+      onDelete: "set null",
+    }),
+  },
+  (i) => ({
+    noteIdx: index("meeting_note_action_items_note_idx").on(i.noteId),
+    // One action item makes at most one task.
+    taskUniq: uniqueIndex("meeting_note_action_items_task_uniq").on(i.taskId),
+  }),
+);
+
 // --- Burner adoption -----------------------------------------------------
 
 // Adoption slots are numbered afresh each year, so a slot number is unique

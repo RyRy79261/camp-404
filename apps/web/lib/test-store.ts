@@ -56,6 +56,21 @@ import type {
   CampMemberDetailOptions,
 } from "@camp404/db/roster";
 import type { PaymentRow, RecordPaymentInput } from "@camp404/db/payments";
+import {
+  ALREADY_A_TASK,
+  ASSIGNEE_NOT_A_MEMBER,
+  ATTENDEE_NOT_A_MEMBER,
+  EVENT_NOT_ON_CALENDAR,
+  ITEM_GONE,
+  NOTE_EDITED,
+  NOTE_GONE,
+  meetingNoteRefusal,
+  type MeetingNote,
+  type MeetingNoteFields,
+  type MeetingNoteSummary,
+  type MeetingNoteWriteResult,
+  type TeamWork,
+} from "@camp404/db/meeting-notes";
 import type {
   ParticipationIntentResult,
   ParticipationRow,
@@ -410,6 +425,32 @@ interface TestTask {
   version: number;
 }
 
+/** A meeting note with its lists (mirrors `meeting_notes` and its children). */
+interface TestMeetingNote {
+  id: string;
+  cycle: number;
+  team: Team | null;
+  title: string;
+  heldAt: Date;
+  calendarEventId: string | null;
+  calendarEventTitle: string | null;
+  agenda: string;
+  notes: string;
+  createdById: string;
+  createdAt: Date;
+  updatedAt: Date;
+  version: number;
+  attendeeIds: string[];
+  decisions: { id: string; text: string }[];
+  actionItems: {
+    id: string;
+    text: string;
+    assigneeId: string | null;
+    dueOn: string | null;
+    taskId: string | null;
+  }[];
+}
+
 /** A payments-ledger row (mirrors `payments`). */
 interface TestPayment {
   id: string;
@@ -562,6 +603,7 @@ interface TestStoreState {
   teamMemberships: TestTeamMembership[];
   requiredActions: TestRequiredAction[];
   tasks: TestTask[];
+  meetingNotes: TestMeetingNote[];
   calendarEvents: TestCalendarEvent[];
   payments: TestPayment[];
   /** `users.ref_code`: each member's payment reference, given out once. */
@@ -623,6 +665,7 @@ function globalState(): TestStoreState {
       teamMemberships: [] as TestTeamMembership[],
       requiredActions: [] as TestRequiredAction[],
       tasks: [] as TestTask[],
+      meetingNotes: [] as TestMeetingNote[],
       calendarEvents: [] as TestCalendarEvent[],
       payments: [] as TestPayment[],
       memberRefCodes: new Map<string, string>(),
@@ -687,6 +730,8 @@ const promotionRequests = S.promotionRequests;
 const teamMemberships = S.teamMemberships;
 const requiredActions = S.requiredActions;
 const tasks = S.tasks;
+S.meetingNotes ??= [];
+const meetingNotes = S.meetingNotes;
 // A dev server that was running before this field existed has a state object
 // without it; give it one rather than crash.
 S.calendarEvents ??= [];
@@ -2619,6 +2664,263 @@ export const testStore = {
         status: r.status,
         createdAt: r.createdAt,
       }));
+  },
+
+  // --- Meeting notes: twins of @camp404/db/meeting-notes, same rules -------
+
+  /** lockTeamWork's twin: rank and this year's teams, or null if not approved. */
+  teamWork(userId: string): TeamWork | null {
+    const user = findUserById(userId);
+    if (!user || user.approvalStatus !== "approved") return null;
+    const mine = testStore.getTeamMemberships(userId);
+    return {
+      rank:
+        user.rank === "captain"
+          ? "captain"
+          : mine.some((m) => m.isLead)
+            ? "team_lead"
+            : "camp_member",
+      memberTeams: mine.map((m) => m.team),
+      cycle: currentCycleNumber(),
+    };
+  },
+
+  listMeetingNotes(
+    input: { team?: Team | "camp"; limit?: number } = {},
+  ): MeetingNoteSummary[] {
+    const rows = meetingNotes
+      .filter((n) =>
+        input.team === undefined
+          ? true
+          : input.team === "camp"
+            ? n.team === null
+            : n.team === input.team,
+      )
+      .sort(
+        (a, b) =>
+          b.heldAt.getTime() - a.heldAt.getTime() ||
+          b.createdAt.getTime() - a.createdAt.getTime(),
+      )
+      .map((n) => ({
+        id: n.id,
+        team: n.team,
+        title: n.title,
+        heldAt: n.heldAt,
+        decisions: n.decisions.length,
+        actionItems: n.actionItems.length,
+      }));
+    return input.limit ? rows.slice(0, input.limit) : rows;
+  },
+
+  getMeetingNote(noteId: string): MeetingNote | null {
+    const n = meetingNotes.find((x) => x.id === noteId);
+    if (!n) return null;
+    const name = (id: string) =>
+      findUserById(id)?.displayName?.trim() || "Unnamed member";
+    return {
+      id: n.id,
+      cycle: n.cycle,
+      team: n.team,
+      title: n.title,
+      heldAt: n.heldAt,
+      calendarEventId: n.calendarEventId,
+      calendarEventTitle: n.calendarEventTitle,
+      agenda: n.agenda,
+      notes: n.notes,
+      createdByName: findUserById(n.createdById)?.displayName?.trim() || null,
+      updatedAt: n.updatedAt,
+      version: n.version,
+      attendees: n.attendeeIds
+        .map((id) => ({ id, displayName: name(id) }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      decisions: n.decisions.map((d) => ({ ...d })),
+      actionItems: n.actionItems.map((i) => {
+        const task = i.taskId ? tasks.find((t) => t.id === i.taskId) : null;
+        return {
+          id: i.id,
+          text: i.text,
+          assigneeId: i.assigneeId,
+          assigneeName: i.assigneeId ? name(i.assigneeId) : null,
+          dueOn: i.dueOn,
+          task: task ? { id: task.id, status: task.status } : null,
+        };
+      }),
+    };
+  },
+
+  createMeetingNote(
+    input: MeetingNoteFields & { actorId: string; team: Team | null },
+  ): MeetingNoteWriteResult<{ id: string }> {
+    const work = testStore.teamWork(input.actorId);
+    const refusal = meetingNoteRefusal(work, input.team);
+    if (refusal || !work) return { ok: false, error: refusal ?? NOTE_GONE };
+    if (input.calendarEvent && input.calendarEvent.title === null) {
+      return { ok: false, error: EVENT_NOT_ON_CALENDAR };
+    }
+    const approved = (id: string) =>
+      findUserById(id)?.approvalStatus === "approved";
+    if (!input.attendeeIds.every(approved)) {
+      return { ok: false, error: ATTENDEE_NOT_A_MEMBER };
+    }
+    if (
+      !input.actionItems.every((i) => !i.assigneeId || approved(i.assigneeId))
+    ) {
+      return { ok: false, error: ASSIGNEE_NOT_A_MEMBER };
+    }
+    const now = new Date();
+    const id = crypto.randomUUID();
+    meetingNotes.push({
+      id,
+      cycle: work.cycle,
+      team: input.team,
+      title: input.title,
+      heldAt: input.heldAt,
+      calendarEventId: input.calendarEvent?.id ?? null,
+      calendarEventTitle: input.calendarEvent?.title ?? null,
+      agenda: input.agenda,
+      notes: input.notes,
+      createdById: input.actorId,
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+      attendeeIds: [...input.attendeeIds],
+      decisions: input.decisions.map((text) => ({
+        id: crypto.randomUUID(),
+        text,
+      })),
+      actionItems: input.actionItems.map((i) => ({
+        id: crypto.randomUUID(),
+        text: i.text,
+        assigneeId: i.assigneeId,
+        dueOn: i.dueOn,
+        taskId: null,
+      })),
+    });
+    return { ok: true, id };
+  },
+
+  editMeetingNote(
+    input: MeetingNoteFields & {
+      actorId: string;
+      noteId: string;
+      version: number;
+    },
+  ): MeetingNoteWriteResult {
+    const note = meetingNotes.find((n) => n.id === input.noteId);
+    if (!note) return { ok: false, error: NOTE_GONE };
+    const refusal = meetingNoteRefusal(
+      testStore.teamWork(input.actorId),
+      note.team,
+    );
+    if (refusal) return { ok: false, error: refusal };
+    if (note.version !== input.version)
+      return { ok: false, error: NOTE_EDITED };
+    let eventTitle: string | null = null;
+    if (input.calendarEvent) {
+      if (input.calendarEvent.title !== null) {
+        eventTitle = input.calendarEvent.title;
+      } else if (input.calendarEvent.id === note.calendarEventId) {
+        eventTitle = note.calendarEventTitle;
+      } else {
+        return { ok: false, error: EVENT_NOT_ON_CALENDAR };
+      }
+    }
+    const approved = (id: string) =>
+      findUserById(id)?.approvalStatus === "approved";
+    if (
+      !input.attendeeIds.every(
+        (id) => note.attendeeIds.includes(id) || approved(id),
+      )
+    ) {
+      return { ok: false, error: ATTENDEE_NOT_A_MEMBER };
+    }
+    const saved = new Map(note.actionItems.map((i) => [i.id, i]));
+    const assigneeOk = input.actionItems.every((i) => {
+      if (!i.assigneeId) return true;
+      const before = i.id ? saved.get(i.id) : undefined;
+      return before?.assigneeId === i.assigneeId || approved(i.assigneeId);
+    });
+    if (!assigneeOk) return { ok: false, error: ASSIGNEE_NOT_A_MEMBER };
+
+    const sent = new Set<string>();
+    const items: TestMeetingNote["actionItems"] = [];
+    for (const item of input.actionItems) {
+      const before = item.id ? saved.get(item.id) : undefined;
+      if (before) {
+        sent.add(before.id);
+        items.push(
+          before.taskId
+            ? before
+            : {
+                ...before,
+                text: item.text,
+                assigneeId: item.assigneeId,
+                dueOn: item.dueOn,
+              },
+        );
+      } else {
+        items.push({
+          id: crypto.randomUUID(),
+          text: item.text,
+          assigneeId: item.assigneeId,
+          dueOn: item.dueOn,
+          taskId: null,
+        });
+      }
+    }
+    for (const item of note.actionItems) {
+      if (!sent.has(item.id) && item.taskId) items.push(item);
+    }
+    Object.assign(note, {
+      title: input.title,
+      heldAt: input.heldAt,
+      calendarEventId: input.calendarEvent?.id ?? null,
+      calendarEventTitle: eventTitle,
+      agenda: input.agenda,
+      notes: input.notes,
+      updatedAt: new Date(),
+      version: note.version + 1,
+      attendeeIds: [...input.attendeeIds],
+      decisions: input.decisions.map((text) => ({
+        id: crypto.randomUUID(),
+        text,
+      })),
+      actionItems: items,
+    });
+    return { ok: true };
+  },
+
+  turnActionItemIntoTask(input: {
+    actorId: string;
+    itemId: string;
+    activeTeams: readonly Team[];
+  }): MeetingNoteWriteResult<{ taskId: string; noteId: string }> {
+    const note = meetingNotes.find((n) =>
+      n.actionItems.some((i) => i.id === input.itemId),
+    );
+    const item = note?.actionItems.find((i) => i.id === input.itemId);
+    if (!note || !item) return { ok: false, error: ITEM_GONE };
+    if (item.taskId) return { ok: false, error: ALREADY_A_TASK };
+    if (note.team && !input.activeTeams.includes(note.team)) {
+      return { ok: false, error: TEAM_NOT_ACTIVE };
+    }
+    const day = new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "Africa/Johannesburg",
+    }).format(note.heldAt);
+    const task = testStore.addTask({
+      creatorId: input.actorId,
+      title: item.text,
+      description: `From the meeting “${note.title}” on ${day}.`,
+      team: note.team,
+      assigneeId: item.assigneeId,
+      dueAt: item.dueOn ? campDayStart(item.dueOn) : null,
+    });
+    if (!task.ok) return task;
+    item.taskId = task.id;
+    return { ok: true, taskId: task.id, noteId: note.id };
   },
 
   // --- The task board: twins of @camp404/db/tasks, same rules, same words ---
@@ -4711,6 +5013,7 @@ export const testStore = {
     teamMemberships.length = 0;
     requiredActions.length = 0;
     tasks.length = 0;
+    meetingNotes.length = 0;
     calendarEvents.length = 0;
     payments.length = 0;
     memberRefCodes.clear();
