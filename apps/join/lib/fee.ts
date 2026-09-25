@@ -24,9 +24,10 @@ export function feeFromBudget(budget: number, costs: number[]): number {
   return Math.max(0, budget - spent);
 }
 
-/** A rand amount's dollar label, at the rate in content.ts: "≈ $400". */
+/** A rand amount's dollar label at the rate in content.ts, to the nearest
+ * $5 so it reads as the guide it is: R3,500 at R16 is "≈ $220". */
 export function formatUsdLabel(rands: number): string {
-  const dollars = Math.round(rands / FEE.usdRate.randsPerDollar);
+  const dollars = Math.round(rands / FEE.usdRate.randsPerDollar / 5) * 5;
   return `≈ $${RANDS.format(dollars)}`;
 }
 

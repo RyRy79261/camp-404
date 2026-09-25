@@ -204,9 +204,10 @@ it appear — you still help build it.
 floating scale, shown in rands with a dollar label beside it. Essential ≈ $200,
 Reasonable ≈ $350, Ideal ≈ $400 (where most people should land), Perfect World
 ≈ $800, and a subsidy below Essential for South Africans, students and anyone
-short on cash. FEE.CALC draws it as a slider. [CORRECTION 2026-09-25] The owner set the rate: $1 = R16, so the tiers are
-R3,200 / R5,600 / R6,400 / R12,800 (`FEE.usdRate` and `FEE.tiers` in
-`apps/join/lib/content.ts`). The rate moves; a camp setting will set it later.
+short on cash. FEE.CALC draws it as a slider. [CORRECTION 2026-09-25] The owner then set the tiers in rands: R3,500 /
+R6,000 / R8,000 / R16,000, with $1 = R16 for the dollar labels (rounded to $5:
+≈ $220 / $375 / $500 / $1,000). The rate moves; change `FEE.usdRate` in
+`apps/join/lib/content.ts` alone. A camp setting will set it later.
 
 **Perks.** Two vegan meals a day (brunch & "lupper") and snacks; a full
 kitchen and braai; sheltered sleeping; a public lounge; a public service to

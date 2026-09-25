@@ -140,7 +140,9 @@ export function FeeScale() {
               </span>
               <span className="block font-mono text-xs">
                 {formatRands(t.rands)}{" "}
-                <span className="text-os-muted">{formatUsdLabel(t.rands)}</span>
+                <span className="block text-os-muted">
+                  {formatUsdLabel(t.rands)}
+                </span>
               </span>
             </button>
           </li>

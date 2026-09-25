@@ -70,7 +70,7 @@ test("the fee scale moves between tiers", async ({ page }) => {
   await fee.getByRole("button", { name: /^Perfect World/ }).click();
   await expect(slider).toHaveAttribute(
     "aria-valuetext",
-    /\$800, Perfect World/,
+    /\$1,000, Perfect World/,
   );
   await slider.fill("0");
   await expect(slider).toHaveAttribute("aria-valuetext", /Subsidy/);

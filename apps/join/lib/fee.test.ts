@@ -33,12 +33,18 @@ describe("fee helpers", () => {
     expect(formatUsdLabel(0)).toBe("≈ $0");
   });
 
-  it("the tiers read back as the owner's dollar figures", () => {
-    expect(FEE.tiers.map((t) => formatUsdLabel(t.rands))).toEqual([
-      "≈ $200",
-      "≈ $350",
-      "≈ $400",
-      "≈ $800",
+  it("rounds the dollar label to $5", () => {
+    const rate = FEE.usdRate.randsPerDollar;
+    expect(formatUsdLabel(218.75 * rate)).toBe("≈ $220");
+    expect(formatUsdLabel(373 * rate)).toBe("≈ $375");
+  });
+
+  it("keeps the owner's rand tiers", () => {
+    expect(FEE.tiers.map((t) => formatRands(t.rands))).toEqual([
+      "R3,500",
+      "R6,000",
+      "R8,000",
+      "R16,000",
     ]);
   });
 
