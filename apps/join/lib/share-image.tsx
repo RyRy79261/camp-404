@@ -1,8 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
-import { CAT_FRAMES } from "@/components/os/inkblot-cat";
-import type { Sprite } from "@/components/os/inkblot-sprites";
+import { CAT_FRAMES, type Sprite } from "@camp404/games/inkblot/art";
 
 // join.camp-404.com's link preview (owner, 2026-09-25): "Are you lost? Join
 // 404", with Jinn, INKBLOT.EXE's black cat, and a 16-bit question mark over
@@ -19,7 +18,7 @@ const MAGENTA = "#ff008c";
 const CYAN = "#00dcff";
 const PINK = "#f02fc2"; // --color-os-primary
 
-// Jinn's colours: coat, sheen, outline, eye (inkblot-sprites COLOURS).
+// Jinn's colours: coat, sheen, outline, eye (INKBLOT's COLOURS).
 const CAT_COLOURS: Record<string, string> = {
   K: "#0b0714",
   D: "#2e2342",

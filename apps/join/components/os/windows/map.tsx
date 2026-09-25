@@ -131,7 +131,7 @@ export function MapWindow() {
           >
             SOUND → AWAY
           </text>
-          <g className="camp404-cursor">
+          <g className="os-cursor">
             <circle
               cx="200"
               cy="170"

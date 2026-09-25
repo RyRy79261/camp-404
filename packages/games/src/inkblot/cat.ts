@@ -1,4 +1,4 @@
-import type { Sprite } from "./inkblot-sprites";
+import type { Sprite } from "./sprites";
 
 // The cat's frames, from the owner's bat-cat repo (RyRy79261/bat-cat,
 // tools/assets/cat_sheet.png via tools/gen_cat_sprites.py, 20 × 20 frames),

@@ -1,18 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BOOT_ERROR, bootLines } from "@/lib/content";
-import { useJoinData } from "./join-data";
 
 const LINE_MS = 110;
 const HOLD_MS = 900;
 
-// A BIOS-style start-up that ends in the camp's joke. Any key, click or tap
+type Props = {
+  /** The start-up log, one line at a time. */
+  lines: readonly string[];
+  /** The last line, big, with a blinking cursor: the joke it ends on. */
+  finale: string;
+  /** What a screen reader hears while it plays. */
+  label: string;
+  onDone: () => void;
+};
+
+// A BIOS-style start-up that ends in the app's joke. Any key, click or tap
 // skips it; under reduced motion every line shows at once and it ends fast.
-export function Boot({ onDone }: { onDone: () => void }) {
+export function Boot({ lines, finale, label, onDone }: Props) {
   const [shown, setShown] = useState(0);
-  const { year } = useJoinData();
-  const lines = bootLines(year);
   const total = lines.length;
 
   useEffect(() => {
@@ -49,20 +55,20 @@ export function Boot({ onDone }: { onDone: () => void }) {
   return (
     <div
       role="status"
-      aria-label="Starting Camp 404 OS"
+      aria-label={label}
       className="fixed inset-0 z-[100] flex flex-col bg-os-bg p-6 font-mono text-xs text-os-muted sm:p-10 sm:text-sm"
     >
       <div
         aria-hidden
-        className="camp404-scanlines pointer-events-none absolute inset-0"
+        className="os-scanlines pointer-events-none absolute inset-0"
       />
       <pre className="relative whitespace-pre-wrap leading-relaxed">
         {lines.slice(0, shown).join("\n")}
       </pre>
       {shown > total && (
-        <p className="camp404-chromatic relative mt-4 font-pixel text-lg uppercase text-os-fg sm:text-2xl">
-          {BOOT_ERROR}
-          <span className="camp404-cursor">_</span>
+        <p className="os-chromatic relative mt-4 font-pixel text-lg uppercase text-os-fg sm:text-2xl">
+          {finale}
+          <span className="os-cursor">_</span>
         </p>
       )}
       <p className="absolute bottom-6 right-6 text-[10px] uppercase tracking-[0.3em] text-os-muted/70">
