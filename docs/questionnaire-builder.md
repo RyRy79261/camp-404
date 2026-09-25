@@ -12,7 +12,9 @@ conditional branching)**.
 > separate from the builder** (not listed, not editable); **Duplicate is in v1**;
 > response erasure is an explicit non-goal (§8).
 
-- Design source of truth: the 10 `FB · …` boards in `design/app.pen` (boards
+- [CORRECTION 2026-09-25] The `design/` folder below was deleted (owner:
+  "completely deprecated"); the code is the source of truth now. Original line:
+  Design source of truth: the 10 `FB · …` boards in `design/app.pen` (boards
   49–58), realizing/evolving `design/questionnaire-builder.mockup.md`. **Where
   the boards and §3 disagree on catalog membership, §3 wins** — boards 51/56
   predate the email/phone/number tiles.

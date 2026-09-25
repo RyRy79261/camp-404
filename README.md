@@ -32,12 +32,10 @@ packages/
   ai-prompts/ Versioned prompt templates
   eslint-config/
   typescript-config/
-design/       Pencil (.pen) design sources — see docs/design-tooling.md
 ```
 
 Design: [`docs/design-system.md`](docs/design-system.md) documents the
-`@camp404/ui` tokens and components; [`docs/design-tooling.md`](docs/design-tooling.md)
-covers the pencil.dev design-to-code workflow.
+`@camp404/ui` tokens and components.
 
 ## Getting started
 

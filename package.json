@@ -10,7 +10,6 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
-    "design:extract-boards": "node scripts/pencil/extract-boards.mjs design/app.pen design/.spec-extract",
     "db:local:up": "docker compose -f docker-compose.local.yml up -d --wait",
     "db:local:down": "docker compose -f docker-compose.local.yml down",
     "db:local:migrate": "NEON_LOCAL_PROXY=1 DATABASE_URL=postgres://postgres:postgres@db.localtest.me:5432/main pnpm --filter @camp404/db exec tsx scripts/migrate-local.ts",
