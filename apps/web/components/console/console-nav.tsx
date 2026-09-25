@@ -21,7 +21,8 @@ import {
   DropdownMenuTrigger,
 } from "@camp404/ui/components/dropdown-menu";
 import { cn } from "@camp404/ui/lib/utils";
-import { activeNavHref, type NavNode } from "@/lib/console-nav";
+import { activeNavHref, type NavItem, type NavNode } from "@/lib/console-nav";
+import { navIcon } from "@/lib/nav-icons";
 
 /**
  * The label, plus the router's own pending state for THIS link.
@@ -151,9 +152,45 @@ function NavMenu({
   );
 }
 
+/** A small tile in the phone menu: the place's picture over its name. */
+function NavTile({
+  item,
+  activeHref,
+  onSamePage,
+}: {
+  item: NavItem;
+  activeHref: string | null;
+  onSamePage: () => void;
+}) {
+  const Icon = navIcon(item.href);
+  const active = item.href === activeHref;
+  return (
+    <li className="min-w-0">
+      <Link
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        onClick={onSamePage}
+        className={cn(
+          "flex h-full flex-col items-center gap-1 rounded-md px-1 py-2 text-center text-[0.7rem] font-medium leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          active ? PILL_ACTIVE : PILL_IDLE,
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="line-clamp-2 break-words">
+          <NavLabel label={item.label} />
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+const TILE_GRID = "grid grid-cols-3 gap-1";
+
 /**
- * On a phone the menus fold into one sheet: the links, then each menu's
- * entries under its name.
+ * On a phone the nav is one sheet from the right (the owner, 2026-09-25): the
+ * plain links as small icon tiles, then each menu as a section that opens and
+ * closes, its entries as tiles in a grid. The section holding the page open
+ * now starts open; the rest start closed, so the sheet stays short.
  */
 function NavSheet({
   nodes,
@@ -165,28 +202,15 @@ function NavSheet({
   pathname: string;
 }) {
   const [open, setOpen] = useOpenOnThisPage(pathname);
+  // A section the member opened or closed by hand; the rest follow the page.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const links = nodes.filter((n) => n.kind === "link");
   const groups = nodes.filter((n) => n.kind === "group");
 
-  const item = (href: string, label: string) => (
-    <li key={href}>
-      <Link
-        href={href}
-        aria-current={href === activeHref ? "page" : undefined}
-        // The page already open: nothing will load, so close now.
-        onClick={() => {
-          if (href === pathname) setOpen(false);
-        }}
-        className={cn(
-          PILL,
-          "block py-2",
-          href === activeHref ? PILL_ACTIVE : PILL_IDLE,
-        )}
-      >
-        <NavLabel label={label} />
-      </Link>
-    </li>
-  );
+  // The page already open: nothing will load, so close now.
+  const closeIfHere = (href: string) => () => {
+    if (href === pathname) setOpen(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -207,34 +231,71 @@ function NavSheet({
           event.preventDefault();
           here.focus();
         }}
-        className="top-0 left-0 flex h-svh max-h-svh w-full max-w-[20rem] translate-x-0 translate-y-0 flex-col gap-4 overflow-y-auto rounded-none border-y-0 border-l-0 p-4 data-[state=closed]:zoom-out-100 data-[state=open]:zoom-in-100 motion-reduce:animate-none sm:max-w-[20rem]"
+        className="top-0 right-0 left-auto flex h-svh max-h-svh w-full max-w-[18rem] translate-x-0 translate-y-0 flex-col gap-3 overflow-y-auto rounded-none border-y-0 border-r-0 p-3 data-[state=closed]:zoom-out-100 data-[state=open]:zoom-in-100 motion-reduce:animate-none sm:max-w-[18rem]"
       >
         <div className="pr-8">
-          <DialogTitle className="text-base">Menu</DialogTitle>
+          <DialogTitle className="text-sm">Menu</DialogTitle>
           <DialogDescription className="sr-only">
             Every page of the camp console you can open.
           </DialogDescription>
         </div>
-        <ul className="flex flex-col gap-0.5">
-          {links.map((l) => item(l.href, l.label))}
+        <ul className={TILE_GRID}>
+          {links.map((l) => (
+            <NavTile
+              key={l.href}
+              item={l}
+              activeHref={activeHref}
+              onSamePage={closeIfHere(l.href)}
+            />
+          ))}
         </ul>
-        {groups.map((group) => (
-          <section
-            key={group.label}
-            aria-labelledby={`nav-sheet-${group.label}`}
-            className="flex flex-col gap-1"
-          >
-            <h2
-              id={`nav-sheet-${group.label}`}
-              className="px-3 font-mono text-[0.65rem] uppercase tracking-[0.25em] text-accent"
+        {groups.map((group) => {
+          const items = group.sections.flat();
+          const holdsPage = items.some((i) => i.href === activeHref);
+          const expanded = toggled[group.label] ?? holdsPage;
+          const id = `nav-sheet-${group.label}`;
+          return (
+            <section
+              key={group.label}
+              aria-labelledby={`${id}-heading`}
+              className="flex flex-col gap-1 border-t border-border pt-2"
             >
-              {group.label}
-            </h2>
-            <ul className="flex flex-col gap-0.5">
-              {group.sections.flat().map((i) => item(i.href, i.label))}
-            </ul>
-          </section>
-        ))}
+              <h2 id={`${id}-heading`}>
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  aria-controls={id}
+                  onClick={() =>
+                    setToggled((t) => ({ ...t, [group.label]: !expanded }))
+                  }
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-md px-1 py-1 font-mono text-[0.65rem] uppercase tracking-[0.25em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    holdsPage ? "text-accent" : "text-muted-foreground",
+                  )}
+                >
+                  {group.label}
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform motion-reduce:transition-none",
+                      expanded && "rotate-180",
+                    )}
+                    aria-hidden
+                  />
+                </button>
+              </h2>
+              <ul id={id} hidden={!expanded} className={TILE_GRID}>
+                {items.map((i) => (
+                  <NavTile
+                    key={i.href}
+                    item={i}
+                    activeHref={activeHref}
+                    onSamePage={closeIfHere(i.href)}
+                  />
+                ))}
+              </ul>
+            </section>
+          );
+        })}
       </DialogContent>
     </Dialog>
   );
@@ -280,7 +341,10 @@ export function ConsoleNav({ nodes }: { nodes: NavNode[] }) {
           ),
         )}
       </nav>
-      <nav className="flex items-center md:hidden" aria-label="Console">
+      <nav
+        className="flex items-center justify-end md:hidden"
+        aria-label="Console"
+      >
         <NavSheet nodes={nodes} activeHref={activeHref} pathname={pathname} />
       </nav>
     </>

@@ -193,23 +193,42 @@ test.describe("console nav — menus (test-mode)", () => {
     await page.keyboard.press("Enter");
     const sheet = page.getByRole("dialog", { name: "Menu" });
     await expect(sheet).toBeVisible();
+    // The links are small tiles; each menu is a section that starts shut
+    // unless it holds the page open now (Home holds none).
+    await expect(sheet.getByRole("link", { name: "Home" })).toBeVisible();
     for (const group of ["Teams", "Camp", "Me", "Captains"]) {
+      const section = sheet.getByRole("region", { name: group, exact: true });
+      await expect(section).toBeVisible();
       await expect(
-        sheet.getByRole("region", { name: group, exact: true }),
-      ).toBeVisible();
+        section.getByRole("button", { name: group, exact: true }),
+      ).toHaveAttribute("aria-expanded", "false");
+      await expect(section.getByRole("link")).toHaveCount(0);
     }
+    // The sheet comes in from the right.
+    const box = await sheet.boundingBox();
+    expect(box && Math.round(box.x + box.width)).toBe(360);
     expect(await noSideScroll()).toBe(true);
     await page.keyboard.press("Escape");
     await expect(sheet).toHaveCount(0);
     await expect(button).toBeFocused();
 
-    // A link in the sheet goes there, and the sheet closes on arrival.
+    // Opening a section shows its tiles; one goes there, and the sheet closes
+    // on arrival.
     await button.click();
-    await navEntry(
-      sheet.getByRole("region", { name: "Camp", exact: true }),
-      "Family tree",
-    ).click();
+    const camp = sheet.getByRole("region", { name: "Camp", exact: true });
+    await camp.getByRole("button", { name: "Camp", exact: true }).click();
+    await navEntry(camp, "Family tree").click();
     await expect(page).toHaveURL("/family-tree");
     await expect(sheet).toHaveCount(0);
+
+    // Back in the sheet, the section holding this page starts open.
+    await button.click();
+    await expect(
+      camp.getByRole("button", { name: "Camp", exact: true }),
+    ).toHaveAttribute("aria-expanded", "true");
+    await expect(navEntry(camp, "Family tree")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 });

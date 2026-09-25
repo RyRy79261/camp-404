@@ -21,7 +21,7 @@ export function consoleNav(page: Page): Locator {
  * Open the part of the nav that holds `group` (a menu's name: "Teams",
  * "Camp", "Me", "Captains") and return it; with no group, the part that holds
  * the plain links (Home, Tasks, Calendar). On a phone that is the sheet, or the
- * menu's section inside it.
+ * menu's section inside it, opened.
  */
 export async function openConsoleNav(
   page: Page,
@@ -31,9 +31,15 @@ export async function openConsoleNav(
     await consoleNav(page).getByRole("button", { name: "Menu" }).click();
     const sheet = page.getByRole("dialog", { name: "Menu" });
     await expect(sheet).toBeVisible();
-    return group
-      ? sheet.getByRole("region", { name: group, exact: true })
-      : sheet;
+    if (!group) return sheet;
+    // Each menu is a section that opens and closes; open it if it is shut.
+    const section = sheet.getByRole("region", { name: group, exact: true });
+    const toggle = section.getByRole("button", { name: group, exact: true });
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+      await toggle.click();
+    }
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    return section;
   }
   if (!group) return consoleNav(page);
   await consoleNav(page)
