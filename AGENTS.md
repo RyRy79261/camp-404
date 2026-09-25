@@ -17,6 +17,7 @@ Turborepo + pnpm workspaces. Node >= 22, pnpm 10.x.
 ```
 apps/
   web/        Next.js 16 app (App Router, React 19, Tailwind v4)
+  join/       join.camp-404.com: static "404 OS" recruiting site, no db or sign-in
   mobile/     Capacitor host wrapping the web static export
   admin-cli/  Node CLI for data ops
 packages/

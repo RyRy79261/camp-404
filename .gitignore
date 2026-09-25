@@ -58,3 +58,5 @@ test-results/
 # pointer at it — neither is ours to keep, and both reappear on every dev run.
 apps/web/AGENTS.md
 apps/web/CLAUDE.md
+apps/join/AGENTS.md
+apps/join/CLAUDE.md

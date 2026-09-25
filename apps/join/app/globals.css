@@ -1,0 +1,607 @@
+@import "tailwindcss";
+
+/* The public landing page's palette (apps/web/app/landing-hero.tsx, owner's
+   pick for this site on 2026-09-25): midnight violet, magenta, electric blue.
+   Every other colour here is mixed from these five, not invented. */
+@theme {
+  --color-os-bg: oklch(0.15 0.05 295);
+  --color-os-fg: oklch(0.97 0.02 330);
+  --color-os-primary: oklch(0.65 0.27 340);
+  --color-os-primary-fg: oklch(0.99 0.005 340);
+  --color-os-muted: oklch(0.7 0.05 325);
+  --color-os-accent: oklch(0.62 0.18 255);
+
+  --color-os-panel: color-mix(
+    in oklch,
+    var(--color-os-bg) 88%,
+    var(--color-os-fg)
+  );
+  --color-os-chrome: color-mix(
+    in oklch,
+    var(--color-os-bg) 72%,
+    var(--color-os-fg)
+  );
+  --color-os-line: color-mix(
+    in oklch,
+    var(--color-os-bg) 60%,
+    var(--color-os-fg)
+  );
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-pixel: var(--font-silkscreen), ui-monospace, monospace;
+}
+
+/* In the base layer, so a utility (focus-visible:outline-none on the
+   terminal prompt) can override it. Unlayered, it beat every utility. */
+@layer base {
+  html,
+  body {
+    height: 100%;
+    background: var(--color-os-bg);
+    color: var(--color-os-fg);
+    overscroll-behavior: none;
+  }
+
+  ::selection {
+    background: var(--color-os-primary);
+    color: var(--color-os-primary-fg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-os-primary);
+    outline-offset: 2px;
+  }
+
+  /* Scroll bars in the OS's own look: a square magenta thumb on the dark
+     track, thin. Firefox reads the first two lines, Chrome and Safari the
+     ::-webkit ones. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-os-primary) var(--color-os-bg);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-os-bg);
+    border-left: 1px solid var(--color-os-line);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-os-primary);
+    border: 2px solid var(--color-os-bg);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-os-fg);
+  }
+  ::-webkit-scrollbar-corner {
+    background: var(--color-os-bg);
+  }
+}
+
+/* ---- Desktop surface: the landing's scanlines and noise, plus a faint
+   grid like a CRT bezel test pattern. ---- */
+
+.os-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklch, var(--color-os-primary) 7%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklch, var(--color-os-primary) 7%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 32px 32px;
+}
+
+.camp404-scanlines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2px,
+    rgba(255, 255, 255, 0.045) 2px,
+    rgba(255, 255, 255, 0.045) 3px
+  );
+}
+
+.camp404-noise {
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.6) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(255, 255, 255, 0.4) 0.5px, transparent 0.5px);
+  background-size:
+    3px 3px,
+    7px 7px;
+  background-position:
+    0 0,
+    1px 1px;
+  mix-blend-mode: overlay;
+}
+
+.camp404-scanbeam {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(180, 100, 255, 0.05) 40%,
+    rgba(255, 0, 200, 0.1) 50%,
+    rgba(180, 100, 255, 0.05) 60%,
+    transparent 100%
+  );
+  animation: camp404-scanbeam 7s linear infinite;
+}
+@keyframes camp404-scanbeam {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(2200%);
+  }
+}
+
+.camp404-chromatic {
+  text-shadow:
+    -1.5px 0 0 rgba(255, 0, 128, 0.8),
+    1.5px 0 0 rgba(0, 200, 255, 0.8);
+}
+
+.os-glow {
+  text-shadow:
+    0 0 12px color-mix(in oklch, var(--color-os-primary) 70%, transparent),
+    -2px 0 0 rgba(255, 0, 128, 0.7),
+    2px 0 0 rgba(0, 200, 255, 0.7);
+}
+
+/* ---- The glitched wordmark (landing-hero's giant 404, sized by the
+   caller through --glitch-size). ---- */
+
+.camp404-glitch-shake {
+  animation: camp404-shake 5s steps(1) infinite;
+}
+@keyframes camp404-shake {
+  0%,
+  4%,
+  8%,
+  100% {
+    transform: translate(0, 0);
+  }
+  2% {
+    transform: translate(-1px, 1px);
+  }
+  6% {
+    transform: translate(2px, -1px);
+  }
+  18% {
+    transform: translate(-2px, 0);
+  }
+  19% {
+    transform: translate(1px, 1px);
+  }
+  20%,
+  99% {
+    transform: translate(0, 0);
+  }
+}
+
+.camp404-glitch-base,
+.camp404-glitch-rgb,
+.camp404-glitch-tear {
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 900;
+  font-size: var(--glitch-size, clamp(7rem, 30vw, 14rem));
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+  text-align: center;
+  white-space: nowrap;
+}
+.camp404-glitch-base {
+  color: var(--color-os-fg);
+  position: relative;
+}
+.camp404-glitch-rgb {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.camp404-glitch-rgb-magenta {
+  color: rgba(255, 0, 140, 0.85);
+  animation: camp404-rgb-magenta 3.7s steps(1) infinite;
+}
+@keyframes camp404-rgb-magenta {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(-4px, 0);
+  }
+  11% {
+    transform: translate(-2px, 2px);
+  }
+  30% {
+    transform: translate(-3px, -1px);
+  }
+  50% {
+    transform: translate(-5px, 0);
+  }
+  70% {
+    transform: translate(-2px, 1px);
+  }
+  90% {
+    transform: translate(-4px, 0);
+  }
+}
+.camp404-glitch-rgb-cyan {
+  color: rgba(0, 220, 255, 0.85);
+  animation: camp404-rgb-cyan 3.7s steps(1) infinite;
+}
+@keyframes camp404-rgb-cyan {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(4px, 0);
+  }
+  11% {
+    transform: translate(2px, -2px);
+  }
+  30% {
+    transform: translate(3px, 1px);
+  }
+  50% {
+    transform: translate(5px, 0);
+  }
+  70% {
+    transform: translate(2px, -1px);
+  }
+  90% {
+    transform: translate(4px, 0);
+  }
+}
+.camp404-glitch-tear {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--color-os-fg);
+  mix-blend-mode: screen;
+}
+.camp404-glitch-tear-a {
+  animation: camp404-tear-a 4.3s steps(1) infinite;
+}
+.camp404-glitch-tear-b {
+  animation: camp404-tear-b 5.1s steps(1) infinite;
+}
+@keyframes camp404-tear-a {
+  0%,
+  8%,
+  100% {
+    clip-path: inset(100% 0 0 0);
+    transform: translate(0, 0);
+  }
+  9% {
+    clip-path: inset(20% 0 70% 0);
+    transform: translate(8px, 0);
+  }
+  11% {
+    clip-path: inset(35% 0 55% 0);
+    transform: translate(-6px, 0);
+  }
+  13% {
+    clip-path: inset(50% 0 40% 0);
+    transform: translate(10px, 0);
+  }
+  15% {
+    clip-path: inset(100% 0 0 0);
+    transform: translate(0, 0);
+  }
+  40% {
+    clip-path: inset(15% 0 75% 0);
+    transform: translate(-12px, 0);
+  }
+  42% {
+    clip-path: inset(45% 0 45% 0);
+    transform: translate(6px, 0);
+  }
+  44% {
+    clip-path: inset(100% 0 0 0);
+    transform: translate(0, 0);
+  }
+}
+@keyframes camp404-tear-b {
+  0%,
+  20%,
+  100% {
+    clip-path: inset(100% 0 0 0);
+    transform: translate(0, 0);
+  }
+  22% {
+    clip-path: inset(60% 0 25% 0);
+    transform: translate(-10px, 0);
+  }
+  24% {
+    clip-path: inset(75% 0 10% 0);
+    transform: translate(4px, 0);
+  }
+  26% {
+    clip-path: inset(100% 0 0 0);
+    transform: translate(0, 0);
+  }
+  65% {
+    clip-path: inset(8% 0 80% 0);
+    transform: translate(7px, 0);
+  }
+  67% {
+    clip-path: inset(28% 0 60% 0);
+    transform: translate(-5px, 0);
+  }
+  69% {
+    clip-path: inset(100% 0 0 0);
+    transform: translate(0, 0);
+  }
+}
+
+.camp404-cursor {
+  animation: camp404-cursor-blink 1.05s steps(1) infinite;
+}
+@keyframes camp404-cursor-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.35;
+  }
+}
+
+/* A window arriving: a short CRT "power on" from a thin line. */
+.os-window-in {
+  /* backwards, not both: a filter or clip-path left on after the animation
+     makes the browser draw the window as an image, and its text goes soft. */
+  animation: os-window-in 180ms steps(4) backwards;
+}
+@keyframes os-window-in {
+  from {
+    clip-path: inset(48% 0 48% 0);
+    filter: brightness(2);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    filter: brightness(1);
+  }
+}
+
+/* TEAMS/ pixel icons: the colour copies sit a fraction of a pixel apart, and
+   jump on hover or when chosen, like the landing's glitched 404. */
+.pixel-glitch-m {
+  transform: translate(-0.35px, 0);
+}
+.pixel-glitch-c {
+  transform: translate(0.35px, 0);
+}
+.pixel-glitch-live .pixel-glitch-m,
+button:hover .pixel-glitch .pixel-glitch-m {
+  animation: pixel-glitch-m 1.6s steps(1) infinite;
+}
+.pixel-glitch-live .pixel-glitch-c,
+button:hover .pixel-glitch .pixel-glitch-c {
+  animation: pixel-glitch-c 1.6s steps(1) infinite;
+}
+@keyframes pixel-glitch-m {
+  0%,
+  100% {
+    transform: translate(-0.35px, 0);
+  }
+  20% {
+    transform: translate(-1px, 0.3px);
+  }
+  22% {
+    transform: translate(-0.35px, 0);
+  }
+  60% {
+    transform: translate(-0.8px, -0.3px);
+  }
+  62% {
+    transform: translate(-0.35px, 0);
+  }
+}
+@keyframes pixel-glitch-c {
+  0%,
+  100% {
+    transform: translate(0.35px, 0);
+  }
+  20% {
+    transform: translate(1px, -0.3px);
+  }
+  22% {
+    transform: translate(0.35px, 0);
+  }
+  60% {
+    transform: translate(0.8px, 0.3px);
+  }
+  62% {
+    transform: translate(0.35px, 0);
+  }
+}
+
+/* GIFTS.EXE: each ring fills once, then a bright segment keeps orbiting. */
+.gift-ring-fill {
+  stroke-dasharray: 100 100;
+  stroke-dashoffset: 100;
+  animation: gift-ring-fill 1.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation-delay: var(--delay, 0ms);
+}
+@keyframes gift-ring-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.gift-ring-orbit {
+  stroke-dasharray: 8 92;
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: gift-ring-orbit 2.8s linear infinite;
+  animation-delay: calc(var(--delay, 0ms) + 1.4s);
+  opacity: 0;
+  animation-fill-mode: backwards;
+}
+@keyframes gift-ring-orbit {
+  0% {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 1;
+  }
+}
+
+/* The Dance of 1000 Flames: each flame flickers on its own beat. */
+.gift-flame {
+  transform: translate(-50%, -50%);
+  animation: gift-flame 0.85s ease-in-out infinite alternate;
+  animation-delay: var(--flame-delay, 0ms);
+}
+@keyframes gift-flame {
+  from {
+    transform: translate(-50%, -50%) scale(0.8) rotate(-8deg);
+    opacity: 0.75;
+  }
+  to {
+    transform: translate(-50%, -60%) scale(1.1) rotate(6deg);
+    opacity: 1;
+  }
+}
+
+/* INKBLOT.EXE's win screen: confetti, a bouncing cat, a waving title. */
+.inkblot-confetti {
+  animation: inkblot-confetti linear infinite;
+}
+@keyframes inkblot-confetti {
+  from {
+    transform: translateY(0) rotate(0deg);
+  }
+  to {
+    transform: translateY(640px) rotate(540deg);
+  }
+}
+.inkblot-bounce {
+  image-rendering: pixelated;
+  animation: inkblot-bounce 0.6s steps(2) infinite alternate;
+}
+@keyframes inkblot-bounce {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-10px);
+  }
+}
+.inkblot-wave {
+  animation: inkblot-wave 1.2s steps(6) infinite;
+}
+@keyframes inkblot-wave {
+  0%,
+  100% {
+    transform: translateY(0);
+    color: var(--color-os-fg);
+  }
+  25% {
+    transform: translateY(-8px);
+    color: var(--color-os-primary);
+  }
+  50% {
+    transform: translateY(0);
+    color: var(--color-os-accent);
+  }
+  75% {
+    transform: translateY(3px);
+    color: var(--color-os-fg);
+  }
+}
+.inkblot-blink {
+  animation: camp404-cursor-blink 0.7s steps(1) infinite;
+}
+
+/* Reduced motion: stills, as the landing does. The fringes held apart, the
+   beam and tears hidden, windows appear without the power-on. */
+@media (prefers-reduced-motion: reduce) {
+  .camp404-scanbeam,
+  .camp404-glitch-tear {
+    display: none;
+  }
+  .camp404-glitch-shake,
+  .camp404-cursor,
+  .os-window-in,
+  .pixel-glitch-live .pixel-glitch-m,
+  .pixel-glitch-live .pixel-glitch-c,
+  button:hover .pixel-glitch .pixel-glitch-m,
+  button:hover .pixel-glitch .pixel-glitch-c,
+  .gift-ring-orbit,
+  .gift-flame,
+  .inkblot-confetti,
+  .inkblot-bounce,
+  .inkblot-wave,
+  .inkblot-blink {
+    animation: none;
+  }
+  .gift-ring-fill {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .camp404-glitch-rgb-magenta {
+    animation: none;
+    transform: translate(-3px, 0);
+  }
+  .camp404-glitch-rgb-cyan {
+    animation: none;
+    transform: translate(3px, 0);
+  }
+}
+
+/* FEE.CALC's slider: the native range input, invisible but for its thumb, laid
+   over the drawn scale so it stays keyboard- and screen-reader-native. */
+.os-range {
+  appearance: none;
+  background: transparent;
+}
+.os-range::-webkit-slider-runnable-track {
+  height: 1rem;
+  background: transparent;
+}
+.os-range::-moz-range-track {
+  height: 1rem;
+  background: transparent;
+}
+.os-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 26px;
+  margin-top: -5px;
+  background: var(--color-os-fg);
+  border: 2px solid var(--color-os-primary);
+  box-shadow: 3px 3px 0 0 rgb(0 0 0 / 0.5);
+}
+.os-range::-moz-range-thumb {
+  width: 14px;
+  height: 26px;
+  border-radius: 0;
+  background: var(--color-os-fg);
+  border: 2px solid var(--color-os-primary);
+}
+.os-range:focus-visible {
+  outline: none;
+}
+.os-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--color-os-primary);
+  outline-offset: 2px;
+}
+.os-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--color-os-primary);
+  outline-offset: 2px;
+}
