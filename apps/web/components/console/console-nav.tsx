@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
@@ -33,8 +33,24 @@ import { navIcon } from "@/lib/nav-icons";
  * console (AGENTS.md), so the nav item itself confirms the click landed. A menu
  * stays open until the new page arrives, so an item inside one pulses too.
  */
-function NavLabel({ label }: { label: string }) {
+function NavLabel({
+  label,
+  onSettled,
+}: {
+  label: string;
+  /**
+   * Called when this link's load ends. A menu closes on the new page's
+   * arrival; this also closes it when the link lands back on the page already
+   * open (a redirect), where the address never changes.
+   */
+  onSettled?: () => void;
+}) {
   const { pending } = useLinkStatus();
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (wasPending.current && !pending) onSettled?.();
+    wasPending.current = pending;
+  }, [pending, onSettled]);
   return (
     <span
       className={cn(
@@ -141,7 +157,10 @@ function NavMenu({
                   href={item.href}
                   aria-current={item.href === activeHref ? "page" : undefined}
                 >
-                  <NavLabel label={item.label} />
+                  <NavLabel
+                    label={item.label}
+                    onSettled={() => setOpen(false)}
+                  />
                 </Link>
               </DropdownMenuItem>
             ))}
@@ -157,10 +176,12 @@ function NavTile({
   item,
   activeHref,
   onSamePage,
+  onSettled,
 }: {
   item: NavItem;
   activeHref: string | null;
   onSamePage: () => void;
+  onSettled: () => void;
 }) {
   const Icon = navIcon(item.href);
   const active = item.href === activeHref;
@@ -177,7 +198,7 @@ function NavTile({
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden />
         <span className="line-clamp-2 break-words">
-          <NavLabel label={item.label} />
+          <NavLabel label={item.label} onSettled={onSettled} />
         </span>
       </Link>
     </li>
@@ -211,6 +232,7 @@ function NavSheet({
   const closeIfHere = (href: string) => () => {
     if (href === pathname) setOpen(false);
   };
+  const close = () => setOpen(false);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -248,6 +270,7 @@ function NavSheet({
               item={l}
               activeHref={activeHref}
               onSamePage={closeIfHere(l.href)}
+              onSettled={close}
             />
           ))}
         </ul>
@@ -292,6 +315,7 @@ function NavSheet({
                     item={i}
                     activeHref={activeHref}
                     onSamePage={closeIfHere(i.href)}
+                    onSettled={close}
                   />
                 ))}
               </ul>
