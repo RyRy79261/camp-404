@@ -31,7 +31,7 @@ describe("consoleNavFor", () => {
       "Home",
       "Tasks",
       "Calendar",
-      "Camp: Roster, Family tree, Power, Recipes",
+      "Camp: Roster, Family tree, Meetings, Power, Recipes",
       "Me: Profile, Notifications, My forms, Invite, Sign-in & security",
     ]);
   });

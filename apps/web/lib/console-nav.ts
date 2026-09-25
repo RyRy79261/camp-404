@@ -46,6 +46,9 @@ export const CONSOLE_NAV: readonly ConsoleNavNode[] = [
         rank: "camp_member",
       },
       { href: "/family-tree", label: "Family tree", rank: "camp_member" },
+      // Meeting notes, every team's and the whole camp's: every member reads
+      // them; a team's members and captains write them.
+      { href: "/meetings", label: "Meetings", rank: "camp_member" },
       // The power plan: every member reads the load list and the fuel
       // estimate; Power & Lighting leads and captains edit them. /power sends
       // on to the load list, and the entry stays lit on both pages beneath it.

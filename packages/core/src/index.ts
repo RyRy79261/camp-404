@@ -109,6 +109,9 @@
 //     General meeting" convention), teamEventName, readTeamEvent (an event's
 //     team and bare title, either convention), parseTeamTag, teamForTag
 //     (./calendar-titles)
+//   - meeting notes: canWorkInTeam (a team's members this year, or a
+//     captain; a whole-camp note is a captain's), meetingInstant,
+//     meetingTimeKey and MEETING_NOTE_PRIVACY_REMINDER (./meeting-notes)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -156,3 +159,4 @@ export * from "./power";
 export * from "./recipes";
 export * from "./recipe-source";
 export * from "./calendar-titles";
+export * from "./meeting-notes";

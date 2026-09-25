@@ -21,7 +21,7 @@ import { TASK_EDITED } from "@camp404/types";
 import type { DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
 import { deliveryValues } from "./deliveries";
-import { createHttpDb, withTransaction } from "./index";
+import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
 
 // The shared task board (owner, 2026-09-23): every approved member sees every
@@ -245,39 +245,54 @@ async function assertAssignable(
   return member ? { ok: true } : { ok: false, error: NOT_A_MEMBER };
 }
 
-/** Add a task, as a captain or a lead of its team. */
-export async function addTask(input: {
+export interface AddTaskInput {
   creatorId: string;
   title: string;
   description: string | null;
   team: Team | null;
   assigneeId: string | null;
   dueAt: Date | null;
-}): Promise<TaskWriteResult<{ id: string }>> {
-  return await withTransaction(async (tx) => {
-    const reach = await lockSenderReach(tx, input.creatorId);
-    if (reach !== undefined) {
-      if (reach.length === 0) return { ok: false, error: NOT_A_TASK_AUTHOR };
-      if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
-      if (!reach.includes(input.team)) {
-        return { ok: false, error: NOT_YOUR_TEAM };
-      }
+}
+
+/** Add a task, as a captain or a lead of its team. */
+export async function addTask(
+  input: AddTaskInput,
+): Promise<TaskWriteResult<{ id: string }>> {
+  return await withTransaction((tx) => addTaskWithin(tx, input));
+}
+
+/**
+ * The board's one add path, inside a transaction the caller holds: the rule
+ * (a captain, or a lead of the task's team), read and locked here, then the
+ * insert. A meeting note's action item becomes a task through this, in the
+ * same transaction that links the item to it.
+ */
+export async function addTaskWithin(
+  tx: Tx,
+  input: AddTaskInput,
+): Promise<TaskWriteResult<{ id: string }>> {
+  const reach = await lockSenderReach(tx, input.creatorId);
+  if (reach !== undefined) {
+    if (reach.length === 0) return { ok: false, error: NOT_A_TASK_AUTHOR };
+    if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
+    if (!reach.includes(input.team)) {
+      return { ok: false, error: NOT_YOUR_TEAM };
     }
-    const assignable = await assertAssignable(tx, input.assigneeId);
-    if (!assignable.ok) return assignable;
-    const [row] = await tx
-      .insert(schema.tasks)
-      .values({
-        title: input.title,
-        description: input.description,
-        team: input.team,
-        assigneeId: input.assigneeId,
-        createdByUserId: input.creatorId,
-        dueAt: input.dueAt,
-      })
-      .returning({ id: schema.tasks.id });
-    return { ok: true, id: row!.id };
-  });
+  }
+  const assignable = await assertAssignable(tx, input.assigneeId);
+  if (!assignable.ok) return assignable;
+  const [row] = await tx
+    .insert(schema.tasks)
+    .values({
+      title: input.title,
+      description: input.description,
+      team: input.team,
+      assigneeId: input.assigneeId,
+      createdByUserId: input.creatorId,
+      dueAt: input.dueAt,
+    })
+    .returning({ id: schema.tasks.id });
+  return { ok: true, id: row!.id };
 }
 
 /** The task row an actor wants to change, locked, or null when it is gone. */

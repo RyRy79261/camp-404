@@ -38,6 +38,7 @@
     "./questionnaire-results": "./src/questionnaire-results.ts",
     "./broadcasts": "./src/broadcasts.ts",
     "./tasks": "./src/tasks.ts",
+    "./meeting-notes": "./src/meeting-notes.ts",
     "./power": "./src/power.ts",
     "./meal-plan": "./src/meal-plan.ts",
     "./recipes": "./src/recipes.ts",
