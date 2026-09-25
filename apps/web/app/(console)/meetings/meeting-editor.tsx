@@ -93,6 +93,7 @@ export function MeetingEditor({
   teamPeople,
   teamLabels,
   events,
+  formerAttendees = [],
 }: {
   mode: MeetingEditorMode;
   initial: MeetingEditorValues;
@@ -103,6 +104,8 @@ export function MeetingEditor({
   teamLabels: Record<string, string>;
   /** Upcoming events on the camp calendar, to link the meeting to. */
   events: MeetingEventOption[];
+  /** People on the note who are no longer approved members, by name. */
+  formerAttendees?: MeetingPerson[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -132,13 +135,14 @@ export function MeetingEditor({
   const teamKey = team === WHOLE_CAMP ? null : team;
   const teamLabel = teamKey ? (teamLabels[teamKey] ?? teamKey) : "Whole camp";
 
-  // The team's people first, then everyone else; someone ticked before who is
-  // no longer on the approved list still shows, so they can be unticked.
+  // The team's people first, then everyone else; someone on the note who is no
+  // longer on the approved list shows in a group of their own, so they can be
+  // unticked.
   const known = new Map(members.map((m) => [m.id, m]));
   const onTeam = new Set(teamKey ? (teamPeople[teamKey] ?? []) : []);
   const teamRows = members.filter((m) => onTeam.has(m.id));
   const otherRows = members.filter((m) => !onTeam.has(m.id));
-  const gone = [...attendees].filter((id) => !known.has(id));
+  const gone = formerAttendees.filter((p) => !known.has(p.id));
   const othersTicked = otherRows.filter((m) => attendees.has(m.id)).length;
 
   // The calendar's events for this team (or the whole camp's), plus the one
@@ -454,11 +458,26 @@ export function MeetingEditor({
             </details>
           ) : null}
           {gone.length > 0 ? (
-            <p className="text-xs text-muted-foreground">
-              {gone.length === 1
-                ? "1 person ticked earlier is no longer an approved member; they stay on the note."
-                : `${gone.length} people ticked earlier are no longer approved members; they stay on the note.`}
-            </p>
+            <section aria-labelledby="attendees-gone">
+              <h2
+                id="attendees-gone"
+                className="pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                No longer approved members
+              </h2>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {gone.map((p) => (
+                  <AckRow
+                    key={p.id}
+                    checked={attendees.has(p.id)}
+                    onCheckedChange={(on) => toggle(p.id, on === true)}
+                    disabled={pending}
+                  >
+                    {p.displayName}
+                  </AckRow>
+                ))}
+              </div>
+            </section>
           ) : null}
         </CardContent>
       </Card>

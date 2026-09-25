@@ -109,6 +109,9 @@ export default async function EditMeetingPage({
         teamPeople={note.team ? { [note.team]: people.map((p) => p.id) } : {}}
         teamLabels={teamLabels}
         events={events}
+        formerAttendees={note.attendees.filter(
+          (a) => !members.some((m) => m.id === a.id),
+        )}
       />
     </div>
   );
