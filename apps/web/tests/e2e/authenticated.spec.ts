@@ -5,6 +5,7 @@ import {
   redeemInviteAtGate,
   resetTestState,
 } from "./_helpers";
+import { navEntry, openConsoleNav } from "./lib/console-nav";
 
 // All specs here rely on E2E_TEST_MODE=1 in the dev server env (see
 // playwright.config.ts). The /api/test/login + reset routes are only
@@ -70,11 +71,11 @@ test.describe("authenticated flow (test-mode)", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: /^Hi\b/ }),
     ).toBeVisible();
-    await expect(
-      page
-        .getByRole("navigation", { name: "Console" })
-        .getByRole("link", { name: "My forms" }),
-    ).toHaveAttribute("href", "/tools/forms");
+    const me = await openConsoleNav(page, "Me");
+    await expect(navEntry(me, "My forms")).toHaveAttribute(
+      "href",
+      "/tools/forms",
+    );
   });
 
   test("a member reaches their sign-in and security page from the profile", async ({

@@ -6,9 +6,10 @@ import { Button } from "@camp404/ui/components/button";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 import { NotificationPanel } from "@/components/notifications/notification-panel";
 import { rankLabel } from "@/lib/camp-roster";
-import { consoleNavFor } from "@/lib/console-nav";
+import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
+import { consoleNavFor, navTeams } from "@/lib/console-nav";
 import { getInboxBadge } from "@/lib/inbox-badge";
-import { isTeamLead, type CampUser } from "@/lib/users";
+import { getMyTeams, isTeamLead, type CampUser } from "@/lib/users";
 import { ConsoleNav } from "./console-nav";
 
 /**
@@ -17,7 +18,9 @@ import { ConsoleNav } from "./console-nav";
  * rank, the bell, Account and Sign out, and the nav bar below.
  *
  * The nav is filtered here, on the server, so the client never learns a
- * destination exists that the viewer's rank cannot open.
+ * destination exists that the viewer's rank cannot open. Its Teams menu is
+ * read from camp settings on each render, so a team a captain adds or
+ * archives shows or leaves without a code change.
  *
  * The bell opens the notification panel rather than jumping to the inbox
  * (AfrikaBurn's console header). The badge is still read here, on the server,
@@ -33,12 +36,20 @@ export async function ConsoleHeader({
   campUser: CampUser;
   email: string | null;
 }) {
-  const [lead, badge] = await Promise.all([
+  const [lead, badge, config, myTeams] = await Promise.all([
     isTeamLead(campUser.id),
     getInboxBadge(campUser.id),
+    getTeamsConfig(),
+    getMyTeams(campUser.id),
   ]);
   const viewerRank = deriveViewerRank(campUser.rank, lead);
-  const navItems = consoleNavFor(viewerRank);
+  const nav = consoleNavFor(
+    viewerRank,
+    navTeams(
+      activeTeams(config),
+      myTeams.map((t) => t.team),
+    ),
+  );
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -86,7 +97,7 @@ export async function ConsoleHeader({
           </div>
         </div>
 
-        <ConsoleNav items={navItems} />
+        <ConsoleNav nodes={nav} />
       </div>
     </header>
   );
