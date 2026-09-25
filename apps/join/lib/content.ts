@@ -1,8 +1,13 @@
 // Every word join.camp-404.com shows lives in this file, so next year's site
 // is a one-file edit. Source: the Notion page "Intro to Camp 404", fetched
-// 2026-09-25 (docs/join-site-brief.md). Re-read it before launch.
+// 2026-09-25 (docs/join-site-brief.md), corrected by the owner the same day.
+// Later, the main app's camp settings will drive some of this (owner,
+// 2026-09-25; how is decided after this site is done). Until then it is
+// plain constants, kept simple so each one can become a setting.
 
-export const APPLY_URL = "https://forms.gle/MWFrCzQzvF3EG7n57";
+// Joining happens in the main app, never a Google Form (owner, 2026-09-25):
+// sign up, then enter an invite code.
+export const SIGNUP_URL = "https://camp-404.com/auth/sign-up";
 
 // [CORRECTION 2026-09-25] The Notion page was written for the 2026 Burn,
 // which is past. The owner chose to say 2027 and mark its dates TBC.
@@ -49,9 +54,9 @@ export const README = {
   quote:
     "Camp 404 is the lost clutter of imagination. A place of uncertainty. Where are we? What's going on? How did we get here? Why did we get here? It's in our blanket fort of opportunity that we embrace the Error Codes of life so that we can explore all of our lost expressions and confused intentions. We create safety, comfort and acceptance - for everyone and everything.",
   steps: [
-    "Complete the Application Form for Camp 404.",
-    "Get a response from the Comms & HR team.",
-    "If accepted: complete the Registration Form, pay your camp fee and join the team(s) you want to work with.",
+    "Get an invite code from someone in Camp 404.",
+    "Sign up in the Camp 404 app and enter your code.",
+    "Answer a few questions, pay your camp fee and join the team(s) you want to work with.",
   ],
 } as const;
 
@@ -183,26 +188,12 @@ export const MAP = {
 
 export type Captain = { name: string; role: string; bio: string };
 
+// Only what is known. Crew size, orphan beds and who is coming are not known
+// for the year ahead (owner, 2026-09-25), so the site does not guess them.
 export const CREW = {
   title: "CREW.DB",
-  size: 50,
-  orphans: 10,
-  split: [
-    { share: "1/3", who: "new to AfrikaBurn" },
-    { share: "1/3", who: "at least one Burn" },
-    { share: "1/3", who: "seasoned 404ers" },
-  ],
+  forming: "Still forming. You could be the next row.",
   captains: [
-    {
-      name: "Caitlin",
-      role: "Chief Cat Herder",
-      bio: "Guiding the gifted, you guys know what to do ;)",
-    },
-    {
-      name: "Cloud",
-      role: "Vice President",
-      bio: "Went from 0 - 100 in T -4s and now probably knows ALL the things.",
-    },
     {
       name: "Ryan",
       role: "The Original Error Code",
@@ -364,9 +355,8 @@ export const PERKS = {
 export const TRUCK = {
   title: "TRUCK.LOG",
   entries: [
-    "A truck carries the container: infrastructure, furniture, freezers, gas, decor.",
-    "Trailer 1 carries the food and bikes.",
-    "Trailer 2 carries the rubbish home. (MOOP goes home with us. All of it.)",
+    "One big truck carries the camp: infrastructure, furniture, freezers, gas, decor.",
+    "A couple of trailers carry the food, the bikes, and the rubbish home. (MOOP goes home with us. All of it.)",
     "The Transport & Travel team makes sure everyone and everything has a ride.",
   ],
 } as const;
@@ -374,8 +364,9 @@ export const TRUCK = {
 export const APPLY = {
   title: "APPLY.EXE",
   heading: `REQUEST ACCESS TO CAMP 404 (${BURN_YEAR})`,
-  body: "The application is a Google Form. The Comms & HR team reads every one and replies.",
-  button: "APPLY",
+  body: "Joining happens in the Camp 404 app. You need an invite code: ask someone in the camp for one.",
+  invite: "[✓] YOU WILL NEED: AN INVITE CODE",
+  button: "SIGN UP",
 } as const;
 
 /** Desktop icon labels, in desktop order. The label is also the window title. */

@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { APPLY_URL } from "../../lib/content";
+import { SIGNUP_URL } from "../../lib/content";
 
 // The four promises of the brief: the boot skips, an icon opens its window,
-// Esc closes it, and APPLY links to the form.
+// Esc closes it, and APPLY links to sign-up.
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -23,7 +23,7 @@ test("an icon opens its window and Esc closes it", async ({ page }) => {
   const crew = page.getByRole("dialog", { name: "CREW.DB" });
   await expect(crew).toBeVisible();
   await expect(crew).toBeFocused();
-  await expect(crew.getByRole("row", { name: /Caitlin/ })).toBeVisible();
+  await expect(crew.getByRole("row", { name: /Ryan/ })).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(crew).toHaveCount(0);
@@ -48,13 +48,15 @@ test("the terminal runs commands and opens APPLY.EXE", async ({ page }) => {
   await expect(page.getByRole("dialog", { name: "APPLY.EXE" })).toBeVisible();
 });
 
-test("APPLY links to the Google Form", async ({ page }) => {
+test("APPLY links to sign-up and asks for an invite code", async ({ page }) => {
   await page.getByRole("button", { name: "Open APPLY.EXE" }).click();
   const apply = page
     .getByRole("dialog", { name: "APPLY.EXE" })
-    .getByRole("link", { name: /apply/i });
-  await expect(apply).toHaveAttribute("href", APPLY_URL);
-  await expect(apply).toHaveAttribute("target", "_blank");
+    .getByRole("link", { name: /sign up/i });
+  await expect(apply).toHaveAttribute("href", SIGNUP_URL);
+  await expect(page.getByRole("dialog", { name: "APPLY.EXE" })).toContainText(
+    "invite code",
+  );
 });
 
 test("the fee scale moves between tiers", async ({ page }) => {

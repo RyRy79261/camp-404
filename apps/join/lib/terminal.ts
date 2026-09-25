@@ -4,7 +4,7 @@
 import { formatRands, formatUsdLabel } from "./fee";
 import {
   APP_LABELS,
-  APPLY_URL,
+  SIGNUP_URL,
   CREW,
   FEE,
   PERKS,
@@ -181,7 +181,11 @@ export function runCommand(input: string): TermResult {
       };
     case "apply":
       return {
-        lines: [hi("Launching APPLY.EXE…"), out(APPLY_URL)],
+        lines: [
+          hi("Launching APPLY.EXE…"),
+          out("You need an invite code. Then sign up:"),
+          out(SIGNUP_URL),
+        ],
         open: "apply",
       };
     case "echo":

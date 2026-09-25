@@ -101,7 +101,13 @@ MEMORY CHECK… LOST`) ending in `ERROR 404: YOU ARE HERE`. Skippable
 - Add the app to the Turbo pipeline so `pnpm turbo run lint typecheck test
 build` covers it. A Playwright smoke test: boot skips, an icon opens its
   window, Esc closes it, APPLY links to the form.
-- Apply link: the Google Form below (owner has not asked for in-app sign-up).
+- Apply link: [CORRECTION 2026-09-25] not the Google Form. The owner: "The
+  entire point of this codebase is to not use Google Drive or Google Forms."
+  APPLY.EXE sends visitors to the main app's sign-up
+  (`https://camp-404.com/auth/sign-up`) and says they need an invite code.
+- [2026-09-25] The main app's camp settings will later control some of this
+  site (owner; how is decided once the site is done). Keep `content.ts` plain
+  so each value can become a setting.
 - Separate Vercel project, domain `join.camp-404.com`.
 
 ## Content (Notion "Intro to Camp 404", fetched 2026-09-25)
@@ -203,8 +209,11 @@ R18 = $1 is ours, not the owner's (`FEE.usdRate` in
 `apps/join/lib/content.ts`); the owner should confirm it.
 [CORRECTION 2026-09-25] The copy was written for the 2026 Burn, which is past.
 The owner chose to say 2027, with the 2026 timeline shown as "2027 dates to be
-confirmed". The Google Form link is still the 2026 one; swap `APPLY_URL` when
-the 2027 form exists.
+confirmed".
+[CORRECTION 2026-09-25] CREW.DB shows only what is known: the 2027 captain is
+Ryan alone, and crew size, orphan beds and the new/seasoned split are not known
+yet, so the site does not show them. TRUCK.LOG: one big truck and a couple of
+trailers.
 Guidance: start from what you'd spend on food for ~10 days, plus your usual
 camping basics (R2,000–R8,000). Or set your total Burn budget and fill it:
 ticket, petrol, drugs/alcohol, extra food, gifts, then camp fees. "A Burn

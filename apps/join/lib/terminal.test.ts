@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APPLY_URL, TEAMS } from "./content";
+import { SIGNUP_URL, TEAMS } from "./content";
 import { runCommand } from "./terminal";
 
 const text = (input: string) =>
@@ -24,10 +24,10 @@ describe("runCommand", () => {
     expect(text("cat kitchen.exe")).toContain("cooking shifts");
   });
 
-  it("apply prints the form link and opens APPLY.EXE", () => {
+  it("apply prints the sign-up link and opens APPLY.EXE", () => {
     const r = runCommand("apply");
     expect(r.open).toBe("apply");
-    expect(text("apply")).toContain(APPLY_URL);
+    expect(text("apply")).toContain(SIGNUP_URL);
   });
 
   it("fee shows the sliding scale in rands with dollar labels", () => {
