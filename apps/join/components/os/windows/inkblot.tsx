@@ -229,9 +229,22 @@ function drawCat(
 const camPx = (game: Game, lowW: number) =>
   Math.round(cameraX(game, lowW * PX) / PX);
 
-/** The crew photo's frames on the wall, in level art pixels. */
-const FRAMES = [125, 440, 740, 1040];
-const PHOTO = { dx: 3, y: 17, w: 30, h: 22 };
+/**
+ * The camp's photos, framed along the wall (owner, 2026-09-25): x in level
+ * art pixels, and each photo's size in art pixels (wide 30 × 22, tall
+ * 20 × 28), matching the files in public/inkblot/.
+ */
+const WIDE = { w: 30, h: 22 };
+const TALL = { w: 20, h: 28 };
+const FRAMES = [
+  { x: 40, src: "/inkblot/crew.jpg", ...WIDE },
+  { x: 200, src: "/inkblot/mushrooms.jpg", ...TALL },
+  { x: 390, src: "/inkblot/neon-404.jpg", ...WIDE },
+  { x: 580, src: "/inkblot/string-star.jpg", ...WIDE },
+  { x: 770, src: "/inkblot/lantern.jpg", ...TALL },
+  { x: 950, src: "/inkblot/crew-film.jpg", ...WIDE },
+] as const;
+const FRAME_Y = 14;
 
 /** Back layer, on the small canvas: wall, frames, skirting, floor. */
 function drawBackground(
@@ -250,16 +263,18 @@ function drawBackground(
       ctx.fillRect(x, y, 1, 1);
   }
 
-  // Frames for the crew photo (owner, 2026-09-25); the photo itself is drawn
+  // Frames for the camp photos (owner, 2026-09-25); the photos themselves are drawn
   // sharp between the layers, not in pixels.
-  for (const wx of FRAMES) {
-    const fx = wx - cam;
-    if (fx < -40 || fx > lowW) continue;
-    rect(ctx, COLOURS.outline, fx, 14, 36, 28);
-    rect(ctx, COLOURS.pinkDark, fx + 1, 15, 34, 26);
-    rect(ctx, COLOURS.pinkLight, fx + 1, 15, 34, 1);
-    rect(ctx, COLOURS.pinkLight, fx + 1, 15, 1, 26);
-    rect(ctx, COLOURS.outline, fx + 2, 16, 32, 24);
+  for (const f of FRAMES) {
+    const fx = f.x - cam;
+    const w = f.w + 6;
+    const h = f.h + 6;
+    if (fx < -w || fx > lowW) continue;
+    rect(ctx, COLOURS.outline, fx, FRAME_Y, w, h);
+    rect(ctx, COLOURS.pinkDark, fx + 1, FRAME_Y + 1, w - 2, h - 2);
+    rect(ctx, COLOURS.pinkLight, fx + 1, FRAME_Y + 1, w - 2, 1);
+    rect(ctx, COLOURS.pinkLight, fx + 1, FRAME_Y + 1, 1, h - 2);
+    rect(ctx, COLOURS.outline, fx + 2, FRAME_Y + 2, w - 4, h - 4);
   }
 
   // Skirting board and floorboards.
@@ -444,8 +459,11 @@ export function InkblotWindow() {
       (window as unknown as { __inkblot?: () => Game }).__inkblot = () =>
         game.current;
     }
-    const photo = new Image();
-    photo.src = "/inkblot/crew.jpg";
+    const photos = FRAMES.map((f) => {
+      const img = new Image();
+      img.src = f.src;
+      return img;
+    });
     const low = document.createElement("canvas");
     const lowCtx = low.getContext("2d")!;
     const front = document.createElement("canvas");
@@ -484,24 +502,18 @@ export function InkblotWindow() {
         drawForeground(frontCtx, game.current, t, lowW);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(low, 0, 0, c.width, c.height);
-        // The photo, sharp at screen resolution, between the two layers.
-        if (photo.complete && photo.naturalWidth > 0) {
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = "high";
-          const cam = camPx(game.current, lowW);
-          for (const wx of FRAMES) {
-            const fx = wx - cam;
-            if (fx < -40 || fx > lowW) continue;
-            ctx.drawImage(
-              photo,
-              (fx + PHOTO.dx) * n,
-              PHOTO.y * n,
-              PHOTO.w * n,
-              PHOTO.h * n,
-            );
-          }
-          ctx.imageSmoothingEnabled = false;
-        }
+        // The photos, sharp at screen resolution, between the two layers.
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        const cam = camPx(game.current, lowW);
+        FRAMES.forEach((f, i) => {
+          const img = photos[i]!;
+          const fx = f.x - cam;
+          if (fx < -f.w - 6 || fx > lowW) return;
+          if (!img.complete || img.naturalWidth === 0) return;
+          ctx.drawImage(img, (fx + 3) * n, (FRAME_Y + 3) * n, f.w * n, f.h * n);
+        });
+        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(front, 0, 0, c.width, c.height);
         drawHud(ctx, game.current, t, c.width, c.height, n, font);
       }
