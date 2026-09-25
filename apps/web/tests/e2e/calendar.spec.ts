@@ -105,14 +105,19 @@ test.describe("camp calendar (test-mode)", () => {
 
     await login(page, { id: "cal-cook", email: "cal-cook@example.com" });
     const mine = await comingUp(page, "Kitchen briefing");
-    await expect(mine.getByText("Yours · Kitchen")).toBeVisible();
+    // One of your teams' events: a border and a star, and the plain badge.
+    await expect(mine.getByText("Kitchen", { exact: true })).toBeVisible();
+    await expect(mine.locator("[data-mine]")).toHaveCount(1);
+    await expect(mine.locator("svg.lucide-star")).toHaveCount(1);
+    await expect(mine.getByText(/Yours/)).toHaveCount(0);
     await expect(mine.getByText("In 7 days")).toBeVisible();
     await expect(mine.getByText(/· 18:00$/)).toBeVisible();
 
     await login(page, { id: "cal-money", email: "cal-money@example.com" });
     const theirs = await comingUp(page, "Kitchen briefing");
     await expect(theirs.getByText("Kitchen", { exact: true })).toBeVisible();
-    await expect(theirs.getByText(/Yours/)).toHaveCount(0);
+    await expect(theirs.locator("[data-mine]")).toHaveCount(0);
+    await expect(theirs.locator("svg.lucide-star")).toHaveCount(0);
   });
 
   test("a captain adds an all-day event for the whole camp, which wears no badge", async ({
@@ -138,7 +143,7 @@ test.describe("camp calendar (test-mode)", () => {
     await login(page, { id: "cal-crew", email: "cal-crew@example.com" });
     const row = await comingUp(page, "Build day");
     await expect(row.getByText("In 7 days")).toBeVisible();
-    await expect(row.getByText(/Yours/)).toHaveCount(0);
+    await expect(row.locator("[data-mine]")).toHaveCount(0);
     await expect(row.getByText("Kitchen", { exact: true })).toHaveCount(0);
   });
 
@@ -185,6 +190,10 @@ test.describe("camp calendar (test-mode)", () => {
     await page.getByRole("option", { name: "Kitchen" }).click();
     await expect(
       page.getByText("Google Calendar shows it as “Kitchen Team - …”."),
+    ).toBeVisible();
+    // The preview says whose view it is: the team's, with its border and star.
+    await expect(
+      page.getByText("Preview — how the Kitchen team sees it on Home"),
     ).toBeVisible();
     await fillEvent(page, {
       title: "Kitchen briefing",

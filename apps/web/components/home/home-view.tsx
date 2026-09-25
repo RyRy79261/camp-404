@@ -28,6 +28,7 @@ import {
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { cn } from "@camp404/ui/lib/utils";
 import type { HomeModel, HomeModuleIcon } from "@/lib/home";
+import { MINE_ROW, MineStar } from "@/components/calendar/calendar-days";
 import { TEAM_ICONS } from "@/lib/nav-icons";
 
 // A member's own home: what to do, what's coming, and the few places that are
@@ -192,12 +193,19 @@ function ComingUpCard({
               <li key={item.id}>
                 {/* On a phone the badge drops under the title, so a long team
                     name never pushes the card wider than the screen. */}
-                <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 sm:grid-cols-[6rem_minmax(0,1fr)_auto]">
+                <div
+                  data-mine={item.team?.mine ? "" : undefined}
+                  className={cn(
+                    "grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 sm:grid-cols-[6rem_minmax(0,1fr)_auto]",
+                    item.team?.mine && MINE_ROW,
+                  )}
+                >
                   <span className="text-xs font-semibold uppercase tracking-wide text-accent">
                     {item.relative}
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">
+                      {item.team?.mine ? <MineStar /> : null}
                       {item.title}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
@@ -206,15 +214,12 @@ function ComingUpCard({
                         : item.when}
                     </span>
                   </span>
-                  {/* A team's event: yours when you are on the team. A
-                      camp-wide event wears no badge. */}
+                  {/* A team's event wears the team's badge; one of your
+                      teams' events also gets the border and star. A camp-wide
+                      event wears no badge. */}
                   {item.team ? (
                     <span className="col-start-2 justify-self-start sm:col-start-3 sm:row-start-1 sm:justify-self-end">
-                      {item.team.mine ? (
-                        <Badge>Yours · {item.team.label}</Badge>
-                      ) : (
-                        <Badge variant="outline">{item.team.label}</Badge>
-                      )}
+                      <Badge variant="outline">{item.team.label}</Badge>
                     </span>
                   ) : null}
                 </div>

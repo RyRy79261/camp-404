@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { MapPin } from "lucide-react";
+import { MapPin, Star } from "lucide-react";
+import { cn } from "@camp404/ui/lib/utils";
 import { Badge } from "@camp404/ui/components/badge";
 import {
   Card,
@@ -19,21 +20,36 @@ export function teamHref(key: string): string {
   return `/teams/${encodeURIComponent(key)}`;
 }
 
-/** A team's badge: "Yours · Kitchen" when the viewer is on it, else "Kitchen". */
+/** A team's badge: the team's name, which opens its page. */
 function TeamBadge({ team }: { team: NonNullable<CalendarItem["team"]> }) {
   return (
     <Link
       href={teamHref(team.key)}
       className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      {team.mine ? (
-        <Badge className="hover:bg-primary/80">Yours · {team.label}</Badge>
-      ) : (
-        <Badge variant="outline" className="hover:border-accent/60">
-          {team.label}
-        </Badge>
-      )}
+      <Badge variant="outline" className="hover:border-accent/60">
+        {team.label}
+      </Badge>
     </Link>
+  );
+}
+
+/**
+ * An event of one of the viewer's teams is drawn in a border with a star
+ * (the owner, 2026-09-25), not with a "Yours" badge.
+ */
+export const MINE_ROW = "my-1.5 rounded-lg border border-accent/60 px-3";
+
+/** The star before the title of an event of one of the viewer's teams. */
+export function MineStar() {
+  return (
+    <>
+      <Star
+        className="mr-1.5 inline h-3.5 w-3.5 shrink-0 fill-accent text-accent align-[-2px]"
+        aria-hidden
+      />
+      <span className="sr-only">Your team&apos;s event: </span>
+    </>
   );
 }
 
@@ -52,13 +68,23 @@ export function CalendarRow({
   showTeam?: boolean;
 }) {
   const meta = [detail, item.location].filter(Boolean).join(" · ");
+  const mine = item.team?.mine === true;
   return (
-    <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 sm:grid-cols-[6rem_minmax(0,1fr)_auto]">
+    <div
+      data-mine={mine ? "" : undefined}
+      className={cn(
+        "grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 sm:grid-cols-[6rem_minmax(0,1fr)_auto]",
+        mine && MINE_ROW,
+      )}
+    >
       <span className="text-xs font-semibold uppercase tracking-wide text-accent">
         {when}
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-sm font-medium">{item.title}</span>
+        <span className="block truncate text-sm font-medium">
+          {mine ? <MineStar /> : null}
+          {item.title}
+        </span>
         {meta ? (
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             {item.location ? (
