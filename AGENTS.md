@@ -16,7 +16,8 @@ Turborepo + pnpm workspaces. Node >= 22, pnpm 10.x.
 
 ```
 apps/
-  web/        Next.js 16 app (App Router, React 19, Tailwind v4)
+  web/        Next.js 16 app (App Router, React 19, Tailwind v4): the console
+  join/       The public join site, join.camp-404.com (docs/deploy-join.md)
   mobile/     Capacitor host wrapping the web static export
   admin-cli/  Node CLI for data ops
 packages/
@@ -86,11 +87,19 @@ layout because a board drew one. For a new surface, copy the composition of
 AfrikaBurn's nearest equivalent (`apps/org/app/(console)/**` in that repo) and
 restyle only with tokens; do not invent a design.
 
+- **One app per subdomain** (owner, 2026-09-24): `apps/web` is the console
+  (moving to app.camp-404.com next), `apps/join` the join site, www and map
+  later. Shared code lives in `packages/`. Each app's `vercel.json` skips a
+  build its app does not need (`turbo-ignore`), and the `changes` job in
+  `ci.yml` runs each app's jobs only when it or a package it uses changed.
+  The join site is public and read-only: it reads the published join page
+  (`@camp404/db/join-page`) and nothing else, with no sign-in.
 - **The signed-out landing page (`apps/web/app/landing-hero.tsx`) is NOT part
   of the restyle** (owner, 2026-09-23: the AfrikaBurn look is for "the
   components and the dashboards, not the landing page"). It keeps Camp 404's
   own glitch design and sets its original palette and font on itself. Do not
-  recompose it after an AfrikaBurn page.
+  recompose it after an AfrikaBurn page. The join site wears the same look
+  (`CAMP_404_PALETTE` in `@camp404/ui/lib/landing-palette`).
 - Tokens: `packages/ui/src/styles/globals.css` (AfrikaBurn's file plus the
   `.camp-accent` skin on `<html>`). Montserrat, dark-first: `<html>` carries
   the `dark` class in `app/layout.tsx`.

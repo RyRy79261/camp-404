@@ -23,6 +23,7 @@ See [`docs/brief.md`](docs/brief.md) for the full project brief (vision, archite
 ```
 apps/
   web/        Next.js app (served on Vercel; statically exported for mobile)
+  join/       Public join site, join.camp-404.com (its own Vercel project)
   mobile/     Capacitor host (iOS + Android)
   admin-cli/  Node CLI for data ops
 packages/
@@ -98,6 +99,11 @@ front of whatever command you use.
 
 `drizzle-kit migrate` tracks applied migrations in the
 `__drizzle_migrations` table, so it is safe to run on every deploy.
+
+The join site (`apps/join`) is a second Vercel project. See
+[`docs/deploy-join.md`](docs/deploy-join.md) for its setup. Each app's
+`vercel.json` has an `ignoreCommand` (`turbo-ignore`), so a push builds a
+preview only for the app it changes.
 
 ## Background work (no cron jobs)
 

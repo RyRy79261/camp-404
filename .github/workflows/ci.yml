@@ -23,6 +23,9 @@ jobs:
     outputs:
       src: ${{ steps.filter.outputs.src }}
       db: ${{ steps.filter.outputs.db }}
+      web: ${{ steps.filter.outputs.web }}
+      join: ${{ steps.filter.outputs.join }}
+      tools: ${{ steps.filter.outputs.tools }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v4
@@ -38,6 +41,38 @@ jobs:
               - 'turbo.json'
               - 'tsconfig*.json'
               - '.github/**'
+            # One app per subdomain (owner, 2026-09-24): each app's own jobs
+            # run only when the app, or a package it uses, changed. The console
+            # (apps/web) uses every package; the join site uses core, db,
+            # types and ui. Root tooling and this workflow count for both.
+            web:
+              - 'apps/web/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+              - 'tsconfig*.json'
+              - '.github/workflows/ci.yml'
+            join:
+              - 'apps/join/**'
+              - 'packages/core/**'
+              - 'packages/db/**'
+              - 'packages/types/**'
+              - 'packages/ui/**'
+              - 'packages/eslint-config/**'
+              - 'packages/typescript-config/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+              - 'tsconfig*.json'
+              - '.github/workflows/ci.yml'
+            # The other apps, which have no Vercel project: the build job
+            # builds them with the console.
+            tools:
+              - 'apps/admin-cli/**'
+              - 'apps/mobile/**'
             # The migration check needs a Neon branch, and the project's branch
             # limit is shared with every open PR's preview. Run it only when
             # what it applies can change: the migrations, the schema or the
@@ -65,7 +100,8 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-        run: pnpm turbo run lint
+        # The join site has its own job below.
+        run: pnpm turbo run lint --filter='!@camp404/join'
 
   typecheck:
     runs-on: ubuntu-latest
@@ -81,7 +117,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-        run: pnpm turbo run typecheck
+        run: pnpm turbo run typecheck --filter='!@camp404/join'
       - name: Verify drizzle migrations are up-to-date with packages/db/src/schema.ts
         run: |
           pnpm --filter @camp404/db exec drizzle-kit generate
@@ -111,9 +147,11 @@ jobs:
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
         # Coverage floors live in each package's vitest.config.ts; a package
         # that drops below its floor fails this job.
-        run: pnpm turbo run test:coverage
+        run: pnpm turbo run test:coverage --filter='!@camp404/join'
 
   build:
+    needs: [changes]
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.tools == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -134,7 +172,27 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-        run: pnpm turbo run build
+        run: pnpm turbo run build --filter='!@camp404/join'
+
+  # The join site (apps/join, join.camp-404.com): its lint, typecheck, tests
+  # and build, only when it or a package it uses changed.
+  join:
+    needs: [changes]
+    if: needs.changes.outputs.join == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint, typecheck, test and build the join site
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        run: pnpm turbo run lint typecheck test:coverage build --filter=@camp404/join
 
   schema-migration:
     # Apply the committed Drizzle migration SQL to a fresh ephemeral Neon
@@ -195,7 +253,7 @@ jobs:
   # reads/writes the in-memory store instead.
   e2e:
     needs: [changes]
-    if: needs.changes.outputs.src == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     # Two shards, each with its own `next dev` and in-memory store, so the
     # serial rule in playwright.config.ts still holds inside each. One server
@@ -251,7 +309,7 @@ jobs:
   # service containers, so it needs no Neon branch and no secrets.
   e2e-db:
     needs: [changes]
-    if: needs.changes.outputs.src == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -332,7 +390,7 @@ jobs:
 
   ci-pass:
     if: always()
-    needs: [changes, lint, typecheck, test, build, e2e, e2e-db, schema-migration, supply-chain, commitlint]
+    needs: [changes, lint, typecheck, test, build, join, e2e, e2e-db, schema-migration, supply-chain, commitlint]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -341,14 +399,12 @@ jobs:
           echo "changes: ${{ needs.changes.result }}"
           echo "lint: ${{ needs.lint.result }}"
           echo "typecheck: ${{ needs.typecheck.result }}"
-          echo "build: ${{ needs.build.result }}"
           echo "supply-chain: ${{ needs.supply-chain.result }}"
 
           # Unconditional jobs: must succeed
           if [[ "${{ needs.changes.result }}" != "success" ||
                 "${{ needs.lint.result }}" != "success" ||
                 "${{ needs.typecheck.result }}" != "success" ||
-                "${{ needs.build.result }}" != "success" ||
                 "${{ needs.supply-chain.result }}" != "success" ]]; then
             echo "::error::Unconditional job failed"
             exit 1
@@ -356,6 +412,8 @@ jobs:
 
           echo "=== Gated jobs (success or skipped) ==="
           echo "test: ${{ needs.test.result }}"
+          echo "build: ${{ needs.build.result }}"
+          echo "join: ${{ needs.join.result }}"
           echo "e2e: ${{ needs.e2e.result }}"
           echo "e2e-db: ${{ needs.e2e-db.result }}"
           echo "schema-migration: ${{ needs.schema-migration.result }}"
@@ -364,6 +422,8 @@ jobs:
           # Gated jobs: success OR skipped
           for result in \
             "${{ needs.test.result }}" \
+            "${{ needs.build.result }}" \
+            "${{ needs.join.result }}" \
             "${{ needs.e2e.result }}" \
             "${{ needs.e2e-db.result }}" \
             "${{ needs.schema-migration.result }}" \
