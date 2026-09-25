@@ -225,14 +225,21 @@ function drawCat(
 }
 
 /** The scene, on the small canvas: 1 unit = one art pixel. */
-function drawScene(
+/** Where the camera is, in art pixels. */
+const camPx = (game: Game, lowW: number) =>
+  Math.round(cameraX(game, lowW * PX) / PX);
+
+/** The crew photo's frames on the wall, in level art pixels. */
+const FRAMES = [125, 440, 740, 1040];
+const PHOTO = { dx: 3, y: 17, w: 30, h: 22 };
+
+/** Back layer, on the small canvas: wall, frames, skirting, floor. */
+function drawBackground(
   ctx: CanvasRenderingContext2D,
   game: Game,
-  t: number,
   lowW: number,
-  photo: HTMLImageElement | null,
 ) {
-  const cam = Math.round(cameraX(game, lowW * PX) / PX);
+  const cam = camPx(game, lowW);
 
   // Wallpaper: a dotted pattern that drifts slower than the room.
   rect(ctx, COLOURS.wall, 0, 0, lowW, FLOOR);
@@ -243,9 +250,9 @@ function drawScene(
       ctx.fillRect(x, y, 1, 1);
   }
 
-  // The crew photo, framed on the wall (owner, 2026-09-25): a 30 × 22,
-  // 16-colour copy of the camp's group shot, public/inkblot/crew.png.
-  for (const wx of [125, 440, 740, 1040]) {
+  // Frames for the crew photo (owner, 2026-09-25); the photo itself is drawn
+  // sharp between the layers, not in pixels.
+  for (const wx of FRAMES) {
     const fx = wx - cam;
     if (fx < -40 || fx > lowW) continue;
     rect(ctx, COLOURS.outline, fx, 14, 36, 28);
@@ -253,9 +260,6 @@ function drawScene(
     rect(ctx, COLOURS.pinkLight, fx + 1, 15, 34, 1);
     rect(ctx, COLOURS.pinkLight, fx + 1, 15, 1, 26);
     rect(ctx, COLOURS.outline, fx + 2, 16, 32, 24);
-    if (photo?.complete && photo.naturalWidth > 0) {
-      ctx.drawImage(photo, fx + 3, 17, 30, 22);
-    }
   }
 
   // Skirting board and floorboards.
@@ -270,7 +274,17 @@ function drawScene(
       rect(ctx, COLOURS.floorLine, x, FLOOR + 1 + row * 6, 1, 5);
     }
   }
+}
 
+/** Front layer, on a second small canvas: furniture, things, the cat. */
+function drawForeground(
+  ctx: CanvasRenderingContext2D,
+  game: Game,
+  t: number,
+  lowW: number,
+) {
+  const cam = camPx(game, lowW);
+  ctx.clearRect(0, 0, lowW, LOW_H);
   for (const f of game.furniture) drawFurniture(ctx, f, cam);
   for (const it of game.items) drawItem(ctx, it, cam, t);
 
@@ -431,9 +445,11 @@ export function InkblotWindow() {
         game.current;
     }
     const photo = new Image();
-    photo.src = "/inkblot/crew.png";
+    photo.src = "/inkblot/crew.jpg";
     const low = document.createElement("canvas");
     const lowCtx = low.getContext("2d")!;
+    const front = document.createElement("canvas");
+    const frontCtx = front.getContext("2d")!;
     const font =
       getComputedStyle(document.documentElement)
         .getPropertyValue("--font-silkscreen")
@@ -457,14 +473,36 @@ export function InkblotWindow() {
         input.current.swipe = false;
         const lowW = Number(c.dataset.lowW || VIEW_W / PX);
         const n = Number(c.dataset.n || 1);
-        if (low.width !== lowW || low.height !== LOW_H) {
-          low.width = lowW;
-          low.height = LOW_H;
+        for (const layer of [low, front]) {
+          if (layer.width !== lowW || layer.height !== LOW_H) {
+            layer.width = lowW;
+            layer.height = LOW_H;
+          }
         }
         const t = now / 1000;
-        drawScene(lowCtx, game.current, t, lowW, photo);
+        drawBackground(lowCtx, game.current, lowW);
+        drawForeground(frontCtx, game.current, t, lowW);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(low, 0, 0, c.width, c.height);
+        // The photo, sharp at screen resolution, between the two layers.
+        if (photo.complete && photo.naturalWidth > 0) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          const cam = camPx(game.current, lowW);
+          for (const wx of FRAMES) {
+            const fx = wx - cam;
+            if (fx < -40 || fx > lowW) continue;
+            ctx.drawImage(
+              photo,
+              (fx + PHOTO.dx) * n,
+              PHOTO.y * n,
+              PHOTO.w * n,
+              PHOTO.h * n,
+            );
+          }
+          ctx.imageSmoothingEnabled = false;
+        }
+        ctx.drawImage(front, 0, 0, c.width, c.height);
         drawHud(ctx, game.current, t, c.width, c.height, n, font);
       }
       raf = requestAnimationFrame(frame);
