@@ -1,25 +1,13 @@
-import type { CSSProperties } from "react";
 import { Inter } from "next/font/google";
 import { Button } from "@camp404/ui/components/button";
+import { CAMP_404_PALETTE } from "@camp404/ui/lib/landing-palette";
 
 // The landing page keeps Camp 404's own look (owner's call, 2026-09-23): the
 // AfrikaBurn restyle was for the console — its components and dashboards —
 // not this page. The site-wide theme is now AfrikaBurn's, so the landing sets
-// its original palette and face on itself; nothing outside this page changes.
+// its original palette (CAMP_404_PALETTE, shared with the join site) and
+// face on itself; nothing outside this page changes.
 const inter = Inter({ subsets: ["latin"], display: "swap" });
-
-// The pre-restyle Camp 404 palette (packages/ui globals.css before #221):
-// midnight-violet base, magenta primary, electric-blue accent.
-const CAMP_404_PALETTE = {
-  "--color-background": "oklch(0.15 0.05 295)",
-  "--color-foreground": "oklch(0.97 0.02 330)",
-  "--color-primary": "oklch(0.65 0.27 340)",
-  "--color-primary-foreground": "oklch(0.99 0.005 340)",
-  "--color-muted-foreground": "oklch(0.7 0.05 325)",
-  "--color-accent": "oklch(0.62 0.18 255)",
-  "--color-ring": "oklch(0.65 0.27 340)",
-  "--radius": "0.625rem",
-} as CSSProperties;
 
 export function LandingHero() {
   return (

@@ -2706,6 +2706,39 @@ export const campSettings = pgTable(
   }),
 );
 
+// --- Join page -------------------------------------------------------------
+// What join.camp-404.com shows for one burn year (#264, owner's rulings
+// 2026-09-24). One row per year, written only by a captain in Camp settings
+// (@camp404/db/join-page): `draft` is the editor's text, `published` the copy
+// the join site reads (null: nothing published). Every write is audited in its
+// own transaction and is a compare-and-set on `version`. The text is Markdown,
+// and its pictures are /api/join-image links (@camp404/core join-page). The
+// length bounds mirror JOIN_PAGE_MAX_LENGTH in @camp404/types.
+export const joinPages = pgTable(
+  "join_pages",
+  {
+    cycle: integer("cycle").primaryKey(),
+    draft: text("draft").notNull().default(""),
+    published: text("published"),
+    publishedAt: timestamp("published_at", { mode: "date" }),
+    version: integer("version").notNull().default(1),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    draftLength: check(
+      "join_pages_draft_length_check",
+      sql`char_length(${t.draft}) <= 50000`,
+    ),
+    publishedLength: check(
+      "join_pages_published_length_check",
+      sql`${t.published} is null or char_length(${t.published}) <= 50000`,
+    ),
+  }),
+);
+
 // --- Questionnaire definitions -------------------------------------------
 // A questionnaire's STORED definition — the pages/questions catalogue as the
 // @camp404/types `Questionnaire` JSON (version lives inside it). Keyed by the

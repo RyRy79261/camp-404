@@ -184,6 +184,14 @@ import {
   type MealPlanWriteResult,
 } from "@camp404/db/meal-plan";
 import {
+  CHECK_JOIN_PAGE,
+  JOIN_PAGE_CHANGED,
+  JOIN_PAGE_NOT_PUBLISHED,
+  NOT_A_JOIN_PAGE_EDITOR,
+  type JoinPage,
+  type JoinPageWriteResult,
+} from "@camp404/db/join-page";
+import {
   calendarEventRefusal,
   type AddCalendarEventResult,
 } from "@camp404/db/calendar-events";
@@ -194,6 +202,7 @@ import {
   ANNOUNCEMENT_NOTIFICATION_KINDS,
   DEFAULT_PLATES,
   KitchenRecipe,
+  JoinPageSave,
   MealPlanInput,
   PROOFREAD_ANSWER_MAX,
   PlateProofread,
@@ -586,6 +595,8 @@ interface TestStoreState {
   /** The kitchen's settings. Reassigned on every edit, so it lives on `S`. */
   /** `kitchen_meal_plans` with their days, keyed by year. */
   mealPlans: Map<number, MealPlan>;
+  /** `join_pages`, keyed by year like the table's primary key. */
+  joinPages: Map<number, JoinPage>;
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -640,6 +651,7 @@ function globalState(): TestStoreState {
       recipeLessons: [] as TestRecipeLesson[],
       recipeHistory: [] as TestRecipeEvent[],
       mealPlans: new Map<number, MealPlan>(),
+      joinPages: new Map<number, JoinPage>(),
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
     } satisfies TestStoreState;
@@ -716,6 +728,7 @@ S.ingredientCatalogue ??= [];
 S.recipeLessons ??= [];
 S.recipeHistory ??= [];
 S.mealPlans ??= new Map<number, MealPlan>();
+S.joinPages ??= new Map<number, JoinPage>();
 const recipes = S.recipes;
 const recipeRuns = S.recipeRuns;
 const recipeSources = S.recipeSources;
@@ -3316,6 +3329,91 @@ export const testStore = {
     return { ok: true, version };
   },
 
+  /**
+   * This year's join page for the editor (the twin of getJoinPageForEditor):
+   * a year with no page opens on the newest earlier year's draft.
+   */
+  getJoinPageForEditor(): JoinPage {
+    const cycle = currentCycleNumber();
+    const page = S.joinPages.get(cycle);
+    if (page) return { ...page };
+    const earlier = [...S.joinPages.values()]
+      .filter((p) => p.cycle < cycle)
+      .sort((a, b) => b.cycle - a.cycle)[0];
+    return {
+      cycle,
+      draft: earlier?.draft ?? "",
+      published: null,
+      publishedAt: null,
+      version: 0,
+      updatedAt: null,
+      startedFrom: earlier?.cycle ?? null,
+    };
+  },
+
+  /**
+   * Save this year's join page, publishing it too when asked (the twin of
+   * saveJoinPage): a captain only, compare-and-set on version.
+   */
+  saveJoinPage(
+    input: { actorId: string } & JoinPageSave,
+  ): JoinPageWriteResult<{ version: number; cycle: number }> {
+    const parsed = JoinPageSave.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? CHECK_JOIN_PAGE,
+      };
+    }
+    if (findUserById(input.actorId)?.rank !== "captain") {
+      return { ok: false, error: NOT_A_JOIN_PAGE_EDITOR };
+    }
+    const { markdown, expectedVersion, publish } = parsed.data;
+    const cycle = currentCycleNumber();
+    const before = S.joinPages.get(cycle);
+    if ((before?.version ?? 0) !== expectedVersion) {
+      return { ok: false, error: JOIN_PAGE_CHANGED };
+    }
+    const now = new Date();
+    const version = expectedVersion + 1;
+    S.joinPages.set(cycle, {
+      cycle,
+      draft: markdown,
+      published: publish ? markdown : (before?.published ?? null),
+      publishedAt: publish ? now : (before?.publishedAt ?? null),
+      version,
+      updatedAt: now,
+      startedFrom: null,
+    });
+    return { ok: true, version, cycle };
+  },
+
+  /** Take this year's join page down (the twin of unpublishJoinPage). */
+  unpublishJoinPage(input: {
+    actorId: string;
+    expectedVersion: number;
+  }): JoinPageWriteResult<{ version: number }> {
+    if (findUserById(input.actorId)?.rank !== "captain") {
+      return { ok: false, error: NOT_A_JOIN_PAGE_EDITOR };
+    }
+    const page = S.joinPages.get(currentCycleNumber());
+    if (!page || page.version !== input.expectedVersion) {
+      return { ok: false, error: JOIN_PAGE_CHANGED };
+    }
+    if (page.published === null) {
+      return { ok: false, error: JOIN_PAGE_NOT_PUBLISHED };
+    }
+    const version = page.version + 1;
+    S.joinPages.set(page.cycle, {
+      ...page,
+      published: null,
+      publishedAt: null,
+      version,
+      updatedAt: new Date(),
+    });
+    return { ok: true, version };
+  },
+
   suggestRecipe(input: {
     submitterId: string;
     title: string | null;
@@ -4728,6 +4826,7 @@ export const testStore = {
     recipeLessons.length = 0;
     recipeHistory.length = 0;
     S.mealPlans.clear();
+    S.joinPages.clear();
     S.nextSerial = 1;
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
   },

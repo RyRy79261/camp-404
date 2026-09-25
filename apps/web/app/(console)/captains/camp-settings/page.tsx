@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarClock } from "lucide-react";
+import { ArrowRight, CalendarClock, DoorOpen } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import {
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Camp settings — Camp 404" };
 
 // Captains' camp settings, as the AfrikaBurn console's settings cards: the team
-// editor in the main column, the camp's year beside it. Preview-but-locked
+// editor in the main column, the camp's year and the join page beside it. Preview-but-locked
 // (D3): non-captains see the heading and a CaptainLock, and the config is
 // withheld server-side — never fetched, never sent. Captains get the full team
 // editor (relabel / reorder / archive). The editor needs the WHOLE list (incl.
@@ -38,7 +38,7 @@ export default async function CampSettingsPage() {
       <PageHeading
         eyebrow="Captains / Camp settings"
         title="Camp settings"
-        description="Your camp's teams, and the year everything is filed under."
+        description="Your camp's teams, the year everything is filed under, and the page people read before they join."
       />
 
       {cleared ? (
@@ -47,27 +47,51 @@ export default async function CampSettingsPage() {
             <TeamSettingsManager teams={teams} />
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarClock className="h-4 w-4 text-accent" aria-hidden />
-                The camp&apos;s year
-              </CardTitle>
-              <CardDescription>
-                Say what year the camp is in, and when it moves on to the next
-                burn, say so here. You see exactly which questionnaires go out
-                again before anything changes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/captains/camp-settings/cycle">
-                  Open the camp&apos;s year
-                  <ArrowRight aria-hidden />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="flex flex-col gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CalendarClock className="h-4 w-4 text-accent" aria-hidden />
+                  The camp&apos;s year
+                </CardTitle>
+                <CardDescription>
+                  Say what year the camp is in, and when it moves on to the next
+                  burn, say so here. You see exactly which questionnaires go out
+                  again before anything changes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild variant="secondary" size="sm">
+                  <Link href="/captains/camp-settings/cycle">
+                    Open the camp&apos;s year
+                    <ArrowRight aria-hidden />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <DoorOpen className="h-4 w-4 text-accent" aria-hidden />
+                  Join page
+                </CardTitle>
+                <CardDescription>
+                  What join.camp-404.com tells people who want to join: what the
+                  camp is and how to apply. Written for each year, and on the
+                  site only once you publish it.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild variant="secondary" size="sm">
+                  <Link href="/captains/camp-settings/join-page">
+                    Edit the join page
+                    <ArrowRight aria-hidden />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       ) : (
         <CaptainLock message="Camp settings are captain-only. Your rank doesn't have clearance for this." />

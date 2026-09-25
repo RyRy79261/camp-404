@@ -35,6 +35,8 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@modelcontextprotocol/sdk": "1.26.0",
+    "@tiptap/extension-image": "3.31.3",
+    "@tiptap/markdown": "3.31.3",
     "@tiptap/pm": "3.29.0",
     "@tiptap/react": "3.29.0",
     "@tiptap/starter-kit": "3.29.0",
