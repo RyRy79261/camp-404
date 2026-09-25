@@ -190,6 +190,10 @@ test.describe("camp calendar (test-mode)", () => {
     await expect(
       page.getByText("Google Calendar shows it as “Kitchen Team - …”."),
     ).toBeVisible();
+    // The preview says whose view it is: the team's, with its border and star.
+    await expect(
+      page.getByText("Preview — how the Kitchen team sees it on Home"),
+    ).toBeVisible();
     await fillEvent(page, {
       title: "Kitchen briefing",
       start: "18:00",

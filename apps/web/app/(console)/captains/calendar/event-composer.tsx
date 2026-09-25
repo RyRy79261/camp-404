@@ -300,7 +300,12 @@ export function EventComposer({
 
       <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-80">
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Preview — how Home shows it
+          {/* The team's own view: the border and star mark an event of one of
+              the viewer's teams, and this preview is how that team sees it,
+              whoever adds it (a captain may add for a team they are not on). */}
+          {teamLabel
+            ? `Preview — how the ${teamLabel} team sees it on Home`
+            : "Preview — how Home shows it"}
         </p>
         <Card>
           {/* The badge under the title, as Home draws it on a phone, so a
