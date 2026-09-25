@@ -43,8 +43,9 @@ jobs:
               - '.github/**'
             # One app per subdomain (owner, 2026-09-24): each app's own jobs
             # run only when the app, or a package it uses, changed. The console
-            # (apps/web) uses every package; the join site uses core, db,
-            # types and ui. Root tooling and this workflow count for both.
+            # (apps/web) uses every package; the join site uses ui (and core
+            # and types through it). Root tooling and this workflow count for
+            # both.
             web:
               - 'apps/web/**'
               - 'packages/**'
@@ -57,7 +58,6 @@ jobs:
             join:
               - 'apps/join/**'
               - 'packages/core/**'
-              - 'packages/db/**'
               - 'packages/types/**'
               - 'packages/ui/**'
               - 'packages/eslint-config/**'

@@ -32,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   // Dark, like the signed-out landing. The page sets the landing's palette and
-  // face on itself (components/join-page-view.tsx).
+  // face on itself (app/page.tsx).
   return (
     <html lang="en" className="dark">
       <body className="antialiased">{children}</body>

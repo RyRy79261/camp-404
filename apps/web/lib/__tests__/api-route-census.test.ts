@@ -36,9 +36,6 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   avatar: "camp-access",
   // A liveness probe: says the app is up and nothing else.
   health: "public",
-  // The join page's pictures (#264): the page is public, so are they. Serves
-  // only the `join-page/` folder (isJoinImagePathname).
-  "join-image": "public",
   "mcp/[transport]": "bearer-mcp",
   // Consent: the code-issuing POST checks camp access and approval.
   "mcp/oauth/authorize": "camp-access",
@@ -68,7 +65,6 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   "tools/invite/check": "camp-access",
   "uploads/avatar": "camp-access",
   "uploads/builder-image": "captain-gate",
-  "uploads/join-image": "captain-gate",
   "uploads/questionnaire-image": "camp-access",
   "voice/transcribe": "camp-access",
 };

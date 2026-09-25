@@ -156,4 +156,3 @@ export * from "./power";
 export * from "./recipes";
 export * from "./recipe-source";
 export * from "./calendar-titles";
-export * from "./join-page";

@@ -19,4 +19,3 @@ export * from "./task";
 export * from "./calendar";
 export * from "./participation";
 export * from "./power";
-export * from "./join-page";

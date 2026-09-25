@@ -303,25 +303,3 @@ describe("recipe audit rows", () => {
     expect(auditDetail("recipe.plates_queued", { title: "Dhal" })).toBe("Dhal");
   });
 });
-
-describe("the join page's audit rows", () => {
-  it("labels each write and names the year and version", () => {
-    expect(auditActionLabel("camp.join_page.saved")).toBe(
-      "Saved the join page",
-    );
-    expect(auditActionLabel("camp.join_page.published")).toBe(
-      "Published the join page",
-    );
-    expect(auditActionLabel("camp.join_page.unpublished")).toBe(
-      "Took the join page down",
-    );
-    expect(
-      auditDetail("camp.join_page.published", { cycle: 2026, version: 3 }),
-    ).toBe("For 2026, version 3");
-    expect(auditDetail("camp.join_page.unpublished", { cycle: 2026 })).toBe(
-      "For 2026",
-    );
-    // No year, no detail: an odd row shows nothing rather than raw data.
-    expect(auditDetail("camp.join_page.saved", { version: 3 })).toBeNull();
-  });
-});

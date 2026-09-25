@@ -19,12 +19,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
-      // `import "server-only"` throws outside a React Server Component; point
-      // it at the package's empty build, as apps/web does.
-      "server-only": path.resolve(
-        __dirname,
-        "node_modules/server-only/empty.js",
-      ),
     },
   },
 });

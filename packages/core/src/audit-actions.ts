@@ -15,9 +15,6 @@ export const AUDIT_ACTION_LABELS = {
   "camp.cycle.advanced": "Moved the camp to a new year",
   "camp.cycle.founded": "Set the camp's first year",
   "camp.cycle.renamed": "Renamed a year",
-  "camp.join_page.published": "Published the join page",
-  "camp.join_page.saved": "Saved the join page",
-  "camp.join_page.unpublished": "Took the join page down",
   "camp.kitchen_meal_plan.changed": "Changed the kitchen's meal plan",
   // No longer written (the settings were removed, 2026-09-24); kept so a row
   // written before still reads.
@@ -293,18 +290,6 @@ export function auditDetail(
       const version = count(metadata, "version");
       if (version === null) return title;
       return title ? `${title}, version ${version}` : `Version ${version}`;
-    }
-    // The year the page is for, which is not always the year it was written
-    // in: the page for a year is written while that year is the camp's.
-    case "camp.join_page.saved":
-    case "camp.join_page.published":
-    case "camp.join_page.unpublished": {
-      const cycle = count(metadata, "cycle");
-      const version = count(metadata, "version");
-      if (cycle === null) return null;
-      return version === null
-        ? `For ${cycle}`
-        : `For ${cycle}, version ${version}`;
     }
     case "camp.cycle.renamed": {
       const to = text(metadata, "to");

@@ -92,8 +92,8 @@ restyle only with tokens; do not invent a design.
   later. Shared code lives in `packages/`. Each app's `vercel.json` skips a
   build its app does not need (`turbo-ignore`), and the `changes` job in
   `ci.yml` runs each app's jobs only when it or a package it uses changed.
-  The join site is public and read-only: it reads the published join page
-  (`@camp404/db/join-page`) and nothing else, with no sign-in.
+  The join site is public and static: no database, no sign-in. Its page is
+  built in code from the owner's copy (no editor, owner 2026-09-25).
 - **The signed-out landing page (`apps/web/app/landing-hero.tsx`) is NOT part
   of the restyle** (owner, 2026-09-23: the AfrikaBurn look is for "the
   components and the dashboards, not the landing page"). It keeps Camp 404's

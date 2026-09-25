@@ -40,7 +40,6 @@
     "./tasks": "./src/tasks.ts",
     "./power": "./src/power.ts",
     "./meal-plan": "./src/meal-plan.ts",
-    "./join-page": "./src/join-page.ts",
     "./recipes": "./src/recipes.ts",
     "./calendar-events": "./src/calendar-events.ts",
     "./audience": "./src/audience.ts",
