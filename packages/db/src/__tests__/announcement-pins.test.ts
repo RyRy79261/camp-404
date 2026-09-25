@@ -340,7 +340,11 @@ describe("announcement pins — who may set one", () => {
     // Their own team: allowed. Nothing tells the write who leads what; it
     // reads the lead flag itself.
     expect(
-      await setAnnouncementPinned({ id: kitchen, actorId: lead.id, pinned: true }),
+      await setAnnouncementPinned({
+        id: kitchen,
+        actorId: lead.id,
+        pinned: true,
+      }),
     ).toEqual({ ok: true });
 
     // A camp-wide announcement is outside a lead's reach — the claim's WHERE
@@ -357,7 +361,11 @@ describe("announcement pins — who may set one", () => {
       .set({ isLead: false })
       .where(eq(schema.teamMemberships.userId, lead.id));
     expect(
-      await setAnnouncementPinned({ id: kitchen, actorId: lead.id, pinned: false }),
+      await setAnnouncementPinned({
+        id: kitchen,
+        actorId: lead.id,
+        pinned: false,
+      }),
     ).toEqual({ ok: false, error: PIN_TEAM_NOT_LED });
     expect((await listPinnedForUser(cook.id)).map((p) => p.id)).toEqual([
       kitchen,
@@ -389,9 +397,10 @@ describe("announcement pins — who may set one", () => {
     expect(
       await setAnnouncementPinned({ id, actorId: captain.id, pinned: true }),
     ).toEqual({ ok: false, error: PIN_TEAM_NOT_LED });
-    expect(
-      (await auditRows(db, id)).map((r) => r.action),
-    ).toEqual(["announcement.pinned", "announcement.unpinned"]);
+    expect((await auditRows(db, id)).map((r) => r.action)).toEqual([
+      "announcement.pinned",
+      "announcement.unpinned",
+    ]);
   });
 
   it("is a compare-and-set: the second pin loses instead of overwriting", async () => {

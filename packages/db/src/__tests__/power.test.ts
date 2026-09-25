@@ -449,11 +449,9 @@ describe("power", () => {
         runFromHour: null,
         runToHour: null,
       });
-      const columns = await h
-        .db()
-        .execute<{
-          column_name: string;
-        }>(sql`select column_name from information_schema.columns where table_name = 'power_plans'`);
+      const columns = await h.db().execute<{
+        column_name: string;
+      }>(sql`select column_name from information_schema.columns where table_name = 'power_plans'`);
       const names = columns.rows.map((c) => c.column_name);
       expect(names).toContain("run_from_hour");
       expect(names).not.toContain("compare_run_from_hour");

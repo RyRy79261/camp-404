@@ -12,32 +12,33 @@
 
 ## File structure
 
-| File | Responsibility | Action |
-|---|---|---|
-| `packages/db/src/crypto.ts` | AES-256-GCM encrypt/decrypt (moved here) | Create (move) |
-| `packages/db/src/id-documents.ts` | Pure `splitIdNumber` / `mergeIdNumber` + field-key constants + column selection | Create |
-| `packages/db/src/burner-profile.ts` | Raw `getIdDocumentColumns` / `setIdDocumentColumns` (text in/out) | Modify |
-| `packages/db/src/roster.ts` | `getCampMemberDetail` returns the encrypted columns | Modify |
-| `packages/db/package.json` | Export `./crypto`, `./id-documents` | Modify |
-| `apps/web/lib/crypto.ts` | (removed — re-points to db) | Delete |
-| `apps/web/lib/mcp/tools/profile.ts` | Import crypto from db; strip ID from `get/update_my_burner_profile` | Modify |
-| `apps/web/lib/mcp/tools/people.ts` | Import crypto from db (no logic change) | Modify |
-| `apps/web/lib/mcp/tools/reimbursements.ts` | Import crypto from db | Modify |
-| `apps/web/lib/users.ts` | `setIdDocuments`/`getIdDocuments` backend (real encrypts, test raw) | Modify |
-| `apps/web/lib/test-store.ts` | In-memory ID-doc store for E2E | Modify |
-| `apps/web/app/onboarding/questionnaire/actions.ts` | Split + persist on save | Modify |
-| `apps/web/lib/forms.ts` | Replay `save` splits; `load` merges back | Modify |
-| `apps/web/app/tools/forms/[key]/actions.ts` | Exclude `id.number` from change-log diff | Modify |
-| `apps/web/app/captains/camp-management/actions.ts` | Captain decrypt+merge before `presentMemberDetail` | Modify |
-| `apps/admin-cli/src/index.ts` (+ `backfill-id-encryption.ts`) | Idempotent backfill command | Modify/Create |
-| `apps/web/lib/__tests__/id-documents.test.ts` | Unit tests for split/merge + render integration | Create |
-| `apps/web/lib/questionnaire.ts` | Correct the stale PII note | Modify |
+| File                                                          | Responsibility                                                                  | Action        |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------- |
+| `packages/db/src/crypto.ts`                                   | AES-256-GCM encrypt/decrypt (moved here)                                        | Create (move) |
+| `packages/db/src/id-documents.ts`                             | Pure `splitIdNumber` / `mergeIdNumber` + field-key constants + column selection | Create        |
+| `packages/db/src/burner-profile.ts`                           | Raw `getIdDocumentColumns` / `setIdDocumentColumns` (text in/out)               | Modify        |
+| `packages/db/src/roster.ts`                                   | `getCampMemberDetail` returns the encrypted columns                             | Modify        |
+| `packages/db/package.json`                                    | Export `./crypto`, `./id-documents`                                             | Modify        |
+| `apps/web/lib/crypto.ts`                                      | (removed — re-points to db)                                                     | Delete        |
+| `apps/web/lib/mcp/tools/profile.ts`                           | Import crypto from db; strip ID from `get/update_my_burner_profile`             | Modify        |
+| `apps/web/lib/mcp/tools/people.ts`                            | Import crypto from db (no logic change)                                         | Modify        |
+| `apps/web/lib/mcp/tools/reimbursements.ts`                    | Import crypto from db                                                           | Modify        |
+| `apps/web/lib/users.ts`                                       | `setIdDocuments`/`getIdDocuments` backend (real encrypts, test raw)             | Modify        |
+| `apps/web/lib/test-store.ts`                                  | In-memory ID-doc store for E2E                                                  | Modify        |
+| `apps/web/app/onboarding/questionnaire/actions.ts`            | Split + persist on save                                                         | Modify        |
+| `apps/web/lib/forms.ts`                                       | Replay `save` splits; `load` merges back                                        | Modify        |
+| `apps/web/app/tools/forms/[key]/actions.ts`                   | Exclude `id.number` from change-log diff                                        | Modify        |
+| `apps/web/app/captains/camp-management/actions.ts`            | Captain decrypt+merge before `presentMemberDetail`                              | Modify        |
+| `apps/admin-cli/src/index.ts` (+ `backfill-id-encryption.ts`) | Idempotent backfill command                                                     | Modify/Create |
+| `apps/web/lib/__tests__/id-documents.test.ts`                 | Unit tests for split/merge + render integration                                 | Create        |
+| `apps/web/lib/questionnaire.ts`                               | Correct the stale PII note                                                      | Modify        |
 
 ---
 
 ### Task 1: Move crypto helper into `@camp404/db`
 
 **Files:**
+
 - Create: `packages/db/src/crypto.ts` (identical content to current `apps/web/lib/crypto.ts`)
 - Modify: `packages/db/package.json` (exports)
 - Modify: `apps/web/lib/mcp/tools/profile.ts`, `people.ts`, `reimbursements.ts` (imports)
@@ -52,6 +53,7 @@
 ### Task 2: Pure ID split/merge helper + tests (TDD)
 
 **Files:**
+
 - Create: `packages/db/src/id-documents.ts`
 - Create: `apps/web/lib/__tests__/id-documents.test.ts`
 - Modify: `packages/db/package.json` (export `./id-documents`)
@@ -60,12 +62,18 @@
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { splitIdNumber, mergeIdNumber, ID_NUMBER_KEY } from "@camp404/db/id-documents";
+import {
+  splitIdNumber,
+  mergeIdNumber,
+  ID_NUMBER_KEY,
+} from "@camp404/db/id-documents";
 
 describe("splitIdNumber", () => {
   it("removes id.number, returns idType + idNumber", () => {
     const { cleaned, idType, idNumber } = splitIdNumber({
-      "id.type": "passport", "id.number": "A12345678", phone: "+27",
+      "id.type": "passport",
+      "id.number": "A12345678",
+      phone: "+27",
     });
     expect(idNumber).toBe("A12345678");
     expect(idType).toBe("passport");
@@ -74,23 +82,35 @@ describe("splitIdNumber", () => {
     expect(cleaned.phone).toBe("+27");
   });
   it("returns null idNumber when absent or empty", () => {
-    expect(splitIdNumber({ "id.type": "sa_id", "id.number": "" }).idNumber).toBeNull();
+    expect(
+      splitIdNumber({ "id.type": "sa_id", "id.number": "" }).idNumber,
+    ).toBeNull();
     expect(splitIdNumber({ phone: "x" }).idNumber).toBeNull();
   });
 });
 
 describe("mergeIdNumber", () => {
   it("restores id.number + id.type into responses", () => {
-    const merged = mergeIdNumber({ phone: "+27" }, { idType: "sa_id", idNumber: "9001015800089" });
+    const merged = mergeIdNumber(
+      { phone: "+27" },
+      { idType: "sa_id", idNumber: "9001015800089" },
+    );
     expect(merged["id.number"]).toBe("9001015800089");
     expect(merged["id.type"]).toBe("sa_id");
   });
   it("is a no-op when idNumber is null", () => {
-    const merged = mergeIdNumber({ phone: "+27" }, { idType: null, idNumber: null });
+    const merged = mergeIdNumber(
+      { phone: "+27" },
+      { idType: null, idNumber: null },
+    );
     expect(merged["id.number"]).toBeUndefined();
   });
   it("round-trips with splitIdNumber", () => {
-    const original = { "id.type": "passport", "id.number": "A12345678", phone: "+27" };
+    const original = {
+      "id.type": "passport",
+      "id.number": "A12345678",
+      phone: "+27",
+    };
     const { cleaned, idType, idNumber } = splitIdNumber(original);
     expect(mergeIdNumber(cleaned, { idType, idNumber })).toEqual(original);
   });
@@ -147,7 +167,8 @@ export function idColumnsFor(
   idType: string | null,
   value: string | null,
 ): { passportEncrypted: string | null; saIdEncrypted: string | null } {
-  if (idType === "sa_id") return { passportEncrypted: null, saIdEncrypted: value };
+  if (idType === "sa_id")
+    return { passportEncrypted: null, saIdEncrypted: value };
   // default/passport
   return { passportEncrypted: value, saIdEncrypted: null };
 }
@@ -159,6 +180,7 @@ export function idColumnsFor(
 ### Task 3: Raw encrypted-column accessors on the db layer
 
 **Files:**
+
 - Modify: `packages/db/src/burner-profile.ts`
 
 - [ ] **Step 1 — implement** (append to `burner-profile.ts`):
@@ -197,6 +219,7 @@ export async function setIdDocumentColumns(
 ### Task 4: `users.ts` backend — encrypt on write, decrypt on read
 
 **Files:**
+
 - Modify: `apps/web/lib/users.ts`
 - Modify: `apps/web/lib/test-store.ts`
 
@@ -212,6 +235,7 @@ getIdDocuments(userId: string) {
   return this.idDocs.get(userId) ?? null;
 }
 ```
+
 (Also clear `idDocs` in the store's existing `reset()`.)
 
 - [ ] **Step 2 — users.ts:** import the helpers and extend the backend:
@@ -224,12 +248,16 @@ import {
   setIdDocumentColumns,
 } from "@camp404/db/burner-profile";
 ```
+
 Add to `UserBackend`:
+
 ```ts
 setIdDocuments(userId: string, id: { idType: string | null; idNumber: string | null }): Promise<void>;
 getIdDocuments(userId: string): Promise<{ idType: string | null; idNumber: string | null } | null>;
 ```
+
 `realBackend`:
+
 ```ts
 async setIdDocuments(userId, id) {
   await setIdDocumentColumns(userId, idColumnsFor(id.idType, id.idNumber ? encrypt(id.idNumber) : null));
@@ -244,14 +272,21 @@ async getIdDocuments(userId) {
   return { idType: null, idNumber: null };
 },
 ```
+
 `testBackend`:
+
 ```ts
 async setIdDocuments(userId, id) { testStore.setIdDocuments(userId, id); },
 async getIdDocuments(userId) { return testStore.getIdDocuments(userId); },
 ```
+
 Exported wrappers:
+
 ```ts
-export async function setIdDocuments(userId: string, id: { idType: string | null; idNumber: string | null }) {
+export async function setIdDocuments(
+  userId: string,
+  id: { idType: string | null; idNumber: string | null },
+) {
   const store = isE2ETestMode() ? testBackend : realBackend;
   await store.setIdDocuments(userId, id);
 }
@@ -267,6 +302,7 @@ export async function getIdDocuments(userId: string) {
 ### Task 5: Encrypt at the onboarding + replay write boundaries
 
 **Files:**
+
 - Modify: `apps/web/app/onboarding/questionnaire/actions.ts`
 - Modify: `apps/web/lib/forms.ts`
 
@@ -285,6 +321,7 @@ await upsertBurnerProfile({
 });
 if (idNumber) await setIdDocuments(campUser.id, { idType, idNumber });
 ```
+
 (The `profile.image` mirror below stays, reading from `cleaned`/`responses` — `profile.image` is untouched by the split.)
 
 - [ ] **Step 2 — replay `BURNER_PROFILE.save` / `load`** in `forms.ts`:
@@ -297,6 +334,7 @@ if (idNumber) await setIdDocuments(campUser.id, { idType, idNumber });
 ### Task 6: Stop the MCP + change-log leaks
 
 **Files:**
+
 - Modify: `apps/web/lib/mcp/tools/profile.ts`
 - Modify: `apps/web/app/tools/forms/[key]/actions.ts`
 
@@ -306,7 +344,10 @@ if (idNumber) await setIdDocuments(campUser.id, { idType, idNumber });
 import { splitIdNumber } from "@camp404/db/id-documents";
 // in handler, after fetching row:
 if (!row) return null;
-return { ...row, responses: splitIdNumber(row.responses as Record<string, unknown>).cleaned };
+return {
+  ...row,
+  responses: splitIdNumber(row.responses as Record<string, unknown>).cleaned,
+};
 ```
 
 - [ ] **Step 2 — `update_my_burner_profile`:** route id out of `responses` into the encrypted column instead of persisting plaintext:
@@ -316,15 +357,20 @@ const { cleaned, idType, idNumber } = splitIdNumber(args.responses);
 // persist `cleaned` instead of args.responses (both insert + onConflict set)
 // then, if idNumber: encrypt into the column for idType (reuse idColumnsFor + encrypt + setIdDocumentColumns, or the users setIdDocuments wrapper)
 ```
+
 (Use the `setIdDocuments` wrapper from `@/lib/users` so test-mode is honoured.)
 
 - [ ] **Step 3 — change-log** in `tools/forms/[key]/actions.ts`: exclude `id.number` from the diff so no plaintext reaches `questionnaire_edits`:
 
 ```ts
 import { ID_NUMBER_KEY } from "@camp404/db/id-documents";
-const changes = diffResponses(form.questionnaire, state.responses, result.responses)
-  .filter((c) => c.questionId !== ID_NUMBER_KEY);
+const changes = diffResponses(
+  form.questionnaire,
+  state.responses,
+  result.responses,
+).filter((c) => c.questionId !== ID_NUMBER_KEY);
 ```
+
 (Confirm the change object's field name is `questionId` against `@camp404/types` `QuestionnaireFieldChange`; adjust if it's `id`.)
 
 - [ ] **Step 4:** `pnpm --filter @camp404/web typecheck` → PASS.
@@ -333,6 +379,7 @@ const changes = diffResponses(form.questionnaire, state.responses, result.respon
 ### Task 7: Captain decrypt path (member detail)
 
 **Files:**
+
 - Modify: `packages/db/src/roster.ts` (`getCampMemberDetail` + `CampMemberDetail`)
 - Modify: `apps/web/app/captains/camp-management/actions.ts`
 - Modify: `apps/web/lib/__tests__/id-documents.test.ts` (render integration)
@@ -348,7 +395,9 @@ const passport = decryptOrNull(detail.passportEncrypted);
 const saId = decryptOrNull(detail.saIdEncrypted);
 const id = passport
   ? { idType: "passport", idNumber: passport }
-  : saId ? { idType: "sa_id", idNumber: saId } : { idType: null, idNumber: null };
+  : saId
+    ? { idType: "sa_id", idNumber: saId }
+    : { idType: null, idNumber: null };
 const responses = mergeIdNumber(detail.responses, id);
 return { ok: true, member: presentMemberDetail({ ...detail, responses }) };
 ```
@@ -359,13 +408,26 @@ return { ok: true, member: presentMemberDetail({ ...detail, responses }) };
 import { presentMemberDetail } from "../member-detail";
 it("captain sees id.number once merged into responses", () => {
   const detail: any = {
-    id: "u1", displayName: "X", rank: "member", approvalStatus: "approved",
-    approvalDecidedAt: null, approvalDecidedByName: null, onboardingComplete: true,
-    onboardingVersion: "v", inviteCode: null, inviteNote: null, invitedByName: null,
+    id: "u1",
+    displayName: "X",
+    rank: "member",
+    approvalStatus: "approved",
+    approvalDecidedAt: null,
+    approvalDecidedByName: null,
+    onboardingComplete: true,
+    onboardingVersion: "v",
+    inviteCode: null,
+    inviteNote: null,
+    invitedByName: null,
     createdAt: new Date(),
-    responses: mergeIdNumber({ "id.type": "passport" }, { idType: "passport", idNumber: "A12345678" }),
+    responses: mergeIdNumber(
+      { "id.type": "passport" },
+      { idType: "passport", idNumber: "A12345678" },
+    ),
   };
-  const flat = presentMemberDetail(detail).profileSections.flatMap((s) => s.items);
+  const flat = presentMemberDetail(detail).profileSections.flatMap(
+    (s) => s.items,
+  );
   expect(flat.some((i) => i.value === "A12345678")).toBe(true);
 });
 ```
@@ -376,6 +438,7 @@ it("captain sees id.number once merged into responses", () => {
 ### Task 8: Idempotent backfill (admin-cli)
 
 **Files:**
+
 - Create: `apps/admin-cli/src/backfill-id-encryption.ts`
 - Modify: `apps/admin-cli/src/index.ts` (register the command)
 
@@ -388,20 +451,28 @@ import { eq } from "drizzle-orm";
 import { encrypt } from "@camp404/db/crypto";
 import { splitIdNumber, idColumnsFor } from "@camp404/db/id-documents";
 
-export async function backfillIdEncryption(): Promise<{ scanned: number; migrated: number }> {
+export async function backfillIdEncryption(): Promise<{
+  scanned: number;
+  migrated: number;
+}> {
   const { db, pool } = createPooledDb();
-  let scanned = 0, migrated = 0;
+  let scanned = 0,
+    migrated = 0;
   try {
     const profiles = await db.select().from(schema.burnerProfiles);
     for (const p of profiles) {
       scanned++;
-      const { cleaned, idType, idNumber } = splitIdNumber(p.responses as Record<string, unknown>);
+      const { cleaned, idType, idNumber } = splitIdNumber(
+        p.responses as Record<string, unknown>,
+      );
       if (!idNumber) continue; // already migrated / nothing to do — idempotent
       await db.transaction(async (tx) => {
-        await tx.update(schema.users)
+        await tx
+          .update(schema.users)
           .set(idColumnsFor(idType, encrypt(idNumber)))
           .where(eq(schema.users.id, p.userId));
-        await tx.update(schema.burnerProfiles)
+        await tx
+          .update(schema.burnerProfiles)
           .set({ responses: cleaned })
           .where(eq(schema.burnerProfiles.userId, p.userId));
       });
@@ -413,6 +484,7 @@ export async function backfillIdEncryption(): Promise<{ scanned: number; migrate
   }
 }
 ```
+
 (Confirm `createPooledDb`'s return shape against `packages/db/src/index.ts`; adjust `{ db, pool }` destructure to match.)
 
 - [ ] **Step 2:** Register a `backfill-id-encryption` subcommand in `apps/admin-cli/src/index.ts` that calls it and prints `{ scanned, migrated }`.
@@ -422,6 +494,7 @@ export async function backfillIdEncryption(): Promise<{ scanned: number; migrate
 ### Task 9: Correct the stale note + full gate
 
 **Files:**
+
 - Modify: `apps/web/lib/questionnaire.ts`
 
 - [ ] **Step 1:** Replace the PII NOTE (lines ~16-20) to state that `id.number` is now split out and encrypted into `users.passport_encrypted`/`sa_id_encrypted`, decrypted only for the owner and captains, and that DOB intentionally stays in `responses`.
@@ -438,4 +511,4 @@ export async function backfillIdEncryption(): Promise<{ scanned: number; migrate
 
 **Type consistency:** `{ idType, idNumber }` shape is used identically across `splitIdNumber`, `setIdDocuments`/`getIdDocuments`, `mergeIdNumber`, and the captain action. `idColumnsFor` returns the `{ passportEncrypted, saIdEncrypted }` shape consumed by `setIdDocumentColumns`.
 
-**Out of scope (later sub-projects):** server-side ID *format* validation (Luhn/passport) → B.
+**Out of scope (later sub-projects):** server-side ID _format_ validation (Luhn/passport) → B.

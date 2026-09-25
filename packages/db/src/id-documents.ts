@@ -44,7 +44,8 @@ export function idColumnsFor(
   idType: string | null,
   value: string | null,
 ): { passportEncrypted: string | null; saIdEncrypted: string | null } {
-  if (idType === "sa_id") return { passportEncrypted: null, saIdEncrypted: value };
+  if (idType === "sa_id")
+    return { passportEncrypted: null, saIdEncrypted: value };
   // default / passport
   return { passportEncrypted: value, saIdEncrypted: null };
 }

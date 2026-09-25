@@ -116,6 +116,11 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "users.telegramHandle": "camp_member",
   "users.sanitised": "camp_member",
   "users.lostCatNumber": "camp_member",
+  // users — "what I am in camp", the member's own words for the camp; a
+  // captain's card is also public on join.camp-404.com when they tick it
+  "users.campTitle": "camp_member",
+  "users.campBlurb": "camp_member",
+  "users.showOnJoin": "camp_member",
   // users — safety
   "users.emergencyContacts": "team_lead",
   // users — captain-only

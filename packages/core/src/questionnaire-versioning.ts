@@ -143,8 +143,12 @@ function sameVisibleIf(a?: VisibleIf, b?: VisibleIf): boolean {
 function visibleIfMap(q: Questionnaire): Map<string, VisibleIf | undefined> {
   const m = new Map<string, VisibleIf | undefined>();
   for (const page of q.pages) {
-    m.set(`p:${page.id}`, page.kind === "questions" ? page.visibleIf : undefined);
-    for (const block of pageBlocks(page)) m.set(`b:${block.id}`, block.visibleIf);
+    m.set(
+      `p:${page.id}`,
+      page.kind === "questions" ? page.visibleIf : undefined,
+    );
+    for (const block of pageBlocks(page))
+      m.set(`b:${block.id}`, block.visibleIf);
   }
   return m;
 }

@@ -10,7 +10,9 @@ const PRUNE_CODES = new Set([
 ]);
 
 /** Whether an FCM send error means the token should be deleted (vs. retried). */
-export function shouldPruneToken(errorCode: string | null | undefined): boolean {
+export function shouldPruneToken(
+  errorCode: string | null | undefined,
+): boolean {
   return !!errorCode && PRUNE_CODES.has(errorCode);
 }
 
@@ -44,7 +46,8 @@ export function deliveryPushStatus(
 export function chunk<T>(items: T[], size: number): T[][] {
   if (size < 1) throw new Error("chunk size must be >= 1");
   const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  for (let i = 0; i < items.length; i += size)
+    out.push(items.slice(i, i + size));
   return out;
 }
 

@@ -63,9 +63,10 @@ export function decrypt(stored: string): string {
   const ciphertext = buf.subarray(IV_LEN + TAG_LEN);
   const decipher = createDecipheriv(ALGO, getKey(), iv);
   decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString(
-    "utf8",
-  );
+  return Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]).toString("utf8");
 }
 
 /**
@@ -113,6 +114,8 @@ export function decryptField(
  * user or drives a write; keep this only where the caller genuinely has
  * nothing to say about the difference.
  */
-export function decryptOrNull(stored: string | null | undefined): string | null {
+export function decryptOrNull(
+  stored: string | null | undefined,
+): string | null {
   return decryptField(stored).value;
 }

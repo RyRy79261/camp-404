@@ -76,8 +76,16 @@ describe("openActivation — fan-out", () => {
     const db = h.db();
     const lead = await makeUser(db);
     const grunt = await makeUser(db);
-    await makeMembership(db, { userId: lead.id, team: "kitchen", isLead: true });
-    await makeMembership(db, { userId: grunt.id, team: "kitchen", isLead: false });
+    await makeMembership(db, {
+      userId: lead.id,
+      team: "kitchen",
+      isLead: true,
+    });
+    await makeMembership(db, {
+      userId: grunt.id,
+      team: "kitchen",
+      isLead: false,
+    });
     const act = await makeActivation(db, { scope: "team_leads" });
 
     expect(await openActivation(act.id)).toEqual({ ok: true, created: 1 });
@@ -429,7 +437,10 @@ describe("reconcileOpenActivations — members who arrive after a send", () => {
 
     expect(await reconcileOpenActivations(late.id)).toBe(0);
     const [gate] = await requiredActionsFor(db, late.id);
-    expect(gate).toMatchObject({ status: "completed", activationId: earlier.id });
+    expect(gate).toMatchObject({
+      status: "completed",
+      activationId: earlier.id,
+    });
   });
 
   it("does nothing for a closed send, or for an erased account", async () => {

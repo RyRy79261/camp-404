@@ -134,13 +134,13 @@ describe("saveBurnerProfileReplay", () => {
           questionnaireKey: "burner_profile",
           editedByUserId: NIL_UUID,
           changes: [
-          {
-            fieldId: "bio.statement",
-            label: "Tell us about yourself",
-            from: "Before",
-            to: "After",
-          },
-        ],
+            {
+              fieldId: "bio.statement",
+              label: "Tell us about yourself",
+              from: "Before",
+              to: "After",
+            },
+          ],
         },
       }),
     ).rejects.toThrow();

@@ -2,7 +2,8 @@ import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
 
-export type TelegramChatKind = (typeof schema.telegramChatKindEnum.enumValues)[number];
+export type TelegramChatKind =
+  (typeof schema.telegramChatKindEnum.enumValues)[number];
 export type TelegramInviteStatus =
   (typeof schema.telegramInviteStatusEnum.enumValues)[number];
 export type TelegramAnnouncementStatus =

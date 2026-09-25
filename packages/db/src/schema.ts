@@ -37,6 +37,7 @@ import {
   type LoadSchedule,
   type BuilderQuestionnaire,
   type DraftReport,
+  type JoinSiteContent,
   type KitchenRecipe,
   type PlateLine,
   type ProofreadExchange,
@@ -618,6 +619,15 @@ export const users = pgTable(
     // always sees their own data via MCP. See `docs/mcp-tooling-proposal.md`.
     aiDataConsent: boolean("ai_data_consent").notNull().default(false),
     aiDataConsentAt: timestamp("ai_data_consent_at", { mode: "date" }),
+
+    // "What I am in camp" (owner, 2026-09-25): an optional title, such as
+    // "The Original Error Code", and a short blurb, written by the member on
+    // their profile and read by other members. `show_on_join` puts a
+    // captain's card on join.camp-404.com; only a captain's card is shown
+    // there, and only when they tick it. Erasure clears all three.
+    campTitle: text("camp_title"),
+    campBlurb: text("camp_blurb"),
+    showOnJoin: boolean("show_on_join").notNull().default(false),
 
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -2810,6 +2820,23 @@ export const campSettings = pgTable(
     singleton: check("camp_settings_singleton", sql`${t.id}`),
   }),
 );
+
+// --- join.camp-404.com ------------------------------------------------------
+// The join site's words for one burn year, as a JoinSiteContent document
+// (@camp404/types join-site.ts), each section checked by its schema on every
+// write. A year with no row reads the latest earlier year, then the defaults
+// (the copy approved in PR #283), so words carry forward until a captain
+// changes them. Written only through @camp404/db/join-site, which writes the
+// audit row in the same transaction.
+export const joinSiteContent = pgTable("join_site_content", {
+  cycle: integer("cycle").primaryKey(),
+  content: jsonb("content").$type<Partial<JoinSiteContent>>().notNull(),
+  updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
 
 // --- Questionnaire definitions -------------------------------------------
 // A questionnaire's STORED definition — the pages/questions catalogue as the

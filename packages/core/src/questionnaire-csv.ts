@@ -93,7 +93,8 @@ const FIXED_HEADERS = ["Member", "Year", "Submitted", "Version"] as const;
 export function displayOrphanedAnswer(
   value: QuestionnaireResponseValue | undefined,
 ): string {
-  if (value === undefined || value === null || value === "") return EMPTY_ANSWER;
+  if (value === undefined || value === null || value === "")
+    return EMPTY_ANSWER;
   if (Array.isArray(value)) {
     return value.length === 0 ? EMPTY_ANSWER : value.join(", ");
   }
@@ -165,7 +166,9 @@ export function buildQuestionnaireCsvRows(
     respondent.cycle,
     respondent.submittedAt ? respondent.submittedAt.toISOString() : "",
     respondent.definitionVersion,
-    ...questions.map((q) => displayResponseValue(q, respondent.responses[q.id])),
+    ...questions.map((q) =>
+      displayResponseValue(q, respondent.responses[q.id]),
+    ),
     ...orphanIds.map((id) => displayOrphanedAnswer(respondent.responses[id])),
   ]);
 

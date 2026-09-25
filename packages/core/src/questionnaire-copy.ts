@@ -38,7 +38,11 @@ export function regenerateQuestionnaireIds(
   }
 
   const remapCondition = (v: VisibleIf | undefined) =>
-    v ? { visibleIf: { ...v, fieldId: questionIds.get(v.fieldId) ?? v.fieldId } } : {};
+    v
+      ? {
+          visibleIf: { ...v, fieldId: questionIds.get(v.fieldId) ?? v.fieldId },
+        }
+      : {};
   const remapTarget = (target: string) =>
     target === SUBMIT_TARGET ? target : (pageIds.get(target) ?? target);
 

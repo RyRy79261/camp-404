@@ -25,7 +25,12 @@ const QUESTION_PAGE = {
   blocks: [
     {
       kind: "question",
-      question: { id: "name", kind: "short_text", prompt: "Name", required: true },
+      question: {
+        id: "name",
+        kind: "short_text",
+        prompt: "Name",
+        required: true,
+      },
     },
     { id: "hdr", kind: "header_break", headingText: "More" },
     {
@@ -47,9 +52,9 @@ const QUESTION_PAGE = {
 describe("isBuilderDefinition", () => {
   it("distinguishes builder pages (blocks) from legacy pages (questions)", () => {
     expect(isBuilderDefinition({ pages: [{ blocks: [] }] })).toBe(true);
-    expect(isBuilderDefinition({ pages: [{ kind: "questions", questions: [] }] })).toBe(
-      false,
-    );
+    expect(
+      isBuilderDefinition({ pages: [{ kind: "questions", questions: [] }] }),
+    ).toBe(false);
     expect(isBuilderDefinition(null)).toBe(false);
     expect(isBuilderDefinition({ pages: [] })).toBe(false);
   });
@@ -90,7 +95,12 @@ describe("validateBuilderResponses", () => {
         blocks: [
           {
             kind: "question",
-            question: { id: "lead", kind: "boolean", prompt: "Lead?", required: true },
+            question: {
+              id: "lead",
+              kind: "boolean",
+              prompt: "Lead?",
+              required: true,
+            },
           },
           {
             kind: "question",
@@ -133,7 +143,10 @@ describe("validateBuilderResponses", () => {
   });
 
   it("retains a hidden field value that is still valid", () => {
-    const res = validateBuilderResponses(gated, { lead: false, team: "Kitchen" });
+    const res = validateBuilderResponses(gated, {
+      lead: false,
+      team: "Kitchen",
+    });
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.responses.team).toBe("Kitchen");
   });
@@ -160,15 +173,26 @@ describe("validateBuilderResponses", () => {
 
 describe("evalVisibleIf", () => {
   it("handles eq, includes, and answeredness; unanswered compares are false", () => {
-    expect(evalVisibleIf({ fieldId: "x", op: "eq", value: "a" }, { x: "a" })).toBe(true);
-    expect(evalVisibleIf({ fieldId: "x", op: "eq", value: "a" }, { x: "b" })).toBe(false);
-    expect(evalVisibleIf({ fieldId: "x", op: "eq", value: "a" }, {})).toBe(false);
+    expect(
+      evalVisibleIf({ fieldId: "x", op: "eq", value: "a" }, { x: "a" }),
+    ).toBe(true);
+    expect(
+      evalVisibleIf({ fieldId: "x", op: "eq", value: "a" }, { x: "b" }),
+    ).toBe(false);
+    expect(evalVisibleIf({ fieldId: "x", op: "eq", value: "a" }, {})).toBe(
+      false,
+    );
     expect(evalVisibleIf({ fieldId: "x", op: "is_answered" }, {})).toBe(false);
     expect(evalVisibleIf({ fieldId: "x", op: "is_empty" }, {})).toBe(true);
     expect(
-      evalVisibleIf({ fieldId: "x", op: "includes", value: "k" }, { x: ["k", "z"] }),
+      evalVisibleIf(
+        { fieldId: "x", op: "includes", value: "k" },
+        { x: ["k", "z"] },
+      ),
     ).toBe(true);
-    expect(evalVisibleIf({ fieldId: "x", op: "gte", value: 3 }, { x: 4 })).toBe(true);
+    expect(evalVisibleIf({ fieldId: "x", op: "gte", value: 3 }, { x: 4 })).toBe(
+      true,
+    );
   });
 });
 
@@ -183,27 +207,58 @@ describe("conditions fit the field they reference", () => {
     ],
   });
   const many = Question.parse({ ...choice, id: "tags", kind: "multi_select" });
-  const yesNo = Question.parse({ id: "lead", kind: "boolean", prompt: "Lead?" });
-  const count = Question.parse({ id: "n", kind: "number", prompt: "How many?" });
+  const yesNo = Question.parse({
+    id: "lead",
+    kind: "boolean",
+    prompt: "Lead?",
+  });
+  const count = Question.parse({
+    id: "n",
+    kind: "number",
+    prompt: "How many?",
+  });
   const text = Question.parse({ id: "t", kind: "short_text", prompt: "Name" });
 
   it("offers the operators §2.1 allows for each kind", () => {
     const answered = ["is_answered", "is_empty"];
     expect(visibleIfOpsFor(choice)).toEqual(["eq", "ne", ...answered]);
     expect(visibleIfOpsFor(yesNo)).toEqual(["eq", "ne", ...answered]);
-    expect(visibleIfOpsFor(many)).toEqual(["includes", "not_includes", ...answered]);
-    expect(visibleIfOpsFor(count)).toEqual(
-      ["eq", "ne", "gt", "gte", "lt", "lte", ...answered],
-    );
+    expect(visibleIfOpsFor(many)).toEqual([
+      "includes",
+      "not_includes",
+      ...answered,
+    ]);
+    expect(visibleIfOpsFor(count)).toEqual([
+      "eq",
+      "ne",
+      "gt",
+      "gte",
+      "lt",
+      "lte",
+      ...answered,
+    ]);
     expect(visibleIfOpsFor(text)).toEqual(answered);
   });
 
   it("accepts a value the field can hold", () => {
-    expect(visibleIfProblem({ fieldId: "diet", op: "eq", value: "veg" }, choice)).toBeNull();
-    expect(visibleIfProblem({ fieldId: "tags", op: "includes", value: "omni" }, many)).toBeNull();
-    expect(visibleIfProblem({ fieldId: "lead", op: "ne", value: false }, yesNo)).toBeNull();
-    expect(visibleIfProblem({ fieldId: "n", op: "gte", value: 3 }, count)).toBeNull();
-    expect(visibleIfProblem({ fieldId: "t", op: "is_answered" }, text)).toBeNull();
+    expect(
+      visibleIfProblem({ fieldId: "diet", op: "eq", value: "veg" }, choice),
+    ).toBeNull();
+    expect(
+      visibleIfProblem(
+        { fieldId: "tags", op: "includes", value: "omni" },
+        many,
+      ),
+    ).toBeNull();
+    expect(
+      visibleIfProblem({ fieldId: "lead", op: "ne", value: false }, yesNo),
+    ).toBeNull();
+    expect(
+      visibleIfProblem({ fieldId: "n", op: "gte", value: 3 }, count),
+    ).toBeNull();
+    expect(
+      visibleIfProblem({ fieldId: "t", op: "is_answered" }, text),
+    ).toBeNull();
   });
 
   it("accepts only a number the number or slider question can give", () => {
@@ -236,11 +291,21 @@ describe("conditions fit the field they reference", () => {
   });
 
   it("names what is wrong with a condition that does not fit", () => {
-    expect(visibleIfProblem({ fieldId: "gone", op: "is_empty" }, undefined)).toBe("missing_field");
-    expect(visibleIfProblem({ fieldId: "t", op: "eq", value: "Jo" }, text)).toBe("wrong_operator");
-    expect(visibleIfProblem({ fieldId: "diet", op: "eq", value: "vegan" }, choice)).toBe("wrong_value");
-    expect(visibleIfProblem({ fieldId: "lead", op: "eq", value: "yes" }, yesNo)).toBe("wrong_value");
-    expect(visibleIfProblem({ fieldId: "n", op: "lt" }, count)).toBe("wrong_value");
+    expect(
+      visibleIfProblem({ fieldId: "gone", op: "is_empty" }, undefined),
+    ).toBe("missing_field");
+    expect(
+      visibleIfProblem({ fieldId: "t", op: "eq", value: "Jo" }, text),
+    ).toBe("wrong_operator");
+    expect(
+      visibleIfProblem({ fieldId: "diet", op: "eq", value: "vegan" }, choice),
+    ).toBe("wrong_value");
+    expect(
+      visibleIfProblem({ fieldId: "lead", op: "eq", value: "yes" }, yesNo),
+    ).toBe("wrong_value");
+    expect(visibleIfProblem({ fieldId: "n", op: "lt" }, count)).toBe(
+      "wrong_value",
+    );
   });
 
   it("blocks publishing a condition on a missing option or with the wrong operator", () => {
@@ -299,7 +364,13 @@ describe("builderQuestionnaireIssues", () => {
                 ],
               },
             },
-            { id: "pic", kind: "image_block", imageUrl: "", altText: "", sizeFit: "fit" },
+            {
+              id: "pic",
+              kind: "image_block",
+              imageUrl: "",
+              altText: "",
+              sizeFit: "fit",
+            },
           ],
         },
         { id: "p2", type: "question", title: "Empty", blocks: [] },
@@ -340,7 +411,10 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
           type: "content",
           title: "Welcome",
           blocks: [
-            { kind: "question", question: { id: "n", kind: "short_text", prompt: "N" } },
+            {
+              kind: "question",
+              question: { id: "n", kind: "short_text", prompt: "N" },
+            },
           ],
         },
       ],
@@ -365,8 +439,17 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
               question: { id: "a", kind: "short_text", prompt: "A" },
               visibleIf: { fieldId: "later", op: "is_answered" },
             },
-            { id: "img", kind: "image_block", imageUrl: "u", altText: "  ", sizeFit: "fit" },
-            { kind: "question", question: { id: "later", kind: "short_text", prompt: "L" } },
+            {
+              id: "img",
+              kind: "image_block",
+              imageUrl: "u",
+              altText: "  ",
+              sizeFit: "fit",
+            },
+            {
+              kind: "question",
+              question: { id: "later", kind: "short_text", prompt: "L" },
+            },
           ],
         },
       ],
@@ -404,7 +487,10 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
           title: "P",
           visibleIf: { fieldId: "x", op: "is_answered" },
           blocks: [
-            { kind: "question", question: { id: "a", kind: "short_text", prompt: "A" } },
+            {
+              kind: "question",
+              question: { id: "a", kind: "short_text", prompt: "A" },
+            },
           ],
         },
       ],
@@ -423,8 +509,14 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
           type: "question",
           title: "P",
           blocks: [
-            { kind: "question", question: { id: "dup", kind: "short_text", prompt: "First" } },
-            { kind: "question", question: { id: "dup", kind: "short_text", prompt: "Second" } },
+            {
+              kind: "question",
+              question: { id: "dup", kind: "short_text", prompt: "First" },
+            },
+            {
+              kind: "question",
+              question: { id: "dup", kind: "short_text", prompt: "Second" },
+            },
           ],
         },
       ],
@@ -450,7 +542,10 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
           type: "question",
           title: "P",
           blocks: [
-            { kind: "question", question: { id: "dup", kind: "boolean", prompt: "First" } },
+            {
+              kind: "question",
+              question: { id: "dup", kind: "boolean", prompt: "First" },
+            },
             {
               kind: "question",
               question: { id: "dup", kind: "short_text", prompt: "Second" },
@@ -478,7 +573,10 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
           title: "P",
           blocks: [
             { id: "shared", kind: "header_break", headingText: "Hi" },
-            { kind: "question", question: { id: "a", kind: "short_text", prompt: "A" } },
+            {
+              kind: "question",
+              question: { id: "a", kind: "short_text", prompt: "A" },
+            },
           ],
         },
       ],
@@ -499,20 +597,32 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
           blocks: [
             {
               kind: "question",
-              question: { id: "s", kind: "slider", prompt: "Slider", min: 5, max: 5 },
+              question: {
+                id: "s",
+                kind: "slider",
+                prompt: "Slider",
+                min: 5,
+                max: 5,
+              },
             },
             {
               kind: "question",
-              question: { id: "n", kind: "number", prompt: "Number", min: 6, max: 2 },
+              question: {
+                id: "n",
+                kind: "number",
+                prompt: "Number",
+                min: 6,
+                max: 2,
+              },
             },
           ],
         },
       ],
     });
     const errors = validateBuilderQuestionnaire(q);
-    expect(errors.filter((e) => /maximum above its minimum/i.test(e))).toHaveLength(
-      2,
-    );
+    expect(
+      errors.filter((e) => /maximum above its minimum/i.test(e)),
+    ).toHaveLength(2);
   });
 
   it("rejects a slider whose step strides past its whole range", () => {
@@ -599,7 +709,13 @@ describe("validateBuilderQuestionnaire (publish-time)", () => {
             },
             {
               kind: "question",
-              question: { id: "s", kind: "slider", prompt: "Slider", min: 1, max: 5 },
+              question: {
+                id: "s",
+                kind: "slider",
+                prompt: "Slider",
+                min: 1,
+                max: 5,
+              },
             },
           ],
         },
@@ -616,7 +732,9 @@ describe("isAllowedBuilderImageUrl", () => {
         "https://camp404store.public.blob.vercel-storage.com/q/playa.jpg",
       ),
     ).toBe(true);
-    expect(isAllowedBuilderImageUrl("/api/avatar/avatars/u1/a.webp")).toBe(true);
+    expect(isAllowedBuilderImageUrl("/api/avatar/avatars/u1/a.webp")).toBe(
+      true,
+    );
   });
 
   it("refuses other sites, however the link is dressed up", () => {
