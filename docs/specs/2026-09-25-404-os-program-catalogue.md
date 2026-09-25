@@ -57,14 +57,15 @@ The rules it follows come from the design doc:
   (`app/(console)/captains/calendar/page.tsx:40-45`), so today they get an
   empty team picker. In the manifest New event still shows for them and opens
   with an explanation instead of an empty picker.
-- Document windows follow decision 7. Recommended (A): each document
-  (`/meetings/<id>`, `/kitchen/recipes/<id>`, `/announcements/<id>`) is its
-  own window, and open windows are capped at 8, closing the oldest background one.
-  The alternatives are no cap (B) or one window per program with documents
-  replacing each other (C). Existing `router.push` calls need no sweep (design
-  doc, section 3). So after New meeting saves and pushes to `/meetings/<id>`
+- Document windows follow decision 7, ruled 2026-09-26: B, no cap. Each
+  document (`/meetings/<id>`, `/kitchen/recipes/<id>`, `/announcements/<id>`)
+  is its own window, and nothing closes a window but the member. Memory is
+  bounded by the last-seen snapshot budget instead (design doc, section 3):
+  over it, the least recently focused windows show their icon and name, and
+  stay open. Existing `router.push` calls need no sweep (design doc, section
+  3). So after New meeting saves and pushes to `/meetings/<id>`
   (`app/(console)/meetings/meeting-editor.tsx:220`), its own window stays open
-  as a background frame until the member closes it or the cap closes it.
+  as a background frame until the member closes it.
 
 ### Legend
 
@@ -85,8 +86,8 @@ The rules it follows come from the design doc:
 **Instances**
 - **Single**: one window per program. A second launch focuses it. Query
   params (`?team=`, `?tab=`) change the same window.
-- **Multi (key)**: one window per key, e.g. one per meeting id. Subject to
-  decision 7 (reuse rule and window cap), not yet ruled on.
+- **Multi (key)**: one window per key, e.g. one per meeting id. No window
+  cap (decision 7 B, ruled 2026-09-26).
 
 **Difficulty** is the cost of making the page work well inside a window, not
 the cost of the frame itself (the frame is shared).
@@ -152,8 +153,8 @@ Decision 14, ruled 2026-09-25: the desktop behaves like a real desktop
 (design doc, section 4). Click selects, Ctrl- or Shift-click adds, a box on
 the empty desktop selects several, a drag moves the selection on a snapping
 grid, double-click or Enter opens, "Line up icons" puts the default back.
-The layout is saved per member (where: the small open question in decision
-14; recommended, the browser).
+The layout is saved per member on the server (decision 14 B, ruled
+2026-09-26), so it follows the member to every device.
 
 Right-click menus:
 
@@ -482,10 +483,9 @@ All are listed, with options and recommendations, in the design doc's
 
 - **1** Ruled 2026-09-25: the Classic desktop. Groups, plain names, the
   Terminal and the phone home screen above follow the owner's feedback on it.
-- **2** Hidden or locked icons. This file assumes hidden (A).
+- **2** Ruled 2026-09-26: hidden (A).
 - **3** Ruled 2026-09-25: the last-seen copy (A).
-- **7** Window cap and document reuse. This file assumes a cap of 8 and one
-  window per document (A).
+- **7** Ruled 2026-09-26: no window cap (B), one window per document.
 - **8** Ruled 2026-09-25: own teams as team folders on the right-hand side,
   tagged LEAD, with a "My teams" row on the phone.
 - **9** Plain names are settled by the owner's feedback. Left open: whether
@@ -497,5 +497,5 @@ All are listed, with options and recommendations, in the design doc's
 - **13** No Finance program for the Finance lead in this work (A); Payments
   stays captain-only.
 - **14** Ruled 2026-09-25: icons move, and members make their own folders
-  and shortcuts (desktop only). Open: where the layout is stored (browser
-  recommended).
+  and shortcuts (desktop only). Ruled 2026-09-26: the layout is stored on
+  the server (B), a per-member JSONB value added in PR C.

@@ -505,6 +505,14 @@ Owner, 2026-09-25: "Blocking questionnaires will sit on top of everything"
   wide, on desktop; full screen on phones. Its text is selectable.
 - Esc does nothing. Focus starts on the first field and stays inside. The
   only way out besides answering is Sign out.
+- **Desktop overlays close first.** Radix portals render into `document.body`,
+  outside `#os-desktop`, so `inert` does not reach them, and their band (110)
+  sits above the blocking layer (108). So when blocking mode starts, the
+  desktop closes every overlay it owns (a tray popover, a right-click menu,
+  the Start menu, a Select, dropdown or dialog opened from a window) before
+  the layer draws; they are controlled components, so this is a state reset,
+  not a DOM sweep. Overlays opened by the blocking form itself are not
+  touched and open above it, as the band table says (4.9).
 
 ### 4.8 Boot
 
@@ -589,7 +597,7 @@ Component by component. "Today" is the file in
 | Table | 5 | Join's CREW.DB (`crew.tsx:17-52`): mono 11px uppercase `os-muted` headers, one `os-line` rule under the header, `os-line/50` between rows, body text 14px in cells, no zebra; hover row `primary/10`; selected row a 2px magenta left rule plus `primary/15`. |
 | ResponsiveDataTable | 8 | the Table skin at width; the narrow card list (`responsive-data-table.tsx:159`) becomes bordered `os-panel` blocks. Its `md:` switch moves to `@container` (section 10). |
 | ProgressBar | | Join's capacity bar: a bordered `os-bg` track, solid / 45% / hatched segments, a mono legend. |
-| Spinner                                    | 17                  | `Loader2` (`spinner.tsx:2,25`) becomes a mono ASCII spinner `                                                                                                                                                                                                                                                                                       | / - \` at `steps(4)`, with the same `aria-hidden`; a status line says what is loading. |
+| Spinner | 17 | `Loader2` (`spinner.tsx:2,25`) becomes a mono ASCII spinner that cycles through the pipe, slash, dash and backslash characters at `steps(4)`, with the same `aria-hidden`; a status line says what is loading. |
 | EmptyState | 14 | the icon, a Silkscreen line in plain words (`NOTHING HERE YET`), one body sentence, one slab button. A hidden cat may sit here (4.6). |
 | CaptainLock | 17 | a window-body lock screen: a pixel padlock, `ACCESS RESTRICTED`, the existing sentence. |
 | Skeleton | | not used in windows (no per-window Suspense); keep for inline lazy parts only, as a flat `os-chrome` block, no shimmer. |
@@ -712,8 +720,14 @@ phone home screen, not a shrunk desktop.
   unless it is turned on. If the native shell ships, the Android App plugin's
   `backButton` event calls the same close logic as the title-bar control.
 - A Back or swipe cannot be cancelled, so the dirty guard cannot ask first.
-  The four editors that autosave their draft (design doc, section 5) keep
-  the text; any other unsaved input is lost on a Back.
+  Back therefore never silently discards unsaved input: a window with unsaved
+  input (`useWindowDirty`) keeps its draft in memory for that window
+  instance, and reopening the window in the same session restores it, with
+  an "Unsaved changes restored" line and a Discard button. The draft is
+  never written to browser storage, and is dropped on save, Discard,
+  sign-out and a user change. The four editors also keep their
+  `sessionStorage` autosave, so their text survives a hard load too (design
+  doc, section 5).
 - The owner ruled a thin Capacitor WebView shell (2026-09-16), which means
   `server.url`. But `apps/mobile/capacitor.config.ts` still sets `webDir`
   (the static export, `../web/out`) and no `server.url`.
@@ -802,9 +816,9 @@ Numbers are the design doc's (its "Decisions" section has all 14).
   existing program's window composition and restyle with `--os-*` tokens".
   B: keep it.
 - **14** Ruled (owner, 2026-09-25): icons move on a snapping grid, with
-  right-click menus, member folders and shortcuts (4.3 to 4.4a). Still open,
-  and not a visual question: where the layout is stored (the design doc
-  recommends the browser).
+  right-click menus, member folders and shortcuts (4.3 to 4.4a). Where the
+  layout is stored, ruled 2026-09-26: on the server (B), so it follows the
+  member to every device. Not a visual question.
 
 AGENTS.md "Design" gets a dated `[CORRECTION 2026-09-25]` in PR D, with the
 Classic desktop ruling, the calm-desktop and plain-words rules, and decision

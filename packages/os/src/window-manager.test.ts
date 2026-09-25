@@ -30,6 +30,22 @@ describe("wmReducer", () => {
     expect(topWindow(two)?.id).toBe("map");
   });
 
+  it("keeps a wrapped cascade window wholly on screen", () => {
+    // Nearly screen-sized windows: the second already runs off the edge,
+    // so it wraps, and the wrapped cascade offset must not push it past it.
+    const big = { w: 1260, h: 780 };
+    let s: WmState<AppId> = INITIAL_WM;
+    for (const id of ["readme", "map", "teams", "terminal"] as const) {
+      s = wmReducer(s, { type: "open", id, size: big, viewport });
+    }
+    for (const w of s.windows) {
+      expect(w.x).toBeGreaterThanOrEqual(0);
+      expect(w.y).toBeGreaterThanOrEqual(0);
+      expect(w.x + w.w).toBeLessThanOrEqual(viewport.width);
+      expect(w.y + w.h).toBeLessThanOrEqual(viewport.height);
+    }
+  });
+
   it("raises an open window instead of opening it twice", () => {
     const s = open(open(INITIAL_WM, "readme"), "map");
     const again = open(s, "readme");

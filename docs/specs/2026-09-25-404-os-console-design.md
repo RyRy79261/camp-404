@@ -5,8 +5,9 @@ the look on 2026-09-25 (the Classic desktop, see
 [The owner's pick](#the-owners-pick-2026-09-25)), then reviewed the
 prototype a second time the same day (see
 [The owner's second review](#the-owners-second-review-2026-09-25)). Ruled:
-decisions 1, 3, 8 and 14 (14 keeps one small open question, where the layout
-is stored). The other decisions are still open (see [Decisions](#decisions)).
+decisions 1, 3, 8 and 14 on 2026-09-25, then 2, 7 (no window cap) and where
+the layout is stored (14 B, on the server) on 2026-09-26. The other decisions
+are still open (see [Decisions](#decisions)).
 
 Companion docs:
 
@@ -340,7 +341,10 @@ routes (`/signup/required`, `/onboarding/questionnaire`) sit outside
     `AcknowledgementGate` already does it), focus starts in the form and is
     trapped there, and Esc does nothing (the layer stops it). Sign out is
     the one way out, as a button inside the layer. The runner's own Selects and dialogs portal above the
-    layer (the z bands in section 2).
+    layer (the z bands in section 2). Because Radix portals sit outside
+    `#os-desktop`, `inert` does not reach an overlay the desktop already had
+    open, so entering held mode first closes every desktop-owned overlay
+    (visual-language doc 4.7a); the form's own overlays are untouched.
   - **Why it is still safe.** The layer decides nothing. It is a picture;
     the gate is the server redirect. If someone strips `inert` in the
     browser's dev tools and clicks an icon, the navigation runs
@@ -496,8 +500,10 @@ smoke suite (`apps/join/tests/e2e/smoke.spec.ts`). It is themed only through
     (`@camp404/os/styles.css`, `@camp404/games/inkblot/styles.css`), so an
     app imports that file and writes no `@source` of its own. Worth it, since
     more games are coming and each should stay out of the OS.
-- **Dirty registry.** `useWindowDirty(isDirty, message)` is consulted on
-  close, minimise, switch and launch, plus `beforeunload`. It replaces the
+- **Dirty registry.** `useWindowDirty(isDirty, message, draft)` is consulted
+  on close, minimise, switch and launch, plus `beforeunload`. A Back cannot
+  be asked about, so the `draft` it carries is kept in memory instead and
+  restored on reopen (section 5, "Back keeps unsaved input"). It replaces the
   builder's `useLeaveGuard`
   (`apps/web/components/questionnaires/builder.tsx:158-209`). That guard's
   document-level capture listener (`:206`) intercepts only `<a href>` clicks:
@@ -556,8 +562,17 @@ smoke suite (`apps/join/tests/e2e/smoke.spec.ts`). It is themed only through
     panels. Canvases (INKBLOT) copy blank.
   - It lives in memory only, never in `sessionStorage`. After a hard load the
     background windows show their icon and name until opened. It is dropped on
-    close, `pruneTo`, sign-out and a user-id change, and it counts toward the
-    window cap (decision 7).
+    close, `pruneTo`, sign-out, a user-id change and **a change of manifest
+    version** (a demotion or any other change of what the member may open),
+    so a captain-only copy never survives losing access.
+  - **A total snapshot budget.** There is no window cap (decision 7 B), and a
+    per-body size limit (see Risks) does not bound the total, so every copy
+    counts toward one budget: about 20 MB of serialized copy HTML across all
+    windows (a constant in `last-seen.ts`, tuned by PR C's measurement).
+    When a new copy would go over it, the least recently focused windows drop
+    their copy, oldest first, and fall back to the icon-and-name state until
+    they are focused again. The windows themselves stay open; only the
+    picture goes. PR C measures memory with many windows open.
   - On phones only one window shows at a time, so the copy is used only as a
     thumbnail in the open-programs switcher, if at all.
 - **During a switch.** `usePathname` changes only on commit, so the old page
@@ -594,9 +609,18 @@ smoke suite (`apps/join/tests/e2e/smoke.spec.ts`). It is themed only through
   and tested: after a close, Back goes to whatever entry preceded the closed
   window's, and may reopen a window closed earlier as a fresh window.
   **Minimise** sets the flag and then does the same replace.
-- **Back/forward re-render.** Because the client cache reuses pages on
-  back/forward, `<Desktop>` calls `router.refresh()` on a popstate commit when
-  the entry is older than 30 seconds, so gates, mark-read and data catch up.
+- **Back/forward re-check.** The client router cache reuses pages on
+  back/forward without running their server gate again, so a member who lost
+  access (a demoted captain) could otherwise see a cached captain-only page.
+  So on **every** back/forward restore of a program page, `<Desktop>` keeps
+  the window body hidden (the frame shows its title and "Checking…") and
+  calls `router.refresh()`, which re-runs the server gate and the layout's
+  manifest read. Only when that refresh commits is the body shown; if the
+  gate now refuses, the refreshed render is the refusal (a redirect,
+  `notFound()` or `CaptainLock`), and the cached page is never drawn. There
+  is no age cutoff: a time limit is not an authorization check. Mark-read and
+  data catch up in the same refresh. A Playwright test demotes a captain,
+  presses Back onto a captain page and asserts its content never appears.
 - **Hard loads** (refresh, email, push, sign-in return): the URL's window is
   focused and the rest of the stack is rehydrated from `sessionStorage` as
   frames with no copy yet (icon and name), until each is opened.
@@ -741,9 +765,9 @@ smoke suite (`apps/join/tests/e2e/smoke.spec.ts`). It is themed only through
     icons" (right-click on the empty desktop) puts the default back;
   - after a resize every icon stays on screen: one that no longer fits goes
     to its default cell, or the first free one;
-  - the layout is saved per member (section 7, and the open question in
-    decision 14). It is pruned against the manifest on load: an icon for a
-    program the member no longer has is dropped, never drawn.
+  - the layout is saved per member on the server (section 7; decision 14
+    B). It is pruned against the manifest on load: an icon for a program the
+    member no longer has is dropped, never drawn.
 - **Right-click menus** (owner, 2026-09-25; the prototype's
   `_proto/desktop-items.tsx`):
   - on a program, in any folder or on the desktop: **Open**, **Create
@@ -854,10 +878,24 @@ phone it is a home screen, not a shrunk desktop:
   Android Back and iOS swipe-back therefore pop the stack; Join does not have
   this. The title-bar Back/Close is the main way out, because the installed
   PWA runs standalone and iOS shows no Back button there.
-- **Draft autosave.** `popstate` cannot be cancelled, so `useWindowDirty`
-  cannot ask before a browser Back, a hardware Back or a swipe. On a phone that
-  is the most common switch; on a desktop the Back button does the same. So the
-  four editors that register `useWindowDirty` (meeting, meal plan, Tiptap
+- **Back keeps unsaved input.** `popstate` cannot be cancelled, so
+  `useWindowDirty` cannot ask before a browser Back, a hardware Back or a
+  swipe, and a phone's Back closes the window it leaves (above). The design
+  therefore **keeps the draft rather than asking**: a window that is dirty
+  when a popstate closes it hands its unsaved values (the page passes them to
+  `useWindowDirty` along with the dirty flag) to the desktop, which keeps
+  them **in memory** for that window instance. When the member reopens the
+  window in the same session, the draft is restored into the form and a
+  line says "Unsaved changes restored" with a Discard button. The in-memory
+  draft is never written to browser storage (so My forms and burner-profile
+  answers, some of them `SAFETY_VISIBLE`, stay out of it), and it is dropped
+  on save, on Discard, on sign-out, on a user-id change and on a change of
+  manifest version. A hard load loses it; for the four editors below that is
+  covered by their autosave. Close and minimise from the title bar still ask
+  first through `useWindowDirty`.
+- **Draft autosave.** On a phone Back is the most common switch; on a
+  desktop the Back button does the same, and a hard load loses the in-memory
+  draft. So the four editors that register `useWindowDirty` (meeting, meal plan, Tiptap
   recipe source, announcements composer) autosave their draft to
   `sessionStorage` at every width, under a separate key per user and
   instance, cleared on save, on close, on sign-out and on a user-id mismatch.
@@ -944,20 +982,28 @@ phone it is a home screen, not a shrunk desktop:
   data is `SAFETY_VISIBLE`), the burner profile, the questionnaire runner, the
   builder, and every selection (a selected roster member, whose restore would
   replay an audited read). A background window with any other unsaved input
-  relies on `useWindowDirty` to ask first.
-- `localStorage` holds two things (owner, 2026-09-25):
-  - `camp404.os.today-open`, a boolean for the Today gadget, per browser;
-  - **the desktop layout** (decision 14, ruled), if the owner takes the
-    recommended storage: `camp404.os.desktop.v1:<campUserId>`, holding only
-    `{cells: {itemId: {c, r}}, items: [shortcut {id, target} | folder {id,
-    name, items}]}`. Program ids, grid cells and the folder names the
-    member typed; no titles, no record data, no URLs. It is validated with
-    Zod on read (a bad value means the default layout), and pruned against
-    the manifest. Unlike the window stack, it is **not** cleared on sign-out,
-    or a member would lose their layout every time; it is keyed by camp user
-    id, so a second member on the same browser gets their own. Deleting the
-    account from this browser clears it.
-  Nothing else goes to `localStorage` or the database in v1.
+  relies on `useWindowDirty` to ask first, and on the in-memory draft kept
+  across Back (section 5).
+- `localStorage` holds one thing: `camp404.os.today-open`, a boolean for the
+  Today gadget, per browser.
+- **The desktop layout is stored on the server** (decision 14 B, owner,
+  2026-09-26), so it follows the member to every device. It is one
+  per-member JSONB value holding only `{cells: {itemId: {c, r}}, items:
+  [shortcut {id, target} | folder {id, name, items}]}`: program ids, grid
+  cells and the folder names the member typed; no titles, no record data, no
+  URLs. It is:
+  - a schema change in PR C: added to `packages/db/src/schema.ts` and
+    generated with `db:generate` (drizzle-kit), never hand-written;
+  - checked with Zod on write (the server action refuses anything else, and
+    folder names keep their 24-character limit) and again on read, where a
+    bad value means the default layout;
+  - read with the manifest (no extra round trip) and pruned against it;
+  - written from the client through a server action, debounced (one write
+    after the member stops moving icons, not one per drop);
+  - deleted by account erasure with the member's other rows, and given a
+    test-store twin so Playwright can drive it.
+  Nothing else about the desktop goes to `localStorage` or the database in
+  v1.
 - Boot plays at most once per browser session (after sign-in, or on "Continue
   to desktop" when the gates clear). Never under `E2E_TEST_MODE` or reduced
   motion, never in front of a server redirect.
@@ -1031,11 +1077,12 @@ must cost next to nothing when nobody is touching it. Rules (owner,
   service names, counts, error text or job state); only a captain's payload
   carries details, and `/captains/system` stays captain-only. A unit test
   asserts a member's manifest holds no detail field.
-- **Saved layouts are not authority.** The layout in `localStorage`
-  (section 7) holds program ids, cells and folder names. On load it is
-  checked with Zod and pruned against the manifest; an id the manifest does
-  not hold is dropped, never drawn. Editing it in dev tools can at most draw
-  an icon for a program the member already has.
+- **Saved layouts are not authority.** The layout stored on the server
+  (section 7) holds program ids, cells and folder names. It is checked with
+  Zod on write and on read, and pruned against the manifest on load; an id
+  the manifest does not hold is dropped, never drawn. A member can write only
+  their own layout, and a forged write can at most draw an icon for a
+  program the member already has.
 - **Predicates are not reinvented.** The registry may only call core
   functions (`packages/core/src/access.ts`, `recipes.ts`, `power.ts`,
   `audience-authz.ts`), so a rule changes in one place.
@@ -1074,8 +1121,9 @@ must cost next to nothing when nobody is touching it. Rules (owner,
   `matchProgram`, with tests that refuse external, protocol-relative
   (`//evil`) and backslash targets, route handlers and `/auth/*`. The proxy
   overwrites any client-sent `x-camp-path`.
-- **No new secrets, env vars, schema or cron.** If a rollout flag is added it
-  goes in `.env.example` and `turbo.json` `globalEnv`.
+- **No new secrets, env vars or cron.** The one schema change is the
+  per-member desktop layout (decision 14 B, PR C). If a rollout flag is added
+  it goes in `.env.example` and `turbo.json` `globalEnv`.
 
 ## Testing strategy
 
@@ -1182,7 +1230,8 @@ must cost next to nothing when nobody is touching it. Rules (owner,
   gadget, not in background windows.
 - **A copy can look broken.** Canvases, images still loading and portalled
   content (an open Select) do not copy. Mitigation: copy once the page is
-  idle; fall back to the icon and name when the body is over a size limit.
+  idle; fall back to the icon and name when the body is over a size limit,
+  or when the total snapshot budget (section 3) evicts it.
 - **Background windows lose unsaved input** unless the page registers
   `useWindowDirty`. None of the meeting, meal-plan, Tiptap source and
   announcement editors has a leave guard today, so `useWindowDirty` (and the
@@ -1191,10 +1240,11 @@ must cost next to nothing when nobody is touching it. Rules (owner,
 - **Every switch is a full server render.** Dynamic routes are not prefetched
   and prefetching is forbidden above, so on a desert phone a switch can take
   seconds. The pending state on the pressed control is the only feedback.
-- **A saved layout lives in one browser.** Under the recommended storage
-  (decision 14) a member's icon layout, folders and shortcuts do not follow
-  them to another computer, and clearing site data loses them. Nothing in
-  them matters for access, so the worst case is "Line up icons".
+- **A saved layout is one more write path.** The layout is on the server
+  (decision 14 B), so it follows the member, but a buggy client could write
+  a broken one. Mitigation: Zod on write and read, a bad value falls back to
+  the default layout, and nothing in it matters for access, so the worst case
+  is "Line up icons".
 - **The held desktop could show more than it should** if a later change
   adds a live field to the manifest and forgets held mode. The held fixture
   in the manifest tests guards it.
@@ -1363,9 +1413,10 @@ and 14 are ruled (14 keeps one small open question).
    *Recommend A.*
 7. **Window cap and document reuse.** **Ruled (owner, 2026-09-26): B, no
    cap.** Each document (`/meetings/<id>`) is its own window, and nothing
-   closes a window but the member. Last-seen copies (decision 3) are kept for
-   every open window, so their memory is bounded by what a member opens; PR C
-   measures it with many windows open.
+   closes a window but the member. Last-seen copies (decision 3) share one
+   total snapshot budget (section 3): over it, the least recently focused
+   windows drop their copy and show their icon and name, and stay open. PR C
+   measures memory with many windows open.
 8. **Do a member's own teams also sit on the desktop, or only in the Teams
    folder?** **Ruled (owner, 2026-09-25): on the desktop, as team folders.**
    Every team the member is in this year is a folder on the right-hand side

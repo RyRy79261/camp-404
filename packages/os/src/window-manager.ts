@@ -181,9 +181,16 @@ function openWindow<K extends string>(
   let x = baseX + n * CASCADE_STEP;
   let y = baseY + n * CASCADE_STEP;
   if (x + w > viewport.width || y + h > viewport.height) {
+    // The wrapped offset is clamped so the whole window stays on screen; a
+    // window as large as the screen allows (size - FIT_MARGIN) sits at the
+    // margin. Positions that do not wrap are untouched.
     const steps = n % 4;
-    x = FIT_MARGIN + steps * CASCADE_STEP;
-    y = FIT_MARGIN + steps * CASCADE_STEP;
+    const offset = FIT_MARGIN + steps * CASCADE_STEP;
+    x = Math.max(FIT_MARGIN, Math.min(offset, viewport.width - w - FIT_MARGIN));
+    y = Math.max(
+      FIT_MARGIN,
+      Math.min(offset, viewport.height - h - FIT_MARGIN),
+    );
   }
   const z = state.topZ + 1;
   return {

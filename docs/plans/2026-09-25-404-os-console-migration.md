@@ -452,8 +452,8 @@ zero visual risk. Needs decisions 2 and 11 (8 is ruled: team folders).
 ### PR C: the console becomes a desktop
 
 **Why.** This is the structural change the owner asked for, on the current
-tokens. Needs decision 7 and the storage question under 14 (3 and 14 are
-ruled).
+tokens. Decisions 3, 7 and 14 are ruled, including where the layout is
+stored (14 B, on the server).
 
 **Files.**
 
@@ -506,21 +506,30 @@ ruled).
     underneath" cannot be built. Consequence, stated and tested: after a
     close, Back goes to whatever entry preceded the closed window's, and may
     reopen a window closed earlier as a fresh window;
-  - on a popstate commit whose entry is older than 30 seconds,
-    `router.refresh()`, so gates, mark-read and data catch up (the client
-    cache reuses pages on back/forward);
+  - on every back/forward restore of a program page, the window body stays
+    hidden (the frame shows its title and "Checking…") until a
+    `router.refresh()` has re-run the server gate; only then is the body
+    shown. The client cache reuses pages on back/forward, so without this a
+    member who lost access could see a cached captain-only page again. No
+    age cutoff: a time limit is not an authorization check;
   - `router.refresh()` when the tab becomes visible after 5 minutes or more
     (an event, not a timer, so no cron rule is broken), and when a page
     renders a `CaptainLock` or a gate redirect, so the manifest and `pruneTo`
     catch up for members changed by someone else;
-  - window cap per decision 7 (A: 8, the oldest background one closes).
+  - no window cap (decision 7 B): nothing closes a window but the member.
+    Memory is bounded by the last-seen snapshot budget below instead.
 - **Last-seen copies (decision 3 A).** New `packages/os/src/last-seen.ts`
   plus its use in `desktop-shell.tsx`: clone the focused body before any
   switch the desktop starts, on a capture-phase click on an in-window link,
   and when the page is idle after each commit; draw it in a closed shadow
   root with the app's stylesheets cloned in, `inert` and `aria-hidden`, with
-  the "Last seen" line. Memory only; dropped on close, `pruneTo`, sign-out and
-  user change; `data-os-private` elements blanked. Mark the private fields:
+  the "Last seen" line. Memory only; dropped on close, `pruneTo`, sign-out,
+  user change and a change of manifest version (a demotion), so a
+  captain-only copy never outlives the access; `data-os-private` elements
+  blanked. A total snapshot budget (about 20 MB of serialized copy HTML
+  across all windows): when it is exceeded, the least recently focused
+  windows drop their copy and fall back to the icon and name; the windows
+  themselves stay open. PR C measures memory with many windows open. Mark the private fields:
   the roster member panel's ID, safety and captain-notes sections, bank
   details in Payments, the ID and passport fields in My account. Start with
   a half-day spike that confirms a layout cannot re-render an old page's
@@ -546,13 +555,15 @@ ruled).
   icons; on a member folder, Open, Rename, Delete folder; on a shortcut,
   Open, Add to folder, Delete shortcut. Shortcuts show a small arrow.
   Member folders and shortcuts are desktop only.
-- **Layout storage** (the open part of decision 14; recommended A):
-  `localStorage` key `camp404.os.desktop.v1:<campUserId>`, holding cells,
-  shortcut targets and folders (program ids and names only), checked with
-  Zod on read and pruned against the manifest. Not cleared on sign-out.
-  If the owner picks B instead, this becomes a schema change with its own
-  migration, erasure step and test-store twin, and the "no schema" line in
-  section 1 no longer holds for PR C.
+- **Layout storage** (decision 14 B, ruled 2026-09-26: on the server). A
+  per-member JSONB value holding icon cells, shortcut targets and member
+  folders (program ids and folder names only), added to `schema.ts` with a
+  drizzle-kit migration in this PR. Zod-checked on write (and on read; a bad
+  value means the default layout) and pruned against the manifest on load.
+  Read with the manifest; written from the client through a debounced
+  server action. Erasure deletes it with the member's other rows, and it
+  gets a test-store twin so Playwright can drive it. Not touched by
+  sign-out, since it is not in the browser.
 - **Team folders** from `manifest.teamFolders` on the right-hand side,
   "Kitchen team", led first, with a LEAD tag and the lead named in the
   accessible name.
@@ -645,7 +656,11 @@ ruled).
   Home, Open programs, the inbox bell and Today; Today opens as a sheet.
   Opening a window from the home screen or switcher pushes an entry; a
   popstate that lands on a different window's instance closes the window it
-  left, so Android Back and iOS swipe-back pop the stack.
+  left, so Android Back and iOS swipe-back pop the stack. Back never silently
+  discards unsaved input: a window that is dirty (`useWindowDirty`) when Back
+  closes it keeps its draft in memory for that window instance, and the
+  draft is restored when the member reopens it in the same session (the four
+  editors also keep their `sessionStorage` autosave). Design doc, section 5.
 - Delete `components/console/console-header.tsx` and
   `components/console/console-nav.tsx`, keeping the `useLinkStatus` pending
   pulse on icons, Start items and taskbar buttons.
@@ -892,12 +907,13 @@ C (click through each, screenshot it) and to **convert** them in PR E.
 
 ## 5. Rollback and feature flag
 
-**Default: no flag, roll back by revert.** No PR touches the schema, so a
-revert (or Vercel's instant rollback to the previous production deployment) is
-always safe. Session storage is versioned (`camp404.os.v1`), so a rollback
-leaves only a harmless unused key; the draft keys are cleared on sign-out.
-The same goes for the saved layout in `localStorage`
-(`camp404.os.desktop.v1:<campUserId>`), if the owner keeps it in the browser.
+**Default: no flag, roll back by revert.** The only schema change is PR C's
+migration, which only adds the desktop-layout table (or column); nothing
+else reads it, so it is safe to leave in place if the UI is rolled back, and
+a revert (or Vercel's instant rollback to the previous production
+deployment) stays safe. Do not write a down-migration for it. Session
+storage is versioned (`camp404.os.v1`), so a rollback leaves only a harmless
+unused key; the draft keys are cleared on sign-out.
 
 - PR A: revert restores Join's local copies.
 - PR B: the header and Home render the same either way; a revert only loses
