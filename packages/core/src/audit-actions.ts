@@ -15,11 +15,13 @@ export const AUDIT_ACTION_LABELS = {
   "camp.cycle.advanced": "Moved the camp to a new year",
   "camp.cycle.founded": "Set the camp's first year",
   "camp.cycle.renamed": "Renamed a year",
+  "camp.cycle.burn_dates_set": "Set the Burn's dates",
   "camp.kitchen_meal_plan.changed": "Changed the kitchen's meal plan",
   // No longer written (the settings were removed, 2026-09-24); kept so a row
   // written before still reads.
   "camp.kitchen_settings.changed": "Changed the kitchen settings",
   "camp.teams.archived": "Archived a team",
+  "camp.teams.described": "Changed what a team does",
   "camp.teams.moved": "Moved a team in the list",
   "camp.teams.renamed": "Renamed a team",
   "camp.teams.unarchived": "Restored a team",
@@ -28,6 +30,7 @@ export const AUDIT_ACTION_LABELS = {
   "document.unpublished": "Unpublished a camp document",
   "document.updated": "Edited a camp document",
   "invite.revoked": "Revoked an invite code",
+  "join_site.section_saved": "Changed the join site",
   "member.approval_decided": "Decided an application",
   "member.bank_details.viewed": "Viewed bank details",
   "member.export": "Exported the member list",
@@ -290,6 +293,16 @@ export function auditDetail(
       const version = count(metadata, "version");
       if (version === null) return title;
       return title ? `${title}, version ${version}` : `Version ${version}`;
+    }
+    case "camp.cycle.burn_dates_set": {
+      const start = text(metadata, "burnStart");
+      const end = text(metadata, "burnEnd");
+      return start && end ? `${start} to ${end}` : "Dates removed";
+    }
+    case "join_site.section_saved": {
+      const section = text(metadata, "section");
+      const year = count(metadata, "year");
+      return section && year !== null ? `${section}, ${year}` : section;
     }
     case "camp.cycle.renamed": {
       const to = text(metadata, "to");

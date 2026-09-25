@@ -19,8 +19,7 @@ const RegisterBody = z.object({
 const DeleteBody = z.object({ token: z.string().min(1) });
 
 async function gate(): Promise<
-  | { ok: true; campUserId: string }
-  | { ok: false; res: NextResponse }
+  { ok: true; campUserId: string } | { ok: false; res: NextResponse }
 > {
   const user = await getAuthenticatedUser();
   if (!user) {

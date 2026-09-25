@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { SIGNUP_URL, TEAMS } from "./content";
-import { runCommand } from "./terminal";
+import { SIGNUP_URL } from "./content";
+import { DEFAULT_JOIN_DATA, type JoinData } from "./join-data";
+import { runCommand as run } from "./terminal";
+
+const TEAMS = DEFAULT_JOIN_DATA.teams;
+const runCommand = (input: string, data: JoinData = DEFAULT_JOIN_DATA) =>
+  run(input, data);
 
 const text = (input: string) =>
   runCommand(input)
@@ -55,6 +60,19 @@ describe("runCommand", () => {
     expect(text("help").toLowerCase()).not.toContain("inkblot");
     expect(text("ls").toLowerCase()).not.toContain("inkblot");
     expect(runCommand("open inkblot").open).toBeUndefined();
+  });
+
+  it("answers from the live data it is given", () => {
+    const data: JoinData = {
+      ...DEFAULT_JOIN_DATA,
+      teams: [{ key: "sound", label: "Sound", description: "Bass." }],
+      captains: [],
+    };
+    expect(runCommand("ls teams", data).lines.map((l) => l.text)).toEqual([
+      "SOUND.WAV",
+    ]);
+    expect(runCommand("cat sound.wav", data).lines[1]?.text).toBe("Bass.");
+    expect(runCommand("captains", data).lines[0]?.text).toContain("herded");
   });
 
   it("clear and exit say so; blank input does nothing", () => {

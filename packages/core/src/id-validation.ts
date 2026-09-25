@@ -4,9 +4,7 @@
 // South African ID (13 digits, YYMMDD prefix, SA Home Affairs Luhn variant)
 // vs Passport (loose 6-12 alphanumeric — Camp 404 is international).
 
-export type IdValidationResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type IdValidationResult = { ok: true } | { ok: false; error: string };
 
 const PASSPORT_RE = /^[A-Z0-9]{6,12}$/i;
 const SA_ID_RE = /^\d{13}$/;
@@ -92,7 +90,10 @@ function hasValidDatePrefix(idNumber: string): boolean {
   // birthday (e.g. 29 Feb 2000) is never wrongly rejected, while an impossible
   // one (29 Feb '01, 31 Apr, 30 Feb) is. Leap-year + month-length rules are left
   // to the platform Date engine rather than re-implemented here.
-  return isRealCalendarDate(1900 + yy, month, day) || isRealCalendarDate(2000 + yy, month, day);
+  return (
+    isRealCalendarDate(1900 + yy, month, day) ||
+    isRealCalendarDate(2000 + yy, month, day)
+  );
 }
 
 /**

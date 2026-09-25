@@ -43,7 +43,10 @@ async function gate(
 }
 
 /** Everyone who holds a reminder delivery for this activation. */
-async function remindedUserIds(db: DB, activationId: string): Promise<string[]> {
+async function remindedUserIds(
+  db: DB,
+  activationId: string,
+): Promise<string[]> {
   const rows = await db
     .select({ userId: schema.notificationDeliveries.userId })
     .from(schema.notificationDeliveries)
@@ -113,7 +116,11 @@ describe("sendReminder — the dedup window", () => {
     await gate(db, { userId: slow.id, activationId: act.id });
 
     const first = new Date("2026-03-01T09:00:00Z");
-    await sendReminder({ activationId: act.id, senderId: captain.id, now: first });
+    await sendReminder({
+      activationId: act.id,
+      senderId: captain.id,
+      now: first,
+    });
 
     const justPast = new Date(first.getTime() + REMINDER_WINDOW_MS + 1000);
     const again = await sendReminder({
@@ -122,7 +129,9 @@ describe("sendReminder — the dedup window", () => {
       now: justPast,
     });
     expect(again).toMatchObject({ ok: true, outcome: "sent", sent: 1 });
-    expect(await db.select().from(schema.notificationDeliveries)).toHaveLength(2);
+    expect(await db.select().from(schema.notificationDeliveries)).toHaveLength(
+      2,
+    );
   });
 
   it("nudges only the member outside the window, and reports the one it skipped", async () => {
@@ -134,7 +143,11 @@ describe("sendReminder — the dedup window", () => {
     await gate(db, { userId: reminded.id, activationId: act.id });
 
     const first = new Date("2026-03-01T09:00:00Z");
-    await sendReminder({ activationId: act.id, senderId: captain.id, now: first });
+    await sendReminder({
+      activationId: act.id,
+      senderId: captain.id,
+      now: first,
+    });
 
     // Grace is added to the send afterwards — the window is per (member,
     // activation), so Ada's fresh reminder must not silence Grace's first one.
@@ -211,7 +224,11 @@ describe("sendReminder — who is outstanding", () => {
     // Wave 3's tally puts waived + expired in a CLOSED bucket for a reason: a
     // waiver is a captain's decision that this member need not answer, and an
     // expired gate belongs to a send that is over. Neither gets pushed at.
-    await gate(db, { userId: waived.id, activationId: act.id, status: "waived" });
+    await gate(db, {
+      userId: waived.id,
+      activationId: act.id,
+      status: "waived",
+    });
     await gate(db, {
       userId: expired.id,
       activationId: act.id,
@@ -328,7 +345,9 @@ describe("sendReminder — what it writes", () => {
     expect(broadcast!.dispatchedAt).toEqual(now);
 
     const targets = await db.select().from(schema.broadcastTargets);
-    expect(targets).toEqual([{ broadcastId: broadcast!.id, userId: member.id }]);
+    expect(targets).toEqual([
+      { broadcastId: broadcast!.id, userId: member.id },
+    ]);
 
     const [delivery] = await db.select().from(schema.notificationDeliveries);
     expect(delivery).toMatchObject({
@@ -367,7 +386,10 @@ describe("remindDueSoon — the daily deadline nudge", () => {
   it("nudges pending members of sends due within 48 hours, and no others", async () => {
     const db = h.db();
     const member = await makeUser(db);
-    const soon = await makeActivation(db, { status: "open", dueAt: inHours(30) });
+    const soon = await makeActivation(db, {
+      status: "open",
+      dueAt: inHours(30),
+    });
     const later = await makeActivation(db, {
       questionnaireKey: "later",
       status: "open",
@@ -399,7 +421,10 @@ describe("remindDueSoon — the daily deadline nudge", () => {
     const db = h.db();
     const captain = await makeUser(db, { rank: "captain" });
     const member = await makeUser(db);
-    const act = await makeActivation(db, { status: "open", dueAt: inHours(20) });
+    const act = await makeActivation(db, {
+      status: "open",
+      dueAt: inHours(20),
+    });
     await gate(db, { userId: member.id, activationId: act.id });
 
     await sendReminder({

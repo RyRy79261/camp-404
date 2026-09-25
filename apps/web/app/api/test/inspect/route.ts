@@ -28,8 +28,8 @@ export async function GET(req: Request) {
     const user = testStore.findUserByAuthId(authUserId);
     if (!user) return NextResponse.json({ user: null });
     const invite = user.inviteCode
-      ? testStore.findUsableInviteCode(user.inviteCode) ??
-        ({ code: user.inviteCode, createdByUserId: null } as const)
+      ? (testStore.findUsableInviteCode(user.inviteCode) ??
+        ({ code: user.inviteCode, createdByUserId: null } as const))
       : null;
     return NextResponse.json({
       user,

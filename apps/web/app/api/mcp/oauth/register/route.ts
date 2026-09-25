@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  isAllowedRedirectUri,
-  registerClient,
-} from "@/lib/mcp/oauth";
+import { isAllowedRedirectUri, registerClient } from "@/lib/mcp/oauth";
 import { rateLimiter, getClientIp } from "@/lib/rate-limit";
 
 const CORS_HEADERS = {

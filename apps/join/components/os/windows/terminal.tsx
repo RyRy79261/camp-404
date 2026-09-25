@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PROMPT, WELCOME, runCommand, type TermLine } from "@/lib/terminal";
+import { useJoinData } from "../join-data";
 import type { AppId } from "@/lib/window-manager";
 
 type Entry = TermLine | { kind: "in"; text: string };
@@ -21,6 +22,7 @@ export function TerminalWindow({
   openApp: (id: AppId) => void;
   close: () => void;
 }) {
+  const data = useJoinData();
   const [lines, setLines] = useState<Entry[]>([...WELCOME]);
   const [value, setValue] = useState("");
   const history = useRef<string[]>([]);
@@ -37,7 +39,7 @@ export function TerminalWindow({
     setValue("");
     if (text.trim()) history.current.push(text);
     cursor.current = history.current.length;
-    const result = runCommand(text);
+    const result = runCommand(text, data);
     if (result.exit) return close();
     setLines((prev) =>
       result.clear

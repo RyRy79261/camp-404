@@ -95,6 +95,8 @@ export const CONSOLE_NAV: readonly ConsoleNavNode[] = [
         label: "Camp settings",
         rank: "captain",
       },
+      // join.camp-404.com's words (owner, 2026-09-25: captains edit them).
+      { href: "/captains/join-site", label: "Join site", rank: "captain" },
       { href: "/captains/audit", label: "Audit", rank: "captain" },
       { href: "/captains/system", label: "System status", rank: "captain" },
     ],

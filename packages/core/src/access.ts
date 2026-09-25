@@ -23,7 +23,10 @@ export function rankLevel(rank: ViewerRank): number {
  * The basis of preview-but-locked: `false` ⇒ the app renders the surface's
  * structure locked with NO data; `true` ⇒ full access.
  */
-export function hasClearance(viewer: ViewerRank, required: ViewerRank): boolean {
+export function hasClearance(
+  viewer: ViewerRank,
+  required: ViewerRank,
+): boolean {
   return rankLevel(viewer) >= rankLevel(required);
 }
 
@@ -53,7 +56,10 @@ export function requireClearance(
 }
 
 /** Derive the viewer clearance rank from the stored rank + derived team-lead. */
-export function deriveViewerRank(rank: StoredRank, isLead: boolean): ViewerRank {
+export function deriveViewerRank(
+  rank: StoredRank,
+  isLead: boolean,
+): ViewerRank {
   if (rank === "captain") return "captain";
   return isLead ? "team_lead" : "camp_member";
 }

@@ -195,7 +195,9 @@ function tokenError(error: string, description: string) {
  * Empty body + `application/json` content-type throws SyntaxError on a
  * naive `request.json()` — fuzz-tested in intake-tracker, matched here.
  */
-async function readBody(req: Request): Promise<Record<string, unknown> & { __error?: string }> {
+async function readBody(
+  req: Request,
+): Promise<Record<string, unknown> & { __error?: string }> {
   try {
     const ct = req.headers.get("content-type") ?? "";
     if (ct.includes("application/json")) {

@@ -40,12 +40,18 @@ beforeEach(() => {
 describe("/api/push/tokens", () => {
   it("refuses a signed-out caller (401) and a non-member (403) on both methods", async () => {
     vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
-    expect((await POST(request("POST", { token: "t", platform: "web" }))).status).toBe(401);
+    expect(
+      (await POST(request("POST", { token: "t", platform: "web" }))).status,
+    ).toBe(401);
     expect((await DELETE(request("DELETE", { token: "t" }))).status).toBe(401);
 
-    vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: "auth-1" } as never);
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-1",
+    } as never);
     vi.mocked(hasCampAccess).mockReturnValue(false);
-    expect((await POST(request("POST", { token: "t", platform: "web" }))).status).toBe(403);
+    expect(
+      (await POST(request("POST", { token: "t", platform: "web" }))).status,
+    ).toBe(403);
     expect((await DELETE(request("DELETE", { token: "t" }))).status).toBe(403);
 
     expect(registerPushToken).not.toHaveBeenCalled();
@@ -54,7 +60,9 @@ describe("/api/push/tokens", () => {
 
   it("refuses a bad body", async () => {
     expect((await POST(request("POST", { token: "t" }))).status).toBe(400);
-    expect((await POST(request("POST", { token: "t", platform: "fax" }))).status).toBe(400);
+    expect(
+      (await POST(request("POST", { token: "t", platform: "fax" }))).status,
+    ).toBe(400);
     expect((await DELETE(request("DELETE", {}))).status).toBe(400);
   });
 

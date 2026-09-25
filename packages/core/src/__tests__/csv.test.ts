@@ -28,7 +28,9 @@ describe("escapeCsvCell", () => {
 
   it("quotes a cell containing a newline, keeping the newline intact", () => {
     expect(escapeCsvCell("line one\nline two")).toBe('"line one\nline two"');
-    expect(escapeCsvCell("line one\r\nline two")).toBe('"line one\r\nline two"');
+    expect(escapeCsvCell("line one\r\nline two")).toBe(
+      '"line one\r\nline two"',
+    );
   });
 
   it("quotes a cell with leading or trailing whitespace", () => {
@@ -80,9 +82,7 @@ describe("neutraliseFormula", () => {
 
 describe("escapeCsvCell + formula neutralisation together", () => {
   it("neutralises then quotes when the neutralised cell still needs quoting", () => {
-    expect(escapeCsvCell('=CONCAT("a","b")')).toBe(
-      '"\'=CONCAT(""a"",""b"")"',
-    );
+    expect(escapeCsvCell('=CONCAT("a","b")')).toBe('"\'=CONCAT(""a"",""b"")"');
   });
 
   it("neutralises without quoting when nothing else demands quotes", () => {

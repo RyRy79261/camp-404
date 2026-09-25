@@ -53,6 +53,10 @@ export function sanitisedUserPatch(
     aiDataConsentAt: null,
     telegramHandle: null,
     telegramUserId: null,
+    // Their words about themselves, and their place on the public join site.
+    campTitle: null,
+    campBlurb: null,
+    showOnJoin: false,
     termsVersion: null,
     termsConsentedAt: null,
     sanitised: true,

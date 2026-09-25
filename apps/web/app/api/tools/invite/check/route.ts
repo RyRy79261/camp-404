@@ -66,7 +66,7 @@ export async function GET(req: Request) {
   }
 
   const existing = usesTestStore()
-    ? testStore.findUsableInviteCode(raw) ?? null
+    ? (testStore.findUsableInviteCode(raw) ?? null)
     : await findInviteCodeByCode(raw);
 
   if (existing) {

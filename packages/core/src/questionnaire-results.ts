@@ -74,7 +74,12 @@ import {
 export type QuestionKind = Question["kind"];
 
 /** How a kind's answers may be summarised. */
-export type AggregateShape = "choice" | "numeric" | "count" | "timeline" | "grid";
+export type AggregateShape =
+  | "choice"
+  | "numeric"
+  | "count"
+  | "timeline"
+  | "grid";
 
 /**
  * The kind → shape routing table, and the exhaustiveness guard for this whole
@@ -583,7 +588,10 @@ function aggregateGrid(
   base: AggregateBase,
   answers: QuestionnaireResponseValue[],
 ): GridAggregate {
-  const columns = question.columns.map(({ value, label }) => ({ value, label }));
+  const columns = question.columns.map(({ value, label }) => ({
+    value,
+    label,
+  }));
   const declaredColumns = new Set(columns.map((column) => column.value));
 
   // Rows: the declared ones in order, then any row id a stored answer still
@@ -591,7 +599,11 @@ function aggregateGrid(
   const declaredRows = new Set(question.rows.map((row) => row.id));
   const storedRows = new Set<string>();
   for (const answer of answers) {
-    if (answer !== null && typeof answer === "object" && !Array.isArray(answer)) {
+    if (
+      answer !== null &&
+      typeof answer === "object" &&
+      !Array.isArray(answer)
+    ) {
       for (const [rowId, picks] of Object.entries(answer)) {
         if (picks.length > 0) storedRows.add(rowId);
       }

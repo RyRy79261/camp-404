@@ -25,10 +25,7 @@ export async function POST(req: Request) {
   }
   const body = (await req.json().catch(() => ({}))) as Partial<SeedBody>;
   if (typeof body.code !== "string" || !body.code) {
-    return NextResponse.json(
-      { error: "code is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "code is required" }, { status: 400 });
   }
   const input = {
     code: body.code,

@@ -75,9 +75,7 @@ describe("definition writers / readers", () => {
       definition: def("Renamed"),
     });
 
-    const [row] = await db
-      .select()
-      .from(schema.questionnaireDefinitions);
+    const [row] = await db.select().from(schema.questionnaireDefinitions);
     expect(row!.title).toBe("Renamed");
     expect(row!.status).toBe("draft");
     expect(row!.version).toBeNull();

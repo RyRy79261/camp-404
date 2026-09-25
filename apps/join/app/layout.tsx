@@ -15,20 +15,27 @@ const silkscreen = Silkscreen({
   display: "swap",
 });
 
-const DESCRIPTION =
-  "Camp 404 is a theme camp at AfrikaBurn: a place for the lost. Boot up 404 OS and apply to join.";
+// Short on purpose (owner, 2026-09-25): "Are you lost? Join 404".
+const TITLE = "Join 404";
+const DESCRIPTION = "Are you lost? Join 404.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://join.camp-404.com"),
-  title: "404 OS · Join Camp 404",
+  title: TITLE,
   description: DESCRIPTION,
+  applicationName: TITLE,
   openGraph: {
     type: "website",
     siteName: "Camp 404",
-    title: "404 OS · Join Camp 404",
+    title: TITLE,
     description: DESCRIPTION,
     url: "/",
     locale: "en_GB",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
   },
 };
 

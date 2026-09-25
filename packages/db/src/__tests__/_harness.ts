@@ -13,7 +13,9 @@ import { __setDbOverride, type Database, type PooledDatabase } from "../index";
 // questionnaire-definitions.ts against real Postgres (jsonb, enums, ON CONFLICT,
 // transactions, FK cascades), with no Docker, no Neon, and no secrets.
 
-const MIGRATIONS_DIR = fileURLToPath(new URL("../../migrations", import.meta.url));
+const MIGRATIONS_DIR = fileURLToPath(
+  new URL("../../migrations", import.meta.url),
+);
 
 let client: PGlite | null = null;
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null;

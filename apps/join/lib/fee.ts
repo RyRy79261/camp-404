@@ -1,4 +1,4 @@
-import { FEE, type FeeTier } from "./content";
+import type { JoinFeeTier } from "@camp404/types";
 
 // Rand formatting and the budget calculator's arithmetic. The site only shows
 // whole rands, like the camp's own money rule (AGENTS.md: rands only), with
@@ -24,19 +24,19 @@ export function feeFromBudget(budget: number, costs: number[]): number {
   return Math.max(0, budget - spent);
 }
 
-/** A rand amount's dollar label at the rate in content.ts, to the nearest
+/** A rand amount's dollar label at the rate a captain typed, to the nearest
  * $5 so it reads as the guide it is: R3,500 at R16 is "≈ $220". */
-export function formatUsdLabel(rands: number): string {
-  const dollars = Math.round(rands / FEE.usdRate.randsPerDollar / 5) * 5;
+export function formatUsdLabel(rands: number, randsPerDollar: number): string {
+  const dollars = Math.round(rands / randsPerDollar / 5) * 5;
   return `≈ $${RANDS.format(dollars)}`;
 }
 
 /** The highest tier an amount reaches, or undefined below the first. */
 export function tierFor(
   rands: number,
-  tiers: readonly FeeTier[] = FEE.tiers,
-): FeeTier | undefined {
-  let reached: FeeTier | undefined;
+  tiers: readonly JoinFeeTier[],
+): JoinFeeTier | undefined {
+  let reached: JoinFeeTier | undefined;
   for (const t of tiers) if (rands >= t.rands) reached = t;
   return reached;
 }

@@ -21,7 +21,9 @@ export type PromotionDenyReason =
   | "only_requester_may_cancel";
 
 /** A guard outcome: allowed, or refused with a reason. */
-export type GuardResult = { ok: true } | { ok: false; reason: PromotionDenyReason };
+export type GuardResult =
+  | { ok: true }
+  | { ok: false; reason: PromotionDenyReason };
 
 /** The participants + state of a request, all `canDecidePromotion` needs. */
 export interface PromotionParticipants {

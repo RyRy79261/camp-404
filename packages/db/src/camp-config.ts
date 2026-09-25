@@ -21,6 +21,12 @@ export interface TeamConfigEntry {
   order: number;
   /** Hidden from pickers/filters but still valid in stored responses. */
   archived: boolean;
+  /**
+   * What the team does, in a line, for join.camp-404.com's TEAMS/ folder
+   * (owner, 2026-09-25). Optional: the site falls back to
+   * DEFAULT_TEAM_DESCRIPTIONS in @camp404/types.
+   */
+  description?: string;
 }
 
 export interface TeamsConfig {
@@ -37,16 +43,56 @@ export interface TeamsConfig {
 export const DEFAULT_TEAMS: TeamConfigEntry[] = [
   { key: "kitchen", label: "Kitchen", order: 0, archived: false },
   { key: "structures", label: "Structures", order: 1, archived: false },
-  { key: "power_and_lighting", label: "Power and Lighting", order: 2, archived: false },
-  { key: "sanitation_and_water", label: "Sanitation and MOOP", order: 3, archived: false },
+  {
+    key: "power_and_lighting",
+    label: "Power and Lighting",
+    order: 2,
+    archived: false,
+  },
+  {
+    key: "sanitation_and_water",
+    label: "Sanitation and MOOP",
+    order: 3,
+    archived: false,
+  },
   { key: "health_and_safety", label: "Safety", order: 4, archived: false },
-  { key: "art_and_activities", label: "Art and Activities", order: 5, archived: false },
-  { key: "ministry_of_memes", label: "Ministry of Memes", order: 6, archived: false },
-  { key: "ministry_of_vibes", label: "Ministry of Vibes", order: 7, archived: false },
+  {
+    key: "art_and_activities",
+    label: "Art and Activities",
+    order: 5,
+    archived: false,
+  },
+  {
+    key: "ministry_of_memes",
+    label: "Ministry of Memes",
+    order: 6,
+    archived: false,
+  },
+  {
+    key: "ministry_of_vibes",
+    label: "Ministry of Vibes",
+    order: 7,
+    archived: false,
+  },
   { key: "finance", label: "Finance", order: 8, archived: false },
-  { key: "transport_and_logistics", label: "Transport and Logistics", order: 9, archived: false },
-  { key: "communications_and_hr", label: "Communications & HR", order: 10, archived: false },
-  { key: "mutant_vehicle", label: "Mutant Vehicle", order: 11, archived: false },
+  {
+    key: "transport_and_logistics",
+    label: "Transport and Logistics",
+    order: 9,
+    archived: false,
+  },
+  {
+    key: "communications_and_hr",
+    label: "Communications & HR",
+    order: 10,
+    archived: false,
+  },
+  {
+    key: "mutant_vehicle",
+    label: "Mutant Vehicle",
+    order: 11,
+    archived: false,
+  },
   { key: "sound", label: "Sound", order: 12, archived: false },
   { key: "water", label: "Water", order: 13, archived: false },
 ];
@@ -118,6 +164,13 @@ export interface CycleEntry {
    * the name at any time without moving anything.
    */
   name?: string;
+  /**
+   * The Burn's first and last day that year, as YYYY-MM-DD (owner,
+   * 2026-09-25: "April 26 – May 2, 2027"). Optional; join.camp-404.com counts
+   * down to the first day and shows both.
+   */
+  burnStart?: string;
+  burnEnd?: string;
 }
 
 /** The longest name a year can have. A label, not a description. */
@@ -140,8 +193,30 @@ export function cleanCycleName(value: unknown): string | undefined {
 function withCleanName(entry: CycleEntry): CycleEntry {
   const next: CycleEntry = { ...entry };
   delete next.name;
+  delete next.burnStart;
+  delete next.burnEnd;
   const name = cleanCycleName(entry.name);
-  return name ? { ...next, name } : next;
+  const dates =
+    isIsoDate(entry.burnStart) &&
+    isIsoDate(entry.burnEnd) &&
+    entry.burnStart <= entry.burnEnd
+      ? { burnStart: entry.burnStart, burnEnd: entry.burnEnd }
+      : {};
+  return name ? { ...next, name, ...dates } : { ...next, ...dates };
+}
+
+/** A real calendar day as YYYY-MM-DD: the platform Date round-trips it. */
+export function isIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const [y, m, d] = value.split("-").map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return (
+    date.getUTCFullYear() === y &&
+    date.getUTCMonth() === m - 1 &&
+    date.getUTCDate() === d
+  );
 }
 
 /**
@@ -596,6 +671,31 @@ export class TeamNameConflictError extends Error {
     super(`Another team is already called "${label}".`);
     this.name = "TeamNameConflictError";
   }
+}
+
+/** The longest team description join.camp-404.com shows. */
+export const MAX_TEAM_DESCRIPTION_LENGTH = 200;
+
+/**
+ * Say what a team does, for join.camp-404.com. Blank removes it (the site
+ * then shows the default line). Pure, like renameTeam; runs inside
+ * mutateTeamsConfig's lock.
+ */
+export function describeTeam(
+  config: TeamsConfig,
+  key: string,
+  description: string,
+): TeamsConfig {
+  const text = description.trim().slice(0, MAX_TEAM_DESCRIPTION_LENGTH);
+  return {
+    ...config,
+    teams: config.teams.map((team) => {
+      if (team.key !== key) return team;
+      const rest = { ...team };
+      delete rest.description;
+      return text ? { ...rest, description: text } : rest;
+    }),
+  };
 }
 
 /**

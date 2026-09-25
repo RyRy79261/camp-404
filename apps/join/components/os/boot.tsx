@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BOOT_ERROR, BOOT_LINES } from "@/lib/content";
+import { BOOT_ERROR, bootLines } from "@/lib/content";
+import { useJoinData } from "./join-data";
 
 const LINE_MS = 110;
 const HOLD_MS = 900;
@@ -10,7 +11,9 @@ const HOLD_MS = 900;
 // skips it; under reduced motion every line shows at once and it ends fast.
 export function Boot({ onDone }: { onDone: () => void }) {
   const [shown, setShown] = useState(0);
-  const total = BOOT_LINES.length;
+  const { year } = useJoinData();
+  const lines = bootLines(year);
+  const total = lines.length;
 
   useEffect(() => {
     const reduced = window.matchMedia(
@@ -54,7 +57,7 @@ export function Boot({ onDone }: { onDone: () => void }) {
         className="camp404-scanlines pointer-events-none absolute inset-0"
       />
       <pre className="relative whitespace-pre-wrap leading-relaxed">
-        {BOOT_LINES.slice(0, shown).join("\n")}
+        {lines.slice(0, shown).join("\n")}
       </pre>
       {shown > total && (
         <p className="camp404-chromatic relative mt-4 font-pixel text-lg uppercase text-os-fg sm:text-2xl">

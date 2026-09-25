@@ -50,11 +50,21 @@ describe("regenerateQuestionnaireIds", () => {
           blocks: [
             {
               kind: "question",
-              question: { id: "lead", kind: "boolean", prompt: "Lead?", required: true },
+              question: {
+                id: "lead",
+                kind: "boolean",
+                prompt: "Lead?",
+                required: true,
+              },
             },
             {
               kind: "question",
-              question: { id: "team", kind: "short_text", prompt: "Team", required: false },
+              question: {
+                id: "team",
+                kind: "short_text",
+                prompt: "Team",
+                required: false,
+              },
               visibleIf: { fieldId: "lead", op: "eq", value: true },
             },
           ],
@@ -67,7 +77,12 @@ describe("regenerateQuestionnaireIds", () => {
           blocks: [
             {
               kind: "question",
-              question: { id: "why", kind: "long_text", prompt: "Why", required: false },
+              question: {
+                id: "why",
+                kind: "long_text",
+                prompt: "Why",
+                required: false,
+              },
             },
           ],
         },
@@ -108,7 +123,13 @@ describe("regenerateQuestionnaireIds", () => {
     const routed = Questionnaire.parse({
       version: "1",
       pages: [
-        { id: "hello", kind: "intro", heading: "Hi", body: "Welcome", next: "p1" },
+        {
+          id: "hello",
+          kind: "intro",
+          heading: "Hi",
+          body: "Welcome",
+          next: "p1",
+        },
         {
           id: "p1",
           kind: "questions",

@@ -29,7 +29,9 @@ describe("a stored builder snapshot against the same questionnaire saved unified
   // move is unified. If the two were compared as stored, the first re-publish
   // of every questionnaire would read as breaking, mint a version nobody
   // changed, and ask every member to answer again on the next send.
-  const snapshot: unknown = JSON.parse(JSON.stringify(BUILDER_V1_QUESTIONNAIRE));
+  const snapshot: unknown = JSON.parse(
+    JSON.stringify(BUILDER_V1_QUESTIONNAIRE),
+  );
   const head: unknown = JSON.parse(
     JSON.stringify(parseStoredDefinition(BUILDER_V1_QUESTIONNAIRE)),
   );
@@ -37,10 +39,16 @@ describe("a stored builder snapshot against the same questionnaire saved unified
   it("is cosmetic in both directions", () => {
     expect(snapshot).not.toEqual(head); // the stored JSON really does differ
     expect(
-      classifyChange(parseStoredDefinition(snapshot), parseStoredDefinition(head)),
+      classifyChange(
+        parseStoredDefinition(snapshot),
+        parseStoredDefinition(head),
+      ),
     ).toBe("cosmetic");
     expect(
-      classifyChange(parseStoredDefinition(head), parseStoredDefinition(snapshot)),
+      classifyChange(
+        parseStoredDefinition(head),
+        parseStoredDefinition(snapshot),
+      ),
     ).toBe("cosmetic");
   });
 
@@ -64,7 +72,12 @@ const QUESTION_PAGE = {
   blocks: [
     {
       kind: "question",
-      question: { id: "name", kind: "short_text", prompt: "Name", required: true },
+      question: {
+        id: "name",
+        kind: "short_text",
+        prompt: "Name",
+        required: true,
+      },
     },
     { id: "hdr", kind: "header_break", headingText: "More" },
     {
@@ -113,7 +126,10 @@ describe("classifyChange on builder definitions", () => {
         base,
         withBlocks([
           ...QUESTION_PAGE.blocks,
-          { kind: "question", question: { id: "extra", kind: "short_text", prompt: "X" } },
+          {
+            kind: "question",
+            question: { id: "extra", kind: "short_text", prompt: "X" },
+          },
         ]),
       ),
     ).toBe("breaking");
@@ -124,7 +140,12 @@ describe("classifyChange on builder definitions", () => {
         withBlocks([
           {
             kind: "question",
-            question: { id: "name", kind: "short_text", prompt: "Name", required: false },
+            question: {
+              id: "name",
+              kind: "short_text",
+              prompt: "Name",
+              required: false,
+            },
           },
           hdr,
           diet,
@@ -176,7 +197,10 @@ describe("classifyChange on builder definitions", () => {
       classifyChange(
         base,
         withBlocks([
-          { kind: "question", question: { id: "name", kind: "email", prompt: "Name" } },
+          {
+            kind: "question",
+            question: { id: "name", kind: "email", prompt: "Name" },
+          },
           hdr,
           diet,
         ]),
@@ -248,7 +272,10 @@ describe("classifyChange on builder definitions", () => {
     const ranged = (min: number, max: number) =>
       withBlocks([
         name,
-        { kind: "question", question: { id: "n", kind: "number", prompt: "N", min, max } },
+        {
+          kind: "question",
+          question: { id: "n", kind: "number", prompt: "N", min, max },
+        },
       ]);
     expect(classifyChange(ranged(0, 6), ranged(1, 6))).toBe("breaking");
     expect(classifyChange(ranged(0, 6), ranged(0, 5))).toBe("breaking");
@@ -269,12 +296,47 @@ describe("classifyChange on the unified model's own fields", () => {
   it("treats a tighter selection, length, scale, rating or numeric-text bound as breaking", () => {
     const pairs: [unknown, unknown][] = [
       [
-        { id: "m", kind: "multi_select", prompt: "M", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] },
-        { id: "m", kind: "multi_select", prompt: "M", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }], minSelections: 1 },
+        {
+          id: "m",
+          kind: "multi_select",
+          prompt: "M",
+          options: [
+            { value: "a", label: "A" },
+            { value: "b", label: "B" },
+          ],
+        },
+        {
+          id: "m",
+          kind: "multi_select",
+          prompt: "M",
+          options: [
+            { value: "a", label: "A" },
+            { value: "b", label: "B" },
+          ],
+          minSelections: 1,
+        },
       ],
       [
-        { id: "m", kind: "multi_select", prompt: "M", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }], maxSelections: 2 },
-        { id: "m", kind: "multi_select", prompt: "M", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }], maxSelections: 1 },
+        {
+          id: "m",
+          kind: "multi_select",
+          prompt: "M",
+          options: [
+            { value: "a", label: "A" },
+            { value: "b", label: "B" },
+          ],
+          maxSelections: 2,
+        },
+        {
+          id: "m",
+          kind: "multi_select",
+          prompt: "M",
+          options: [
+            { value: "a", label: "A" },
+            { value: "b", label: "B" },
+          ],
+          maxSelections: 1,
+        },
       ],
       [
         { id: "t", kind: "long_text", prompt: "T" },
@@ -289,7 +351,13 @@ describe("classifyChange on the unified model's own fields", () => {
         { id: "r", kind: "rating", prompt: "R", steps: 4 },
       ],
       [
-        { id: "s", kind: "short_text", prompt: "S", format: "integer", max: 10 },
+        {
+          id: "s",
+          kind: "short_text",
+          prompt: "S",
+          format: "integer",
+          max: 10,
+        },
         { id: "s", kind: "short_text", prompt: "S", format: "integer", max: 9 },
       ],
       [
@@ -324,9 +392,9 @@ describe("classifyChange on the unified model's own fields", () => {
     expect(classifyChange(grid(["a"], ["x", "y"]), grid(["a"], ["x"]))).toBe(
       "breaking",
     );
-    expect(classifyChange(grid(["a"], ["x"]), grid(["a", "b"], ["x", "y"]))).toBe(
-      "cosmetic",
-    );
+    expect(
+      classifyChange(grid(["a"], ["x"]), grid(["a", "b"], ["x", "y"])),
+    ).toBe("cosmetic");
   });
 
   describe("routing", () => {
@@ -339,11 +407,31 @@ describe("classifyChange on the unified model's own fields", () => {
         { value: "no", label: "No" },
       ],
     });
-    const routed = (goTo: string | undefined, next?: string, reversed = false) => {
+    const routed = (
+      goTo: string | undefined,
+      next?: string,
+      reversed = false,
+    ) => {
       const pages = [
-        { id: "p1", kind: "questions", title: "P1", questions: [choice(goTo)], ...(next ? { next } : {}) },
-        { id: "p2", kind: "questions", title: "P2", questions: [{ id: "a", kind: "email", prompt: "A" }] },
-        { id: "p3", kind: "questions", title: "P3", questions: [{ id: "b", kind: "email", prompt: "B" }] },
+        {
+          id: "p1",
+          kind: "questions",
+          title: "P1",
+          questions: [choice(goTo)],
+          ...(next ? { next } : {}),
+        },
+        {
+          id: "p2",
+          kind: "questions",
+          title: "P2",
+          questions: [{ id: "a", kind: "email", prompt: "A" }],
+        },
+        {
+          id: "p3",
+          kind: "questions",
+          title: "P3",
+          questions: [{ id: "b", kind: "email", prompt: "B" }],
+        },
       ];
       return unified({
         version: "1",

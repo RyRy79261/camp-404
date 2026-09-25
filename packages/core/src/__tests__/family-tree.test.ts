@@ -61,7 +61,11 @@ describe("buildTree", () => {
 });
 
 describe("computeMatchIds", () => {
-  const roster = [u("a", null, "Marlo"), u("b", "a", "Sara"), u("c", "b", "Dust")];
+  const roster = [
+    u("a", null, "Marlo"),
+    u("b", "a", "Sara"),
+    u("c", "b", "Dust"),
+  ];
 
   it("returns null for an empty query", () => {
     expect(computeMatchIds(roster, "   ")).toBeNull();

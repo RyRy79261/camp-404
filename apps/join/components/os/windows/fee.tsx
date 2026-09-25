@@ -1,21 +1,21 @@
 "use client";
 
 import { useId, useState } from "react";
-import { FEE } from "@/lib/content";
+import type { JoinSiteContent } from "@camp404/types";
+import { BUDGET_LINES } from "@/lib/content";
 import {
   feeFromBudget,
   formatRands,
-  formatUsdLabel,
+  formatUsdLabel as usd,
   parseRands,
   tierFor,
 } from "@/lib/fee";
+import { useJoinData } from "../join-data";
 import { FeeScale } from "./fee-scale";
 import { Eyebrow, WinBody } from "./ui";
 
-const SPEND_MAX = Math.max(...FEE.spend.map((s) => s.rands));
-
-function verdict(fee: number): string {
-  const tier = tierFor(fee);
+function verdict(fee: number, FEE: JoinSiteContent["fee"]): string {
+  const tier = tierFor(fee, FEE.tiers);
   if (!tier) return FEE.subsidy.note;
   return tier.note ? `${tier.name}. ${tier.note}` : `${tier.name}.`;
 }
@@ -24,11 +24,15 @@ function verdict(fee: number): string {
 // is left for the camp fee. Nothing here is sent anywhere.
 export function FeeWindow() {
   const id = useId();
+  const FEE = useJoinData().content.fee;
+  const formatUsdLabel = (rands: number) =>
+    usd(rands, FEE.usdRate.randsPerDollar);
+  const SPEND_MAX = Math.max(1, ...FEE.spend.map((s) => s.rands));
   const [budget, setBudget] = useState("");
   const [costs, setCosts] = useState<Record<string, string>>({});
   const fee = feeFromBudget(
     parseRands(budget),
-    FEE.calculator.map((l) => parseRands(costs[l.key] ?? "")),
+    BUDGET_LINES.map((l) => parseRands(costs[l.key] ?? "")),
   );
 
   const field =
@@ -60,7 +64,7 @@ export function FeeWindow() {
           />
         </label>
         <div className="grid grid-cols-2 gap-3">
-          {FEE.calculator.map((l) => (
+          {BUDGET_LINES.map((l) => (
             <label key={l.key} className="block space-y-1">
               <span className="font-mono text-[11px] uppercase text-os-fg">
                 − {l.label}
@@ -97,7 +101,7 @@ export function FeeWindow() {
               {formatUsdLabel(fee)}
             </span>
           </span>
-          <span className="block text-os-primary">{verdict(fee)}</span>
+          <span className="block text-os-primary">{verdict(fee, FEE)}</span>
         </output>
       </section>
 

@@ -79,15 +79,17 @@ describe("canSendPromotion", () => {
   });
 
   it("refuses promoting yourself", () => {
-    expect(
-      canSendPromotion({ ...base, targetId: "cap-1" }),
-    ).toEqual({ ok: false, reason: "cannot_promote_self" });
+    expect(canSendPromotion({ ...base, targetId: "cap-1" })).toEqual({
+      ok: false,
+      reason: "cannot_promote_self",
+    });
   });
 
   it("refuses a target who is already a captain", () => {
-    expect(
-      canSendPromotion({ ...base, targetRank: "captain" }),
-    ).toEqual({ ok: false, reason: "target_already_captain" });
+    expect(canSendPromotion({ ...base, targetRank: "captain" })).toEqual({
+      ok: false,
+      reason: "target_already_captain",
+    });
   });
 
   it("reports viewer_not_captain before self/already-captain when several apply", () => {

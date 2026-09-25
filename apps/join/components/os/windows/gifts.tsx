@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
-import { GIFTS, type Gift } from "@/lib/content";
+import type { JoinGift as Gift } from "@camp404/types";
+import { useJoinData } from "../join-data";
 import { GiftIconSvg } from "../gift-icons";
 import { Eyebrow, WinBody } from "./ui";
 
@@ -95,23 +96,24 @@ function FlameRing() {
 }
 
 export function GiftsWindow() {
+  const gifts = useJoinData().content.gifts;
   return (
     <WinBody>
       <p className="font-mono text-xs uppercase text-os-muted">
-        &gt; Installing gifts to TANKWA_TOWN… {GIFTS.intro}
+        &gt; Installing gifts to TANKWA_TOWN… {gifts.intro}
       </p>
       <section aria-labelledby="gifts-primary" className="space-y-3">
         <Eyebrow id="gifts-primary">Primary</Eyebrow>
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {GIFTS.primary.map((g, i) => (
+        <ul className="grid grid-cols-3 gap-3">
+          {gifts.primary.map((g, i) => (
             <GiftRing key={g.name} gift={g} delay={i * 180} primary />
           ))}
         </ul>
       </section>
       <section aria-labelledby="gifts-secondary" className="space-y-3">
         <Eyebrow id="gifts-secondary">Secondary</Eyebrow>
-        <ul className="mx-auto grid max-w-sm grid-cols-2 gap-3">
-          {GIFTS.secondary.map((g, i) => (
+        <ul className="grid grid-cols-3 gap-3">
+          {gifts.secondary.map((g, i) => (
             <GiftRing
               key={g.name}
               gift={g}

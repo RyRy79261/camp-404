@@ -90,9 +90,7 @@ describe("buildQuestionnaireCsvRows — shape", () => {
   it("writes one row per respondent, with the answers resolved to labels", () => {
     const rows = buildQuestionnaireCsvRows({
       questions: [NAME, MEAL],
-      respondents: [
-        respondent({ responses: { name: "Dusty", meal: "late" } }),
-      ],
+      respondents: [respondent({ responses: { name: "Dusty", meal: "late" } })],
     });
     expect(rows[1]).toEqual([
       "Dusty",
@@ -269,9 +267,7 @@ describe("buildQuestionnaireCsv — the file", () => {
   it("neutralises a formula a member typed into a free-text answer", () => {
     const csv = buildQuestionnaireCsv({
       questions: [NAME],
-      respondents: [
-        respondent({ name: "Dusty", responses: { name: "=1+1" } }),
-      ],
+      respondents: [respondent({ name: "Dusty", responses: { name: "=1+1" } })],
     });
     expect(csv).toContain("'=1+1");
     expect(csv).not.toContain(",=1+1");

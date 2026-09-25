@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { canLeaveCamp } from "@camp404/core";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
@@ -13,6 +14,7 @@ import {
 import { deleteAccount } from "@/lib/account";
 import { pruneReplacedProfilePhotos } from "@/lib/avatar-blob";
 import { runAction } from "@/lib/action-result";
+import { setCampBlurb } from "@/lib/join-site";
 
 export type UpdateProfileResult = { ok: false; error: string };
 export type DeleteAccountResult = { ok: false; error: string };
@@ -100,5 +102,50 @@ export async function deleteOwnAccount(
     });
     if (!erased.ok) return { ok: false, error: SOLE_CAPTAIN_ERROR };
     redirect("/auth/sign-out");
+  });
+}
+
+export type CampBlurbResult = { ok: true } | { ok: false; error: string };
+
+const MAX_CAMP_TITLE = 60;
+const MAX_CAMP_BLURB = 280;
+
+/**
+ * "What I am in camp" (owner, 2026-09-25): the member's own optional title
+ * and blurb. Only a captain can put theirs on join.camp-404.com; for anyone
+ * else the switch is stored off.
+ */
+export async function updateCampBlurb(input: {
+  title: string;
+  blurb: string;
+  showOnJoin: boolean;
+}): Promise<CampBlurbResult> {
+  return runAction("updateCampBlurb", async () => {
+    const authUser = await getAuthenticatedUserOrRedirect();
+    const campUser = await ensureCampUser(authUser);
+    if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+      redirect("/signup/required");
+    }
+    const title = input.title.trim();
+    const blurb = input.blurb.trim();
+    if (title.length > MAX_CAMP_TITLE) {
+      return {
+        ok: false,
+        error: `Keep your title to ${MAX_CAMP_TITLE} characters.`,
+      };
+    }
+    if (blurb.length > MAX_CAMP_BLURB) {
+      return {
+        ok: false,
+        error: `Keep your blurb to ${MAX_CAMP_BLURB} characters.`,
+      };
+    }
+    await setCampBlurb(campUser.id, {
+      title: title || null,
+      blurb: blurb || null,
+      showOnJoin: campUser.rank === "captain" && input.showOnJoin,
+    });
+    revalidatePath("/profile/edit");
+    return { ok: true };
   });
 }

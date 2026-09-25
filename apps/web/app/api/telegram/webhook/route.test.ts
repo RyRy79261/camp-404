@@ -35,8 +35,14 @@ const chatMember = {
     chat: { id: -100, type: "supergroup" },
     from: { id: 7, is_bot: false, first_name: "Ada" },
     date: 1,
-    old_chat_member: { status: "left", user: { id: 7, is_bot: false, first_name: "Ada" } },
-    new_chat_member: { status: "member", user: { id: 7, is_bot: false, first_name: "Ada" } },
+    old_chat_member: {
+      status: "left",
+      user: { id: 7, is_bot: false, first_name: "Ada" },
+    },
+    new_chat_member: {
+      status: "member",
+      user: { id: 7, is_bot: false, first_name: "Ada" },
+    },
   },
 };
 

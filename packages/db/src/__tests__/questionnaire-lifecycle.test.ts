@@ -99,8 +99,11 @@ describe("listOpenSendBlocking", () => {
 
   it("maps each open send to its blocking flag, skipping drafts and closed sends", async () => {
     const db = h.db();
-    const send = (questionnaireKey: string, status: "open" | "closed" | "draft", blocking: boolean) =>
-      makeActivation(db, { questionnaireKey, status, blocking });
+    const send = (
+      questionnaireKey: string,
+      status: "open" | "closed" | "draft",
+      blocking: boolean,
+    ) => makeActivation(db, { questionnaireKey, status, blocking });
     await send("safety", "open", true);
     await send("skills", "open", false);
     await send("old", "closed", true);
@@ -122,7 +125,11 @@ describe("publishDefinition", () => {
     await seedDraft(db, "feedback", validDef("Camp feedback"), owner.id);
 
     const res = await publishDefinition("feedback", owner.id);
-    expect(res).toEqual({ ok: true, version: "feedback-v1", change: "initial" });
+    expect(res).toEqual({
+      ok: true,
+      version: "feedback-v1",
+      change: "initial",
+    });
 
     const versions = await versionRows(db, "feedback");
     expect(versions).toHaveLength(1);
@@ -171,13 +178,25 @@ describe("publishDefinition", () => {
 
   it("a cosmetic edit re-publishes in place: same version, snapshot overwritten", async () => {
     const db = h.db();
-    await seedDraft(db, "feedback", validDef("Camp feedback", { prompt: "Your name" }));
+    await seedDraft(
+      db,
+      "feedback",
+      validDef("Camp feedback", { prompt: "Your name" }),
+    );
     await publishDefinition("feedback", null);
 
     // edit only the prompt — cosmetic
-    await setHead(db, "feedback", validDef("Camp feedback", { prompt: "Full name" }));
+    await setHead(
+      db,
+      "feedback",
+      validDef("Camp feedback", { prompt: "Full name" }),
+    );
     const res = await publishDefinition("feedback", null);
-    expect(res).toEqual({ ok: true, version: "feedback-v1", change: "cosmetic" });
+    expect(res).toEqual({
+      ok: true,
+      version: "feedback-v1",
+      change: "cosmetic",
+    });
 
     const versions = await versionRows(db, "feedback");
     expect(versions).toHaveLength(1); // no new version row
@@ -194,7 +213,11 @@ describe("publishDefinition", () => {
     await setHead(db, "feedback", builderDef("Camp feedback"));
 
     const res = await publishDefinition("feedback", null);
-    expect(res).toEqual({ ok: true, version: "feedback-v1", change: "initial" });
+    expect(res).toEqual({
+      ok: true,
+      version: "feedback-v1",
+      change: "initial",
+    });
     const [version] = await versionRows(db, "feedback");
     expect(version!.definition).toEqual(validDef("Camp feedback"));
   });
@@ -219,7 +242,11 @@ describe("publishDefinition", () => {
     });
 
     const res = await publishDefinition("feedback", null);
-    expect(res).toEqual({ ok: true, version: "feedback-v1", change: "cosmetic" });
+    expect(res).toEqual({
+      ok: true,
+      version: "feedback-v1",
+      change: "cosmetic",
+    });
     expect(await versionRows(db, "feedback")).toHaveLength(1);
 
     // …while a real breaking edit against that old snapshot still mints one.
@@ -227,7 +254,11 @@ describe("publishDefinition", () => {
       .update(schema.questionnaireVersions)
       .set({ definition: builderDef("Camp feedback") })
       .where(eq(schema.questionnaireVersions.definitionKey, "feedback"));
-    await setHead(db, "feedback", validDef("Camp feedback", { required: true }));
+    await setHead(
+      db,
+      "feedback",
+      validDef("Camp feedback", { required: true }),
+    );
     expect(await publishDefinition("feedback", null)).toEqual({
       ok: true,
       version: "feedback-v2",
@@ -261,13 +292,25 @@ describe("publishDefinition", () => {
 
   it("a breaking edit mints a new version and keeps the old snapshot", async () => {
     const db = h.db();
-    await seedDraft(db, "feedback", validDef("Camp feedback", { required: false }));
+    await seedDraft(
+      db,
+      "feedback",
+      validDef("Camp feedback", { required: false }),
+    );
     await publishDefinition("feedback", null);
 
     // flip required off→on — breaking
-    await setHead(db, "feedback", validDef("Camp feedback", { required: true }));
+    await setHead(
+      db,
+      "feedback",
+      validDef("Camp feedback", { required: true }),
+    );
     const res = await publishDefinition("feedback", null);
-    expect(res).toEqual({ ok: true, version: "feedback-v2", change: "breaking" });
+    expect(res).toEqual({
+      ok: true,
+      version: "feedback-v2",
+      change: "breaking",
+    });
 
     const versions = await versionRows(db, "feedback");
     expect(versions.map((v) => v.version).sort()).toEqual([
@@ -302,7 +345,9 @@ describe("publishDefinition", () => {
 describe("closeActivation", () => {
   const h = useTestDb();
 
-  async function publishedWithOpenSend(db: ReturnType<ReturnType<typeof useTestDb>["db"]>) {
+  async function publishedWithOpenSend(
+    db: ReturnType<ReturnType<typeof useTestDb>["db"]>,
+  ) {
     const u = await makeUser(db);
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
@@ -443,7 +488,9 @@ describe("sendActivation — one-open invariant", () => {
       .where(eq(schema.questionnaireActivations.id, res.activationId));
     expect(act!.status).toBe("open");
     expect(act!.version).toBe("feedback-v1");
-    expect((await requiredActionsFor(db, a.id))[0]!.version).toBe("feedback-v1");
+    expect((await requiredActionsFor(db, a.id))[0]!.version).toBe(
+      "feedback-v1",
+    );
     expect((await requiredActionsFor(db, b.id))[0]!.actionKey).toBe("feedback");
   });
 

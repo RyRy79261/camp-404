@@ -135,9 +135,7 @@ describe("plainPreview — the whole body (no max)", () => {
 
   it("closes a code span only on a backtick run of the same length", () => {
     expect(plainPreview("Use ``a ` b`` here.")).toBe("Use a ` b here.");
-    expect(plainPreview("The ``` fence ``` marker.")).toBe(
-      "The fence marker.",
-    );
+    expect(plainPreview("The ``` fence ``` marker.")).toBe("The fence marker.");
   });
 
   it("leaves a lone backtick where it was typed", () => {

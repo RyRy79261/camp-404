@@ -42,8 +42,7 @@ export const runtime = "nodejs";
  * Auth, dual rate limiting, validation and the E2E short-circuit mirror the
  * avatar route.
  */
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(req: Request) {
   const user = await getAuthenticatedUser();
@@ -127,7 +126,10 @@ export async function POST(req: Request) {
 
   const file = form.get("image");
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Missing `image` file" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing `image` file" },
+      { status: 400 },
+    );
   }
   if (!ALLOWED_TYPES.has(file.type)) {
     return NextResponse.json(

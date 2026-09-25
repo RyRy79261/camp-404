@@ -17,6 +17,7 @@ import {
   currentCycle,
   foundingCycles,
   isCycleYear,
+  isIsoDate,
   MAX_CYCLE_NAME_LENGTH,
   MAX_CYCLE_YEAR,
   renameCycle,
@@ -238,6 +239,10 @@ export interface AdvanceCycleInput {
 export type SetCycleNameResult =
   | { ok: true; cycle: CycleEntry }
   | { ok: false; reason: "unknown-year" | "invalid-name" };
+
+export type SetBurnDatesResult =
+  | { ok: true; cycle: CycleEntry }
+  | { ok: false; reason: "unknown-year" | "invalid-dates" };
 
 export type AdvanceCycleResult =
   | { ok: true; report: RolloverReport }
@@ -983,6 +988,83 @@ export async function setCycleName(input: {
       action: "camp.cycle.renamed",
       target: String(input.year),
       metadata: { from: before.name ?? null, to: name || null },
+    });
+
+    return {
+      ok: true as const,
+      cycle: next.find((c) => c.year === input.year)!,
+    };
+  });
+}
+
+/**
+ * Set or clear the Burn's first and last day for one year (owner,
+ * 2026-09-25), for join.camp-404.com's countdown and schedule. Both dates or
+ * neither: YYYY-MM-DD, real days, the start not after the end. Same lock and
+ * spread as setCycleName, so the teams and every other year are kept, and the
+ * audit row commits with the change.
+ */
+export async function setCycleBurnDates(input: {
+  year: number;
+  /** Both null removes the dates. */
+  burnStart: string | null;
+  burnEnd: string | null;
+  actorUserId: string | null;
+}): Promise<SetBurnDatesResult> {
+  const clearing = input.burnStart === null && input.burnEnd === null;
+  if (
+    !clearing &&
+    !(
+      isIsoDate(input.burnStart) &&
+      isIsoDate(input.burnEnd) &&
+      input.burnStart <= input.burnEnd
+    )
+  ) {
+    return { ok: false, reason: "invalid-dates" };
+  }
+
+  return await withTransaction(async (tx) => {
+    await tx
+      .insert(schema.campSettings)
+      .values({ id: true })
+      .onConflictDoNothing({ target: schema.campSettings.id });
+    const [locked] = await tx
+      .select({ config: schema.campSettings.config })
+      .from(schema.campSettings)
+      .where(eq(schema.campSettings.id, true))
+      .for("update");
+
+    const stored =
+      locked?.config && typeof locked.config === "object"
+        ? (locked.config as CampConfig)
+        : ({} as CampConfig);
+    const cycles = resolveCycles(stored);
+    if (!cycles.some((c) => c.year === input.year)) {
+      return { ok: false as const, reason: "unknown-year" as const };
+    }
+
+    const next = cycles.map((c) => {
+      if (c.year !== input.year) return c;
+      const without = { ...c };
+      delete without.burnStart;
+      delete without.burnEnd;
+      return clearing
+        ? without
+        : {
+            ...without,
+            burnStart: input.burnStart!,
+            burnEnd: input.burnEnd!,
+          };
+    });
+    await tx
+      .update(schema.campSettings)
+      .set({ config: { ...stored, cycles: next }, updatedAt: new Date() })
+      .where(eq(schema.campSettings.id, true));
+    await writeAuditEvent(tx, {
+      actorId: input.actorUserId,
+      action: "camp.cycle.burn_dates_set",
+      target: String(input.year),
+      metadata: { burnStart: input.burnStart, burnEnd: input.burnEnd },
     });
 
     return {
