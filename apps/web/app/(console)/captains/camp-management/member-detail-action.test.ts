@@ -476,9 +476,7 @@ describe("the member's questionnaires", () => {
     const res = await getMemberDetailAction("member-1");
 
     expect(listMemberQuestionnaireGates).toHaveBeenCalledWith("member-1");
-    expect(
-      res.ok && res.questionnaires.map((q) => [q.key, q.status]),
-    ).toEqual([
+    expect(res.ok && res.questionnaires.map((q) => [q.key, q.status])).toEqual([
       ["burner_profile", "complete"],
       ["safety", "next-up"],
     ]);

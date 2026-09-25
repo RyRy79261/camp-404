@@ -1,4 +1,4 @@
-import type { TeamIcon } from "@/lib/content";
+import type { TeamIcon } from "@/lib/teams";
 
 // Pixel-art team icons, one "#" per pixel, drawn for Camp 404. Each renders
 // three times: a magenta and a cyan copy knocked sideways under the white one,
@@ -148,6 +148,31 @@ const GRIDS: Record<TeamIcon, readonly string[]> = {
     ".##.....##..",
     ".##.....##..",
     "............",
+  ],
+  sound: [
+    "....#.......",
+    "...##...#...",
+    "..#.#....#..",
+    "###.#..#..#.",
+    "#...#...#.#.",
+    "#...#...#.#.",
+    "###.#..#..#.",
+    "..#.#....#..",
+    "...##...#...",
+    "....#.......",
+  ],
+  // A team added after the site was drawn.
+  generic: [
+    "##########..",
+    "#.#....#.##.",
+    "#.#....#..#.",
+    "#.######..#.",
+    "#.........#.",
+    "#.#######.#.",
+    "#.#.....#.#.",
+    "#.#.....#.#.",
+    "#.#.....#.#.",
+    "##########..",
   ],
   transport: [
     "..#####.........",

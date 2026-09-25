@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { GiftIcon } from "@/lib/content";
+import type { GiftIcon } from "@camp404/types";
 
 // Line-art icons for GIFTS.EXE on a 64 × 64 grid, in the desktop icons' style.
 // Now Now Meow Meow is drawn from a photo of the real vehicle (owner,

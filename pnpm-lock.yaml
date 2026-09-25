@@ -91,6 +91,12 @@ importers:
 
   apps/join:
     dependencies:
+      '@camp404/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@camp404/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       next:
         specifier: ^16.3.4
         version: 16.3.4(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(@types/node@25.9.5)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -100,6 +106,9 @@ importers:
       react-dom:
         specifier: ^19.2.6
         version: 19.2.6(react@19.2.6)
+      server-only:
+        specifier: ^0.0.1
+        version: 0.0.1
     devDependencies:
       '@camp404/eslint-config':
         specifier: workspace:*
@@ -10238,7 +10247,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.3))
+      vitest: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.3))
 
   '@vitest/expect@3.2.4':
     dependencies:

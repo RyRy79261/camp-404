@@ -67,7 +67,9 @@ describe("GET /api/tools/invite/check", () => {
   });
 
   it("answers an approved member, reading the code in lowercase", async () => {
-    vi.mocked(findInviteCodeByCode).mockResolvedValue({ code: "amber-fox" } as never);
+    vi.mocked(findInviteCodeByCode).mockResolvedValue({
+      code: "amber-fox",
+    } as never);
     const res = await check("  Amber-Fox ");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ available: false, reason: "taken" });

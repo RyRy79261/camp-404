@@ -1,53 +1,65 @@
-import { CREW, type Headcount } from "@/lib/content";
+import { CREW_LABELS } from "@/lib/content";
+import type { JoinHeadcount as Headcount } from "@/lib/join-data";
+import { useJoinData } from "../join-data";
 import { Eyebrow, WinBody } from "./ui";
 
 // This year's captains, then a headcount from the app's "Coming this year?"
 // answers: counts only, never a list of who.
 export function CrewWindow() {
+  const { year, captains, headcount } = useJoinData();
   return (
     <WinBody>
       <section aria-labelledby="crew-captains" className="space-y-2">
-        <Eyebrow id="crew-captains">{CREW.captainsHeading}</Eyebrow>
-        <table className="w-full border-collapse text-left">
-          <thead className="font-mono text-[10px] uppercase tracking-widest text-os-muted">
-            <tr className="border-b border-os-line">
-              <th scope="col" className="py-1 pr-3 font-normal">
-                name
-              </th>
-              <th scope="col" className="py-1 pr-3 font-normal">
-                role
-              </th>
-              <th scope="col" className="py-1 font-normal">
-                bio
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {CREW.captains.map((c) => (
-              <tr key={c.name} className="border-b border-os-line/50 align-top">
-                <th
-                  scope="row"
-                  className="py-2 pr-3 font-pixel text-xs uppercase"
-                >
-                  {c.name}
+        <Eyebrow id="crew-captains">
+          {CREW_LABELS.captainsHeading(year)}
+        </Eyebrow>
+        {captains.length === 0 ? (
+          <p className="text-os-muted">{CREW_LABELS.noCaptains}</p>
+        ) : (
+          <table className="w-full border-collapse text-left">
+            <thead className="font-mono text-[10px] uppercase tracking-widest text-os-muted">
+              <tr className="border-b border-os-line">
+                <th scope="col" className="py-1 pr-3 font-normal">
+                  name
                 </th>
-                <td className="py-2 pr-3 font-mono text-[11px] uppercase text-os-primary">
-                  {c.role}
-                </td>
-                <td className="py-2 text-os-muted">{c.bio}</td>
+                <th scope="col" className="py-1 pr-3 font-normal">
+                  role
+                </th>
+                <th scope="col" className="py-1 font-normal">
+                  bio
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {captains.map((c) => (
+                <tr
+                  key={c.name}
+                  className="border-b border-os-line/50 align-top"
+                >
+                  <th
+                    scope="row"
+                    className="py-2 pr-3 font-pixel text-xs uppercase"
+                  >
+                    {c.name}
+                  </th>
+                  <td className="py-2 pr-3 font-mono text-[11px] uppercase text-os-primary">
+                    {c.title}
+                  </td>
+                  <td className="py-2 text-os-muted">{c.blurb}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <section aria-labelledby="crew-count" className="space-y-3">
-        <Eyebrow id="crew-count">{CREW.headcountHeading}</Eyebrow>
+        <Eyebrow id="crew-count">{CREW_LABELS.headcountHeading(year)}</Eyebrow>
         <p className="font-mono text-xs text-os-accent">
           &gt; SELECT status, COUNT(*) FROM coming_this_year GROUP BY status;
         </p>
-        <CapacityBar count={CREW.headcount} />
-        <p className="text-xs text-os-muted">{CREW.headcountSource}</p>
+        <CapacityBar count={headcount} />
+        <p className="text-xs text-os-muted">{CREW_LABELS.headcountSource}</p>
       </section>
     </WinBody>
   );
@@ -67,7 +79,8 @@ const SEGMENTS = [
 // One bar from 0 to the camp's capacity: accepted, then yes-and-waiting, then
 // maybe, with the minimum the camp needs marked on it.
 function CapacityBar({ count }: { count: Headcount | null }) {
-  const { min, max } = CREW.capacity;
+  const crew = useJoinData().content.crew;
+  const { min, max } = crew.capacity;
   const pct = (n: number) => `${(Math.min(n, max) / max) * 100}%`;
   const accepted = count?.accepted ?? 0;
   return (
@@ -86,7 +99,7 @@ function CapacityBar({ count }: { count: Headcount | null }) {
             NULL<span className="camp404-cursor">_</span>
             <span className="text-base text-os-muted"> / {max} places</span>
           </p>
-          <p>{CREW.counting}</p>
+          <p>{crew.counting}</p>
         </div>
       )}
 
@@ -119,13 +132,13 @@ function CapacityBar({ count }: { count: Headcount | null }) {
           className="absolute top-8 -translate-x-1/2 whitespace-nowrap text-center font-mono text-[10px] uppercase text-os-fg"
           style={{ left: pct(min) }}
         >
-          {min} · {CREW.minLabel}
+          {min} · {CREW_LABELS.minLabel}
         </p>
         <p
           aria-hidden
           className="absolute right-0 top-8 font-mono text-[10px] uppercase text-os-muted"
         >
-          {max} · {CREW.maxLabel}
+          {max} · {CREW_LABELS.maxLabel}
         </p>
       </div>
 

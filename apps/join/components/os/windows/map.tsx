@@ -1,16 +1,17 @@
-import { MAP } from "@/lib/content";
+import { useJoinData } from "../join-data";
 import { WinBody } from "./ui";
 
 // A schematic of the plot, not a survey: the dune and toilets behind,
 // sleeping at the back, the lounge up front with its sound facing away.
 export function MapWindow() {
+  const map = useJoinData().content.map;
   return (
     <WinBody>
       <figure className="border border-os-line bg-os-bg/70 p-2">
         <svg
           viewBox="0 0 400 292"
           role="img"
-          aria-label={`${MAP.where}: the dune and a row of toilets at the back, the sleeping tent in front of them, the kitchen in the middle and the lounge at the front, its sound pointing away from sleeping, towards Street A.`}
+          aria-label={`${map.where}: the dune and a row of toilets at the back, the sleeping tent in front of them, the kitchen in the middle and the lounge at the front, its sound pointing away from sleeping, towards Street A.`}
           className="w-full font-mono"
           fill="none"
           stroke="currentColor"
@@ -54,7 +55,7 @@ export function MapWindow() {
             className="fill-os-muted text-[9px]"
             stroke="none"
           >
-            {MAP.where.toUpperCase()}
+            {map.where.toUpperCase()}
           </text>
           <rect
             x="0"
@@ -149,7 +150,7 @@ export function MapWindow() {
         </svg>
       </figure>
       <ul className="space-y-1">
-        {MAP.lines.map((l) => (
+        {map.lines.map((l) => (
           <li key={l} className="flex gap-2">
             <span aria-hidden className="text-os-primary">
               ›

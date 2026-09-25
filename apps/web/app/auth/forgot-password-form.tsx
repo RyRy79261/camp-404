@@ -18,7 +18,11 @@ import { authClient } from "@/lib/auth-client";
 const SENT =
   "If an account uses that email, we've sent it a link to reset the password.";
 
-export function ForgotPasswordForm({ emailEnabled }: { emailEnabled: boolean }) {
+export function ForgotPasswordForm({
+  emailEnabled,
+}: {
+  emailEnabled: boolean;
+}) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);

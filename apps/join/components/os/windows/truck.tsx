@@ -1,4 +1,4 @@
-import { TRUCK } from "@/lib/content";
+import { useJoinData } from "../join-data";
 import { WinBody } from "./ui";
 
 // One big truck; the trailers go behind members' own cars.
@@ -17,6 +17,7 @@ const TRUCK_ART = [
 ].join("\n");
 
 export function TruckWindow() {
+  const truck = useJoinData().content.truck;
   return (
     <WinBody>
       <pre
@@ -26,7 +27,7 @@ export function TruckWindow() {
         {TRUCK_ART}
       </pre>
       <ol className="space-y-1 font-mono text-xs">
-        {TRUCK.entries.map((e, i) => (
+        {truck.entries.map((e, i) => (
           <li key={e} className="grid grid-cols-[3.25rem_1fr] gap-2">
             <span className="text-os-muted">
               [{String(i + 1).padStart(3, "0")}]

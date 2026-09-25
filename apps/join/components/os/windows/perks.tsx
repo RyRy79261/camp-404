@@ -1,11 +1,12 @@
-import { PERKS } from "@/lib/content";
+import { useJoinData } from "../join-data";
 import { WinBody } from "./ui";
 
 export function PerksWindow() {
+  const perks = useJoinData().content.perks;
   return (
     <WinBody>
       <ul className="grid gap-1 sm:grid-cols-2">
-        {PERKS.summary.map((p) => (
+        {perks.summary.map((p) => (
           <li key={p} className="flex gap-2">
             <span aria-hidden className="font-mono text-os-primary">
               [✓]
@@ -15,7 +16,7 @@ export function PerksWindow() {
         ))}
       </ul>
       <div className="space-y-2">
-        {PERKS.files.map((f) => (
+        {perks.files.map((f) => (
           <details
             key={f.file}
             className="group border border-os-line bg-os-bg/60 open:border-os-primary"

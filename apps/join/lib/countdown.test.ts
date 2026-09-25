@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { BURN_DATES } from "./content";
+import { DEFAULT_JOIN_DATA } from "./join-data";
+
+const BURN_DATES = DEFAULT_JOIN_DATA.burn!;
 import {
   burnCountdown,
   burnDatesLabel,
@@ -44,7 +46,7 @@ describe("burn countdown", () => {
 });
 
 describe("burn dates label", () => {
-  it("says the Burn's dates from BURN_DATES", () => {
+  it("says the Burn's dates", () => {
     expect(burnDatesLabel(BURN_DATES)).toBe("26 April – 2 May 2027");
   });
 

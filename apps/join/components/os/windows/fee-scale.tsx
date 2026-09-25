@@ -1,23 +1,28 @@
 "use client";
 
 import { useId, useState } from "react";
-import { FEE } from "@/lib/content";
-import { formatRands, formatUsdLabel, tierFor } from "@/lib/fee";
-
-const PERFECT = FEE.tiers[FEE.tiers.length - 1]!.rands;
-const ESSENTIAL = FEE.tiers[0]!.rands;
-// Room past Perfect World, so its marker is not on the very edge.
-const SCALE_MAX = Math.round((PERFECT * 1.125) / 100) * 100;
-const IDEAL = FEE.tiers.find((t) => t.key === "ideal")!.rands;
-
-const pct = (rands: number) => `${(rands / SCALE_MAX) * 100}%`;
+import { formatRands, formatUsdLabel as usd, tierFor } from "@/lib/fee";
+import { useJoinData } from "../join-data";
 
 // The camp fee as a floating scale: a subsidy zone, four marked tiers and a
 // slider to see where an amount lands. It is a guide; nothing is sent.
 export function FeeScale() {
   const id = useId();
+  const FEE = useJoinData().content.fee;
+  const rate = FEE.usdRate.randsPerDollar;
+  const formatUsdLabel = (rands: number) => usd(rands, rate);
+  const PERFECT = FEE.tiers[FEE.tiers.length - 1]!.rands;
+  const ESSENTIAL = FEE.tiers[0]!.rands;
+  // Room past the top tier, so its marker is not on the very edge.
+  const SCALE_MAX = Math.round((PERFECT * 1.125) / 100) * 100;
+  // Start on "ideal" when a tier has that name, else the middle tier.
+  const IDEAL = (
+    FEE.tiers.find((t) => t.key === "ideal") ??
+    FEE.tiers[Math.floor(FEE.tiers.length / 2)]!
+  ).rands;
+  const pct = (rands: number) => `${(rands / SCALE_MAX) * 100}%`;
   const [amount, setAmount] = useState(IDEAL);
-  const tier = tierFor(amount);
+  const tier = tierFor(amount, FEE.tiers);
   const label = tier?.name ?? FEE.subsidy.name;
   const note = tier ? tier.note : FEE.subsidy.note;
 

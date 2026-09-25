@@ -176,9 +176,7 @@ describe("recipe version page", () => {
       target: { value: "Soak overnight." },
     });
     await act(async () => {
-      fireEvent.click(
-        within(notes).getByRole("button", { name: "Add note" }),
-      );
+      fireEvent.click(within(notes).getByRole("button", { name: "Add note" }));
     });
     expect(addLessonAction).toHaveBeenCalledWith({
       recipeId: RECIPE,

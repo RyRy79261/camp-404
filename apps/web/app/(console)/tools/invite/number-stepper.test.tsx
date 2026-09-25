@@ -5,7 +5,9 @@ import { NumberStepper } from "./number-stepper";
 describe("NumberStepper", () => {
   it("renders the current value in the number input", () => {
     render(<NumberStepper value="3" onChange={() => {}} aria-label="count" />);
-    expect((screen.getByLabelText("count") as HTMLInputElement).value).toBe("3");
+    expect((screen.getByLabelText("count") as HTMLInputElement).value).toBe(
+      "3",
+    );
   });
 
   it("increments via +", () => {
@@ -24,15 +26,15 @@ describe("NumberStepper", () => {
 
   it("disables − at the min", () => {
     render(<NumberStepper value="1" onChange={() => {}} min={1} />);
-    expect((screen.getByLabelText("Decrease") as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    expect(
+      (screen.getByLabelText("Decrease") as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it("disables + at the max", () => {
     render(<NumberStepper value="100" onChange={() => {}} max={100} />);
-    expect((screen.getByLabelText("Increase") as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    expect(
+      (screen.getByLabelText("Increase") as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 });

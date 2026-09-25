@@ -13,9 +13,12 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@camp404/db": "workspace:*",
+    "@camp404/types": "workspace:*",
     "next": "^16.3.4",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@camp404/eslint-config": "workspace:*",

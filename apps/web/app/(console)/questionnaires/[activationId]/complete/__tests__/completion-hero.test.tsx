@@ -37,8 +37,14 @@ describe("CompletionHero", () => {
 
   it("says 1 more in the singular", () => {
     render(
-      <CompletionHero variant="more-required" pendingCount={1} nextHref="/q/1" />,
+      <CompletionHero
+        variant="more-required"
+        pendingCount={1}
+        nextHref="/q/1"
+      />,
     );
-    expect(screen.getByText("1 more required before you’re unlocked")).toBeTruthy();
+    expect(
+      screen.getByText("1 more required before you’re unlocked"),
+    ).toBeTruthy();
   });
 });

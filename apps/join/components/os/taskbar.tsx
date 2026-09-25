@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { APPS, appById } from "@/lib/apps";
-import { BURN_DATES, DESKTOP } from "@/lib/content";
+import { DESKTOP } from "@/lib/content";
+import { useJoinData } from "./join-data";
 import {
   burnCountdown,
   burnDatesLabel,
@@ -23,14 +24,15 @@ type Props = {
   onReboot: () => void;
 };
 
-function useBurnCountdown() {
+function useBurnCountdown(burn: { start: string; end: string } | null) {
   const [c, setC] = useState<BurnCountdown | null>(null);
   useEffect(() => {
-    const tick = () => setC(burnCountdown(tankwaToday(new Date()), BURN_DATES));
+    if (!burn) return;
+    const tick = () => setC(burnCountdown(tankwaToday(new Date()), burn));
     tick();
     const t = window.setInterval(tick, 60_000);
     return () => window.clearInterval(t);
-  }, []);
+  }, [burn]);
   return c;
 }
 
@@ -47,7 +49,8 @@ export function Taskbar({
   const [menu, setMenu] = useState(false);
   const start = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const countdown = useBurnCountdown();
+  const { burn } = useJoinData();
+  const countdown = useBurnCountdown(burn);
 
   // Opening the menu puts focus on its first item; a click elsewhere shuts it.
   useEffect(() => {
@@ -181,17 +184,20 @@ export function Taskbar({
             );
           })}
         </div>
-        <div
-          title={`AfrikaBurn: ${burnDatesLabel(BURN_DATES)}`}
-          className="flex h-8 shrink-0 items-center border border-os-line bg-os-panel px-2 font-mono text-[11px] uppercase tracking-wider text-os-fg sm:px-3"
-        >
-          <span className="sm:hidden">
-            {countdown ? countdownShort(countdown) : "T-…"}
-          </span>
-          <span className="hidden sm:inline">
-            {countdown ? countdownLabel(countdown) : "T-…"}
-          </span>
-        </div>
+        {/* No dates yet (a captain sets them in the app): no countdown. */}
+        {burn && (
+          <div
+            title={`AfrikaBurn: ${burnDatesLabel(burn)}`}
+            className="flex h-8 shrink-0 items-center border border-os-line bg-os-panel px-2 font-mono text-[11px] uppercase tracking-wider text-os-fg sm:px-3"
+          >
+            <span className="sm:hidden">
+              {countdown ? countdownShort(countdown) : "T-…"}
+            </span>
+            <span className="hidden sm:inline">
+              {countdown ? countdownLabel(countdown) : "T-…"}
+            </span>
+          </div>
+        )}
       </div>
     </>
   );

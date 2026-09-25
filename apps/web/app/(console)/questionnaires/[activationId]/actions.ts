@@ -53,7 +53,10 @@ export async function saveBuilderResponses(
   // questionnaire. A completed/waived/expired row must NOT write: a stale
   // partial save (completedAt=null) would otherwise wipe a completed row's
   // completedAt and diverge from required_actions.status.
-  const targeted = await getRequiredAction(campUser.id, activation.questionnaireKey);
+  const targeted = await getRequiredAction(
+    campUser.id,
+    activation.questionnaireKey,
+  );
   if (
     !targeted ||
     targeted.status !== "pending" ||
@@ -69,7 +72,9 @@ export async function saveBuilderResponses(
   if (!parsed.success) {
     return {
       ok: false,
-      errors: { _form: "We couldn't read your answers. Please reload and try again." },
+      errors: {
+        _form: "We couldn't read your answers. Please reload and try again.",
+      },
     };
   }
   const responses = parsed.data;

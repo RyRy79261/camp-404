@@ -5,6 +5,7 @@ import { APPS } from "@/lib/apps";
 import { DESKTOP } from "@/lib/content";
 import type { AppId, OsWindow } from "@/lib/window-manager";
 import { DesktopIcon } from "./desktop-icon";
+import { useJoinData } from "./join-data";
 import { GlitchWordmark } from "./glitch-wordmark";
 
 // The desktop, composed after dimensional.org/prototype (owner's pick of three
@@ -62,6 +63,7 @@ function Footer({ onReboot }: { onReboot: () => void }) {
 }
 
 export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
+  const { year } = useJoinData();
   const open = new Set(windows.map((w) => w.id));
   const icons = APPS.map((app) => (
     <DesktopIcon
@@ -81,7 +83,7 @@ export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
         <div className="pointer-events-none relative flex flex-col items-center gap-2 pt-10">
           <GlitchWordmark text="404" size="clamp(5rem, 34vw, 9rem)" />
           <p className="camp404-chromatic px-4 text-center font-mono text-[10px] uppercase tracking-[0.3em] text-os-fg">
-            {DESKTOP.tagline}
+            {DESKTOP.tagline(year)}
           </p>
         </div>
         <nav
@@ -116,7 +118,7 @@ export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
           size="clamp(3rem, 7vw, 5.5rem)"
         />
         <p className="camp404-chromatic font-mono text-[11px] uppercase tracking-[0.3em] text-os-fg">
-          {DESKTOP.tagline}
+          {DESKTOP.tagline(year)}
         </p>
       </div>
       <nav

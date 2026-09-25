@@ -135,7 +135,8 @@ export async function createInviteAction(
     if (!isSyntacticallyValidCode(code)) {
       return {
         ok: false,
-        error: "Invite code must be 3–48 chars, lowercase letters/digits/hyphens.",
+        error:
+          "Invite code must be 3–48 chars, lowercase letters/digits/hyphens.",
       };
     }
     const existing = await findInviteCodeByCode(code);

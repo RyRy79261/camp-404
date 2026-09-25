@@ -92,7 +92,9 @@ describe("TeamSettingsManager", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rename Kitchen" }));
     const input = screen.getByLabelText("Rename Kitchen");
     fireEvent.change(input, { target: { value: "  Cuisine  " } });
-    fireEvent.click(screen.getByRole("button", { name: "Save name for Kitchen" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save name for Kitchen" }),
+    );
     await waitFor(() =>
       expect(renameTeamAction).toHaveBeenCalledWith("kitchen", "Cuisine"),
     );

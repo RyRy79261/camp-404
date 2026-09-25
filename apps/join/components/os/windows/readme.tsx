@@ -1,20 +1,21 @@
-import { README } from "@/lib/content";
+import { useJoinData } from "../join-data";
 import type { AppId } from "@/lib/window-manager";
 
 export function ReadmeWindow({ openApp }: { openApp: (id: AppId) => void }) {
+  const { readme } = useJoinData().content;
   return (
     <article className="space-y-4 p-5 text-sm leading-relaxed text-os-fg">
       <h3 className="os-glow font-pixel text-xl uppercase leading-tight text-os-fg">
-        {README.heading}
+        {readme.heading}
       </h3>
-      {README.paragraphs.map((p) => (
+      {readme.paragraphs.map((p) => (
         <p key={p}>{p}</p>
       ))}
       <p className="border border-os-primary/60 bg-os-primary/10 px-3 py-2 font-mono text-xs uppercase tracking-wide text-os-primary">
-        ⚠ {README.warning}
+        ⚠ {readme.warning}
       </p>
       <blockquote className="border-l-2 border-os-accent pl-4 italic text-os-muted">
-        “{README.quote}”
+        “{readme.quote}”
       </blockquote>
       <section aria-labelledby="readme-join" className="space-y-2">
         <h4
@@ -24,7 +25,7 @@ export function ReadmeWindow({ openApp }: { openApp: (id: AppId) => void }) {
           How to join
         </h4>
         <ol className="list-inside list-decimal space-y-1 marker:font-mono marker:text-os-primary">
-          {README.steps.map((s) => (
+          {readme.steps.map((s) => (
             <li key={s}>{s}</li>
           ))}
         </ol>

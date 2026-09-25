@@ -37,3 +37,22 @@ on that text and nothing changes until a captain saves.
 - New `users` columns join `MEMBER_FIELD_READERS`; erasure clears them.
 - The public read returns counts, never names, and only captains who opted in.
 - The editor has a test-store twin so Playwright can drive it.
+
+## Built
+
+- `@camp404/types` `join-site.ts`: the per-section schemas and the approved copy.
+- `@camp404/db` `join-site.ts` + migration 0061: the table, the writers, the
+  public read; PGlite tests prove opt-in only, counts only, carry-forward.
+- `apps/web`: Captains → Join site (`/captains/join-site`) and the profile's
+  "What I am in camp" card, with test-store twins and Playwright specs.
+- `apps/join`: `lib/load-join-data.ts` reads the database on the server
+  (`revalidate = 60`); every window reads `useJoinData()`. No `DATABASE_URL`,
+  or a failed read, shows `DEFAULT_JOIN_DATA`.
+
+## Vercel
+
+The join project needs `DATABASE_URL` (the same Neon database, read only is
+enough). With it unset the site still works on the built-in copy. Connecting
+the Vercel Neon integration to the join project too would give every join
+preview its own Neon branch, which counts against the branch limit; a
+read-only production connection string for Preview avoids that.

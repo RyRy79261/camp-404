@@ -2,16 +2,9 @@
 // window. Pure, so every command and easter egg is tested without a browser.
 
 import { formatRands, formatUsdLabel } from "./fee";
-import {
-  APP_LABELS,
-  SIGNUP_URL,
-  CREW,
-  FEE,
-  INKBLOT,
-  PERKS,
-  README,
-  TEAMS,
-} from "./content";
+import { APP_LABELS, INKBLOT, SIGNUP_URL } from "./content";
+import type { JoinData } from "./join-data";
+import { teamFile } from "./teams";
 import { APP_IDS, type AppId } from "./window-manager";
 
 export type TermLine = { kind: "out" | "err" | "hi"; text: string };
@@ -61,21 +54,24 @@ function findApp(name: string): (typeof APP_IDS)[number] | undefined {
   );
 }
 
-function cat(target: string): TermResult {
+function cat(target: string, data: JoinData): TermResult {
+  const { readme, perks } = data.content;
   const t = target.toLowerCase();
   if (!t) return { lines: [err("cat: which file? try 'cat mission'")] };
   if (["mission", "readme", "readme.txt"].includes(t)) {
-    return { lines: [hi(README.heading), ...README.paragraphs.map(out)] };
+    return { lines: [hi(readme.heading), ...readme.paragraphs.map(out)] };
   }
-  if (t === "quote") return { lines: [out(`“${README.quote}”`)] };
-  const team = TEAMS.find((x) => x.file.toLowerCase() === t);
-  if (team) return { lines: [hi(team.name), out(team.does)] };
-  const perk = PERKS.files.find((x) => x.file.toLowerCase() === t);
+  if (t === "quote") return { lines: [out(`“${readme.quote}”`)] };
+  const team = data.teams.find((x) => teamFile(x).toLowerCase() === t);
+  if (team) return { lines: [hi(team.label), out(team.description)] };
+  const perk = perks.files.find((x) => x.file.toLowerCase() === t);
   if (perk) return { lines: [hi(perk.name), ...perk.paragraphs.map(out)] };
   return { lines: [err(`cat: ${target}: No such file. Lost, like us.`)] };
 }
 
-export function runCommand(input: string): TermResult {
+/** Run one line. `data` is the site's live data, so answers match the windows. */
+export function runCommand(input: string, data: JoinData): TermResult {
+  const { fee } = data.content;
   const line = input.trim();
   if (!line) return { lines: [] };
   const [rawCmd = "", ...rest] = line.split(/\s+/);
@@ -155,13 +151,14 @@ export function runCommand(input: string): TermResult {
       const dir = arg.toLowerCase().replace(/\/$/, "");
       if (!dir)
         return { lines: [out(APP_IDS.map((id) => APP_LABELS[id]).join("  "))] };
-      if (dir === "teams") return { lines: TEAMS.map((t) => out(t.file)) };
+      if (dir === "teams")
+        return { lines: data.teams.map((t) => out(teamFile(t))) };
       if (dir === "perks")
-        return { lines: PERKS.files.map((f) => out(f.file)) };
+        return { lines: data.content.perks.files.map((f) => out(f.file)) };
       return { lines: [err(`ls: ${arg}: No such directory.`)] };
     }
     case "cat":
-      return cat(arg);
+      return cat(arg, data);
     case "open": {
       const id = findApp(arg);
       if (!id) return { lines: [err(`open: ${arg || "what"}? Try 'ls'.`)] };
@@ -169,19 +166,21 @@ export function runCommand(input: string): TermResult {
     }
     case "captains":
       return {
-        lines: CREW.captains.map((c) => out(`${c.name.padEnd(8)} ${c.role}`)),
+        lines: data.captains.length
+          ? data.captains.map((c) => out(`${c.name.padEnd(8)} ${c.title}`))
+          : [out("Still being herded.")],
       };
     case "fee":
       return {
         lines: [
           hi("Camp fee: a floating scale, not a fixed fee."),
-          ...FEE.tiers.map((t) =>
+          ...fee.tiers.map((t) =>
             out(
-              `${t.name.padEnd(14)} ${formatRands(t.rands).padStart(8)}  ${formatUsdLabel(t.rands)}`,
+              `${t.name.padEnd(14)} ${formatRands(t.rands).padStart(8)}  ${formatUsdLabel(t.rands, fee.usdRate.randsPerDollar)}`,
             ),
           ),
-          out(FEE.subsidy.note),
-          out(FEE.intro),
+          out(fee.subsidy.note),
+          out(fee.intro),
           out("Budget your Burn: open fee.calc"),
         ],
         open: "fee",

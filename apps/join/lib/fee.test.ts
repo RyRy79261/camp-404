@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { FEE } from "./content";
+import { DEFAULT_JOIN_CONTENT } from "@camp404/types";
+
+const FEE = DEFAULT_JOIN_CONTENT.fee;
+const RATE = FEE.usdRate.randsPerDollar;
 import {
   feeFromBudget,
   formatRands,
@@ -29,14 +32,14 @@ describe("fee helpers", () => {
 
   it("labels rands in dollars at the content rate", () => {
     const rate = FEE.usdRate.randsPerDollar;
-    expect(formatUsdLabel(400 * rate)).toBe("≈ $400");
-    expect(formatUsdLabel(0)).toBe("≈ $0");
+    expect(formatUsdLabel(400 * rate, RATE)).toBe("≈ $400");
+    expect(formatUsdLabel(0, RATE)).toBe("≈ $0");
   });
 
   it("rounds the dollar label to $5", () => {
     const rate = FEE.usdRate.randsPerDollar;
-    expect(formatUsdLabel(218.75 * rate)).toBe("≈ $220");
-    expect(formatUsdLabel(373 * rate)).toBe("≈ $375");
+    expect(formatUsdLabel(218.75 * rate, RATE)).toBe("≈ $220");
+    expect(formatUsdLabel(373 * rate, RATE)).toBe("≈ $375");
   });
 
   it("keeps the owner's rand tiers", () => {
@@ -50,10 +53,10 @@ describe("fee helpers", () => {
 
   it("finds the highest tier an amount reaches, none below Essential", () => {
     const [essential, reasonable, ideal, perfect] = FEE.tiers;
-    expect(tierFor(essential!.rands - 1)).toBeUndefined();
-    expect(tierFor(essential!.rands)?.key).toBe("essential");
-    expect(tierFor(reasonable!.rands + 1)?.key).toBe("reasonable");
-    expect(tierFor(ideal!.rands)?.key).toBe("ideal");
-    expect(tierFor(perfect!.rands * 2)?.key).toBe("perfect");
+    expect(tierFor(essential!.rands - 1, FEE.tiers)).toBeUndefined();
+    expect(tierFor(essential!.rands, FEE.tiers)?.key).toBe("essential");
+    expect(tierFor(reasonable!.rands + 1, FEE.tiers)?.key).toBe("reasonable");
+    expect(tierFor(ideal!.rands, FEE.tiers)?.key).toBe("ideal");
+    expect(tierFor(perfect!.rands * 2, FEE.tiers)?.key).toBe("perfect");
   });
 });

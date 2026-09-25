@@ -20,6 +20,8 @@ import { Boot } from "./boot";
 import { Desktop } from "./desktop";
 import { OsWindowFrame } from "./os-window";
 import { Taskbar } from "./taskbar";
+import { JoinDataProvider } from "./join-data";
+import type { JoinData } from "@/lib/join-data";
 import { WindowContent } from "./windows";
 
 const PHONE_QUERY = "(max-width: 767px)";
@@ -36,7 +38,7 @@ function usePhone() {
   );
 }
 
-export function Os() {
+export function Os({ data }: { data: JoinData }) {
   const [booting, setBooting] = useState(true);
   const [wm, dispatch] = useReducer(wmReducer, INITIAL_WM);
   const phone = usePhone();
@@ -119,7 +121,7 @@ export function Os() {
     !!w.minimized || (phone && w.id !== top?.id);
 
   return (
-    <>
+    <JoinDataProvider data={data}>
       <Desktop
         windows={wm.windows}
         phone={phone}
@@ -180,6 +182,6 @@ export function Os() {
         onReboot={reboot}
       />
       {booting && <Boot onDone={finishBoot} />}
-    </>
+    </JoinDataProvider>
   );
 }

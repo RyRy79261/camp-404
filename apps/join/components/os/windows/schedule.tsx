@@ -1,4 +1,6 @@
-import { SCHEDULE, type ScheduleEntry } from "@/lib/content";
+import type { JoinScheduleEntry as ScheduleEntry } from "@camp404/types";
+import { burnDatesLabel } from "@/lib/countdown";
+import { useJoinData } from "../join-data";
 import { AllHands, Eyebrow, WinBody } from "./ui";
 
 function Block({
@@ -34,19 +36,22 @@ function Block({
 }
 
 export function ScheduleWindow() {
+  const { year, burn, content } = useJoinData();
+  const schedule = content.schedule;
   return (
     <WinBody>
       <p className="border border-os-accent/60 px-3 py-1.5 font-mono text-[11px] uppercase text-os-accent">
-        {SCHEDULE.datesNote}
+        {burn ? `AfrikaBurn ${year}: ${burnDatesLabel(burn)}. ` : ""}
+        {schedule.datesNote}
       </p>
-      <Block id="sched-before" title="Before" entries={SCHEDULE.before} />
-      <Block id="sched-onsite" title="On site" entries={SCHEDULE.onSite} />
-      <Block id="sched-after" title="After" entries={SCHEDULE.after} />
+      <Block id="sched-before" title="Before" entries={schedule.before} />
+      <Block id="sched-onsite" title="On site" entries={schedule.onSite} />
+      <Block id="sched-after" title="After" entries={schedule.after} />
       <section aria-labelledby="sched-shifts" className="space-y-2">
         <Eyebrow id="sched-shifts">Daily shifts</Eyebrow>
-        <p className="text-os-muted">{SCHEDULE.shiftsIntro}</p>
+        <p className="text-os-muted">{schedule.shiftsIntro}</p>
         <ul className="space-y-1">
-          {SCHEDULE.shifts.map((s) => (
+          {schedule.shifts.map((s) => (
             <li key={s} className="flex gap-2">
               <span aria-hidden className="text-os-primary">
                 ›
@@ -57,7 +62,7 @@ export function ScheduleWindow() {
         </ul>
       </section>
       <p className="bg-os-primary/15 px-3 py-2 font-mono text-xs uppercase text-os-fg">
-        {SCHEDULE.proactive}
+        {schedule.proactive}
       </p>
     </WinBody>
   );

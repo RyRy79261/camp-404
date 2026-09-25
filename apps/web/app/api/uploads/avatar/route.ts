@@ -50,8 +50,14 @@ export async function POST(req: Request) {
   });
   if (!limit.ok) {
     return NextResponse.json(
-      { error: "Rate limit exceeded", retryAfterSeconds: limit.retryAfterSeconds },
-      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+      {
+        error: "Rate limit exceeded",
+        retryAfterSeconds: limit.retryAfterSeconds,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limit.retryAfterSeconds) },
+      },
     );
   }
 
@@ -64,7 +70,10 @@ export async function POST(req: Request) {
   if (!ipLimit.ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded" },
-      { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSeconds) } },
+      {
+        status: 429,
+        headers: { "Retry-After": String(ipLimit.retryAfterSeconds) },
+      },
     );
   }
 
@@ -77,7 +86,10 @@ export async function POST(req: Request) {
 
   const file = form.get("image");
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Missing `image` file" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing `image` file" },
+      { status: 400 },
+    );
   }
   if (!ALLOWED_TYPES.has(file.type)) {
     return NextResponse.json(
