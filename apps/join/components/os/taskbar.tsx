@@ -5,6 +5,7 @@ import { APPS, appById } from "@/lib/apps";
 import { BURN_DATES, DESKTOP } from "@/lib/content";
 import {
   burnCountdown,
+  burnDatesLabel,
   countdownLabel,
   countdownShort,
   tankwaToday,
@@ -181,7 +182,7 @@ export function Taskbar({
           })}
         </div>
         <div
-          title="AfrikaBurn: 26 April – 2 May 2027"
+          title={`AfrikaBurn: ${burnDatesLabel(BURN_DATES)}`}
           className="flex h-8 shrink-0 items-center border border-os-line bg-os-panel px-2 font-mono text-[11px] uppercase tracking-wider text-os-fg sm:px-3"
         >
           <span className="sm:hidden">

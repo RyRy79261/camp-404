@@ -154,7 +154,8 @@ export function wmReducer(state: WmState, action: WmAction): WmState {
         windows: state.windows.filter((w) => w.id !== action.id),
       };
     case "closeAll":
-      return { ...state, windows: [] };
+      // A reboot starts the stack again from the bottom.
+      return INITIAL_WM;
     case "focus": {
       const target = state.windows.find((w) => w.id === action.id);
       if (!target || (target.z === state.topZ && !target.minimized)) {

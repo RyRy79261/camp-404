@@ -532,8 +532,9 @@ export function InkblotWindow() {
 
   function onKey(e: React.KeyboardEvent, down: boolean) {
     if (e.key === "Escape" || e.key === "Tab") return;
-    // Typing initials on the win screen is not playing.
-    if ((e.target as HTMLElement).closest("input, button, form")) return;
+    // Typing initials on the win screen is not playing. A focused pad button
+    // is, so only the win screen is left out.
+    if ((e.target as HTMLElement).closest("[data-inkblot-win]")) return;
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (down && key === "r") return restart();
     if (game.current.phase === "won") return;

@@ -40,6 +40,13 @@ describe("wmReducer", () => {
     expect(topWindow(closed)?.id).toBe("readme");
   });
 
+  it("close all starts the stack again from the bottom", () => {
+    const s = open(open(INITIAL_WM, "readme"), "map");
+    const rebooted = wmReducer(s, { type: "closeAll" });
+    expect(rebooted).toEqual(INITIAL_WM);
+    expect(open(rebooted, "readme").windows[0]!.z).toBe(1);
+  });
+
   it("focus leaves the state alone when the window is already on top", () => {
     const s = open(INITIAL_WM, "readme");
     expect(wmReducer(s, { type: "focus", id: "readme" })).toBe(s);

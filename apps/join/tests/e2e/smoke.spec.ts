@@ -140,6 +140,12 @@ test("the terminal hides a game behind jinn-is-best", async ({ page }) => {
   await page.getByRole("button", { name: "Close README.TXT" }).click();
   // Not on the desktop, not in the Start menu.
   await expect(page.getByRole("button", { name: /INKBLOT/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Start" }).click();
+  const menu = page.getByRole("menu", { name: "Start" });
+  await expect(menu.getByRole("menuitem", { name: "TERMINAL" })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: /INKBLOT/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
 
   await page.getByRole("button", { name: "Open TERMINAL" }).click();
   const prompt = page.getByLabel("burner@404:~$");

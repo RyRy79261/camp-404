@@ -105,6 +105,7 @@ export function InkblotWin({
   return (
     <div
       ref={root}
+      data-inkblot-win
       role="dialog"
       aria-labelledby={`${id}-title`}
       className="absolute inset-0 z-10 overflow-y-auto bg-[oklch(0.1_0.02_295/0.86)] px-4 py-3 text-center"

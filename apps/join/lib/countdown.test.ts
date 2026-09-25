@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BURN_DATES } from "./content";
 import {
   burnCountdown,
+  burnDatesLabel,
   countdownLabel,
   countdownShort,
   tankwaToday,
@@ -38,6 +39,18 @@ describe("burn countdown", () => {
   it("is over the day after the last day", () => {
     expect(countdownLabel(burnCountdown("2027-05-03", BURN_DATES))).toBe(
       "See you next Burn",
+    );
+  });
+});
+
+describe("burn dates label", () => {
+  it("says the Burn's dates from BURN_DATES", () => {
+    expect(burnDatesLabel(BURN_DATES)).toBe("26 April – 2 May 2027");
+  });
+
+  it("names both years when the dates cross one", () => {
+    expect(burnDatesLabel({ start: "2027-12-30", end: "2028-01-02" })).toBe(
+      "30 December 2027 – 2 January 2028",
     );
   });
 });

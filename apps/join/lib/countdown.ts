@@ -24,6 +24,25 @@ function dayNumber(isoDate: string): number {
   );
 }
 
+/**
+ * The Burn's dates in words, e.g. "26 April – 2 May 2027". Each day is
+ * formatted on its own, not with formatRange, whose spacing differs between
+ * ICU versions (and so between the server and a browser).
+ */
+export function burnDatesLabel(burn: { start: string; end: string }): string {
+  const start = new Date(dayNumber(burn.start) * DAY_MS);
+  const end = new Date(dayNumber(burn.end) * DAY_MS);
+  const format = (d: Date, withYear: boolean) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "UTC",
+      day: "numeric",
+      month: "long",
+      year: withYear ? "numeric" : undefined,
+    }).format(d);
+  const sameYear = start.getUTCFullYear() === end.getUTCFullYear();
+  return `${format(start, !sameYear)} – ${format(end, true)}`;
+}
+
 export type BurnCountdown =
   | { phase: "before"; days: number }
   | { phase: "during"; day: number }

@@ -126,7 +126,12 @@ export function Os() {
         onOpen={openApp}
         onReboot={reboot}
       >
-        <div ref={layer} className="pointer-events-none absolute inset-0">
+        {/* isolate: window z-indexes stay inside this layer, so on a phone
+            (no z-20 wrapper) a window never rises over the taskbar. */}
+        <div
+          ref={layer}
+          className="pointer-events-none absolute inset-0 isolate"
+        >
           {wm.windows.map((w) => (
             <OsWindowFrame
               key={w.id}
