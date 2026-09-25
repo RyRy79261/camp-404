@@ -344,31 +344,6 @@ body {
   }
 }
 
-/* The horizon variant's receding grid. */
-.os-horizon {
-  background-image:
-    linear-gradient(
-      to right,
-      color-mix(in oklch, var(--color-os-primary) 45%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      color-mix(in oklch, var(--color-os-primary) 45%, transparent) 1px,
-      transparent 1px
-    );
-  background-size: 48px 48px;
-  transform: perspective(320px) rotateX(62deg);
-  transform-origin: top center;
-  mask-image: linear-gradient(to bottom, transparent, black 30%);
-  animation: os-horizon-scroll 2.4s linear infinite;
-}
-@keyframes os-horizon-scroll {
-  to {
-    background-position: 0 48px;
-  }
-}
-
 /* Reduced motion: stills, as the landing does. The fringes held apart, the
    beam and tears hidden, windows appear without the power-on. */
 @media (prefers-reduced-motion: reduce) {
@@ -378,8 +353,7 @@ body {
   }
   .camp404-glitch-shake,
   .camp404-cursor,
-  .os-window-in,
-  .os-horizon {
+  .os-window-in {
     animation: none;
   }
   .camp404-glitch-rgb-magenta {
@@ -390,4 +364,46 @@ body {
     animation: none;
     transform: translate(3px, 0);
   }
+}
+
+/* FEE.CALC's slider: the native range input, invisible but for its thumb, laid
+   over the drawn scale so it stays keyboard- and screen-reader-native. */
+.os-range {
+  appearance: none;
+  background: transparent;
+}
+.os-range::-webkit-slider-runnable-track {
+  height: 1rem;
+  background: transparent;
+}
+.os-range::-moz-range-track {
+  height: 1rem;
+  background: transparent;
+}
+.os-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 26px;
+  margin-top: -5px;
+  background: var(--color-os-fg);
+  border: 2px solid var(--color-os-primary);
+  box-shadow: 3px 3px 0 0 rgb(0 0 0 / 0.5);
+}
+.os-range::-moz-range-thumb {
+  width: 14px;
+  height: 26px;
+  border-radius: 0;
+  background: var(--color-os-fg);
+  border: 2px solid var(--color-os-primary);
+}
+.os-range:focus-visible {
+  outline: none;
+}
+.os-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--color-os-primary);
+  outline-offset: 2px;
+}
+.os-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--color-os-primary);
+  outline-offset: 2px;
 }

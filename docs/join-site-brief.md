@@ -194,9 +194,13 @@ water (R50K), 24/7 power & lights (R10K), decor (R10K), gifts and artworks,
 transport & storage (R100K). Finances fully transparent. Paying doesn't make
 it appear — you still help build it.
 **Camp fee (required): USD 404–1404 recommended. Tent fee (optional): TBC.**
-[CORRECTION 2026-09-25] The owner chose rands. [UNRESOLVED 2026-09-25] The
-rand range is not given yet; the site shows a placeholder R4,040–R14,040
-(`FEE.recommended` in `apps/join/lib/content.ts`) until the owner sets it.
+[CORRECTION 2026-09-25] The owner replaced the fixed range: the fee is a
+floating scale, shown in rands with a dollar label beside it. Essential ≈ $200,
+Reasonable ≈ $350, Ideal ≈ $400 (where most people should land), Perfect World
+≈ $800, and a subsidy below Essential for South Africans, students and anyone
+short on cash. FEE.CALC draws it as a slider. [UNRESOLVED 2026-09-25] The rate
+R18 = $1 is ours, not the owner's (`FEE.usdRate` in
+`apps/join/lib/content.ts`); the owner should confirm it.
 [CORRECTION 2026-09-25] The copy was written for the 2026 Burn, which is past.
 The owner chose to say 2027, with the 2026 timeline shown as "2027 dates to be
 confirmed". The Google Form link is still the 2026 one; swap `APPLY_URL` when

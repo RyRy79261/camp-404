@@ -30,10 +30,11 @@ describe("runCommand", () => {
     expect(text("apply")).toContain(APPLY_URL);
   });
 
-  it("fee shows rands and opens the calculator", () => {
+  it("fee shows the sliding scale in rands with dollar labels", () => {
     const r = runCommand("fee");
     expect(r.open).toBe("fee");
-    expect(text("fee")).toMatch(/R\d{1,2},\d{3}/);
+    expect(text("fee")).toMatch(/Ideal\s+R\d{1,2},\d{3}\s+≈ \$400/);
+    expect(text("fee")).toContain("Perfect World");
   });
 
   it("opens a program by its desktop name", () => {

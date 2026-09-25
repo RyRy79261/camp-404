@@ -1,7 +1,7 @@
 // TERMINAL's shell: one line in, lines out, and sometimes a request to open a
 // window. Pure, so every command and easter egg is tested without a browser.
 
-import { formatRands } from "./fee";
+import { formatRands, formatUsdLabel } from "./fee";
 import {
   APP_LABELS,
   APPLY_URL,
@@ -167,9 +167,13 @@ export function runCommand(input: string): TermResult {
     case "fee":
       return {
         lines: [
-          hi(
-            `Camp fee: ${formatRands(FEE.recommended.min)} – ${formatRands(FEE.recommended.max)} recommended.`,
+          hi("Camp fee: a floating scale, not a fixed fee."),
+          ...FEE.tiers.map((t) =>
+            out(
+              `${t.name.padEnd(14)} ${formatRands(t.rands).padStart(8)}  ${formatUsdLabel(t.rands)}`,
+            ),
           ),
+          out(FEE.subsidy.note),
           out(FEE.intro),
           out("Budget your Burn: open fee.calc"),
         ],

@@ -1,3 +1,5 @@
+import { FEE, type FeeTier } from "./content";
+
 // Rand formatting and the budget calculator's arithmetic. The site only shows
 // whole rands, like the camp's own money rule (AGENTS.md: rands only), with
 // commas as the camp's own copy writes them (R2,000).
@@ -20,4 +22,20 @@ export function parseRands(text: string): number {
 export function feeFromBudget(budget: number, costs: number[]): number {
   const spent = costs.reduce((a, b) => a + b, 0);
   return Math.max(0, budget - spent);
+}
+
+/** A rand amount's dollar label, at the rate in content.ts: "≈ $400". */
+export function formatUsdLabel(rands: number): string {
+  const dollars = Math.round(rands / FEE.usdRate.randsPerDollar);
+  return `≈ $${RANDS.format(dollars)}`;
+}
+
+/** The highest tier an amount reaches, or undefined below the first. */
+export function tierFor(
+  rands: number,
+  tiers: readonly FeeTier[] = FEE.tiers,
+): FeeTier | undefined {
+  let reached: FeeTier | undefined;
+  for (const t of tiers) if (rands >= t.rands) reached = t;
+  return reached;
 }

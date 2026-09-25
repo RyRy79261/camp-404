@@ -2,16 +2,22 @@
 
 import { useId, useState } from "react";
 import { FEE } from "@/lib/content";
-import { feeFromBudget, formatRands, parseRands } from "@/lib/fee";
+import {
+  feeFromBudget,
+  formatRands,
+  formatUsdLabel,
+  parseRands,
+  tierFor,
+} from "@/lib/fee";
+import { FeeScale } from "./fee-scale";
 import { Eyebrow, WinBody } from "./ui";
 
 const SPEND_MAX = Math.max(...FEE.spend.map((s) => s.rands));
 
 function verdict(fee: number): string {
-  if (fee === 0) return "Nothing is okay. Come build with us anyway.";
-  if (fee < FEE.recommended.min) return "Pay what you can. That's the deal.";
-  if (fee <= FEE.recommended.max) return "Right in the recommended range.";
-  return "You're subsidising a starving artist. Legend.";
+  const tier = tierFor(fee);
+  if (!tier) return FEE.subsidy.note;
+  return tier.note ? `${tier.name}. ${tier.note}` : `${tier.name}.`;
 }
 
 // "Budget your Burn": set a total, take off the other costs, and see what
@@ -30,11 +36,7 @@ export function FeeWindow() {
 
   return (
     <WinBody>
-      <p className="font-pixel text-base uppercase">
-        Camp fee: {formatRands(FEE.recommended.min)} –{" "}
-        {formatRands(FEE.recommended.max)}{" "}
-        <span className="text-os-muted">recommended</span>
-      </p>
+      <FeeScale />
       <p>{FEE.intro}</p>
       <p className="font-mono text-[11px] uppercase text-os-muted">
         Tent fee (optional): {FEE.tentFee}
@@ -90,7 +92,10 @@ export function FeeWindow() {
             Left for your camp fee
           </span>
           <span className="os-glow block font-pixel text-2xl">
-            {formatRands(fee)}
+            {formatRands(fee)}{" "}
+            <span className="font-mono text-sm text-os-muted">
+              {formatUsdLabel(fee)}
+            </span>
           </span>
           <span className="block text-os-primary">{verdict(fee)}</span>
         </output>

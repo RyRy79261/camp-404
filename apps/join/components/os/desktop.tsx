@@ -75,7 +75,7 @@ export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
 
   if (phone) {
     return (
-      <main className="relative min-h-dvh overflow-hidden bg-os-bg pb-6">
+      <main className="relative min-h-dvh overflow-x-clip bg-os-bg pb-6">
         <Surface />
         <h1 className="sr-only">Camp 404</h1>
         <div className="pointer-events-none relative flex flex-col items-center gap-2 pt-10">
@@ -99,7 +99,7 @@ export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
   }
 
   return (
-    <main className="relative h-dvh overflow-hidden bg-os-bg">
+    <main className="relative h-dvh overflow-clip bg-os-bg">
       <Surface />
       <header className="relative z-10 flex h-11 items-center justify-between border-b border-os-line/60 bg-os-bg/80 px-4">
         <span className="os-glow font-pixel text-sm uppercase tracking-widest text-os-fg">

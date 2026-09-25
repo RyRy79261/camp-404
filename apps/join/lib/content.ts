@@ -261,15 +261,47 @@ export const SCHEDULE = {
 
 export type BudgetLine = { key: string; label: string; hint: string };
 
+export type FeeTier = {
+  key: string;
+  name: string;
+  /** Whole rands. The dollar figure beside it is worked out, never stored. */
+  rands: number;
+  note?: string;
+};
+
 export const FEE = {
   title: "FEE.CALC",
-  // [UNRESOLVED 2026-09-25] The Notion page says "USD 404–1404 recommended".
-  // The owner chose rands; these rand figures are a placeholder until the
-  // owner gives the real range.
-  recommended: { min: 4_040, max: 14_040 },
+  // The owner's sliding scale (2026-09-25): not a fixed fee. The owner gave
+  // the tiers in dollars; the site keeps them in rands, as the camp keeps all
+  // money, and shows a dollar figure only as a label at `usdRate`.
+  // [UNRESOLVED 2026-09-25] R18.00 = $1 is our assumption, not the owner's.
+  // Change the rate (and the rand figures, if the dollar labels should stay
+  // round) when the owner names one.
+  usdRate: { randsPerDollar: 18, asOf: "September 2026" },
+  tiers: [
+    { key: "essential", name: "Essential", rands: 3_600 },
+    { key: "reasonable", name: "Reasonable", rands: 6_300 },
+    {
+      key: "ideal",
+      name: "Ideal",
+      rands: 7_200,
+      note: "Where we hope most people can land.",
+    },
+    {
+      key: "perfect",
+      name: "Perfect World",
+      rands: 14_400,
+      note: "More helps subsidise the starving artists.",
+    },
+  ] satisfies FeeTier[],
+  subsidy: {
+    name: "Subsidy",
+    note: "South African, a student, or short on cash? Pay what you can: nothing is okay. Ask the Comms & HR team.",
+  },
+  scaleIntro: "A floating scale, not a fixed fee. Slide to see where you land.",
   tentFee: "TBC",
   intro:
-    "Pay what you can afford. Nothing is okay; more helps subsidise the starving artists. Paying doesn't make the camp appear: you still help build it.",
+    "Pay what you can afford. Paying doesn't make the camp appear: you still help build it.",
   spend: [
     { what: "Shade", rands: 100_000 },
     { what: "Kitchen: 2 vegan meals a day, snacks, water", rands: 50_000 },

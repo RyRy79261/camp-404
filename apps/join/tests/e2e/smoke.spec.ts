@@ -56,3 +56,20 @@ test("APPLY links to the Google Form", async ({ page }) => {
   await expect(apply).toHaveAttribute("href", APPLY_URL);
   await expect(apply).toHaveAttribute("target", "_blank");
 });
+
+test("the fee scale moves between tiers", async ({ page }) => {
+  await page.getByRole("button", { name: "Close README.TXT" }).click();
+  await page.getByRole("button", { name: "Open FEE.CALC" }).click();
+  const fee = page.getByRole("dialog", { name: "FEE.CALC" });
+  const slider = fee.getByRole("slider", {
+    name: "What I could pay, in rands",
+  });
+  await expect(slider).toHaveAttribute("aria-valuetext", /Ideal/);
+  await fee.getByRole("button", { name: /^Perfect World/ }).click();
+  await expect(slider).toHaveAttribute(
+    "aria-valuetext",
+    /\$800, Perfect World/,
+  );
+  await slider.fill("0");
+  await expect(slider).toHaveAttribute("aria-valuetext", /Subsidy/);
+});
