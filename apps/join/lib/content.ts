@@ -449,8 +449,10 @@ export const INKBLOT = {
   controls: "← → move · ↑ or Space jump · ↓ hop down · X swipe · R restart",
   touch: "Use the buttons below to move, jump and swipe.",
   start: "Press any key or tap to start",
-  won: "EVERYTHING IS ON THE FLOOR. GOOD CAT.",
-  again: "Press R or tap to knock it all over again",
+  winTitle: "GOODEST BOI",
+  winLine: "Everything is on the floor.",
+  boardNote: "Scores live in this browser only.",
+  againButton: "Knock it all over again",
 } as const;
 
 /** Desktop icon labels, in desktop order. The label is also the window title. */

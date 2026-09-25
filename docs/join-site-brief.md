@@ -253,3 +253,10 @@ Transport & Travel team makes sure everyone and everything has a ride.
   knocks everything off. It is on no desktop, menu or `help` list. The rules
   are in `apps/join/lib/inkblot.ts`, tested; the drawing is in
   `components/os/windows/inkblot.tsx`.
+- INKBLOT.EXE is 16-bit pixel art (owner). The cat's frames come from the
+  owner's bat-cat repo (`tools/assets/cat_sheet.png`), recoloured black.
+  [UNRESOLVED 2026-09-25] bat-cat does not record where that sheet came from
+  or its licence; the owner should confirm it may ship on a public site.
+- Clearing the level shows GOODEST BOI and a "speed of chaos" top 10 with
+  arcade initials. The site has no database, so the board lives in each
+  visitor's browser; a shared board would need the main app.

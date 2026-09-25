@@ -204,9 +204,10 @@ export function createGame(): Game {
     phase: "title",
     cat: {
       x: 40,
-      y: FLOOR_Y - 24,
-      w: 36,
-      h: 24,
+      // The running frame's body, 13 × 11 art pixels at 2 units each.
+      y: FLOOR_Y - 22,
+      w: 26,
+      h: 22,
       vx: 0,
       vy: 0,
       facing: 1,

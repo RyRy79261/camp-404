@@ -151,3 +151,52 @@ test("the terminal hides a game behind jinn-is-best", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(game).toHaveCount(0);
 });
+
+test("clearing INKBLOT.EXE says GOODEST BOI and keeps a speed-of-chaos board", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Close README.TXT" }).click();
+  await page.getByRole("button", { name: "Open TERMINAL" }).click();
+  const prompt = page.getByLabel("burner@404:~$");
+  await prompt.fill("jinn-is-best");
+  await prompt.press("Enter");
+  const game = page.getByRole("dialog", { name: "INKBLOT.EXE" });
+  await game.getByRole("application").press("Enter");
+
+  // Development builds expose the game so a test can finish it at once.
+  await page.evaluate(() => {
+    const g = (
+      window as unknown as {
+        __inkblot: () => {
+          seconds: number;
+          items: { state: string; surface: unknown; vy: number }[];
+        };
+      }
+    ).__inkblot();
+    g.seconds = 42.3;
+    for (const it of g.items) {
+      it.state = "falling";
+      it.surface = null;
+      it.vy = 400;
+    }
+  });
+
+  const win = page.getByRole("dialog", { name: "GOODEST BOI" });
+  await expect(win).toBeVisible();
+  await expect(win).toContainText("0:42.");
+  const initials = win.getByLabel(/enter your initials/i);
+  await expect(initials).toBeFocused();
+  await initials.pressSequentially("jin!");
+  await expect(initials).toHaveValue("JIN");
+  await initials.press("Enter");
+  await expect(win.getByRole("listitem").first()).toContainText("JIN");
+
+  // Stored in this browser for next time.
+  const stored = await page.evaluate(() =>
+    window.localStorage.getItem("inkblot.leaderboard.v1"),
+  );
+  expect(stored).toContain('"JIN"');
+
+  await win.getByRole("button", { name: /knock it all over again/i }).click();
+  await expect(win).toHaveCount(0);
+});

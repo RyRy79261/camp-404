@@ -15,7 +15,7 @@ const SIZES: Record<AppId, { w: number; h: number }> = {
   truck: { w: 520, h: 360 },
   terminal: { w: 640, h: 400 },
   apply: { w: 460, h: 300 },
-  inkblot: { w: 700, h: 480 },
+  inkblot: { w: 720, h: 560 },
 };
 
 export type AppDef = {

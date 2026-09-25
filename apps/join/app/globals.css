@@ -478,6 +478,56 @@ button:hover .pixel-glitch .pixel-glitch-c {
   }
 }
 
+/* INKBLOT.EXE's win screen: confetti, a bouncing cat, a waving title. */
+.inkblot-confetti {
+  animation: inkblot-confetti linear infinite;
+}
+@keyframes inkblot-confetti {
+  from {
+    transform: translateY(0) rotate(0deg);
+  }
+  to {
+    transform: translateY(640px) rotate(540deg);
+  }
+}
+.inkblot-bounce {
+  image-rendering: pixelated;
+  animation: inkblot-bounce 0.6s steps(2) infinite alternate;
+}
+@keyframes inkblot-bounce {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-10px);
+  }
+}
+.inkblot-wave {
+  animation: inkblot-wave 1.2s steps(6) infinite;
+}
+@keyframes inkblot-wave {
+  0%,
+  100% {
+    transform: translateY(0);
+    color: var(--color-os-fg);
+  }
+  25% {
+    transform: translateY(-8px);
+    color: var(--color-os-primary);
+  }
+  50% {
+    transform: translateY(0);
+    color: var(--color-os-accent);
+  }
+  75% {
+    transform: translateY(3px);
+    color: var(--color-os-fg);
+  }
+}
+.inkblot-blink {
+  animation: camp404-cursor-blink 0.7s steps(1) infinite;
+}
+
 /* Reduced motion: stills, as the landing does. The fringes held apart, the
    beam and tears hidden, windows appear without the power-on. */
 @media (prefers-reduced-motion: reduce) {
@@ -493,7 +543,11 @@ button:hover .pixel-glitch .pixel-glitch-c {
   button:hover .pixel-glitch .pixel-glitch-m,
   button:hover .pixel-glitch .pixel-glitch-c,
   .gift-ring-orbit,
-  .gift-flame {
+  .gift-flame,
+  .inkblot-confetti,
+  .inkblot-bounce,
+  .inkblot-wave,
+  .inkblot-blink {
     animation: none;
   }
   .gift-ring-fill {
