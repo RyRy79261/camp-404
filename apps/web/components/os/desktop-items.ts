@@ -3,7 +3,10 @@ import {
   type DefaultSpec,
   type DesktopLayout,
 } from "@camp404/os";
-import { desktopFolderKey, desktopTeamFolderKey } from "@camp404/types";
+import {
+  desktopFolderKey,
+  desktopTeamFolderKey,
+} from "@camp404/types/desktop-keys";
 import type {
   ClientFolder,
   ClientProgram,

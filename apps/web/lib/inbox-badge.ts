@@ -1,7 +1,8 @@
 import "server-only";
 
 import { cache } from "react";
-import { countUnread } from "./notifications";
+import { countUnread, countUnreadSplit } from "./notifications";
+import { usesTestStore } from "./test-mode";
 import { getPendingQuestionnaires } from "./users";
 
 // The one count of "what is new in your inbox". The bell in the desktop's tray
@@ -41,15 +42,32 @@ export interface InboxBadge {
  * them.
  *
  * Wrapped in React `cache`, so the header and the page share one read per
- * request. The waiting list is read first because the notice count needs its
- * ids.
+ * request. Against the database the two halves are read together; the test
+ * store keeps the plain order (waiting list, then the count without it).
  */
 export const getInboxBadge = cache(
   async (userId: string): Promise<InboxBadge> => {
-    const pending = await getPendingQuestionnaires(userId);
-    const notices = await countUnread(userId, {
-      exceptActivationIds: pending.map((q) => q.activationId),
-    });
+    if (usesTestStore()) {
+      const pending = await getPendingQuestionnaires(userId);
+      const notices = await countUnread(userId, {
+        exceptActivationIds: pending.map((q) => q.activationId),
+      });
+      const waiting = pending.length;
+      return { notices, waiting, total: notices + waiting };
+    }
+    // Both halves at once (the badge is on every console page): every unread
+    // delivery, split by the questionnaire it points at, less the notices of
+    // the forms still waiting. The same number as countUnread with those ids
+    // left out (packages/db count-unread.test.ts), one database wait sooner.
+    const [pending, unread] = await Promise.all([
+      getPendingQuestionnaires(userId),
+      countUnreadSplit(userId),
+    ]);
+    const waitingIds = new Set(pending.map((q) => q.activationId));
+    let notices = unread.total;
+    for (const id of waitingIds) {
+      notices -= unread.byQuestionnaire.get(id) ?? 0;
+    }
     const waiting = pending.length;
     return { notices, waiting, total: notices + waiting };
   },

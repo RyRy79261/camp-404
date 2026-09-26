@@ -55,15 +55,7 @@ export const DesktopShortcutId = z.string().regex(/^sc-\d{1,6}$/);
 /** The id the desktop gives a new member folder: `uf-<n>`. */
 export const DesktopMemberFolderId = z.string().regex(/^uf-\d{1,6}$/);
 
-/** The grid key of a camp-wide folder (Teams, Kitchen, Captains). */
-export function desktopFolderKey(folderId: string): string {
-  return `folder:${folderId}`;
-}
-
-/** The grid key of one of the member's team folders ("Kitchen team"). */
-export function desktopTeamFolderKey(team: string): string {
-  return `team-folder:${team}`;
-}
+export { desktopFolderKey, desktopTeamFolderKey } from "./desktop-keys";
 
 /** A cell on the invisible icon grid: column and row, from the top left. */
 export const DesktopCell = z.object({

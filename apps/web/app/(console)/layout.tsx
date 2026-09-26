@@ -1,17 +1,18 @@
 import { cookies } from "next/headers";
 import { Desktop } from "@/components/os/desktop-shell";
-import { TodayBody } from "@/components/os/today-body";
+import { TodayBody, TodayWarm } from "@/components/os/today-body";
 import { BOOT_COOKIE, bootLog } from "@/lib/boot";
 import { isCampBootstrapped } from "@/lib/bootstrap";
 import { getCampSettings } from "@/lib/camp-config";
 import { rankLabel } from "@/lib/camp-roster";
 import { getMyDesktopLayout } from "@/lib/desktop-layout";
-import { resolveMemberState } from "@/lib/member-gate";
+import { prefetchMemberState, resolveMemberState } from "@/lib/member-gate";
 import { listPinnedForUser } from "@/lib/notifications";
 import { getProgramManifest, manifestModeFor } from "@/lib/program-manifest";
 import { getCampHeadcount } from "@/lib/roster";
 import { isE2ETestMode } from "@/lib/test-mode";
-import { getTodayModel } from "@/lib/today";
+import { getInboxBadge } from "@/lib/inbox-badge";
+import { todayBurn } from "@/lib/today";
 import { getMyMemberships } from "@/lib/users";
 
 // Reads the session cookie on every request; cannot be prerendered.
@@ -52,6 +53,8 @@ export default async function ConsoleLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // The member's plain reads start now, beside the setup check, not after it.
+  prefetchMemberState();
   const bootstrapped = await isCampBootstrapped();
   const state = bootstrapped ? await resolveMemberState() : null;
   if (!state || state.kind !== "member") return <>{children}</>;
@@ -84,7 +87,7 @@ export default async function ConsoleLayout({
     memberships,
     settings,
     pinned,
-    today,
+    inbox,
     jar,
     headcount,
   ] = await Promise.all([
@@ -93,9 +96,11 @@ export default async function ConsoleLayout({
     full ? getMyMemberships(state.campUser.id) : Promise.resolve([]),
     getCampSettings(),
     full ? listPinnedForUser(state.campUser.id) : Promise.resolve([]),
-    // Today on every screen (the prototype's pop-out): the member's own
-    // summary, read with the chrome. A held member gets none.
-    held ? Promise.resolve(null) : getTodayModel(state),
+    // Today's count on its handle: the forms waiting on a cleared member,
+    // which is its "Needs you" list. The badge is the manifest's own read.
+    // Today's contents are read when the gadget opens (TodayBody), not with
+    // every page.
+    full ? getInboxBadge(state.campUser.id) : Promise.resolve(null),
     cookies(),
     captain ? getCampHeadcount() : Promise.resolve(null),
   ]);
@@ -134,7 +139,7 @@ export default async function ConsoleLayout({
           teams: settings.teams.teams.filter((t) => !t.archived).length,
           inbox: manifest.tray.inbox?.count ?? 0,
           year: cycle?.year ?? null,
-          daysTo: today?.burn?.daysTo ?? null,
+          daysTo: todayBurn(cycle, new Date())?.daysTo ?? null,
         })
       : null;
   return (
@@ -159,12 +164,13 @@ export default async function ConsoleLayout({
       year={cycle?.year ?? null}
       tagline={tagline}
       today={
-        today
-          ? {
-              count: today.home.todos.length,
-              body: <TodayBody initial={today} />,
+        held
+          ? null
+          : {
+              count: inbox?.waiting ?? 0,
+              body: <TodayBody userId={campUser.id} />,
+              warm: <TodayWarm userId={campUser.id} />,
             }
-          : null
       }
       boot={boot}
     >

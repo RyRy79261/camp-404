@@ -416,4 +416,51 @@ describe("findOrCreateCampUser", () => {
     expect(a.user.id).toBe(b.user.id);
     expect([a.created, b.created].sort()).toEqual([false, true]);
   });
+
+  const gate = {
+    type: "questionnaire" as const,
+    actionKey: "burner_profile",
+    title: "Complete your burner profile",
+    version: "1",
+  };
+
+  async function gatesOf(userId: string) {
+    return h
+      .db()
+      .select()
+      .from(schema.requiredActions)
+      .where(eq(schema.requiredActions.userId, userId));
+  }
+
+  it("writes the gate with the row, so the row is never seen without it", async () => {
+    const { user, created } = await findOrCreateCampUser(input, gate);
+    expect(created).toBe(true);
+    const gates = await gatesOf(user.id);
+    expect(gates).toHaveLength(1);
+    expect(gates[0]).toMatchObject({
+      actionKey: "burner_profile",
+      status: "pending",
+      blocking: true,
+    });
+  });
+
+  it("gives the gate to a row another request made without one", async () => {
+    // A row from before the gate went in with it (or a winner that failed
+    // between its two writes): the call that finds it still leaves it gated.
+    const winner = await makeUser(h.db(), { authUserId: "auth-race" });
+    const { user, created } = await findOrCreateCampUser(input, gate);
+    expect(created).toBe(false);
+    expect(user.id).toBe(winner.id);
+    expect(await gatesOf(user.id)).toHaveLength(1);
+  });
+
+  it("gives two concurrent founder calls one row and one gate", async () => {
+    const [a, b] = await Promise.all([
+      findOrCreateCampUser(input, gate),
+      findOrCreateCampUser(input, gate),
+    ]);
+    expect(a.user.id).toBe(b.user.id);
+    expect([a.created, b.created].sort()).toEqual([false, true]);
+    expect(await gatesOf(a.user.id)).toHaveLength(1);
+  });
 });

@@ -1262,6 +1262,89 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(osWindow(page, "INKBLOT")).toBeVisible();
   });
 
+  test("a program opens its window at once, Loading…, while a slow server answers", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "a phone shows the page itself, not a window");
+    await asRank(page, request, "instant-open", "member");
+    await page.goto("/");
+    await expectDesktop(page);
+
+    // A slow server: the page's own data (the router's RSC request, never a
+    // prefetch) waits two seconds before it goes out.
+    await page.route(
+      (url) => url.pathname === "/tasks" || url.pathname === "/meetings",
+      async (route) => {
+        const headers = route.request().headers();
+        if (headers["rsc"] === "1" && !headers["next-router-prefetch"]) {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        await route.continue();
+      },
+    );
+    // Time from the member's action to a visible loading window, in the page.
+    const watch = () =>
+      page.evaluate(
+        () =>
+          new Promise<number>((resolve, reject) => {
+            let t0 = 0;
+            const start = () => {
+              t0 = performance.now();
+              const tick = () => {
+                const el = [
+                  ...document.querySelectorAll<HTMLElement>(
+                    "[data-window-loading]",
+                  ),
+                ].find((e) => e.offsetParent !== null);
+                if (el) resolve(performance.now() - t0);
+                else if (performance.now() - t0 > 3000) reject("none");
+                else requestAnimationFrame(tick);
+              };
+              tick();
+            };
+            for (const type of ["dblclick", "click"]) {
+              document.addEventListener(type, start, {
+                capture: true,
+                once: true,
+              });
+            }
+          }),
+      );
+
+    const fromIcon = watch();
+    await desktopIcon(page, "Tasks").dblclick();
+    const iconMs = await fromIcon;
+    const tasks = osWindow(page, "Tasks");
+    await expect(tasks.getByText("Loading Tasks…")).toBeVisible();
+    // The page has not arrived: the frame is there before it.
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Tasks" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Tasks" }),
+    ).toBeVisible();
+    await expect(tasks.getByText("Loading Tasks…")).toHaveCount(0);
+
+    await openConsoleNav(page, "Camp");
+    const fromStart = watch();
+    await startMenu(page).getByRole("menuitem", { name: "Meetings" }).click();
+    const startMs = await fromStart;
+    await expect(taskbarWindow(page, "Meetings")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Meetings" }),
+    ).toBeVisible();
+
+    testInfo.annotations.push({
+      type: "open-feedback",
+      description: `icon ${iconMs.toFixed(0)} ms, Start ${startMs.toFixed(0)} ms`,
+    });
+    // Feedback within about a frame or two of the click, however slow the
+    // server (it waits 2 s here).
+    expect(iconMs).toBeLessThan(150);
+    expect(startMs).toBeLessThan(150);
+  });
+
   test("an idle desktop with two windows open costs next to no CPU", async ({
     page,
     request,

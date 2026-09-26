@@ -37,20 +37,84 @@
   --font-pixel: var(--os-font-pixel);
 }
 
+/* A window's place and size (--win-x/-y/-w/-h, set on its frame by
+   OsWindowFrame) are for the frame alone. Registered as not inherited, so a
+   drag or resize restyles the frame and nothing inside it: as plain custom
+   properties they were inherited by every element in the window, and each
+   frame of a drag restyled the whole page it shows (a window of Tasks at 4x
+   CPU throttling: 33 fps and 192,000 element restyles in a 2 s drag; with
+   these, 57 fps). Nothing inside a window reads them; a page part that must
+   fit the window reads --page-h. */
+@property --win-x {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --win-y {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --win-w {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --win-h {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* A window being dragged moves on its own layer, so each frame is a
+   compositor move, not a repaint of the desktop under it (OsWindowFrame
+   writes the transform itself while the pointer is down). And the desktop's
+   decorative loops hold still meanwhile, so nothing else asks for frames. */
+[data-gesture="move"] {
+  will-change: transform;
+}
+:root[data-os-gesture] .os-scanbeam,
+:root[data-os-gesture] [class*="os-glitch-"],
+:root[data-os-gesture] .cat-zzz {
+  animation-play-state: paused !important;
+}
+
 /* A window arriving: a short CRT "power on" from a thin line. */
+/* The power-on, with transforms only, so the compositor plays all four steps
+   even while the page's first render holds the main thread (a clip-path and
+   a filter could not run there, and the steps were lost inside that render).
+   Two covers in the desktop's colour, over the top and the bottom half, fold
+   away to the middle line, opening the window from a thin line. The window
+   itself is never transformed: its box, and every size measured in it, is
+   true from the first frame. backwards, not both: nothing is left on it. */
 .os-window-in {
-  /* backwards, not both: a filter or clip-path left on after the animation
-     makes the browser draw the window as an image, and its text goes soft. */
+  animation: none;
+}
+.os-window-in::before,
+.os-window-in::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  z-index: 50;
+  background: var(--os-bg);
+  transform: scaleY(0);
   animation: os-window-in 180ms steps(4) backwards;
+}
+.os-window-in::before {
+  bottom: 50%;
+  transform-origin: top;
+}
+.os-window-in::after {
+  top: 50%;
+  transform-origin: bottom;
 }
 @keyframes os-window-in {
   from {
-    clip-path: inset(48% 0 48% 0);
-    filter: brightness(2);
+    transform: scaleY(0.96);
   }
   to {
-    clip-path: inset(0 0 0 0);
-    filter: brightness(1);
+    transform: scaleY(0);
   }
 }
 
@@ -88,18 +152,32 @@
 /* A program on its way (an icon or Start item pressed, the page not yet
    there): a two-step blink, not a spinner. */
 .os-pending {
-  animation: os-pending-blink 0.8s steps(2) infinite;
+  /* Dim from the first frame, then back, 0.4 s each: the press shows at
+     once, not after a first step. Opacity only, so the compositor plays it
+     even while the page's first render keeps the main thread busy. */
+  animation: os-pending-blink 0.8s steps(1) infinite;
 }
 @keyframes os-pending-blink {
-  50% {
+  0% {
     opacity: 0.45;
   }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+/* A page on its way: a busy cursor over the desktop (inherited, so a
+   control with its own cursor keeps it; no rule reaching every element, which
+   would restyle the whole page twice per open). */
+#os-desktop[aria-busy="true"] {
+  cursor: progress;
 }
 
 /* Reduced motion: windows appear without the power-on; the cursor holds;
    a pending program is dimmed, not blinking. */
 @media (prefers-reduced-motion: reduce) {
-  .os-window-in,
+  .os-window-in::before,
+  .os-window-in::after,
   .os-cursor {
     animation: none;
   }
@@ -178,7 +256,9 @@
 
 /* ---- The glitched wordmark (the landing page's giant 404, as Join draws
    it), sized by the caller through --glitch-size. Everything steps: a few
-   jumps every few seconds, nothing eased, so it costs next to nothing. ---- */
+   jumps every few seconds, nothing eased. Not free: each step is a frame
+   with some style work (about seven a second across its thirteen layers),
+   so the console holds it still while a program window has focus. ---- */
 
 .os-glitch-shake {
   animation: os-glitch-shake 5s steps(1) infinite;
@@ -495,11 +575,13 @@
   }
 }
 
-/* Nobody can see it: every animation under data-os-paused holds still. The
-   app sets it on its desktop root while the tab is hidden, and on the
-   surface and wordmark while something covers them whole (a blocking form,
-   a maximised window, a program on a phone). The idle desktop costs nothing
-   (design doc, section 8). */
+/* Every animation under data-os-paused holds still. The app sets it on its
+   desktop root while the tab is hidden, and on the surface and wordmark while
+   something covers them whole (a blocking form, a maximised window, a
+   program on a phone) or a program's window has focus. The bare desktop is
+   NOT free: its stepped loops (beam, glitch, cats) still ask for 13 to 16
+   frames a second between them, some main-thread style work each time, and
+   GPU time (design doc, section 8). */
 [data-os-paused] *,
 [data-os-paused] *::before,
 [data-os-paused] *::after {

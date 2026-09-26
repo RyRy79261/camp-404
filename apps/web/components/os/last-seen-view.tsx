@@ -43,15 +43,60 @@ export function LastSeenView({ copy }: { copy: LastSeenCopy }) {
 export function WindowPlaceholder({
   icon,
   label,
+  loading = false,
 }: {
   icon: React.ReactNode;
   label: string;
+  /**
+   * The page is on its way: a skeleton of a page (heading, a line, rows) in
+   * the window's own colours, instead of "Click to open".
+   */
+  loading?: boolean;
 }) {
+  if (loading) return <WindowSkeleton label={label} />;
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-os-muted select-none">
       {icon}
       <p className="font-pixel text-xs uppercase tracking-[0.2em]">{label}</p>
       <p className="font-mono text-[11px]">Click to open.</p>
+    </div>
+  );
+}
+
+/** One square block of the skeleton. */
+function Block({ className }: { className: string }) {
+  return <div aria-hidden className={`bg-os-fg/10 ${className}`} />;
+}
+
+/**
+ * A window whose page is on its way (opened at the click): the shape of a
+ * console page, square blocks in the window's soft palette, pulsing on the
+ * compositor (opacity only), still under reduced motion. It holds no data:
+ * the server still gates the page, and this is drawn before it answers.
+ */
+export function WindowSkeleton({ label }: { label: string }) {
+  return (
+    <div
+      data-window-loading
+      className="flex h-full flex-col gap-5 overflow-hidden px-6 py-6 select-none"
+    >
+      <p className="os-pending font-pixel text-[10px] uppercase tracking-[0.2em] text-os-muted">
+        Loading {label}…
+      </p>
+      <div className="flex flex-col gap-2 motion-safe:animate-pulse">
+        <Block className="h-3 w-24" />
+        <Block className="h-7 w-2/5" />
+        <Block className="h-3.5 w-3/5" />
+      </div>
+      <div className="grid gap-3 motion-safe:animate-pulse">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-3">
+            <Block className="size-8 shrink-0" />
+            <Block className="h-4 flex-1" />
+            <Block className="h-4 w-16" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

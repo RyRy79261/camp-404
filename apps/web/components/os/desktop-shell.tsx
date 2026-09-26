@@ -59,7 +59,7 @@ import {
   type WmAction,
   type WmState,
 } from "@camp404/os";
-import { desktopFolderKey } from "@camp404/types";
+import { desktopFolderKey } from "@camp404/types/desktop-keys";
 import { toast } from "@camp404/ui/components/toast";
 import { saveDesktopLayoutAction } from "@/app/(console)/desktop-layout-actions";
 import { SignOutLink } from "@/components/auth/sign-out-link";
@@ -425,7 +425,12 @@ export interface DesktopProps {
    * rendered on the server, and the count on its handle. None for a held
    * member.
    */
-  today?: { count: number; body: ReactNode } | null;
+  today?: {
+    count: number;
+    body: ReactNode;
+    /** Rendered always (nothing visible): Today's background first read. */
+    warm?: ReactNode;
+  } | null;
   /**
    * The boot screen's lines, when it plays: once per browser session, never
    * in tests (the layout decides). Null for no boot.
@@ -661,6 +666,9 @@ function DesktopInner({
   // Where the desktop last sent the member, to tell when a gate redirected
   // them somewhere else (their access may have changed).
   const sentTo = useRef<string | null>(null);
+  // The window a click opened before its page arrived (below), until the
+  // navigation settles.
+  const preOpened = useRef<string | null>(null);
   const navigateTo = useCallback(
     (to: string, key: string | null, resume: boolean) => {
       if (liveKey && key !== liveKey && !mayLeave(liveKey)) return;
@@ -668,10 +676,62 @@ function DesktopInner({
       resumeKey.current = resume ? key : null;
       sentTo.current = new URL(to, window.location.href).pathname;
       setTarget(key);
+      // Instant feedback: a program not yet open gets its window (and its
+      // taskbar button) at once, blinking "Loading…" until the page lands in
+      // it; the server may take a second. Not on a phone, which shows one
+      // window, the page. The window is the one the page would open anyway
+      // (same id, size and place), so the arrival only fills it.
+      const m = key ? matchProgram(to) : null;
+      // A second click before the first page came: the first window it
+      // opened ahead of its page goes.
+      const earlier = preOpened.current;
+      if (earlier && earlier !== key) {
+        preOpened.current = null;
+        dispatch({ type: "close", id: earlier });
+      }
+      const already =
+        key && key !== earlier
+          ? wm.windows.find((w) => w.id === key)
+          : undefined;
+      if (already && key !== liveKey) {
+        // An open window comes to the front at once, with its last-seen
+        // copy, blinking until its page arrives.
+        dispatch({ type: "focus", id: already.id });
+      } else if (
+        key &&
+        m &&
+        m.programId !== "desktop" &&
+        !onPhoneNow() &&
+        !already
+      ) {
+        preOpened.current = key;
+        dispatch({
+          type: "openPage",
+          id: key,
+          url: to,
+          program: windowProgram(m.programId, key),
+          size: pageSize(m.programId),
+          viewport,
+        });
+      }
       startNav(() => router.push(to as Route));
     },
-    [captureLive, liveKey, mayLeave, router],
+    [captureLive, liveKey, mayLeave, router, viewport, wm.windows],
   );
+  // A window opened ahead of its page that the page never reached (a gate
+  // sent the member elsewhere, or another click won): it goes, as if never
+  // opened. Once the page has been live in it, it is an ordinary window.
+  useEffect(() => {
+    const key = preOpened.current;
+    if (!key) return;
+    if (liveKey === key) {
+      preOpened.current = null;
+      return;
+    }
+    if (navigating) return;
+    preOpened.current = null;
+    dispatch({ type: "close", id: key });
+  }, [liveKey, navigating]);
 
   /** Open a program's address: raise its window if open, else go there. */
   const openHref = useCallback(
@@ -1089,6 +1149,11 @@ function DesktopInner({
   const [checking, setChecking] = useState(false);
   const [refreshing, startRefresh] = useTransition();
   const refreshStarted = useRef(false);
+  // Where Back or Forward is going. The refresh waits until the router has
+  // moved there: a refresh started before the move re-rendered the page being
+  // left, then the move fetched the destination too (two server trips, the
+  // window hidden for both).
+  const poppedTo = useRef<string | null>(null);
   useEffect(() => {
     const onPop = () => {
       // Only a real move through history: a fragment link on this page
@@ -1096,6 +1161,7 @@ function DesktopInner({
       // is focusing, nor cost a server round trip.
       const now = `${window.location.pathname}${window.location.search}`;
       if (now === committed.current.url) return;
+      poppedTo.current = now;
       refreshStarted.current = false;
       setChecking(true);
     };
@@ -1105,11 +1171,24 @@ function DesktopInner({
   useEffect(() => {
     if (!checking) return;
     if (!refreshStarted.current) {
-      refreshStarted.current = true;
-      // The router restored this page from its cache without asking the
-      // server. Keep it hidden until a refresh has run its gate again: a
-      // member who lost access never sees the cached page.
-      startRefresh(() => router.refresh());
+      const start = () => {
+        if (refreshStarted.current) return;
+        refreshStarted.current = true;
+        // The router restored this page from its cache without asking the
+        // server. Keep it hidden until a refresh has run its gate again, on
+        // the page now shown: a member who lost access never sees the cached
+        // page.
+        startRefresh(() => router.refresh());
+      };
+      if (url === poppedTo.current) {
+        start();
+        return;
+      }
+      // Not moved yet. Should the router never arrive at that address (it
+      // went somewhere else), check whatever it shows after a moment rather
+      // than keep the window hidden.
+      const late = window.setTimeout(start, 1500);
+      return () => window.clearTimeout(late);
     } else if (!refreshing) {
       setChecking(false);
     }
@@ -1574,6 +1653,7 @@ function DesktopInner({
               label: program.label,
               icon: programIcon(program),
               open: wm.windows.some((w) => w.id === instance),
+              pending: !!instance && pendingKey === instance,
               ...(program.badge ? { badge: program.badge } : {}),
               ...(entry?.kind === "folder" && teamTag(program)),
               onOpen: () => openProgram(program),
@@ -1639,6 +1719,7 @@ function DesktopInner({
                   <WindowPlaceholder
                     icon={iconOf(w, "size-12")}
                     label={title}
+                    loading={pendingKey === w.id}
                   />
                 )}
               </div>
@@ -1761,9 +1842,15 @@ function DesktopInner({
   // everything, a maximised window over the desktop, or on a phone a program
   // or sheet over the home screen. Their loops hold still (data-os-paused),
   // so a covered desktop costs what a hidden tab does.
+  // On the desktop they also hold still while a program's window has focus:
+  // the member is working in it, and the loops (the glitch steps some seven
+  // times a second, the beam eight) otherwise ask for frames the whole time.
+  // They play again on the bare desktop, or with a folder in front.
   const decorCovered =
     held ||
-    (phoneNow ? phoneCovered : !!top && !top.minimized && !!top.maximized);
+    (phoneNow
+      ? phoneCovered
+      : !!top && !top.minimized && (!!top.maximized || !!top.lastUrl));
   // Prince sleeps on the clock, just above the bar, at the screen's right.
   // Wherever a window, the Today panel or a phone program reaches down to
   // him there, he lets taps through to it rather than take them.
@@ -1807,6 +1894,8 @@ function DesktopInner({
         id="os-desktop"
         data-os-skin
         inert={held || undefined}
+        // A page on its way: a busy cursor everywhere on the desktop.
+        aria-busy={navigating || undefined}
         data-os-keyboard={keyboard || undefined}
         // --os-phone-bar: the bottom bar's height, where a phone's windows
         // and sheets stop; nothing while the soft keyboard is up.
@@ -1891,6 +1980,7 @@ function DesktopInner({
           {windowLayer}
           {/* Today: shut until its handle is pulled; it slides in over the
               windows, on every screen (the prototype's pop-out). */}
+          {!held && today?.warm}
           {!held && today && (
             <TodayGadget
               open={todayStored && !phoneNow}

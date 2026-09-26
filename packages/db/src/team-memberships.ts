@@ -100,6 +100,28 @@ export async function getTeamMembershipsForCycle(
 }
 
 /**
+ * A member's team memberships in EVERY year, team-ordered, each with its
+ * year. For a caller that wants this year's and would otherwise wait for the
+ * settings read first: it reads this beside the settings and keeps the rows
+ * of the current year (the web app's `getMyMemberships`). The same order as
+ * `getTeamMembershipsForCycle`, so filtering to one year gives its answer.
+ */
+export async function getTeamMembershipsEveryYear(
+  userId: string,
+): Promise<TeamMembership[]> {
+  const db = createHttpDb();
+  return db
+    .select({
+      team: schema.teamMemberships.team,
+      isLead: schema.teamMemberships.isLead,
+      cycle: schema.teamMemberships.cycle,
+    })
+    .from(schema.teamMemberships)
+    .where(eq(schema.teamMemberships.userId, userId))
+    .orderBy(asc(schema.teamMemberships.team));
+}
+
+/**
  * Put a member on a team FOR THIS YEAR. Idempotent: assigning someone who is
  * already on the team is a no-op (`created: false`), never a duplicate-key
  * error — a captain double-clicking, or two captains acting on the same member,

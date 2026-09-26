@@ -13,9 +13,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // replay of it.
 
 import { eq } from "drizzle-orm";
+import type * as Activations from "@camp404/db/activations";
 import * as schema from "@camp404/db/schema";
 import { useTestDb } from "../../../../packages/db/src/__tests__/_harness";
-import { ensureCampUser } from "../users";
+import { ensureCampUser, getPendingRequiredActions } from "../users";
+
+// Stall the gate seed on demand, to open the window between the row and its
+// gate that a concurrent request could fall into.
+const hold = vi.hoisted(() => ({
+  gate: null as Promise<void> | null,
+  reached: false,
+}));
+vi.mock("@camp404/db/activations", async (importOriginal) => {
+  const actual = await importOriginal<typeof Activations>();
+  return {
+    ...actual,
+    ensureRequiredAction: async (
+      ...args: Parameters<typeof actual.ensureRequiredAction>
+    ) => {
+      if (hold.gate) {
+        hold.reached = true;
+        await hold.gate;
+      }
+      return actual.ensureRequiredAction(...args);
+    },
+  };
+});
 
 const FOUNDER = {
   id: "auth-founder",
@@ -34,6 +57,8 @@ describe("ensureCampUser for a founder account", () => {
   });
   afterEach(() => {
     vi.unstubAllEnvs();
+    hold.gate = null;
+    hold.reached = false;
   });
 
   async function rowsFor(authUserId: string) {
@@ -70,5 +95,24 @@ describe("ensureCampUser for a founder account", () => {
     const again = await ensureCampUser(FOUNDER);
     expect(again.id).toBe(first.id);
     expect(await rowsFor(FOUNDER.id)).toHaveLength(1);
+  });
+
+  it("never lets another request find the founder's row without its gate", async () => {
+    // The first request stalls where it seeds the gate (after the row is
+    // in). A second request meanwhile finds the row, returns it at once, and
+    // reads the gates the ladder would. It must see the burner profile: if the
+    // row could be seen before its gate, that request let the founder past
+    // onboarding.
+    let release!: () => void;
+    hold.gate = new Promise<void>((r) => (release = r));
+    const first = ensureCampUser(FOUNDER);
+    await vi.waitFor(() => expect(hold.reached).toBe(true));
+
+    const second = await ensureCampUser(FOUNDER);
+    const pending = await getPendingRequiredActions(second.id);
+    release();
+    await first;
+
+    expect(pending.map((a) => a.actionKey)).toEqual(["burner_profile"]);
   });
 });

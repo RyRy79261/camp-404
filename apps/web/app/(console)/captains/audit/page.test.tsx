@@ -15,9 +15,9 @@ vi.mock("@/lib/camp-config", () => ({
   teamLabelMap: () => ({ kitchen: "Kitchen" }),
 }));
 
-import { listAuditLog } from "@camp404/db/audit";
+import { isAuditCursor, listAuditLog } from "@camp404/db/audit";
 import { captainPageGate } from "@/lib/captain-gate";
-import AuditLogPage from "./page";
+import AuditLogPage, { AuditRows } from "./page";
 
 const CURSOR =
   "2026-09-16T09:00:00.500000~33333333-3333-4333-8333-333333333333";
@@ -33,7 +33,19 @@ async function renderAs(cleared: boolean, before?: string) {
     rank: cleared ? "captain" : "team_lead",
     cleared,
   } as never);
-  render(await AuditLogPage({ searchParams: Promise.resolve({ before }) }));
+  const page = await AuditLogPage({
+    searchParams: Promise.resolve({ before }),
+  });
+  // A cleared captain's rows stream behind a boundary, as a server component
+  // of their own (jsdom cannot render an async component inside the page):
+  // draw them for the cursor the page accepted, as the stream would.
+  render(
+    cleared
+      ? await AuditRows({
+          cursor: before && isAuditCursor(before) ? before : null,
+        })
+      : page,
+  );
 }
 
 describe("audit log page", () => {

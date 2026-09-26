@@ -8,10 +8,15 @@ if (typeof window !== "undefined") {
   // jsdom has no matchMedia: answer "no reduced motion" unless a test says
   // otherwise through `setReducedMotion`.
   if (!window.matchMedia) {
+    // `matches` is live, as a browser's MediaQueryList's is: the app keeps
+    // one list per query and reads it again, rather than asking anew.
     window.matchMedia = ((query: string) => ({
-      matches:
-        query.includes("prefers-reduced-motion") &&
-        (globalThis as { __reducedMotion?: boolean }).__reducedMotion === true,
+      get matches() {
+        return (
+          query.includes("prefers-reduced-motion") &&
+          (globalThis as { __reducedMotion?: boolean }).__reducedMotion === true
+        );
+      },
       media: query,
       onchange: null,
       addEventListener: () => {},

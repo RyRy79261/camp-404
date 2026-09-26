@@ -12,6 +12,7 @@ import { getMyLift as dbGetMyLift } from "@camp404/db/cars";
 import {
   assignTeam,
   getTeamMemberships as dbGetTeamMemberships,
+  getTeamMembershipsEveryYear,
   getTeamMembershipsForCycle,
   setLead,
 } from "@camp404/db/team-memberships";
@@ -243,25 +244,34 @@ describe("the database layer's reads for the header, measured on real Postgres",
       await dbGetTeamMemberships(lead.id);
     });
     // After: one settings read and one memberships read per request, shared
-    // by the header, the page and the captain gate (React cache()). The
+    // by the header, the page and the captain gate (React cache()), sent
+    // together: every year's memberships, kept to the current one. The
     // manifest also reads the member's lift (does My lift show?), with the
     // year passed in; Home used to make that read on its own, and now shares
-    // it.
+    // it. The lift's three reads (driving, riding, riders) go out at once.
+    // What a page waits for is the number of those waits, not the reads.
     const settingsAndTeams = await count(async () => {
-      const config = await getCampConfig();
+      const [config, rows] = await Promise.all([
+        getCampConfig(),
+        getTeamMembershipsEveryYear(lead.id),
+      ]);
       const year =
         config.cycles?.find((c) => c.endedAt === null)?.year ?? UNSET_CYCLE;
-      await getTeamMembershipsForCycle(lead.id, year);
+      expect(rows.filter((r) => r.cycle === year)).toEqual(
+        await getTeamMembershipsForCycle(lead.id, year),
+      );
     });
     const lift = await count(() => dbGetMyLift(lead.id, YEAR));
-    const after = settingsAndTeams + lift;
+    const waits = 1 + 1;
 
     console.info(
-      `header round trips: before ${before}; after ${settingsAndTeams} + lift ${lift} = ${after}`,
+      `header reads: before ${before} one after another; after ${settingsAndTeams - 1} + lift ${lift}, in ${waits} waits`,
     );
     expect(before).toBe(5);
-    expect(settingsAndTeams).toBe(2);
-    expect(after).toBeLessThan(before);
+    // Two reads plus the check's own read of the year's rows.
+    expect(settingsAndTeams).toBe(3);
+    expect(lift).toBe(3);
+    expect(waits).toBeLessThan(before);
     query.mockRestore();
   });
 });

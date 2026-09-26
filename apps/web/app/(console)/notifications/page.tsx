@@ -82,24 +82,28 @@ export default async function NotificationsPage({
 
   // The questionnaires still waiting on this member. Reading the inbox never
   // clears these: only finishing the form does (owner's call, 2026-09-16:
-  // "a notification section that would shout until it's done"). Sync first, so
-  // a member who joined after a send opened sees it here too.
-  await syncOpenGates(campUser.id);
-  const pending = await getPendingQuestionnaires(campUser.id);
-  // A captain request waits here too. Only an approved member can accept one
-  // (the action refuses anyone else), so nobody else is shown it.
-  const promotions = isApproved(campUser, authUser.primaryEmail)
-    ? await getIncomingPromotionsForUser(campUser.id)
-    : [];
-
-  // An unknown ?filter= opens the whole inbox rather than 404ing: a shared link
-  // with a stale param should still show the member their notifications.
+  // "a notification section that would shout until it's done"). Synced, so a
+  // member who joined after a send opened sees it here too: the sync and the
+  // reads go out together, and the waiting list is read again when the sync
+  // wrote a gate. A captain request waits here too. Only an approved member
+  // can accept one (the action refuses anyone else), so nobody else is shown
+  // it. An unknown ?filter= opens the whole inbox rather than 404ing: a shared
+  // link with a stale param should still show the member their notifications.
   const filter = parseInboxFilter((await searchParams)?.filter);
-
   // Snapshot the first page (with pre-read state), then clear the badge for
   // exactly those rows — a delivery that arrives after the snapshot stays
   // unread, and so do older ones until they are scrolled into view.
-  const { items, nextCursor } = await listInbox(campUser.id, { filter });
+  const [written, waiting, promotions, { items, nextCursor }] =
+    await Promise.all([
+      syncOpenGates(campUser.id),
+      getPendingQuestionnaires(campUser.id),
+      isApproved(campUser, authUser.primaryEmail)
+        ? getIncomingPromotionsForUser(campUser.id)
+        : Promise.resolve([]),
+      listInbox(campUser.id, { filter }),
+    ]);
+  const pending =
+    written > 0 ? await getPendingQuestionnaires(campUser.id) : waiting;
   if (marksPageRead(filter)) {
     try {
       await markRead(campUser.id, feedIds(items));

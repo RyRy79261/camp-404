@@ -30,9 +30,9 @@ function renderWindow(
     onMove: vi.fn(),
     onResize: vi.fn(),
   };
-  const view = render(
+  const ui = (w: OsWindow<"notes">) => (
     <OsWindowFrame
-      win={win}
+      win={w}
       title="NOTES.TXT"
       titleHeading={titleHeading}
       background={background}
@@ -42,9 +42,14 @@ function renderWindow(
       {...handlers}
     >
       {children}
-    </OsWindowFrame>,
+    </OsWindowFrame>
   );
-  return { ...view, ...handlers };
+  const view = render(ui(win));
+  return {
+    ...view,
+    ...handlers,
+    rerenderWin: (w: OsWindow<"notes">) => view.rerender(ui(w)),
+  };
 }
 
 function Colours() {
@@ -278,28 +283,78 @@ describe("dragging", () => {
   const pointer = (type: string, x: number, y: number) =>
     new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
 
-  it("moves from the title bar at most once a frame, left and top only", () => {
+  it("moves from the title bar on its own style, and tells the manager once, on letting go", () => {
     stubFrames();
     const { container, onMove } = renderWindow(<p>Body</p>);
     const bar = container.querySelector<HTMLElement>("[data-titlebar]")!;
+    const frame = screen.getByRole("region", { name: "NOTES.TXT" });
 
     fireEvent(bar, pointer("pointerdown", 100, 100));
     for (const x of [110, 120, 130])
       fireEvent(bar, pointer("pointermove", x, 105));
-    expect(onMove).not.toHaveBeenCalled();
+    // One frame draws the last move, as a transform on the window itself:
+    // nothing is dispatched while the pointer is down (a drag frame used to
+    // re-render the whole desktop).
     act(() => frames.shift()!(0));
-    expect(onMove).toHaveBeenCalledTimes(1);
-    expect(onMove).toHaveBeenLastCalledWith(WIN.x + 30, WIN.y + 5);
+    expect(onMove).not.toHaveBeenCalled();
+    expect(frame.style.transform).toBe("translate(30px, 5px)");
+    expect(frame.getAttribute("data-gesture")).toBe("move");
+    expect(frame.style.left).toBe(`${WIN.x}px`);
 
     // Letting go reports where the pointer ended, without waiting a frame.
     fireEvent(bar, pointer("pointermove", 150, 90));
     fireEvent(bar, pointer("pointerup", 150, 90));
-    expect(onMove).toHaveBeenCalledTimes(2);
+    expect(onMove).toHaveBeenCalledTimes(1);
     expect(onMove).toHaveBeenLastCalledWith(WIN.x + 50, WIN.y - 10);
+  });
 
-    const style = screen.getByRole("region", { name: "NOTES.TXT" }).style;
-    expect(style.left).toBe(`${WIN.x}px`);
-    expect(style.transform).toBe("");
+  it("drops the preview once the manager has drawn the new place", () => {
+    stubFrames();
+    const { container, onMove, rerenderWin } = renderWindow(<p>Body</p>);
+    const bar = container.querySelector<HTMLElement>("[data-titlebar]")!;
+    fireEvent(bar, pointer("pointerdown", 100, 100));
+    fireEvent(bar, pointer("pointermove", 140, 100));
+    act(() => frames.shift()!(0));
+    fireEvent(bar, pointer("pointerup", 140, 100));
+    expect(onMove).toHaveBeenCalledWith(WIN.x + 40, WIN.y);
+    rerenderWin({ ...WIN, x: WIN.x + 40 });
+    const frame = screen.getByRole("region", { name: "NOTES.TXT" });
+    expect(frame.style.transform).toBe("");
+    expect(frame.style.left).toBe(`${WIN.x + 40}px`);
+    expect(frame.hasAttribute("data-gesture")).toBe(false);
+  });
+
+  it("a click on the title bar without a move tells nobody", () => {
+    stubFrames();
+    const { container, onMove } = renderWindow(<p>Body</p>);
+    const bar = container.querySelector<HTMLElement>("[data-titlebar]")!;
+    fireEvent(bar, pointer("pointerdown", 100, 100));
+    fireEvent(bar, pointer("pointerup", 100, 100));
+    expect(onMove).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("region", { name: "NOTES.TXT" }).style.transform,
+    ).toBe("");
+  });
+
+  it("resizes on its own style, and tells the manager once, on letting go", () => {
+    stubFrames();
+    const { container, onResize } = renderWindow(<p>Body</p>);
+    const grip = container.querySelector<HTMLElement>('[data-grip="se"]')!;
+    const frame = screen.getByRole("region", { name: "NOTES.TXT" });
+    fireEvent(grip, pointer("pointerdown", 100, 100));
+    fireEvent(grip, pointer("pointermove", 150, 130));
+    act(() => frames.shift()!(0));
+    expect(onResize).not.toHaveBeenCalled();
+    expect(frame.style.width).toBe(`${WIN.w + 50}px`);
+    expect(frame.style.height).toBe(`${WIN.h + 30}px`);
+    fireEvent(grip, pointer("pointerup", 150, 130));
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith(
+      { x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h },
+      "se",
+      50,
+      30,
+    );
   });
 
   it("does not drag from the body", () => {

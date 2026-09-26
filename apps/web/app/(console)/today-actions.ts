@@ -1,6 +1,6 @@
 "use server";
 
-import { resolveMemberState } from "@/lib/member-gate";
+import { prefetchMemberState, resolveMemberState } from "@/lib/member-gate";
 import { getTodayModel, type TodayModel } from "@/lib/today";
 
 /**
@@ -10,6 +10,9 @@ import { getTodayModel, type TodayModel } from "@/lib/today";
  * the desktop does not draw.
  */
 export async function refreshTodayAction(): Promise<TodayModel | null> {
+  // The member's plain reads (their row, teams, the settings) start at once,
+  // so Today's own reads overlap the gate instead of waiting behind it.
+  prefetchMemberState();
   const state = await resolveMemberState();
   return getTodayModel(state);
 }

@@ -3,15 +3,23 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { PHONE_QUERY } from "./use-phone";
+import { mediaQueryList, PHONE_QUERY } from "./use-phone";
 import { useLeaveGuard, WindowKeyProvider } from "./use-window-dirty";
-import type { Edge, OsWindow, Rect } from "./window-manager";
+import {
+  clampPosition,
+  resizeRect,
+  type Edge,
+  type OsWindow,
+  type Rect,
+  type Viewport,
+} from "./window-manager";
 
 type Props<K extends string> = {
   win: OsWindow<K>;
@@ -94,48 +102,58 @@ const GRIPS: { edge: Edge; className: string }[] = [
 ];
 
 /**
- * Follow one pointer until it lets go, reporting at most once a frame: a
- * fast drag fires many moves between two paints, and only the last counts.
- * Letting go reports the final position at once.
+ * Follow one pointer until it lets go: `onFrame` at most once an animation
+ * frame with the distance so far (a fast drag fires many moves between two
+ * paints, and only the last counts), and `onEnd` once, with the last
+ * distance, when it lets go.
  */
 function track(
   e: PointerEvent<HTMLElement>,
-  onMove: (dx: number, dy: number) => void,
+  onFrame: (dx: number, dy: number) => void,
+  onEnd: (dx: number, dy: number) => void,
 ) {
   const el = e.currentTarget;
   const x0 = e.clientX;
   const y0 = e.clientY;
   el.setPointerCapture(e.pointerId);
   let frame = 0;
-  let pending: [number, number] | null = null;
+  let last: [number, number] = [0, 0];
+  let pending = false;
   const flush = () => {
     frame = 0;
     if (!pending) return;
-    const [dx, dy] = pending;
-    pending = null;
-    onMove(dx, dy);
+    pending = false;
+    onFrame(last[0], last[1]);
   };
   const move = (ev: globalThis.PointerEvent) => {
-    pending = [ev.clientX - x0, ev.clientY - y0];
+    last = [ev.clientX - x0, ev.clientY - y0];
+    pending = true;
     if (!frame) frame = requestAnimationFrame(flush);
   };
   const up = () => {
     cancelAnimationFrame(frame);
-    flush();
     el.removeEventListener("pointermove", move);
     el.removeEventListener("pointerup", up);
     el.removeEventListener("pointercancel", up);
+    onEnd(last[0], last[1]);
   };
   el.addEventListener("pointermove", move);
   el.addEventListener("pointerup", up);
   el.addEventListener("pointercancel", up);
 }
 
+/** The desktop a frame sits on: its positioned parent's box. */
+function desktopOf(el: HTMLElement): Viewport {
+  const parent = (el.offsetParent as HTMLElement | null) ?? document.body;
+  return { width: parent.clientWidth, height: parent.clientHeight };
+}
+
 /**
  * One window: a labelled region (not a dialog, which it is not: the rest of
  * the desktop stays usable), with a title bar to drag, eight grips to resize
- * and a body that scrolls on its own. Positioned with left and top, never a
- * transform, so drag-and-drop and popovers inside it measure true.
+ * and a body that scrolls on its own. At rest it is positioned with left and
+ * top, never a transform, so drag-and-drop and popovers inside it measure
+ * true; only while its title bar is dragged does it wear a transform.
  */
 export function OsWindowFrame<K extends string>({
   win,
@@ -212,25 +230,133 @@ export function OsWindowFrame<K extends string>({
     close();
   }
 
+  // A drag or resize never goes through React while the pointer is down:
+  // each frame writes the frame's own style (a transform for a move, its
+  // place and size for a resize), and the window manager hears once, when it
+  // lets go. Before, every frame re-rendered the desktop and saved the
+  // windows. The preview is clamped the way the window manager clamps, so the
+  // window does not jump when it lands. `gesture` holds what to clear once the
+  // new place has been drawn by React.
+  const gesture = useRef<"move" | "resize" | null>(null);
+  function clearGesture(el: HTMLElement) {
+    el.style.removeProperty("transform");
+    el.removeAttribute("data-gesture");
+    document.documentElement.removeAttribute("data-os-gesture");
+    gesture.current = null;
+  }
+  function beginGesture(el: HTMLElement, kind: "move" | "resize") {
+    gesture.current = kind;
+    el.setAttribute("data-gesture", kind);
+    // The desktop's decorative loops hold still while a window moves.
+    document.documentElement.setAttribute("data-os-gesture", "");
+  }
+  /**
+   * After telling the window manager: React draws the new place and the
+   * layout effect clears the preview. Should the new place equal the old
+   * (nothing re-renders), clear it two frames on regardless.
+   */
+  function settle(el: HTMLElement) {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (gesture.current) clearGesture(el);
+      }),
+    );
+  }
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && gesture.current === "move") clearGesture(el);
+  }, [win.x, win.y]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && gesture.current === "resize") clearGesture(el);
+  }, [win.x, win.y, win.w, win.h]);
+
   function startDrag(e: PointerEvent<HTMLDivElement>) {
     if (fills || e.button !== 0 || onPhoneNow()) return;
     if ((e.target as HTMLElement).closest("button")) return;
-    const { x, y } = win;
-    track(e, (dx, dy) => onMove(x + dx, y + dy));
+    const el = ref.current;
+    if (!el) return;
+    const { x, y, w } = win;
+    const vp = desktopOf(el);
+    // An unmeasured desktop (no layout yet) is not a reason to pin the
+    // window: the window manager clamps it when it lands anyway.
+    const at = (dx: number, dy: number) =>
+      vp.width > 0 && vp.height > 0
+        ? clampPosition(x + dx, y + dy, w, vp)
+        : { x: x + dx, y: y + dy };
+    beginGesture(el, "move");
+    track(
+      e,
+      (dx, dy) => {
+        const p = at(dx, dy);
+        el.style.transform = `translate(${p.x - x}px, ${p.y - y}px)`;
+      },
+      (dx, dy) => {
+        const p = at(dx, dy);
+        if (p.x === x && p.y === y) clearGesture(el);
+        else {
+          onMove(p.x, p.y);
+          settle(el);
+        }
+      },
+    );
   }
 
   function startResize(edge: Edge, e: PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || onPhoneNow()) return;
     e.stopPropagation();
+    const el = ref.current;
+    if (!el) return;
     const from = { x: win.x, y: win.y, w: win.w, h: win.h };
-    track(e, (dx, dy) => onResize(from, edge, dx, dy));
+    const vp = desktopOf(el);
+    beginGesture(el, "resize");
+    const draw = (r: Rect) => {
+      if (responsive) {
+        el.style.setProperty("--win-x", `${r.x}px`);
+        el.style.setProperty("--win-y", `${r.y}px`);
+        el.style.setProperty("--win-w", `${r.w}px`);
+        el.style.setProperty("--win-h", `${r.h}px`);
+      } else {
+        el.style.left = `${r.x}px`;
+        el.style.top = `${r.y}px`;
+        el.style.width = `${r.w}px`;
+        el.style.height = `${r.h}px`;
+      }
+    };
+    const sized = (dx: number, dy: number) =>
+      vp.width > 0 && vp.height > 0
+        ? resizeRect(from, edge, dx, dy, vp)
+        : resizeRect(from, edge, dx, dy, {
+            width: Number.POSITIVE_INFINITY,
+            height: Number.POSITIVE_INFINITY,
+          });
+    track(
+      e,
+      (dx, dy) => draw(sized(dx, dy)),
+      (dx, dy) => {
+        const r = sized(dx, dy);
+        if (
+          r.x === from.x &&
+          r.y === from.y &&
+          r.w === from.w &&
+          r.h === from.h
+        ) {
+          clearGesture(el);
+          return;
+        }
+        // The last size stays drawn until React writes the same one.
+        draw(r);
+        onResize(from, edge, dx, dy);
+        settle(el);
+      },
+    );
   }
 
   // A responsive frame is a floating window only from md up, where CSS
   // reads its place from variables; inline left/top would win over the
   // phone's full-screen classes.
   function onPhoneNow() {
-    return responsive && window.matchMedia(PHONE_QUERY).matches;
+    return responsive && mediaQueryList(PHONE_QUERY).matches;
   }
 
   const placement: CSSProperties = responsive
