@@ -442,6 +442,11 @@ export interface DesktopProps {
    * (lib/prince-keeper.ts decides on the server). A yes or no only.
    */
   princeKeeper?: boolean;
+  /**
+   * How long the clock stays empty before she walks on, in ms. Unset: the
+   * scene's own 30 s. Only the E2E harness shortens it.
+   */
+  reunionDelayMs?: number;
   children: ReactNode;
 }
 
@@ -479,6 +484,7 @@ function DesktopInner({
   today = null,
   boot = null,
   princeKeeper = false,
+  reunionDelayMs,
   children,
 }: DesktopProps) {
   const router = useRouter();
@@ -1876,7 +1882,7 @@ function DesktopInner({
   // come home, the two of them (it waits, or holds still, while covered).
   const clockCat = (phone: boolean) =>
     princeKeeper ? (
-      <ClockReunion covered={princeCovered} />
+      <ClockReunion covered={princeCovered} delayMs={reunionDelayMs} />
     ) : (
       <ClockPrince className={phone ? `right-2 ${princeClass}` : princeClass} />
     );

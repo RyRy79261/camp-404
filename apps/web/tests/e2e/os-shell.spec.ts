@@ -1365,13 +1365,21 @@ test.describe("404 OS desktop (test-mode)", () => {
     const bar = taskbar(page);
     await expect(bar.locator("[data-reunion]")).toBeAttached();
     await expect(bar.locator('[data-cat="prince"]')).toHaveCount(0);
+    // First the clock stands empty (30 s; E2E_REUNION_DELAY_MS, 3 s, under
+    // the harness): he is missing, and the session is not marked yet, so
+    // leaving now plays it next time.
+    expect(
+      await page.evaluate(() => sessionStorage.getItem("camp404:reunion-seen")),
+    ).toBeNull();
 
     // She calls him (the scene is hidden from assistive tech), he comes, and
     // they sit together: one picture with a plain name.
     const scene = bar.locator('[data-reunion="scene"]');
     await expect(scene).toHaveAttribute("aria-hidden", "true");
-    await expect(scene.getByText("Prince?", { exact: true })).toBeVisible({
-      timeout: 8_000,
+    await expect(
+      scene.getByText("Prince, prince, prince", { exact: true }),
+    ).toBeVisible({
+      timeout: 12_000,
     });
     const pair = bar.getByRole("img", { name: "Cloud and Prince" });
     await expect(pair).toBeVisible({ timeout: 20_000 });

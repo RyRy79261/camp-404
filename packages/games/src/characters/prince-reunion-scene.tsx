@@ -18,6 +18,7 @@ import { HUMAN_H, HUMAN_W } from "./human-frames";
 import type { CharacterLook } from "./human";
 import {
   reunionFrames,
+  REUNION_DELAY_MS,
   REUNION_LABEL,
   REUNION_MS,
   REUNION_SEEN_KEY,
@@ -55,8 +56,12 @@ import {
 //   while the tab is hidden, the desktop is asleep under the boot screen or a
 //   blocking form, something covers the clock (`covered`), or this copy of
 //   the clock is not on screen (the phone bar's on a desktop, and back);
+// - before she walks on, the clock stays empty for `delayMs` (30 s) of
+//   visible, uncovered time: one timeout, no frames, stopped and its time
+//   kept whenever the scene could not play, so the wait costs nothing;
 // - reduced motion, or a second showing in the same browser session: the
-//   two of them are simply there, sitting together.
+//   two of them are simply there, sitting together. The session is marked
+//   when she starts walking, so leaving during the wait plays it next time.
 //
 // An easter egg: nothing names it. The moving scene is hidden from assistive
 // tech; the finished pair is one picture called "Cloud and Prince", and the
@@ -76,6 +81,11 @@ export type PrinceReunionProps = {
   lines?: readonly string[];
   /** The accessible name of the finished pair. */
   label?: string;
+  /**
+   * How long the clock stays empty before she walks on, in ms of the scene
+   * being able to play (`REUNION_DELAY_MS`). Tests shorten it.
+   */
+  delayMs?: number;
 };
 
 type Scene = {
@@ -213,6 +223,7 @@ export function PrinceReunion({
   scale = 2,
   lines = REUNION_TAPPED,
   label = REUNION_LABEL,
+  delayMs = REUNION_DELAY_MS,
 }: PrinceReunionProps) {
   const { frames, layout } = useMemo(() => sceneFor(look), [look]);
   // Over already (this session saw it, or reduced motion), or still to play.
@@ -241,6 +252,8 @@ export function PrinceReunion({
   coveredNow.current = covered;
   /** The scene's own clock, in ms; kept across a pause. */
   const elapsed = useRef(0);
+  /** How long the empty clock has been seen before she walks on, in ms. */
+  const waited = useRef(0);
   const geometry = useRef<ReunionGeometry | null>(null);
 
   // Drawn once, in the colours the desktop computes here.
@@ -353,13 +366,38 @@ export function PrinceReunion({
       }
       raf = requestAnimationFrame(tick);
     };
+    // The wait before she walks on: one timeout, running only while the
+    // scene could play. Stopped (its time so far kept) when it cannot.
+    let timer = 0;
+    let since = -1;
+    const holdWait = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = 0;
+      if (since >= 0) waited.current += performance.now() - since;
+      since = -1;
+    };
     const kick = () => {
-      if (!raf && !blocked()) raf = requestAnimationFrame(tick);
+      if (blocked()) {
+        holdWait();
+        return;
+      }
+      if (waited.current < delayMs) {
+        if (timer) return;
+        since = performance.now();
+        timer = window.setTimeout(() => {
+          timer = 0;
+          waited.current += performance.now() - since;
+          since = -1;
+          kick();
+        }, delayMs - waited.current);
+        return;
+      }
+      if (!raf) raf = requestAnimationFrame(tick);
     };
 
-    // What can end a pause: the tab shown, the desktop woken, the window
-    // resized (the other clock's layout), `covered` lifted (this effect runs
-    // again).
+    // What can start or end a pause: the tab shown or hidden, the desktop
+    // woken or put to sleep, the window resized (the other clock's layout),
+    // `covered` changing (this effect runs again).
     document.addEventListener("visibilitychange", kick);
     window.addEventListener("resize", kick);
     const woken =
@@ -374,11 +412,12 @@ export function PrinceReunion({
     kick();
     return () => {
       if (raf) cancelAnimationFrame(raf);
+      holdWait();
       document.removeEventListener("visibilitychange", kick);
       window.removeEventListener("resize", kick);
       woken?.disconnect();
     };
-  }, [over, atlas, covered, paint, scale]);
+  }, [over, atlas, covered, paint, scale, delayMs]);
 
   // A tap flicks his tail for a moment (not under reduced motion).
   useEffect(() => {

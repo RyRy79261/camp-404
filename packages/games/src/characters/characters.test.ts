@@ -260,16 +260,28 @@ describe("the reunion scene", () => {
     expect(frames.call[0]).toEqual(mirrored(cloud.frames.call[0]!));
   });
 
-  it("calls three times, then asks where he is, and lasts about 12 s", () => {
-    expect(REUNION_CALLS).toHaveLength(4);
-    expect(REUNION_CALLS.at(-1)).toBe("Prince, where are you?");
-    expect(REUNION_BEATS.filter((b) => b.id.startsWith("call"))).toHaveLength(
-      4,
-    );
-    expect(REUNION_MS).toBeGreaterThan(10_000);
-    expect(REUNION_MS).toBeLessThan(14_000);
+  it("calls 'Prince, prince, prince' quickly, then asks where he is, and lasts about 10 s", () => {
+    expect(REUNION_CALLS).toEqual([
+      "Prince, prince, prince",
+      "Prince, where are you?",
+    ]);
+    const ids = REUNION_BEATS.map((b) => b.id);
+    // One quick call, a look about, the question, then he comes.
+    expect(ids.slice(2, 7)).toEqual([
+      "call-1",
+      "look-1",
+      "look-2",
+      "call-2",
+      "sprint",
+    ]);
+    const ms = (id: string) => REUNION_BEATS.find((b) => b.id === id)!.ms;
+    expect(ms("call-1")).toBe(1200);
+    expect(ms("call-2")).toBe(1500);
+    expect(ms("look-1") + ms("look-2")).toBeLessThanOrEqual(1000);
+    expect(REUNION_MS).toBeGreaterThan(9_000);
+    expect(REUNION_MS).toBeLessThan(11_000);
     expect(beatStart("walk-in")).toBe(0);
-    expect(beatStart("sprint")).toBe(7_900);
+    expect(beatStart("sprint")).toBe(5_800);
     expect(() => beatStart("nope")).toThrow();
   });
 });

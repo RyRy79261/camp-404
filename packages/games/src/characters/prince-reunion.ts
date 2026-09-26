@@ -16,11 +16,12 @@ import {
 // (prince-reunion-scene.tsx) draws these once into one picture, and the
 // timeline (prince-reunion-timeline.ts) says which shows when.
 
-/** What she calls, one bubble each, with a breath between. */
+/**
+ * What she calls, one bubble each (owner, 2026-09-27: "its 'Prince, prince,
+ * prince' quickly", then "Prince, where are you?"), with a look about between.
+ */
 export const REUNION_CALLS = [
-  "Prince?",
-  "Prince!",
-  "Prince…",
+  "Prince, prince, prince",
   "Prince, where are you?",
 ] as const;
 
@@ -29,6 +30,13 @@ export const REUNION_TAPPED = ["prrr", "♥", "prrrrr", "mrrp", "♥"] as const;
 
 /** The accessible name of the finished pair. Never names the secret. */
 export const REUNION_LABEL = "Cloud and Prince";
+
+/**
+ * How long the clock stays empty before she walks on (owner, 2026-09-27):
+ * about 30 s of the desktop seen, uncovered, after the boot screen. He is
+ * missing until then. Counted only while the scene could play.
+ */
+export const REUNION_DELAY_MS = 30_000;
 
 /** The browser-session key that says the scene has played in this tab. */
 export const REUNION_SEEN_KEY = "camp404:reunion-seen";
@@ -47,27 +55,28 @@ export type ReunionBeat = {
 };
 
 /**
- * The beats, in order. The walk in, then four calls (each a bubble, and a
- * look about between), the sprint, the leap, the dust, and the two of them
- * sitting together, which then stays for the rest of the session.
+ * The beats, in order. The walk in, one quick call, a look about, the second
+ * call, the sprint, the leap, the dust, and the two of them sitting together,
+ * which then stays for the rest of the session.
  */
 export const REUNION_BEATS: readonly ReunionBeat[] = [
   { id: "walk-in", ms: 2000, note: "from the right edge to above the clock" },
   { id: "settle", ms: 300, note: "stops, faces the desktop" },
-  { id: "call-1", ms: 900, note: "hand to mouth: Prince?" },
-  { id: "look-1", ms: 500, note: "looks left" },
-  { id: "call-2", ms: 900, note: "Prince!" },
-  { id: "look-2", ms: 500, note: "looks right" },
-  { id: "call-3", ms: 900, note: "Prince…" },
-  { id: "pause", ms: 400, note: "a beat of quiet" },
-  { id: "call-4", ms: 1500, note: "Prince, where are you?" },
+  {
+    id: "call-1",
+    ms: 1200,
+    note: "hand to mouth, quickly: Prince, prince, prince",
+  },
+  { id: "look-1", ms: 400, note: "looks left" },
+  { id: "look-2", ms: 400, note: "looks right" },
+  { id: "call-2", ms: 1500, note: "Prince, where are you?" },
   { id: "sprint", ms: 1200, note: "Prince runs in from the left edge" },
   { id: "leap", ms: 200, note: "he leaps; she throws her arms up" },
   { id: "dust", ms: 1500, note: "the cartoon dust cloud" },
   { id: "heart", ms: 1200, note: "the dust clears: a heart above them" },
 ];
 
-/** The whole scene, in ms (about 12 s). */
+/** The whole scene, in ms (about 10 s). */
 export const REUNION_MS = REUNION_BEATS.reduce((t, b) => t + b.ms, 0);
 
 /** When a beat starts, in ms from the start of the scene. */

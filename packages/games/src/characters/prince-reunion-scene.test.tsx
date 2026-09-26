@@ -5,6 +5,7 @@ import { PrinceReunion } from "./prince-reunion-scene";
 import {
   beatStart,
   REUNION_CALLS,
+  REUNION_DELAY_MS,
   REUNION_MS,
   REUNION_SEEN_KEY,
 } from "./prince-reunion";
@@ -45,7 +46,7 @@ function bubble() {
 function renderAtClock(props: Parameters<typeof PrinceReunion>[0] = {}) {
   return render(
     <div style={{ position: "relative" }}>
-      <PrinceReunion {...props} />
+      <PrinceReunion delayMs={0} {...props} />
     </div>,
   );
 }
@@ -93,7 +94,7 @@ afterEach(() => {
 });
 
 describe("PrinceReunion", () => {
-  it("plays once: she walks in, calls four times, he tackles her, and they sit together", () => {
+  it("plays once: she walks in, calls him twice, he tackles her, and they sit together", () => {
     renderAtClock();
     // Playing: hidden from assistive tech whole, nothing named.
     expect(scene().getAttribute("aria-hidden")).toBe("true");
@@ -113,9 +114,12 @@ describe("PrinceReunion", () => {
     play(beatStart("call-1") + 100 - 1000);
     expect(bubble()!.textContent).toBe(REUNION_CALLS[0]);
     expect(bubble()!.style.visibility).toBe("visible");
-    play(beatStart("call-4") + 100 - (beatStart("call-1") + 100));
+    play(beatStart("look-1") + 100 - (beatStart("call-1") + 100));
+    expect(bubble()!.style.visibility).toBe("hidden");
+    play(beatStart("call-2") + 100 - (beatStart("look-1") + 100));
     expect(bubble()!.textContent).toBe("Prince, where are you?");
-    play(beatStart("sprint") + 100 - (beatStart("call-4") + 100));
+    expect(bubble()!.style.visibility).toBe("visible");
+    play(beatStart("sprint") + 100 - (beatStart("call-2") + 100));
     expect(bubble()!.style.visibility).toBe("hidden");
 
     play(REUNION_MS - beatStart("sprint"));
@@ -174,13 +178,13 @@ describe("PrinceReunion", () => {
   it("waits while the clock is covered, or not on screen, and never marks itself seen", () => {
     const view = render(
       <div style={{ position: "relative" }}>
-        <PrinceReunion covered />
+        <PrinceReunion delayMs={0} covered />
       </div>,
     );
     expect(queue.size).toBe(0);
     view.rerender(
       <div style={{ position: "relative" }}>
-        <PrinceReunion />
+        <PrinceReunion delayMs={0} />
       </div>,
     );
     expect(queue.size).toBe(1);
@@ -195,7 +199,7 @@ describe("PrinceReunion", () => {
   it("covered mid-scene, holds still out of sight, and carries on when uncovered", () => {
     const at = (covered: boolean) => (
       <div style={{ position: "relative" }}>
-        <PrinceReunion covered={covered} />
+        <PrinceReunion delayMs={0} covered={covered} />
       </div>
     );
     const view = render(at(false));
@@ -228,7 +232,7 @@ describe("PrinceReunion", () => {
     const view = render(
       <div id="desk" inert>
         <div style={{ position: "relative" }}>
-          <PrinceReunion />
+          <PrinceReunion delayMs={0} />
         </div>
       </div>,
     );
@@ -246,7 +250,7 @@ describe("PrinceReunion", () => {
     // The other copy (the phone bar's clock) mounts while this one plays.
     render(
       <div style={{ position: "relative" }}>
-        <PrinceReunion />
+        <PrinceReunion delayMs={0} />
       </div>,
     );
     frame();
@@ -263,10 +267,10 @@ describe("PrinceReunion", () => {
           data-offscreen
           style={{ position: "relative" }}
         >
-          <PrinceReunion />
+          <PrinceReunion delayMs={0} />
         </div>
         <div style={{ position: "relative" }}>
-          <PrinceReunion />
+          <PrinceReunion delayMs={0} />
         </div>
       </>,
     );
@@ -293,7 +297,7 @@ describe("PrinceReunion", () => {
     expect(scene().querySelector(".cat-bubble")!.textContent).toBe("♥");
     view.rerender(
       <div style={{ position: "relative" }}>
-        <PrinceReunion covered />
+        <PrinceReunion delayMs={0} covered />
       </div>,
     );
     expect(scene().querySelector("button")!.className).toMatch(
@@ -309,5 +313,86 @@ describe("PrinceReunion", () => {
     renderAtClock();
     const pair = screen.getByRole("img", { name: "Cloud and Prince" });
     expect(pair.querySelectorAll("rect").length).toBeGreaterThan(50);
+  });
+});
+
+describe("the wait before she walks on", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Her layers, the ones showing. */
+  function shown() {
+    return [
+      ...scene().querySelectorAll<HTMLElement>(
+        "span[style*='background-image']",
+      ),
+    ].filter((l) => l.style.visibility === "visible");
+  }
+
+  it("keeps the clock empty for 30 s, no frames at all, then she walks on", () => {
+    expect(REUNION_DELAY_MS).toBe(30_000);
+    renderAtClock({ delayMs: undefined });
+    act(() => vi.advanceTimersByTime(REUNION_DELAY_MS - 1));
+    // Nothing on the clock, no frame asked for, not marked seen.
+    expect(queue.size).toBe(0);
+    expect(shown()).toHaveLength(0);
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(window.sessionStorage.getItem(REUNION_SEEN_KEY)).toBeNull();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(queue.size).toBe(1);
+    frame();
+    // She starts walking, and only now is the session marked.
+    expect(window.sessionStorage.getItem(REUNION_SEEN_KEY)).toBe("1");
+    play(1000);
+    expect(shown()).toHaveLength(1);
+  });
+
+  it("counts only time the clock can be seen: a hidden tab or a cover stops the wait", () => {
+    const at = (covered: boolean) => (
+      <div style={{ position: "relative" }}>
+        <PrinceReunion delayMs={1000} covered={covered} />
+      </div>
+    );
+    const view = render(at(false));
+    act(() => vi.advanceTimersByTime(600));
+
+    // Hidden for a minute: the wait stops where it was.
+    visibility = "hidden";
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(queue.size).toBe(0);
+    visibility = "visible";
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    act(() => vi.advanceTimersByTime(300));
+    expect(queue.size).toBe(0);
+
+    // Covered for a minute: the same.
+    view.rerender(at(true));
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(queue.size).toBe(0);
+    view.rerender(at(false));
+    act(() => vi.advanceTimersByTime(99));
+    expect(queue.size).toBe(0);
+    // 600 + 300 + 100 ms seen: she walks on.
+    act(() => vi.advanceTimersByTime(1));
+    expect(queue.size).toBe(1);
+  });
+
+  it("left during the wait, it is not marked seen, so it plays next time", () => {
+    const view = renderAtClock({ delayMs: 5000 });
+    act(() => vi.advanceTimersByTime(4000));
+    view.unmount();
+    expect(window.sessionStorage.getItem(REUNION_SEEN_KEY)).toBeNull();
+    renderAtClock({ delayMs: 5000 });
+    expect(screen.queryByRole("img")).toBeNull();
   });
 });

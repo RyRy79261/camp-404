@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AuthenticatedUser } from "./auth";
 import { envList, type EnvBag } from "./integration-config";
+import { isE2ETestMode } from "./test-mode";
 
 // Who sees Prince come home (owner, 2026-09-26): Prince, the white cat asleep
 // on the taskbar clock, was a captain's cat. For her, he is not asleep on the
@@ -30,4 +31,16 @@ export function isPrinceKeeper(
   if (!user?.emailVerified || !user.primaryEmail) return false;
   const email = user.primaryEmail.trim().toLowerCase();
   return email !== "" && princeKeeperEmails(env).includes(email);
+}
+
+/**
+ * The empty clock's wait before she walks on, under the E2E harness only:
+ * a few seconds instead of the scene's 30, so Playwright need not sit
+ * through it. Undefined (the scene's own default) everywhere else; there is
+ * no setting of its own for a deployment to trip.
+ */
+export const E2E_REUNION_DELAY_MS = 3_000;
+
+export function reunionDelayMs(): number | undefined {
+  return isE2ETestMode() ? E2E_REUNION_DELAY_MS : undefined;
 }

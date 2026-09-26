@@ -8,7 +8,7 @@ import { rankLabel } from "@/lib/camp-roster";
 import { getMyDesktopLayout } from "@/lib/desktop-layout";
 import { prefetchMemberState, resolveMemberState } from "@/lib/member-gate";
 import { listPinnedForUser } from "@/lib/notifications";
-import { isPrinceKeeper } from "@/lib/prince-keeper";
+import { isPrinceKeeper, reunionDelayMs } from "@/lib/prince-keeper";
 import { getProgramManifest, manifestModeFor } from "@/lib/program-manifest";
 import { getCampHeadcount } from "@/lib/roster";
 import { isE2ETestMode } from "@/lib/test-mode";
@@ -179,6 +179,9 @@ export default async function ConsoleLayout({
       // Prince comes home for one member (lib/prince-keeper.ts): a yes or
       // no, decided here; the address list never leaves the server.
       princeKeeper={isPrinceKeeper(process.env, authUser)}
+      // The empty clock's 30 s wait before she walks on; shorter under
+      // the E2E harness only.
+      reunionDelayMs={reunionDelayMs()}
     >
       {children}
     </Desktop>

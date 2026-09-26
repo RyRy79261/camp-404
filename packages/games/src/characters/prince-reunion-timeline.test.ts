@@ -64,21 +64,23 @@ describe("the reunion, beat by beat", () => {
     expect(during("settle").cloud).toEqual({ pose: "idle", frame: 0, x: 0 });
   });
 
-  it("calls him four times, one bubble each, and looks about between", () => {
-    const words = ["call-1", "call-2", "call-3", "call-4"].map(
-      (b) => during(b, 10).bubble,
-    );
-    expect(words).toEqual([...REUNION_CALLS]);
+  it("calls him quickly three times in one bubble, looks about, then asks where he is", () => {
+    const words = ["call-1", "call-2"].map((b) => during(b, 10).bubble);
+    expect(words).toEqual(["Prince, prince, prince", "Prince, where are you?"]);
     expect(during("call-1", 10).cloud).toMatchObject({
       pose: "call",
       frame: 0,
     });
     // The last moments of a call: mouth shut, listening, bubble still up.
-    expect(during("call-1", 850).cloud).toMatchObject({ frame: 1 });
-    expect(during("call-1", 850).bubble).toBe(REUNION_CALLS[0]);
+    expect(during("call-1", 1150).cloud).toMatchObject({ frame: 1 });
+    expect(during("call-1", 1150).bubble).toBe(REUNION_CALLS[0]);
+    expect(during("call-2", 1150).cloud).toMatchObject({ frame: 0 });
+    expect(during("call-2", 1450).cloud).toMatchObject({ frame: 1 });
+    expect(during("call-2", 1450).bubble).toBe(REUNION_CALLS[1]);
+    // Between the two calls: a look left, then right, with no bubble.
     expect(during("look-1").cloud).toMatchObject({ pose: "look", frame: 0 });
     expect(during("look-2").cloud).toMatchObject({ pose: "look", frame: 1 });
-    for (const quiet of ["walk-in", "settle", "look-1", "pause", "sprint"]) {
+    for (const quiet of ["walk-in", "settle", "look-1", "look-2", "sprint"]) {
       expect(during(quiet, 10).bubble).toBeNull();
     }
   });

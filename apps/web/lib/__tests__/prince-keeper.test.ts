@@ -1,7 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { isPrinceKeeper, princeKeeperEmails } from "../prince-keeper";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  E2E_REUNION_DELAY_MS,
+  isPrinceKeeper,
+  princeKeeperEmails,
+  reunionDelayMs,
+} from "../prince-keeper";
 
 const WEB = path.resolve(__dirname, "../..");
 const REPO = path.resolve(WEB, "../..");
@@ -74,6 +79,20 @@ describe("who sees Prince come home", () => {
         { primaryEmail: " ", emailVerified: true },
       ),
     ).toBe(false);
+  });
+});
+
+describe("the empty clock's wait before she walks on", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("is the scene's own 30 s, shortened only under the E2E harness", () => {
+    vi.stubEnv("E2E_TEST_MODE", "");
+    expect(reunionDelayMs()).toBeUndefined();
+    vi.stubEnv("E2E_TEST_MODE", "1");
+    expect(reunionDelayMs()).toBe(E2E_REUNION_DELAY_MS);
+    expect(E2E_REUNION_DELAY_MS).toBeLessThan(30_000);
   });
 });
 

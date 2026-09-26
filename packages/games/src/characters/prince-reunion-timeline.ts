@@ -148,7 +148,7 @@ export function reunionAt(t: number, geo: ReunionGeometry): ReunionShot {
       },
     };
   }
-  if (id === "settle" || id === "pause") {
+  if (id === "settle") {
     return { ...NONE, cloud: { pose: "idle", frame: 0, x: 0 } };
   }
   if (id.startsWith("call-")) {
