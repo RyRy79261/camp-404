@@ -267,9 +267,10 @@ export function buildCharacter(look: CharacterLook): Character {
 export function withLapCat(look: CharacterLook, cat: Sprite): Sprite[] {
   const hands = resolveTemplate(SIT_HANDS, look);
   return HUMAN_TEMPLATES.sit.map((t) => {
-    // The cat's edge is the desktop's light outline, as on every cat, so his
-    // black cap and tail read against a dark skirt.
-    const lap = inlaid(resolveTemplate(t, look), cat, LAP_AT.x, LAP_AT.y, "O");
-    return outlined(inlaid(lap, hands, 0, 0, "O"));
+    // Inside her lap the cat's edge is the figure's dark inner line, not the
+    // desktop's light outline, so he sits in her lap instead of on top of it
+    // (the owner's pick, 2026-09-27). The outline round the lot stays light.
+    const lap = inlaid(resolveTemplate(t, look), cat, LAP_AT.x, LAP_AT.y, "l");
+    return outlined(inlaid(lap, hands, 0, 0, "l"));
   });
 }
