@@ -72,6 +72,29 @@ function allKeys(value: unknown, into = new Set<string>()): Set<string> {
   return into;
 }
 
+describe("buildProgramManifest: version", () => {
+  it("does not change with live counts (inbox, badges, health warnings)", () => {
+    const quiet = buildProgramManifest(facts());
+    const busy = buildProgramManifest(facts({ inbox: 7, healthWarnings: 2 }));
+    expect(busy.version).toBe(quiet.version);
+    const captain = buildProgramManifest(facts({ rank: CAPTAIN }));
+    const captainBusy = buildProgramManifest(
+      facts({ rank: CAPTAIN, inbox: 3, healthWarnings: 4 }),
+    );
+    expect(captainBusy.version).toBe(captain.version);
+  });
+
+  it("changes when what the member may open changes", () => {
+    const lead = buildProgramManifest(
+      facts({ rank: LEAD, memberships: [{ team: KITCHEN, isLead: true }] }),
+    );
+    const demoted = buildProgramManifest(
+      facts({ memberships: [{ team: KITCHEN, isLead: false }] }),
+    );
+    expect(demoted.version).not.toBe(lead.version);
+  });
+});
+
 describe("buildProgramManifest: the personas", () => {
   it("gives a pending applicant only the Inbox, Today and the balloon", () => {
     const m = buildProgramManifest(

@@ -647,7 +647,7 @@ export interface ProgramManifest {
    * a meeting, …), each at its own bar, so a stored window can be pruned.
    */
   allowedChildren: ProgramId[];
-  /** Changes whenever anything above changes. */
+  /** Changes when what the member may open changes; never with live counts. */
   version: string;
 }
 
@@ -885,7 +885,35 @@ export function buildProgramManifest(
     pins: mode === "full",
     allowedChildren,
   };
-  return { ...body, version: hash(JSON.stringify(body)) };
+  return { ...body, version: accessVersion(body) };
+}
+
+/**
+ * The manifest's version changes only when what the member may open changes
+ * (a demotion, a new team, the mode), never with live counts. The desktop
+ * drops every last-seen copy when it changes, so a new notice or a new health
+ * warning must not bump it.
+ */
+function accessVersion(body: Omit<ProgramManifest, "version">): string {
+  const noBadge = <T extends { badge?: unknown }>({ badge: _b, ...rest }: T) =>
+    rest;
+  return hash(
+    JSON.stringify({
+      ...body,
+      programs: body.programs.map(noBadge),
+      teamFolders: body.teamFolders.map((f) => ({
+        ...f,
+        programs: f.programs.map(noBadge),
+      })),
+      tray: {
+        ...body.tray,
+        inbox: body.tray.inbox ? {} : null,
+        health: body.tray.health
+          ? { ...body.tray.health, status: null, warnings: null }
+          : null,
+      },
+    }),
+  );
 }
 
 /** The page of a team that is not in the Teams folder (archived), if allowed. */
