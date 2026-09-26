@@ -327,3 +327,28 @@ describe("MemberProfile — what the member still owes", () => {
     expect(outstandingValue()).toBe("All complete");
   });
 });
+
+describe("MemberProfile — the desktop's last-seen copy", () => {
+  it("marks every answer section (ID, safety) to be blanked, and not the overview", async () => {
+    const withAnswers = detail("approved");
+    if (!withAnswers.ok) throw new Error("fixture");
+    withAnswers.member.profileSections = [
+      {
+        title: "Identity",
+        items: [{ label: "ID number", value: "8001015009087" }],
+      },
+      {
+        title: "Emergency contacts",
+        items: [{ label: "Sam (sister)", value: "+27 82 000 0000" }],
+      },
+    ];
+    vi.mocked(getMemberDetailAction).mockResolvedValue(withAnswers);
+    renderProfile({ approvalStatus: "approved" });
+    await screen.findByText("8001015009087");
+    const marked = [...document.querySelectorAll("[data-os-private]")];
+    const text = marked.map((el) => el.textContent ?? "").join(" ");
+    expect(text).toContain("8001015009087");
+    expect(text).toContain("+27 82 000 0000");
+    expect(text).not.toContain("Outstanding");
+  });
+});

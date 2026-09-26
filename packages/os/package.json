@@ -9,6 +9,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./terminal": "./src/terminal/index.ts",
+    "./prefetch-guard": "./src/prefetch-guard.ts",
     "./styles.css": "./src/styles.css"
   },
   "scripts": {

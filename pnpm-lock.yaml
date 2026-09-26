@@ -228,6 +228,12 @@ importers:
       '@camp404/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@camp404/games':
+        specifier: workspace:*
+        version: link:../../packages/games
+      '@camp404/os':
+        specifier: workspace:*
+        version: link:../../packages/os
       '@camp404/telegram':
         specifier: workspace:*
         version: link:../../packages/telegram
@@ -10336,7 +10342,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.3))
+      vitest: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.3))
 
   '@vitest/expect@3.2.4':
     dependencies:

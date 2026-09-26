@@ -1,0 +1,51 @@
+/* The console's one Tailwind entry: the kit's tokens and components, then the
+   404 OS engine's classes (and INKBLOT's, for the Terminal). The OS packages
+   bring their own @source lines, so nothing here scans them.
+
+   PR C (the structure) runs on the console's CURRENT tokens: the --os-*
+   variables the OS reads are mapped from the kit's semantic colours below, so
+   the desktop wears today's AfrikaBurn surfaces and Camp 404 magenta. The 404
+   OS skin (its own palette and pixel face) is PR D, and replaces only this
+   block. */
+@import "@camp404/ui/styles.css";
+@import "@camp404/os/styles.css";
+@import "@camp404/games/inkblot/styles.css";
+
+:root {
+  --os-bg: var(--color-background);
+  --os-fg: var(--color-foreground);
+  --os-primary: var(--color-primary);
+  --os-primary-fg: var(--color-primary-foreground);
+  --os-muted: var(--color-muted-foreground);
+  --os-accent: var(--color-foreground);
+  --os-panel: var(--color-card);
+  --os-chrome: var(--color-secondary);
+  --os-line: var(--color-border);
+  --os-danger: var(--color-destructive);
+  --os-font-pixel: var(--font-mono);
+}
+
+/* Where toasts sit: clear of the desktop's taskbar (2.5rem), and of the
+   pinned strip above it when there are pins (2.25rem more); on a phone, clear
+   of the bottom bar, which grows with the home indicator (the same sum as the
+   desktop's --os-phone-bar), and on the floor while the soft keyboard has
+   put the bar away. Without a desktop (the landing page, sign-in), on the
+   floor. Structure, not skin: PR D leaves it. */
+:root {
+  --os-toast-bottom: 0px;
+}
+body:has(#os-desktop) {
+  --os-toast-bottom: 2.5rem;
+}
+body:has(#os-desktop [data-os-pins]) {
+  --os-toast-bottom: 4.75rem;
+}
+@media (max-width: 767px) {
+  body:has(#os-desktop),
+  body:has(#os-desktop [data-os-pins]) {
+    --os-toast-bottom: calc(3.5rem + max(0.25rem, env(safe-area-inset-bottom)));
+  }
+  body:has(#os-desktop[data-os-keyboard]) {
+    --os-toast-bottom: 0px;
+  }
+}

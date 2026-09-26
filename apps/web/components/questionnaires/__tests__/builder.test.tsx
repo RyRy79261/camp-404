@@ -17,6 +17,11 @@ import {
   vi,
 } from "vitest";
 import type { Questionnaire, QuestionsPage } from "@camp404/types";
+import {
+  WindowDirtyProvider,
+  WindowKeyProvider,
+  useLeaveGuard,
+} from "@camp404/os";
 import { choose, installSelectPolyfills } from "./select-helpers";
 
 // The builder's DOM is large. Role queries skip the is-it-hidden walk
@@ -508,34 +513,89 @@ describe("QuestionnaireBuilderV2 — publishing", () => {
 });
 
 describe("QuestionnaireBuilderV2 — leaving with unsaved changes", () => {
-  it("asks before following a link, and goes once the author agrees", async () => {
-    renderBuilder();
-    const cancel = screen.getByRole("link", { name: "Cancel" });
-    fireEvent.click(cancel);
-    // Nothing unsaved: the link is left to do its job.
-    expect(screen.queryByText("Leave without saving?")).toBeNull();
-
-    fireEvent.change(screen.getByLabelText("Section 2 title"), {
-      target: { value: "Later" },
-    });
-    fireEvent.click(cancel);
-    await screen.findByText("Leave without saving?");
-    expect(push).not.toHaveBeenCalled();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Leave without saving" }),
+  // Inside its desktop window: the desktop's guard (useLeaveGuard) is what
+  // close, minimise, a switch, a launch and a link in the window ask.
+  const KEY = "edit-questionnaire:gear-check";
+  let leave: (key?: string) => boolean;
+  function Guard() {
+    leave = useLeaveGuard();
+    return null;
+  }
+  function inWindow(confirm: (m: string) => boolean, open = true) {
+    return (
+      <WindowDirtyProvider confirm={confirm}>
+        <Guard />
+        {open && (
+          <WindowKeyProvider windowKey={KEY}>
+            <QuestionnaireBuilderV2
+              initial={{
+                key: "gear-check",
+                definition: DEFINITION,
+                status: "draft",
+                version: null,
+              }}
+              isCaptain
+            />
+          </WindowKeyProvider>
+        )}
+      </WindowDirtyProvider>
     );
-    await waitFor(() =>
-      expect(push).toHaveBeenCalledWith("/captains/questionnaires"),
+  }
+  const retitle = (value: string) =>
+    fireEvent.change(screen.getByLabelText("Section 2 title"), {
+      target: { value },
+    });
+
+  it("asks before its window goes, only while something is unsaved", () => {
+    const confirm = vi.fn(() => false);
+    render(inWindow(confirm));
+    expect(leave(KEY)).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
+
+    retitle("Later");
+    expect(leave(KEY)).toBe(false);
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringMatching(/not saved\. Leave without saving\?/),
     );
   });
 
+  it("asks nothing once the draft is saved", async () => {
+    const confirm = vi.fn(() => false);
+    render(inWindow(confirm));
+    retitle("Later");
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(updateDefinitionAction).toHaveBeenCalled());
+    await waitFor(() => expect(leave(KEY)).toBe(true));
+  });
+
   it("asks the browser before a reload", () => {
-    renderBuilder();
-    fireEvent.change(screen.getByLabelText("Section 2 title"), {
-      target: { value: "Later" },
-    });
+    render(inWindow(() => false));
+    retitle("Later");
     const event = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("keeps the draft across a Back, in memory, with Discard", () => {
+    const confirm = vi.fn(() => false);
+    const view = render(inWindow(confirm));
+    retitle("Later");
+    // A Back: the page goes and nobody was asked.
+    view.rerender(inWindow(confirm, false));
+    view.rerender(inWindow(confirm));
+    expect(
+      (screen.getByLabelText("Section 2 title") as HTMLInputElement).value,
+    ).toBe("Later");
+    expect(screen.getByText("Unsaved changes restored.")).toBeTruthy();
+    expect(leave(KEY)).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(
+      (screen.getByLabelText("Section 2 title") as HTMLInputElement).value,
+    ).toBe("Second");
+    expect(screen.queryByText("Unsaved changes restored.")).toBeNull();
+    confirm.mockClear();
+    expect(leave(KEY)).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
   });
 });

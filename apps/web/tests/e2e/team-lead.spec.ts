@@ -40,20 +40,17 @@ test.describe("team lead persona", () => {
     await approvedMember(page, request, "kitchen-lead");
     await seedTeam(request, "kitchen-lead", "kitchen", true);
 
-    // The console nav offers a lead the builder and announcements, and none
-    // of the captain-only destinations.
+    // The Captains folder offers a lead the builder and announcements, and
+    // none of the captain-only programs.
     await page.goto("/");
     const captains = await openConsoleNav(page, "Captains");
-    await expect(navEntry(captains, "Questionnaires")).toHaveAttribute(
-      "href",
-      "/captains/questionnaires",
-    );
+    await expect(navEntry(captains, "Questionnaires")).toBeVisible();
     await expect(navEntry(captains, "Announcements")).toBeVisible();
     await expect(navEntry(captains, "Payments")).toHaveCount(0);
-    await expect(navEntry(captains, "Audit")).toHaveCount(0);
-    await page.keyboard.press("Escape");
+    await expect(navEntry(captains, "Audit log")).toHaveCount(0);
 
-    await page.goto("/captains/questionnaires");
+    await navEntry(captains, "Questionnaires").click();
+    await expect(page).toHaveURL("/captains/questionnaires");
     await expect(
       page.getByRole("heading", { level: 1, name: "Questionnaires" }),
     ).toBeVisible();

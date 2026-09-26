@@ -36,6 +36,7 @@ import {
   type LoadOwner,
   type LoadSchedule,
   type BuilderQuestionnaire,
+  type DesktopLayout,
   type DraftReport,
   type JoinSiteContent,
   type KitchenRecipe,
@@ -1753,6 +1754,25 @@ export const teamBudgets = pgTable(
     ),
   }),
 );
+
+// --- Desktop layouts -----------------------------------------------------
+// Where a member keeps the icons on their 404 OS desktop, and the shortcuts
+// and folders they made there (owner's decision 14 B, 2026-09-26: on the
+// server, so it follows the member to every device). One row per member, one
+// JSONB value in the `DesktopLayout` shape (@camp404/types): program ids, grid
+// cells and folder names the member typed, nothing else. Checked with Zod on
+// write and on read (a bad value reads as the default layout) and pruned
+// against the member's manifest, so it is never authority. Only the member
+// writes their own row; it is not privileged, so no audit row. Account
+// erasure deletes it (account.ts), since the kept users row stops the cascade.
+
+export const desktopLayouts = pgTable("desktop_layouts", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  layout: jsonb("layout").$type<DesktopLayout>().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
 
 // --- Push notifications --------------------------------------------------
 

@@ -12,6 +12,7 @@ import { nextGate } from "@/lib/required-actions";
 import { QueueCard } from "@/components/questionnaire/queue-card";
 import { CompletionHero } from "./completion-hero";
 import { SignOutLink } from "@/components/auth/sign-out-link";
+import { OutsideBlockingLayer } from "@/components/questionnaire/outside-blocking-layer";
 import { RunnerFrame } from "../runner-frame";
 
 export const dynamic = "force-dynamic";
@@ -120,7 +121,9 @@ export default async function QuestionnaireCompletePage({
                 You can&rsquo;t use Camp 404 until every required questionnaire
                 is done.
               </p>
-              <SignOutLink className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground" />
+              <OutsideBlockingLayer>
+                <SignOutLink className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground" />
+              </OutsideBlockingLayer>
             </div>
           )}
         </section>

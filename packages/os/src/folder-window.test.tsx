@@ -22,6 +22,21 @@ describe("FolderWindow", () => {
     expect(openRoster).not.toHaveBeenCalled();
   });
 
+  it("keeps a long name readable: two lines, and whole in its tooltip", () => {
+    const name = "Ministry of Magic and Mischief";
+    render(
+      <FolderWindow
+        label="Teams"
+        items={[{ id: "mom", label: name, icon, onOpen: vi.fn() }]}
+      />,
+    );
+    const button = screen.getByRole("button", { name: `Open ${name}` });
+    expect(button.getAttribute("title")).toBe(name);
+    const label = button.querySelector("[data-label]")!;
+    expect(label.className).toContain("line-clamp-2");
+    expect(label.className).not.toContain("truncate");
+  });
+
   it("says so when it holds nothing", () => {
     render(<FolderWindow label="Camp" items={[]} empty="Nothing here yet." />);
     expect(screen.getByText("Nothing here yet.")).toBeTruthy();

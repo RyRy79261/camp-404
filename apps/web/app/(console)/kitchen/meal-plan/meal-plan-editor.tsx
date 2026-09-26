@@ -3,6 +3,7 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, Loader2, Save } from "lucide-react";
+import { z } from "zod";
 import { mealPlanDayLabel } from "@camp404/core";
 import {
   MEALS_OF_THE_DAY,
@@ -24,6 +25,11 @@ import {
   TableRow,
 } from "@camp404/ui/components/table";
 import { toast } from "@camp404/ui/components/toast";
+import {
+  useDraftAutosave,
+  useEditorDraft,
+  type EditorDraft,
+} from "@/components/os/editor-draft";
 import { UNREACHABLE } from "@/lib/recipe-copy";
 import { saveMealPlanAction } from "./actions";
 
@@ -99,13 +105,29 @@ function DayLabel({ label }: { label: string }) {
   );
 }
 
-export function MealPlanEditor({
-  daysOnSite: savedDays,
-  firstDay: savedFirstDay,
-  days,
-  version,
-  canEdit,
-}: {
+/**
+ * The fields as typed, as an unsaved draft (editor-draft.tsx), for the dirty
+ * guard. It names the version it was typed over. Not kept or restored while
+ * `restore` is off (below); the schema is what a restore would check.
+ */
+const PlatesField = z.string().max(20);
+const MealPlanDraft = z.object({
+  version: z.number().int(),
+  daysOnSite: z.string().max(20),
+  firstDay: z.string().max(40),
+  rows: z
+    .array(
+      z.object({
+        breakfast: PlatesField,
+        lunch: PlatesField,
+        dinner: PlatesField,
+      }),
+    )
+    .max(MEAL_PLAN_MAX_DAYS),
+});
+type MealPlanDraft = z.infer<typeof MealPlanDraft>;
+
+type MealPlanEditorProps = {
   daysOnSite: number;
   /** The date of day 1 (YYYY-MM-DD), or null when not set. */
   firstDay: string | null;
@@ -114,12 +136,54 @@ export function MealPlanEditor({
   version: number;
   /** A captain or a Kitchen lead. */
   canEdit: boolean;
-}) {
+};
+
+/**
+ * The meal plan. For an editor, unsaved numbers ask before the window goes.
+ * Nothing is kept or restored: PR C changes nothing inside a Kitchen page
+ * (plan section 0), and a restored draft would need a note the owner has not
+ * approved.
+ */
+export function MealPlanEditor(props: MealPlanEditorProps) {
+  const { daysOnSite, firstDay, days, version, canEdit } = props;
+  const draft = useEditorDraft<MealPlanDraft>({
+    editor: "meal-plan",
+    baseline: {
+      version,
+      daysOnSite: String(daysOnSite),
+      firstDay: firstDay ?? "",
+      rows: toRows(days),
+    },
+    restore: false,
+    parse: (raw) => {
+      if (!canEdit) return null;
+      const parsed = MealPlanDraft.safeParse(raw);
+      return parsed.success && parsed.data.version === version
+        ? parsed.data
+        : null;
+    },
+  });
+  return <MealPlanEditorForm key={draft.generation} {...props} draft={draft} />;
+}
+
+function MealPlanEditorForm({
+  daysOnSite: savedDays,
+  firstDay: savedFirstDay,
+  version,
+  canEdit,
+  draft,
+}: MealPlanEditorProps & { draft: EditorDraft<MealPlanDraft> }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [daysOnSite, setDaysOnSite] = useState(String(savedDays));
-  const [firstDay, setFirstDay] = useState(savedFirstDay ?? "");
-  const [rows, setRows] = useState<Row[]>(() => toRows(days));
+  const [daysOnSite, setDaysOnSite] = useState(draft.start.daysOnSite);
+  const [firstDay, setFirstDay] = useState(draft.start.firstDay);
+  const [rows, setRows] = useState<Row[]>(() => draft.start.rows);
+  const { saved } = useDraftAutosave(draft, {
+    version,
+    daysOnSite,
+    firstDay,
+    rows,
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [refusal, setRefusal] = useState<string | null>(null);
 
@@ -178,6 +242,7 @@ export function MealPlanEditor({
         setRefusal(result.error);
         return;
       }
+      saved();
       toast.success("Meal plan saved");
       router.refresh();
     });

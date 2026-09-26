@@ -58,9 +58,12 @@ async function recordPayment(
   await page.getByLabel("Amount (R)").fill(input.amount);
   await page.locator("#payment-status").selectOption(input.status);
   await page.getByRole("button", { name: "Record payment" }).click();
-  // The form clears once the payment is on file.
-  await expect(page.getByText(/^Recorded C404-M\d{3}-/)).toBeVisible();
+  // The form clears once the payment is on file. The toast names its
+  // reference; the one before it may still be up (toasts stay five seconds,
+  // and nothing covers the Record button to make the next click wait), so the
+  // newest is the last.
   await expect(page.getByLabel("Amount (R)")).toHaveValue("");
+  await expect(page.getByText(/^Recorded C404-M\d{3}-/).last()).toBeVisible();
 }
 
 async function expectLedgerAndTotals(page: Page) {

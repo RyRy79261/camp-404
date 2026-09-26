@@ -11,6 +11,7 @@ import {
   resetTestState,
   seedTeam,
 } from "./_helpers";
+import { goViaConsoleNav } from "./lib/console-nav";
 
 // A team's own page (test-mode): any approved member opens any team's page
 // and reads its leads and members this year, its upcoming events and its open
@@ -98,10 +99,10 @@ test.describe("team page (test-mode)", () => {
     await expect(page.getByText(/on this team|lead this team/)).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Add/ })).toHaveCount(0);
 
-    // A member of the team arrives from Home's team icon.
+    // A member of the team arrives from their team's folder on the desktop.
     await login(page, { id: "team-cook", email: "team-cook@example.com" });
     await page.goto("/");
-    await page.getByRole("link", { name: "Kitchen", exact: true }).click();
+    await goViaConsoleNav(page, "Kitchen", "Kitchen team");
     await expect(page).toHaveURL(/\/teams\/kitchen$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Kitchen" }),

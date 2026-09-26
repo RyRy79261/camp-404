@@ -59,8 +59,9 @@ export function MemberNotes({
     });
   }
 
+  // Blanked in the desktop's last-seen copy of the roster (data-os-private).
   return (
-    <Card>
+    <Card data-os-private="">
       <CardHeader>
         <CardTitle className="text-base">Captain notes</CardTitle>
         <CardDescription>

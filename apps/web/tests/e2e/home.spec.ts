@@ -7,6 +7,14 @@ import {
   seedLift,
   setRank,
 } from "./_helpers";
+import {
+  closeConsoleNav,
+  expectDesktop,
+  goViaConsoleNav,
+  navEntry,
+  openConsoleNav,
+  openToday,
+} from "./lib/console-nav";
 
 /** The camp day (UTC+2, no daylight saving) `days` from now, as YYYY-MM-DD. */
 function campDayFromNow(days: number): string {
@@ -37,7 +45,9 @@ test.describe("unauthenticated home page", () => {
 });
 
 // A signed-in member's own Home: to-dos, what's coming, their places — and
-// nothing that is not theirs (owner, 2026-09-23).
+// nothing that is not theirs (owner, 2026-09-23). Home is the 404 OS desktop
+// now (PR C): its programs are the icons, the Start menu and, on a phone, the
+// home screen; the member's summary is the Today gadget, closed until opened.
 test.describe("a member's own home", () => {
   test.beforeEach(async ({ request }) => {
     await resetTestState(request);
@@ -57,25 +67,27 @@ test.describe("a member's own home", () => {
     await setRank(request, "home-member", "member");
 
     await page.goto("/");
+    await expectDesktop(page);
+    // The member's programs: present first, then the captain's absent.
+    const programs = await openConsoleNav(page);
+    await expect(navEntry(programs, "Inbox")).toBeVisible();
+    await expect(navEntry(programs, "My forms")).toBeVisible();
+    // Camp overview lives only in the Captains folder, which the Start menu
+    // lists as one entry: its absence is what differs by rank (a captain's
+    // menu has it, below).
+    await expect(navEntry(programs, "Captains")).toHaveCount(0);
+    await closeConsoleNav(page);
+
+    const today = await openToday(page);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Hi Nova" }),
+      today.getByRole("heading", { level: 2, name: "Hi Nova" }),
     ).toBeVisible();
-    await expect(page.getByText("You’re all caught up.")).toBeVisible();
+    await expect(today.getByText("You’re all caught up.")).toBeVisible();
     // The e2e store stands in for a connected calendar that starts empty.
     // The "not connected" wording is covered by unit tests.
-    await expect(page.getByText("Nothing on the calendar yet.")).toBeVisible();
-    const shortcuts = page.getByRole("navigation", { name: "Your modules" });
-    await expect(
-      shortcuts.getByRole("link", { name: /^Notifications/ }),
-    ).toHaveAttribute("href", "/notifications");
-    await expect(
-      shortcuts.getByRole("link", { name: /My forms/ }),
-    ).toBeVisible();
+    await expect(today.getByText("Nothing on the calendar yet.")).toBeVisible();
     // The whole-camp board is a captain's, and is not here.
     await expect(page.getByText("Is camp ready?")).toHaveCount(0);
-    await expect(
-      shortcuts.getByRole("link", { name: /Camp overview/ }),
-    ).toHaveCount(0);
   });
 
   test("a driver sees their car, and a rider their seat (getMyLift's twin)", async ({
@@ -112,12 +124,13 @@ test.describe("a member's own home", () => {
     });
 
     await page.goto("/");
+    const driverToday = await openToday(page);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Hi Ada" }),
+      driverToday.getByRole("heading", { level: 2, name: "Hi Ada" }),
     ).toBeVisible();
-    await expect(page.getByText("You're driving")).toBeVisible();
-    await expect(page.getByText("Toyota Hilux")).toBeVisible();
-    await expect(page.getByText("With Ren Rider")).toBeVisible();
+    await expect(driverToday.getByText("You're driving")).toBeVisible();
+    await expect(driverToday.getByText("Toyota Hilux")).toBeVisible();
+    await expect(driverToday.getByText("With Ren Rider")).toBeVisible();
 
     // The My lift program's page shows the same card.
     await page.goto("/lift");
@@ -132,13 +145,14 @@ test.describe("a member's own home", () => {
       displayName: "Ren Rider",
     });
     await page.goto("/");
+    const riderToday = await openToday(page);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Hi Ren" }),
+      riderToday.getByRole("heading", { level: 2, name: "Hi Ren" }),
     ).toBeVisible();
-    await expect(page.getByText("Riding with Ada Driver")).toBeVisible();
+    await expect(riderToday.getByText("Riding with Ada Driver")).toBeVisible();
   });
 
-  test("a captain gets the camp overview as one link, and it opens", async ({
+  test("a captain gets the camp overview in the Captains folder, and it opens", async ({
     page,
     request,
   }) => {
@@ -148,8 +162,8 @@ test.describe("a member's own home", () => {
     await setRank(request, "home-captain", "captain");
 
     await page.goto("/");
-    const shortcuts = page.getByRole("navigation", { name: "Your modules" });
-    await shortcuts.getByRole("link", { name: /Camp overview/ }).click();
+    await expectDesktop(page);
+    await goViaConsoleNav(page, "Camp overview", "Captains");
     await expect(page).toHaveURL("/captains/overview");
     await expect(
       page.getByRole("heading", { level: 1, name: "Camp overview" }),
@@ -207,20 +221,17 @@ test.describe("a member's own home", () => {
       email: "home-tasker@example.com",
     });
     await page.goto("/");
+    const today = await openToday(page);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Hi Tessa" }),
+      today.getByRole("heading", { level: 2, name: "Hi Tessa" }),
     ).toBeVisible();
-    const list = page.getByRole("list", { name: "Your tasks" });
+    const list = today.getByRole("list", { name: "Your tasks" });
     const row = list.getByRole("link", { name: /Pack the shade cloth/ });
     await expect(row).toBeVisible();
     await expect(row.getByText("Due in 10 days")).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "See all tasks" }),
+      today.getByRole("link", { name: "See all tasks" }),
     ).toBeVisible();
-    const shortcuts = page.getByRole("navigation", { name: "Your modules" });
-    await expect(
-      shortcuts.getByRole("link", { name: "Tasks, 1 yours" }),
-    ).toHaveAttribute("href", "/tasks");
 
     await row.click();
     await expect(page).toHaveURL("/tasks");
@@ -229,7 +240,7 @@ test.describe("a member's own home", () => {
     ).toBeVisible();
   });
 
-  test("a member with no tasks has no task list, and a plain Tasks tile", async ({
+  test("a member with no tasks has no task list, and a plain Tasks program", async ({
     page,
     request,
   }) => {
@@ -243,14 +254,15 @@ test.describe("a member's own home", () => {
     await setRank(request, "home-idle", "member");
 
     await page.goto("/");
+    const programs = await openConsoleNav(page, "Camp");
+    await expect(navEntry(programs, "Tasks")).toHaveAccessibleName("Tasks");
+    await closeConsoleNav(page);
+    const today = await openToday(page);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Hi Idle" }),
+      today.getByRole("heading", { level: 2, name: "Hi Idle" }),
     ).toBeVisible();
-    await expect(page.getByRole("list", { name: "Your tasks" })).toHaveCount(0);
-    await expect(
-      page
-        .getByRole("navigation", { name: "Your modules" })
-        .getByRole("link", { name: "Tasks", exact: true }),
-    ).toHaveAttribute("href", "/tasks");
+    await expect(today.getByRole("list", { name: "Your tasks" })).toHaveCount(
+      0,
+    );
   });
 });

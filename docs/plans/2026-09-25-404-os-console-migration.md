@@ -87,7 +87,13 @@ Settled in the second review (owner, 2026-09-25), no decision needed:
 Also standing: Kitchen windows need a layout approval before any Kitchen UI
 work (memory: `kitchen-noble-notations-direction.md`). PR C only wraps the
 existing Kitchen pages in a window frame and changes nothing inside them; say
-so in the PR and get a yes on the screenshots anyway.
+so in the PR and get a yes on the screenshots anyway. [CORRECTION 2026-09-26]
+The four-editor item below once put a "Unsaved changes restored" note with
+Discard inside the meal-plan and recipe-source editors, with no owner yes.
+It is out: the two Kitchen editors keep only the invisible dirty guard
+(`restore: false` in `components/os/editor-draft.tsx`), nothing is kept or
+restored, and nothing inside a Kitchen page changes. Turning the restore on
+needs the owner's yes on a screenshot of the note in both editors.
 
 The native shell is also open: [UNRESOLVED 2026-09-25] the owner ruled a thin
 Capacitor WebView (2026-09-16), but `apps/mobile/capacitor.config.ts` still
@@ -840,6 +846,282 @@ proof that hidden icons are not the security boundary.
 - The PR lists flows with no E2E cover: the questionnaire runner and
   completion page (beyond the held-mid-session case), the builder, results,
   the cycle page, setup, and the audit log with data.
+
+**[2026-09-26] As built so far (the shell core).** Where the build differs
+from the text above, or settles something it left open:
+
+- Pending state: the desktop opens and switches windows through its own
+  `router.push` inside a `useTransition`, and the pressed icon, taskbar
+  button or window title blinks (`.os-pending`) until the page arrives. Start
+  menu rows are real `<Link>`s (a new tab still works), but a plain click goes
+  through the same path, so the dirty guard and the last-seen copy run first;
+  `useLinkStatus` is not used.
+- Held mid-session: `RunnerFrame` (the runner and `/complete`) renders
+  `<HeldScreen>` when `block.reason === "questionnaire"`. The desktop holds
+  for that address only (the page moves from its window into the layer and
+  mounts again, so a hold that ended on unmount would loop), and refreshes
+  once unless the layout already drew the held branch.
+- A refused page is noticed by the `data-captain-lock` attribute
+  `CaptainLock` now carries: the desktop refreshes once per address.
+- Wide pages open maximised (a fixed list in `desktop-shell.tsx`, `WIDE`),
+  until PR E.
+- The Today gadget is the desktop page itself (`/`), as the text says: it is
+  not on other addresses. `HomeView variant="today"` drops the module grid.
+  The web-push prompt moved inside it.
+- Last-seen copies: at most 16 at once as well as the character budget
+  (`LAST_SEEN_MAX_COPIES`); a minimised window mounts no copy. Measured in
+  `next dev` with 20 windows open: JS heap 20.8 MB to 25.3 MB, DOM nodes 994
+  to 3,199; an idle desktop with two windows used 1 ms of main-thread task
+  time in 5 s, and 0 ms with 20.
+- `data-os-private` is on every answer section and the captain notes in the
+  roster's member panel, and on any questionnaire field whose key is
+  `ALWAYS_PRIVATE` (the ID number in the burner-profile replay). No page
+  shows bank details today, so Payments has nothing to mark.
+- `captains/error.tsx` and `tools/error.tsx` are deleted; `(console)/error.tsx`
+  and `questionnaires/error.tsx` both render `WindowError` ("Tasks stopped
+  responding", named from the address only).
+- The kit's Radix overlays moved from `z-50` to `z-[110]`, the Toaster to
+  `z-[120]` and the acknowledgement takeover to `z-[130]` (visual-language
+  doc 4.9).
+
+**[2026-09-26] As built: the chrome.**
+
+- A slim strip along the top of the desktop (`components/os/desktop-header.tsx`)
+  holds the camp's name and the account chip (`account-chip.tsx`): name,
+  rank chip and, for a lead, "Leads Kitchen" or "Leads 3 teams". The full
+  list is in the chip's accessible name and in a CSS tooltip on hover and
+  keyboard focus; a press opens My account. The led teams are read in the
+  layout from the request-cached memberships and camp settings, in the
+  camp's order.
+- Start menu foot: Account, Report a problem, Line up icons, Show desktop,
+  Log off (`SignOutLink`). The header line says "Rank · Leads …". The
+  taskbar also ends in a thin Show desktop strip. Show desktop minimises
+  every window and replaces the address with `/` (the dirty guard first).
+- Tray (`components/os/desktop-tray.tsx`), in order: the inbox bell
+  (`NotificationPanel`, unchanged), a pinned count that moves focus to the
+  strip, the system-health item (a member's opens a balloon with one
+  sentence and no link; a captain's is named "System health, N warnings" and
+  opens System status), the Burn countdown ("12 days to the Burn", "The
+  Burn, day 2", nothing without dates or after the Burn;
+  `lib/burn-countdown.ts`, camp days) and the clock (`useMinuteClock`, camp
+  time). The restricted desktop's "Application submitted" balloon is open on
+  load, with a tray button to show it again.
+- Pins: `PinnedAnnouncements` (the server component) is gone. The layout
+  reads `listPinnedForUser` (cleared members only) and hands the desktop id
+  and title; `components/os/pinned-strip.tsx` draws one line with "1 of N"
+  and next/previous, nothing moving on its own, still the region "Pinned
+  announcements" with a "Read" link to `/announcements/<id>` that opens
+  through the desktop.
+- Terminal: `/terminal` and `/terminal/inkblot` (`requireMemberPage`),
+  commands in `lib/terminal-commands.ts` over the member's own manifest
+  (`terminalContext`). `open` answers a program the member does not have
+  exactly as one that does not exist. `help` names no cat and no game. The
+  Terminal ends the Captains column after the folder, and ends the Camp
+  column for a member with no Captains folder (the registry's
+  `endsColumn`). Its `open` and `exit` go through the desktop
+  (`DesktopSignals.open` / `closeLive`). INKBLOT loads with `next/dynamic`
+  and gets its wall photos from `apps/web/public/inkblot` (copies of Join's)
+  through `photoBase`. Neither page focuses its prompt on a hard load (the
+  shell's focus rule); a click does.
+- The Today gadget's file is `components/os/today-gadget.tsx`; its handle
+  is vertically centred. It is still only at `/`. [UNRESOLVED 2026-09-26]
+  The approved prototype keeps the handle on every address, over windows;
+  here Today exists only on the desktop page, so its handle goes whenever a
+  program is focused. The owner picks: Today only at `/` (as built), or the
+  handle everywhere (its body would then need rendering outside the `/`
+  page).
+- A hidden tab sets `data-os-paused` on `#os-desktop`, which pauses every
+  animation under it (`@camp404/os/styles.css`). The Toaster sits above the
+  taskbar (`bottom-10`). [CORRECTION 2026-09-26] It sits at
+  `--os-toast-bottom` (`app/globals.css`): above the taskbar, and the pinned
+  strip when there are pins; above the phone's bottom bar with its
+  safe-area inset; on the floor with no desktop.
+- Measured (`next dev`, 1440x900, a pending applicant's desktop with the
+  clock running): 4.4 ms of main-thread task time and 1.5 ms of script over
+  5 idle seconds.
+
+**[2026-09-26] As built: the phone and the editors.**
+
+- The frame has a `responsive` mode (`OsWindowFrame`, `@camp404/os`): full
+  screen below `md` (`max-md:fixed`, down to the `--os-phone-bar` variable),
+  a floating window from `md` up, its place read from `--win-x/y/w/h`
+  variables instead of inline `left`/`top`, so the server's first paint is
+  already right at 390 px (checked with JavaScript off). A phone title bar is
+  48 px with a big "Back" (named "Back, close Roster") on the left and the
+  plain name centred; no minimise, maximise or grips below `md`. Dragging and
+  double-click check `matchMedia` when they start. Join's `phone` prop is
+  unchanged.
+- One window shows on a phone: the live page, or a folder sheet on top of it
+  (`phoneHidden`). Background copies are desktop only.
+- The home screen (`components/os/phone-chrome.tsx`, `PhoneHome`) is the
+  desktop's default order by group (`homeScreenGroups` in
+  `desktop-items.ts`: Me, Camp, Captains with the Terminal, then My teams),
+  big icons (48 px picture, 64 x 80 cell, 4 a row at 390, 3 at 360). No
+  shortcuts, member folders, dragging or menus. Its foot holds Report a
+  problem and Log off (`SignOutLink`), since there is no Start menu on a
+  phone; My account is an icon and the header chip. The pending applicant's
+  "Application submitted" and the system-health line (a member's sentence, a
+  captain's "System health, N warnings" to System status) sit above the icons.
+- Bottom bar (`PhoneBar`): Home, Open programs (a full-screen list sheet:
+  each window by plain name, go to it or close it), the inbox bell and Today.
+  It pads by the safe-area inset and steps aside while the soft keyboard is
+  up (a `visualViewport` resize, not verified on a real phone). Home asks the
+  dirty guard, minimises every window and PUSHES `/`, so Back from the home
+  screen returns to the program. The pinned strip folds into the bell: a
+  "Pinned (N)" list at the top of its panel (`PinnedList`), each with Read.
+- Today on a phone is a sheet (up to 80% of the height) holding the `/`
+  page's Today body, with the Burn countdown on top. Its body exists only on
+  `/`, so Today from a program goes home first. It starts closed on every
+  load; the desktop handle's stored choice is not used on a phone.
+- Back on a phone: a popstate that lands on another window's page closes the
+  window it left, with no question. A cross-document Back (after a hard load)
+  is a hard load and restores the stack as before. Back does not close a
+  folder sheet (it has no history entry); that is still open.
+- Kept drafts: `useWindowDirty(isDirty, message, draft)` keeps the draft in
+  memory for the window when the page goes unasked (a Back, on any width)
+  and `useKeptDraft()` hands it back once. A "leave anyway" answer, a save, a
+  close, Discard, a manifest change and a user change drop it.
+- The four editors go through `components/os/editor-draft.tsx`: the dirty
+  guard, the kept draft, and a `sessionStorage` autosave
+  (`camp404.os.draft.v1:<user>:<window>:<editor>`, 400 ms after typing stops,
+  and at once when the page goes by Back or the document unloads), read back in
+  a layout effect after hydration and checked with each editor's Zod schema.
+  A draft typed over an older meeting version, meal-plan version or recipe
+  source is thrown away; a composer draft whose audience the sender may no
+  longer pick gets the first they may, and one editing a draft that was since
+  published or deleted becomes a new announcement. The restored form shows
+  "Unsaved changes restored." with Discard. Cleared on save, Discard, "leave
+  anyway", close, sign-out and another member on the tab. Kitchen pages
+  change only by this note and the guard. [CORRECTION 2026-09-26] Only by
+  the guard: the Kitchen editors pass `restore: false` (section 0).
+- The builder's own `useLeaveGuard` is gone: it registers `useWindowDirty`
+  with its definition as the draft (memory only), so it asks with the
+  browser's confirm box, not the camp's dialog. The desktop's in-window link
+  guard now asks for any link to another page, including one in the same
+  window (`/profile` to `/profile/edit`), and skips new-tab clicks.
+- The announcements microphone stops when its page goes, which on the
+  desktop is whenever its window closes, minimises or gives way (the
+  recorder's own cleanup, now tested).
+- `next dev`'s dev-tools badge sits over the bottom bar's Home button at 360
+  and 390 px; a Playwright click there needs the badge moved or hidden.
+  [2026-09-26] Hidden for E2E runs only: `devIndicators: false` when
+  `E2E_TEST_MODE=1` (`apps/web/next.config.ts`).
+
+**[2026-09-26] As built: the E2E specs.**
+
+- `tests/e2e/lib/console-nav.ts` is rewritten over the desktop:
+  `openConsoleNav(page, place)` opens the Start menu (desktop) or goes to the
+  home screen (phone) and returns a group ("Me", "Camp", "My teams") or, when
+  the name is a folder ("Teams", "Kitchen", "Captains", "Kitchen team"), that
+  folder's window; a folder wins where a name is both. `navEntry`,
+  `goViaConsoleNav` and `consoleNavGroups` keep their names. New:
+  `expectDesktop` (the `/` page's hidden h1 plus the Start button or home
+  screen: something present before an absence), `openToday`, `desktopIcon`,
+  `osWindow`, `taskbarWindow`, `closeConsoleNav`. On a phone the home screen
+  is always drawn under the open window, so "home" means no window on screen.
+- `console-nav.spec.ts` is replaced by `os-shell.spec.ts` (18 cases; the
+  phone case runs at 360 and 390). The held desktop (hard load and
+  mid-session) and the builder's leave question need the questionnaire
+  engine, so they are `tests/e2e-db/desktop.spec.ts`, against the text above
+  that said nothing in `tests/e2e-db` changes. Three existing e2e-db specs
+  changed too: `_flows.ts` and `attendance-gate.spec.ts` click "Send
+  questionnaire" with `exact: true` (the Send window's title-bar buttons, "Close
+  Send questionnaire", carry the same words), and `captain-review.spec.ts`
+  reads "Waiting for a captain" in the Today gadget.
+- Changed as the table said: home, calendar, announcements (the pin strip, or
+  the bell's list on a phone), captain-preview-locked ("Audit log"; the roster
+  view that the width shows, so the two roster cases pass at 360 px too),
+  team-lead, system-status, authenticated, team-page. Also payments: its
+  toast check takes the newest "Recorded …" toast, since nothing covers the
+  Record button now to make the next click wait for the last toast to go.
+- Found by the specs and fixed in the code: a keyboard-opened right-click
+  menu (Shift+F10) left focus on the icon, because the first row was focused
+  while the menu was still `visibility: hidden`; and a real right-click within
+  a second of Shift+F10 was swallowed as the keyboard's echo.
+- Idle CPU is an automated check (CDP `Performance.getMetrics`, two windows
+  open, 4 s idle, budget 100 ms of task time); it measured a few ms.
+- Each new case was broken once on purpose (the copy's blanking, close by
+  push instead of replace, Today not kept, no LEAD, Start's Esc focus, close
+  to `/`, no stack restore, a window-wide Esc, drag not saved, the captain's
+  health item, a rejected applicant given a desktop, a busy loop, a phone Back
+  that keeps the window, the Terminal opening anything, a `loading.tsx`, no
+  `inert`, the builder never dirty) and went red.
+
+**[2026-09-26] Verified against the exit criteria.**
+
+- `notFound()` and redirects, on `next dev` and on a production build
+  (`next start`, `E2E_TEST_MODE=1`, `CI=1`): an unknown meeting answers 404
+  and draws "Page not found" in its window with the taskbar up; signed-out
+  pages answer 307 to sign-in, a member with no invite 307 to
+  `/signup/required`, a pending applicant 307 to `/pending-approval` (their
+  `/` and `/notifications` answer 200). The Vercel preview is still to check.
+- One live body: a `MutationObserver` over a captain opening 24 programs and
+  3 folders never saw two `#os-window-content`, nor two `h1`s in window
+  frames, at once. The copies sit in closed shadow roots (15 at the end: the
+  16-copy cap binds long before the character budget; 408,633 characters of
+  copy HTML).
+- Idle (CDP `Performance.getMetrics`, 5 s, no input): two windows 0.5 ms of
+  task time; 27 windows 1.7 ms (production) and 6.8 ms (`next dev`).
+- Memory after a forced GC, production build: 10.0 MB JS heap and 741 DOM
+  nodes with two windows; 14.3 MB and 6,882 nodes with 27 (`next dev`: 19.6
+  and 32.4 MB).
+- Found in the screenshots and fixed: a held member saw two Sign outs, the
+  runner's own and the blocking layer's. The layer tells the page it has one
+  (`useInBlockingLayer`), and the runner header and completion page leave
+  theirs out there (`OutsideBlockingLayer`); a bare page keeps it.
+
+**[2026-09-26] As built: the review fixes.** On main with #287 (the base
+moved to it, so the manifest version changes only when access changes, and
+a new count keeps copies and drafts; the shell tests pin both ways).
+
+- Two-factor secrets never reach a copy: the QR code, the setup key and the
+  backup codes carry `data-os-private` (`account-two-factor.tsx`), so does
+  `PasswordInput`'s field, and `last-seen.ts` blanks any input whose type is
+  password or whose `autocomplete` is `current-password`, `new-password` or
+  `one-time-code`, whatever its type (a revealed password is `type="text"`).
+- Every questionnaire field whose answer lands in a `SAFETY_VISIBLE` column
+  (the emergency-contact roles, the allergy and anaphylaxis roles, the
+  burner profile's allergies) is marked too, and
+  `private-marker-drift.test.ts` fails when a console component names an
+  `ALWAYS_PRIVATE` or `SAFETY_VISIBLE` field without the marker. The review
+  asked `QuestionField` to pass the field to `isFieldLocked` for
+  author-locked builder fields: no question type has a `locked` flag, so
+  there is nothing to pass.
+- A demoted member's copies: dropped on the next version change, which now
+  also comes from a gate redirect (the desktop sent them to one address and
+  a gate put them on another), besides a hard load, a tab back after five
+  minutes, Back/Forward and a `CaptainLock`. Until one of those, a
+  background copy of a page they have lost stays: a copy of what was on
+  their own screen. Windows pruned then also forget their stored drafts.
+- `/auth/sign-out` itself forgets the tab's windows and drafts, so erasure's
+  server redirect clears them too.
+- Held: the blocking layer holds only the runner and `/complete`, and is
+  named by the page's h1 ("Tent check, dialog"). The inbox and an
+  announcement, which gate on camp access alone, draw bare for a held member
+  as before the desktop.
+- Keyboard and screen readers: a background frame is no landmark and its
+  title-bar buttons leave the tab order; on a phone the home screen is
+  `inert` under a program, a folder sheet or Open programs; Skip to window
+  focuses the page without a history move (a popstate that does not change
+  the address no longer hides the page for a gate check); closing the last
+  window focuses its icon (or the folder holding it, or Start); Esc in a
+  text field, textarea, contenteditable or text combobox belongs to the
+  field, not the window; Tab shuts the Start menu. A tablet opens an icon
+  on a double tap (touch or pen, 400 ms), since iOS sends no reliable
+  dblclick.
+- Today open on the desktop: the icon grid stops at its left edge, so the
+  team folders move left of it instead of under it.
+- Folder windows show a name on two lines, the whole name in its tooltip.
+- "Last seen hh:mm" is camp time, as the taskbar clock is.
+- A pending icon move is saved at once when the page is hidden or goes, or
+  the desktop unmounts, not lost to the 800 ms wait.
+- A window drag no longer lays the icon grid out again every frame (the
+  icons and the grid's spec are memoised on the open-window set, not on
+  window positions).
+- `(console)/error.tsx` draws the root's full-screen page where no desktop
+  is mounted (the landing page, setup, a held member's inbox).
+- New event: a lead whose led teams are all archived gets a sentence saying
+  so, not an empty picker (`calendar.spec.ts`).
 
 ### PR D: the skin (after decisions 4, 5, 6, 9, 10, 12)
 

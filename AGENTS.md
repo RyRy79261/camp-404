@@ -48,7 +48,7 @@ Per-package work uses `--filter`, e.g. `pnpm --filter @camp404/web dev`.
 The web typecheck runs `next typegen` first, so typed routes are checked
 against the real route tree (`next-env.d.ts` is generated, not committed).
 
-Four traps that already cost real time:
+Traps that already cost real time:
 
 - **PGlite has one connection.** The db integration tests
   (`packages/db/src/__tests__/_harness.ts`) back every driver with one
@@ -65,14 +65,82 @@ Four traps that already cost real time:
 - **A `"use server"` file may export only async functions.** A `const`
   export breaks the page under `next dev`, and neither typecheck nor lint
   catches it. Put shared constants in a plain module.
-- **No `loading.tsx` under `app/(console)/`.** Three reasons, each found the
-  hard way. A page below one that calls `notFound()` answers 200, and its
-  `redirect()` happens in the browser instead of on the server. And the console
-  header's `next/link`s hydrate before the streamed page arrives, so React
-  client-renders the page and leaves the server's copy behind in a hidden
-  `<div id="S:0">`: the page is in the DOM twice (invisible, but a Playwright
-  `getByLabel` sees two). Navigation feedback comes from the nav item's own
-  pending state (`useLinkStatus` in `components/console/console-nav.tsx`).
+- **No `loading.tsx` under `app/(console)/`, and no Suspense around a
+  window.** Three reasons, each found the hard way. A page below one that
+  calls `notFound()` answers 200, and its `redirect()` happens in the browser
+  instead of on the server. And the chrome's `next/link`s hydrate before the
+  streamed page arrives, so React client-renders the page and leaves the
+  server's copy behind in a hidden `<div id="S:0">`: the page is in the DOM
+  twice (invisible, but a Playwright `getByLabel` sees two).
+  [CORRECTION 2026-09-26] This named the console header's links and the nav
+  item's pulse; the header is gone (PR C, the 404 OS desktop). The pressed
+  icon, taskbar button or window title blinks instead (`pendingKey` in
+  `components/os/desktop-shell.tsx`, a `useTransition` round the desktop's
+  own `router.push`).
+- **Only one window body is ever mounted.** The console is the 404 OS
+  desktop (`components/os/desktop-shell.tsx`): the URL is the focused window,
+  and the page for it renders live inside that window. Every other open
+  window is a frozen copy of how it last looked, plain HTML in a CLOSED
+  shadow root, `inert` and `aria-hidden` (`@camp404/os` `last-seen.ts`).
+  Playwright, `getByLabel`, screen readers and Tab see one page only; a
+  background frame is no landmark and has no tab stops (the taskbar is the
+  keyboard's way to it). Mark anything private in a page with
+  `data-os-private` (ID numbers, safety data, captain notes, two-factor
+  secrets) so the copy blanks it; `private-marker-drift.test.ts` fails when a
+  console component names an `ALWAYS_PRIVATE` or `SAFETY_VISIBLE` field
+  without it. Password and one-time-code fields (by type or `autocomplete`)
+  are always blanked. A copy keeps what the member typed into a controlled
+  field (React mirrors it into the `value` attribute), so it lives in memory
+  only and is dropped on a change of manifest version (what the member may
+  open, never a count).
+- **Never `prefetch={true}` or `router.prefetch()` on a program URL.** A full
+  prefetch renders the page on the server with no click: it marks the inbox
+  and announcements read, runs `resetStaleRuns` and kicks due work. The
+  default `<Link>` prefetch is fine (no `loading.tsx`, so it renders no
+  page). `components/os/__tests__/desktop-items.test.ts` and
+  `packages/os/src/prefetch-guard.test.ts` fail on one.
+- **A window's title bar is not a heading.** The page's `PageHeading` h1 is
+  the only heading, so `getByRole("heading")` never matches twice. A window
+  frame is a labelled region (a `section` with
+  `aria-roledescription="window"`), never `role="dialog"`, so
+  `getByRole("dialog")` still means a Radix modal.
+- **Any action that changes rank, teams, lead flags, approval, a gate or the
+  cycle calls `revalidateManifest()`** (`lib/manifest-revalidate.ts`), or the
+  acting member's desktop keeps icons they no longer have (the layout stays
+  mounted across navigation). Other members catch up on a hard load, a tab
+  back after five minutes, a Back or Forward, a gate redirect, or a page that
+  renders a `CaptainLock`; until then their background copies stay.
+- **Phones are CSS, not a screen check.** Below `md` the desktop is a home
+  screen, full-screen windows and a bottom bar; every phone piece is
+  `md:hidden` and every desktop piece `max-md:hidden`, so the server's first
+  paint is right at 390 px. Never switch layout on `usePhone()` (the server
+  cannot know the width, so the page would flip after hydration); read
+  `matchMedia(PHONE_QUERY)` only inside an event (dragging, Back). jsdom draws
+  no CSS, so a unit test sees both the phone's and the desktop's chrome:
+  scope a query to one (`getByRole("toolbar", { name: "Taskbar" })` or
+  `[data-os-phone-home]`).
+- **Unsaved input goes through `useWindowDirty`.** A page with a form a
+  member could lose registers it (`@camp404/os`), so close, minimise, a switch,
+  a launch, a link inside the window and a page unload ask first, and a Back
+  (which cannot be asked about) keeps the draft in memory for that window. The
+  four long-text editors (meeting, meal plan, recipe source, announcements
+  composer) go through `components/os/editor-draft.tsx`; the meeting editor
+  and the composer also autosave to `sessionStorage` and restore with
+  "Unsaved changes restored". The two Kitchen editors pass `restore: false`
+  (the guard only) until the owner approves the restored note inside a
+  Kitchen page. Nothing else may store a draft in the
+  browser (My forms, the burner profile and the runner hold safety data).
+  Never hand-roll a leave guard on document clicks: taskbar buttons and
+  frames navigate with `router.push`, which such a guard never sees.
+- **A blocking questionnaire draws over an inert desktop, but the gate is
+  still the server's redirect.** `requireMemberPage` sends every member page
+  to the runner, except the two that gate on camp access alone (the inbox,
+  `/notifications`, and an announcement, `/announcements/[id]`, reached from
+  a push or email link). The blocking layer holds only the runner and its
+  `/complete` page; a held member on those two gets the page bare, as before
+  the desktop (`desktop-shell.tsx`). The held desktop is a picture. Never add
+  a live field (counts, pins, badges, Today, copies) to the held manifest,
+  and never let the layer decide who is held.
 - **"branches limit exceeded" in the `schema-migration` job is capacity, not
   code.** Each run makes a Neon branch; several stacked PRs pushed together
   hit the project's limit. Re-run the failed job.
@@ -102,8 +170,29 @@ restyle only with tokens; do not invent a design.
   into one "Menu" sheet below `md`. A new page goes into a menu there. E2E
   specs reach the nav through `tests/e2e/lib/console-nav.ts`. A page starts with
   `PageHeading` (`@camp404/ui/components/page-heading`) and owns no container.
+  [CORRECTION 2026-09-26] The header and nav are gone (PR C). The layout
+  draws the 404 OS desktop (`components/os/desktop-shell.tsx`) from the
+  member's program manifest, built on the server (`lib/programs.ts`,
+  `lib/program-manifest.ts`): icons, folders, team folders, the Start menu
+  and the tray. A new page gets a row in `lib/program-routes.ts` (which
+  window its URL opens, and its plain title in `PROGRAM_TITLES`) and an
+  entry in `PROGRAM_REGISTRY` in `lib/programs.ts` (its icon, folder and the
+  same rank bar as its page gate); `program-registry-drift.test.ts` and
+  `program-routes.test.ts` fail until both exist. A page still starts with
+  `PageHeading` and owns no container: the window pads it. The E2E helper
+  `tests/e2e/lib/console-nav.ts` drives the Start menu and folder windows on
+  a desktop and the home screen and folder sheets on a phone
+  (`openConsoleNav(page, "Captains")` opens the Captains folder); it also
+  has `expectDesktop` (something present before an absence on `/`),
+  `openToday` (the member's summary is behind the closed Today handle),
+  `desktopIcon` and `osWindow`. The shell's own cases are
+  `tests/e2e/os-shell.spec.ts`; the held desktop and the builder's leave
+  question need the questionnaire engine and are in
+  `tests/e2e-db/desktop.spec.ts`.
 - Loading: no `loading.tsx` in the console (see the gotcha under Commands);
-  the pressed nav item pulses while the next page renders.
+  the pressed nav item pulses while the next page renders. [CORRECTION
+  2026-09-26] The pressed icon, taskbar button or window title blinks
+  (`.os-pending`) while the next page renders.
 
 ## Database — read this before touching the schema
 

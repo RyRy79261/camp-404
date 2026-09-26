@@ -436,8 +436,11 @@ export function MemberProfile({
                 </CardContent>
               </Card>
             ) : (
+              // The member's answers hold their ID number and safety data.
+              // `data-os-private` blanks them in the desktop's last-seen copy
+              // of this window, so they never sit in a background picture.
               member.profileSections.map((section) => (
-                <Card key={section.title}>
+                <Card key={section.title} data-os-private="">
                   <CardHeader>
                     <CardTitle className="text-base">{section.title}</CardTitle>
                   </CardHeader>

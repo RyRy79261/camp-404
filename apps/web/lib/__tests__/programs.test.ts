@@ -132,7 +132,11 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "power" },
       { kind: "folder", id: "teams" },
       { kind: "folder", id: "kitchen" },
+      // No Captains column for them: the Terminal ends Camp.
+      { kind: "program", id: "terminal" },
     ]);
+    expect(m.programs.find((p) => p.id === "terminal")?.group).toBe("camp");
+    expect(m.startMenu.map((s) => s.group)).toEqual(["me", "camp"]);
     expect(folder(m, "captains")).toBeUndefined();
     expect(folder(m, "kitchen")?.programs.map((p) => p.id)).toEqual([
       "recipes",
@@ -175,6 +179,13 @@ describe("buildProgramManifest: the personas", () => {
       "announcements",
       "new-event",
     ]);
+    // The Captains column: the folder, then the Terminal.
+    expect(m.desktop.slice(-2)).toEqual([
+      { kind: "folder", id: "captains" },
+      { kind: "program", id: "terminal" },
+    ]);
+    expect(m.programs.find((p) => p.id === "terminal")?.group).toBe("captains");
+    expect(m.allowedChildren).toContain("inkblot");
     expect(m.allowedChildren).toContain("edit-recipe");
     expect(m.allowedChildren).toContain("send-questionnaire");
     expect(m.allowedChildren).not.toContain(pid("results"));
@@ -414,6 +425,7 @@ const SERVER_ONLY: Record<
   requires: true,
   applicants: true,
   perTeam: true,
+  endsColumn: true,
 };
 
 // The client shapes, each a Record over the type's keys for the same reason.

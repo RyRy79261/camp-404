@@ -24,7 +24,11 @@ test("answering the blocking attendance check hands the member back to the app",
     captain.getByRole("radio", { name: /^Everyone/, checked: true }),
   ).toBeVisible();
   await captain.getByRole("switch", { name: "Blocking" }).click();
-  await captain.getByRole("button", { name: "Send questionnaire" }).click();
+  // Exact: the Send window's own title-bar buttons ("Close Send
+  // questionnaire") and taskbar button carry the same words.
+  await captain
+    .getByRole("button", { name: "Send questionnaire", exact: true })
+    .click();
   await captain.getByRole("button", { name: "Send to everyone" }).click();
 
   // The blocking send gates the captain too: the runner, alone.

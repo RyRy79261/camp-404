@@ -99,6 +99,8 @@ import { Labelled, ToggleRow } from "./editor-parts";
 import { QuestionnairePreview } from "./questionnaire-preview";
 import { VisibilityEditor } from "./visibility-editor";
 import { fieldsBefore } from "./visibility";
+import { useKeptDraft, useWindowDirty } from "@camp404/os";
+import { RestoredNote } from "@/components/os/editor-draft";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import {
   publishAction,
@@ -142,74 +144,16 @@ function sectionLabel(page: QuestionnairePage, index: number): string {
   return `${index + 1}. ${title?.trim() || "Untitled section"}`;
 }
 
-const LEAVE_CONFIRM = {
-  title: "Leave without saving?",
-  description:
-    "Your changes to this questionnaire are not saved. If you leave now, they are lost.",
-  confirmLabel: "Leave without saving",
-  cancelLabel: "Stay",
-  destructive: true,
-} as const;
-
 /**
- * While there are unsaved changes: the browser asks before a reload or a tab
- * close, and a click on any in-app link asks with the camp's own dialog first.
+ * What leaving with unsaved changes asks. The desktop asks it (useWindowDirty)
+ * before this window closes, minimises, gives way to another, or the page
+ * unloads; a link inside the window asks too. A Back cannot be asked about,
+ * so the draft is kept in memory for this window instead, and comes back when
+ * the window opens again in the same session. It is never stored in the
+ * browser.
  */
-function useLeaveGuard(
-  dirty: boolean,
-  confirm: (options: typeof LEAVE_CONFIRM) => Promise<boolean>,
-) {
-  const router = useRouter();
-  React.useEffect(() => {
-    if (!dirty) return;
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    const onClick = (event: MouseEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      ) {
-        return;
-      }
-      const target = event.target as Element | null;
-      const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
-      if (
-        !anchor ||
-        anchor.target === "_blank" ||
-        anchor.hasAttribute("download")
-      ) {
-        return;
-      }
-      const url = new URL(anchor.href, window.location.href);
-      // Another site unloads the page, which the browser's own prompt covers.
-      if (url.origin !== window.location.origin) return;
-      // A link to a place on this page (an issue's anchor) leaves nothing.
-      if (
-        url.pathname === window.location.pathname &&
-        url.search === window.location.search
-      ) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      void confirm(LEAVE_CONFIRM).then((leave) => {
-        if (leave) router.push(`${url.pathname}${url.search}${url.hash}`);
-      });
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    document.addEventListener("click", onClick, true);
-    return () => {
-      window.removeEventListener("beforeunload", onBeforeUnload);
-      document.removeEventListener("click", onClick, true);
-    };
-  }, [dirty, confirm, router]);
-}
+const LEAVE_MESSAGE =
+  "Your changes to this questionnaire are not saved. Leave without saving? They will be lost.";
 
 export function QuestionnaireBuilderV2({
   initial,
@@ -228,10 +172,22 @@ export function QuestionnaireBuilderV2({
   const [confirm, confirmDialog] = useConfirm();
   const questionnaireKey = initial.key;
 
-  const [draft, setDraft] = React.useState<Questionnaire>(initial.definition);
+  // A draft this window kept when the author last went Back out of it
+  // unsaved (memory only), if it is still a questionnaire.
+  const kept = useKeptDraft();
+  const [restoredFrom] = React.useState(() => {
+    if (kept === undefined) return null;
+    const parsed = Questionnaire.safeParse(kept);
+    return parsed.success ? parsed.data : null;
+  });
+  const [restored, setRestored] = React.useState(restoredFrom !== null);
+  const [draft, setDraft] = React.useState<Questionnaire>(
+    restoredFrom ?? initial.definition,
+  );
   // Edits count up; a save records the count it wrote. Unsaved = they differ,
-  // so an edit made while a save is in flight stays unsaved.
-  const [edits, setEdits] = React.useState(0);
+  // so an edit made while a save is in flight stays unsaved. A restored draft
+  // starts unsaved.
+  const [edits, setEdits] = React.useState(restoredFrom ? 1 : 0);
   const [savedEdits, setSavedEdits] = React.useState(0);
   const dirty = edits !== savedEdits;
   const [saveState, setSaveState] = React.useState<SaveState>("idle");
@@ -251,7 +207,7 @@ export function QuestionnaireBuilderV2({
   >(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
 
-  useLeaveGuard(dirty, confirm);
+  useWindowDirty(dirty, LEAVE_MESSAGE, draft);
 
   const liveIssues = React.useMemo<DefinitionIssue[]>(() => {
     const result = validateQuestionnaireDefinition(draft);
@@ -461,6 +417,7 @@ export function QuestionnaireBuilderV2({
         return false;
       }
       setSavedEdits(writing);
+      setRestored(false);
       setSaveState("saved");
       setShowIssues((s) => (s === "save" ? null : s));
       return true;
@@ -526,6 +483,16 @@ export function QuestionnaireBuilderV2({
   return (
     <div className="flex flex-col gap-6">
       {confirmDialog}
+      {restored && (
+        <RestoredNote
+          disabled={busy !== null}
+          onDiscard={() => {
+            setDraft(initial.definition);
+            setSavedEdits(edits);
+            setRestored(false);
+          }}
+        />
+      )}
       {/* Fewer-forms warning — the builder holds ITSELF to the principle. */}
       <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
         <Tent className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />

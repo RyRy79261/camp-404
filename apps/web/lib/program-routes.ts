@@ -57,7 +57,65 @@ export type ProgramId =
   | "join-site"
   | "audit"
   | "system"
+  | "terminal"
+  | "inkblot"
   | "questionnaire";
+
+/**
+ * Each program's plain name (owner, 2026-09-25: "some of the terminology
+ * might be a bit too geeky"), for a window's title bar and its taskbar
+ * button. The same words as the registry's labels in lib/programs.ts
+ * (lib/__tests__/program-routes.test.ts keeps the two equal), repeated here
+ * because this module ships to the browser and the registry never does. A
+ * team's window is titled with the team's own name, which the desktop has
+ * from the member's manifest.
+ */
+export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
+  desktop: "Desktop",
+  inbox: "Inbox",
+  announcement: "Announcement",
+  account: "My account",
+  "my-forms": "My forms",
+  form: "Form",
+  "form-answers": "Answers",
+  invites: "Invites",
+  "my-lift": "My lift",
+  tasks: "Tasks",
+  calendar: "Calendar",
+  team: "Team",
+  roster: "Roster",
+  "family-tree": "Family tree",
+  meetings: "Meetings",
+  meeting: "Meeting",
+  "new-meeting": "New meeting",
+  "edit-meeting": "Edit meeting",
+  power: "Power",
+  recipes: "Recipes",
+  "new-recipe": "New recipe",
+  "recipe-review": "Recipe review",
+  recipe: "Recipe",
+  "edit-recipe": "Edit recipe",
+  "recipe-version": "Recipe version",
+  "recipe-source": "Recipe source",
+  "meal-plan": "Meal plan",
+  questionnaires: "Questionnaires",
+  "edit-questionnaire": "Edit questionnaire",
+  "preview-questionnaire": "Preview",
+  "send-questionnaire": "Send questionnaire",
+  results: "Results",
+  "respondent-answers": "Answers",
+  announcements: "Announcements",
+  "new-event": "New event",
+  overview: "Camp overview",
+  payments: "Payments",
+  "camp-settings": "Camp settings",
+  "join-site": "Join site",
+  audit: "Audit log",
+  system: "System status",
+  terminal: "Terminal",
+  inkblot: "INKBLOT",
+  questionnaire: "Questionnaire",
+};
 
 export interface ProgramRoute {
   /** The route as its folder names it: `/meetings/[id]/edit`. */
@@ -220,6 +278,10 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/captains/audit", "audit", "AUDIT.LOG"),
   route("/captains/system", "system", "SYSMON.EXE"),
 
+  // The Terminal, and the game it opens (its own window, a child).
+  route("/terminal", "terminal", "TERMINAL.EXE"),
+  route("/terminal/inkblot", "inkblot", "INKBLOT.EXE"),
+
   // The questionnaire runner and its last page share a window.
   route(
     "/questionnaires/[activationId]",
@@ -298,28 +360,4 @@ export function matchProgram(pathname: string): ProgramMatch | null {
     }
   }
   return null;
-}
-
-/**
- * The header nav entry the current page belongs to: the one whose link is the
- * longest match, so /profile/security lights "Sign-in & security" and not
- * "Profile". Home matches only itself.
- *
- * Kept for today's header, whose Profile and Sign-in & security entries are
- * two links into one program (so `matchProgram` alone cannot tell them apart).
- * It goes with the header in PR C.
- */
-export function activeNavHref(
-  pathname: string,
-  hrefs: readonly string[],
-): string | null {
-  let best: string | null = null;
-  for (const href of hrefs) {
-    const matches =
-      href === "/"
-        ? pathname === "/"
-        : pathname === href || pathname.startsWith(`${href}/`);
-    if (matches && (best === null || href.length > best.length)) best = href;
-  }
-  return best;
 }

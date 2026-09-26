@@ -23,16 +23,19 @@ vi.mock("./actions", () => ({
   editMeetingNoteAction: vi.fn(async () => ({ ok: true })),
 }));
 
+import { draftStorageKey } from "@/components/os/window-storage";
+import { DRAFT_OWNER, DraftWindow } from "@/tests/draft-window";
 import { editMeetingNoteAction } from "./actions";
 import { MeetingEditor } from "./meeting-editor";
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  window.sessionStorage.clear();
 });
 
-function editor() {
-  render(
+function editor(inWindow = false) {
+  const ui = (
     <MeetingEditor
       mode={{ kind: "edit", noteId: "note-1", version: 2, team: "kitchen" }}
       initial={{
@@ -59,9 +62,75 @@ function editor() {
       teamLabels={{ kitchen: "Kitchen" }}
       events={[]}
       formerAttendees={[{ id: "gone", displayName: "Left Camp" }]}
-    />,
+    />
+  );
+  render(
+    inWindow ? (
+      <DraftWindow windowKey="edit-meeting:note-1">{ui}</DraftWindow>
+    ) : (
+      ui
+    ),
   );
 }
+
+describe("MeetingEditor's unsaved draft", () => {
+  const KEY = draftStorageKey(DRAFT_OWNER, "edit-meeting:note-1", "meeting");
+  const title = () =>
+    (screen.getByLabelText(/^Title/) as HTMLInputElement).value;
+
+  it("keeps it for this tab when the window goes, and restores it with Discard", () => {
+    editor(true);
+    fireEvent.change(screen.getByLabelText(/^Title/), {
+      target: { value: "Kickoff, take two" },
+    });
+    // The window goes (a Back): the draft is written as it stood.
+    cleanup();
+    expect(JSON.parse(window.sessionStorage.getItem(KEY)!)).toMatchObject({
+      version: 2,
+      title: "Kickoff, take two",
+    });
+
+    editor(true);
+    expect(title()).toBe("Kickoff, take two");
+    expect(screen.getByText("Unsaved changes restored.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(title()).toBe("Kickoff");
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("throws away a draft typed over an older version of the note", () => {
+    window.sessionStorage.setItem(
+      KEY,
+      JSON.stringify({
+        version: 1,
+        team: "kitchen",
+        title: "Stale",
+        date: "2026-10-02",
+        time: "18:30",
+        calendarEventId: null,
+        agenda: "",
+        notes: "",
+        attendeeIds: [],
+        decisions: [],
+        actionItems: [],
+      }),
+    );
+    editor(true);
+    expect(title()).toBe("Kickoff");
+    expect(screen.queryByText("Unsaved changes restored.")).toBeNull();
+  });
+
+  it("forgets it once the note is saved", async () => {
+    editor(true);
+    fireEvent.change(screen.getByLabelText(/^Title/), {
+      target: { value: "Kickoff, saved" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save meeting" }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    cleanup();
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+  });
+});
 
 describe("MeetingEditor", () => {
   it("lets an attendee who is no longer approved be unticked", async () => {

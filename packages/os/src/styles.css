@@ -20,6 +20,8 @@
      --os-muted, --os-accent       quiet text; the second colour
      --os-panel, --os-chrome,      window body, bars, and rules: shades
      --os-line                     between bg and fg
+     --os-danger                   delete rows in menus (the primary colour
+                                   when unset)
      --os-font-pixel               the pixel face for titles and labels */
 @theme inline {
   --color-os-bg: var(--os-bg);
@@ -31,6 +33,7 @@
   --color-os-panel: var(--os-panel);
   --color-os-chrome: var(--os-chrome);
   --color-os-line: var(--os-line);
+  --color-os-danger: var(--os-danger, var(--os-primary));
   --font-pixel: var(--os-font-pixel);
 }
 
@@ -82,10 +85,35 @@
   }
 }
 
-/* Reduced motion: windows appear without the power-on; the cursor holds. */
+/* A program on its way (an icon or Start item pressed, the page not yet
+   there): a two-step blink, not a spinner. */
+.os-pending {
+  animation: os-pending-blink 0.8s steps(2) infinite;
+}
+@keyframes os-pending-blink {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Reduced motion: windows appear without the power-on; the cursor holds;
+   a pending program is dimmed, not blinking. */
 @media (prefers-reduced-motion: reduce) {
   .os-window-in,
   .os-cursor {
     animation: none;
   }
+  .os-pending {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* A hidden tab: every animation on the desktop holds still until the member
+   comes back (the app sets data-os-paused on its desktop root on
+   visibilitychange). The idle desktop costs nothing (design doc, section 8). */
+[data-os-paused] *,
+[data-os-paused] *::before,
+[data-os-paused] *::after {
+  animation-play-state: paused !important;
 }

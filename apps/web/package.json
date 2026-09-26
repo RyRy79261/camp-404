@@ -25,6 +25,8 @@
     "@camp404/auth": "workspace:*",
     "@camp404/core": "workspace:*",
     "@camp404/db": "workspace:*",
+    "@camp404/games": "workspace:*",
+    "@camp404/os": "workspace:*",
     "@camp404/telegram": "workspace:*",
     "@camp404/types": "workspace:*",
     "@camp404/ui": "workspace:*",

@@ -27,6 +27,8 @@ export function DesktopIcon({
       data-icon={id}
       onClick={onOpen}
       aria-label={`Open ${label}`}
+      // Two lines at most; a longer name is whole in the tooltip.
+      title={label}
       className="group flex w-28 flex-col items-center gap-2 p-1 text-os-accent outline-none"
     >
       {icon(
@@ -34,15 +36,18 @@ export function DesktopIcon({
           open ? "text-os-primary drop-shadow-[0_0_8px_var(--os-primary)]" : ""
         }`,
       )}
+      {/* Drawn by CSS from data-label, not written into the page, so a
+          folder's icon names never collide with the same words in a window's
+          page; the button's name is its aria-label. */}
       <span
-        className={`max-w-full truncate px-1.5 py-0.5 font-pixel text-[10px] uppercase tracking-wider ${
+        aria-hidden
+        data-label={label}
+        className={`line-clamp-2 max-w-full px-1.5 py-0.5 text-center font-pixel text-[10px] uppercase tracking-wider after:content-[attr(data-label)] ${
           open
             ? "bg-os-primary text-os-primary-fg"
             : "bg-os-chrome/80 text-os-fg group-hover:bg-os-primary group-hover:text-os-primary-fg group-focus-visible:bg-os-primary group-focus-visible:text-os-primary-fg"
         }`}
-      >
-        {label}
-      </span>
+      />
     </button>
   );
 }

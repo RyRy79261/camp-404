@@ -36,7 +36,9 @@ import {
   proofreadProgressAction,
   sendSourceForProofreadingAction,
 } from "../../actions";
+import { draftStorageKey } from "@/components/os/window-storage";
 import { ANSWER_QUESTIONS_LABEL, UNREACHABLE } from "@/lib/recipe-copy";
+import { DRAFT_OWNER, DraftWindow } from "@/tests/draft-window";
 import { POLL_MS, SourceEditor, type OpenRun } from "./source-editor";
 
 const RECIPE = "11111111-1111-4111-8111-111111111111";
@@ -372,5 +374,63 @@ describe("source editor", () => {
     expect(current()).toContain("Claude is reading it");
     await poll();
     expect(current()).toContain("Checking the structure");
+  });
+});
+
+describe("the unsaved source (the four editors' rule, guard only)", () => {
+  // A Kitchen page in PR C: unsaved text asks before its window goes, and
+  // nothing is kept or restored, so nothing inside the page changes (plan
+  // section 0).
+  const KEY = draftStorageKey(
+    DRAFT_OWNER,
+    `edit-recipe:${RECIPE}`,
+    "recipe-source",
+  );
+  function inWindow(basedOnSourceId = "source-1") {
+    render(
+      <DraftWindow windowKey={`edit-recipe:${RECIPE}`}>
+        <SourceEditor
+          recipeId={RECIPE}
+          title="Camp dal"
+          basedOnSourceId={basedOnSourceId}
+          serves={6}
+          sections={emptySourceSections()}
+          run={null}
+        />
+      </DraftWindow>,
+    );
+  }
+  const serves = () => screen.getByLabelText("Serves") as HTMLInputElement;
+  function unloadIsAsked(): boolean {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+
+  afterEach(() => window.sessionStorage.clear());
+
+  it("asks before the window goes", () => {
+    inWindow();
+    expect(unloadIsAsked()).toBe(false);
+    fireEvent.change(serves(), { target: { value: "8" } });
+    expect(unloadIsAsked()).toBe(true);
+  });
+
+  it("keeps and restores nothing: the page looks as it did", () => {
+    inWindow();
+    fireEvent.change(serves(), { target: { value: "8" } });
+    cleanup();
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+    inWindow();
+    expect(serves().value).toBe("6");
+    expect(screen.queryByText("Unsaved changes restored.")).toBeNull();
+  });
+
+  it("stops asking once sent, which saves the source", async () => {
+    inWindow();
+    fireEvent.change(serves(), { target: { value: "8" } });
+    await pressSend();
+    expect(sendSourceForProofreadingAction).toHaveBeenCalled();
+    expect(unloadIsAsked()).toBe(false);
   });
 });

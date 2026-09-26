@@ -475,11 +475,33 @@ function TeamIcons({ teams }: { teams: HomeModel["teams"] }) {
   );
 }
 
-export function HomeView({ home }: { home: HomeModel }) {
+export function HomeView({
+  home,
+  variant = "page",
+}: {
+  home: HomeModel;
+  /**
+   * `page`: the whole page, with its module grid. `today`: the body of the
+   * desktop's Today gadget (a narrow panel beside the desktop icons, which
+   * ARE the modules now), so no module grid, one column, and an h2: the
+   * gadget sits on the desktop page, which has its own heading.
+   */
+  variant?: "page" | "today";
+}) {
+  const today = variant === "today";
   return (
-    <div className="flex flex-col">
-      <PageHeading eyebrow="Home" title={home.greeting} />
-      <div className="-mt-3 mb-6 flex flex-wrap gap-2" aria-label="You are">
+    <div className={cn("flex flex-col", today && "gap-4 p-4")}>
+      {today ? (
+        <h2 className="text-lg font-semibold tracking-tight">
+          {home.greeting}
+        </h2>
+      ) : (
+        <PageHeading eyebrow="Home" title={home.greeting} />
+      )}
+      <div
+        className={cn("flex flex-wrap gap-2", !today && "-mt-3 mb-6")}
+        aria-label="You are"
+      >
         {home.chips.map((chip) => (
           <Badge key={chip} variant="outline">
             {chip}
@@ -489,9 +511,14 @@ export function HomeView({ home }: { home: HomeModel }) {
 
       {/* One column on a phone that never grows past the screen: an auto
           column would take the width of the longest task title. */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-3">
-        <div className="flex flex-col gap-6 lg:col-span-2">
-          <ModuleGrid modules={home.modules} />
+      <div
+        className={cn(
+          "grid grid-cols-[minmax(0,1fr)] gap-6",
+          !today && "lg:grid-cols-3",
+        )}
+      >
+        <div className={cn("flex flex-col gap-6", !today && "lg:col-span-2")}>
+          {today ? null : <ModuleGrid modules={home.modules} />}
           {home.waitingForApproval ? (
             <WaitingCard />
           ) : (

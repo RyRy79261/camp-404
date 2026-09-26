@@ -103,6 +103,9 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
             ref={ref}
             id={id}
             type={visible ? "text" : "password"}
+            // Revealed, the field is type="text" and React keeps its value
+            // attribute in step: the 404 OS desktop blanks it in a copy.
+            data-os-private=""
             value={value}
             defaultValue={defaultValue}
             onChange={(e) => {

@@ -233,7 +233,7 @@ export function Toaster({ className }: { className?: string }) {
       role="region"
       aria-label="Notifications"
       className={cn(
-        "pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-4 sm:items-end",
+        "pointer-events-none fixed inset-x-0 bottom-0 z-[120] flex flex-col items-center gap-2 p-4 sm:items-end",
         className,
       )}
     >

@@ -9,8 +9,14 @@ const config: NextConfig = {
     "@camp404/types",
     "@camp404/core",
     "@camp404/ai-prompts",
+    "@camp404/os",
+    "@camp404/games",
   ],
   typedRoutes: true,
+  // `next dev`'s badge sits bottom-left, over the phone bottom bar's Home
+  // button (404 OS, PR C), so Playwright's clicks there land on the badge.
+  // Off for the E2E runs only; compile and runtime errors still show.
+  ...(process.env.E2E_TEST_MODE === "1" ? { devIndicators: false } : {}),
   // Next's App Router refuses to route `.`-prefixed folders, so the
   // canonical `/.well-known/*` paths get rewritten into normal app
   // routes under /api/mcp/well-known/*.

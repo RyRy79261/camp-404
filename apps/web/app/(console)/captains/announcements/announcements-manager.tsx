@@ -28,7 +28,8 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { AnnouncementPresentation } from "@camp404/types";
+import { z } from "zod";
+import { AnnouncementPresentation } from "@camp404/types";
 import type { AnnouncementSummary, Audience } from "@camp404/db/broadcasts";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
@@ -59,6 +60,13 @@ import {
   MarkdownHint,
   MarkdownPreview,
 } from "@/components/announcements/markdown-body";
+import {
+  DraftRestoredNote,
+  stableJson,
+  useDraftAutosave,
+  useEditorDraft,
+  type EditorDraft,
+} from "@/components/os/editor-draft";
 import { RecorderPanel } from "@/components/voice/recorder-panel";
 import { useDictationToggle } from "@/components/voice/use-dictation-toggle";
 import { useVoiceSupported } from "@/components/voice/use-voice-recorder";
@@ -167,13 +175,52 @@ function audienceFromValue(value: string): Audience {
   return { scope: "everyone" };
 }
 
-export function AnnouncementsManager({
-  announcements,
-  currentUserId,
-  audienceOptions,
-  teamLabels,
-  leadTeams,
-}: {
+/**
+ * The composer's fields as an unsaved draft (components/os/editor-draft.tsx):
+ * kept across a Back and a reload in this tab. Read back, an audience the
+ * sender may no longer pick becomes the first they may, and an edit of a
+ * draft that has since been published or deleted becomes a new one.
+ */
+const ComposerDraft = z.object({
+  editingId: z.string().max(200).nullable(),
+  title: z.string().max(1_000),
+  body: z.string().max(20_000),
+  presentation: AnnouncementPresentation,
+  audience: z.string().max(200),
+  pinned: z.boolean(),
+});
+
+/** What the composer holds when it is saved: blank, or the draft it edits. */
+function savedForm(
+  editingId: string | null,
+  announcements: readonly AnnouncementSummary[],
+  audienceOptions: readonly AudienceOption[],
+): FormState {
+  const editing =
+    editingId === null
+      ? undefined
+      : announcements.find((a) => a.id === editingId && a.publishedAt === null);
+  if (!editing) {
+    return {
+      editingId: null,
+      title: "",
+      body: "",
+      presentation: "acknowledge",
+      audience: audienceOptions[0]?.value ?? "everyone",
+      pinned: false,
+    };
+  }
+  return {
+    editingId: editing.id,
+    title: editing.title,
+    body: editing.body,
+    presentation: editing.presentation,
+    audience: audienceValue(editing.audience),
+    pinned: markedPinned(editing),
+  };
+}
+
+type AnnouncementsManagerProps = {
   announcements: AnnouncementSummary[];
   currentUserId: string;
   /** A captain gets the camp and every active team; a lead their own teams. */
@@ -185,17 +232,64 @@ export function AnnouncementsManager({
    * so pin to, anything). Decides which published cards offer a pin.
    */
   leadTeams: string[] | null;
-}) {
+};
+
+/**
+ * The announcements page: the lists and the composer. The composer's unsaved
+ * words ask before the window goes, survive a Back and a reload in this tab,
+ * and come back with "Unsaved changes restored" and Discard. The microphone
+ * stops whenever the page goes (the recorder's own cleanup), so closing the
+ * window never leaves it listening.
+ */
+export function AnnouncementsManager(props: AnnouncementsManagerProps) {
+  const { announcements, audienceOptions } = props;
+  const draft = useEditorDraft<FormState>({
+    editor: "announcement",
+    baseline: savedForm(null, announcements, audienceOptions),
+    parse: (raw) => {
+      const parsed = ComposerDraft.safeParse(raw);
+      if (!parsed.success) return null;
+      const form = parsed.data;
+      const editing = form.editingId
+        ? announcements.some(
+            (a) => a.id === form.editingId && a.publishedAt === null,
+          )
+        : false;
+      const audienceOk = audienceOptions.some((o) => o.value === form.audience);
+      return {
+        ...form,
+        editingId: editing ? form.editingId : null,
+        audience: audienceOk
+          ? form.audience
+          : (audienceOptions[0]?.value ?? "everyone"),
+      };
+    },
+  });
+  return (
+    <AnnouncementsManagerView key={draft.generation} {...props} draft={draft} />
+  );
+}
+
+function AnnouncementsManagerView({
+  announcements,
+  currentUserId,
+  audienceOptions,
+  teamLabels,
+  leadTeams,
+  draft,
+}: AnnouncementsManagerProps & { draft: EditorDraft<FormState> }) {
   const router = useRouter();
-  const emptyForm: FormState = {
-    editingId: null,
-    title: "",
-    body: "",
-    presentation: "acknowledge",
-    audience: audienceOptions[0]?.value ?? "everyone",
-    pinned: false,
-  };
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const emptyForm: FormState = savedForm(null, announcements, audienceOptions);
+  const [form, setForm] = useState<FormState>(draft.start);
+  // Unsaved: the composer differs from what it holds when saved (blank, or
+  // the draft it edits).
+  // A save or a Cancel empties the composer, which is its saved state, so
+  // the stored draft goes with it.
+  useDraftAutosave(draft, form, {
+    clean:
+      stableJson(form) ===
+      stableJson(savedForm(form.editingId, announcements, audienceOptions)),
+  });
   const [error, setError] = useState<string | null>(null);
   const dictation = useDictationToggle();
   const voiceSupported = useVoiceSupported();
@@ -471,6 +565,7 @@ export function AnnouncementsManager({
           )}
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          <DraftRestoredNote draft={draft} disabled={pending} />
           <InputField
             label="Title"
             id="announcement-title"

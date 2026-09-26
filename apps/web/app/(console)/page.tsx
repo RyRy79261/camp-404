@@ -15,6 +15,7 @@ import { isSignInSecured } from "@/lib/sign-in-security";
 import { listMyOpenTasks } from "@/lib/tasks";
 import { getMyTeams, getPendingQuestionnaires } from "@/lib/users";
 import { HomeView } from "@/components/home/home-view";
+import { TodayGadgetPanel } from "@/components/os/today-gadget";
 import { EnablePush } from "@/components/push/enable-push";
 import { LandingHero } from "../landing-hero";
 
@@ -23,9 +24,10 @@ import { LandingHero } from "../landing-hero";
 export const dynamic = "force-dynamic";
 
 /**
- * Home. Signed out, the landing page. Signed in, the member's OWN page (owner,
- * 2026-09-23): what they need to do, what's coming up, and the few places that
- * are theirs, built from their profile and status. The whole-camp view moved to
+ * Home. Signed out, the landing page. Signed in, the 404 OS desktop, whose
+ * icons the console layout draws; this page is its Today gadget: the member's
+ * OWN summary (owner, 2026-09-23), what they need to do, what's coming up,
+ * built from their profile and status. The whole-camp view moved to
  * /captains/overview.
  *
  * The member ladder still applies — a fresh member goes to the invite gate or
@@ -113,12 +115,19 @@ export default async function HomePage() {
     manifest ?? undefined,
   );
 
+  // The desktop itself: its icons are the modules now (the console layout
+  // draws them), so this page is the Today gadget, closed by default.
   return (
-    <div className="flex flex-col gap-6">
-      <HomeView home={home} />
-      {/* Web push opt-in; renders nothing unless push is supported and the
-          member has not decided yet. */}
-      <EnablePush />
-    </div>
+    <>
+      <h1 className="sr-only">Desktop</h1>
+      <TodayGadgetPanel count={home.todos.length}>
+        <HomeView home={home} variant="today" />
+        {/* Web push opt-in; renders nothing unless push is supported and
+            the member has not decided yet. */}
+        <div className="px-4 pb-4">
+          <EnablePush />
+        </div>
+      </TodayGadgetPanel>
+    </>
   );
 }

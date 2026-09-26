@@ -1,6 +1,6 @@
-import { Lock } from "lucide-react"
+import { Lock } from "lucide-react";
 
-import { cn } from "../lib/utils"
+import { cn } from "../lib/utils";
 
 // Preview-but-locked: the page shows its heading, and this card stands where
 // the data would be. The page sends no data for a rank below its bar, so this
@@ -9,10 +9,10 @@ import { cn } from "../lib/utils"
 // viewer is missing.
 export interface CaptainLockProps {
   /** @default "Captain access only" */
-  title?: string
+  title?: string;
   /** @default "This data is visible to captains. Your rank doesn’t have clearance for this view." */
-  message?: string
-  className?: string
+  message?: string;
+  className?: string;
 }
 
 export function CaptainLock({
@@ -20,8 +20,12 @@ export function CaptainLock({
   message = "This data is visible to captains. Your rank doesn’t have clearance for this view.",
   className,
 }: CaptainLockProps) {
+  // `data-captain-lock` tells the 404 OS desktop a gate refused this page,
+  // so it refreshes its program list (the member may have been demoted by
+  // someone else since it was drawn).
   return (
     <div
+      data-captain-lock=""
       className={cn(
         "flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card/40 px-6 py-16 text-center",
         className,
@@ -35,5 +39,5 @@ export function CaptainLock({
         </p>
       </div>
     </div>
-  )
+  );
 }

@@ -561,14 +561,35 @@ smoke suite (`apps/join/tests/e2e/smoke.spec.ts`). It is themed only through
     and `aria-hidden`. So Playwright (which does not pierce closed shadow
     roots), `getByLabel`, screen readers and the Tab key see one page only.
   - A clone keeps attributes, not live input values, so unsaved typing is not
-    copied. Elements marked `data-os-private` are blanked in the copy: ID and
+    copied. [CORRECTION 2026-09-26] Measured in the PR C spike: React keeps a
+    controlled field's `value` attribute in step with what was typed, so a
+    copy DOES hold unsaved typing. It stays in memory, shows only the
+    member's own screen, and password fields are always blanked. Elements
+    marked `data-os-private` are blanked in the copy: ID and
     passport numbers, bank details, the roster's safety and captain-notes
-    panels. Canvases (INKBLOT) copy blank.
+    panels. Canvases (INKBLOT) copy blank. [2026-09-26, PR C as built] Marked:
+    every answer section and the captain notes in the roster's member panel,
+    and any questionnaire field whose key is `ALWAYS_PRIVATE` (the ID number
+    in the burner profile replay). Payments shows no bank details today, so
+    nothing there is marked. [2026-09-26, review] Also marked: every
+    questionnaire field whose answer lands in a `SAFETY_VISIBLE` column
+    (emergency contacts, allergies, anaphylaxis), and Sign-in and security's
+    two-factor QR code, setup key and backup codes; password and one-time
+    code fields are blanked by type or `autocomplete`, whatever their type (a
+    revealed password is `type="text"`). `private-marker-drift.test.ts`
+    checks the console's components.
   - It lives in memory only, never in `sessionStorage`. After a hard load the
     background windows show their icon and name until opened. It is dropped on
     close, `pruneTo`, sign-out, a user-id change and **a change of manifest
     version** (a demotion or any other change of what the member may open),
-    so a captain-only copy never survives losing access.
+    so a captain-only copy never survives losing access. [CORRECTION
+    2026-09-26] Never survives the desktop LEARNING of it: the layout does
+    not re-render on a soft navigation, so after a demotion by someone else
+    the version changes on the next refresh (a hard load, a tab back after
+    five minutes, Back/Forward, a gate redirect, a page that renders a
+    `CaptainLock`). Until then a background copy of a lost page stays: a
+    copy of what was on the member's own screen, from when they could see
+    it.
   - **A total snapshot budget.** There is no window cap (decision 7 B), and a
     per-body size limit (see Risks) does not bound the total, so every copy
     counts toward one budget: about 20 MB of serialized copy HTML across all
@@ -921,6 +942,17 @@ phone it is a home screen, not a shrunk desktop:
   instance, cleared on save, on close, on sign-out and on a user-id mismatch.
   This is the one exception to "layout only" in section 7. It is limited to
   those four editors, none of which hold ID, bank or safety fields.
+- [2026-09-26, PR C as built] Where the build settles what this section left
+  open: Home asks the dirty guard, minimises every window and pushes `/` (so
+  Back from the home screen returns to the program); Today's body is the `/`
+  page's, so Today from a program goes home first; there is no Start menu on
+  a phone, so Report a problem and Log off sit at the foot of the home
+  screen, and the system-health and "Application submitted" lines above its
+  icons; the pinned strip folds into the bell's panel as a "Pinned (N)"
+  list. Back does not close a folder sheet (it has no history entry). The
+  stored draft is also cleared on Discard and when the member answers the
+  guard with "leave anyway" (they chose to lose it). The plan's "As built:
+  the phone and the editors" block has the rest.
 - Wide pages (Tasks, Roster, Power, Meal plan, Payments, builder, recipe rail)
   move to `@container` queries in a later PR. Until then they open maximised on
   desktop.

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Info, ListChecks, Plus, Save, Trash2 } from "lucide-react";
+import { z } from "zod";
 import { MEETING_NOTE_PRIVACY_REMINDER } from "@camp404/core";
 import { NewMeetingNoteInput } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
@@ -26,6 +27,12 @@ import {
 } from "@camp404/ui/components/select";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
+import {
+  DraftRestoredNote,
+  useDraftAutosave,
+  useEditorDraft,
+  type EditorDraft,
+} from "@/components/os/editor-draft";
 import type { MeetingEventOption } from "@/lib/meeting-notes-view";
 import { createMeetingNoteAction, editMeetingNoteAction } from "./actions";
 
@@ -86,15 +93,83 @@ type FieldName = "title" | "date" | "time" | "agenda" | "notes";
 let keySerial = 0;
 const nextKey = () => `row-${++keySerial}`;
 
-export function MeetingEditor({
-  mode,
-  initial,
-  members,
-  teamPeople,
-  teamLabels,
-  events,
-  formerAttendees = [],
-}: {
+/**
+ * Everything the form holds, as its unsaved draft (editor-draft.tsx): kept in
+ * memory across a Back and in this tab's storage across a reload. An edit's
+ * draft names the version it was typed over, and is thrown away once the
+ * note has moved on.
+ */
+const MeetingDraft = z.object({
+  version: z.number().int().nullable(),
+  team: z.string().max(100),
+  title: z.string().max(1_000),
+  date: z.string().max(40),
+  time: z.string().max(40),
+  calendarEventId: z.string().max(200).nullable(),
+  agenda: z.string().max(20_000),
+  notes: z.string().max(40_000),
+  attendeeIds: z.array(z.string().max(200)).max(1_000),
+  decisions: z.array(z.string().max(2_000)).max(200),
+  actionItems: z
+    .array(
+      z.object({
+        id: z.string().max(200).nullable(),
+        text: z.string().max(1_000),
+        assigneeId: z.string().max(200).nullable(),
+        due: z.string().max(40),
+        onBoard: z.boolean(),
+      }),
+    )
+    .max(200),
+});
+type MeetingDraft = z.infer<typeof MeetingDraft>;
+
+/** The editor's values as a draft; attendees in one order, so equal is equal. */
+function meetingDraft(
+  version: number | null,
+  team: string,
+  values: MeetingEditorValues,
+): MeetingDraft {
+  return {
+    version,
+    team,
+    title: values.title,
+    date: values.date,
+    time: values.time,
+    calendarEventId: values.calendarEventId,
+    agenda: values.agenda,
+    notes: values.notes,
+    attendeeIds: [...values.attendeeIds].sort(),
+    decisions: values.decisions,
+    actionItems: values.actionItems.map((i) => ({
+      id: i.id,
+      text: i.text,
+      assigneeId: i.assigneeId,
+      due: i.due,
+      onBoard: i.onBoard,
+    })),
+  };
+}
+
+/** A draft read back, if it still fits this page: its team, its version. */
+function parseMeetingDraft(
+  raw: unknown,
+  mode: MeetingEditorMode,
+): MeetingDraft | null {
+  const parsed = MeetingDraft.safeParse(raw);
+  if (!parsed.success) return null;
+  const draft = parsed.data;
+  if (mode.kind === "edit") {
+    return draft.version === mode.version && draft.team === mode.team
+      ? draft
+      : null;
+  }
+  const teams = new Set(mode.teams.map((t) => t.value));
+  if (mode.canPickWholeCamp) teams.add(WHOLE_CAMP);
+  return draft.version === null && teams.has(draft.team) ? draft : null;
+}
+
+type MeetingEditorProps = {
   mode: MeetingEditorMode;
   initial: MeetingEditorValues;
   /** Everyone who may be ticked or given an action item: approved members. */
@@ -106,10 +181,42 @@ export function MeetingEditor({
   events: MeetingEventOption[];
   /** People on the note who are no longer approved members, by name. */
   formerAttendees?: MeetingPerson[];
-}) {
+};
+
+/**
+ * The meeting editor. Unsaved input asks before its window goes, survives a
+ * Back and a reload in this tab, and comes back with "Unsaved changes
+ * restored" and Discard.
+ */
+export function MeetingEditor(props: MeetingEditorProps) {
+  const { mode, initial } = props;
+  const draft = useEditorDraft({
+    editor: "meeting",
+    baseline: meetingDraft(
+      mode.kind === "edit" ? mode.version : null,
+      mode.team,
+      initial,
+    ),
+    parse: (raw) => parseMeetingDraft(raw, mode),
+  });
+  return <MeetingEditorForm key={draft.generation} {...props} draft={draft} />;
+}
+
+function MeetingEditorForm({
+  mode,
+  initial: saved,
+  members,
+  teamPeople,
+  teamLabels,
+  events,
+  formerAttendees = [],
+  draft,
+}: MeetingEditorProps & { draft: EditorDraft<MeetingDraft> }) {
   const router = useRouter();
+  // Where the form starts: the saved note, or the draft the member left.
+  const initial: MeetingEditorValues = draft.start;
   const [pending, startTransition] = React.useTransition();
-  const [team, setTeam] = React.useState(mode.team);
+  const [team, setTeam] = React.useState(draft.start.team);
   const [title, setTitle] = React.useState(initial.title);
   const [date, setDate] = React.useState(initial.date);
   const [time, setTime] = React.useState(initial.time);
@@ -132,6 +239,23 @@ export function MeetingEditor({
   >({});
   const [error, setError] = React.useState<string | null>(null);
 
+  // What is typed now, against what is saved: the guard, the kept draft and
+  // this tab's autosave (editor-draft.tsx).
+  const { saved: markSaved } = useDraftAutosave(
+    draft,
+    meetingDraft(mode.kind === "edit" ? mode.version : null, team, {
+      title,
+      date,
+      time,
+      calendarEventId: eventId === NO_EVENT ? null : eventId,
+      agenda,
+      notes,
+      attendeeIds: [...attendees],
+      decisions: decisions.map((d) => d.text),
+      actionItems: items.map(({ key: _key, ...item }) => item),
+    }),
+  );
+
   const teamKey = team === WHOLE_CAMP ? null : team;
   const teamLabel = teamKey ? (teamLabels[teamKey] ?? teamKey) : "Whole camp";
 
@@ -149,8 +273,8 @@ export function MeetingEditor({
   // the note already names even if it has passed.
   const eventOptions = events.filter((e) => e.team === teamKey);
   const linkedGone =
-    initial.calendarEventId !== null &&
-    !eventOptions.some((e) => e.id === initial.calendarEventId);
+    saved.calendarEventId !== null &&
+    !eventOptions.some((e) => e.id === saved.calendarEventId);
 
   function pickEvent(next: string) {
     setEventId(next);
@@ -216,6 +340,7 @@ export function MeetingEditor({
           setError(result.error);
           return;
         }
+        markSaved();
         toast.success("Meeting saved");
         router.push(`/meetings/${result.data.id}`);
       } else {
@@ -228,6 +353,7 @@ export function MeetingEditor({
           setError(result.error);
           return;
         }
+        markSaved();
         toast.success("Meeting saved");
         router.push(`/meetings/${mode.noteId}`);
       }
@@ -237,6 +363,7 @@ export function MeetingEditor({
 
   return (
     <form onSubmit={submit} noValidate className="flex min-w-0 flex-col gap-6">
+      <DraftRestoredNote draft={draft} disabled={pending} />
       <div className="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-accent/10 p-3">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
         <p className="text-sm text-foreground">
@@ -307,8 +434,8 @@ export function MeetingEditor({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_EVENT}>Not on the calendar</SelectItem>
-                  {linkedGone && initial.calendarEventId ? (
-                    <SelectItem value={initial.calendarEventId}>
+                  {linkedGone && saved.calendarEventId ? (
+                    <SelectItem value={saved.calendarEventId}>
                       The event it names now
                     </SelectItem>
                   ) : null}

@@ -4,6 +4,7 @@ import { Circle, Lock } from "lucide-react";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { SignOutLink } from "@/components/auth/sign-out-link";
+import { OutsideBlockingLayer } from "./outside-blocking-layer";
 
 // The chrome around a questionnaire runner, as AfrikaBurn's fill page draws it:
 // the Required/Optional badge, the title, and — for a questionnaire that holds
@@ -32,8 +33,9 @@ export function BlockingBadge({ blocking }: { blocking: boolean }) {
  * The runner page's header: the badge, the way out, and the title as the
  * page's level-1 heading.
  *
- * A blocking questionnaire holds the whole app, so the console draws no header
- * around it and this is the page's only chrome: its only escape is Sign out.
+ * A blocking questionnaire holds the whole app: its only escape is Sign out,
+ * which the desktop's blocking layer draws under the form (so it is left out
+ * here) and a bare page draws here.
  * An optional one can wait, so it sits inside the console and its escape is
  * "Later", back to the inbox where it stays listed.
  */
@@ -52,9 +54,11 @@ export function RunnerHeader({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <BlockingBadge blocking={blocking} />
         {blocking ? (
-          <Button type="button" variant="ghost" size="sm" asChild>
-            <SignOutLink />
-          </Button>
+          <OutsideBlockingLayer>
+            <Button type="button" variant="ghost" size="sm" asChild>
+              <SignOutLink />
+            </Button>
+          </OutsideBlockingLayer>
         ) : (
           <Button type="button" variant="outline" size="sm" asChild>
             <Link href="/notifications">Later</Link>

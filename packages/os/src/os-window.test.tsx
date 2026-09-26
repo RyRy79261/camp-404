@@ -20,6 +20,7 @@ function renderWindow(
   children: ReactNode,
   win: OsWindow<"notes"> = WIN,
   titleHeading = false,
+  background = false,
 ) {
   const handlers = {
     onFocus: vi.fn(),
@@ -34,6 +35,7 @@ function renderWindow(
       win={win}
       title="NOTES.TXT"
       titleHeading={titleHeading}
+      background={background}
       isTop
       hidden={false}
       phone={false}
@@ -68,6 +70,66 @@ function Colours() {
 }
 
 describe("OsWindowFrame", () => {
+  it("asks to come forward on a press in it, but not on its title-bar buttons", () => {
+    const view = renderWindow(<button type="button">Save</button>);
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Save" }));
+    expect(view.onFocus).toHaveBeenLastCalledWith("pointer");
+    view.onFocus.mockClear();
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Close NOTES.TXT" }),
+    );
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Minimise NOTES.TXT" }),
+    );
+    expect(view.onFocus).not.toHaveBeenCalled();
+  });
+
+  it("says when focus moved into it, apart from a press", () => {
+    const view = renderWindow(<button type="button">Save</button>);
+    view.onFocus.mockClear();
+    act(() => screen.getByRole("button", { name: "Save" }).focus());
+    expect(view.onFocus).toHaveBeenLastCalledWith("focus");
+  });
+
+  it("marks its body, which keeps selectable text", () => {
+    const view = renderWindow(<p>Body text</p>);
+    const body = view.container.querySelector("[data-window-body]");
+    expect(body?.textContent).toBe("Body text");
+    expect(body?.className).toContain("select-text");
+  });
+
+  it("leaves focus alone on mount when told to", () => {
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    render(
+      <OsWindowFrame
+        win={WIN}
+        title="NOTES.TXT"
+        isTop
+        hidden={false}
+        phone={false}
+        autoFocus={false}
+        pending
+        onFocus={() => {}}
+        onClose={() => {}}
+        onMinimize={() => {}}
+        onToggleMaximize={() => {}}
+        onMove={() => {}}
+        onResize={() => {}}
+      >
+        <p>Body</p>
+      </OsWindowFrame>,
+    );
+    expect(document.activeElement).toBe(outside);
+    expect(
+      screen
+        .getByRole("region", { name: "NOTES.TXT" })
+        .getAttribute("aria-busy"),
+    ).toBe("true");
+    outside.remove();
+  });
+
   it("is a labelled window region, not a dialog", () => {
     renderWindow(<p>Hello</p>);
     const win = screen.getByRole("region", { name: "NOTES.TXT" });
@@ -133,17 +195,58 @@ describe("OsWindowFrame", () => {
 
   it("ignores an Esc that something inside already used", () => {
     const { onClose } = renderWindow(
-      <input
-        aria-label="Search"
+      <button
+        type="button"
         onKeyDown={(e) => {
           if (e.key === "Escape") e.preventDefault();
         }}
-      />,
+      >
+        Inside
+      </button>,
     );
-    fireEvent.keyDown(screen.getByRole("textbox", { name: "Search" }), {
+    fireEvent.keyDown(screen.getByRole("button", { name: "Inside" }), {
       key: "Escape",
     });
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("keeps the window open for an Esc in a field being typed in", () => {
+    const { onClose } = renderWindow(
+      <>
+        <input aria-label="Search the roster" />
+        <textarea aria-label="Notes" />
+        <div role="textbox" aria-label="Body" contentEditable />
+        <input type="checkbox" aria-label="Done" />
+      </>,
+    );
+    for (const field of [
+      screen.getByRole("textbox", { name: "Search the roster" }),
+      screen.getByRole("textbox", { name: "Notes" }),
+      screen.getByRole("textbox", { name: "Body" }),
+    ]) {
+      fireEvent.keyDown(field, { key: "Escape" });
+    }
+    expect(onClose).not.toHaveBeenCalled();
+    // A checkbox takes no typing: Esc there is the window's.
+    fireEvent.keyDown(screen.getByRole("checkbox", { name: "Done" }), {
+      key: "Escape",
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("a background frame is no landmark, and its buttons leave the tab order", () => {
+    const { container, onClose } = renderWindow(<p>Copy</p>, WIN, false, true);
+    expect(screen.queryByRole("region", { name: "NOTES.TXT" })).toBeNull();
+    const frame = container.querySelector("section[data-window]")!;
+    expect(frame.getAttribute("aria-hidden")).toBe("true");
+    const buttons = [...frame.querySelectorAll("button")];
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const b of buttons) expect(b.tabIndex).toBe(-1);
+    // A pointer still works on it.
+    fireEvent.click(
+      frame.querySelector('button[aria-label="Close NOTES.TXT"]')!,
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("focuses the element that asks for it when it opens", () => {
@@ -283,5 +386,110 @@ describe("unsaved input", () => {
     const again = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(again);
     expect(again.defaultPrevented).toBe(false);
+  });
+});
+
+describe("a responsive frame (the console)", () => {
+  function renderResponsive(win: OsWindow<"notes"> = WIN, phoneHidden = false) {
+    const handlers = {
+      onFocus: vi.fn(),
+      onClose: vi.fn(),
+      onMinimize: vi.fn(),
+      onToggleMaximize: vi.fn(),
+      onMove: vi.fn(),
+      onResize: vi.fn(),
+    };
+    render(
+      <OsWindowFrame
+        win={win}
+        title="Roster"
+        isTop
+        hidden={false}
+        phone={false}
+        responsive
+        phoneHidden={phoneHidden}
+        {...handlers}
+      >
+        <p>Body</p>
+      </OsWindowFrame>,
+    );
+    const frame = screen.getByRole("region", { name: "Roster" });
+    return { frame, ...handlers };
+  }
+
+  function phoneScreen(matches: boolean) {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn((query: string) => ({
+        matches,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      })),
+    );
+  }
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+  // Frames run at once: a drag reports on its pointerup either way.
+  function stubFrames() {
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 1);
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+  }
+  const pointer = (type: string, x: number, y: number) =>
+    new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+
+  it("is full screen by CSS below md, placed by variables from md up, never inline left/top", () => {
+    const { frame } = renderResponsive();
+    // The server's first paint is right at 390 px: nothing inline says
+    // where the window is, so the phone's classes are not overridden.
+    expect(frame.style.left).toBe("");
+    expect(frame.style.top).toBe("");
+    expect(frame.style.width).toBe("");
+    expect(frame.style.getPropertyValue("--win-x")).toBe("40px");
+    expect(frame.style.getPropertyValue("--win-w")).toBe("400px");
+    expect(frame.className).toContain("max-md:fixed");
+    expect(frame.className).toContain("md:left-[var(--win-x)]");
+    expect(frame.className).not.toContain("max-md:hidden");
+  });
+
+  it("hides on a phone when another window is the one shown", () => {
+    const { frame } = renderResponsive(WIN, true);
+    expect(frame.className).toContain("max-md:hidden");
+  });
+
+  it("has a big Back that closes it, and desktop buttons hidden on a phone", () => {
+    const { onClose } = renderResponsive();
+    const back = screen.getByRole("button", { name: "Back, close Roster" });
+    expect(back.className).toContain("md:hidden");
+    fireEvent.click(back);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    const close = screen.getByRole("button", { name: "Close Roster" });
+    expect(close.parentElement?.className).toContain("max-md:hidden");
+  });
+
+  it("does not drag or maximise on a phone", () => {
+    phoneScreen(true);
+    stubFrames();
+    const { frame, onMove, onToggleMaximize } = renderResponsive();
+    const bar = frame.querySelector<HTMLElement>("[data-titlebar]")!;
+    fireEvent(bar, pointer("pointerdown", 100, 100));
+    fireEvent(bar, pointer("pointermove", 200, 200));
+    fireEvent(bar, pointer("pointerup", 200, 200));
+    fireEvent.doubleClick(bar);
+    expect(onMove).not.toHaveBeenCalled();
+    expect(onToggleMaximize).not.toHaveBeenCalled();
+  });
+
+  it("drags on a desktop", () => {
+    phoneScreen(false);
+    stubFrames();
+    const { frame, onMove } = renderResponsive();
+    const bar = frame.querySelector<HTMLElement>("[data-titlebar]")!;
+    fireEvent(bar, pointer("pointerdown", 100, 100));
+    fireEvent(bar, pointer("pointermove", 130, 120));
+    fireEvent(bar, pointer("pointerup", 130, 120));
+    expect(onMove).toHaveBeenCalledWith(70, 60);
   });
 });

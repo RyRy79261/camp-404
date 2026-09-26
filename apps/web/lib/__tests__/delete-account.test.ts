@@ -5,17 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // orchestration (E2E short-circuit, cleanup called, cleanup failure swallowed).
 vi.mock("@camp404/db/account", () => ({ sanitiseAccount: vi.fn() }));
 vi.mock("@/lib/avatar-blob", () => ({ deleteAvatarBlobs: vi.fn() }));
-vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));
+vi.mock("@/lib/test-mode", () => ({
+  isE2ETestMode: vi.fn(() => false),
+  usesTestStore: vi.fn(() => false),
+}));
 
 import { deleteAccount } from "@/lib/account";
 import { sanitiseAccount } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "@/lib/avatar-blob";
-import { isE2ETestMode } from "@/lib/test-mode";
+import { isE2ETestMode, usesTestStore } from "@/lib/test-mode";
+import { testStore } from "@/lib/test-store";
 
 describe("deleteAccount", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(isE2ETestMode).mockReturnValue(false);
+    vi.mocked(usesTestStore).mockReturnValue(false);
     vi.mocked(sanitiseAccount).mockResolvedValue({
       ok: true,
       lostCatNumber: 7,
@@ -30,6 +35,31 @@ describe("deleteAccount", () => {
     expect(res).toEqual({ ok: true, lostCatNumber: 0 });
     expect(sanitiseAccount).not.toHaveBeenCalled();
     expect(deleteAvatarBlobs).not.toHaveBeenCalled();
+  });
+
+  it("deletes the test store's desktop layout under E2E, as the real erasure deletes the row", async () => {
+    vi.mocked(isE2ETestMode).mockReturnValue(true);
+    vi.mocked(usesTestStore).mockReturnValue(true);
+    testStore.reset();
+    const member = testStore.createUser({
+      authUserId: "auth-erased",
+      displayName: "Erased",
+      inviteCode: "seed",
+    });
+    const other = testStore.createUser({
+      authUserId: "auth-kept",
+      displayName: "Kept",
+      inviteCode: "seed",
+    });
+    const layout = { cells: { inbox: { c: 0, r: 0 } }, items: [] };
+    testStore.saveDesktopLayout(member.id, layout);
+    testStore.saveDesktopLayout(other.id, layout);
+
+    await deleteAccount({ userId: member.id, authUserId: member.authUserId });
+
+    expect(testStore.getDesktopLayout(member.id)).toBeNull();
+    expect(testStore.getDesktopLayout(other.id)).toEqual(layout);
+    testStore.reset();
   });
 
   it("scrubs the DB, then deletes all the member's avatar blobs", async () => {

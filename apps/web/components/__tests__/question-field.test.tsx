@@ -637,3 +637,65 @@ describe("QuestionField — image upload endpoint", () => {
     ).toBeTruthy();
   });
 });
+
+describe("QuestionField — the desktop's last-seen copy", () => {
+  it("marks an ID number to be blanked, and nothing else", () => {
+    // The ID number's answer key is ALWAYS_PRIVATE (@camp404/core), so the
+    // field carries data-os-private and never shows in a background window.
+    const { container } = render(
+      <>
+        <QuestionField
+          question={q({ id: "id.number", kind: "short_text", prompt: "ID" })}
+          value="8001015009087"
+          onChange={() => {}}
+        />
+        <QuestionField
+          question={q({ id: "name", kind: "short_text", prompt: "Name" })}
+          value="Ada"
+          onChange={() => {}}
+        />
+      </>,
+    );
+    const marked = container.querySelectorAll("[data-os-private]");
+    expect(marked).toHaveLength(1);
+    expect(marked[0]!.querySelector("input")?.id).toBe("q-id.number");
+  });
+});
+
+describe("QuestionField — safety answers in the last-seen copy", () => {
+  it("marks the emergency contacts and the allergies (SAFETY_VISIBLE)", () => {
+    const { container } = render(
+      <>
+        <QuestionField
+          question={q({
+            id: "emergency.1.name",
+            kind: "short_text",
+            prompt: "Name",
+            role: "emergency_contact_name",
+          })}
+          value="Ma Private"
+          onChange={() => {}}
+        />
+        <QuestionField
+          question={q({
+            id: "allergies",
+            kind: "short_text",
+            prompt: "Allergies",
+            role: "dietary_allergies",
+          })}
+          value="Peanuts"
+          onChange={() => {}}
+        />
+        <QuestionField
+          question={q({ id: "fav", kind: "short_text", prompt: "Favourite" })}
+          value="Dal"
+          onChange={() => {}}
+        />
+      </>,
+    );
+    const marked = [...container.querySelectorAll("[data-os-private]")].map(
+      (el) => el.querySelector("input")?.id,
+    );
+    expect(marked).toEqual(["q-emergency.1.name", "q-allergies"]);
+  });
+});

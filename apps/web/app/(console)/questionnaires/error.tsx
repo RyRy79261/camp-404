@@ -1,23 +1,10 @@
 "use client";
 
-import { ErrorRecovery } from "@/components/error-recovery";
+import { WindowError } from "@/components/os/window-error";
 
-// An error in a questionnaire is caught here, not at the root, so the recovery sits in
-// the page area and its way back stays in this section.
-export default function SectionError({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
-  return (
-    <ErrorRecovery
-      frame="inline"
-      error={error}
-      reset={reset}
-      backHref="/"
-      backLabel="Back to camp"
-    />
-  );
-}
+// A questionnaire that fails is caught here, not at the root. On the desktop
+// it sits in the questionnaire's window; for a member a blocking
+// questionnaire holds, it sits in the blocking layer over the inert desktop;
+// with no desktop (a rejected applicant) it is the page alone. The way back
+// is the desktop, which for a held member is the gate again.
+export default WindowError;

@@ -32,6 +32,7 @@
     "./join-site": "./src/join-site.ts",
     "./cycles": "./src/cycles.ts",
     "./cycle-rollover": "./src/cycle-rollover.ts",
+    "./desktop-layouts": "./src/desktop-layouts.ts",
     "./questionnaire-definitions": "./src/questionnaire-definitions.ts",
     "./questionnaire-lifecycle": "./src/questionnaire-lifecycle.ts",
     "./questionnaire-responses": "./src/questionnaire-responses.ts",
