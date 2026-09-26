@@ -6,10 +6,13 @@ import {
   assignTeam,
   getTeamCoverage,
   getTeamMemberships,
+  getTeamMembershipsForCycle,
   listTeamPeople,
   removeTeam,
   setLead,
 } from "../team-memberships";
+import { getCampConfig, currentCycle } from "../camp-config";
+import { advanceCycle } from "../cycle-rollover";
 import { isTeamLead } from "../roster";
 import { resolveAudience } from "../broadcasts";
 import * as schema from "../schema";
@@ -557,5 +560,89 @@ describe("listTeamPeople", () => {
     expect((await listTeamPeople("kitchen"))[0]?.displayName).toBe(
       "Unnamed burner",
     );
+  });
+});
+
+// The web console reads the camp config once per request and one year of
+// memberships once per request (apps/web/lib/camp-config.ts getCampSettings,
+// apps/web/lib/users.ts getMyMemberships), then derives the lead flag, the
+// led teams and the member's teams from that one read. These pin the two
+// queries it is built on, against real Postgres.
+describe("getTeamMembershipsForCycle", () => {
+  const h = useTestDb();
+
+  /** What the console's settings read hands the memberships read. */
+  async function yearFromConfig(): Promise<number> {
+    return currentCycle((await getCampConfig()).cycles ?? [])?.year ?? 1;
+  }
+
+  it("answers the same as getTeamMemberships for the year the config names", async () => {
+    const db = h.db();
+    const cook = await makeUser(db);
+    await foundedAt(db, 2027);
+    await assignTeam({ userId: cook.id, team: "kitchen" });
+    await assignTeam({ userId: cook.id, team: "finance" });
+    await setLead({ userId: cook.id, team: "kitchen", isLead: true });
+
+    const year = await yearFromConfig();
+    expect(year).toBe(2027);
+    expect(await getTeamMembershipsForCycle(cook.id, year)).toEqual(
+      await getTeamMemberships(cook.id),
+    );
+    expect(await getTeamMembershipsForCycle(cook.id, year)).toEqual([
+      { team: "kitchen", isLead: true, cycle: 2027 },
+      { team: "finance", isLead: false, cycle: 2027 },
+    ]);
+  });
+
+  it("reads only the year it is given", async () => {
+    const db = h.db();
+    const cook = await makeUser(db);
+    await makeMembership(db, {
+      userId: cook.id,
+      team: "kitchen",
+      isLead: true,
+      cycle: 2026,
+    });
+    await makeMembership(db, { userId: cook.id, team: "sound", cycle: 2027 });
+
+    expect(await getTeamMembershipsForCycle(cook.id, 2026)).toEqual([
+      { team: "kitchen", isLead: true, cycle: 2026 },
+    ]);
+    expect(await getTeamMembershipsForCycle(cook.id, 2027)).toEqual([
+      { team: "sound", isLead: false, cycle: 2027 },
+    ]);
+  });
+
+  it("comes back empty after the year rolls over, until captains reassign", async () => {
+    const db = h.db();
+    const lead = await makeUser(db);
+    await foundedAt(db, 2026);
+    await assignTeam({ userId: lead.id, team: "kitchen" });
+    await setLead({ userId: lead.id, team: "kitchen", isLead: true });
+    expect(
+      (await getTeamMembershipsForCycle(lead.id, await yearFromConfig())).some(
+        (m) => m.isLead,
+      ),
+    ).toBe(true);
+
+    const rolled = await advanceCycle({
+      year: 2027,
+      expectedFromYear: 2026,
+      actorUserId: null,
+    });
+    expect(rolled.ok).toBe(true);
+
+    // The config now names 2027, and last year's lead row is not this year's.
+    const year = await yearFromConfig();
+    expect(year).toBe(2027);
+    expect(await getTeamMembershipsForCycle(lead.id, year)).toEqual([]);
+
+    // A captain reassigns them, and the lead is back.
+    await assignTeam({ userId: lead.id, team: "kitchen" });
+    await setLead({ userId: lead.id, team: "kitchen", isLead: true });
+    expect(await getTeamMembershipsForCycle(lead.id, year)).toEqual([
+      { team: "kitchen", isLead: true, cycle: 2027 },
+    ]);
   });
 });

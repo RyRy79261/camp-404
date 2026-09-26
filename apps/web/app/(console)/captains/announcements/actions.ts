@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateManifest } from "@/lib/manifest-revalidate";
 import {
   AnnouncementAudience,
   ComposeAnnouncementInput,
@@ -246,7 +247,7 @@ export async function setPinnedAction(
     if (!result.ok) return result;
     revalidatePath("/captains/announcements");
     // The banner rides in the console layout, so every console page is stale.
-    revalidatePath("/", "layout");
+    revalidateManifest();
     return { ok: true };
   });
 }

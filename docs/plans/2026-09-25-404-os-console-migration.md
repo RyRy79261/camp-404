@@ -33,7 +33,7 @@ shrunk desktop.
 ## 0. Owner decisions, and which PR each one blocks
 
 The design doc lists 14 decisions, with options and recommendations. The
-numbers here are the same. Decisions 1, 2, 3, 7, 8 and 14 are ruled. PR A (the
+numbers here are the same. Decisions 1, 2, 3, 7, 8, 11 and 14 are ruled. PR A (the
 engine, proved on Join) needs none of the open ones.
 
 | # | Question | Options | Needed before | Recommendation |
@@ -48,7 +48,7 @@ engine, proved on Join) needs none of the open ones.
 | 8 | Own teams on the desktop, or only in the Teams folder? | **Ruled 2026-09-25: team folders on the right-hand side** ("Kitchen team"), led first and tagged LEAD, holding the team page and its tools; a My teams row on the phone | done | n/a. The tools per team are shaped with each lead |
 | 9 | Window titles | Plain names settled by your feedback. A: plain names only. B: plus a quiet file-name suffix on the title chip | PR D | B on desktop |
 | 10 | Body font | A: Montserrat 500. B: Inter | PR D | A |
-| 11 | Driver programs | A: a My lift program, `getMyLift` test-store twin in PR B. B: explicit deferral | PR B | A |
+| 11 | Driver programs | **Ruled 2026-09-26: A**, a My lift program (`/lift`) and a `getMyLift` test-store twin in PR B | done | n/a |
 | 12 | AGENTS.md "copy AfrikaBurn's nearest equivalent" rule | A: "copy the nearest existing program's window composition, restyle with `--os-*` tokens". B: keep it | PR D | A, since decision 1 is A |
 | 13 | Anything money-related for a Finance lead? | A: no change in this work. B: a Finance program now | none (A changes nothing) | A |
 | 14 | Can members rearrange icons? | **Ruled 2026-09-25: yes**, and **2026-09-26: stored on the server** (a per-member JSONB value; a drizzle-kit migration in PR C; erasure deletes it) | done | n/a |
@@ -448,6 +448,75 @@ zero visual risk. Needs decisions 2 and 11 (8 is ruled: team folders).
   to 1, memberships 2-3 to 1).
 - The proxy's cost per request is measured on the preview and reported in
   the PR.
+
+**[CORRECTION 2026-09-26] As built.** Where the build differs from the text
+above:
+
+- `activeNavHref` is not replaced yet. Today's header has two links into one
+  program (Profile and Sign-in & security are both the My account window), so
+  `matchProgram` alone cannot say which one to light. It moved into
+  `lib/program-routes.ts` beside `matchProgram` and goes with the header in
+  PR C.
+- My lift needed a route the plan did not name: `/lift`
+  (`app/(console)/lift/page.tsx`, `requireMemberPage`, the same card Home
+  shows). Nothing links to it yet, so the header and Home do not change; the
+  desktop draws its icon in PR C. That makes 51 `(console)` pages, not 50.
+  The test-store twin is seeded through `/api/test/seed-lift`.
+- The manifest also carries `programs` (the programs that sit on the desktop
+  itself, outside any folder), so `desktop` and `startMenu` can name items by
+  id without repeating them.
+- `captain-gate.ts` did not change: `captainPageGate` reads the lead flag
+  through `isTeamLead`, which now reads the shared memberships cache.
+- The test store's memberships read sorted by team NAME, while Postgres
+  sorts `ORDER BY team` on the enum by its declared order. It now sorts by
+  `Team.options`, and `memberships-agreement.test.ts` keeps the two equal.
+- The system-health flag counts `deriveSystemStatus`'s attention items over
+  the environment checks and the setup state (`readBootstrapState`, a
+  request-cached read the layout already makes), never the timed probe.
+- `revalidateManifest()` is also called by `markAllNotificationsReadAction`
+  (the bell's count is a tray field). The list the test keeps is in
+  `lib/__tests__/manifest-revalidate.test.ts`.
+- "New event opens with an explanation for a lead whose led teams are all
+  archived" (design doc, section 4) is a visible change on
+  `/captains/calendar`, so it is not in this PR; it moves to PR C.
+- The unit tests live in `apps/web/lib/__tests__/` (`programs.test.ts`,
+  `program-manifest.test.ts`, `program-routes.test.ts`,
+  `program-registry-drift.test.ts`, `proxy.test.ts`,
+  `sign-in-redirect.test.ts`, `manifest-revalidate.test.ts`,
+  `memberships-agreement.test.ts`, `lifts.test.ts`, `request-reads.test.ts`),
+  the repo's convention.
+- The anon-routes "returns there after sign-in" case drives the return leg
+  through `/auth?next=`, the path Google and a finished sign-in take; the
+  E2E test login stands in for the form.
+- The per-request dedupe is guarded by `request-reads.test.ts`. React
+  `cache()` is a pass-through outside a Server Components render, so no
+  other unit test can see it; that file stands a per-request memoiser in for
+  `cache()`, runs the app's own reads (`getCampSettings`, `getMyMemberships`,
+  `isTeamLead`, `getLeadTeams`, `getMyLift`, `getProgramManifest`) against
+  PGlite, and asserts one `camp_settings` config read and one
+  `team_memberships` read per request. It went red with a `cache(` wrapper
+  removed, with the memberships or lift read looking the year up again, and
+  with the health flag calling the timed probe. The memoiser is a stand-in:
+  that React's own `cache()` dedupes inside a real render is shown only by
+  the statement-log run below.
+- Round trips for the header's reads, counted on PGlite at the DATABASE
+  layer (`memberships-agreement.test.ts`, a measurement for this table, not a
+  guard on the app's path): 5 before (lead flag, teams config, my
+  teams, each membership read looking the year up again); 4 after: 2 for
+  the settings and memberships, and 2 for the lift (driver, then rider),
+  which Home made on its own before and now shares with the manifest. So a
+  console page that is not Home pays the lift's 2 reads it did not pay
+  before, and still comes out one lower. `captainPageGate`'s own lead read
+  (2 more before) is now shared too. The proxy's cost still has to be
+  measured on a preview.
+- Measured on one whole console request (2026-09-26, `next dev` against the
+  local Postgres stack with `log_statement = all`, a member and a Kitchen
+  lead, warm): `camp_settings` config reads went from 4-6 to 1, and
+  `team_memberships` reads from 3-4 to 1, on `/`, `/tasks` and
+  `/captains/questionnaires` alike. The lift's 2 reads are now on every
+  console page (before, only on `/`). All app queries per request: `/tasks`
+  18-20 to 14, `/` 25 to 16, `/captains/questionnaires` 15-20 to 15-16. The
+  one `bootstrapped_at` read (the setup latch) stays.
 
 ### PR C: the console becomes a desktop
 

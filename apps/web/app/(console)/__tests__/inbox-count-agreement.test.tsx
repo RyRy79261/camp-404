@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as CampConfig from "@/lib/camp-config";
+import type * as MemberGate from "@/lib/member-gate";
 import type * as Notifications from "@/lib/notifications";
 import type * as Users from "@/lib/users";
 
@@ -25,8 +26,15 @@ vi.mock("@/lib/auth", () => ({
 }));
 vi.mock("@/lib/bootstrap", () => ({
   isCampBootstrapped: vi.fn(async () => true),
+  readBootstrapState: vi.fn(async () => ({
+    captainCount: 1,
+    bootstrappedAt: null,
+  })),
 }));
-vi.mock("@/lib/member-gate", () => ({ resolveMemberState: vi.fn() }));
+vi.mock("@/lib/member-gate", async (importActual) => ({
+  ...(await importActual<typeof MemberGate>()),
+  resolveMemberState: vi.fn(),
+}));
 vi.mock("@/lib/lifts", () => ({ getMyLift: vi.fn(async () => null) }));
 vi.mock("@/lib/sign-in-security", () => ({
   isSignInSecured: vi.fn(async () => true),
@@ -34,6 +42,12 @@ vi.mock("@/lib/sign-in-security", () => ({
 vi.mock("@/lib/camp-config", async (importActual) => ({
   ...(await importActual<typeof CampConfig>()),
   getTeamsConfig: vi.fn(async () => ({ teams: [] })),
+  getCampSettings: vi.fn(async () => ({
+    teams: { teams: [] },
+    cycles: [],
+    current: null,
+    cycleNumber: 1,
+  })),
 }));
 vi.mock("@/lib/camp-calendar", () => ({
   getUpcomingEvents: vi.fn(async () => ({ status: "ok", events: [] })),
@@ -54,6 +68,7 @@ vi.mock("@/lib/users", async (importActual) => {
     ...actual,
     getPendingQuestionnaires: vi.fn(actual.getPendingQuestionnaires),
     getMyTeams: vi.fn(async () => []),
+    getMyMemberships: vi.fn(async () => []),
     isTeamLead: vi.fn(async () => false),
   };
 });
@@ -69,6 +84,7 @@ vi.mock("@/components/push/device-token", () => ({
 }));
 
 import { resolveMemberState } from "@/lib/member-gate";
+import { getProgramManifest } from "@/lib/program-manifest";
 import { countUnread, countUnreadByTeam } from "@/lib/notifications";
 import { testStore } from "@/lib/test-store";
 import { getPendingQuestionnaires, type CampUser } from "@/lib/users";
@@ -114,9 +130,13 @@ function countIn(name: string): number {
 
 /** Render the header and Home for one member; read both numbers. */
 async function renderBoth(campUser: CampUser) {
+  // The header draws the bell from the member's program manifest, as the
+  // console layout hands it over.
+  const manifest = await getProgramManifest();
+  if (!manifest) throw new Error("no manifest for this member");
   render(
     <>
-      {await ConsoleHeader({ campUser, email: "member@example.com" })}
+      {await ConsoleHeader({ campUser, email: "member@example.com", manifest })}
       {await HomePage()}
     </>,
   );

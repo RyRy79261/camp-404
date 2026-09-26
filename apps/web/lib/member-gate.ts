@@ -13,6 +13,7 @@ import {
   type CampUser,
 } from "./users";
 import { runDueWorkAfterResponse } from "./background-work";
+import { signInRedirect } from "./sign-in-redirect";
 
 /** Why a member cannot use a member page yet, and where to send them. */
 export type MemberBlock =
@@ -53,6 +54,20 @@ export async function memberBlock(
   return null;
 }
 
+/**
+ * An applicant waiting for a captain: their only block is approval, and they
+ * are still pending (a rejected applicant is blocked the same way, but is not
+ * waiting for anything). Home lets them in and shows them they are waiting;
+ * the program manifest gives them the restricted desktop. One predicate, so
+ * the two cannot drift.
+ */
+export function isAwaitingApproval(
+  campUser: Pick<CampUser, "approvalStatus">,
+  block: MemberBlock | null,
+): boolean {
+  return block?.reason === "approval" && campUser.approvalStatus === "pending";
+}
+
 /** Where the signed-in viewer stands on the member ladder. */
 export type MemberState =
   | { kind: "signed_out" }
@@ -88,7 +103,7 @@ export async function requireMemberPage(): Promise<{
   campUser: CampUser;
 }> {
   const state = await resolveMemberState();
-  if (state.kind === "signed_out") redirect("/auth/sign-in");
+  if (state.kind === "signed_out") return signInRedirect();
   if (state.block) redirect(state.block.href);
   return { authUser: state.authUser, campUser: state.campUser };
 }

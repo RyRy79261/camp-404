@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidateManifest } from "@/lib/manifest-revalidate";
 import { boundDraftResponses } from "@camp404/core";
 import {
   incompleteContactErrors,
@@ -196,6 +197,11 @@ export async function saveBurnerProfile(
 
   // redirect() throws a control-flow signal that must escape the try/catch
   // above, so it lives out here after persistence has succeeded.
-  if (final) redirect("/");
+  if (final) {
+    // The burner profile was the gate: the console layout draws the member's
+    // header from a fresh manifest.
+    revalidateManifest();
+    redirect("/");
+  }
   return { ok: true };
 }

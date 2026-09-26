@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidateManifest } from "@/lib/manifest-revalidate";
 import { humanDuration } from "@camp404/core";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { redeemInviteForUser } from "@/lib/users";
@@ -51,5 +52,7 @@ export async function submitInviteCode(
   const result = await redeemInviteForUser(authUser, code);
   if (!result.ok) return { ok: false, error: result.error };
 
+  // The invite was the gate: the console layout redraws from a fresh manifest.
+  revalidateManifest();
   redirect("/");
 }

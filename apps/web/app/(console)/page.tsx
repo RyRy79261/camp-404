@@ -7,7 +7,9 @@ import { getUpcomingEvents } from "@/lib/camp-calendar";
 import { buildHome } from "@/lib/home";
 import { getInboxBadge } from "@/lib/inbox-badge";
 import { getMyLift } from "@/lib/lifts";
-import { resolveMemberState } from "@/lib/member-gate";
+import { isAwaitingApproval, resolveMemberState } from "@/lib/member-gate";
+import { getProgramManifest } from "@/lib/program-manifest";
+import { signInRedirect } from "@/lib/sign-in-redirect";
 import { countUnreadByTeam } from "@/lib/notifications";
 import { isSignInSecured } from "@/lib/sign-in-security";
 import { listMyOpenTasks } from "@/lib/tasks";
@@ -44,10 +46,9 @@ export default async function HomePage() {
   }
 
   const state = await resolveMemberState();
-  if (state.kind === "signed_out") redirect("/auth/sign-in");
+  if (state.kind === "signed_out") return signInRedirect();
   const { campUser, block } = state;
-  const waiting =
-    block?.reason === "approval" && campUser.approvalStatus === "pending";
+  const waiting = isAwaitingApproval(campUser, block);
   if (block && !waiting) redirect(block.href);
 
   const approval = waiting ? "pending" : "approved";
@@ -61,6 +62,7 @@ export default async function HomePage() {
     teamsConfig,
     calendar,
     myTasks,
+    manifest,
   ] = await Promise.all([
     waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
     waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
@@ -77,6 +79,9 @@ export default async function HomePage() {
     waiting
       ? Promise.resolve({ items: [], total: 0 })
       : listMyOpenTasks(campUser.id),
+    // The header's manifest, cached for this request: Home's tiles are a view
+    // of it, so the two cannot disagree.
+    getProgramManifest(),
   ]);
   const labels = teamLabelMap(teamsConfig);
   const isCaptain =
@@ -85,25 +90,28 @@ export default async function HomePage() {
       memberships.some((m) => m.isLead),
     ) === "captain";
 
-  const home = buildHome({
-    now: new Date(),
-    approval,
-    firstName: campUser.displayName?.trim().split(/\s+/)[0] ?? null,
-    isCaptain,
-    teams: memberships.map((m) => ({
-      key: m.team,
-      label: labels[m.team] ?? m.team,
-      isLead: m.isLead,
-      unread: unreadByTeam[m.team] ?? 0,
-    })),
-    pending,
-    inbox,
-    myTasks,
-    lift,
-    calendar,
-    teamLabels: labels,
-    secured,
-  });
+  const home = buildHome(
+    {
+      now: new Date(),
+      approval,
+      firstName: campUser.displayName?.trim().split(/\s+/)[0] ?? null,
+      isCaptain,
+      teams: memberships.map((m) => ({
+        key: m.team,
+        label: labels[m.team] ?? m.team,
+        isLead: m.isLead,
+        unread: unreadByTeam[m.team] ?? 0,
+      })),
+      pending,
+      inbox,
+      myTasks,
+      lift,
+      calendar,
+      teamLabels: labels,
+      secured,
+    },
+    manifest ?? undefined,
+  );
 
   return (
     <div className="flex flex-col gap-6">

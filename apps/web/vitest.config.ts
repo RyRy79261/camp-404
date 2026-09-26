@@ -13,6 +13,11 @@ export default defineConfig({
     // take 1-3 s; under a full turbo run with coverage on, the slowest pass
     // 5 s. A stuck test still fails, just later.
     testTimeout: 15_000,
+    // The two tests that read real Postgres (lib/__tests__/lifts.test.ts and
+    // memberships-agreement.test.ts) start PGlite and run every migration in
+    // `beforeAll`. Under a full turbo run that took over the 10 s default and
+    // failed both; packages/db, whose harness it is, allows 60 s.
+    hookTimeout: 60_000,
     // `pnpm test:coverage` (CI). The floors are the coverage measured on
     // 2026-09-16 minus 3 points, so coverage can drift down only a little
     // before CI says so.

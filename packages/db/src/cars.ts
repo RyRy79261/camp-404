@@ -69,9 +69,15 @@ export interface CarRider {
   addedAt: Date;
 }
 
-/** This year's riders in one driver's car. */
-export async function listCarRiders(driverUserId: string): Promise<CarRider[]> {
-  const cycle = await currentCycleNumber();
+/**
+ * This year's riders in one driver's car. `cycle` is for a caller that already
+ * read the camp's current year; leave it out and it is read here.
+ */
+export async function listCarRiders(
+  driverUserId: string,
+  cycle?: number,
+): Promise<CarRider[]> {
+  cycle ??= await currentCycleNumber();
   return createHttpDb()
     .select({
       userId: schema.carMembers.memberUserId,
@@ -130,8 +136,15 @@ function vehicleName(make: string | null, model: string | null): string | null {
   return name || null;
 }
 
-export async function getMyLift(userId: string): Promise<MyLift | null> {
-  const cycle = await currentCycleNumber();
+/**
+ * `cycle` is the camp's current year, for a caller that already read it (the
+ * web app's request-cached settings); leave it out and it is read here.
+ */
+export async function getMyLift(
+  userId: string,
+  cycle?: number,
+): Promise<MyLift | null> {
+  cycle ??= await currentCycleNumber();
   const db = createHttpDb();
   const [driving] = await db
     .select({
@@ -152,7 +165,7 @@ export async function getMyLift(userId: string): Promise<MyLift | null> {
     )
     .limit(1);
   if (driving) {
-    const riders = await listCarRiders(userId);
+    const riders = await listCarRiders(userId, cycle);
     return {
       role: "driver",
       vehicle: vehicleName(driving.vehicleMake, driving.vehicleModel),

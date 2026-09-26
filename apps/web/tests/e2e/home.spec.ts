@@ -4,6 +4,7 @@ import {
   login,
   redeemInviteAtGate,
   resetTestState,
+  seedLift,
   setRank,
 } from "./_helpers";
 
@@ -75,6 +76,66 @@ test.describe("a member's own home", () => {
     await expect(
       shortcuts.getByRole("link", { name: /Camp overview/ }),
     ).toHaveCount(0);
+  });
+
+  test("a driver sees their car, and a rider their seat (getMyLift's twin)", async ({
+    page,
+    request,
+  }) => {
+    // The rider's row must exist before the driver's car can seat them.
+    await login(page, {
+      id: "home-rider",
+      email: "god@example.com",
+      displayName: "Ren Rider",
+    });
+    await page.goto("/");
+    await completeOnboarding(request, "home-rider");
+    await setRank(request, "home-rider", "member");
+    await login(page, {
+      id: "home-driver",
+      email: "god@example.com",
+      displayName: "Ada Driver",
+    });
+    await page.goto("/");
+    await completeOnboarding(request, "home-driver");
+    await setRank(request, "home-driver", "member");
+    await seedLift(request, "home-driver", {
+      role: "driver",
+      vehicleMake: "Toyota",
+      vehicleModel: "Hilux",
+      seatsOffered: 3,
+      departureCity: "Cape Town",
+    });
+    await seedLift(request, "home-rider", {
+      role: "rider",
+      driverAuthUserId: "home-driver",
+    });
+
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Hi Ada" }),
+    ).toBeVisible();
+    await expect(page.getByText("You're driving")).toBeVisible();
+    await expect(page.getByText("Toyota Hilux")).toBeVisible();
+    await expect(page.getByText("With Ren Rider")).toBeVisible();
+
+    // The My lift program's page shows the same card.
+    await page.goto("/lift");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "My lift" }),
+    ).toBeVisible();
+    await expect(page.getByText("1 of 3 seats taken")).toBeVisible();
+
+    await login(page, {
+      id: "home-rider",
+      email: "god@example.com",
+      displayName: "Ren Rider",
+    });
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Hi Ren" }),
+    ).toBeVisible();
+    await expect(page.getByText("Riding with Ada Driver")).toBeVisible();
   });
 
   test("a captain gets the camp overview as one link, and it opens", async ({

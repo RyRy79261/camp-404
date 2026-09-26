@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import {
   bootstrapFirstCaptain,
   getBootstrapState,
@@ -24,9 +25,17 @@ import { FOUNDER_CODE } from "@camp404/core";
  */
 export async function isCampBootstrapped(): Promise<boolean> {
   if (usesTestStore()) return true;
-  const state = await getBootstrapState();
+  const state = await readBootstrapState();
   return state.captainCount > 0 || state.bootstrappedAt !== null;
 }
+
+/**
+ * The setup state (captain count and the latch), read once per request: the
+ * console layout and the page both ask whether the camp is set up, and the
+ * program manifest's system-health flag needs the captain count. React
+ * `cache()` only, so a server action (the setup wizard's) always reads fresh.
+ */
+export const readBootstrapState = cache(() => getBootstrapState());
 
 /** What /setup says to an account that may not found the camp. */
 export const SETUP_REFUSED_MESSAGE =

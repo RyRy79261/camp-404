@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateManifest } from "@/lib/manifest-revalidate";
 import { redirect } from "next/navigation";
 import { QuestionnaireResponses, type SaveResult } from "@camp404/types";
 import {
@@ -149,7 +149,7 @@ export async function saveBuilderResponses(
     // Next keeps a layout across in-app navigation, so without this the
     // completion screen and every page after it stayed headerless until a
     // reload (owner's report, 2026-09-25). Refresh from the root layout down.
-    revalidatePath("/", "layout");
+    revalidateManifest();
     redirect(`/questionnaires/${activation.id}/complete`);
   }
   return { ok: true };

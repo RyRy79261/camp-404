@@ -21,7 +21,8 @@ import {
   DropdownMenuTrigger,
 } from "@camp404/ui/components/dropdown-menu";
 import { cn } from "@camp404/ui/lib/utils";
-import { activeNavHref, type NavItem, type NavNode } from "@/lib/console-nav";
+import type { NavItem, NavNode } from "@/lib/console-nav";
+import { activeNavHref } from "@/lib/program-routes";
 import { navIcon } from "@/lib/nav-icons";
 
 /**

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import {
   createCampUser,
   findUserByAuthId,
@@ -22,11 +23,11 @@ import {
 import type {
   EmergencyContact,
   QuestionnaireFieldChange,
+  Team,
 } from "@camp404/types";
 import { encrypt, decryptOrNull } from "@camp404/db/crypto";
 import { idColumnsFor } from "@camp404/db/id-documents";
-import { isTeamLead as dbIsTeamLead } from "@camp404/db/roster";
-import { getTeamMemberships as dbGetTeamMemberships } from "@camp404/db/team-memberships";
+import { getTeamMembershipsForCycle as dbGetTeamMembershipsForCycle } from "@camp404/db/team-memberships";
 import {
   ensureRequiredAction,
   satisfyRequiredAction as dbSatisfyRequiredAction,
@@ -41,6 +42,7 @@ import {
   hasCampAccess as coreHasCampAccess,
   isApproved as coreIsApproved,
 } from "@camp404/core";
+import { getCampSettings } from "./camp-config";
 import { QUESTIONNAIRE_VERSION } from "./questionnaire";
 import type { AuthenticatedUser } from "./auth";
 import { usesTestStore } from "./test-mode";
@@ -317,6 +319,46 @@ export function isApproved(
   return coreIsApproved(user, isGodEmail(email));
 }
 
+/** One team a member is on this year, and whether they lead it. */
+export interface MyMembership {
+  team: Team;
+  isLead: boolean;
+}
+
+/**
+ * The teams a member is on THIS YEAR, and whether they lead each: ONE read per
+ * member per request, from which the lead flag (`isTeamLead`), the led teams
+ * (`getLeadTeams`), the member's teams (`getMyTeams`) and the program manifest
+ * all follow. The console used to make each of those reads separately, and
+ * each of them read `camp_settings` again for the year.
+ *
+ * Year-scoped: the year comes from the request's one settings read
+ * (`getCampSettings`), so at a rollover this empties for everyone until
+ * captains assign teams again, and last year's lead rows answer nothing.
+ *
+ * React `cache()` only, keyed by the member: one server render shares it and
+ * throws it away. The membership writes (`assignTeam`, `removeTeam`,
+ * `setLead`) never read through this, and the re-render that
+ * `revalidateManifest()` asks for after one is a new render, so it reads the
+ * fresh rows. Do not read this after a membership write in the same action.
+ *
+ * The E2E twin is the test store's `team_memberships` mirror, year-scoped by
+ * the same rules (lib/__tests__/test-store-teams.test.ts), in the same team
+ * order as the database (lib/__tests__/memberships-agreement.test.ts).
+ */
+export const getMyMemberships = cache(
+  async (userId: string): Promise<MyMembership[]> => {
+    if (usesTestStore()) {
+      return testStore
+        .getTeamMemberships(userId)
+        .map((m) => ({ team: m.team, isLead: m.isLead }));
+    }
+    const { cycleNumber } = await getCampSettings();
+    const rows = await dbGetTeamMembershipsForCycle(userId, cycleNumber);
+    return rows.map((m) => ({ team: m.team, isLead: m.isLead }));
+  },
+);
+
 /**
  * Whether a user leads at least one team THIS YEAR — the derived `team_lead`
  * rank that unlocks the control panel's team-lead layer. Team leadership is
@@ -325,25 +367,13 @@ export function isApproved(
  * roles"). Nothing is deleted: last year's lead row stays on file, it just is
  * not an answer to this year's question.
  *
- * Routed through the test store under E2E_TEST_MODE, which now models team
- * memberships with the real backend's year-scoping — so a Playwright persona
- * that has been made a lead reads as one here, and one that has not still
- * reads false.
+ * Read from `getMyMemberships`, so the gate, the header and the manifest share
+ * one read per request.
  */
 export async function isTeamLead(userId: string): Promise<boolean> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  return store.isTeamLead(userId);
+  return (await getMyMemberships(userId)).some((m) => m.isLead);
 }
 
-/**
- * The teams this member LEADS this year. Clearance is global — leading any team
- * makes you a `team_lead` everywhere (owner-ratified) — so this is never a
- * clearance question; it is the AUDIENCE question, and the only consumer is
- * `canSendToAudience`, which decides whether a lead may address a given team.
- *
- * Year-scoped like `isTeamLead`: at a rollover it empties for everyone until
- * captains reappoint leads.
- */
 /**
  * The teams this member is on THIS year, and whether they lead each — for
  * their own home page. Year-scoped like every team read: at a rollover it
@@ -352,13 +382,22 @@ export async function isTeamLead(userId: string): Promise<boolean> {
 export async function getMyTeams(
   userId: string,
 ): Promise<{ team: string; isLead: boolean }[]> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  return store.getMyTeams(userId);
+  return getMyMemberships(userId);
 }
 
+/**
+ * The teams this member LEADS this year. Clearance is global — leading any team
+ * makes you a `team_lead` everywhere (owner-ratified) — so this is never a
+ * clearance question; it is the AUDIENCE question (`canSendToAudience`, and
+ * the Kitchen and Power predicates).
+ *
+ * Year-scoped like `isTeamLead`: at a rollover it empties for everyone until
+ * captains reappoint leads.
+ */
 export async function getLeadTeams(userId: string): Promise<string[]> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  return store.getLeadTeams(userId);
+  return (await getMyMemberships(userId))
+    .filter((m) => m.isLead)
+    .map((m) => m.team);
 }
 
 /**
@@ -422,9 +461,6 @@ interface UserBackend {
   setTelegramHandle(userId: string, handle: string | null): Promise<void>;
   setUserDisplayName(userId: string, name: string | null): Promise<void>;
   getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null>;
-  isTeamLead(userId: string): Promise<boolean>;
-  getLeadTeams(userId: string): Promise<string[]>;
-  getMyTeams(userId: string): Promise<{ team: string; isLead: boolean }[]>;
   upsertBurnerProfile(input: {
     userId: string;
     version: string;
@@ -602,19 +638,6 @@ const realBackend: UserBackend = {
       version: row.version,
     };
   },
-  async isTeamLead(userId) {
-    return dbIsTeamLead(userId);
-  },
-  async getMyTeams(userId) {
-    const memberships = await dbGetTeamMemberships(userId);
-    return memberships.map((m) => ({ team: m.team, isLead: m.isLead }));
-  },
-  async getLeadTeams(userId) {
-    // The same year-scoped read the roster's lead column aggregates, narrowed
-    // to the rows whose lead flag is set.
-    const memberships = await dbGetTeamMemberships(userId);
-    return memberships.filter((m) => m.isLead).map((m) => m.team);
-  },
   async upsertBurnerProfile(input) {
     await upsertBurnerProfileDb(input);
   },
@@ -699,19 +722,6 @@ const testBackend: UserBackend = {
       updatedAt: row.updatedAt,
       version: row.version,
     };
-  },
-  // Both read the store's `team_memberships` mirror, which is year-scoped and
-  // written by the same three operations production has.
-  async isTeamLead(userId) {
-    return testStore.isTeamLead(userId);
-  },
-  async getMyTeams(userId) {
-    return testStore
-      .getTeamMemberships(userId)
-      .map((m) => ({ team: m.team, isLead: m.isLead }));
-  },
-  async getLeadTeams(userId) {
-    return testStore.getLeadTeams(userId);
   },
   async upsertBurnerProfile(input) {
     testStore.upsertProfile(input);

@@ -21,12 +21,14 @@ vi.mock("@/lib/users", () => ({
   satisfyBurnerProfileAction: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/questionnaire-config", () => ({
   getQuestionnaireForResponses: vi.fn(),
 }));
 
 import type { Questionnaire } from "@camp404/types";
 import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
+import { revalidatePath } from "next/cache";
 import { saveBurnerProfile } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
@@ -270,6 +272,8 @@ describe("saveBurnerProfile response bounds", () => {
     expect(upsertBurnerProfile).toHaveBeenCalledTimes(1);
     const { responses } = vi.mocked(upsertBurnerProfile).mock.calls[0]![0]!;
     expect(responses).toEqual({ birthday: "1990-04-12" });
+    // The profile was the gate: the console layout redraws its manifest.
+    expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
   });
 
   it("refuses a final submit with a date of birth after today, writing nothing", async () => {

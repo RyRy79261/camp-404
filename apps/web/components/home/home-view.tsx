@@ -305,7 +305,7 @@ function ChecklistCard({
   );
 }
 
-function LiftCard({ lift }: { lift: NonNullable<HomeModel["lift"]> }) {
+export function LiftCard({ lift }: { lift: NonNullable<HomeModel["lift"]> }) {
   return (
     <Card>
       <CardHeader className="pb-3">

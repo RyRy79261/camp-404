@@ -65,8 +65,24 @@ export interface TeamWriteInput {
 export async function getTeamMemberships(
   userId: string,
 ): Promise<TeamMembership[]> {
+  return getTeamMembershipsForCycle(userId, await currentCycleNumber());
+}
+
+/**
+ * A member's team memberships for ONE year, team-ordered: the same read as
+ * `getTeamMemberships`, for a caller that already knows the camp's current
+ * year. The web app's request-cached settings read resolves the year once per
+ * request (apps/web/lib/camp-config.ts `getCampSettings`), and passing it here
+ * saves the `camp_settings` read `currentCycleNumber()` would make again.
+ *
+ * Pass the CURRENT year, from the camp config. Any other year answers a
+ * different question: last year's teams, which no production read wants.
+ */
+export async function getTeamMembershipsForCycle(
+  userId: string,
+  cycle: number,
+): Promise<TeamMembership[]> {
   const db = createHttpDb();
-  const cycle = await currentCycleNumber();
   return db
     .select({
       team: schema.teamMemberships.team,
