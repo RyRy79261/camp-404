@@ -47,6 +47,8 @@ export interface AuthEnv {
   NODE_ENV?: string | undefined;
   /** The e2e harness switch. The app refuses to boot with it on Vercel. */
   E2E_TEST_MODE?: string | undefined;
+  /** "real": the e2e run against a real database (playwright.db.config.ts). */
+  E2E_DATABASE?: string | undefined;
   /**
    * E2E only: auth emails are appended to this file instead of sent, so a
    * Playwright run can follow a reset link. Honoured only by
@@ -174,6 +176,24 @@ export function resolveUseSecureCookies(env: AuthEnv): boolean | undefined {
   const baseURL = resolveBaseURL(env);
   if (!baseURL) return undefined;
   return baseURL.startsWith("https://") ? undefined : false;
+}
+
+/**
+ * Where Better Auth keeps its rate-limit counters. The database everywhere,
+ * so every serverless instance shares one count, EXCEPT in the e2e harness's
+ * run with no database (E2E_TEST_MODE=1, the in-memory test store), off
+ * Vercel: served as a production build it logged a failed `rate_limit` query
+ * on every auth request. There the counters live in the one server process,
+ * which still limits: the limiter stays on, only its store moves. The e2e run
+ * against a real database (E2E_DATABASE=real) keeps the database store, the
+ * one production uses. The same Vercel lock as resolveAuthEmailCaptureFile;
+ * the app also refuses to boot with E2E_TEST_MODE on Vercel.
+ */
+export function resolveRateLimitStorage(env: AuthEnv): "database" | "memory" {
+  if (env.E2E_TEST_MODE !== "1") return "database";
+  if (trimmed(env.VERCEL_ENV)) return "database";
+  if (env.E2E_DATABASE === "real") return "database";
+  return "memory";
 }
 
 /**

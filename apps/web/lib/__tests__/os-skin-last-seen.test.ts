@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 // has issues").
 
 const css = readFileSync(path.join(__dirname, "../../app/globals.css"), "utf8");
-const SKIN = ":root:has([data-os-skin])";
+const SKIN = ":root.os-skinned";
 
 /** Every rule's selector list and body, comments dropped. */
 function rules(): { selectors: string[]; body: string }[] {

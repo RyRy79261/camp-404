@@ -11,6 +11,7 @@ import { AcknowledgementGate } from "./acknowledgement-gate";
 import { FeedbackGate } from "./feedback-gate";
 import "./globals.css";
 import { SITE_URL } from "@/lib/site";
+import { OS_SKIN_SCRIPT } from "@/lib/os-skin";
 
 // Brand faces, exposed as CSS vars consumed by --font-sans / --font-mono in
 // @camp404/ui globals.css. Montserrat is the AfrikaBurn app's face (body 500,
@@ -84,13 +85,20 @@ export default function RootLayout({
   // Dark-first, wearing the Camp 404 accent skin over AfrikaBurn's surfaces.
   // The class is fixed here; nothing on the client changes it any more.
   // suppressHydrationWarning stays for browser extensions that stamp
-  // attributes on <html> before React hydrates.
+  // attributes on <html> before React hydrates, and for the OS skin's class
+  // (lib/os-skin.ts), which the head script adds before React hydrates.
   return (
     <html
       lang="en"
       suppressHydrationWarning
       className={`dark camp-accent ${montserrat.variable} ${jetbrainsMono.variable} ${inter.variable} ${silkscreen.variable}`}
     >
+      <head>
+        {/* Sets the 404 OS skin's class on <html> while the page carries
+            `data-os-skin` (lib/os-skin.ts), before the first paint. The
+            class is not React's, which suppressHydrationWarning allows. */}
+        <script dangerouslySetInnerHTML={{ __html: OS_SKIN_SCRIPT }} />
+      </head>
       <body className="font-sans antialiased">
         <Providers>
           {children}

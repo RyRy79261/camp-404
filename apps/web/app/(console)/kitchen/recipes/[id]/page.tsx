@@ -200,7 +200,7 @@ function DraftArticle({
 }) {
   return (
     <Card role="article" aria-labelledby="recipe-draft">
-      <CardHeader className="flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+      <CardHeader className="flex-col gap-3 space-y-0 page-sm:flex-row page-sm:items-start page-sm:justify-between">
         <div className="flex flex-col gap-1.5">
           <CardTitle id="recipe-draft" className="text-base">
             Claude&apos;s recipe
@@ -647,7 +647,7 @@ export default async function RecipePage({
             />
           ) : null}
 
-          <div className="grid items-start gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-6 page-md:grid-cols-2">
             <WhereItCameFrom detail={detail} privileged={privileged} />
 
             <Rail
@@ -762,7 +762,7 @@ export default async function RecipePage({
         actions={actions}
       />
 
-      <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-8 page-md:flex-row page-md:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           {reviewing && run ? (
             <DraftArticle detail={detail} run={run} nextVersion={1} />
@@ -775,7 +775,7 @@ export default async function RecipePage({
           />
         </div>
 
-        <aside className="flex w-full shrink-0 flex-col gap-6 lg:sticky lg:top-6 lg:w-[360px]">
+        <aside className="flex w-full shrink-0 flex-col gap-6 page-md:sticky page-md:top-6 page-md:w-[360px]">
           <Rail
             id="recipe-decision"
             title="Decision"

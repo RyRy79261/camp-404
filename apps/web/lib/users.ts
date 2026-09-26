@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import {
   createCampUser,
+  findOrCreateCampUser,
   findUserByAuthId,
   findUserById,
   getBurnerProfileByUserId,
@@ -88,17 +89,20 @@ export async function ensureCampUser(
   if (existing) return existing;
 
   // God accounts bypass the invite gate entirely — give them a real,
-  // approved row on first sign-in.
+  // approved row on first sign-in. The first page load sends several requests
+  // at once, and each of them gets here with no row, so the create is
+  // race-safe: one inserts, the others read its row. Every one of them seeds
+  // the gate (idempotent), so no request goes on before the gate exists.
   if (god) {
-    const created = await store.createUser({
+    const { user } = await store.findOrCreateUser({
       authUserId: authUser.id,
       displayName: authUser.displayName ?? authUser.primaryEmail,
       inviteCode: null,
       rank: "member",
       approvalStatus: "approved",
     });
-    await seedBurnerProfileAction(created.id);
-    return created;
+    await seedBurnerProfileAction(user.id);
+    return user;
   }
 
   // Signed in, but no row and no invite redeemed yet. Hand back a synthetic,
@@ -447,6 +451,14 @@ interface UserBackend {
     rank: Rank;
     approvalStatus: ApprovalStatus;
   }): Promise<CampUser>;
+  /** Create the row unless one exists for the auth id; never throws on a race. */
+  findOrCreateUser(input: {
+    authUserId: string;
+    displayName: string | null;
+    inviteCode: string | null;
+    rank: Rank;
+    approvalStatus: ApprovalStatus;
+  }): Promise<{ user: CampUser; created: boolean }>;
   setUserInviteCode(userId: string, code: string): Promise<void>;
   setUserRank(userId: string, rank: Rank): Promise<void>;
   setUserApprovalStatus(userId: string, status: ApprovalStatus): Promise<void>;
@@ -607,6 +619,10 @@ const realBackend: UserBackend = {
     const row = await createCampUser(input);
     return toCampUser(row);
   },
+  async findOrCreateUser(input) {
+    const { user, created } = await findOrCreateCampUser(input);
+    return { user: toCampUser(user), created };
+  },
   async setUserInviteCode(userId, code) {
     await setUserInviteCode(userId, code);
   },
@@ -691,6 +707,13 @@ const testBackend: UserBackend = {
   async createUser(input) {
     const row = testStore.createUser(input);
     return toCampUser(row);
+  },
+  async findOrCreateUser(input) {
+    // Synchronous, so two requests cannot interleave between the read and
+    // the write.
+    const existing = testStore.findUserByAuthId(input.authUserId);
+    if (existing) return { user: toCampUser(existing), created: false };
+    return { user: toCampUser(testStore.createUser(input)), created: true };
   },
   async setUserInviteCode(userId, code) {
     testStore.setUserInviteCode(userId, code);

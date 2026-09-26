@@ -2,7 +2,11 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { useTestDb } from "./_harness";
 import { makeMembership, makeUser } from "./_factories";
-import { setUserApproval, setUserApprovalStatus } from "../burner-profile";
+import {
+  findOrCreateCampUser,
+  setUserApproval,
+  setUserApprovalStatus,
+} from "../burner-profile";
 import * as schema from "../schema";
 
 // setUserApproval is a compare-and-set on the status the captain saw. Two
@@ -362,5 +366,54 @@ describe("the approval decision reason", () => {
     expect(
       (await readUser(db, applicant.id)).approvalDecisionReason,
     ).toBeNull();
+  });
+});
+
+// Several first requests from one new account all see no row; the insert must
+// let the losers read the winner's row instead of failing on auth_user_id.
+describe("findOrCreateCampUser", () => {
+  const h = useTestDb();
+  const input = {
+    authUserId: "auth-race",
+    displayName: "Racer",
+    inviteCode: null,
+    rank: "member" as const,
+    approvalStatus: "approved" as const,
+  };
+
+  it("creates the row when there is none", async () => {
+    const { user, created } = await findOrCreateCampUser(input);
+    expect(created).toBe(true);
+    expect(user.authUserId).toBe("auth-race");
+  });
+
+  it("returns the row another request already inserted, unchanged", async () => {
+    const db = h.db();
+    const winner = await makeUser(db, {
+      authUserId: "auth-race",
+      displayName: "Winner",
+      approvalStatus: "pending",
+    });
+
+    const { user, created } = await findOrCreateCampUser(input);
+
+    expect(created).toBe(false);
+    expect(user.id).toBe(winner.id);
+    expect(user.displayName).toBe("Winner");
+    expect(user.approvalStatus).toBe("pending");
+    const rows = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.authUserId, "auth-race"));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("gives two concurrent calls one row", async () => {
+    const [a, b] = await Promise.all([
+      findOrCreateCampUser(input),
+      findOrCreateCampUser(input),
+    ]);
+    expect(a.user.id).toBe(b.user.id);
+    expect([a.created, b.created].sort()).toEqual([false, true]);
   });
 });

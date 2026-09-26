@@ -33,6 +33,7 @@ import {
   resolvePasskeyOrigins,
   resolvePasskeyRpID,
   resolveRateLimit,
+  resolveRateLimitStorage,
   resolveRequireEmailVerification,
   resolveTrustedOrigins,
   resolveUseSecureCookies,
@@ -172,9 +173,10 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
       : {}),
 
     // Counters in the database so every serverless instance shares them.
-    // In-memory storage is per-instance, which is no limit at all.
+    // In-memory storage is per-instance, which is no limit at all. Only the
+    // e2e run with no database keeps them in memory (resolveRateLimitStorage).
     rateLimit: {
-      storage: "database",
+      storage: resolveRateLimitStorage(env),
       modelName: "rateLimit",
       ...resolveRateLimit(env),
     },

@@ -378,7 +378,7 @@ export default async function PowerLoadsPage() {
               action={copyButton}
             />
           ) : (
-            <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
+            <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
               <ResponsiveDataTable
                 columns={loadColumns(canEdit, inventoryOptions)}
                 data={loads}

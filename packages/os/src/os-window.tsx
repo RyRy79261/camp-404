@@ -160,6 +160,7 @@ export function OsWindowFrame<K extends string>({
   children,
 }: Props<K>) {
   const ref = useRef<HTMLElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = `${useId()}-title`;
   const Title = titleHeading ? "h2" : "span";
   const fills = phone || win.maximized;
@@ -182,6 +183,20 @@ export function OsWindowFrame<K extends string>({
     const wanted = el.querySelector<HTMLElement>("[data-autofocus]");
     (wanted ?? el).focus({ preventScroll: true });
   }, []);
+
+  // The body's own height as `--page-h`, for a page part that must fit the
+  // window's visible height (a sticky rail with its own scroll). `--win-h`
+  // will not do: it is the frame's restored height, kept while the window is
+  // maximised or on a phone, where the frame is sized by CSS instead.
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      body.style.setProperty("--page-h", `${body.clientHeight}px`);
+    });
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [win.id]);
 
   // Esc closes the window, but only an Esc nobody else used, pressed on
   // something really inside it. React sends a portal's events up through
@@ -415,6 +430,7 @@ export function OsWindowFrame<K extends string>({
           this box's width, not the screen's (@camp404/ui styles). */}
       <div
         key={win.id}
+        ref={bodyRef}
         data-window-body
         data-page-container
         className="@container/page min-h-0 flex-1 select-text overflow-auto overscroll-contain"

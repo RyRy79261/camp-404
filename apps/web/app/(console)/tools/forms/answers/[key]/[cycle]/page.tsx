@@ -84,12 +84,12 @@ export default async function AnsweredQuestionnairePage({
                 {questions.map((question) => (
                   <div
                     key={question.id}
-                    className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:grid sm:grid-cols-3 sm:gap-6"
+                    className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 page-sm:grid page-sm:grid-cols-3 page-sm:gap-6"
                   >
                     <dt className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
                       {question.prompt}
                     </dt>
-                    <dd className="whitespace-pre-wrap text-sm text-foreground [overflow-wrap:anywhere] sm:col-span-2">
+                    <dd className="whitespace-pre-wrap text-sm text-foreground [overflow-wrap:anywhere] page-sm:col-span-2">
                       {displayResponseValue(
                         question,
                         answers.responses[question.id],

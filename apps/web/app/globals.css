@@ -17,9 +17,12 @@
    The kit's own tokens (--color-background, --color-primary, …) are pointed
    at the same palette only where something wears the OS look: the desktop
    (#os-desktop), the blocking form and the gate screens each carry
-   `data-os-skin`. `:root:has(…)` rather than a class on the element, so the
-   Radix popovers, selects and dialogs a window opens (portalled into <body>,
-   outside the desktop) and the toasts wear it too. The sign-in pages and the
+   `data-os-skin`, and while one is on the page <html> carries `os-skinned`
+   (set by a script in the root layout's head, lib/os-skin.ts), so the Radix
+   popovers, selects and dialogs a window opens (portalled into <body>,
+   outside the desktop) and the toasts wear it too. Not `:root:has(…)`: that
+   restyled the whole document on every DOM change (lib/os-skin.ts has the
+   numbers). The sign-in pages and the
    signed-out landing page carry no marker and keep their own look (decision
    5 A; owner, 2026-09-23).
 
@@ -50,7 +53,7 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-:root:has([data-os-skin]),
+:root.os-skinned,
 :host,
 :host > div {
   color-scheme: dark;
@@ -132,56 +135,56 @@
 }
 
 @layer base {
-  :root:has([data-os-skin]) {
+  :root.os-skinned {
     background: var(--os-bg);
   }
-  :root:has([data-os-skin]) ::selection,
+  :root.os-skinned ::selection,
   :host ::selection {
     background: var(--os-primary);
     color: var(--os-primary-fg);
   }
   /* Join's focus: a 2px magenta outline. Base layer, so a utility that
      draws its own (a ring, or none on the terminal prompt) still wins. */
-  :root:has([data-os-skin]) :focus-visible,
+  :root.os-skinned :focus-visible,
   :host :focus-visible {
     outline: 2px solid var(--os-primary);
     outline-offset: 2px;
   }
   /* On the taskbar and the phone's bottom bar the ring sits on the chrome,
      where magenta is 2.7:1: near-white there (9.3:1), past 3:1. */
-  :root:has([data-os-skin]) [role="toolbar"] :focus-visible,
+  :root.os-skinned [role="toolbar"] :focus-visible,
   :host [role="toolbar"] :focus-visible {
     outline-color: var(--os-fg);
   }
   /* Scroll bars in the OS's look: a square magenta thumb on the dark track. */
-  :root:has([data-os-skin]) *,
+  :root.os-skinned *,
   :host * {
     scrollbar-width: thin;
     scrollbar-color: var(--os-primary) var(--os-bg);
   }
-  :root:has([data-os-skin]) ::-webkit-scrollbar,
+  :root.os-skinned ::-webkit-scrollbar,
   :host ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
-  :root:has([data-os-skin]) ::-webkit-scrollbar-track,
+  :root.os-skinned ::-webkit-scrollbar-track,
   :host ::-webkit-scrollbar-track {
     background: var(--os-bg);
     border-left: 1px solid var(--os-line);
   }
-  :root:has([data-os-skin]) ::-webkit-scrollbar-thumb,
+  :root.os-skinned ::-webkit-scrollbar-thumb,
   :host ::-webkit-scrollbar-thumb {
     background: var(--os-primary);
     border: 2px solid var(--os-bg);
   }
-  :root:has([data-os-skin]) ::-webkit-scrollbar-corner,
+  :root.os-skinned ::-webkit-scrollbar-corner,
   :host ::-webkit-scrollbar-corner {
     background: var(--os-bg);
   }
   /* Headings in the pixel face, uppercase (the prototype's in-window
      headings), in place of Montserrat's 800 treatment. */
-  :root:has([data-os-skin]) h1,
-  :root:has([data-os-skin]) h2,
+  :root.os-skinned h1,
+  :root.os-skinned h2,
   :host h1,
   :host h2 {
     font-family: var(--os-font-pixel);
@@ -190,7 +193,7 @@
     line-height: 1.2;
   }
   /* lucide's glyphs, squared to Join's grammar. */
-  :root:has([data-os-skin]) svg.lucide,
+  :root.os-skinned svg.lucide,
   :host svg.lucide {
     stroke-linecap: square;
     stroke-linejoin: miter;
@@ -202,7 +205,7 @@
    over the part's own utilities, and a call site's. */
 @layer utilities {
   /* Chips: square, pixel face. */
-  :root:has([data-os-skin]) [data-slot="badge"],
+  :root.os-skinned [data-slot="badge"],
   :host [data-slot="badge"] {
     border-radius: 0;
     font-family: var(--os-font-pixel);
@@ -213,7 +216,7 @@
     padding: 0.25rem 0.375rem;
   }
   /* Buttons: pixel face, uppercase, and a hard shadow on the main one. */
-  :root:has([data-os-skin]) [data-slot="button"],
+  :root.os-skinned [data-slot="button"],
   :host [data-slot="button"] {
     font-family: var(--os-font-pixel);
     font-weight: 400;
@@ -224,33 +227,33 @@
   /* The main button is Join's "Run APPLY.EXE" slab, as the prototype draws
      it (_proto/kit.tsx, primary): a near-white block with dark text and a
      magenta offset shadow, filled magenta under the pointer. */
-  :root:has([data-os-skin]) [data-slot="button"][data-variant="default"],
+  :root.os-skinned [data-slot="button"][data-variant="default"],
   :host [data-slot="button"][data-variant="default"] {
     border: 2px solid var(--os-fg);
     background-color: var(--os-fg);
     color: var(--os-bg);
     box-shadow: 4px 4px 0 0 var(--os-primary);
   }
-  :root:has([data-os-skin]) [data-slot="button"][data-variant="default"]:hover,
+  :root.os-skinned [data-slot="button"][data-variant="default"]:hover,
   :host [data-slot="button"][data-variant="default"]:hover {
     border-color: var(--os-primary);
     background-color: var(--os-primary);
     color: var(--os-bg);
   }
-  :root:has([data-os-skin]) [data-slot="button"][data-variant="default"]:active,
+  :root.os-skinned [data-slot="button"][data-variant="default"]:active,
   :host [data-slot="button"][data-variant="default"]:active {
     box-shadow: none;
     translate: 4px 4px;
   }
-  :root:has([data-os-skin]) [data-slot="button"][data-variant="outline"],
+  :root.os-skinned [data-slot="button"][data-variant="outline"],
   :host [data-slot="button"][data-variant="outline"] {
     border-color: color-mix(in oklch, var(--os-muted) 60%, transparent);
     /* The kit's card colour: the OS panel on the desktop, the softer charcoal
        inside a program window. */
     background-color: var(--color-card);
   }
-  :root:has([data-os-skin]) [data-slot="button"][data-variant="outline"]:hover,
-  :root:has([data-os-skin]) [data-slot="button"][data-variant="ghost"]:hover,
+  :root.os-skinned [data-slot="button"][data-variant="outline"]:hover,
+  :root.os-skinned [data-slot="button"][data-variant="ghost"]:hover,
   :host [data-slot="button"][data-variant="outline"]:hover,
   :host [data-slot="button"][data-variant="ghost"]:hover {
     border-color: var(--os-primary);
@@ -258,7 +261,7 @@
     color: var(--os-fg);
   }
   /* A card's title: a pixel eyebrow, as the prototype's panel headers. */
-  :root:has([data-os-skin]) [data-slot="card-title"],
+  :root.os-skinned [data-slot="card-title"],
   :host [data-slot="card-title"] {
     font-family: var(--os-font-pixel);
     font-weight: 400;
@@ -266,12 +269,12 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
-  :root:has([data-os-skin]) [data-slot="card"],
+  :root.os-skinned [data-slot="card"],
   :host [data-slot="card"] {
     box-shadow: none;
   }
   /* A page's own heading inside its window. */
-  :root:has([data-os-skin]) [data-slot="page-title"],
+  :root.os-skinned [data-slot="page-title"],
   :host [data-slot="page-title"] {
     font-size: 1.25rem;
     text-transform: uppercase;
@@ -279,14 +282,14 @@
   /* The blocking form's heading is lit like a tube, as the prototype's
      required form draws its question (os-glow): it is the one thing on the
      screen. */
-  :root:has([data-os-skin]) [data-os-blocking] h1,
+  :root.os-skinned [data-os-blocking] h1,
   :host [data-os-blocking] h1 {
     text-shadow:
       0 0 12px color-mix(in oklch, var(--os-primary) 70%, transparent),
       -2px 0 0 rgba(255, 0, 128, 0.7),
       2px 0 0 rgba(0, 200, 255, 0.7);
   }
-  :root:has([data-os-skin]) [data-slot="page-eyebrow"],
+  :root.os-skinned [data-slot="page-eyebrow"],
   :host [data-slot="page-eyebrow"] {
     font-family: var(--os-font-pixel);
     font-size: 10px;
@@ -295,8 +298,8 @@
 
   /* A field's label, the prototype's FieldLabel: small pixel capitals in the
      quiet colour. The kit's Label, a questionnaire's prompt, a filter's. */
-  :root:has([data-os-skin]) [data-slot="label"],
-  :root:has([data-os-skin]) [data-slot="field-label"],
+  :root.os-skinned [data-slot="label"],
+  :root.os-skinned [data-slot="field-label"],
   :host [data-slot="label"],
   :host [data-slot="field-label"] {
     font-family: var(--os-font-pixel);
@@ -311,22 +314,22 @@
   /* A headline number, the prototype's Kpi: a panel tile with a coloured
      left edge (data-kpi="primary" | "accent" | "warn"), its label in small
      pixel capitals and its figure in the pixel face. */
-  :root:has([data-os-skin]) [data-kpi],
+  :root.os-skinned [data-kpi],
   :host [data-kpi] {
     border-color: var(--color-border);
     background-color: var(--color-card);
   }
-  :root:has([data-os-skin]) [data-kpi="primary"],
-  :root:has([data-os-skin]) [data-kpi="warn"],
+  :root.os-skinned [data-kpi="primary"],
+  :root.os-skinned [data-kpi="warn"],
   :host [data-kpi="primary"],
   :host [data-kpi="warn"] {
     box-shadow: inset 3px 0 0 0 var(--os-primary);
   }
-  :root:has([data-os-skin]) [data-kpi="accent"],
+  :root.os-skinned [data-kpi="accent"],
   :host [data-kpi="accent"] {
     box-shadow: inset 3px 0 0 0 var(--os-accent);
   }
-  :root:has([data-os-skin]) [data-kpi-label],
+  :root.os-skinned [data-kpi-label],
   :host [data-kpi-label] {
     font-family: var(--os-font-pixel);
     font-size: 10px;
@@ -335,7 +338,7 @@
     text-transform: uppercase;
     color: var(--os-muted);
   }
-  :root:has([data-os-skin]) [data-kpi-value],
+  :root.os-skinned [data-kpi-value],
   :host [data-kpi-value] {
     font-family: var(--os-font-pixel);
     font-size: 1.5rem;
@@ -346,7 +349,7 @@
   /* A filter chip, the prototype's roster chips: pixel capitals in a
      bordered box with the count in a box of its own, edged and tinted
      magenta when chosen, its count filled magenta. */
-  :root:has([data-os-skin]) [data-slot="filter-chip"],
+  :root.os-skinned [data-slot="filter-chip"],
   :host [data-slot="filter-chip"] {
     height: 2rem;
     gap: 0.375rem;
@@ -360,18 +363,18 @@
     letter-spacing: 0.05em;
     text-transform: uppercase;
   }
-  :root:has([data-os-skin]) [data-slot="filter-chip"]:hover,
+  :root.os-skinned [data-slot="filter-chip"]:hover,
   :host [data-slot="filter-chip"]:hover {
     background-color: color-mix(in oklch, var(--os-fg) 5%, transparent);
     color: var(--os-fg);
   }
-  :root:has([data-os-skin]) [data-slot="filter-chip"][aria-pressed="true"],
+  :root.os-skinned [data-slot="filter-chip"][aria-pressed="true"],
   :host [data-slot="filter-chip"][aria-pressed="true"] {
     border-color: var(--os-primary);
     background-color: color-mix(in oklch, var(--os-primary) 18%, transparent);
     color: var(--os-fg);
   }
-  :root:has([data-os-skin]) [data-slot="filter-chip-count"],
+  :root.os-skinned [data-slot="filter-chip-count"],
   :host [data-slot="filter-chip-count"] {
     min-width: 1rem;
     padding-inline: 0.25rem;
@@ -382,7 +385,7 @@
     line-height: 1rem;
     text-align: center;
   }
-  :root:has([data-os-skin])
+  :root.os-skinned
     [data-slot="filter-chip"][aria-pressed="true"]
     [data-slot="filter-chip-count"],
   :host
@@ -394,7 +397,7 @@
 
   /* A progress bar, the prototype's: a square, bordered track with the fill
      cut into blocks. */
-  :root:has([data-os-skin]) [data-slot="progress"],
+  :root.os-skinned [data-slot="progress"],
   :host [data-slot="progress"] {
     border-radius: 0;
     height: 0.625rem;
@@ -402,7 +405,7 @@
     background-color: var(--color-background);
     padding: 1px;
   }
-  :root:has([data-os-skin]) [data-slot="progress-fill"],
+  :root.os-skinned [data-slot="progress-fill"],
   :host [data-slot="progress-fill"] {
     border-radius: 0;
     background-color: var(--os-primary);
@@ -412,7 +415,7 @@
       transparent calc(5% - 2px) 5%
     );
   }
-  :root:has([data-os-skin]) [data-slot="progress-text"],
+  :root.os-skinned [data-slot="progress-text"],
   :host [data-slot="progress-text"] {
     font-family: var(--os-font-pixel);
     font-size: 10px;
@@ -423,7 +426,7 @@
   /* A toast, the prototype's: a panel with a hard shadow and a coloured
      stripe at its left (magenta, blue for done), a small pixel title in the
      quiet colour, plain text under it, and no icon. */
-  :root:has([data-os-skin]) [data-slot="toast"],
+  :root.os-skinned [data-slot="toast"],
   :host [data-slot="toast"] {
     border-color: var(--os-line);
     background-color: var(--os-panel);
@@ -431,17 +434,17 @@
       inset 4px 0 0 0 var(--os-primary),
       6px 6px 0 0 rgb(0 0 0 / 0.45);
   }
-  :root:has([data-os-skin]) [data-slot="toast"][data-variant="success"],
+  :root.os-skinned [data-slot="toast"][data-variant="success"],
   :host [data-slot="toast"][data-variant="success"] {
     box-shadow:
       inset 4px 0 0 0 var(--os-accent),
       6px 6px 0 0 rgb(0 0 0 / 0.45);
   }
-  :root:has([data-os-skin]) [data-slot="toast-icon"],
+  :root.os-skinned [data-slot="toast-icon"],
   :host [data-slot="toast-icon"] {
     display: none;
   }
-  :root:has([data-os-skin]) [data-slot="toast-title"],
+  :root.os-skinned [data-slot="toast-title"],
   :host [data-slot="toast-title"] {
     font-family: var(--os-font-pixel);
     font-size: 10px;
@@ -450,7 +453,7 @@
     text-transform: uppercase;
     color: var(--os-muted);
   }
-  :root:has([data-os-skin]) [data-slot="toast"] p:not([data-slot]),
+  :root.os-skinned [data-slot="toast"] p:not([data-slot]),
   :host [data-slot="toast"] p:not([data-slot]) {
     color: var(--os-fg);
   }

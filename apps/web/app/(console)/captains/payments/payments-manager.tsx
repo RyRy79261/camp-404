@@ -278,7 +278,7 @@ export function PaymentsManager({
             data={payments}
             getRowKey={(p) => p.id}
             label={`Payments for ${yearLabel}`}
-            className="md:rounded-xl md:border md:bg-card md:shadow-sm"
+            className="page-md:rounded-xl page-md:border page-md:bg-card page-md:shadow-sm"
           />
         )}
       </section>

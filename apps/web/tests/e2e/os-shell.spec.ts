@@ -9,6 +9,7 @@ import {
   setRank,
 } from "./_helpers";
 import { desktopOnly } from "./lib/dom";
+import { resizeWindowTo } from "./lib/window-fit";
 import {
   bottomBar,
   desktopIcon,
@@ -125,21 +126,6 @@ const KONAMI_KEYS = [
   "b",
   "a",
 ];
-
-/** Drag a window's right edge until the window is `width` px wide. */
-async function resizeWindowTo(page: Page, win: Locator, width: number) {
-  const box = (await win.boundingBox())!;
-  const grip = (await win.locator('[data-grip="e"]').boundingBox())!;
-  const x = grip.x + grip.width / 2;
-  const y = grip.y + grip.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + (width - box.width), y, { steps: 8 });
-  await page.mouse.up();
-  await expect
-    .poll(async () => Math.round((await win.boundingBox())!.width))
-    .toBe(width);
-}
 
 /**
  * The page heading in a window is stacked: its title on one line (never one

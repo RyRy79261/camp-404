@@ -170,7 +170,7 @@ function CompletionCard({
 
   return (
     <Card className="mb-6">
-      <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:gap-6">
+      <CardContent className="flex flex-col gap-4 p-5 page-lg:flex-row page-lg:items-center page-lg:gap-6">
         <div className="flex shrink-0 flex-col">
           <span className="text-3xl font-semibold tabular-nums">
             {pct === null ? "—" : `${pct}%`}
@@ -210,7 +210,7 @@ function CompletionCard({
           obligation to be reminded of.
         */}
         {view.activeActivation?.status === "open" && (
-          <div className="shrink-0 lg:max-w-xs">
+          <div className="shrink-0 page-lg:max-w-xs">
             <ReminderButton
               activationId={view.activeActivation.id}
               outstanding={summary.outstanding}

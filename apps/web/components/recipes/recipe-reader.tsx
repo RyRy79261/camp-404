@@ -299,7 +299,7 @@ function CookNotes({
         title="Cook notes"
         meta={recipe.notes.length + (hasCount ? 1 : 0)}
       />
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 page-md:grid-cols-2">
         {hasCount && count ? (
           <div className="flex flex-col gap-2 rounded-lg border border-accent/40 bg-card p-4">
             <h3 className="font-mono text-xs uppercase tracking-[0.2em] text-accent">
@@ -381,13 +381,15 @@ export function RecipeReader({
       <div
         className={cn(
           "grid min-w-0 gap-10",
-          layout === "page" && "lg:grid-cols-[20rem_minmax(0,1fr)] lg:gap-12",
+          layout === "page" &&
+            "page-md:grid-cols-[20rem_minmax(0,1fr)] page-md:gap-12",
         )}
       >
         <aside
           className={cn(
             "min-w-0",
-            layout === "page" && "lg:sticky lg:top-6 lg:self-start",
+            layout === "page" &&
+              "page-md:sticky page-md:top-6 page-md:self-start",
           )}
         >
           <Ingredients

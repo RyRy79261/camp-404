@@ -373,7 +373,7 @@ function MeetingEditorForm({
 
       <Card>
         <CardContent className="flex flex-col gap-5 p-5">
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 page-sm:grid-cols-2">
             {mode.kind === "new" ? (
               <Field
                 label="Team"
@@ -466,7 +466,7 @@ function MeetingEditorForm({
             />
           </Field>
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 page-sm:grid-cols-2">
             <Field
               label="Date"
               htmlFor="meeting-date"
@@ -550,7 +550,7 @@ function MeetingEditorForm({
                 Nobody is on this team yet this year.
               </p>
             ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 page-sm:grid-cols-2">
                 {(teamKey ? teamRows : otherRows).map((m) => (
                   <AckRow
                     key={m.id}
@@ -570,7 +570,7 @@ function MeetingEditorForm({
                 Anyone else
                 {othersTicked > 0 ? ` (${othersTicked} ticked)` : ""}
               </summary>
-              <div className="grid gap-2 pt-3 sm:grid-cols-2">
+              <div className="grid gap-2 pt-3 page-sm:grid-cols-2">
                 {otherRows.map((m) => (
                   <AckRow
                     key={m.id}
@@ -592,7 +592,7 @@ function MeetingEditorForm({
               >
                 No longer approved members
               </h2>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 page-sm:grid-cols-2">
                 {gone.map((p) => (
                   <AckRow
                     key={p.id}
@@ -698,7 +698,7 @@ function MeetingEditorForm({
                 ) : (
                   <li
                     key={item.key}
-                    className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[minmax(0,1fr)_11rem_10rem_auto] sm:items-start"
+                    className="grid gap-3 rounded-lg border border-border p-3 page-sm:grid-cols-[minmax(0,1fr)_11rem_10rem_auto] page-sm:items-start"
                   >
                     <Field
                       label={`Action item ${index + 1}`}
@@ -776,7 +776,7 @@ function MeetingEditorForm({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="justify-self-end sm:self-end"
+                      className="justify-self-end page-sm:self-end"
                       aria-label={`Remove action item ${index + 1}`}
                       onClick={() =>
                         setItems((all) => all.filter((x) => x.key !== item.key))
@@ -821,7 +821,7 @@ function MeetingEditorForm({
         </p>
       ) : null}
 
-      <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-t border-border pt-4 page-sm:flex-row page-sm:items-center page-sm:justify-between">
         <p className="text-xs text-muted-foreground">
           {teamKey
             ? `Every approved member can read it, under Meetings and on the ${teamLabel} page.`

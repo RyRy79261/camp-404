@@ -91,7 +91,7 @@ export function VisibilityEditor({
             </p>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 page-sm:grid-cols-3">
             <Labelled label="Question">
               <Select
                 value={field ? field.id : ""}

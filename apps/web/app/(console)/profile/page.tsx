@@ -79,7 +79,7 @@ export default async function ProfilePage() {
             <Card>
               <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
                 <div className="flex min-w-0 items-center gap-4">
-                  <Avatar className="h-16 w-16 text-lg sm:h-[72px] sm:w-[72px]">
+                  <Avatar className="h-16 w-16 text-lg page-sm:h-[72px] page-sm:w-[72px]">
                     {campUser.profileImageUrl ? (
                       <AvatarImage src={campUser.profileImageUrl} alt={name} />
                     ) : null}

@@ -504,7 +504,7 @@ function Control({
             <div
               role="radiogroup"
               {...groupAria}
-              className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+              className="grid grid-cols-2 gap-2 page-sm:grid-cols-3"
             >
               {opts.map((opt) => (
                 <ImageOption
@@ -622,7 +622,7 @@ function Control({
             <div
               role="group"
               {...groupAria}
-              className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+              className="grid grid-cols-2 gap-2 page-sm:grid-cols-3"
             >
               {opts.map((opt) => (
                 <ImageOption

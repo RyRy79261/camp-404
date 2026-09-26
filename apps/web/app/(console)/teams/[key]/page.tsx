@@ -242,7 +242,7 @@ export default async function TeamPage({
                   {page.tasks.map((task) => (
                     <li
                       key={task.id}
-                      className="grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 sm:grid-cols-[1rem_minmax(0,1fr)_auto]"
+                      className="grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 page-sm:grid-cols-[1rem_minmax(0,1fr)_auto]"
                     >
                       <Circle
                         className="h-4 w-4 text-muted-foreground"
@@ -260,7 +260,7 @@ export default async function TeamPage({
                       </span>
                       {/* On a phone the badges drop under the title. */}
                       {task.status === "in_progress" || task.due ? (
-                        <span className="col-start-2 flex flex-wrap gap-1.5 sm:col-start-3 sm:row-start-1 sm:justify-end">
+                        <span className="col-start-2 flex flex-wrap gap-1.5 page-sm:col-start-3 page-sm:row-start-1 page-sm:justify-end">
                           {task.status === "in_progress" ? (
                             <Badge variant="outline">Doing</Badge>
                           ) : null}

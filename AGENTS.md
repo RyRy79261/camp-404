@@ -196,10 +196,14 @@ keyboard's way to them is the Terminal.
   the `dark` class in `app/layout.tsx`. [CORRECTION 2026-09-26] Those stay
   for the sign-in pages only (decision 5 A). Everything with `data-os-skin`
   on the page (the desktop, the held form's page, `GateScreen`, the invite
-  gate) wears the 404 OS skin from `apps/web/app/globals.css`:
-  `:root:has([data-os-skin])` points the kit's tokens at the `--os-*`
-  palette, zeroes the radius variables and sets Inter, so Radix popovers and
-  toasts portalled into `<body>` wear it too. The OS's own classes (surface,
+  gate) wears the 404 OS skin from `apps/web/app/globals.css`: while a
+  marker is on the page `<html>` carries `os-skinned` (a script in the root
+  layout's head keeps it in step, `lib/os-skin.ts`), and `:root.os-skinned`
+  points the kit's tokens at the `--os-*` palette, zeroes the radius
+  variables and sets Inter, so Radix popovers and toasts portalled into
+  `<body>` wear it too. Never key a rule on `:root:has(...)`: Chrome then
+  restyles the whole document on every DOM change (3x the style work of a
+  window switch, measured 2026-09-26). The OS's own classes (surface,
   wordmark, window power-on, slide-in) are in `packages/os/src/styles.css`;
   a kit part the skin restyles further carries a `data-slot` (badge, button,
   card, card-title, page-title, page-eyebrow, label, field-label,

@@ -34,7 +34,7 @@ export function ProfileEditForm({
   return (
     <form
       action={formAction}
-      className="grid gap-6 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start"
+      className="grid gap-6 page-sm:grid-cols-[auto_minmax(0,1fr)] page-sm:items-start"
     >
       <AvatarUpload
         value={imageUrl}

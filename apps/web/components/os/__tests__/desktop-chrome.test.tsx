@@ -412,6 +412,65 @@ describe("the Terminal", () => {
     expect(nav.replace).toHaveBeenCalledWith("/");
     expect(document.querySelector('[data-window="terminal"]')).toBeNull();
   });
+
+  // The cat commands' effects go through the desktop's signals: the Terminal
+  // prints, and the desktop does the rest (the approved prototype's).
+  const terminalWindow = () =>
+    document.querySelector<HTMLElement>('[data-window="terminal"]')!;
+  const catsArrived = () =>
+    waitFor(() =>
+      expect(
+        document.querySelector('[role="toolbar"] [data-cat="prince"]'),
+      ).not.toBeNull(),
+    );
+
+  it("sudo feed cat brings Jinn over the Terminal's window at once; feed cat does not", async () => {
+    const input = terminal();
+    // The cats' lazy chunk (the peek's too) has arrived once Prince is on
+    // the clock, so an absence below means something.
+    await catsArrived();
+    // Without sudo the tin stays shut.
+    type(input, "feed cat");
+    expect(screen.getByRole("log").textContent).toMatch(/Permission denied/);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(terminalWindow().querySelector(".cat-peek")).toBeNull();
+
+    type(input, "sudo feed cat");
+    expect(screen.getByRole("log").textContent).toMatch(/opening a tin/);
+    await waitFor(() =>
+      expect(terminalWindow().querySelector(".cat-peek")).not.toBeNull(),
+    );
+  });
+
+  it("meow starts paw prints behind the pointer, and meow again stops them", async () => {
+    const input = terminal();
+    const walk = () => {
+      for (const [x, y] of [
+        [100, 100],
+        [160, 140],
+        [220, 180],
+      ]) {
+        fireEvent.pointerMove(window, { clientX: x, clientY: y });
+      }
+    };
+    const paws = () => document.querySelectorAll(".cat-paw").length;
+
+    // No prints before anyone says meow.
+    await catsArrived();
+    walk();
+    expect(paws()).toBe(0);
+
+    type(input, "meow");
+    await waitFor(() => {
+      walk();
+      expect(paws()).toBeGreaterThan(0);
+    });
+
+    type(input, "meow");
+    await waitFor(() => expect(paws()).toBe(0));
+    walk();
+    expect(paws()).toBe(0);
+  });
 });
 
 describe("the cats' places", () => {

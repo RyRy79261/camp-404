@@ -132,7 +132,7 @@ export function PublicMemberProfile({
         </Card>
 
         {/* Captain-only section — locked for members (decision: privacy). */}
-        <aside className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card/40 px-6 py-10 text-center page-lg:sticky page-lg:top-24">
+        <aside className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card/40 px-6 py-10 text-center page-lg:sticky page-lg:top-6">
           <Lock aria-hidden className="h-6 w-6 text-muted-foreground" />
           <p className="max-w-xs text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Captains only.</span>{" "}

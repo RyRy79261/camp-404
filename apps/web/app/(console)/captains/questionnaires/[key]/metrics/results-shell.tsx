@@ -171,7 +171,7 @@ export function ResultsShell({
           </span>
         )}
         <YearSwitch
-          className="w-auto shrink-0 sm:ml-auto"
+          className="w-auto shrink-0 page-sm:ml-auto"
           questionnaireKey={view.key}
           cycle={view.cycle}
           cycles={view.cycleOptions.map((c) => ({

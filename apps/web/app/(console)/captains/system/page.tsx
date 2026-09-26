@@ -102,9 +102,9 @@ export default async function SystemStatusPage() {
             {BACKGROUND_JOBS.map((job) => (
               <div
                 key={job.label}
-                className="flex flex-col gap-1.5 border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0 sm:flex-row sm:gap-6"
+                className="flex flex-col gap-1.5 border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0 page-sm:flex-row page-sm:gap-6"
               >
-                <dt className="flex w-full shrink-0 flex-col gap-1.5 sm:w-56">
+                <dt className="flex w-full shrink-0 flex-col gap-1.5 page-sm:w-56">
                   <span className="text-sm font-medium text-foreground">
                     {job.label}
                   </span>

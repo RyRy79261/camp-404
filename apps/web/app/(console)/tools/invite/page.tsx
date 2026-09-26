@@ -32,7 +32,7 @@ export default async function InviteToolPage() {
       />
 
       <div className="grid gap-6 page-lg:grid-cols-3">
-        <div className="page-lg:sticky page-lg:top-32 page-lg:col-start-3 page-lg:row-start-1 page-lg:self-start">
+        <div className="page-lg:sticky page-lg:top-6 page-lg:col-start-3 page-lg:row-start-1 page-lg:self-start">
           <InviteForm isCaptain={isCaptain} />
         </div>
         <div className="page-lg:col-span-2 page-lg:col-start-1 page-lg:row-start-1">

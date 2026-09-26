@@ -73,7 +73,7 @@ export function CalendarRow({
     <div
       data-mine={mine ? "" : undefined}
       className={cn(
-        "grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 sm:grid-cols-[6rem_minmax(0,1fr)_auto]",
+        "grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 page-sm:grid-cols-[6rem_minmax(0,1fr)_auto]",
         mine && MINE_ROW,
       )}
     >
@@ -95,7 +95,7 @@ export function CalendarRow({
         ) : null}
       </span>
       {showTeam && item.team ? (
-        <span className="col-start-2 justify-self-start sm:col-start-3 sm:row-start-1 sm:justify-self-end">
+        <span className="col-start-2 justify-self-start page-sm:col-start-3 page-sm:row-start-1 page-sm:justify-self-end">
           <TeamBadge team={item.team} />
         </span>
       ) : null}

@@ -503,4 +503,35 @@ describe("the window's body", () => {
     expect(body?.hasAttribute("data-page-container")).toBe(true);
     expect(body?.className.split(" ")).toContain("@container/page");
   });
+
+  it("carries its own visible height as --page-h, maximised or not", () => {
+    // jsdom lays nothing out: stand in for the observer and the height.
+    let notify = () => {};
+    const observed: Element[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(cb: () => void) {
+          notify = cb;
+        }
+        observe(el: Element) {
+          observed.push(el);
+        }
+        disconnect() {}
+      },
+    );
+    try {
+      renderWindow(<p>Inside</p>, { ...WIN, maximized: true });
+      const body = screen
+        .getByText("Inside")
+        .closest<HTMLElement>("[data-window-body]")!;
+      expect(observed).toEqual([body]);
+      Object.defineProperty(body, "clientHeight", { value: 742 });
+      act(() => notify());
+      // The frame's restored height (300) is not what the page sees.
+      expect(body.style.getPropertyValue("--page-h")).toBe("742px");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

@@ -107,7 +107,7 @@ export default async function AuditLogPage({
           data={data.entries}
           getRowKey={(e) => e.id}
           label="Audit log"
-          className="md:rounded-xl md:border md:bg-card md:shadow-sm"
+          className="page-md:rounded-xl page-md:border page-md:bg-card page-md:shadow-sm"
         />
       )}
 

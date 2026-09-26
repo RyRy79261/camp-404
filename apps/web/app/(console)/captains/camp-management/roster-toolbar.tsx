@@ -155,7 +155,7 @@ export function RosterToolbar({
 }) {
   return (
     <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
-      <FilterField label="Search" className="w-full sm:w-80">
+      <FilterField label="Search" className="w-full page-sm:w-80">
         <div className="relative">
           <Search
             aria-hidden
@@ -180,7 +180,7 @@ export function RosterToolbar({
         <div
           role="group"
           aria-label="Filter the roster"
-          className="flex flex-wrap items-center gap-1.5 sm:gap-0 sm:[&>*:not(:first-child)]:rounded-l-none sm:[&>*:not(:first-child)]:border-l-0 sm:[&>*:not(:last-child)]:rounded-r-none"
+          className="flex flex-wrap items-center gap-1.5 page-sm:gap-0 page-sm:[&>*:not(:first-child)]:rounded-l-none page-sm:[&>*:not(:first-child)]:border-l-0 page-sm:[&>*:not(:last-child)]:rounded-r-none"
         >
           {STATUS_CHIPS.map(({ chip: value, label, key }) => {
             const active = chip === value;
@@ -235,7 +235,7 @@ export function RosterToolbar({
         </div>
       </FilterField>
 
-      <FilterField label="Team" className="w-full sm:w-52">
+      <FilterField label="Team" className="w-full page-sm:w-52">
         <div className="relative">
           <select
             aria-label="Filter by team"
@@ -256,7 +256,7 @@ export function RosterToolbar({
 
       {/* This year — captain view only: who is coming, and who has not said. */}
       {thisYear && !publicOnly && (
-        <FilterField label="This year" className="w-full sm:w-52">
+        <FilterField label="This year" className="w-full page-sm:w-52">
           <div className="relative">
             <select
               aria-label="This year"
@@ -283,7 +283,10 @@ export function RosterToolbar({
       {/* Sort — phones only; the table's column headers sort on wider
           screens. */}
       {sort && (
-        <FilterField label="Sort" className="w-full sm:w-52 page-md:hidden">
+        <FilterField
+          label="Sort"
+          className="w-full page-sm:w-52 page-md:hidden"
+        >
           <div className="relative">
             <select
               aria-label="Sort the roster"

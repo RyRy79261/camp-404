@@ -367,7 +367,7 @@ function IndividualTable({
         data={rows}
         getRowKey={(row) => row.userId}
         label="Answers"
-        className="md:rounded-xl md:border md:bg-card md:shadow-sm"
+        className="page-md:rounded-xl page-md:border page-md:bg-card page-md:shadow-sm"
       />
       <ResponseViewer
         response={viewing}
@@ -672,7 +672,7 @@ function NumericChart({
   ];
   return (
     <div className="flex flex-col gap-3">
-      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-2 page-sm:grid-cols-4">
         {stats.map(([label, value]) => (
           <div
             key={label}
@@ -728,15 +728,15 @@ function BarRow({
   // a 360px phone those same widths left the track invisible, so below md the
   // label goes full-width above the bar and the count sits beside it.
   return (
-    <div className="flex flex-col gap-1 md:flex-row md:items-center md:gap-3">
+    <div className="flex flex-col gap-1 page-md:flex-row page-md:items-center page-md:gap-3">
       <span
-        className="truncate text-sm md:w-40 md:shrink-0"
+        className="truncate text-sm page-md:w-40 page-md:shrink-0"
         title={typeof label === "string" ? label : undefined}
       >
         {label}
         {flag && <UnlistedFlag text={flag} />}
       </span>
-      <div className="flex items-center gap-2 md:contents">
+      <div className="flex items-center gap-2 page-md:contents">
         <div
           className="h-6 flex-1 overflow-hidden rounded-sm bg-muted"
           aria-hidden
@@ -746,7 +746,7 @@ function BarRow({
             style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
           />
         </div>
-        <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground md:w-28">
+        <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground page-md:w-28">
           {count} · {percent}%
         </span>
       </div>

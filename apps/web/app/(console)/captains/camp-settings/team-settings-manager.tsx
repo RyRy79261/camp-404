@@ -60,7 +60,7 @@ const MIN_ACTIVE_TEAMS = 2;
  * The row's move and rename buttons: 36 px on a phone so the three of them,
  * the switch and a team name fit a 360 px screen with no sideways scroll.
  */
-const ACTION_BUTTON = "h-9 w-9 sm:h-10 sm:w-10";
+const ACTION_BUTTON = "h-9 w-9 page-sm:h-10 page-sm:w-10";
 
 type Busy = { key: string; action: "up" | "down" | "archive" | "rename" };
 type Control = "up" | "down" | "rename";
@@ -215,11 +215,11 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4 sm:pl-6">Team</TableHead>
-                <TableHead className="w-14 px-1 sm:w-28 sm:px-2">
+                <TableHead className="pl-4 page-sm:pl-6">Team</TableHead>
+                <TableHead className="w-14 px-1 page-sm:w-28 page-sm:px-2">
                   Active
                 </TableHead>
-                <TableHead className="pr-3 text-right sm:w-36 sm:pr-6">
+                <TableHead className="pr-3 text-right page-sm:w-36 page-sm:pr-6">
                   Actions
                 </TableHead>
               </TableRow>
@@ -245,7 +245,7 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                   return (
                     <TableRow key={team.key}>
                       {/* The name: read mode, or the rename field. */}
-                      <TableCell className="whitespace-normal py-2 pl-4 sm:pl-6">
+                      <TableCell className="whitespace-normal py-2 pl-4 page-sm:pl-6">
                         {editing ? (
                           <div className="flex items-start gap-1">
                             <InputField
@@ -314,7 +314,7 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                       </TableCell>
 
                       {/* Archive toggle. */}
-                      <TableCell className="px-1 py-2 sm:px-2">
+                      <TableCell className="px-1 py-2 page-sm:px-2">
                         <span className="flex items-center gap-2">
                           <Switch
                             id={`archived-${team.key}`}
@@ -349,8 +349,8 @@ export function TeamSettingsManager({ teams }: { teams: TeamRow[] }) {
                       </TableCell>
 
                       {/* Reorder and rename. */}
-                      <TableCell className="py-2 pl-1 pr-3 sm:pl-2 sm:pr-6">
-                        <span className="flex items-center justify-end sm:gap-1">
+                      <TableCell className="py-2 pl-1 pr-3 page-sm:pl-2 page-sm:pr-6">
+                        <span className="flex items-center justify-end page-sm:gap-1">
                           <Button
                             ref={controlRef(team.key, "up")}
                             type="button"

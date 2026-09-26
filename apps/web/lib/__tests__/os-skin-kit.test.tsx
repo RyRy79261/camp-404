@@ -21,7 +21,7 @@ function ruleFor(selector: string): string {
   const re = /([^{};]+)\{([^{}]*)\}/g;
   for (let m = re.exec(css); m; m = re.exec(css)) {
     const selectors = m[1]!.split(",").map((s) => s.trim());
-    if (selectors.includes(`:root:has([data-os-skin]) ${selector}`)) {
+    if (selectors.includes(`:root.os-skinned ${selector}`)) {
       return m[2]!;
     }
   }

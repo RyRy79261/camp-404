@@ -51,7 +51,7 @@ export function CalendarFilter({
     <Field
       label="Team"
       htmlFor="calendar-filter-team"
-      className="w-full sm:w-60"
+      className="w-full page-sm:w-60"
     >
       <Select value={value} onValueChange={choose} disabled={pending}>
         <SelectTrigger id="calendar-filter-team">

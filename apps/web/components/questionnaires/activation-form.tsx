@@ -513,7 +513,7 @@ export function ActivationForm({
         </CardContent>
       </Card>
 
-      <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-t border-border pt-4 page-sm:flex-row page-sm:items-center page-sm:justify-between">
         <p className="text-xs text-muted-foreground">
           Sending asks everyone this audience matches now, and anyone who joins
           it while the send is open

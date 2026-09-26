@@ -160,7 +160,7 @@ export async function RecentActivity() {
             {entries.map((e) => (
               <li
                 key={e.id}
-                className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0 page-sm:flex-row page-sm:items-baseline page-sm:justify-between page-sm:gap-4"
               >
                 <span className="text-sm">
                   <span className="font-medium">{e.who}</span>{" "}

@@ -624,7 +624,7 @@ export function QuestionnaireBuilderV2({
                     ? "All changes saved"
                     : "No changes yet"}
           </span>
-          <span className="hidden sm:inline">
+          <span className="hidden page-sm:inline">
             {liveIssues.length > 0
               ? `${liveIssues.length} ${liveIssues.length === 1 ? "problem" : "problems"} to fix before this can be published.`
               : "Ready to publish."}
@@ -660,10 +660,13 @@ function PaletteRail({
 }) {
   const content = PALETTE.filter((p) => p.group === "content");
   const questions = PALETTE.filter((p) => p.group === "question");
+  // Sticks down its column and scrolls on its own, within the window's
+  // visible height (`--page-h`, set by the window frame, maximised or not):
+  // 1.5rem above it, and room below for the sticky save bar.
   return (
     <aside
       aria-label="Add a block"
-      className="page-lg:sticky page-lg:top-32 page-lg:max-h-[calc(100svh-9rem)] page-lg:self-start page-lg:overflow-y-auto"
+      className="page-lg:sticky page-lg:top-6 page-lg:max-h-[calc(var(--page-h,100svh)-7rem)] page-lg:self-start page-lg:overflow-y-auto"
     >
       <Card>
         <CardContent className="flex flex-col gap-3 p-3">
@@ -712,7 +715,7 @@ function PaletteGroup({
     <div
       role="group"
       aria-label={label}
-      className="grid grid-cols-2 gap-1 lg:flex lg:flex-col"
+      className="grid grid-cols-2 gap-1 page-lg:flex page-lg:flex-col"
     >
       <span className="col-span-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
@@ -901,7 +904,7 @@ function SectionEditor({
 
       {page.kind === "questions" ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 page-sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">
                 Section title

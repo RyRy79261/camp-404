@@ -101,7 +101,7 @@ export function FuelMethodCard({
           is the idle burn: fuel it uses just to keep running.
         </p>
         {generator ? (
-          <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-3">
+          <dl className="grid gap-x-6 gap-y-1 page-sm:grid-cols-3">
             <div>
               <dt className="text-xs">At 50% load</dt>
               <dd className="font-semibold tabular-nums text-foreground">

@@ -1146,6 +1146,12 @@ below:
   rather than a codemod over `rounded-*` (`rounded-full` keeps avatars
   round). A few kit parts carry a `data-slot` for the pixel face (badge,
   button, card title, page title), no cva rewrite.
+  [CORRECTION 2026-09-26] The rules are keyed on an `os-skinned` class on
+  `<html>` after all, kept in step with the marker by a script in the root
+  layout's head (`apps/web/lib/os-skin.ts`). `:root:has([data-os-skin])`
+  made Chrome restyle the whole document on every DOM change: on production
+  builds a switch between three open windows cost a median 26.6 ms of style
+  recalculation with it, 9.0 ms with the class, 5.6 ms before the skin.
 - Chrome as the prototype: the CRT surface and the glitched "404 OS"
   wordmark with "AfrikaBurn <year> · <name>" (from camp settings) on the
   wallpaper; the header "CAMP 404 · <rank> console", the pinned ticker moved
@@ -1258,6 +1264,25 @@ page is converted, its window opens maximised on desktop.
 - Sticky rails (recipe detail, invite, payments) stick to the window's scroll
   container.
 - Playwright at two window sizes per converted page.
+
+**[2026-09-26] As built: the Kitchen and the rails.**
+
+- The Kitchen's recipe windows open at 880 px (`L_SIZE`), under page-lg's
+  1024 px. So the recipe page's split (the recipe beside its Decision rail,
+  the History tab's two columns) and `RecipeReader`'s ingredients beside
+  the method switch at page-md, not page-lg: from a 768 px body up they sit
+  side by side, so the opening size and a maximised window look as they did
+  on a desktop before windows fit, and they stack only in a narrower window.
+  [UNRESOLVED 2026-09-26] The owner approves the Kitchen's narrow-window
+  screenshots in the PR before merge.
+- The window frame sets `--page-h` on its body, the body's own height,
+  measured (`OsWindowFrame`). `--win-h` is the frame's restored height and
+  stays set while the window is maximised, so a page must not size itself by
+  it. The builder's palette is at most `--page-h` less 7rem: 1.5rem above it
+  and room for the sticky save bar below.
+- Sticky rails stick 1.5rem (`top-6`) below the top of the window's body;
+  `expectSticksInWindow` (`tests/e2e/lib/window-fit.ts`) checks the recipe
+  Decision rail and, on the database run, the invite form.
 
 ## 3. Order of programs
 

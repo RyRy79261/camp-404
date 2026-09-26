@@ -70,7 +70,7 @@ export function PromotionRequestCard({
           {error}
         </p>
       )}
-      <div className="flex flex-wrap gap-2 sm:pl-8">
+      <div className="flex flex-wrap gap-2 page-sm:pl-8">
         <Button
           type="button"
           size="sm"

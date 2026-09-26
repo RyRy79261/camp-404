@@ -123,7 +123,7 @@ export default async function CalendarPage({
         </Card>
       ) : (
         <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 page-sm:flex-row page-sm:items-end page-sm:justify-between">
             <CalendarFilter
               value={value}
               teams={options}

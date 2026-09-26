@@ -1,0 +1,313 @@
+import {
+  test,
+  expect,
+  type APIRequestContext,
+  type Locator,
+  type Page,
+} from "@playwright/test";
+import {
+  completeOnboarding,
+  login,
+  redeemInviteAtGate,
+  resetTestState,
+  seedTeam,
+  setRank,
+} from "./_helpers";
+import { desktopOnly } from "./lib/dom";
+import { acceptedAt50, DISH } from "./lib/kitchen";
+import {
+  borderTop,
+  expectBeside,
+  expectFits,
+  expectStacked,
+  expectSticksInWindow,
+  NARROW,
+  openWindow,
+  resizeWindowTo,
+  WIDE,
+  WIDEST,
+} from "./lib/window-fit";
+
+// Windows fit their own width (PR E of the 404 OS console plan). Every
+// window on a 1440px screen, so a page laid out by the SCREEN's width would
+// put its columns side by side even in a 470px window; laid out by the
+// window's, it stacks them there and spreads them out again when the window
+// is wide. Each page is checked in a narrow window (470px) and a wide one.
+// The questionnaire builder and its results need the questionnaire engine,
+// which the in-memory store cannot run: tests/e2e-db/window-fit.spec.ts.
+
+test.use({ viewport: { width: 1440, height: 900 } });
+
+async function captain(page: Page, request: APIRequestContext, id: string) {
+  await login(page, { id, email: "god@example.com", displayName: "Cap Tain" });
+  await page.goto("/");
+  await completeOnboarding(request, id);
+  await setRank(request, id, "captain");
+}
+
+async function approvedMember(
+  page: Page,
+  request: APIRequestContext,
+  id: string,
+  displayName: string,
+) {
+  await login(page, { id, email: `${id}@example.com`, displayName });
+  await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
+  await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+  await completeOnboarding(request, id);
+}
+
+/** The framed box a data table sits in (a card from md up, by the window). */
+function tableFrame(win: Locator, label: string): Locator {
+  return dataTable(win, label).locator("..");
+}
+
+/** A ResponsiveDataTable by its label, whichever of its two forms shows. */
+function dataTable(win: Locator, label: string | RegExp): Locator {
+  return win.locator('[data-slot="responsive-data-table"]').filter({
+    has: win.page().getByRole("table", { name: label, includeHidden: true }),
+  });
+}
+
+test.describe("windows fit their own width (test-mode)", () => {
+  test.beforeEach(async ({ request }, testInfo) => {
+    desktopOnly(testInfo, "windows are resized on the desktop only");
+    await resetTestState(request);
+  });
+
+  test("Kitchen: a recipe, the review queue and the meal plan", async ({
+    page,
+    request,
+  }) => {
+    await approvedMember(page, request, "fit-cook", "Rita Member");
+    await page.goto("/kitchen/recipes/new");
+    await page
+      .getByLabel("Recipe text")
+      .fill(
+        [
+          "Camp dal",
+          ...Array.from(
+            { length: 40 },
+            (_, i) => `Step ${i + 1}: stir the pot.`,
+          ),
+        ].join("\n"),
+      );
+    await page.getByRole("button", { name: "Import recipe" }).click();
+    await expect(page).toHaveURL(/\/kitchen\/recipes\/[0-9a-f-]{36}$/);
+    const recipeUrl = new URL(page.url()).pathname;
+    await captain(page, request, "fit-kitchen-cap");
+
+    // The recipe: its rail (the decision) under the recipe in a narrow
+    // window, beside it from page-md, so at the size the window opens at
+    // (880) it sits beside the recipe as it did before windows fit.
+    let win = await openWindow(page, recipeUrl, "Camp dal");
+    const original = win.getByRole("article", { name: "Original" });
+    const decision = win.getByRole("article", { name: "Decision" });
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expectStacked(original, decision);
+    await resizeWindowTo(page, win, WIDE);
+    await expectFits(win);
+    await expectBeside(original, decision);
+
+    // The rail sticks to the top of the WINDOW's scroll box while the long
+    // recipe scrolls on beside it.
+    await expectSticksInWindow(decision);
+
+    // The review queue: cards in a narrow window, a framed table in a wide.
+    win = await openWindow(page, "/kitchen/recipes/review", "Review recipes");
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expect(win.getByRole("table", { name: "Suggestions" })).toBeHidden();
+    await expect(win.getByRole("list", { name: "Suggestions" })).toBeVisible();
+    await expect.poll(() => borderTop(tableFrame(win, "Suggestions"))).toBe(0);
+    await resizeWindowTo(page, win, WIDE);
+    await expectFits(win);
+    await expect(win.getByRole("list", { name: "Suggestions" })).toBeHidden();
+    await expect.poll(() => borderTop(tableFrame(win, "Suggestions"))).toBe(1);
+
+    // The meal plan: narrower plate boxes and no frame in a narrow window.
+    win = await openWindow(page, "/kitchen/meal-plan", "Meal plan");
+    const plates = win.getByRole("spinbutton", { name: "Day 1 breakfast" });
+    // The table's own scroll box, then the frame around it.
+    const frame = win
+      .getByRole("table", { name: "Plates per day" })
+      .locator("xpath=../..");
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    expect((await plates.boundingBox())!.width).toBe(64);
+    await expect.poll(() => borderTop(frame)).toBe(0);
+    await resizeWindowTo(page, win, WIDE);
+    await expectFits(win);
+    expect((await plates.boundingBox())!.width).toBe(80);
+    await expect.poll(() => borderTop(frame)).toBe(1);
+  });
+
+  test("Kitchen: a recipe in the book, its ingredients and method", async ({
+    page,
+    request,
+  }) => {
+    const recipeUrl = await acceptedAt50(page, request);
+    const win = await openWindow(page, recipeUrl, DISH);
+    const ingredients = win.getByRole("region", { name: "Ingredients" });
+    const method = win.getByRole("region", { name: "Method" });
+    await expect(method).toBeVisible();
+
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expectStacked(ingredients, method);
+    // The opening size (880) keeps the ingredients beside the method, as
+    // before windows fit (the Kitchen's layout does not change there).
+    await resizeWindowTo(page, win, WIDE);
+    await expectFits(win);
+    await expectBeside(ingredients, method);
+  });
+
+  test("Roster: a member's profile, its fields and its rail", async ({
+    page,
+    request,
+  }) => {
+    await approvedMember(page, request, "fit-ana", "Ana Member");
+    await captain(page, request, "fit-roster-cap");
+
+    const win = await openWindow(
+      page,
+      "/captains/camp-management",
+      "Camp management",
+    );
+    await win
+      .getByRole("button", { name: "Open Ana Member's profile" })
+      .filter({ visible: true })
+      .click();
+    const profile = win.getByRole("region", { name: "Ana Member profile" });
+    const firstField = profile.getByText("Emergency contact", { exact: true });
+    const secondField = profile.getByText("Joined", { exact: true });
+    // The record (overview, answers, notes) and the rail of decisions.
+    const rail = profile.locator("aside");
+    const record = rail.locator("xpath=preceding-sibling::div[1]");
+    await expect(firstField).toBeVisible();
+
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expectStacked(firstField, secondField);
+    await expectStacked(record, rail);
+
+    await resizeWindowTo(page, win, WIDEST);
+    await expectFits(win);
+    await expectBeside(firstField, secondField);
+    await expectBeside(record, rail);
+  });
+
+  test("Power: the load list and the fuel estimate", async ({
+    page,
+    request,
+  }) => {
+    await captain(page, request, "fit-power-cap");
+    await seedTeam(request, "fit-power-cap", "power_and_lighting", true);
+
+    let win = await openWindow(page, "/power/loads", "Load list");
+    const connected = win.getByRole("article", { name: "Connected load" });
+    const peak = win.getByRole("article", { name: "Estimated peak" });
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expectStacked(connected, peak);
+    await resizeWindowTo(page, win, WIDE);
+    await expectFits(win);
+    await expectBeside(connected, peak);
+
+    win = await openWindow(page, "/power/fuel", "Fuel estimate");
+    const generator = win.getByText("Generator", { exact: true });
+    const second = win.getByText("Second generator (a note)", { exact: true });
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expectStacked(generator, second);
+    await resizeWindowTo(page, win, WIDE);
+    await expectFits(win);
+    await expectBeside(generator, second);
+  });
+
+  test("Payments: the ledger's frame and the totals beside it", async ({
+    page,
+    request,
+  }) => {
+    await approvedMember(page, request, "fit-payer", "Pat Payer");
+    await captain(page, request, "fit-pay-cap");
+
+    const win = await openWindow(page, "/captains/payments", "Dues & payments");
+    const member = win.locator("#payment-member");
+    const value = await member
+      .locator("option", { hasText: "Pat Payer" })
+      .getAttribute("value");
+    await member.selectOption(value!);
+    await win.getByLabel("Amount (R)").fill("1500");
+    await win.getByRole("button", { name: "Record payment" }).click();
+    await expect(win.getByLabel("Amount (R)")).toHaveValue("");
+
+    const ledger = win.getByRole("region", { name: /^Payments for / });
+    const totals = win.getByText("Dues paid", { exact: true });
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expectStacked(ledger, totals);
+    await expect(
+      win.getByRole("table", { name: /^Payments for / }),
+    ).toBeHidden();
+    // The ledger is a card list here, not a framed table.
+    const ledgerTable = dataTable(win, /^Payments for /);
+    await expect.poll(() => borderTop(ledgerTable)).toBe(0);
+    await resizeWindowTo(page, win, WIDE);
+    await expectFits(win);
+    await expect.poll(() => borderTop(ledgerTable)).toBe(1);
+    await resizeWindowTo(page, win, WIDEST);
+    await expectBeside(ledger, totals);
+  });
+
+  test("Tasks: the board's columns", async ({ page, request }) => {
+    await captain(page, request, "fit-tasks-cap");
+    const win = await openWindow(page, "/tasks", "Tasks");
+    const todo = win.getByRole("region", { name: "To do" });
+    const doing = win.getByRole("region", { name: "Doing" });
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expectStacked(todo, doing);
+    await resizeWindowTo(page, win, WIDEST);
+    await expectFits(win);
+    await expectBeside(todo, doing);
+  });
+
+  test("New event, a new meeting and System", async ({ page, request }) => {
+    await captain(page, request, "fit-misc-cap");
+
+    // New event: the preview under the form, then beside it.
+    let win = await openWindow(page, "/captains/calendar", "Add an event");
+    const title = win.getByLabel("Title");
+    const preview = win.getByText("Preview — how Home shows it");
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expectStacked(title, preview);
+    await resizeWindowTo(page, win, WIDEST);
+    await expectFits(win);
+    await expectBeside(title, preview);
+
+    // A new meeting: its first two fields, one per row, then a pair.
+    win = await openWindow(page, "/meetings/new", "New meeting");
+    const team = win.locator("#meeting-team");
+    const event = win.locator("#meeting-event");
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expectStacked(team, event);
+    await resizeWindowTo(page, win, WIDE);
+    await expectFits(win);
+    await expectBeside(team, event);
+
+    // System: each check's name above its detail, then beside it.
+    win = await openWindow(page, "/captains/system", "System status");
+    const name = win.locator("dt").first();
+    const detail = win.locator("dd").first();
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expectStacked(name, detail);
+    await resizeWindowTo(page, win, WIDE);
+    await expectFits(win);
+    await expectBeside(name, detail);
+  });
+});
