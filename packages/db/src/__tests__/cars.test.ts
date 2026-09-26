@@ -196,4 +196,14 @@ describe("my lift", () => {
     await makeDriverProfile(db, { userId: old.id, cycle: 2020 });
     expect(await getMyLift(old.id)).toBeNull();
   });
+
+  it("reads the year a caller passes, the same as the one it would read itself", async () => {
+    const db = h.db();
+    const old = await makeUser(db, { approvalStatus: "approved" });
+    await makeDriverProfile(db, { userId: old.id, cycle: 2020 });
+    // The camp has no year, so its own read lands on the sentinel (1).
+    expect(await getMyLift(old.id, 1)).toEqual(await getMyLift(old.id));
+    expect(await getMyLift(old.id, 1)).toBeNull();
+    expect(await getMyLift(old.id, 2020)).toMatchObject({ role: "driver" });
+  });
 });

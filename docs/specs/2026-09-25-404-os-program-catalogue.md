@@ -1,14 +1,19 @@
 # 404 OS program catalogue
 
-Status: proposal, 2026-09-25. Nothing here is built. The owner picked the
-Classic desktop on 2026-09-25 (decision 1, ruled) and asked for plain names,
-an ordered desktop, a Terminal and a phone version. In a second review the
-same day he ruled decisions 3 (last-seen windows), 8 (team folders on the
-right) and 14 (movable icons, member folders and shortcuts), made the
+Status: proposal, 2026-09-25. [CORRECTION 2026-09-26] PR B has built the
+program manifest (`apps/web/lib/programs.ts`, `lib/program-manifest.ts`) and
+the My lift page (`/lift`); the current header and Home are views of it, so
+nothing on screen changed. The desktop itself (PR C) is not built. The owner
+picked the Classic desktop on 2026-09-25 (decision 1, ruled) and asked for
+plain names, an ordered desktop, a Terminal and a phone version. In a second
+review the same day he ruled decisions 3 (last-seen windows), 8 (team folders
+on the right) and 14 (movable icons, member folders and shortcuts), made the
 system-health warning visible to every accepted member, and put blocking
 questionnaires on top of an inert desktop (design doc, "The owner's second
-review"). The other decisions are open. Decision numbers below are the
-design doc's.
+review"). On 2026-09-26 he ruled decisions 2 (hide what a member cannot use;
+every approved member sees every team's page), 7 (no window cap) and 11 (a
+My lift program for drivers and riders). The other decisions are open.
+Decision numbers below are the design doc's.
 
 This is one of four documents:
 
@@ -120,7 +125,7 @@ Folders inside Camp:
 
 | Folder | What goes in it | Who gets it |
 | --- | --- | --- |
-| Teams | One icon per active team, own teams first, led teams first among them (`navTeams`, `apps/web/lib/console-nav.ts:126-145`) | Every approved member |
+| Teams | One icon per active team, own teams first, in camp order, then the rest in camp order (`teamsInCampOrder` in `apps/web/lib/programs.ts`, which the header's `navTeams` also uses). [CORRECTION 2026-09-26] This said led teams come first among the own teams; neither the header nor the manifest does that. Only the team folders on the right are led-first. Led-first here would change the header's Teams menu, a visible change for PR C, not PR B. | Every approved member |
 | Kitchen | Recipes, Meal plan, and Recipe review for reviewers | Every approved member (Recipe review is conditional) |
 
 A folder is itself a small window (`folder-window` in `@camp404/os`); on a
@@ -189,6 +194,7 @@ keyboard.
 | `/tools/forms/[key]` | the form's name (e.g. Attendance) | `<FORM>.DOC` | none | none | Child of My forms | Same gate (`app/(console)/tools/forms/[key]/page.tsx:35`). Unknown key is a 404 (`:38`); a form not yet done redirects to `/tools/forms` (`:43`) | M | Multi (form key) | The form and its change log (side pane or History tab) | `/tools/forms/attendance` (linked from Profile) | Medium. Multi-step form; needs the dirty guard |
 | `/tools/forms/answers/[key]/[cycle]` | Answers | `ANSWERS.TXT` | none | none | Child of My forms | Same gate (`.../answers/[key]/[cycle]/page.tsx:36`). Only the member's own answers; otherwise 404 (`:45`) | S | Multi (key + cycle) | none | `/tools/forms/answers/<key>/<cycle>` | Easy |
 | `/tools/invite` | Invites | `KEYGEN.EXE` | Line-art key | Me | Icon | Every approved member: `requireMemberPage()` (`app/(console)/tools/invite/page.tsx:17`). A captain sees every code and extra controls (`:20-24`); the same program, not a second icon | M | Single | Code list pane and mint-form pane | `/tools/invite` | Medium. The sticky side panel must stick to the window's scroll body |
+| `/lift` (new, PR B) | My lift | `MY_LIFT.EXE` | Line-art car with a seat | Me | Icon | [CORRECTION 2026-09-26] Added when the owner ruled decision 11 A. The page opens for every approved member: `requireMemberPage()` (`app/(console)/lift/page.tsx`), and says so plainly when they have no car and no seat. The icon shows only for a member who drives this year or has a seat in a car (`getMyLift` is not null; a test-store twin makes it drivable under E2E) | S | Single | The lift card Home shows | `/lift` | Easy |
 | `/terminal` (new) | Terminal | `TERMINAL.EXE` | Line-art prompt `>_` | Captains column, last (ends Camp for a plain member) | Icon | Every approved member: `requireMemberPage()`. The console's command set over the member's own manifest: `help`, `ls`, `open <program>` (only programs in the manifest; anything else is "not found"), `whoami`, `clear`, `exit`, `play inkblot`, cat easter eggs (never listed by `help`). Reads and writes no data in v1 | M | Single | Scrollback and prompt (`TerminalWindow` from `@camp404/os/terminal`) | `/terminal` | Easy. A new page; register it in `program-routes.ts` and `programs.ts` |
 | `/terminal/inkblot` (new) | INKBLOT | `INKBLOT.EXE` | none | none | Child of Terminal (or a hidden cat) | Every approved member, same gate. The shared game from `@camp404/games/inkblot`, loaded with `next/dynamic` only when it opens. No leaderboard in v1 (no schema change) | M | Single | The game canvas | `/terminal/inkblot` | Easy. Canvas copies blank into a last-seen copy |
 
@@ -259,6 +265,8 @@ Kitchen UI work needs the owner's layout approval first (memory note
 
 The five tables above cover all 50 `(console)` pages that exist today, plus
 the two new Terminal pages (`/terminal`, `/terminal/inkblot`, added in PR C).
+[CORRECTION 2026-09-26] PR B adds `/lift` (My lift, decision 11 A), so the
+console has 51 pages before the Terminal.
 The remaining 9 pages (`auth`, `auth/[path]`, `mcp/connect`,
 `onboarding/questionnaire`, `pending-approval`, `privacy`, `setup`,
 `signup/required`, `terms`) are in the last two sections. A drift test in PR B (migration plan) fails when a new
@@ -269,7 +277,7 @@ The remaining 9 pages (`auth`, `auth/[path]`, `mcp/connect`,
 These use the default program set from the design doc, the groups above and
 plain names, in the default layout (before the member moves anything). They
 assume the recommended answers: hidden, not locked (decision 2); a My lift
-program for drivers (decision 11). Team folders follow decision 8, ruled. Teams in the examples are illustrative, but use real
+program for drivers (decision 11, ruled A on 2026-09-26). Team folders follow decision 8, ruled. Teams in the examples are illustrative, but use real
 keys from `teamEnum` (`packages/db/src/schema.ts:96`); active teams come from
 camp settings. The Today gadget is closed by default on every desktop; its
 handle sits on the right edge.
@@ -324,12 +332,10 @@ is `team_lead`. `driver_profiles.intends_to_drive = true`.
 Everything the plain member has, plus:
 - **Team folders**: Kitchen team first, tagged LEAD (led teams first),
   holding Kitchen, Recipes, Meal plan and Recipe review.
-- **Me**: My lift (their own car or lift, from `getMyLift`), if the owner
-  takes decision 11 A.
-  `getMyLift` returns null under the E2E test store today
-  (`apps/web/lib/lifts.ts:13`), so PR B adds its test-store twin. If the owner
-  picks B (defer), the driver shows only as the "Driver" chip and the lift
-  card in the Today gadget, as on Home today.
+- **Me**: My lift (their own car or lift, from `getMyLift`; decision 11 A,
+  ruled 2026-09-26).
+  [CORRECTION 2026-09-26] `getMyLift` returned null under the E2E test
+  store; PR B added its test-store twin, so Playwright drives it.
 - **Camp**: the Kitchen folder gains Recipe review, because
   `canApproveRecipe("team_lead", ["kitchen"])` is true
   (`packages/core/src/recipes.ts:52`). Meal plan opens editable
@@ -492,8 +498,8 @@ All are listed, with options and recommendations, in the design doc's
   the File name column shows as a quiet suffix on the window title chip (B,
   recommended on desktop) or only in the Terminal (A). Either way the title
   bar is not a heading, so it never double-matches the page's `h1`.
-- **11** A My lift program for drivers, with a `getMyLift` test-store twin in
-  PR B (A), or an explicit deferral (B).
+- **11** Ruled 2026-09-26: A, a My lift program (`/lift`) for a member who
+  drives or has a seat, with a `getMyLift` test-store twin, built in PR B.
 - **13** No Finance program for the Finance lead in this work (A); Payments
   stays captain-only.
 - **14** Ruled 2026-09-25: icons move, and members make their own folders

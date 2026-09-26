@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateManifest } from "@/lib/manifest-revalidate";
 import { z } from "zod";
 import type { TeamMembership } from "@camp404/db/team-memberships";
 import { decryptField } from "@camp404/db/crypto";
@@ -435,6 +436,7 @@ export async function decideApprovalAction(input: {
     // Revalidate either way: on the lost-CAS path the roster this captain is
     // looking at is stale, which is exactly why they got here.
     revalidatePath("/captains/camp-management");
+    revalidateManifest();
     if (!decided) return { ok: false, error: LOST_RACE };
     return { ok: true };
   });
@@ -516,6 +518,7 @@ export async function decideApprovalsAction(input: {
       (won ? decided : lost).push(userId);
     }
     revalidatePath("/captains/camp-management");
+    revalidateManifest();
     return { ok: true, decided, lost, refused };
   });
 }
@@ -734,6 +737,7 @@ export async function assignTeamAction(
     await assignTeam({ userId, team: gate.team, actorId: gate.captainId });
     // The roster's team badges and lead column read the same rows.
     revalidatePath("/captains/camp-management");
+    revalidateManifest();
     return { ok: true, teams: await getTeamMemberships(userId) };
   });
 }
@@ -754,6 +758,7 @@ export async function removeTeamAction(
 
     await removeTeam({ userId, team: gate.team, actorId: gate.captainId });
     revalidatePath("/captains/camp-management");
+    revalidateManifest();
     return { ok: true, teams: await getTeamMemberships(userId) };
   });
 }
@@ -785,6 +790,7 @@ export async function setTeamLeadAction(
       return { ok: false, error: "Add them to the team first." };
     }
     revalidatePath("/captains/camp-management");
+    revalidateManifest();
     return { ok: true, teams: await getTeamMemberships(userId) };
   });
 }

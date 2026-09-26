@@ -2,6 +2,7 @@ import { PinnedAnnouncements } from "@/components/console/pinned-announcements";
 import { ConsoleHeader } from "@/components/console/console-header";
 import { isCampBootstrapped } from "@/lib/bootstrap";
 import { resolveMemberState } from "@/lib/member-gate";
+import { getProgramManifest } from "@/lib/program-manifest";
 
 // Reads the session cookie on every request; cannot be prerendered.
 export const dynamic = "force-dynamic";
@@ -40,12 +41,18 @@ export default async function ConsoleLayout({
   if (!state || state.kind !== "member" || state.block) {
     return <>{children}</>;
   }
+  // A cleared member always has a full manifest; null would mean the member
+  // state changed under this render, and the page draws bare rather than
+  // guess.
+  const manifest = await getProgramManifest();
+  if (!manifest) return <>{children}</>;
 
   return (
     <div className="min-h-svh">
       <ConsoleHeader
         campUser={state.campUser}
         email={state.authUser.primaryEmail}
+        manifest={manifest}
       />
       <div className={CONTENT}>
         {/* A pinned announcement rides above every console page — that is what
@@ -56,7 +63,9 @@ export default async function ConsoleLayout({
             by a gate both return above, and an applicant waiting on approval
             gets the bare content column. Nobody sees a pin before they are
             through the door. */}
-        <PinnedAnnouncements userId={state.campUser.id} />
+        {manifest.pins ? (
+          <PinnedAnnouncements userId={state.campUser.id} />
+        ) : null}
         {children}
       </div>
     </div>

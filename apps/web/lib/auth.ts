@@ -2,10 +2,10 @@ import "server-only";
 
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
 import { auth, authMayServe } from "@camp404/auth";
 import { toAuthenticatedUser } from "./session-user";
 import { isE2ETestMode, TEST_USER_COOKIE } from "./test-mode";
+import { signInRedirect } from "./sign-in-redirect";
 
 /**
  * Minimal authenticated-user shape we use across the app. Both the Better
@@ -85,10 +85,14 @@ const readSession = cache(async () => {
   return auth.api.getSession({ headers: await headers() });
 });
 
-/** Same as getAuthenticatedUser but redirects to sign-in when unauthenticated. */
+/**
+ * Same as getAuthenticatedUser but redirects to sign-in when unauthenticated,
+ * with `?next=` naming the page when it is a console window, so a push or email
+ * link survives signing in (lib/sign-in-redirect.ts).
+ */
 export async function getAuthenticatedUserOrRedirect(): Promise<AuthenticatedUser> {
   const user = await getAuthenticatedUser();
-  if (!user) redirect("/auth/sign-in");
+  if (!user) return signInRedirect();
   return user;
 }
 

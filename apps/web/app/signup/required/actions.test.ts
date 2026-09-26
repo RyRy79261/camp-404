@@ -13,6 +13,7 @@ vi.mock("@/lib/rate-limit", () => ({
   getClientIp: vi.fn(() => "1.2.3.4"),
 }));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(() => {
     throw new Error("NEXT_REDIRECT");
@@ -24,6 +25,7 @@ import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { redeemInviteForUser } from "@/lib/users";
 import { rateLimiter } from "@/lib/rate-limit";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 
 function codeForm(code: string): FormData {
   const form = new FormData();
@@ -84,6 +86,8 @@ describe("submitInviteCode", () => {
       "MEOW",
     );
     expect(redirect).toHaveBeenCalledWith("/");
+    // The invite was the gate: the console layout redraws its manifest.
+    expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
   });
 
   it("returns the redemption error for a wrong code", async () => {

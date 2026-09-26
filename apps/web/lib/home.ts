@@ -3,6 +3,11 @@ import type { MyLift } from "@camp404/db/cars";
 import type { MyOpenTask } from "@camp404/db/tasks";
 import type { CalendarResult } from "./google-calendar";
 import type { InboxBadge } from "./inbox-badge";
+import {
+  buildProgramManifest,
+  manifestProgramIds,
+  type ProgramManifest,
+} from "./programs";
 
 // What a member's home page shows, decided from their own profile and status
 // and nothing else (owner, 2026-09-23: "The dashboard should be built off of
@@ -277,7 +282,8 @@ function upcomingFromLift(lift: MyLift | null, today: string): HomeUpcoming[] {
   return out;
 }
 
-function liftCard(lift: MyLift | null): HomeLift | null {
+/** The lift card: what Home shows about the member's car or seat. */
+export function liftCard(lift: MyLift | null): HomeLift | null {
   if (!lift) return null;
   if (lift.role === "driver") {
     const seats =
@@ -304,7 +310,42 @@ function liftCard(lift: MyLift | null): HomeLift | null {
   };
 }
 
-export function buildHome(input: HomeInput): HomeModel {
+/**
+ * The manifest Home's own facts give, for a caller with no manifest of its
+ * own (the unit tests): an applicant is `restricted`, anyone else `full`, at
+ * the rank their captaincy and lead flag make them. The page passes the real
+ * one (lib/program-manifest.ts).
+ */
+export function manifestForHome(input: HomeInput): ProgramManifest {
+  const lead = input.teams.some((t) => t.isLead);
+  const approved = input.approval === "approved";
+  return buildProgramManifest({
+    mode: approved ? "full" : "restricted",
+    approved,
+    rank: input.isCaptain ? "captain" : lead ? "team_lead" : "camp_member",
+    memberships: input.teams.map((t) => ({ team: t.key, isLead: t.isLead })),
+    teams: Object.entries(input.teamLabels).map(([key, label], order) => ({
+      key,
+      label,
+      archived: false,
+      order,
+    })),
+    hasLift: input.lift !== null,
+    inbox: input.inbox.total,
+    healthWarnings: null,
+  });
+}
+
+/**
+ * Home's model. The module tiles are a VIEW of the member's program manifest
+ * (404 OS, PR B): a tile shows when the manifest holds its program, so Home
+ * and the header can no longer disagree about what a member may open. Pass the
+ * manifest the console built; without one, Home's own facts build it.
+ */
+export function buildHome(
+  input: HomeInput,
+  manifest: ProgramManifest = manifestForHome(input),
+): HomeModel {
   const today = campDayKey(input.now);
   const approved = input.approval === "approved";
 
@@ -382,22 +423,23 @@ export function buildHome(input: HomeInput): HomeModel {
         .slice(0, 6)
     : [];
 
-  const leads = input.teams.some((t) => t.isLead);
-  const modules: HomeModule[] = [
-    // The inbox, named as the page it opens and the bell it mirrors: its count
-    // (getInboxBadge) holds unread notices of every kind and forms still
-    // waiting for an answer, so "Announcements, 1 new" would name the wrong
-    // thing when the 1 is a form.
-    {
+  const has = manifestProgramIds(manifest);
+  const modules: HomeModule[] = [];
+  // The inbox, named as the page it opens and the bell it mirrors: its count
+  // (getInboxBadge) holds unread notices of every kind and forms still
+  // waiting for an answer, so "Announcements, 1 new" would name the wrong
+  // thing when the 1 is a form.
+  if (has.has("inbox")) {
+    modules.push({
       id: "announcements",
       href: "/notifications",
       label: "Notifications",
       icon: "announcements",
       badge: input.inbox.total > 0 ? input.inbox.total : null,
       badgeSays: "waiting",
-    },
-  ];
-  if (approved) {
+    });
+  }
+  if (has.has("my-forms")) {
     modules.push({
       id: "forms",
       href: "/tools/forms",
@@ -405,8 +447,10 @@ export function buildHome(input: HomeInput): HomeModel {
       icon: "forms",
       badge: input.pending.length > 0 ? input.pending.length : null,
     });
-    // The shared task board, for everyone; the count is the tasks that are
-    // theirs and not finished.
+  }
+  // The shared task board, for everyone; the count is the tasks that are
+  // theirs and not finished.
+  if (has.has("tasks")) {
     modules.push({
       id: "tasks",
       href: "/tasks",
@@ -415,45 +459,47 @@ export function buildHome(input: HomeInput): HomeModel {
       badge: input.myTasks.total > 0 ? input.myTasks.total : null,
       badgeSays: "yours",
     });
-    // A lead may post and send forms, but only to a team they lead; a captain
-    // to anyone (canSendToAudience in @camp404/core). The pages enforce the
-    // scope; these tiles only say where to start.
-    if (leads || input.isCaptain) {
-      modules.push(
-        {
-          id: "message",
-          href: "/captains/announcements",
-          label: input.isCaptain ? "Announce" : "Message team",
-          icon: "message",
-          badge: null,
-        },
-        {
-          id: "form",
-          href: "/captains/questionnaires",
-          label: "Send form",
-          icon: "send-form",
-          badge: null,
-        },
-        // The camp calendar: a lead adds events for a team they lead, a
-        // captain for any team or the whole camp.
-        {
-          id: "event",
-          href: "/captains/calendar",
-          label: "Add event",
-          icon: "add-event",
-          badge: null,
-        },
-      );
-    }
-    if (input.isCaptain) {
-      modules.push({
-        id: "overview",
-        href: "/captains/overview",
-        label: "Camp overview",
-        icon: "overview",
-        badge: null,
-      });
-    }
+  }
+  // A lead may post and send forms, but only to a team they lead; a captain
+  // to anyone (canSendToAudience in @camp404/core). The pages enforce the
+  // scope; these tiles only say where to start.
+  if (has.has("announcements")) {
+    modules.push({
+      id: "message",
+      href: "/captains/announcements",
+      label: input.isCaptain ? "Announce" : "Message team",
+      icon: "message",
+      badge: null,
+    });
+  }
+  if (has.has("questionnaires")) {
+    modules.push({
+      id: "form",
+      href: "/captains/questionnaires",
+      label: "Send form",
+      icon: "send-form",
+      badge: null,
+    });
+  }
+  // The camp calendar: a lead adds events for a team they lead, a captain for
+  // any team or the whole camp.
+  if (has.has("new-event")) {
+    modules.push({
+      id: "event",
+      href: "/captains/calendar",
+      label: "Add event",
+      icon: "add-event",
+      badge: null,
+    });
+  }
+  if (has.has("overview")) {
+    modules.push({
+      id: "overview",
+      href: "/captains/overview",
+      label: "Camp overview",
+      icon: "overview",
+      badge: null,
+    });
   }
 
   // Led teams first, then by name, so the teams someone is responsible for

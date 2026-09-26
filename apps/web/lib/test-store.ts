@@ -56,6 +56,7 @@ import type {
   CampMemberDetailOptions,
 } from "@camp404/db/roster";
 import type { PaymentRow, RecordPaymentInput } from "@camp404/db/payments";
+import type { MyLift } from "@camp404/db/cars";
 import {
   ALREADY_A_TASK,
   ASSIGNEE_NOT_A_MEMBER,
@@ -228,6 +229,7 @@ import {
   type EditLoadInput,
   type GeneratorInput,
   type LoadInput,
+  Team as TeamKeys,
 } from "@camp404/types";
 import {
   currentCycle,
@@ -638,6 +640,31 @@ interface TestStoreState {
   joinContent: Map<number, Partial<JoinSiteContent>>;
   /** users.camp_title / camp_blurb / show_on_join, by user id. */
   campBlurbs: Map<string, TestCampBlurb>;
+  /** `driver_profiles`, one row per member per year (the lift fields only). */
+  driverProfiles: TestDriverProfile[];
+  /** `car_members`: who rides in whose car, per year. */
+  carMembers: TestCarMember[];
+}
+
+/** The lift fields of a `driver_profiles` row. */
+export interface TestDriverProfile {
+  userId: string;
+  cycle: number;
+  intendsToDrive: boolean;
+  vehicleMake: string | null;
+  vehicleModel: string | null;
+  seatsOffered: number | null;
+  departureCity: string | null;
+  arrivalAt: Date | null;
+  departureAt: Date | null;
+}
+
+/** A `car_members` row: one rider in one driver's car for one year. */
+interface TestCarMember {
+  driverUserId: string;
+  memberUserId: string;
+  cycle: number;
+  createdAt: Date;
 }
 
 export type TestCampBlurb = {
@@ -698,6 +725,8 @@ function globalState(): TestStoreState {
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
       joinContent: new Map<number, Partial<JoinSiteContent>>(),
       campBlurbs: new Map<string, TestCampBlurb>(),
+      driverProfiles: [] as TestDriverProfile[],
+      carMembers: [] as TestCarMember[],
     } satisfies TestStoreState;
   }
   return g[GLOBAL_KEY] as TestStoreState;
@@ -782,6 +811,10 @@ const recipePlateCounts = S.recipePlateCounts;
 const ingredientCatalogue = S.ingredientCatalogue;
 const recipeLessons = S.recipeLessons;
 const recipeHistory = S.recipeHistory;
+S.driverProfiles ??= [];
+S.carMembers ??= [];
+const driverProfiles = S.driverProfiles;
+const carMembers = S.carMembers;
 
 /**
  * The camp's current year, resolved the way `currentCycleNumber()` resolves it
@@ -2145,13 +2178,22 @@ export const testStore = {
     return currentCycleNumber();
   },
 
-  /** This year's memberships for one member, team-ordered (mirrors getTeamMemberships). */
+  /**
+   * This year's memberships for one member, team-ordered (mirrors
+   * getTeamMemberships). "Team order" is the database's: `ORDER BY team` on a
+   * Postgres enum sorts by the enum's declared order (kitchen, structures, …),
+   * not by name, so the store sorts by the same list (`Team.options`, which a
+   * test keeps equal to `teamEnum`). It sorted by name until 2026-09-26, which
+   * put a Finance member's Finance before their Kitchen here and not in
+   * production (lib/__tests__/memberships-agreement.test.ts).
+   */
   getTeamMemberships(userId: string): TeamMembership[] {
     const cycle = currentCycleNumber();
+    const order = (team: Team) => TeamKeys.options.indexOf(team);
     return teamMemberships
       .filter((m) => m.userId === userId && m.cycle === cycle)
       .map((m) => ({ team: m.team, isLead: m.isLead, cycle: m.cycle }))
-      .sort((a, b) => a.team.localeCompare(b.team));
+      .sort((a, b) => order(a.team) - order(b.team));
   },
 
   /** Put a member on a team for THIS year. Idempotent; never sets the lead flag. */
@@ -5048,6 +5090,113 @@ export const testStore = {
     S.teamsConfig = structuredClone(DEFAULT_CAMP_CONFIG);
     S.joinContent.clear();
     S.campBlurbs.clear();
+    driverProfiles.length = 0;
+    carMembers.length = 0;
+  },
+
+  // --- Lifts (the twin of @camp404/db/cars getMyLift) ----------------------
+  // Year-scoped like the tables: a driver profile or a seat counts only in the
+  // camp's current year. Written only by the seed helpers below (specs and
+  // unit tests); the captain-side car tools read the real database and have no
+  // E2E cover.
+
+  /** Seed a member's driver profile for a year (this year by default). */
+  seedDriverProfile(
+    input: Partial<Omit<TestDriverProfile, "userId">> & { userId: string },
+  ): TestDriverProfile {
+    if (!findUserById(input.userId)) {
+      throw new Error(`No test user with id ${input.userId}`);
+    }
+    const row: TestDriverProfile = {
+      userId: input.userId,
+      cycle: input.cycle ?? currentCycleNumber(),
+      intendsToDrive: input.intendsToDrive ?? true,
+      vehicleMake: input.vehicleMake ?? null,
+      vehicleModel: input.vehicleModel ?? null,
+      seatsOffered: input.seatsOffered ?? null,
+      departureCity: input.departureCity ?? null,
+      arrivalAt: input.arrivalAt ?? null,
+      departureAt: input.departureAt ?? null,
+    };
+    // (user_id, cycle) is the row's identity: seeding twice replaces it.
+    const idx = driverProfiles.findIndex(
+      (d) => d.userId === row.userId && d.cycle === row.cycle,
+    );
+    if (idx === -1) driverProfiles.push(row);
+    else driverProfiles[idx] = row;
+    return row;
+  },
+
+  /** Seat a member in a driver's car for a year (this year by default). */
+  seedCarRider(input: {
+    driverUserId: string;
+    memberUserId: string;
+    cycle?: number;
+  }): void {
+    for (const id of [input.driverUserId, input.memberUserId]) {
+      if (!findUserById(id)) throw new Error(`No test user with id ${id}`);
+    }
+    carMembers.push({
+      driverUserId: input.driverUserId,
+      memberUserId: input.memberUserId,
+      cycle: input.cycle ?? currentCycleNumber(),
+      createdAt: new Date(),
+    });
+  },
+
+  /**
+   * The member's own lift this year, case for case with getMyLift: the car
+   * they drive (their profile says they intend to drive), else the first car
+   * they were seated in whose driver still intends to drive, else null.
+   */
+  getMyLift(userId: string): MyLift | null {
+    const cycle = currentCycleNumber();
+    const vehicle = (d: TestDriverProfile) =>
+      [d.vehicleMake, d.vehicleModel]
+        .filter((p) => p?.trim())
+        .join(" ")
+        .trim() || null;
+    const driving = driverProfiles.find(
+      (d) => d.userId === userId && d.cycle === cycle && d.intendsToDrive,
+    );
+    if (driving) {
+      const riders = carMembers
+        .filter((c) => c.driverUserId === userId && c.cycle === cycle)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map(
+          (c) => findUserById(c.memberUserId)?.displayName ?? "A camp member",
+        );
+      return {
+        role: "driver",
+        vehicle: vehicle(driving),
+        seatsOffered: driving.seatsOffered,
+        riders,
+        departureCity: driving.departureCity,
+        arrivalAt: driving.arrivalAt,
+        departureAt: driving.departureAt,
+      };
+    }
+    const seats = carMembers
+      .filter((c) => c.memberUserId === userId && c.cycle === cycle)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    for (const seat of seats) {
+      const car = driverProfiles.find(
+        (d) =>
+          d.userId === seat.driverUserId &&
+          d.cycle === seat.cycle &&
+          d.intendsToDrive,
+      );
+      if (!car) continue;
+      return {
+        role: "rider",
+        driverName: findUserById(car.userId)?.displayName ?? null,
+        vehicle: vehicle(car),
+        departureCity: car.departureCity,
+        arrivalAt: car.arrivalAt,
+        departureAt: car.departureAt,
+      };
+    }
+    return null;
   },
 
   // --- join.camp-404.com (the twin of @camp404/db/join-site) --------------

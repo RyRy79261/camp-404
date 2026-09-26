@@ -119,6 +119,30 @@ export async function seedTeam(
 }
 
 /**
+ * Give a test user a lift this year through the test seam: their own car
+ * (`driver`), or a seat in `driverAuthUserId`'s car (`rider`). Both users must
+ * have loaded a page. The store's twin of getMyLift reads it.
+ */
+export async function seedLift(
+  request: APIRequestContext,
+  authUserId: string,
+  lift:
+    | {
+        role: "driver";
+        vehicleMake?: string;
+        vehicleModel?: string;
+        seatsOffered?: number;
+        departureCity?: string;
+      }
+    | { role: "rider"; driverAuthUserId: string },
+): Promise<void> {
+  const res = await request.post("/api/test/seed-lift", {
+    data: { authUserId, ...lift },
+  });
+  if (!res.ok()) throw new Error(`seedLift failed: ${res.status()}`);
+}
+
+/**
  * Put a test user at an attendance status for this year (applied, maybe,
  * accepted, waitlisted or not_attending). The user must have loaded a page.
  */

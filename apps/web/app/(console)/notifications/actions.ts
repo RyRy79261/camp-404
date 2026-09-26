@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateManifest } from "@/lib/manifest-revalidate";
 import { z } from "zod";
 import { canDecidePromotion, type PromotionParticipants } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -112,6 +113,8 @@ export async function acceptCaptainPromotionAction(
   revalidatePath("/");
   revalidatePath("/notifications");
   revalidatePath("/captains/camp-management");
+  // The new captain's own nav and Home gain the captain programs.
+  revalidateManifest();
   return { ok: true };
 }
 
@@ -299,8 +302,9 @@ export async function markAllNotificationsReadAction(): Promise<
     }
     const cleared = await markAllRead(campUser.id);
     revalidatePath("/notifications");
-    // The badge is drawn by the console layout, so the whole shell refreshes.
-    revalidatePath("/", "layout");
+    // The badge is drawn by the console layout (from the manifest), so the
+    // whole shell refreshes.
+    revalidateManifest();
     return { ok: true, data: { cleared } };
   });
 }

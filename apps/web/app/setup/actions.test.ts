@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // runFirstTimeSetup was never called, not only the sentence it gets back.
 
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUserOrRedirect: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/bootstrap", () => ({
   isCampBootstrapped: vi.fn(),
   mayFoundCamp: vi.fn(),
@@ -12,6 +13,7 @@ vi.mock("@/lib/bootstrap", () => ({
   SETUP_REFUSED_MESSAGE: "refused sentence",
 }));
 
+import { revalidatePath } from "next/cache";
 import { completeSetupAction } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import {
@@ -42,6 +44,8 @@ describe("completeSetupAction", () => {
   it("elects the founder when they may found the camp", async () => {
     await expect(completeSetupAction()).resolves.toEqual({ ok: true });
     expect(runFirstTimeSetup).toHaveBeenCalledWith(user);
+    // The founder is a captain now: their console redraws its manifest.
+    expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
   });
 
   it("refuses once the camp is set up, before anything else", async () => {

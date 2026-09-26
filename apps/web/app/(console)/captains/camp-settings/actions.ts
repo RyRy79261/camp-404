@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateManifest } from "@/lib/manifest-revalidate";
 import { z } from "zod";
 import {
   moveTeam,
@@ -110,6 +111,7 @@ export async function renameTeamAction(
     throw error;
   }
   revalidateTeamSurfaces();
+  revalidateManifest();
   return { ok: true };
 }
 
@@ -134,6 +136,7 @@ export async function moveTeamAction(
     },
   );
   revalidateTeamSurfaces();
+  revalidateManifest();
   return { ok: true };
 }
 
@@ -182,6 +185,7 @@ export async function setTeamArchivedAction(
     throw error;
   }
   revalidateTeamSurfaces();
+  revalidateManifest();
   return { ok: true };
 }
 
@@ -296,6 +300,7 @@ export async function setFoundingYearAction(
     };
   }
   revalidateRolloverSurfaces();
+  revalidateManifest();
   return { ok: true, report: result.report };
 }
 
@@ -340,6 +345,7 @@ export async function advanceCycleAction(
   // The rollover can write a camp-wide notice and new questionnaire sends.
   deliverAfterResponse();
   revalidateRolloverSurfaces();
+  revalidateManifest();
   return { ok: true, report: result.report };
 }
 

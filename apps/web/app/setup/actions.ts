@@ -2,6 +2,7 @@
 
 import { runAction } from "@/lib/action-result";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
+import { revalidateManifest } from "@/lib/manifest-revalidate";
 import {
   isCampBootstrapped,
   mayFoundCamp,
@@ -40,6 +41,10 @@ export async function completeSetupAction(): Promise<SetupResult> {
     if (!mayFoundCamp(user)) {
       return { ok: false, error: SETUP_REFUSED_MESSAGE };
     }
-    return await runFirstTimeSetup(user);
+    const result = await runFirstTimeSetup(user);
+    // The founder is a captain now: their console redraws from a fresh
+    // manifest.
+    if (result.ok) revalidateManifest();
+    return result;
   });
 }

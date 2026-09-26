@@ -1,37 +1,47 @@
-import { hasClearance } from "@camp404/core";
-import { Team, type ViewerRank } from "@camp404/types";
+import "server-only";
+
+import type { ViewerRank } from "@camp404/types";
+import type { ProgramId } from "./program-routes";
+import {
+  manifestForRank,
+  manifestProgramIds,
+  teamsInCampOrder,
+  type ProgramManifest,
+} from "./programs";
 
 /**
  * The console nav (issue #266): a few links, then menus that group the rest.
- * Every entry carries the lowest rank that may open it. The header filters
- * this on the server and hands the client only the entries the viewer may see,
- * and a menu left with no entries is not drawn at all.
+ * Since the program manifest (404 OS, PR B) it is a VIEW of the manifest: an
+ * entry is drawn when the member's manifest holds its program, so the nav and
+ * Home can no longer disagree about what a member may open. The rank bars live
+ * in one place, lib/programs.ts. The header builds this on the server and hands
+ * the client only labels and links.
  *
  * Hiding is never the security boundary. Each page re-checks with
- * `requireMemberPage` or `captainPageGate`, so an entry must carry the same bar
- * its page guards on, or the nav leads somewhere that refuses.
+ * `requireMemberPage` or `captainPageGate`.
  */
 export interface ConsoleNavEntry {
   href: string;
   label: string;
-  rank: ViewerRank;
+  /** Drawn when the member's manifest holds this program. */
+  program: ProgramId;
 }
 
 export type ConsoleNavNode =
-  | ({ kind: "link" } & ConsoleNavEntry)
+  | { kind: "link"; href: string; label: string; program: ProgramId | null }
   | { kind: "group"; label: string; entries: readonly ConsoleNavEntry[] }
   /** The Teams menu: its entries come from camp settings, not from here. */
   | { kind: "teams"; label: string };
 
 export const CONSOLE_NAV: readonly ConsoleNavNode[] = [
   // Every member's own page: their to-dos, what's coming up, their places.
-  { kind: "link", href: "/", label: "Home", rank: "camp_member" },
+  { kind: "link", href: "/", label: "Home", program: null },
   // The shared task board: every approved member sees every task.
-  { kind: "link", href: "/tasks", label: "Tasks", rank: "camp_member" },
+  { kind: "link", href: "/tasks", label: "Tasks", program: "tasks" },
   // The camp calendar, by day, with a team filter; each team's badge opens
   // that team's page. Adding an event stays with captains and leads, and is
   // reached from Home's "Add event" tile.
-  { kind: "link", href: "/calendar", label: "Calendar", rank: "camp_member" },
+  { kind: "link", href: "/calendar", label: "Calendar", program: "calendar" },
   // One page per team (the camp's own teams first), from camp settings.
   { kind: "teams", label: "Teams" },
   {
@@ -43,33 +53,33 @@ export const CONSOLE_NAV: readonly ConsoleNavNode[] = [
       {
         href: "/captains/camp-management",
         label: "Roster",
-        rank: "camp_member",
+        program: "roster",
       },
-      { href: "/family-tree", label: "Family tree", rank: "camp_member" },
+      { href: "/family-tree", label: "Family tree", program: "family-tree" },
       // Meeting notes, every team's and the whole camp's: every member reads
       // them; a team's members and captains write them.
-      { href: "/meetings", label: "Meetings", rank: "camp_member" },
+      { href: "/meetings", label: "Meetings", program: "meetings" },
       // The power plan: every member reads the load list and the fuel
       // estimate; Power & Lighting leads and captains edit them. /power sends
       // on to the load list, and the entry stays lit on both pages beneath it.
-      { href: "/power", label: "Power", rank: "camp_member" },
+      { href: "/power", label: "Power", program: "power" },
       // The recipe book: every member reads it and suggests; Kitchen leads and
       // captains review from inside it.
-      { href: "/kitchen/recipes", label: "Recipes", rank: "camp_member" },
+      { href: "/kitchen/recipes", label: "Recipes", program: "recipes" },
     ],
   },
   {
     kind: "group",
     label: "Me",
     entries: [
-      { href: "/profile", label: "Profile", rank: "camp_member" },
-      { href: "/notifications", label: "Notifications", rank: "camp_member" },
-      { href: "/tools/forms", label: "My forms", rank: "camp_member" },
-      { href: "/tools/invite", label: "Invite", rank: "camp_member" },
+      { href: "/profile", label: "Profile", program: "account" },
+      { href: "/notifications", label: "Notifications", program: "inbox" },
+      { href: "/tools/forms", label: "My forms", program: "my-forms" },
+      { href: "/tools/invite", label: "Invite", program: "invites" },
       {
         href: "/profile/security",
         label: "Sign-in & security",
-        rank: "camp_member",
+        program: "account",
       },
     ],
   },
@@ -78,27 +88,31 @@ export const CONSOLE_NAV: readonly ConsoleNavNode[] = [
     label: "Captains",
     entries: [
       // The whole camp at a glance, which used to be home (split 2026-09-23).
-      { href: "/captains/overview", label: "Camp overview", rank: "captain" },
+      {
+        href: "/captains/overview",
+        label: "Camp overview",
+        program: "overview",
+      },
       {
         href: "/captains/questionnaires",
         label: "Questionnaires",
-        rank: "team_lead",
+        program: "questionnaires",
       },
       {
         href: "/captains/announcements",
         label: "Announcements",
-        rank: "team_lead",
+        program: "announcements",
       },
-      { href: "/captains/payments", label: "Payments", rank: "captain" },
+      { href: "/captains/payments", label: "Payments", program: "payments" },
       {
         href: "/captains/camp-settings",
         label: "Camp settings",
-        rank: "captain",
+        program: "camp-settings",
       },
       // join.camp-404.com's words (owner, 2026-09-25: captains edit them).
-      { href: "/captains/join-site", label: "Join site", rank: "captain" },
-      { href: "/captains/audit", label: "Audit", rank: "captain" },
-      { href: "/captains/system", label: "System status", rank: "captain" },
+      { href: "/captains/join-site", label: "Join site", program: "join-site" },
+      { href: "/captains/audit", label: "Audit", program: "audit" },
+      { href: "/captains/system", label: "System status", program: "system" },
     ],
   },
 ];
@@ -127,37 +141,51 @@ export interface NavTeams {
  * The Teams menu, from camp settings: the active teams in the camp's order
  * (pass `activeTeams(config)`, so an archived team is not in it), the viewer's
  * own teams this year first. A key the team page cannot open is left out
- * rather than leading to a 404.
+ * rather than leading to a 404. The same split the manifest's Teams folder
+ * uses (`teamsInCampOrder`).
  */
 export function navTeams(
   active: readonly { key: string; label: string }[],
   myTeams: readonly string[],
 ): NavTeams {
-  const items = active
-    .filter((t) => Team.safeParse(t.key).success)
-    .map((t) => ({ key: t.key, href: `/teams/${t.key}`, label: t.label }));
-  const strip = ({ href, label }: { href: string; label: string }) => ({
+  const { mine, others } = teamsInCampOrder(active, myTeams);
+  const item = ({ key, label }: { key: string; label: string }) => ({
+    href: `/teams/${key}`,
+    label,
+  });
+  return { mine: mine.map(item), others: others.map(item) };
+}
+
+/** The Teams menu from the manifest's Teams folder: its own teams first. */
+function navTeamsFromManifest(manifest: ProgramManifest): NavTeams {
+  const folder = manifest.folders.find((f) => f.id === "teams");
+  const teams = folder?.programs ?? [];
+  const item = ({ href, label }: { href: string; label: string }) => ({
     href,
     label,
   });
   return {
-    mine: items.filter((t) => myTeams.includes(t.key)).map(strip),
-    others: items.filter((t) => !myTeams.includes(t.key)).map(strip),
+    mine: teams.filter((t) => t.mine).map(item),
+    others: teams.filter((t) => !t.mine).map(item),
   };
 }
 
 /**
- * The nav a viewer of `rank` may see, in bar order. Entries above the viewer's
- * rank are dropped, then any menu left empty.
+ * The nav drawn from a member's manifest: an entry shows when the manifest
+ * holds its program, then any menu left empty is dropped. The Teams menu comes
+ * from the manifest's Teams folder unless `teams` is passed.
  */
-export function consoleNavFor(
-  rank: ViewerRank,
-  teams: NavTeams = { mine: [], others: [] },
+export function consoleNavFromManifest(
+  manifest: ProgramManifest,
+  teams: NavTeams = navTeamsFromManifest(manifest),
 ): NavNode[] {
+  const has = manifestProgramIds(manifest);
+  const shows = (program: ProgramId | null) =>
+    program === null || has.has(program);
   const nodes: NavNode[] = [];
   for (const node of CONSOLE_NAV) {
     if (node.kind === "link") {
-      if (hasClearance(rank, node.rank)) {
+      if (shows(node.program)) {
         nodes.push({ kind: "link", href: node.href, label: node.label });
       }
       continue;
@@ -167,7 +195,7 @@ export function consoleNavFor(
         ? [teams.mine, teams.others]
         : [
             node.entries
-              .filter((entry) => hasClearance(rank, entry.rank))
+              .filter((entry) => shows(entry.program))
               .map(({ href, label }) => ({ href, label })),
           ];
     const drawn = sections.filter((section) => section.length > 0);
@@ -179,21 +207,15 @@ export function consoleNavFor(
 }
 
 /**
- * The entry the current page belongs to: the one whose link is the longest
- * match, so /profile/security lights "Sign-in & security" and not "Profile".
- * Home matches only itself.
+ * The nav an approved member of `rank` with no teams would see, in bar order:
+ * `consoleNavFromManifest` over `manifestForRank(rank)`.
  */
-export function activeNavHref(
-  pathname: string,
-  hrefs: readonly string[],
-): string | null {
-  let best: string | null = null;
-  for (const href of hrefs) {
-    const matches =
-      href === "/"
-        ? pathname === "/"
-        : pathname === href || pathname.startsWith(`${href}/`);
-    if (matches && (best === null || href.length > best.length)) best = href;
-  }
-  return best;
+export function consoleNavFor(
+  rank: ViewerRank,
+  teams: NavTeams = { mine: [], others: [] },
+): NavNode[] {
+  return consoleNavFromManifest(manifestForRank(rank), teams);
 }
+
+/** Kept here for callers of the old name; it lives in lib/program-routes.ts. */
+export { activeNavHref } from "./program-routes";

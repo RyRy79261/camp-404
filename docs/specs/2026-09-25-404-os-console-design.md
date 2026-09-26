@@ -1,6 +1,6 @@
 # 404 OS console: architecture
 
-Status: proposal, 2026-09-25. Nothing here is built yet. The owner picked
+Status: proposal, 2026-09-25; being built. PR A (#286, the packages) and PR B (the program manifest) are done. The owner picked
 the look on 2026-09-25 (the Classic desktop, see
 [The owner's pick](#the-owners-pick-2026-09-25)), then reviewed the
 prototype a second time the same day (see
@@ -528,7 +528,11 @@ smoke suite (`apps/join/tests/e2e/smoke.spec.ts`). It is themed only through
 - `apps/web/lib/program-routes.ts` (a plain module, never a `"use server"`
   file) exports `matchProgram(pathname)` →
   `{programId, instanceKey, genericTitle}`. It replaces `activeNavHref`
-  (`apps/web/lib/console-nav.ts:186`). Rules:
+  (`apps/web/lib/console-nav.ts:186`). [CORRECTION 2026-09-26] Not until PR
+  C: today's header has two links into the My account program (Profile and
+  Sign-in & security), which `matchProgram` cannot tell apart, so PR B moved
+  `activeNavHref` into `program-routes.ts` and the header keeps using it.
+  Rules:
   - sub-pages share an instance: `/profile`, `/profile/edit` and
     `/profile/security` are one window; so are `/power/loads` and
     `/power/fuel`;
@@ -798,13 +802,14 @@ smoke suite (`apps/join/tests/e2e/smoke.spec.ts`). It is themed only through
     captain); captains only: Camp overview, Payments, Camp settings (with the
     year applet), Join site, Audit log, System status. New event for a lead
     whose led teams are all archived opens with an explanation, not an empty
-    picker;
+    picker ([CORRECTION 2026-09-26] in PR C: it changes what the page shows,
+    and PR B changes nothing visible);
   - child windows with no icon: builder, preview, send, results, respondent
     detail, meeting and recipe documents, answers, announcement detail, the
     questionnaire runner and completion page, and INKBLOT (opened from the
     Terminal or a hidden cat);
-  - driver programs: see decision 11 (proposed My lift, with a `getMyLift`
-    test-store twin added in PR B). Participation gates nothing (owner rule)
+  - driver programs: decision 11, ruled A (2026-09-26): My lift at `/lift`,
+    with a `getMyLift` test-store twin, added in PR B. Participation gates nothing (owner rule)
     and the founder address grants no clearance.
 - **Terminal** (owner, 2026-09-25: "We do need the terminal"). A route,
   `/terminal`, behind `requireMemberPage`, drawing the shared
@@ -841,6 +846,21 @@ smoke suite (`apps/join/tests/e2e/smoke.spec.ts`). It is themed only through
   member moved off a team may still see its team folder; every gate still
   refuses, so nothing leaks through a page. Their saved layout and
   shortcuts are pruned against the new manifest when it arrives.
+  [2026-09-26, PR B as built] The manifest inputs that change for a member
+  who did NOT act, and so are never revalidated for them (they wait for one
+  of the three above):
+  - their rank or approval, changed by a captain (approve, reject, demote)
+    or by another member accepting a promotion;
+  - their teams and lead flags, changed by a captain;
+  - the team settings and the year, changed by a captain;
+  - their lift (whether My lift shows): a driver seating or dropping them,
+    and every lift change made through the MCP tools
+    (`lib/mcp/tools/lifts.ts`, `lib/mcp/tools/profile.ts`), which run
+    outside the member's browser, so no layout of theirs is refreshed even
+    when they made the change themselves;
+  - their inbox count, when someone sends them a notice.
+  The drift test (`lib/__tests__/manifest-revalidate.test.ts`) covers only
+  the hand-kept list of actions that change the actor's own inputs.
 
 ### 5. Phone model (below `md`): the mobile Classic desktop
 
@@ -1327,7 +1347,8 @@ by text or by voice.
 ## Decisions
 
 Open questions for the owner. Each has a recommendation. Decisions 1, 3, 8
-and 14 are ruled (14 keeps one small open question).
+and 14 are ruled (14 keeps one small open question). [CORRECTION 2026-09-26]
+Decisions 2, 7 and 11 are ruled too (owner, 2026-09-26).
 
 1. **Does the console leave the AfrikaBurn look (2026-09-17 ruling) for 404
    OS?** **Ruled (owner, 2026-09-25): yes, the Classic desktop (look A of the
@@ -1445,7 +1466,9 @@ and 14 are ruled (14 keeps one small open question).
     lift, with the `getMyLift` test-store twin added in PR B as AGENTS.md
     requires. B: no driver program in this work; the deferral is recorded
     here.
-    *Recommend A.*
+    **Ruled (owner, 2026-09-26): A.** Built in PR B: the route is `/lift`
+    (`requireMemberPage`), and the manifest offers it to a member who drives
+    this year or has a seat in a car (`getMyLift` is not null).
 12. **AGENTS.md's "copy AfrikaBurn's nearest equivalent for a new surface"
     rule.**
     A: replace it with "copy the nearest existing program's window composition

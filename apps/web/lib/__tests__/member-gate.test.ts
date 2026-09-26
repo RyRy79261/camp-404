@@ -9,6 +9,9 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
+// The page asked for, as proxy.ts hands it to the gate.
+const requestHeaders = vi.hoisted(() => new Headers());
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => requestHeaders) }));
 vi.mock("@/lib/background-work", () => ({
   runDueWorkAfterResponse: vi.fn(),
 }));
@@ -168,6 +171,20 @@ describe("requireMemberPage", () => {
     await expect(requireMemberPage()).rejects.toThrow("NEXT_REDIRECT");
     expect(redirect).toHaveBeenCalledWith("/auth/sign-in");
     expect(ensureCampUser).not.toHaveBeenCalled();
+  });
+
+  it("names the page they asked for, so signing in brings them back", async () => {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
+    requestHeaders.set("x-camp-path", "/tools/forms?tab=done");
+
+    try {
+      await expect(requireMemberPage()).rejects.toThrow("NEXT_REDIRECT");
+      expect(redirect).toHaveBeenCalledWith(
+        "/auth/sign-in?next=%2Ftools%2Fforms%3Ftab%3Ddone",
+      );
+    } finally {
+      requestHeaders.delete("x-camp-path");
+    }
   });
 });
 

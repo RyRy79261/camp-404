@@ -1,18 +1,19 @@
 import "server-only";
 
+import { cache } from "react";
 import {
-  getTeamsConfig as dbGetTeamsConfig,
-  getCurrentCycle as dbGetCurrentCycle,
-  getCycles as dbGetCycles,
+  getCampConfig as dbGetCampConfig,
   mutateTeamsConfig as dbMutateTeamsConfig,
   activeTeams,
   audienceLabel,
   currentCycle,
   memberTeamsLabel,
   resolveCycles,
+  resolveTeamsConfig,
   teamLabelMap,
   teamPickerOptions,
   AUDIENCE_SCOPE_LABELS,
+  UNSET_CYCLE,
   type CycleEntry,
   type TeamsConfig,
   type TeamConfigEntry,
@@ -42,10 +43,53 @@ export {
   AUDIENCE_SCOPE_LABELS,
 };
 
-export function getTeamsConfig(): Promise<TeamsConfig> {
-  return usesTestStore()
-    ? Promise.resolve(testStore.getTeamsConfig())
-    : dbGetTeamsConfig();
+/**
+ * The camp settings one request needs, read once: the team config, every year
+ * the camp has had, and the year it is in now.
+ */
+export interface CampSettings {
+  teams: TeamsConfig;
+  cycles: CycleEntry[];
+  /** The year the camp is in, or null before a captain names the founding year. */
+  current: CycleEntry | null;
+  /**
+   * The year every year-scoped read filters on: the current year, or the
+   * `UNSET_CYCLE` sentinel on a camp with no year yet, exactly as
+   * `currentCycleNumber()` in @camp404/db resolves it.
+   */
+  cycleNumber: number;
+}
+
+/**
+ * The `camp_settings` singleton, read ONCE per request. The console used to
+ * read it three or more times on every page: the team config for the nav,
+ * then `currentCycleNumber()` inside each team-membership read. Everything on
+ * the page that needs the teams or the year now shares this one read.
+ *
+ * React `cache()`, never `unstable_cache` or `"use cache"`: it lives for one
+ * server request and is thrown away with it. No action reads this after
+ * writing the config in the same call (the writes go through
+ * `mutateTeamsConfig`, which reads the row itself); the re-render that
+ * `revalidateManifest()` asks for is a new render and reads fresh.
+ *
+ * The E2E branch runs the same pure resolvers over the test store's config.
+ */
+export const getCampSettings = cache(async (): Promise<CampSettings> => {
+  const raw: unknown = usesTestStore()
+    ? testStore.getTeamsConfig()
+    : await dbGetCampConfig();
+  const cycles = resolveCycles(raw);
+  const current = currentCycle(cycles);
+  return {
+    teams: resolveTeamsConfig(raw),
+    cycles,
+    current,
+    cycleNumber: current?.year ?? UNSET_CYCLE,
+  };
+});
+
+export async function getTeamsConfig(): Promise<TeamsConfig> {
+  return (await getCampSettings()).teams;
 }
 
 /**
@@ -78,18 +122,14 @@ export function mutateTeamsConfig(
  * list and this returns null. Playwright keeps running with no database and no
  * test-store change, and it stays honest if the store ever grows a cycles key.
  */
-export function getCurrentCycle(): Promise<CycleEntry | null> {
-  return usesTestStore()
-    ? Promise.resolve(currentCycle(resolveCycles(testStore.getTeamsConfig())))
-    : dbGetCurrentCycle();
+export async function getCurrentCycle(): Promise<CycleEntry | null> {
+  return (await getCampSettings()).current;
 }
 
 /**
  * Every year the camp has had, oldest first, with their optional names. Empty
  * until a captain names the founding year. Same E2E split as getCurrentCycle.
  */
-export function getCycles(): Promise<CycleEntry[]> {
-  return usesTestStore()
-    ? Promise.resolve(resolveCycles(testStore.getTeamsConfig()))
-    : dbGetCycles();
+export async function getCycles(): Promise<CycleEntry[]> {
+  return (await getCampSettings()).cycles;
 }
