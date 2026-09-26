@@ -157,11 +157,20 @@ export function QuestionField({
       data-os-private={privateField ? "" : undefined}
     >
       {labelable ? (
-        <label id={labelId} htmlFor={fieldId} className="text-sm font-medium">
+        <label
+          id={labelId}
+          htmlFor={fieldId}
+          data-slot="field-label"
+          className="text-sm font-medium"
+        >
           {prompt}
         </label>
       ) : (
-        <span id={labelId} className="text-sm font-medium">
+        <span
+          id={labelId}
+          data-slot="field-label"
+          className="text-sm font-medium"
+        >
           {prompt}
         </span>
       )}

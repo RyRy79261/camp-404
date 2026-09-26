@@ -55,13 +55,19 @@ export function KpiCards({ kpis }: { kpis: Kpi[] }) {
   return (
     <section
       aria-label="Camp at a glance"
-      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      className="grid gap-4 page-sm:grid-cols-2 page-lg:grid-cols-4"
     >
       {kpis.map((kpi) => (
         <Link key={kpi.key} href={kpi.href} className="group">
-          <Card className="h-full transition-colors group-hover:border-accent/60">
+          <Card
+            data-kpi
+            className="h-full transition-colors group-hover:border-accent/60"
+          >
             <CardContent className="flex flex-col gap-1 p-5">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span
+                data-kpi-label
+                className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+              >
                 {kpi.label}
               </span>
               {kpi.value === null ? (
@@ -69,7 +75,10 @@ export function KpiCards({ kpis }: { kpis: Kpi[] }) {
                   not available here
                 </span>
               ) : (
-                <span className="text-3xl font-bold tabular-nums">
+                <span
+                  data-kpi-value
+                  className="text-3xl font-bold tabular-nums"
+                >
                   {kpi.value}
                 </span>
               )}
@@ -184,7 +193,10 @@ export function TeamCoverageCard({ rows }: { rows: TeamCoverageRow[] }) {
         ) : (
           <>
             <p className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold tabular-nums">
+              <span
+                data-kpi-value
+                className="text-2xl font-extrabold tabular-nums"
+              >
                 {led} / {rows.length}
               </span>
               <span className="text-xs text-muted-foreground">have a lead</span>

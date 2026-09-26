@@ -16,7 +16,7 @@ import {
 } from "./lib/console-nav";
 
 /**
- * The pinned announcements. On a desktop they are a strip above the taskbar;
+ * The pinned announcements. On a desktop they are a line in the header;
  * on a phone they fold into the bell's panel, which this opens.
  */
 async function pinnedPins(page: Page): Promise<Locator> {

@@ -56,6 +56,9 @@ type PanelState =
 export function NotificationPanel({
   count,
   pinned,
+  triggerClassName,
+  icon,
+  badgeClassName,
 }: {
   /**
    * What the badge shows: `getInboxBadge(...).total` (lib/inbox-badge.ts),
@@ -69,6 +72,12 @@ export function NotificationPanel({
    * panel, for its links.
    */
   pinned?: (close: () => void) => ReactNode;
+  /** The bell's look where it sits (the tray's bordered box). */
+  triggerClassName?: string;
+  /** The bell's glyph, in place of the kit's. */
+  icon?: ReactNode;
+  /** The count badge's look. */
+  badgeClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<PanelState>({ status: "loading" });
@@ -119,7 +128,12 @@ export function NotificationPanel({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <NotificationBell count={count} />
+        <NotificationBell
+          count={count}
+          className={triggerClassName}
+          icon={icon}
+          badgeClassName={badgeClassName}
+        />
       </PopoverTrigger>
       <PopoverContent
         className={PANEL}

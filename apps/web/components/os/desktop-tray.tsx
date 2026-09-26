@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { AlertTriangle, Info, Pin } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import {
+  TRAY_BOX,
+  TRAY_PIP,
   Tray,
   TrayBalloon,
   TrayButton,
@@ -13,12 +14,14 @@ import {
 import { NotificationPanel } from "@/components/notifications/notification-panel";
 import { burnCountdownLabel } from "@/lib/burn-countdown";
 import type { ManifestTray } from "@/lib/programs";
+import { LineIcon } from "./line-icons";
 
-// The taskbar's right-hand end (visual-language doc 4.7): the inbox bell, the
-// pinned count, the system-health warning, the Burn countdown and the clock,
-// in that order. Which of them there are is the manifest's to say, per mode
-// (the restricted desktop gets no pins and no system health; the held one
-// gets no tray at all).
+// The taskbar's right-hand end (the approved prototype's tray): the inbox
+// bell, the system-health warning, the Burn countdown and the clock, in that
+// order, each in a bordered box. Which of them there are is the manifest's to
+// say, per mode (the restricted desktop gets no system health; the held one
+// gets no tray at all). The pinned announcements live in the header now, so
+// the tray no longer counts them.
 //
 // Cheap when idle (design doc, section 8): the clock ticks once a minute on
 // the minute and stops while the tab is hidden, and only this component
@@ -38,6 +41,24 @@ const DAY = new Intl.DateTimeFormat("en-GB", {
   month: "short",
   timeZone: CAMP_TIME_ZONE,
 });
+/** A YYYY-MM-DD date as the tray's tooltip says it: "Sun 26 Apr". */
+const DATE = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+function day(iso: string): string {
+  const ms = Date.parse(`${iso}T00:00:00Z`);
+  return Number.isNaN(ms) ? iso : DATE.format(ms);
+}
+
+/** The bell's look in the tray: the bordered box and the magenta pip. */
+export const TRAY_BELL = {
+  triggerClassName: `${TRAY_BOX} w-auto outline-none hover:border-os-primary hover:bg-os-panel focus-visible:border-os-primary aria-expanded:border-os-primary`,
+  badgeClassName: TRAY_PIP,
+  icon: <LineIcon name="bell" className="size-4" />,
+};
 
 /** What the member sees when something is wrong; no detail (owner, 2026-09-25). */
 export const HEALTH_SENTENCE = "Something in the app is not working right now.";
@@ -47,42 +68,31 @@ export const APPLICATION_SUBMITTED =
 
 export interface DesktopTrayProps {
   tray: ManifestTray;
-  /** How many pinned announcements the strip holds (cleared members only). */
-  pinned: number;
   /** The Burn's dates this year, if a captain set them. */
   burn: { start: string; end: string } | null;
+  /** The year, for the countdown's tooltip ("AfrikaBurn 2027: …"). */
+  year?: number | null;
+  /**
+   * Drawn over the clock's top edge, decorative and free of pointer events
+   * unless it is itself a toy (Prince, asleep on the clock).
+   */
+  clockDecoration?: ReactNode;
   /** Open a console address the desktop's way (System status). */
   onOpenHref: (href: string) => void;
 }
 
 export function DesktopTray({
   tray,
-  pinned,
   burn,
+  year = null,
+  clockDecoration,
   onOpenHref,
 }: DesktopTrayProps) {
   const now = useMinuteClock();
   const slots: TraySlots = {};
 
   if (tray.inbox) {
-    slots.inbox = <NotificationPanel count={tray.inbox.count} />;
-  }
-  if (pinned > 0) {
-    slots.pins = (
-      <TrayButton
-        label="Pinned announcements"
-        count={pinned}
-        countNoun="pinned"
-        onClick={() => {
-          // The strip is always drawn; the tray item takes the member to it.
-          document
-            .querySelector<HTMLElement>("[data-os-pins] a[href]")
-            ?.focus();
-        }}
-      >
-        <Pin aria-hidden className={ICON} />
-      </TrayButton>
-    );
+    slots.inbox = <NotificationPanel count={tray.inbox.count} {...TRAY_BELL} />;
   }
   if (tray.health?.status === "warning") {
     slots.health = <HealthItem health={tray.health} onOpenHref={onOpenHref} />;
@@ -92,25 +102,31 @@ export function DesktopTray({
     slots.health = <ApplicationBalloon />;
   }
   const countdown = now ? burnCountdownLabel(now, burn) : null;
-  if (countdown) {
+  if (countdown && burn) {
     slots.countdown = (
-      <span className="flex h-8 shrink-0 items-center border border-os-line bg-os-panel px-2 font-mono text-[11px] uppercase tracking-wider text-os-fg">
+      <span
+        title={`AfrikaBurn${year ? ` ${year}` : ""}: ${day(burn.start)} to ${day(burn.end)}`}
+        className={`${TRAY_BOX} font-mono text-[11px] uppercase tracking-wider max-lg:hidden`}
+      >
         {countdown}
       </span>
     );
   }
   slots.clock = (
-    <time
-      dateTime={now?.toISOString()}
-      // Null until mounted, so the server's paint and the first client one
-      // agree; the box keeps its width meanwhile.
-      className="flex h-8 min-w-16 shrink-0 flex-col items-end justify-center border border-os-line bg-os-bg px-2 font-mono leading-none whitespace-nowrap text-os-fg"
-    >
-      <span className="text-[12px]">{now ? CLOCK.format(now) : ""}</span>
-      <span className="text-[9px] uppercase text-os-muted">
-        {now ? DAY.format(now) : ""}
-      </span>
-    </time>
+    <div className="relative">
+      {clockDecoration}
+      <time
+        dateTime={now?.toISOString()}
+        // Null until mounted, so the server's paint and the first client one
+        // agree; the box keeps its width meanwhile.
+        className="flex h-8 min-w-16 shrink-0 flex-col items-end justify-center border border-os-line bg-os-bg px-2 font-mono leading-none whitespace-nowrap text-os-fg"
+      >
+        <span className="text-[12px]">{now ? CLOCK.format(now) : ""}</span>
+        <span className="text-[9px] uppercase text-os-muted">
+          {now ? DAY.format(now) : ""}
+        </span>
+      </time>
+    </div>
   );
 
   return <Tray slots={slots} />;
@@ -125,9 +141,7 @@ export function HealthItem({
 }) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
-  const icon = (
-    <AlertTriangle aria-hidden className={`${ICON} text-os-primary`} />
-  );
+  const icon = <LineIcon name="alert" className={`${ICON} text-os-primary`} />;
 
   // A captain: the count, and System status.
   if ("warnings" in health) {
@@ -172,7 +186,7 @@ function ApplicationBalloon() {
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        <Info aria-hidden className={ICON} />
+        <LineIcon name="info" className={ICON} />
       </TrayButton>
       <TrayBalloon open={open} onClose={() => setOpen(false)} anchor={button}>
         {APPLICATION_SUBMITTED}

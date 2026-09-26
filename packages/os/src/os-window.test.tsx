@@ -493,3 +493,14 @@ describe("a responsive frame (the console)", () => {
     expect(onMove).toHaveBeenCalledWith(70, 60);
   });
 });
+
+describe("the window's body", () => {
+  it("is the page container the kit's page-* variants measure", () => {
+    renderWindow(<p>Inside</p>);
+    const body = screen.getByText("Inside").closest("[data-window-body]");
+    // The @camp404/ui page-sm/md/lg/xl variants answer for the box that
+    // carries data-page-container and the container named `page`.
+    expect(body?.hasAttribute("data-page-container")).toBe(true);
+    expect(body?.className.split(" ")).toContain("@container/page");
+  });
+});

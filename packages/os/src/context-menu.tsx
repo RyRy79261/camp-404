@@ -181,7 +181,7 @@ function OpenMenu({
               m.bold ? "font-semibold" : ""
             } ${
               m.danger ? "text-os-danger" : "text-os-fg"
-            } enabled:hover:bg-os-primary enabled:hover:text-os-primary-fg enabled:focus-visible:bg-os-primary enabled:focus-visible:text-os-primary-fg`}
+            } enabled:hover:bg-os-primary enabled:hover:text-os-bg enabled:focus-visible:bg-os-primary enabled:focus-visible:text-os-bg`}
           >
             {m.label}
           </button>

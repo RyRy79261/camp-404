@@ -49,7 +49,7 @@ type Props = {
 };
 
 const ITEM =
-  "flex w-full items-center gap-3 px-3 py-1.5 text-left font-pixel text-[11px] uppercase outline-none hover:bg-os-primary hover:text-os-primary-fg focus-visible:bg-os-primary focus-visible:text-os-primary-fg";
+  "flex w-full items-center gap-3 px-3 py-1.5 text-left font-pixel text-[11px] uppercase outline-none hover:bg-os-primary hover:text-os-bg focus-visible:bg-os-primary focus-visible:text-os-bg";
 
 // The Start menu: every program the app lists, above the taskbar. Arrow keys
 // walk it, Esc shuts it, and a press anywhere else shuts it too.
@@ -162,6 +162,13 @@ export type StartMenuGroup = {
 
 type GroupedProps = {
   groups: readonly StartMenuGroup[];
+  /**
+   * How the groups stand side by side on a desktop, by group key: each inner
+   * list is one column, its groups one under the other (the prototype's Me
+   * and My teams, Camp and Kitchen, Captain). A group in no column gets one
+   * of its own, after these. A phone lists every group in `groups` order.
+   */
+  columns?: readonly (readonly string[])[];
   /** Rows along the bottom: Account, Report a problem, Log off. */
   footer?: readonly StartMenuItem[];
   /** Above the groups: the member's name and rank, as the app draws them. */
@@ -173,8 +180,9 @@ type GroupedProps = {
   landmark?: string;
 };
 
+// At least 44 px tall on a phone, where each row is a thumb's target.
 const GROUP_ROW =
-  "group flex w-full items-center gap-2.5 px-3 py-1.5 text-left font-pixel text-[11px] uppercase text-os-fg outline-none hover:bg-os-primary hover:text-os-primary-fg focus-visible:bg-os-primary focus-visible:text-os-primary-fg";
+  "group flex w-full items-center gap-2.5 px-3 py-2.5 max-md:min-h-11 text-left font-pixel text-[11px] uppercase text-os-fg outline-none hover:bg-os-primary hover:text-os-bg focus-visible:bg-os-primary focus-visible:text-os-bg md:py-1";
 
 /**
  * The console's Start menu: the member's programs in their groups, then the
@@ -185,6 +193,7 @@ const GROUP_ROW =
  */
 export function GroupedStartMenu({
   groups,
+  columns,
   footer = [],
   header,
   label,
@@ -253,7 +262,7 @@ export function GroupedStartMenu({
         {item.tag && (
           <span
             aria-hidden
-            className="border border-current px-0.5 text-[10px] leading-tight"
+            className="shrink-0 border border-current px-0.5 text-[8px] leading-tight"
           >
             {item.tag.text}
           </span>
@@ -261,7 +270,7 @@ export function GroupedStartMenu({
         {item.badge !== undefined && item.badge > 0 && (
           <span
             aria-hidden
-            className="ml-auto bg-os-primary px-1 font-mono text-[10px] font-bold text-os-primary-fg group-hover:bg-os-primary-fg group-hover:text-os-primary"
+            className="ml-auto bg-os-primary px-1 font-mono text-[10px] font-bold text-os-bg group-hover:bg-os-bg group-hover:text-os-primary group-focus-visible:bg-os-bg group-focus-visible:text-os-primary"
           >
             {item.badge}
           </span>
@@ -293,6 +302,24 @@ export function GroupedStartMenu({
     );
   }
 
+  // The groups with something in them, in their columns: side by side on a
+  // desktop, one after another on a phone (and in that order for the arrow
+  // keys' walk).
+  const shown = groups.filter((g) => g.items.length > 0);
+  const byKey = new Map(shown.map((g) => [g.key, g] as const));
+  const placed = new Set<string>();
+  const stacks: StartMenuGroup[][] = [];
+  for (const column of columns ?? []) {
+    const stack = column.flatMap((key) => {
+      const g = byKey.get(key);
+      if (!g || placed.has(key)) return [];
+      placed.add(key);
+      return [g];
+    });
+    if (stack.length > 0) stacks.push(stack);
+  }
+  for (const g of shown) if (!placed.has(g.key)) stacks.push([g]);
+
   const menu = (
     <div
       ref={menuRef}
@@ -314,31 +341,36 @@ export function GroupedStartMenu({
           </div>
         )}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] md:divide-x md:divide-os-line">
-            {groups
-              .filter((g) => g.items.length > 0)
-              .map((g) => (
-                <div
-                  key={g.key}
-                  role="group"
-                  aria-label={g.label}
-                  className="py-1"
-                >
-                  <p
-                    aria-hidden
-                    className="px-3 pb-1 pt-1.5 font-mono text-[11px] uppercase tracking-[0.25em] text-os-muted"
+          <div className="grid grid-cols-1 md:grid-flow-col md:auto-cols-fr md:divide-x md:divide-os-line">
+            {stacks.map((stack) => (
+              <div
+                key={stack.map((g) => g.key).join(" ")}
+                className="contents md:block"
+              >
+                {stack.map((g) => (
+                  <div
+                    key={g.key}
+                    role="group"
+                    aria-label={g.label}
+                    className="py-1"
                   >
-                    {g.label}
-                  </p>
-                  <ul role="none">
-                    {g.items.map((item) => (
-                      <li key={item.key} role="none">
-                        {row(item)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+                    <p
+                      aria-hidden
+                      className="px-3 pb-1 pt-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-os-muted"
+                    >
+                      {g.label}
+                    </p>
+                    <ul role="none">
+                      {g.items.map((item) => (
+                        <li key={item.key} role="none">
+                          {row(item)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         </div>
         {footer.length > 0 && (
@@ -348,7 +380,7 @@ export function GroupedStartMenu({
           >
             {footer.map((item) => (
               <li key={item.key} role="none" className="flex-1">
-                {row(item, "py-2")}
+                {row(item, "md:py-2")}
               </li>
             ))}
           </ul>

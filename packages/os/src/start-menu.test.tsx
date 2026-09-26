@@ -263,3 +263,48 @@ describe("useMinuteClock", () => {
     vi.useRealTimers();
   });
 });
+
+describe("GroupedStartMenu's columns", () => {
+  it("stands the groups in the columns it is given, one under another, and any left over after", () => {
+    const anchor = { current: null };
+    const group = (key: string, label: string): StartMenuGroup => ({
+      key,
+      label,
+      items: [{ key: `${key}-row`, label: `${label} row`, onSelect: () => {} }],
+    });
+    render(
+      <GroupedStartMenu
+        groups={[
+          group("me", "Me"),
+          group("camp", "Camp"),
+          group("my-teams", "My teams"),
+          group("kitchen", "Kitchen"),
+          group("extra", "Extra"),
+          { key: "empty", label: "Empty", items: [] },
+        ]}
+        columns={[
+          ["me", "my-teams"],
+          ["camp", "kitchen"],
+        ]}
+        label="Start"
+        banner="Camp 404 OS"
+        anchor={anchor}
+        onClose={() => {}}
+      />,
+    );
+    const menu = screen.getByRole("menu", { name: "Start" });
+    // Reading order: Me, My teams, Camp, Kitchen, then the one in no column;
+    // an empty group is not drawn.
+    expect(
+      within(menu)
+        .getAllByRole("group")
+        .map((g) => g.getAttribute("aria-label")),
+    ).toEqual(["Me", "My teams", "Camp", "Kitchen", "Extra"]);
+    // Me and My teams share a column.
+    const me = within(menu).getByRole("group", { name: "Me" });
+    const teams = within(menu).getByRole("group", { name: "My teams" });
+    const camp = within(menu).getByRole("group", { name: "Camp" });
+    expect(me.parentElement).toBe(teams.parentElement);
+    expect(me.parentElement).not.toBe(camp.parentElement);
+  });
+});

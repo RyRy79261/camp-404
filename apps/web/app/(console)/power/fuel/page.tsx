@@ -353,7 +353,7 @@ export default async function PowerFuelPage() {
         <PowerKpiCards
           kpis={kpis}
           label="Fuel at a glance"
-          className="lg:grid-cols-3 xl:grid-cols-5"
+          className="page-lg:grid-cols-3 page-xl:grid-cols-5"
         />
 
         <FuelDayByDayCard

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect } from "react";
+import type { TerminalEffect } from "@/lib/terminal-commands";
 
 // A blocking questionnaire can start holding a member while their desktop is
 // already up: a captain sends one, and the member's next click is
@@ -15,7 +16,8 @@ import { createContext, useContext, useEffect } from "react";
 //
 // The same context lets a page inside a window ask the desktop to open
 // another program or to close its own window (the Terminal's `open` and
-// `exit`), so it goes the desktop's way rather than round it.
+// `exit`), so it goes the desktop's way rather than round it, and to show
+// one of its cats (the Terminal's `meow` and `sudo feed cat`).
 
 export interface DesktopSignals {
   /**
@@ -31,6 +33,11 @@ export interface DesktopSignals {
   open: (href: string) => void;
   /** Close the window the page is in, as its close button does. */
   closeLive: () => void;
+  /**
+   * A Terminal cat command's request (`meow`: paw prints on or off; `sudo
+   * feed cat`: Jinn peeks now). Decorative only.
+   */
+  effect: (effect: TerminalEffect) => void;
 }
 
 export const DesktopSignalsContext = createContext<DesktopSignals | null>(null);

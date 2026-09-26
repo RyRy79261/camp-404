@@ -371,12 +371,23 @@ routes (`/signup/required`, `/onboarding/questionnaire`) sit outside
   redirects in `apps/web/app/(console)/page.tsx` stay as they are. A signed-in
   member gets `HomeView` trimmed to a **Today gadget** (to-dos, tasks, coming
   up, lift, checklist). The "Your modules" grid becomes the desktop icons.
+  [CORRECTION 2026-09-26] `app/(console)/page.tsx` now renders only an
+  sr-only "Desktop" heading. Today is not the `/` page's body any more: the
+  console layout reads it (`getTodayModel`, `lib/today.ts`) for every console
+  page except a held one, and draws the gadget on every screen, over the
+  windows (the prototype's pop-out).
 - **The Today gadget is closed by default** (owner, 2026-09-25: "I don't like
   it being open the whole time"). A handle on the right edge of the desktop
   opens and closes it. The choice is remembered per browser in
   `localStorage` (`camp404.os.today-open`, a boolean and nothing else). The
   gadget is rendered on the server with the page, so opening it needs no
-  request; while closed it is not in the DOM. Setup-checklist items that block
+  request; while closed it is not in the DOM. [CORRECTION 2026-09-26] It is
+  rendered on the server with the layout (every console page but a held
+  one), and it does ask again when it opens: `TodayBody` calls
+  `refreshTodayAction` on mount, which runs each time the gadget opens,
+  because the layout is not drawn again as the member moves between windows.
+  It skips that read when its copy was built for this very page load (under
+  five seconds old: the gadget left open, drawn again on a hard load). Setup-checklist items that block
   nothing stay in it; a real block is still a gate route, never the gadget.
 - **Tray and pins are manifest fields, per mode.** `NotificationPanel` moves
   into the tray. `PinnedAnnouncements` becomes a strip above the window layer
@@ -945,7 +956,9 @@ phone it is a home screen, not a shrunk desktop:
 - [2026-09-26, PR C as built] Where the build settles what this section left
   open: Home asks the dirty guard, minimises every window and pushes `/` (so
   Back from the home screen returns to the program); Today's body is the `/`
-  page's, so Today from a program goes home first; there is no Start menu on
+  page's, so Today from a program goes home first [CORRECTION 2026-09-26: the
+  body is the layout's now, read for every console page; on a phone Today
+  still opens as a sheet over the home screen, so it goes home first]; there is no Start menu on
   a phone, so Report a problem and Log off sit at the foot of the home
   screen, and the system-health and "Application submitted" lines above its
   icons; the pinned strip folds into the bell's panel as a "Pinned (N)"
@@ -956,6 +969,13 @@ phone it is a home screen, not a shrunk desktop:
 - Wide pages (Tasks, Roster, Power, Meal plan, Payments, builder, recipe rail)
   move to `@container` queries in a later PR. Until then they open maximised on
   desktop.
+  [CORRECTION 2026-09-26] No window opens maximised any more (the owner's
+  approval of the prototype, 2026-09-26). Pages reflow to their window
+  (`page-*` variants), and a window opens where the prototype puts it: just
+  right of the icon columns (x 308), from the top, cascading 28 px, the wide
+  pages at the prototype's XL (1040 x 660) or L (880 x 600), each cut to the
+  room and leaving 52 px at the right edge for the Today handle
+  (`PAGE_SIZE`, `placeAt` in `components/os/desktop-shell.tsx`).
 - Native: the owner ruled a thin Capacitor WebView shell (2026-09-16), which
   means `server.url`. But `apps/mobile/capacitor.config.ts` still sets
   `webDir` (the static export, `../web/out`) and no `server.url`.
@@ -1380,7 +1400,13 @@ by text or by voice.
 
 Open questions for the owner. Each has a recommendation. Decisions 1, 3, 8
 and 14 are ruled (14 keeps one small open question). [CORRECTION 2026-09-26]
-Decisions 2, 7 and 11 are ruled too (owner, 2026-09-26).
+Decisions 2, 7 and 11 are ruled too (owner, 2026-09-26). [CORRECTION
+2026-09-26] Decisions 4, 5, 6, 9, 10 and 12 are ruled by the owner's approval
+of the prototype (2026-09-26, on PR C: "This doesn't have the same styling as
+we had in the prototype … its missing the soul of the design I approved"):
+the approved prototype (variant A, `apps/join/app/prototype/captain-desktop`)
+IS the design, and each of those decisions is taken as the prototype draws
+it. Each ruling is under its decision below.
 
 1. **Does the console leave the AfrikaBurn look (2026-09-17 ruling) for 404
    OS?** **Ruled (owner, 2026-09-25): yes, the Classic desktop (look A of the
@@ -1443,6 +1469,20 @@ Decisions 2, 7 and 11 are ruled too (owner, 2026-09-26).
    B: the console's `oklch(0.72 0.2 345)` with the same dark text, 7.2:1.
    *Recommend A* (the visual-language doc's default, sections 2.3 and 12):
    it keeps Join's colour and passes AA; B if you want more margin.
+   **Ruled (owner's approval of the prototype, 2026-09-26): A, Join's
+   magenta, with the text colours as the prototype draws them.** The kit's
+   filled buttons carry the dark `os-bg` (5.3:1). The chrome keeps the
+   prototype's near-white `os-primary-fg` on the focused title bar, an open
+   Start button and a hovered menu row, which measures 3.6:1
+   (`apps/web/lib/__tests__/os-skin-contrast.test.ts`), below AA for small
+   text. That is the prototype's look, recorded here rather than hidden; the
+   dark text is the one-line change if the owner wants AA there too.
+   [CORRECTION 2026-09-26] The prototype's kit does not fill its primary
+   button with magenta: it is Join's "Run APPLY.EXE" slab, near-white with
+   dark text and a magenta offset shadow, magenta under the pointer. The
+   kit's main button now follows it (`apps/web/app/globals.css`,
+   `packages/os/src/buttons.ts`); magenta fills the focused title bar, the
+   open Start button, a hovered menu row and a pressed button's hover.
 5. **Do gate screens wear the OS look?** The shared shells do not map onto the
    gates one to one:
    - `AuthShell` is the shell of the sign-in pages themselves
@@ -1460,10 +1500,23 @@ Decisions 2, 7 and 11 are ruled too (owner, 2026-09-26).
    `AuthShell` whole). B: leave them all as they are.
    *Recommend A,* in the skin PR, with the runner and wizard listed as their
    own items. Routes and gates do not change.
+   **Ruled (owner's approval of the prototype, 2026-09-26): A.** `GateScreen`
+   is one window on the CRT desktop (the prototype's blocking form), the
+   invite gate at `/signup/required` takes `AuthShell os`, the sign-in pages
+   are unchanged, and the blocking layer keeps its window with the scanlines
+   over the dimmed desktop. The onboarding wizard's own pages are still their
+   own item.
 6. **Should the boot sequence play?**
    A: once per browser session, short, skippable; never in tests or reduced
    motion. B: never.
    *Recommend A.*
+   **Ruled (owner's approval of the prototype, 2026-09-26): A.** The
+   prototype's BIOS log with the member's own lines ("Counting cats … 2
+   (Jinn awake, Prince asleep)"), about a second, any key or tap skips it. A
+   session cookie (`camp404_os_booted`, `lib/boot.ts`) that the layout reads
+   makes it once per browser session and lets the server draw it on the
+   first paint; never under `E2E_TEST_MODE`, never over a blocking form,
+   hidden by CSS and ended at once under reduced motion.
 7. **Window cap and document reuse.** **Ruled (owner, 2026-09-26): B, no
    cap.** Each document (`/meetings/<id>`) is its own window, and nothing
    closes a window but the member. Last-seen copies (decision 3) share one
@@ -1488,10 +1541,16 @@ Decisions 2, 7 and 11 are ruled too (owner, 2026-09-26).
    *Recommend B* on desktop: it keeps a little of the Join flavour where it
    costs nothing, and nothing a member must read depends on it. A if the
    owner finds even that geeky. Either way the title bar is not a heading.
+   **Ruled (owner's approval of the prototype, 2026-09-26): B,** as the
+   prototype draws it: the plain title, then the file name's extension
+   quiet after it ("Roster .db"), `aria-hidden`, hidden on a phone.
 10. **Body font: Montserrat or Inter?**
     A: Montserrat 500 (already loaded and tuned). B: Inter (matches Join and
     the landing page).
     *Recommend A* (visual-language doc, section 3).
+    **Ruled (owner's approval of the prototype, 2026-09-26): B, Inter** for
+    body text and Silkscreen for the chrome, as the prototype and Join set
+    them. Montserrat stays on the sign-in pages.
 11. **Driver programs.** You named driver status as an input.
     A: a My lift program (the member's own car or lift, from `getMyLift` in
     `lib/lifts.ts`), shown to a member with `intends_to_drive` or an assigned
@@ -1507,6 +1566,10 @@ Decisions 2, 7 and 11 are ruled too (owner, 2026-09-26).
     and restyle with `--os-*` tokens; do not invent a design". B: keep it as
     is.
     *Recommend A,* since decision 1 is ruled A.
+    **Ruled (owner's approval of the prototype, 2026-09-26): A.** AGENTS.md's
+    Design section now says the console's look is the 404 OS Classic desktop
+    (a dated `[CORRECTION 2026-09-26]`); the landing page keeps its own glitch
+    design.
 13. **Does a Finance lead get anything money-related?** Payments
     (`/captains/payments`) is captain-only today.
     A: no change in this work. B: a Finance program for the Finance lead now.

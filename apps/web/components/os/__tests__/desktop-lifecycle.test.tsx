@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
@@ -397,26 +398,65 @@ describe("keyboard and screen readers", () => {
   });
 });
 
-describe("Today docked open on the desktop", () => {
-  afterEach(() => window.localStorage.clear());
-  const grid = () => document.querySelector<HTMLElement>("[data-os-icons]")!;
+describe("the desktop's loops at rest", () => {
+  it("run while the desktop shows, and hold still under a maximised window", () => {
+    const view = render(<Desktop {...props()} />);
+    const beam = () => document.querySelector("[data-os-scanbeam]")!;
+    const mark = () =>
+      document.querySelector("#os-desktop [data-os-wordmark]")!;
+    expect(beam().closest("[data-os-paused]")).toBeNull();
+    expect(mark().closest("[data-os-paused]")).toBeNull();
+    const title =
+      frame("tasks")!.querySelector<HTMLElement>("[data-titlebar]")!;
+    fireEvent.doubleClick(title);
+    view.rerender(<Desktop {...props()} />);
+    expect(beam().closest("[data-os-paused]")).not.toBeNull();
+    expect(mark().closest("[data-os-paused]")).not.toBeNull();
+  });
+});
 
-  it("stops the icon grid at its left edge, so no icon sits under it", () => {
-    window.localStorage.setItem("camp404.os.today-open", "true");
-    nav.pathname = "/";
-    render(<Desktop {...props()} />);
-    expect(grid().className).toContain("right-[22.75rem]");
+describe("Today, the pop-out on every screen", () => {
+  afterEach(() => window.localStorage.clear());
+  const today = { count: 2, body: <p>Your day</p> };
+  const handle = () =>
+    screen.getByRole("button", { name: /^(Show|Hide) Today/ });
+
+  it("is shut on a first visit, and opens over a program's window", () => {
+    nav.pathname = "/tasks";
+    render(<Desktop {...props({ today })} />);
+    expect(handle().getAttribute("aria-expanded")).toBe("false");
+    expect(handle().getAttribute("aria-label")).toBe("Show Today, 2 due");
+    expect(screen.queryByRole("complementary", { name: "Today" })).toBeNull();
+    fireEvent.click(handle());
+    const panel = screen.getByRole("complementary", { name: "Today" });
+    expect(within(panel).getByText("Your day")).toBeTruthy();
+    expect(window.localStorage.getItem("camp404.os.today-open")).toBe("true");
+    // Over the window layer (z-20), under the taskbar and Start menu.
+    const gadget = document.querySelector<HTMLElement>("[data-os-today]")!;
+    expect(gadget.className).toContain("z-30");
+    // The live window is still there under it.
+    expect(document.querySelector('[data-window="tasks"]')).not.toBeNull();
   });
 
-  it("gives the grid the whole width while Today is closed, or in a program", () => {
-    window.localStorage.setItem("camp404.os.today-open", "false");
-    nav.pathname = "/";
-    const view = render(<Desktop {...props()} />);
-    expect(grid().className).toContain("right-0");
+  it("stays open from one screen to the next, as the member left it", () => {
     window.localStorage.setItem("camp404.os.today-open", "true");
+    nav.pathname = "/";
+    const view = render(<Desktop {...props({ today })} />);
+    expect(screen.getByRole("complementary", { name: "Today" })).toBeTruthy();
     nav.pathname = "/tasks";
-    view.rerender(<Desktop {...props()} />);
-    expect(grid().className).toContain("right-0");
+    view.rerender(<Desktop {...props({ today })} />);
+    expect(screen.getByRole("complementary", { name: "Today" })).toBeTruthy();
+    // It covers the icons rather than pushing them aside.
+    expect(
+      document.querySelector<HTMLElement>("[data-os-icons]")!.className,
+    ).toContain("inset-0");
+  });
+
+  it("is not there for a member a blocking form holds", () => {
+    window.localStorage.setItem("camp404.os.today-open", "true");
+    nav.pathname = "/questionnaires/act-1";
+    render(<Desktop {...props({ mode: "held", today })} />);
+    expect(document.querySelector("[data-os-today]")).toBeNull();
   });
 });
 
@@ -429,6 +469,39 @@ describe("held by a blocking questionnaire", () => {
       </Desktop>,
     );
     expect(screen.getByRole("dialog", { name: "Tent check" })).toBeTruthy();
+  });
+
+  it("keeps the header and the taskbar drawn behind the form, asleep with the desktop", () => {
+    nav.pathname = "/questionnaires/act-1";
+    render(
+      <Desktop {...props({ mode: "held" })}>
+        <h1>Tent check</h1>
+      </Desktop>,
+    );
+    const desk = document.getElementById("os-desktop")!;
+    expect(desk.hasAttribute("inert")).toBe(true);
+    // The prototype's locked desktop: "CAMP 404" and the account chip on
+    // top, the bar with its Start slab and clock along the bottom.
+    const header = desk.querySelector("header")!;
+    expect(header.querySelector('[data-label="Camp 404"]')).not.toBeNull();
+    const bar = desk.querySelector<HTMLElement>("[data-os-held-taskbar]")!;
+    expect(bar.getAttribute("aria-hidden")).toBe("true");
+    expect(bar.textContent).toContain("Start");
+    // A picture: nothing on the bar takes a press.
+    expect(bar.querySelector("button, a")).toBeNull();
+  });
+
+  it("stills the desktop's surface and wordmark while the form covers them", () => {
+    nav.pathname = "/questionnaires/act-1";
+    render(
+      <Desktop {...props({ mode: "held" })}>
+        <h1>Tent check</h1>
+      </Desktop>,
+    );
+    const beam = document.querySelector("[data-os-scanbeam]")!;
+    expect(beam.closest("[data-os-paused]")).not.toBeNull();
+    const mark = document.querySelector("#os-desktop [data-os-wordmark]")!;
+    expect(mark.closest("[data-os-paused]")).not.toBeNull();
   });
 
   it("draws the inbox bare, with no layer and no desktop", () => {

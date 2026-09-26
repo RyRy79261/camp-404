@@ -5,6 +5,13 @@ import { defineConfig, devices } from "@playwright/test";
 // Playwright doesn't try to spin up its own dev server.
 const skipWebServer = process.env.PLAYWRIGHT_SKIP_WEB_SERVER === "1";
 
+// E2E_SERVE_BUILD=1 serves a production build (`next start`) instead of
+// `next dev`; run `next build` with the same env first. CI does this: under
+// `next dev`, Turbopack's native memory grew to 14-17 GB over one shard (the
+// JS heap stayed near 1 GB) and the 16 GB runner was killed. `next start` has
+// no compiler in the server process. Locally the default stays `next dev`.
+const serveBuild = process.env.E2E_SERVE_BUILD === "1";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   // Playwright's default testMatch claims `*.test.ts` as well as `*.spec.ts`,
@@ -58,9 +65,11 @@ export default defineConfig({
   webServer: skipWebServer
     ? undefined
     : {
-        // `next dev` is fine for the breadth of unauth tests we run here.
-        // Switch to `next start` against a build if HMR ever interferes.
-        command: "pnpm next dev --port 3000",
+        // `next start` needs CI set as well: lib/env.ts refuses
+        // E2E_TEST_MODE on a production server outside CI.
+        command: serveBuild
+          ? "pnpm next start --port 3000"
+          : "pnpm next dev --port 3000",
         url: "http://localhost:3000/api/health",
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

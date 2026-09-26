@@ -43,7 +43,7 @@ function requiredForm(page: Page) {
   return page.getByRole("dialog", { name: CHECK.title });
 }
 
-/** The pinned strip above the taskbar. */
+/** The pinned announcements, a line in the desktop header. */
 function pinned(page: Page) {
   return page.getByRole("region", { name: "Pinned announcements" });
 }

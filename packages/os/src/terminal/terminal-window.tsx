@@ -29,6 +29,8 @@ type Props<K extends string, C> = {
   welcome: readonly TermLine[];
   openApp: (id: K) => void;
   close: () => void;
+  /** A command's `effect` (the app's own), handed on with its output. */
+  onEffect?: (effect: string) => void;
   prompt?: string;
 };
 
@@ -38,6 +40,7 @@ export function TerminalWindow<K extends string, C>({
   welcome,
   openApp,
   close,
+  onEffect,
   prompt = PROMPT,
 }: Props<K, C>) {
   const inputId = useId();
@@ -62,6 +65,7 @@ export function TerminalWindow<K extends string, C>({
         ? []
         : [...prev, { kind: "in", text: `${prompt} ${text}` }, ...result.lines],
     );
+    if (result.effect && onEffect) onEffect(result.effect);
     if (result.open) {
       const id = result.open;
       // Let the output render first, then raise the requested window.

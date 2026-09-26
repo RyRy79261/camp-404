@@ -1,111 +1,93 @@
-import {
-  Activity,
-  Banknote,
-  Bell,
-  BookOpen,
-  CalendarDays,
-  CalendarPlus,
-  CarFront,
-  ChefHat,
-  ClipboardCheck,
-  ClipboardList,
-  FileText,
-  Folder,
-  Gamepad2,
-  FolderHeart,
-  Globe,
-  KanbanSquare,
-  LayoutDashboard,
-  LayoutGrid,
-  Megaphone,
-  Network,
-  NotebookPen,
-  Plug,
-  ScrollText,
-  Settings,
-  SquareTerminal,
-  UserPlus,
-  UserRound,
-  Users,
-  UtensilsCrossed,
-  type LucideIcon,
-} from "lucide-react";
-import { TEAM_ICONS } from "@/lib/nav-icons";
+import type { ReactNode } from "react";
+import { LineIcon, type IconKey } from "./line-icons";
+import { PixelIcon, teamPixelIcon } from "./pixel-icons";
 
 // A picture for each program, by the icon key the manifest sends (never by
-// anything that says who may open it). PR C draws them with the console's
-// own lucide set on its current tokens; the 404 OS drawings are PR D.
+// anything that says who may open it): the approved prototype's line art for
+// programs and folders, Join's pixel art for a team's own page. A drawing is
+// a function of the classes its place asks for (size, colour, glow), the
+// shape @camp404/os's icon components take.
 
-const PROGRAM_ICONS: Record<string, LucideIcon> = {
-  inbox: Bell,
-  "my-forms": FileText,
-  account: UserRound,
-  invites: UserPlus,
-  "my-lift": CarFront,
-  tasks: KanbanSquare,
-  calendar: CalendarDays,
-  roster: Users,
-  meetings: NotebookPen,
-  "family-tree": Network,
-  power: Plug,
-  recipes: BookOpen,
-  "meal-plan": UtensilsCrossed,
-  "recipe-review": ClipboardCheck,
-  questionnaires: ClipboardList,
-  announcements: Megaphone,
-  announcement: Megaphone,
-  "new-event": CalendarPlus,
-  overview: LayoutDashboard,
-  payments: Banknote,
-  "camp-settings": Settings,
-  "join-site": Globe,
-  audit: ScrollText,
-  system: Activity,
-  form: FileText,
-  "form-answers": FileText,
-  questionnaire: FileText,
-  meeting: NotebookPen,
-  "new-meeting": NotebookPen,
-  "edit-meeting": NotebookPen,
-  recipe: BookOpen,
-  "new-recipe": BookOpen,
-  "edit-recipe": BookOpen,
-  "recipe-version": BookOpen,
-  "recipe-source": BookOpen,
-  "edit-questionnaire": ClipboardList,
-  "preview-questionnaire": ClipboardList,
-  "send-questionnaire": ClipboardList,
-  results: ClipboardList,
-  "respondent-answers": ClipboardList,
-  team: Users,
-  terminal: SquareTerminal,
-  inkblot: Gamepad2,
-  folder: Folder,
-  "member-folder": FolderHeart,
-  kitchen: ChefHat,
+export type Drawing = (className: string) => ReactNode;
+
+/** The manifest's icon keys (and child program ids), to the line drawings. */
+const LINE: Readonly<Record<string, IconKey>> = {
+  inbox: "inbox",
+  "my-forms": "myforms",
+  account: "account",
+  invites: "keygen",
+  "my-lift": "lift",
+  tasks: "tasks",
+  calendar: "calendar",
+  roster: "roster",
+  meetings: "minutes",
+  meeting: "minutes",
+  "new-meeting": "minutes",
+  "edit-meeting": "minutes",
+  "family-tree": "lineage",
+  power: "power",
+  recipes: "cookbook",
+  recipe: "cookbook",
+  "new-recipe": "cookbook",
+  "edit-recipe": "cookbook",
+  "recipe-version": "cookbook",
+  "recipe-source": "cookbook",
+  "meal-plan": "mealplan",
+  "recipe-review": "review",
+  questionnaires: "forms",
+  "edit-questionnaire": "forms",
+  "preview-questionnaire": "forms",
+  "send-questionnaire": "forms",
+  results: "forms",
+  "respondent-answers": "forms",
+  announcements: "broadcast",
+  announcement: "broadcast",
+  "new-event": "newevent",
+  overview: "campstat",
+  payments: "ledger",
+  "camp-settings": "settings",
+  "join-site": "joinsite",
+  audit: "audit",
+  system: "sysmon",
+  form: "myforms",
+  "form-answers": "myforms",
+  questionnaire: "myforms",
+  terminal: "terminal",
+  inkblot: "cat",
+  folder: "folder",
+  "member-folder": "folder",
+  kitchen: "folder",
+  team: "folder",
 };
 
-/** The picture for a manifest program: a team's own, else its icon key's. */
-export function programIcon(program: { id: string; icon: string }): LucideIcon {
+function line(key: IconKey): Drawing {
+  return function LineDrawing(className: string) {
+    return <LineIcon name={key} className={className} />;
+  };
+}
+
+/** A team's own drawing: Join's pixel art. */
+export function teamIcon(team: string): Drawing {
+  const icon = teamPixelIcon(team);
+  return function TeamDrawing(className: string) {
+    return <PixelIcon icon={icon} className={className} />;
+  };
+}
+
+/** The picture for a manifest program: a team page's own, else its icon key's. */
+export function programIcon(program: { id: string; icon: string }): Drawing {
   if (program.id.startsWith("team:")) {
-    return TEAM_ICONS[program.id.slice("team:".length)] ?? Users;
+    return teamIcon(program.id.slice("team:".length));
   }
-  return PROGRAM_ICONS[program.icon] ?? LayoutGrid;
+  return iconFor(program.icon);
 }
 
 /** The picture for an icon key alone (a folder, or a child program by its id). */
-export function iconFor(key: string): LucideIcon {
-  return PROGRAM_ICONS[key] ?? LayoutGrid;
+export function iconFor(key: string): Drawing {
+  return line(LINE[key] ?? "folder");
 }
 
-/** A team folder's picture: the team's own. */
-export function teamIcon(team: string): LucideIcon {
-  return TEAM_ICONS[team] ?? Users;
-}
-
-/** Draw a lucide picture the way the OS icon components ask: with classes. */
-export function drawIcon(Icon: LucideIcon) {
-  return function DrawnIcon(className: string) {
-    return <Icon aria-hidden strokeWidth={1.5} className={className} />;
-  };
+/** A folder, shut or open (its window is on the desktop). */
+export function folderIcon(open = false): Drawing {
+  return line(open ? "folder-open" : "folder");
 }

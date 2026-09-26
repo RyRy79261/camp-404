@@ -121,12 +121,16 @@ export function BlockingLayer({
       className="fixed inset-0 z-[108] grid bg-os-bg/85 backdrop-blur-[2px] md:place-items-center md:p-6"
     >
       <div
+        aria-hidden
+        className="os-scanlines pointer-events-none absolute inset-0"
+      />
+      <div
         ref={frame}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy ?? headingId ?? titleId}
         tabIndex={-1}
-        className="relative flex h-dvh w-full select-text flex-col border-os-primary bg-os-panel outline-none md:h-auto md:max-h-[calc(100dvh-3rem)] md:max-w-lg md:border md:shadow-[8px_8px_0_0_rgb(0_0_0/0.45)]"
+        className="relative flex h-dvh w-full select-text flex-col border-os-primary bg-os-panel outline-none md:h-auto md:max-h-[calc(100dvh-3rem)] md:max-w-lg md:border md:shadow-[6px_6px_0_0_rgb(0_0_0/0.45)]"
       >
         <div className="flex h-9 shrink-0 select-none items-center justify-between gap-2 bg-os-primary px-3 text-os-primary-fg">
           <span
@@ -141,7 +145,11 @@ export function BlockingLayer({
             </span>
           )}
         </div>
-        <div className="@container min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {/* The page container (the kit's page-* variants), as a window's body. */}
+        <div
+          data-page-container
+          className="@container/page min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        >
           <InBlockingLayer.Provider value={!!signOut}>
             {children}
           </InBlockingLayer.Provider>

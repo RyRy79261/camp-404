@@ -80,9 +80,9 @@ test.describe("a member's own home", () => {
 
     const today = await openToday(page);
     await expect(
-      today.getByRole("heading", { level: 2, name: "Hi Nova" }),
+      today.getByRole("heading", { level: 2, name: /^Today · / }),
     ).toBeVisible();
-    await expect(today.getByText("You’re all caught up.")).toBeVisible();
+    await expect(today.getByText("Nothing waiting on you.")).toBeVisible();
     // The e2e store stands in for a connected calendar that starts empty.
     // The "not connected" wording is covered by unit tests.
     await expect(today.getByText("Nothing on the calendar yet.")).toBeVisible();
@@ -126,7 +126,7 @@ test.describe("a member's own home", () => {
     await page.goto("/");
     const driverToday = await openToday(page);
     await expect(
-      driverToday.getByRole("heading", { level: 2, name: "Hi Ada" }),
+      driverToday.getByRole("heading", { level: 2, name: /^Today · / }),
     ).toBeVisible();
     await expect(driverToday.getByText("You're driving")).toBeVisible();
     await expect(driverToday.getByText("Toyota Hilux")).toBeVisible();
@@ -137,7 +137,10 @@ test.describe("a member's own home", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "My lift" }),
     ).toBeVisible();
-    await expect(page.getByText("1 of 3 seats taken")).toBeVisible();
+    // In the program's window: Today, left open, shows the same line.
+    await expect(
+      page.locator("#os-window-content").getByText("1 of 3 seats taken"),
+    ).toBeVisible();
 
     await login(page, {
       id: "home-rider",
@@ -147,7 +150,7 @@ test.describe("a member's own home", () => {
     await page.goto("/");
     const riderToday = await openToday(page);
     await expect(
-      riderToday.getByRole("heading", { level: 2, name: "Hi Ren" }),
+      riderToday.getByRole("heading", { level: 2, name: /^Today · / }),
     ).toBeVisible();
     await expect(riderToday.getByText("Riding with Ada Driver")).toBeVisible();
   });
@@ -223,15 +226,13 @@ test.describe("a member's own home", () => {
     await page.goto("/");
     const today = await openToday(page);
     await expect(
-      today.getByRole("heading", { level: 2, name: "Hi Tessa" }),
+      today.getByRole("heading", { level: 2, name: /^Today · / }),
     ).toBeVisible();
-    const list = today.getByRole("list", { name: "Your tasks" });
+    const list = today.getByRole("list", { name: "My tasks" });
     const row = list.getByRole("link", { name: /Pack the shade cloth/ });
     await expect(row).toBeVisible();
     await expect(row.getByText("Due in 10 days")).toBeVisible();
-    await expect(
-      today.getByRole("link", { name: "See all tasks" }),
-    ).toBeVisible();
+    await expect(today.getByRole("link", { name: "All tasks" })).toBeVisible();
 
     await row.click();
     await expect(page).toHaveURL("/tasks");
@@ -254,15 +255,15 @@ test.describe("a member's own home", () => {
     await setRank(request, "home-idle", "member");
 
     await page.goto("/");
-    const programs = await openConsoleNav(page, "Camp");
+    const programs = await openConsoleNav(page, "Me");
     await expect(navEntry(programs, "Tasks")).toHaveAccessibleName("Tasks");
     await closeConsoleNav(page);
     const today = await openToday(page);
     await expect(
-      today.getByRole("heading", { level: 2, name: "Hi Idle" }),
+      today.getByRole("heading", { level: 2, name: /^Today · / }),
     ).toBeVisible();
-    await expect(today.getByRole("list", { name: "Your tasks" })).toHaveCount(
-      0,
-    );
+    // The section is still drawn, as the prototype draws it, with its line.
+    await expect(today.getByText("No open tasks. Nice.")).toBeVisible();
+    await expect(today.getByRole("list", { name: "My tasks" })).toHaveCount(0);
   });
 });

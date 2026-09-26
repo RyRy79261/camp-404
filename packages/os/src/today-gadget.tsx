@@ -14,8 +14,10 @@ import {
 // it, and the choice is remembered per browser. While closed its body is not
 // in the DOM. What it shows is the app's.
 //
-// Band 10 (visual-language doc 4.9): above the wallpaper, below every window,
-// so it never covers the focused one.
+// [CORRECTION 2026-09-26] It sits OVER the windows now, as the approved
+// prototype draws it (owner, 2026-09-26: "this doesnt look like the pop out
+// gadget from the prototype"): the app gives it a band above the window layer
+// and below the taskbar and Start menu.
 
 /** A remembered yes/no, read and written somewhere the app picks. */
 export interface BooleanStore {
@@ -100,16 +102,47 @@ type Props = {
   label?: string;
   /** Where the frame sits; the app places it over the desktop's right edge. */
   className?: string;
+  /**
+   * A full-screen window is up: the handle drops below its title bar, so it
+   * never sits on that window's buttons. Otherwise it sits at the top of the
+   * panel, where the prototype draws it.
+   */
+  clearTitleBar?: boolean;
   /** The body, drawn only while open. */
   children: ReactNode;
 };
 
+/** The handle's arrow: points the way the panel will move. */
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="square"
+      strokeLinejoin="miter"
+      aria-hidden
+      className="size-3.5 shrink-0"
+    >
+      <path d={open ? "M9 5l7 7-7 7" : "M15 5l-7 7 7 7"} />
+    </svg>
+  );
+}
+
+/**
+ * The Today gadget (the prototype's pop-out, owner's approval 2026-09-26): a
+ * tab on the desktop's right edge with the panel attached to it. Closed, only
+ * the tab shows; open, the tab and the panel slide in together, over the
+ * windows. Closing is instant, and a closed panel is not in the DOM.
+ */
 export function TodayGadget({
   open,
   onOpenChange,
   count = 0,
   label = "Today",
   className = "absolute inset-y-0 right-0",
+  clearTitleBar = false,
   children,
 }: Props) {
   const panelId = `${useId()}-today`;
@@ -133,7 +166,11 @@ export function TodayGadget({
   return (
     <div
       data-os-today
-      className={`z-10 flex select-none items-stretch ${className}`}
+      data-open={open || undefined}
+      // The frame runs the height of the desktop's edge but takes no
+      // pointer itself, so a full-screen window's buttons under it still
+      // answer; only the handle and the open panel do.
+      className={`pointer-events-none flex select-none items-start ${open ? "os-slide-in" : ""} ${className}`}
     >
       <button
         ref={handle}
@@ -143,28 +180,31 @@ export function TodayGadget({
         aria-controls={panelId}
         aria-label={name}
         title={name}
-        className="group flex w-11 justify-end self-center outline-none"
+        // 44 px to aim at; the tab drawn inside is 28 px, flush with the
+        // panel (or the screen's edge).
+        className={`group pointer-events-auto flex w-11 shrink-0 justify-end outline-none ${
+          clearTitleBar ? "mt-12" : "mt-2"
+        }`}
       >
         <span
-          className={`flex h-24 w-7 flex-col items-center justify-center gap-2 border border-r-0 border-l-2 font-mono text-[10px] uppercase tracking-[0.3em] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-os-primary ${
+          className={`flex w-7 flex-col items-center gap-2 border border-r-0 py-3 font-pixel text-[10px] uppercase tracking-[0.3em] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-os-primary ${
             open
-              ? "border-os-primary bg-os-primary text-os-primary-fg"
-              : "border-os-line border-l-os-primary bg-os-chrome text-os-fg group-hover:text-os-primary"
+              ? "border-os-primary bg-os-primary text-os-bg"
+              : "border-os-line bg-os-chrome text-os-fg group-hover:border-os-primary group-hover:text-os-primary"
           }`}
         >
+          <Chevron open={open} />
           <span aria-hidden className="[writing-mode:vertical-rl]">
             {label}
           </span>
           {count > 0 && (
             <span
               aria-hidden
-              className={`grid h-4 min-w-4 place-items-center px-0.5 font-bold tracking-normal ${
-                open
-                  ? "bg-os-primary-fg text-os-primary"
-                  : "bg-os-primary text-os-primary-fg"
+              className={`grid h-4 min-w-4 place-items-center px-0.5 font-mono text-[10px] font-bold tracking-normal ${
+                open ? "bg-os-bg text-os-primary" : "bg-os-primary text-os-bg"
               }`}
             >
-              {count}
+              {count > 99 ? "99+" : count}
             </span>
           )}
         </span>
@@ -175,7 +215,7 @@ export function TodayGadget({
           id={panelId}
           aria-label={label}
           onKeyDown={onKeyDown}
-          className="os-window-in h-full w-80 select-text overflow-y-auto overscroll-contain border-l border-os-line bg-os-panel"
+          className="pointer-events-auto max-h-full w-80 max-w-[calc(100vw-3rem)] select-text overflow-y-auto overscroll-contain border border-r-0 border-os-primary bg-os-bg shadow-[6px_6px_0_0_rgb(0_0_0/0.45)]"
         >
           {children}
         </aside>

@@ -136,7 +136,7 @@ test.describe("authenticated flow (test-mode)", () => {
     // The restricted desktop: its Today gadget says they are waiting.
     const today = await openToday(page);
     await expect(today.getByText("Waiting for a captain")).toBeVisible();
-    await expect(today.getByRole("list", { name: "To do" })).toHaveCount(0);
+    await expect(today.getByRole("list", { name: "Needs you" })).toHaveCount(0);
     await expect(today.getByText("Coming up")).toHaveCount(0);
 
     // Every other member page still holds at the approval screen.

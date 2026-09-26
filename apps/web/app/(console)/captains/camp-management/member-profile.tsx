@@ -379,9 +379,9 @@ export function MemberProfile({
       {detail.state === "loading" && (
         <SkeletonRegion
           label="Loading profile…"
-          className="grid items-start gap-6 lg:grid-cols-3"
+          className="grid items-start gap-6 page-lg:grid-cols-3"
         >
-          <div className="flex flex-col gap-6 lg:col-span-2">
+          <div className="flex flex-col gap-6 page-lg:col-span-2">
             {[6, 3].map((lines) => (
               <div
                 key={lines}
@@ -408,9 +408,9 @@ export function MemberProfile({
       )}
 
       {member && (
-        <div className="grid items-start gap-6 lg:grid-cols-3">
+        <div className="grid items-start gap-6 page-lg:grid-cols-3">
           {/* The member's record. */}
-          <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+          <div className="flex min-w-0 flex-col gap-6 page-lg:col-span-2">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Overview</CardTitle>
@@ -463,7 +463,7 @@ export function MemberProfile({
           </div>
 
           {/* The action rail — decisions, rank and teams. */}
-          <aside className="flex flex-col gap-6 lg:sticky lg:top-24">
+          <aside className="flex flex-col gap-6 page-lg:sticky page-lg:top-24">
             <Card className="border-accent/40">
               <CardHeader>
                 <CardTitle className="text-base">Decision</CardTitle>

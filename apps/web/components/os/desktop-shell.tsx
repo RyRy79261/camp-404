@@ -16,15 +16,20 @@ import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BlockingLayer,
+  CASCADE_STEP,
+  MIN_SIZE,
   ContextMenu,
   DesktopIcons,
   FolderNameDialog,
   FolderWindow,
+  GlitchWordmark,
   INITIAL_WM,
   LastSeenStore,
   OsWindowFrame,
   PHONE_QUERY,
+  Surface,
   TODAY_OPEN_KEY,
+  TodayGadget,
   WindowDirtyProvider,
   addFolder,
   addShortcut,
@@ -54,6 +59,7 @@ import {
   type WmAction,
   type WmState,
 } from "@camp404/os";
+import { desktopFolderKey } from "@camp404/types";
 import { toast } from "@camp404/ui/components/toast";
 import { saveDesktopLayoutAction } from "@/app/(console)/desktop-layout-actions";
 import { SignOutLink } from "@/components/auth/sign-out-link";
@@ -94,10 +100,20 @@ import {
   PhoneSheet,
   PhoneSwitcher,
   type PhoneGroup,
+  PhoneClock,
 } from "./phone-chrome";
 import { PinnedList, PinnedStrip, type PinnedItem } from "./pinned-strip";
-import { drawIcon, iconFor, programIcon, teamIcon } from "./program-icons";
-import { PhoneTodayContext, type PhoneToday } from "./today-gadget";
+import { folderIcon, iconFor, programIcon } from "./program-icons";
+import { ConsoleBoot } from "./console-boot";
+import {
+  ClockPrince,
+  DesktopSecrets,
+  TeamsFolderArt,
+  WindowPeek,
+} from "./desktop-cats";
+import { INKBLOT_HREF, type TerminalEffect } from "@/lib/terminal-commands";
+import type { BootLine } from "@/lib/boot";
+import { TRAY_BELL } from "./desktop-tray";
 import {
   forgetOtherMembers,
   forgetWindowDrafts,
@@ -120,30 +136,59 @@ import {
 // an icon is never the security boundary, every page and action keeps its
 // gate.
 
-/** A window's size when it opens, before the member resizes it. */
-const DEFAULT_SIZE = { w: 760, h: 560 };
+/**
+ * A window's size when it opens, before the member resizes it: the
+ * prototype's sizes (_proto/programs.ts, its S, M, L and XL), which the owner
+ * approved with the prototype on 2026-09-26. M is the default.
+ */
+const DEFAULT_SIZE = { w: 720, h: 520 };
+/** A member's own folder. */
 const FOLDER_SIZE = { w: 520, h: 340 };
 /**
- * Pages drawn for a wide screen, which open maximised on the desktop until
- * windows answer to their own width (PR E; design doc, section 5).
+ * The camp's folders, each at the prototype's size: Teams opens tall, every
+ * team's icon and the art piece pinned under them; Kitchen is one row.
  */
-const WIDE: ReadonlySet<ProgramId> = new Set<ProgramId>([
-  "tasks",
-  "roster",
-  "power",
-  "meal-plan",
-  "payments",
-  "edit-questionnaire",
-  "recipe",
-  "edit-recipe",
-  "recipe-review",
-  "results",
-  "respondent-answers",
-  "overview",
-  "audit",
-  "family-tree",
-  "calendar",
-]);
+const TEAMS_FOLDER_KEY = desktopFolderKey("teams");
+const CAMP_FOLDER_SIZE: Record<string, { w: number; h: number }> = {
+  [TEAMS_FOLDER_KEY]: { w: 620, h: 600 },
+  [desktopFolderKey("kitchen")]: { w: 440, h: 180 },
+  [desktopFolderKey("captains")]: { w: 560, h: 340 },
+};
+function folderSize(key: string): { w: number; h: number } {
+  return CAMP_FOLDER_SIZE[key] ?? FOLDER_SIZE;
+}
+/**
+ * Pages drawn for a wide screen open larger, as the prototype sizes them
+ * (its XL and L): still a window right of the icons, never full screen
+ * (owner's approval of the prototype, 2026-09-26). Each is cut to the room
+ * the screen has, and its page reflows to the window (the page-* variants).
+ */
+const XL_SIZE = { w: 1040, h: 660 };
+const L_SIZE = { w: 880, h: 600 };
+const S_SIZE = { w: 520, h: 440 };
+const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
+  tasks: XL_SIZE,
+  roster: XL_SIZE,
+  payments: XL_SIZE,
+  "edit-questionnaire": XL_SIZE,
+  "edit-recipe": XL_SIZE,
+  results: XL_SIZE,
+  "respondent-answers": XL_SIZE,
+  calendar: L_SIZE,
+  power: L_SIZE,
+  recipes: L_SIZE,
+  recipe: L_SIZE,
+  "meal-plan": L_SIZE,
+  "recipe-review": L_SIZE,
+  overview: L_SIZE,
+  questionnaires: L_SIZE,
+  announcements: L_SIZE,
+  "join-site": L_SIZE,
+  audit: L_SIZE,
+  "new-event": S_SIZE,
+  terminal: { w: 640, h: 420 },
+  inkblot: { w: 700, h: 440 },
+};
 /** A tab back after this long refreshes the desktop (an event, not a timer). */
 const STALE_AFTER_MS = 5 * 60_000;
 /** How long the desktop waits after the last icon move before it saves. */
@@ -161,7 +206,7 @@ type Action =
       id: string;
       url: string;
       program: string;
-      maximize: boolean;
+      size: { w: number; h: number };
       viewport: Viewport;
     }
   | {
@@ -170,23 +215,110 @@ type Action =
       saved: OsWindow<string>[];
       liveKey: string | null;
       viewport: Viewport;
+    }
+  | {
+      /**
+       * "Tidy windows" (the Start menu): every window on the desktop back to
+       * its opening size, cascaded from the top left in its stacking order,
+       * none maximised. Minimised windows stay down; the order, and so the
+       * live window on top, does not change.
+       */
+      type: "tidy";
+      viewport: Viewport;
     };
 
+/**
+ * Where windows open, and where "Tidy windows" starts its cascade: just
+ * right of the icons' default columns (the prototype's), so the icons stay
+ * in sight.
+ */
+const ICONS_EDGE = 308;
+/**
+ * What a new window leaves free at the right edge: the Today handle's 44 px
+ * to aim at and a gap, so the handle never sits on a window's close button.
+ */
+const TODAY_ROOM = 52;
+
+/**
+ * The prototype's spot for the k-th window: right of the icons, cascading
+ * from the top, cut to the room left (a screen with no room right of the
+ * icons starts further left rather than push a window off it).
+ */
+function placeAt(
+  k: number,
+  size: { w: number; h: number },
+  vp: Viewport,
+): Pick<OsWindow<string>, "x" | "y" | "w" | "h"> {
+  const room = vp.width - ICONS_EDGE - 36;
+  const x0 =
+    room >= Math.min(size.w, 640)
+      ? ICONS_EDGE
+      : Math.max(8, Math.min(vp.width - size.w - 40, ICONS_EDGE));
+  const step = k % 6;
+  const x = x0 + step * CASCADE_STEP;
+  const y = 12 + step * CASCADE_STEP;
+  return {
+    x,
+    y,
+    w: Math.max(MIN_SIZE.w, Math.min(size.w, vp.width - x - TODAY_ROOM)),
+    h: Math.max(MIN_SIZE.h, Math.min(size.h, vp.height - y - 12)),
+  };
+}
+
+function tidy(state: WmState<string>, vp: Viewport): WmState<string> {
+  const shown = state.windows
+    .filter((w) => !w.minimized)
+    .sort((a, b) => a.z - b.z);
+  const place = new Map<string, OsWindow<string>>();
+  shown.forEach((w, i) => {
+    const size = w.lastUrl ? pageSize(w.program) : folderSize(w.id);
+    place.set(w.id, { ...w, ...placeAt(i, size, vp), maximized: false });
+  });
+  if (place.size === 0) return state;
+  return {
+    ...state,
+    windows: state.windows.map((w) => place.get(w.id) ?? w),
+  };
+}
+
+/** A page's opening size: its own, else the default. */
+function pageSize(program: string | undefined): { w: number; h: number } {
+  return (program && PAGE_SIZE[program as ProgramId]) || DEFAULT_SIZE;
+}
+
+/** A window that has just opened goes where the prototype puts it. */
+function placeNew(
+  before: WmState<string>,
+  after: WmState<string>,
+  id: string,
+  size: { w: number; h: number },
+  vp: Viewport,
+): WmState<string> {
+  if (before.windows.some((w) => w.id === id)) return after;
+  const shown = before.windows.filter((w) => !w.minimized).length;
+  const at = placeAt(shown, size, vp);
+  return {
+    ...after,
+    windows: after.windows.map((w) => (w.id === id ? { ...w, ...at } : w)),
+  };
+}
+
 function reducer(state: WmState<string>, action: Action): WmState<string> {
+  if (action.type === "tidy") return tidy(state, action.viewport);
   if (action.type === "openPage") {
-    const existed = state.windows.some((w) => w.id === action.id);
-    let next = wmReducer(state, {
+    const next = wmReducer(state, {
       type: "upsertUrl",
       id: action.id,
       url: action.url,
       program: action.program,
-      size: DEFAULT_SIZE,
+      size: action.size,
       viewport: action.viewport,
     });
-    if (!existed && action.maximize) {
-      next = wmReducer(next, { type: "toggleMaximize", id: action.id });
-    }
-    return next;
+    return placeNew(state, next, action.id, action.size, action.viewport);
+  }
+  if (action.type === "open") {
+    const next = wmReducer(state, action);
+    return placeNew(state, next, action.id, action.size, action.viewport);
   }
   if (action.type === "restore") {
     const live = state.windows.find((w) => w.id === action.liveKey);
@@ -270,12 +402,35 @@ export interface DesktopProps {
   /** Their name, rank label and led teams: the account chip and Start menu. */
   account: DesktopAccount;
   /**
+   * A captain's Start menu header: the camp's approved members and the
+   * sign-ups waiting. Null for anyone else.
+   */
+  headcount?: { members: number; waiting: number } | null;
+  /**
    * Pinned announcements (id and title), a strip above the taskbar and a
    * tray item. Only a cleared member's manifest draws them.
    */
   pins?: readonly PinnedItem[];
   /** The Burn's dates this year, for the tray's countdown. */
   burn?: { start: string; end: string } | null;
+  /** The camp's year, for the countdown's tooltip. */
+  year?: number | null;
+  /**
+   * Under the wallpaper's wordmark: "AfrikaBurn 2027 · The Big Question",
+   * from camp settings; nothing before a captain names the year.
+   */
+  tagline?: string | null;
+  /**
+   * The Today gadget (the prototype's pop-out, on every screen): its body,
+   * rendered on the server, and the count on its handle. None for a held
+   * member.
+   */
+  today?: { count: number; body: ReactNode } | null;
+  /**
+   * The boot screen's lines, when it plays: once per browser session, never
+   * in tests (the layout decides). Null for no boot.
+   */
+  boot?: { lines: readonly BootLine[]; welcome: string } | null;
   children: ReactNode;
 }
 
@@ -305,8 +460,13 @@ function DesktopInner({
   layout: savedLayout,
   userId,
   account,
+  headcount = null,
   pins = [],
   burn = null,
+  year = null,
+  tagline = null,
+  today = null,
+  boot = null,
   children,
 }: DesktopProps) {
   const router = useRouter();
@@ -318,6 +478,38 @@ function DesktopInner({
   const liveKey = page?.instanceKey ?? null;
   const mayLeave = useLeaveGuard();
   const keptDrafts = useKeptDrafts();
+
+  // --- The cats (desktop-cats.tsx) ----------------------------------------------
+  // Paw prints behind the pointer ("meow" on the desktop or in the Terminal,
+  // again to stop), and when the Terminal's "sudo feed cat" last ran, so Jinn
+  // peeks over the focused window at once. Rare events, never per frame.
+  const [paws, setPaws] = useState(false);
+  const [fedAt, setFedAt] = useState(0);
+  const pawsNow = useRef(false);
+  const togglePaws = useCallback(() => {
+    const on = !pawsNow.current;
+    pawsNow.current = on;
+    setPaws(on);
+    // No prints under reduced motion, so nothing to announce.
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    if (on) {
+      toast("Meow", {
+        description:
+          "Paw prints follow your pointer. Type meow again to stop them.",
+      });
+    } else {
+      toast("Paws off", { description: "The paw prints stop." });
+    }
+  }, []);
+  const catEffect = useCallback(
+    (effect: TerminalEffect) => {
+      if (effect === "paws") togglePaws();
+      else setFedAt(Date.now());
+    },
+    [togglePaws],
+  );
 
   // --- Held by a blocking questionnaire ---------------------------------------
   // The page that said a blocking questionnaire holds the member (its
@@ -348,7 +540,7 @@ function DesktopInner({
             id: page.instanceKey,
             url,
             program: windowProgram(page.programId, page.instanceKey),
-            maximize: WIDE.has(page.programId),
+            size: pageSize(page.programId),
             viewport: vp,
           }
         : null,
@@ -506,7 +698,7 @@ function DesktopInner({
         type: "open",
         id: key,
         program: key,
-        size: FOLDER_SIZE,
+        size: folderSize(key),
         viewport,
       });
     },
@@ -693,11 +885,6 @@ function DesktopInner({
     if (goHome()) setTodayOpen(true);
   }, [goHome, page]);
 
-  const phoneToday = useMemo<PhoneToday>(
-    () => ({ open: todayOpen, setOpen: setTodayOpen, burn }),
-    [burn, todayOpen],
-  );
-
   // The soft keyboard is up: the bottom bar steps aside so nothing fixed
   // rides over the focused field (visual-language doc, section 9). An event,
   // not a poll.
@@ -882,6 +1069,7 @@ function DesktopInner({
     () => ({
       open: (href) => openHrefRef.current(href),
       closeLive: () => closeLiveRef.current(),
+      effect: catEffect,
       hold: () => {
         if (heldOn === pathname) return;
         setHeldOn(pathname);
@@ -894,7 +1082,7 @@ function DesktopInner({
         if (mode !== "held") router.refresh();
       },
     }),
-    [heldOn, mode, pathname, router],
+    [catEffect, heldOn, mode, pathname, router],
   );
 
   // --- Back and forward: check the gate again before showing a cached page ------------
@@ -1090,6 +1278,8 @@ function DesktopInner({
 
   const programMenu = (program: ClientProgram): ContextMenuEntry[] => [
     { label: "Open", bold: true, onSelect: () => openProgram(program) },
+    // The prototype's rule under "Open", as every desktop menu draws it.
+    "divider",
     {
       label: "Create desktop shortcut",
       onSelect: () => changeLayout(addShortcut(layout, program.id).layout),
@@ -1133,6 +1323,7 @@ function DesktopInner({
       case "member-folder":
         return [
           { label: "Open", bold: true, onSelect: () => openEntry(entry) },
+          "divider",
           {
             label: "Rename",
             onSelect: () =>
@@ -1155,6 +1346,7 @@ function DesktopInner({
       case "shortcut":
         return [
           { label: "Open", bold: true, onSelect: () => openEntry(entry) },
+          "divider",
           ...addToFolderEntries(entry.program.id, entry.key),
           "divider",
           {
@@ -1236,7 +1428,7 @@ function DesktopInner({
           const instance = matchProgram(entry.program.href)?.instanceKey;
           return {
             ...base,
-            icon: drawIcon(programIcon(entry.program)),
+            icon: programIcon(entry.program),
             open: !!instance && open.has(instance),
             pending: !!instance && pendingKey === instance,
             droppable: true,
@@ -1245,23 +1437,33 @@ function DesktopInner({
               entry.program.badge && { badge: entry.program.badge }),
           };
         }
-        case "folder":
+        case "folder": {
+          // A camp folder counts what its programs count (the prototype's
+          // Captains folder wears System health's number).
+          const inside = entry.folder.programs.reduce(
+            (sum, p) => sum + (p.badge ?? 0),
+            0,
+          );
           return {
             ...base,
-            icon: drawIcon(iconFor(entry.folder.icon)),
+            icon: folderIcon(open.has(entry.key)),
             open: open.has(entry.key),
+            ...(inside > 0 && { badge: inside }),
           };
+        }
         case "team-folder":
+          // A team you are on is a folder, as the prototype draws it; the
+          // team's own picture is on its page inside.
           return {
             ...base,
-            icon: drawIcon(teamIcon(entry.folder.team)),
+            icon: folderIcon(open.has(entry.key)),
             open: open.has(entry.key),
             ...(entry.folder.lead && { lead: true }),
           };
         case "member-folder":
           return {
             ...base,
-            icon: drawIcon(iconFor("member-folder")),
+            icon: folderIcon(open.has(entry.key)),
             open: open.has(entry.key),
             count: entry.programs.length,
             acceptsDrop: true,
@@ -1271,13 +1473,12 @@ function DesktopInner({
   }, [entries, openIds, pendingKey]);
   const spec = useMemo(() => desktopSpec(manifest, layout), [manifest, layout]);
 
-  // Today, docked open on the desktop page: the icon grid stops at its left
-  // edge, so the team folders down the right-hand column (decision 8) move
-  // left of it rather than under it, where arrow keys could still land. The
-  // same stored choice the gadget reads (a boolean in this browser).
-  const [todayStored] = useStoredBoolean(localStorageBoolean(TODAY_OPEN_KEY));
+  // Today: closed by default, the member's choice kept in this browser (a
+  // boolean). On a phone the same body opens as a sheet from the bottom bar.
+  const [todayStored, setTodayStored] = useStoredBoolean(
+    localStorageBoolean(TODAY_OPEN_KEY),
+  );
   const phoneNow = usePhone();
-  const todayDocked = !page && !held && todayStored && !phoneNow;
 
   const titleOf = (w: OsWindow<string>): string => {
     const entry = entryByKey.get(w.id);
@@ -1301,8 +1502,31 @@ function DesktopInner({
       (m &&
         programs.get(m.programId === "team" ? m.instanceKey : m.programId)) ??
       null;
-    const Icon = program ? programIcon(program) : iconFor(m?.programId ?? "");
-    return <Icon aria-hidden strokeWidth={1.5} className={className} />;
+    return (program ? programIcon(program) : iconFor(m?.programId ?? ""))(
+      className,
+    );
+  };
+
+  // The Teams folder marks the member's own teams, as the prototype does:
+  // LEAD on one they lead, MINE on one they are on.
+  const ledTeams = new Set(
+    manifest.teamFolders.filter((f) => f.lead).map((f) => f.team),
+  );
+  const teamTag = (program: ClientProgram) => {
+    if (!program.id.startsWith("team:")) return {};
+    if (ledTeams.has(program.id.slice("team:".length))) {
+      return {
+        tag: { text: "Lead", spoken: "you lead it", strong: true },
+      };
+    }
+    return program.mine ? { tag: { text: "Mine", spoken: "your team" } } : {};
+  };
+
+  /** The old file name's extension, quiet after the title: "Roster .db". */
+  const suffixOf = (w: OsWindow<string>): string | undefined => {
+    const file = w.lastUrl ? matchProgram(w.lastUrl)?.genericTitle : undefined;
+    const dot = file ? file.lastIndexOf(".") : -1;
+    return file && dot > 0 ? file.slice(dot).toLowerCase() : undefined;
   };
 
   const folderBody = (key: string): ReactNode => {
@@ -1348,11 +1572,20 @@ function DesktopInner({
             return {
               id: program.id,
               label: program.label,
-              icon: drawIcon(programIcon(program)),
+              icon: programIcon(program),
               open: wm.windows.some((w) => w.id === instance),
+              ...(program.badge ? { badge: program.badge } : {}),
+              ...(entry?.kind === "folder" && teamTag(program)),
               onOpen: () => openProgram(program),
             };
           })}
+          // The Teams folder (every member has it) keeps the camp's art piece
+          // at its bottom, with Jinn asleep on it.
+          footer={
+            entry?.kind === "folder" && entry.folder.id === "teams" ? (
+              <TeamsFolderArt onWake={() => openHref(INKBLOT_HREF)} />
+            ) : undefined
+          }
           empty={
             isMemberFolderId(key)
               ? "Nothing in here yet. Drag an icon onto this folder, or right-click a program and add it."
@@ -1388,7 +1621,7 @@ function DesktopInner({
                   id="os-window-content"
                   tabIndex={-1}
                   hidden={checking}
-                  className="mx-auto w-full max-w-6xl px-4 py-6 outline-none sm:px-6"
+                  className="mx-auto w-full max-w-6xl px-4 py-6 outline-none page-sm:px-6"
                 >
                   {children}
                 </div>
@@ -1416,6 +1649,13 @@ function DesktopInner({
               key={w.id}
               win={w}
               title={title}
+              suffix={suffixOf(w)}
+              // Jinn, now and then, over the focused window's top edge.
+              decoration={
+                w.id === top?.id && !w.maximized ? (
+                  <WindowPeek fedAt={fedAt} />
+                ) : undefined
+              }
               isTop={w.id === top?.id}
               // A frozen copy: no landmark, no tab stops (design doc,
               // section 6). A folder's window stays live.
@@ -1473,7 +1713,7 @@ function DesktopInner({
         minimized: w.minimized,
         icon: (
           <span className={pendingKey === w.id ? "os-pending" : undefined}>
-            {iconOf(w, "size-4 shrink-0")}
+            {iconOf(w, "size-4 shrink-0 text-os-accent")}
           </span>
         ),
       }));
@@ -1517,6 +1757,27 @@ function DesktopInner({
   // covers only part of it, and leaves it be.
   const phoneCovered =
     held || switcherOpen || !!page || (!!top && !top.minimized && !top.lastUrl);
+  // Nobody can see the CRT surface or the wordmark: a blocking form over
+  // everything, a maximised window over the desktop, or on a phone a program
+  // or sheet over the home screen. Their loops hold still (data-os-paused),
+  // so a covered desktop costs what a hidden tab does.
+  const decorCovered =
+    held ||
+    (phoneNow ? phoneCovered : !!top && !top.minimized && !!top.maximized);
+  // Prince sleeps on the clock, just above the bar, at the screen's right.
+  // Wherever a window, the Today panel or a phone program reaches down to
+  // him there, he lets taps through to it rather than take them.
+  const princeCovered = phoneNow
+    ? phoneCovered || todayOpen
+    : (todayStored && !!today) ||
+      wm.windows.some(
+        (w) =>
+          !w.minimized &&
+          (w.maximized ||
+            (w.x + w.w > viewport.width - 56 &&
+              w.y + w.h > viewport.height - 32)),
+      );
+  const princeClass = princeCovered ? "pointer-events-none" : "";
   const switcherRows = [...wm.windows]
     .sort((a, b) => b.z - a.z)
     .map((w) => ({
@@ -1533,186 +1794,246 @@ function DesktopInner({
   // the inbox's own link to the form. Every other member page is sent to the
   // form by its server gate. The blocking layer holds only the form.
   if (mode === "held" && page?.programId !== "questionnaire") {
-    return <div className={HELD_BARE}>{children}</div>;
+    return (
+      <div data-os-skin className={HELD_BARE}>
+        {children}
+      </div>
+    );
   }
 
   return (
     <DesktopSignalsContext.Provider value={signals}>
-      <PhoneTodayContext.Provider value={phoneToday}>
-        <div
-          id="os-desktop"
-          inert={held || undefined}
-          data-os-keyboard={keyboard || undefined}
-          // --os-phone-bar: the bottom bar's height, where a phone's windows
-          // and sheets stop; nothing while the soft keyboard is up.
-          className={`fixed inset-0 flex select-none flex-col overflow-hidden bg-os-bg text-os-fg ${
-            keyboard
-              ? "[--os-phone-bar:0px]"
-              : "[--os-phone-bar:calc(3.5rem+max(0.25rem,env(safe-area-inset-bottom)))]"
-          }`}
-        >
-          {page && !held && (
-            <a
-              href="#os-window-content"
-              onClick={(e) => {
-                // Focus the live window's page without moving through
-                // history: the fragment would fire popstate.
-                const target = document.getElementById("os-window-content");
-                if (!target) return;
-                e.preventDefault();
-                target.focus();
-              }}
-              className="sr-only z-[100] bg-os-primary px-3 py-2 text-os-primary-fg focus:not-sr-only focus:absolute focus:left-2 focus:top-2"
-            >
-              Skip to window
-            </a>
-          )}
-          {!held && (
-            <DesktopHeader
-              account={account}
-              onOpenAccount={() => openHref("/profile")}
-              phoneTray={
-                !held && health?.status === "warning" ? (
-                  <HealthItem health={health} onOpenHref={openHref} />
-                ) : undefined
-              }
-            />
-          )}
-          <div className="relative min-h-0 flex-1">
-            <DesktopIcons
-              className={`absolute inset-y-0 left-0 max-md:hidden ${
-                todayDocked ? "right-[22.75rem]" : "right-0"
-              }`}
-              items={icons}
-              spec={spec}
-              cells={layout.cells}
-              onCellsChange={(cells) => changeLayout(withCells(layout, cells))}
-              onOpen={(key) => {
-                const entry = entryByKey.get(key);
-                if (entry && !held) openEntry(entry);
-              }}
-              onDropIntoFolder={onDropIntoFolder}
-              onContextMenu={held ? undefined : onDesktopMenu}
-            />
-            <PhoneHome
-              groups={phoneGroups}
-              notices={phoneNotices}
-              covered={phoneCovered}
-            />
-            {/* The desktop's own page (/): the Today gadget lives here, above
-              the wallpaper and below every window. */}
-            {!page && !held && children}
-            {windowLayer}
-          </div>
-          {!held && manifest.pins && pins.length > 0 ? (
-            // On a phone the pins fold into the bell instead.
-            <div
-              data-os-pins
-              className="relative z-[90] shrink-0 px-2 pb-1 max-md:hidden"
-            >
+      <div
+        id="os-desktop"
+        data-os-skin
+        inert={held || undefined}
+        data-os-keyboard={keyboard || undefined}
+        // --os-phone-bar: the bottom bar's height, where a phone's windows
+        // and sheets stop; nothing while the soft keyboard is up.
+        className={`fixed inset-0 flex select-none flex-col overflow-hidden bg-os-bg text-os-fg ${
+          keyboard
+            ? "[--os-phone-bar:0px]"
+            : "[--os-phone-bar:calc(3.5rem+max(0.25rem,env(safe-area-inset-bottom)))]"
+        }`}
+      >
+        {/* The CRT surface under everything: grid, scanlines, noise, beam. */}
+        <div data-os-paused={decorCovered || undefined} className="contents">
+          <Surface />
+        </div>
+        {page && !held && (
+          <a
+            href="#os-window-content"
+            onClick={(e) => {
+              // Focus the live window's page without moving through
+              // history: the fragment would fire popstate.
+              const target = document.getElementById("os-window-content");
+              if (!target) return;
+              e.preventDefault();
+              target.focus();
+            }}
+            className="sr-only z-[100] bg-os-primary px-3 py-2 text-os-bg focus:not-sr-only focus:absolute focus:left-2 focus:top-2"
+          >
+            Skip to window
+          </a>
+        )}
+        {/* Held, the header stays drawn behind the form, inert with the rest
+            of the desktop, as the prototype's locked desktop. */}
+        <DesktopHeader
+          account={account}
+          onOpenAccount={() => openHref("/profile")}
+          pins={
+            !held && manifest.pins && pins.length > 0 ? (
               <PinnedStrip pins={pins} />
-            </div>
-          ) : null}
+            ) : undefined
+          }
+          phoneTray={
+            !held && health?.status === "warning" ? (
+              <HealthItem health={health} onOpenHref={openHref} />
+            ) : undefined
+          }
+        />
+        <div className="relative min-h-0 flex-1">
+          {/* The wallpaper: the wordmark and the year, centred. */}
           <div
             aria-hidden
-            className="h-10 shrink-0 max-md:h-[var(--os-phone-bar)]"
-          />
-          {held ? (
-            <EmptyTaskbar />
-          ) : (
-            <>
-              <PhoneBar
-                hidden={keyboard}
-                openCount={wm.windows.length}
-                switcherOpen={switcherOpen}
-                todayOpen={todayOpen && !page}
-                onHome={() => {
-                  setTodayOpen(false);
-                  goHome();
-                }}
-                onSwitcher={() => {
-                  setTodayOpen(false);
-                  setSwitcherOpen((open) => !open);
-                }}
-                onToday={toggleToday}
-                bell={
-                  manifest.tray.inbox ? (
-                    <NotificationPanel
-                      count={manifest.tray.inbox.count}
-                      pinned={
-                        manifest.pins && pins.length > 0
-                          ? (close) => (
-                              <PinnedList pins={pins} onNavigate={close} />
-                            )
-                          : undefined
-                      }
-                    />
-                  ) : null
-                }
-              />
-              {switcherOpen && (
-                <PhoneSheet
-                  title="Open programs"
-                  onClose={() => setSwitcherOpen(false)}
-                >
-                  <PhoneSwitcher
-                    rows={switcherRows}
-                    onPick={(id) => {
-                      setSwitcherOpen(false);
-                      const w = wm.windows.find((x) => x.id === id);
-                      if (w) focusWindow(w);
-                    }}
-                    onCloseWindow={(id) => {
-                      if (id === liveKey && !mayLeave(id)) return;
-                      closeWindow(id);
-                    }}
-                  />
-                </PhoneSheet>
-              )}
-              <div className="max-md:hidden">
-                <DesktopTaskbar
-                  manifest={manifest}
-                  windows={taskbarWindows}
-                  topId={top?.id}
-                  onToggleWindow={toggleFromTaskbar}
-                  onOpenProgram={openProgram}
-                  onOpenFolder={openFolder}
-                  account={account}
-                  pinned={manifest.pins ? pins.length : 0}
-                  burn={burn}
-                  onOpenHref={openHref}
-                  onLineUpIcons={() => changeLayout(lineUpIcons(layout))}
-                  onShowDesktop={showDesktop}
-                />
-              </div>
-            </>
-          )}
-          <ContextMenu
-            menu={held ? null : menu}
-            onClose={() => setMenu(null)}
-          />
-          <FolderNameDialog
-            open={!held && nameDialog !== null}
-            fresh={nameDialog?.kind === "new"}
-            name={nameDialog?.kind === "rename" ? nameDialog.name : ""}
-            onSave={saveName}
-            onCancel={() => setNameDialog(null)}
-          />
-        </div>
-        {held && (
-          <BlockingLayer
-            title="Required form"
-            // Named by the form's own title ("Tent check, dialog"), then its
-            // completion page's.
-            nameFromHeading
-            signOut={
-              <SignOutLink className="font-semibold text-os-muted hover:text-os-fg" />
-            }
+            data-os-paused={decorCovered || undefined}
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 max-md:hidden"
           >
-            {children}
-          </BlockingLayer>
+            <GlitchWordmark text="404 OS" size="clamp(3rem, 7vw, 5.5rem)" />
+            {tagline && (
+              <p
+                data-label={tagline}
+                className="os-chromatic font-mono text-[11px] uppercase tracking-[0.3em] text-os-fg after:content-[attr(data-label)]"
+              />
+            )}
+          </div>
+          <DesktopIcons
+            className="absolute inset-0 max-md:hidden"
+            items={icons}
+            spec={spec}
+            cells={layout.cells}
+            onCellsChange={(cells) => changeLayout(withCells(layout, cells))}
+            onOpen={(key) => {
+              const entry = entryByKey.get(key);
+              if (entry && !held) openEntry(entry);
+            }}
+            onDropIntoFolder={onDropIntoFolder}
+            onContextMenu={held ? undefined : onDesktopMenu}
+          />
+          <PhoneHome
+            groups={phoneGroups}
+            notices={phoneNotices}
+            tagline={`${account.rank} console${year ? ` · Burn ${year}` : ""}`}
+            covered={phoneCovered}
+          />
+          {/* The desktop's own page (/): its heading, nothing to see. */}
+          {!page && !held && children}
+          {windowLayer}
+          {/* Today: shut until its handle is pulled; it slides in over the
+              windows, on every screen (the prototype's pop-out). */}
+          {!held && today && (
+            <TodayGadget
+              open={todayStored && !phoneNow}
+              onOpenChange={setTodayStored}
+              count={today.count}
+              clearTitleBar={!!top?.maximized}
+              className="absolute bottom-2 right-0 top-3 z-30 max-md:hidden"
+            >
+              {today.body}
+            </TodayGadget>
+          )}
+        </div>
+        <div
+          aria-hidden
+          className="h-10 shrink-0 max-md:h-[var(--os-phone-bar)]"
+        />
+        {held ? (
+          <EmptyTaskbar />
+        ) : (
+          <>
+            <PhoneBar
+              hidden={keyboard}
+              openCount={wm.windows.length}
+              switcherOpen={switcherOpen}
+              todayOpen={todayOpen && !page}
+              todayCount={today?.count}
+              onHome={() => {
+                setTodayOpen(false);
+                goHome();
+              }}
+              onSwitcher={() => {
+                setTodayOpen(false);
+                setSwitcherOpen((open) => !open);
+              }}
+              onToday={toggleToday}
+              bell={
+                manifest.tray.inbox ? (
+                  <NotificationPanel
+                    count={manifest.tray.inbox.count}
+                    {...TRAY_BELL}
+                    triggerClassName="relative grid h-12 w-full place-items-center text-os-fg outline-none hover:text-os-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-os-fg"
+                    pinned={
+                      manifest.pins && pins.length > 0
+                        ? (close) => (
+                            <PinnedList pins={pins} onNavigate={close} />
+                          )
+                        : undefined
+                    }
+                  />
+                ) : null
+              }
+              clock={
+                <PhoneClock
+                  burn={burn}
+                  decoration={
+                    <ClockPrince className={`right-2 ${princeClass}`} />
+                  }
+                />
+              }
+            />
+            {switcherOpen && (
+              <PhoneSheet
+                title="Open programs"
+                onClose={() => setSwitcherOpen(false)}
+              >
+                <PhoneSwitcher
+                  rows={switcherRows}
+                  onPick={(id) => {
+                    setSwitcherOpen(false);
+                    const w = wm.windows.find((x) => x.id === id);
+                    if (w) focusWindow(w);
+                  }}
+                  onCloseWindow={(id) => {
+                    if (id === liveKey && !mayLeave(id)) return;
+                    closeWindow(id);
+                  }}
+                />
+              </PhoneSheet>
+            )}
+            {phoneNow && todayOpen && !page && today && (
+              // The whole screen above the bar, the gadget boxed inside it,
+              // as the prototype's phone draws Today.
+              <PhoneSheet title="Today" onClose={() => setTodayOpen(false)}>
+                <div className="p-2">
+                  <div className="border border-os-line">{today.body}</div>
+                </div>
+              </PhoneSheet>
+            )}
+            <div className="max-md:hidden">
+              <DesktopTaskbar
+                manifest={manifest}
+                windows={taskbarWindows}
+                topId={top?.id}
+                onToggleWindow={toggleFromTaskbar}
+                onOpenProgram={openProgram}
+                onOpenFolder={openFolder}
+                account={account}
+                headcount={headcount}
+                burn={burn}
+                year={year}
+                clockDecoration={<ClockPrince className={princeClass} />}
+                onOpenHref={openHref}
+                onTidyWindows={() => dispatch({ type: "tidy", viewport })}
+                onLineUpIcons={() => changeLayout(lineUpIcons(layout))}
+                onShowDesktop={showDesktop}
+              />
+            </div>
+          </>
         )}
-      </PhoneTodayContext.Provider>
+        <ContextMenu menu={held ? null : menu} onClose={() => setMenu(null)} />
+        <FolderNameDialog
+          open={!held && nameDialog !== null}
+          fresh={nameDialog?.kind === "new"}
+          name={nameDialog?.kind === "rename" ? nameDialog.name : ""}
+          onSave={saveName}
+          onCancel={() => setNameDialog(null)}
+        />
+      </div>
+      {held && (
+        <BlockingLayer
+          title="Required form"
+          // Named by the form's own title ("Tent check, dialog"), then its
+          // completion page's.
+          nameFromHeading
+          signOut={
+            <SignOutLink className="font-semibold text-os-muted hover:text-os-fg" />
+          }
+        >
+          {children}
+        </BlockingLayer>
+      )}
+      {/* The secret keys open the Terminal's game, which only the full
+          desktop has: an applicant waiting for approval gets none. */}
+      {mode === "full" && !held && (
+        <DesktopSecrets
+          paws={paws}
+          onKonami={() => openHref(INKBLOT_HREF)}
+          onMeow={togglePaws}
+        />
+      )}
+      {boot && !held && (
+        <ConsoleBoot lines={boot.lines} welcome={boot.welcome} />
+      )}
     </DesktopSignalsContext.Provider>
   );
 }

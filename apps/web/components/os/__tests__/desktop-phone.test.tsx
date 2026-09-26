@@ -47,7 +47,6 @@ vi.mock("@/components/push/device-token", () => ({
 }));
 
 import { Desktop, type DesktopProps } from "../desktop-shell";
-import { TodayGadgetPanel } from "../today-gadget";
 import { draftStorageKey, windowStorageKey } from "../window-storage";
 
 const KITCHEN = Team.enum.kitchen;
@@ -252,11 +251,7 @@ describe("the bottom bar", () => {
     phoneScreen();
     nav.pathname = "/";
     const view = render(
-      <Desktop {...props()}>
-        <TodayGadgetPanel count={0}>
-          <p>Your day</p>
-        </TodayGadgetPanel>
-      </Desktop>,
+      <Desktop {...props({ today: { count: 0, body: <p>Your day</p> } })} />,
     );
     expect(screen.queryByText("Your day")).toBeNull();
     fireEvent.click(bar().getByRole("button", { name: "Today" }));
@@ -272,7 +267,9 @@ describe("the bottom bar", () => {
     view.unmount();
 
     nav.pathname = "/tasks";
-    render(<Desktop {...props()} />);
+    render(
+      <Desktop {...props({ today: { count: 0, body: <p>Your day</p> } })} />,
+    );
     fireEvent.click(bar().getByRole("button", { name: "Today" }));
     expect(nav.push).toHaveBeenCalledWith("/");
   });

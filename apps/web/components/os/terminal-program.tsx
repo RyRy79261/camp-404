@@ -7,6 +7,7 @@ import { TerminalWindow } from "@camp404/os/terminal";
 import {
   CONSOLE_COMMANDS,
   WELCOME,
+  isTerminalEffect,
   terminalHref,
   type TerminalContext,
 } from "@/lib/terminal-commands";
@@ -38,6 +39,9 @@ export function TerminalProgram({ context }: { context: TerminalContext }) {
         if (!href) return;
         if (desktop) desktop.open(href);
         else router.push(href as Route);
+      }}
+      onEffect={(effect) => {
+        if (isTerminalEffect(effect)) desktop?.effect(effect);
       }}
       close={() => {
         if (desktop) desktop.closeLive();

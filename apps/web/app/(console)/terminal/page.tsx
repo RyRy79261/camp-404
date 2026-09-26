@@ -30,7 +30,7 @@ export default async function TerminalPage() {
   );
 
   return (
-    <div className="-mx-4 -my-6 min-h-96 bg-os-bg sm:-mx-6">
+    <div className="-mx-4 -my-6 min-h-96 bg-os-bg page-sm:-mx-6">
       <h1 className="sr-only">Terminal</h1>
       <TerminalProgram context={context} />
     </div>

@@ -1,7 +1,9 @@
 import "server-only";
 
 import {
+  getCampHeadcount as dbGetCampHeadcount,
   getCampManagementRoster as dbGetCampManagementRoster,
+  type CampHeadcount,
   getCampMemberDetail as dbGetCampMemberDetail,
   type CampManagementMember,
   type CampManagementRosterOptions,
@@ -37,13 +39,14 @@ import { testStore } from "./test-store";
 // Playwright runs. The captain pages import the read from here; the pure
 // view-models stay in `lib/camp-roster.ts`.
 
-export type { CampManagementMember, TeamCoverage, TeamPerson };
+export type { CampHeadcount, CampManagementMember, TeamCoverage, TeamPerson };
 
 type QuestionnaireGate = Awaited<
   ReturnType<typeof dbListMemberQuestionnaireGates>
 >[number];
 
 interface RosterBackend {
+  getCampHeadcount(): Promise<CampHeadcount>;
   getCampManagementRoster(
     options?: CampManagementRosterOptions,
   ): Promise<CampManagementMember[]>;
@@ -68,6 +71,7 @@ interface RosterBackend {
 // Each entry calls through at CALL time, so a unit test's vi.mock of the db
 // module still intercepts the read.
 const realBackend: RosterBackend = {
+  getCampHeadcount: () => dbGetCampHeadcount(),
   getCampManagementRoster: (options) => dbGetCampManagementRoster(options),
   getTeamCoverage: () => dbGetTeamCoverage(),
   listTeamPeople: (team) => dbListTeamPeople(team),
@@ -83,6 +87,9 @@ const realBackend: RosterBackend = {
 };
 
 const testBackend: RosterBackend = {
+  async getCampHeadcount() {
+    return testStore.getCampHeadcount();
+  },
   async getCampManagementRoster(options) {
     return testStore.getCampManagementRoster(options);
   },
@@ -119,6 +126,14 @@ const testBackend: RosterBackend = {
 
 function backend(): RosterBackend {
   return usesTestStore() ? testBackend : realBackend;
+}
+
+/**
+ * The camp's approved members and waiting sign-ups: the captain's Start menu
+ * header. Captain-only; the console layout asks only for a captain.
+ */
+export function getCampHeadcount(): Promise<CampHeadcount> {
+  return backend().getCampHeadcount();
 }
 
 /** Pass `includeEmail` only for a captain viewer. */

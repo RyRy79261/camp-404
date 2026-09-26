@@ -186,8 +186,9 @@ jobs:
       - name: Audit dependencies
         run: pnpm audit --audit-level high
 
-  # Playwright e2e suite. Self-contained: playwright.config.ts auto-starts
-  # `next dev` with E2E_TEST_MODE=1, which bypasses the login and the Neon
+  # Playwright e2e suite. Self-contained: the job builds the app and
+  # playwright.config.ts starts it (`next start`, E2E_SERVE_BUILD=1) with
+  # E2E_TEST_MODE=1, which bypasses the login and the Neon
   # database with the in-memory test store (apps/web/lib/test-store.ts). So
   # this job needs no Vercel preview, no DATABASE_URL, and no auth secret —
   # the build-time placeholders (packages/auth/src/config.ts and
@@ -197,11 +198,15 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
-    # Two shards, each with its own `next dev` and in-memory store, so the
-    # serial rule in playwright.config.ts still holds inside each. One server
-    # compiling every route the whole suite visits starved the runner at about
-    # test 90 (three "The runner has received a shutdown signal" deaths on PR
-    # #262, same point each time, three Azure regions).
+    # A production build, not `next dev`: under `next dev` the server's
+    # memory climbed to 14 GB within one shard and the 16 GB runner was
+    # killed ("The runner has received a shutdown signal": PR #262, #287, #288
+    # and main). Measured locally, 2026-09-26: one shard under `next dev` peaked
+    # at 17.6 GB RSS with the JS heap at 1.1 GB (the rest is Turbopack's native
+    # memory, which --max-old-space-size does not cap); the whole suite under
+    # `next start` peaked at 0.5 GB, 153 passed. Two shards, each with its own
+    # server and in-memory store, so the serial rule in playwright.config.ts
+    # still holds inside each.
     strategy:
       fail-fast: false
       matrix:
@@ -226,10 +231,21 @@ jobs:
       - name: Install Playwright system deps (cached browser)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm --filter @camp404/web exec playwright install-deps chromium
+      - name: Build the app for e2e
+        # The same test env the server gets from playwright.config.ts's
+        # webServer.env, so nothing prerendered at build time sees another.
+        # CI=true (set by Actions) is what lets lib/env.ts start a production
+        # server with E2E_TEST_MODE.
+        env:
+          E2E_TEST_MODE: "1"
+          INVITE_CODES: test-invite-e2e-only-code
+          GOD_EMAILS: god@example.com
+        run: pnpm --filter @camp404/web build
       - name: Run e2e tests
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          E2E_SERVE_BUILD: "1"
         # Desktop only; the 360 px project runs nightly (mobile.yml).
         # A memory line every 20 s leaves evidence if a runner dies mid-run.
         run: |

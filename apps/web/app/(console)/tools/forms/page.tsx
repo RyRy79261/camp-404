@@ -69,7 +69,7 @@ export default async function FormsListPage() {
                   logged.
                 </p>
               </div>
-              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <ul className="grid gap-4 page-sm:grid-cols-2 page-lg:grid-cols-3">
                 {forms.map((form) => (
                   <li key={form.key}>
                     <FormCard
@@ -104,7 +104,7 @@ export default async function FormsListPage() {
                   said.
                 </p>
               </div>
-              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <ul className="grid gap-4 page-sm:grid-cols-2 page-lg:grid-cols-3">
                 {answered.map((a) => {
                   const year = yearName(a.cycle);
                   return (

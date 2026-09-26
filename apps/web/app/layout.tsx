@@ -1,5 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { JetBrains_Mono, Montserrat } from "next/font/google";
+import {
+  Inter,
+  JetBrains_Mono,
+  Montserrat,
+  Silkscreen,
+} from "next/font/google";
 import { Toaster } from "@camp404/ui/components/toast";
 import { Providers } from "./providers";
 import { AcknowledgementGate } from "./acknowledgement-gate";
@@ -19,6 +24,23 @@ const montserrat = Montserrat({
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-brand-mono",
+  display: "swap",
+});
+
+// The 404 OS faces (owner's approval of the prototype, 2026-09-26, decision
+// 10): Inter for body text and Silkscreen, the pixel face, for the chrome
+// (window titles, icon labels, buttons, headings), as Join loads them. The
+// desktop and the gate screens wear them (`data-os-skin`, globals.css); the
+// sign-in pages keep Montserrat.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+const silkscreen = Silkscreen({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-silkscreen",
   display: "swap",
 });
 
@@ -67,7 +89,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`dark camp-accent ${montserrat.variable} ${jetbrainsMono.variable}`}
+      className={`dark camp-accent ${montserrat.variable} ${jetbrainsMono.variable} ${inter.variable} ${silkscreen.variable}`}
     >
       <body className="font-sans antialiased">
         <Providers>

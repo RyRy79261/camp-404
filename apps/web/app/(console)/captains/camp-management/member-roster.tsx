@@ -121,14 +121,14 @@ export function MemberRoster({
             {filtered.length} {filtered.length === 1 ? "member" : "members"}
           </p>
           <RosterTable
-            className="hidden md:block"
+            className="hidden page-md:block"
             rows={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}
             showStanding={showStanding}
           />
           <RosterList
-            className="md:hidden"
+            className="page-md:hidden"
             rows={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}

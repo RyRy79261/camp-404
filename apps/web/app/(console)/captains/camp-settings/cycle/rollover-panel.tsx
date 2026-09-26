@@ -527,8 +527,8 @@ function AdvanceYearPanel({
     <div className="flex flex-col gap-6">
       {founded && <FoundedNotice report={founded} />}
 
-      <div className="grid items-start gap-6 lg:grid-cols-3">
-        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+      <div className="grid items-start gap-6 page-lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-6 page-lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">

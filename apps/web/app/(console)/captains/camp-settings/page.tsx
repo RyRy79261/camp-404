@@ -42,8 +42,8 @@ export default async function CampSettingsPage() {
       />
 
       {cleared ? (
-        <div className="grid items-start gap-6 lg:grid-cols-3">
-          <div className="min-w-0 lg:col-span-2">
+        <div className="grid items-start gap-6 page-lg:grid-cols-3">
+          <div className="min-w-0 page-lg:col-span-2">
             <TeamSettingsManager teams={teams} />
           </div>
 

@@ -112,7 +112,7 @@ function ResponsiveDataTable<T>({
 
   return (
     <div data-slot="responsive-data-table" className={className}>
-      <div className="hidden md:block">
+      <div className="hidden page-md:block">
         <Table>
           {label ? <caption className="sr-only">{label}</caption> : null}
           <TableHeader>
@@ -156,7 +156,7 @@ function ResponsiveDataTable<T>({
       </div>
 
       <ul
-        className="flex list-none flex-col gap-3 md:hidden"
+        className="flex list-none flex-col gap-3 page-md:hidden"
         aria-label={label}
       >
         {data.map((row) => (

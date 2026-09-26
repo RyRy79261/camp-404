@@ -34,22 +34,24 @@ shrunk desktop.
 
 The design doc lists 14 decisions, with options and recommendations. The
 numbers here are the same. Decisions 1, 2, 3, 7, 8, 11 and 14 are ruled. PR A (the
-engine, proved on Join) needs none of the open ones.
+engine, proved on Join) needs none of the open ones. [CORRECTION 2026-09-26]
+Decisions 4, 5, 6, 9, 10 and 12 are ruled too, by the owner's approval of the
+prototype (2026-09-26): the approved prototype is the design (rows below).
 
 | # | Question | Options | Needed before | Recommendation |
 |---|----------|---------|---------------|----------------|
 | 1 | Leave the AfrikaBurn look (2026-09-17 ruling) for 404 OS? | **Ruled 2026-09-25: yes, the Classic desktop; the skin follows Join.** Tiled workstation and Command deck rejected as too busy | done | Staged anyway: structure on current tokens first (PR C), each control's skin only after you approve its screenshot (PR D) |
 | 2 | Programs a member cannot use: hidden or locked? | **Ruled 2026-09-26: A, hidden** (folders too). Every member still sees every team dashboard, read-only | done | n/a |
 | 3 | Windows you are not looking at: what do they show? | **Ruled 2026-09-25: A, last-seen windows**, a frozen copy of the body, "Last seen hh:mm. Click to refresh.", fresh on focus | done | n/a |
-| 4 | Which magenta fills the focused title bar and main buttons? | A: Join's `oklch(0.65 0.27 340)` with dark `os-bg` text, 5.3:1. B: the console's `oklch(0.72 0.2 345)` with the same dark text, 7.2:1. (Near-white on magenta, about 3.6:1, is not offered) | PR D | A |
-| 5 | Do gate screens wear the OS look? | A: restyle `GateScreen`; split `AuthShell` so `/signup/required` changes and the sign-in pages do not; runner and onboarding wizard as separate items. A2: as A, sign-in pages too. B: leave all | PR D | A |
-| 6 | Should the boot sequence play? | A: once per browser session, short, skippable; never in tests or reduced motion. B: never | PR D | A |
+| 4 | Which magenta fills the focused title bar and main buttons? | **Ruled 2026-09-26 (the prototype): A, Join's magenta**; dark `os-bg` text on filled buttons (5.3:1), the prototype's near-white on the title bar (3.6:1, recorded). [CORRECTION 2026-09-26] The main button is the prototype's near-white slab with a magenta shadow, magenta on hover | done | n/a |
+| 5 | Do gate screens wear the OS look? | **Ruled 2026-09-26 (the prototype): A**; `GateScreen` and the invite gate in the OS look, the sign-in pages unchanged | done | n/a |
+| 6 | Should the boot sequence play? | **Ruled 2026-09-26 (the prototype): A**, once per browser session (a session cookie), short, skippable, never in tests or reduced motion | done | n/a |
 | 7 | Window cap and document reuse | **Ruled 2026-09-26: B, no cap**; each document its own window | done | n/a. PR C measures memory with many windows open |
 | 8 | Own teams on the desktop, or only in the Teams folder? | **Ruled 2026-09-25: team folders on the right-hand side** ("Kitchen team"), led first and tagged LEAD, holding the team page and its tools; a My teams row on the phone | done | n/a. The tools per team are shaped with each lead |
-| 9 | Window titles | Plain names settled by your feedback. A: plain names only. B: plus a quiet file-name suffix on the title chip | PR D | B on desktop |
-| 10 | Body font | A: Montserrat 500. B: Inter | PR D | A |
+| 9 | Window titles | **Ruled 2026-09-26 (the prototype): B**, plain title plus a quiet suffix ("Roster .db") | done | n/a |
+| 10 | Body font | **Ruled 2026-09-26 (the prototype): B, Inter**, with Silkscreen for chrome | done | n/a |
 | 11 | Driver programs | **Ruled 2026-09-26: A**, a My lift program (`/lift`) and a `getMyLift` test-store twin in PR B | done | n/a |
-| 12 | AGENTS.md "copy AfrikaBurn's nearest equivalent" rule | A: "copy the nearest existing program's window composition, restyle with `--os-*` tokens". B: keep it | PR D | A, since decision 1 is A |
+| 12 | AGENTS.md "copy AfrikaBurn's nearest equivalent" rule | **Ruled 2026-09-26 (the prototype): A**; AGENTS.md's Design section corrected | done | n/a |
 | 13 | Anything money-related for a Finance lead? | A: no change in this work. B: a Finance program now | none (A changes nothing) | A |
 | 14 | Can members rearrange icons? | **Ruled 2026-09-25: yes**, and **2026-09-26: stored on the server** (a per-member JSONB value; a drizzle-kit migration in PR C; erasure deletes it) | done | n/a |
 
@@ -864,7 +866,9 @@ from the text above, or settles something it left open:
 - A refused page is noticed by the `data-captain-lock` attribute
   `CaptainLock` now carries: the desktop refreshes once per address.
 - Wide pages open maximised (a fixed list in `desktop-shell.tsx`, `WIDE`),
-  until PR E.
+  until PR E. [CORRECTION 2026-09-26] `WIDE` is gone: they open at the
+  prototype's XL or L size right of the icons (`PAGE_SIZE`), never full
+  screen.
 - The Today gadget is the desktop page itself (`/`), as the text says: it is
   not on other addresses. `HomeView variant="today"` drops the module grid.
   The web-push prompt moved inside it.
@@ -969,7 +973,8 @@ from the text above, or settles something it left open:
   dirty guard, minimises every window and PUSHES `/`, so Back from the home
   screen returns to the program. The pinned strip folds into the bell: a
   "Pinned (N)" list at the top of its panel (`PinnedList`), each with Read.
-- Today on a phone is a sheet (up to 80% of the height) holding the `/`
+- Today on a phone is a sheet ([CORRECTION 2026-09-26] the whole screen
+  above the bar, as the prototype's; it was up to 80% of the height) holding the `/`
   page's Today body, with the Burn countdown on top. Its body exists only on
   `/`, so Today from a program goes home first. It starts closed on every
   load; the desktop handle's stored choice is not used on a phone.
@@ -1126,6 +1131,53 @@ a new count keeps copies and drafts; the shell tests pin both ways).
 ### PR D: the skin (after decisions 4, 5, 6, 9, 10, 12)
 
 Decision 1 is ruled (the Classic desktop), so this PR goes ahead.
+
+[CORRECTION 2026-09-26] The owner's feedback on PR C ("its missing the soul
+of the design I approved and critically all of the cat stuff") ruled the
+open decisions and moved this skin onto PR C's branch: the approved prototype
+is matched as it is drawn. What was built, and where it differs from the list
+below:
+
+- The skin is `data-os-skin` plus `:root:has([data-os-skin])` in
+  `apps/web/app/globals.css`, not an `.os-skin` class on `<html>`: the kit's
+  tokens become the `--os-*` palette only where the desktop, the blocking
+  form or a gate screen is on the page, so the sign-in pages keep their look
+  and portalled popovers still wear it. The radius variables are zeroed
+  rather than a codemod over `rounded-*` (`rounded-full` keeps avatars
+  round). A few kit parts carry a `data-slot` for the pixel face (badge,
+  button, card title, page title), no cva rewrite.
+- Chrome as the prototype: the CRT surface and the glitched "404 OS"
+  wordmark with "AfrikaBurn <year> · <name>" (from camp settings) on the
+  wallpaper; the header "CAMP 404 · <rank> console", the pinned ticker moved
+  into it, and the account chip with initials and a rank chip; the
+  prototype's line-art program icons and folder icons, team pixel icons in
+  the Teams folder and My teams; the Start menu's three columns (Me with My
+  teams, Camp with the Kitchen, Captains with the Terminal) and its Tidy
+  windows / Line up icons / Show desktop / Report a problem / Log off row;
+  the tray's boxes (bell, warning, "N days to the Burn", clock); the phone
+  home screen's wordmark and hairline group labels and the bottom bar's
+  bordered cells with a clock.
+- Today is on every screen, over the windows, as the prototype's pop-out
+  (handle attached to the panel, closed by default, remembered): the layout
+  reads it (`lib/today.ts`) and the gadget reads it again when it opens
+  (`refreshTodayAction`), since a layout is not drawn again as the member
+  moves between windows. `/` is only the desktop's heading now.
+- The wordmark's torn slices are separate copies whose opacity and
+  transform move (composited), not an animated `clip-path`: measured with
+  CDP `Performance.getMetrics` on the idle desktop (headless Chromium,
+  1440x900, 6 s), main-thread busy fell from 2.9% with 60 style recalcs a
+  second to 0.3% with 5; a hidden tab and reduced motion 0%.
+- Cats and Shadow Work are built in `@camp404/games` (its own work) and
+  placed by `apps/web/components/os/desktop-cats.tsx`: Prince on the tray's
+  clock and the phone bar's (`clockDecoration`), Jinn's peek over the focused
+  window (the frame's `decoration`), Shadow Work pinned under the Teams
+  folder's icons (the folder window's `footer`; the Teams folder opens
+  620x600 to hold it), and the Konami code and "meow" on the desktop. Each
+  has a plain name ("A cat", "Shadow Work"), never a hint.
+- Not done here: the members and applicants counts at the top of the
+  prototype's Start menu (they need a roster count the layout does not read
+  yet); the kit cva recipes beyond the data-slot rules; the Silkscreen
+  lint-style check.
 
 **Files.**
 

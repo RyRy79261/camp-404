@@ -156,6 +156,36 @@ one. For a new surface, copy the composition of
 AfrikaBurn's nearest equivalent (`apps/org/app/(console)/**` in that repo) and
 restyle only with tokens; do not invent a design.
 
+[CORRECTION 2026-09-26] **The look is the 404 OS Classic desktop** (owner's
+pick 2026-09-25, and his approval of the prototype 2026-09-26: "the
+approved prototype IS the design"). The prototype is
+`apps/join/app/prototype/captain-desktop` in the owner's checkout (variant A);
+match it, do not re-derive it. Join's palette (midnight violet
+`oklch(0.15 0.05 295)`, magenta `oklch(0.65 0.27 340)`, electric blue
+`oklch(0.62 0.18 255)` and the panel, chrome and line mixes) through the
+`--os-*` variables, Silkscreen for the chrome and Inter for body text
+(decision 10), the CRT surface (grid, scanlines, noise, beam) and the glitched
+"404 OS" wordmark with the year under it on the wallpaper. The AfrikaBurn kit
+stays as the parts, re-coloured inside the desktop: `data-os-skin` on the
+desktop, the blocking form's page and the gate screens turns the kit's tokens
+into the OS palette, square (`apps/web/app/globals.css`). For a new surface,
+copy the nearest existing program's window composition and restyle only with
+tokens (decision 12 A); do not invent a design. The AfrikaBurn rule above is
+the record of the 2026-09-17 call.
+
+**Games and cats live in `@camp404/games`** (owner, 2026-09-26). The desktop's
+two cats are Jinn (all black) and Prince (white, with a black cap, back patch
+and tail, asleep on the taskbar clock), and Shadow Work (the camp's art piece;
+never "the lamp") sits at the bottom of the Teams folder with Jinn on it.
+`@camp404/os` never imports a game (its package.json has no games
+dependency). Join imports only `@camp404/games/inkblot` and
+`@camp404/games/inkblot/art` (`apps/join/lib/games-boundary.test.ts`
+fails on any other). The web app loads the rest lazily, through
+`components/os/desktop-cats.tsx`. Easter eggs are never labelled: a cat or the
+art piece is a toy for the pointer, hidden from assistive tech and out of the
+Tab order, with no name, hint or instruction anywhere in the UI; the
+keyboard's way to them is the Terminal.
+
 - **The signed-out landing page (`apps/web/app/landing-hero.tsx`) is NOT part
   of the restyle** (owner, 2026-09-23: the AfrikaBurn look is for "the
   components and the dashboards, not the landing page"). It keeps Camp 404's
@@ -163,7 +193,18 @@ restyle only with tokens; do not invent a design.
   recompose it after an AfrikaBurn page.
 - Tokens: `packages/ui/src/styles/globals.css` (AfrikaBurn's file plus the
   `.camp-accent` skin on `<html>`). Montserrat, dark-first: `<html>` carries
-  the `dark` class in `app/layout.tsx`.
+  the `dark` class in `app/layout.tsx`. [CORRECTION 2026-09-26] Those stay
+  for the sign-in pages only (decision 5 A). Everything with `data-os-skin`
+  on the page (the desktop, the held form's page, `GateScreen`, the invite
+  gate) wears the 404 OS skin from `apps/web/app/globals.css`:
+  `:root:has([data-os-skin])` points the kit's tokens at the `--os-*`
+  palette, zeroes the radius variables and sets Inter, so Radix popovers and
+  toasts portalled into `<body>` wear it too. The OS's own classes (surface,
+  wordmark, window power-on, slide-in) are in `packages/os/src/styles.css`;
+  a kit part the skin restyles further carries a `data-slot` (badge, button,
+  card, card-title, page-title, page-eyebrow, label, field-label,
+  filter-chip, progress, toast) or `data-kpi` (a headline number tile), and
+  the skin draws it as the prototype's kit does.
 - Shell: `apps/web/app/(console)/layout.tsx` draws the header and the nav,
   filtered by rank on the server (`lib/console-nav.ts`): a few links, then the
   Teams, Camp, Me and Captains menus (Teams read from camp settings), folded
@@ -179,12 +220,22 @@ restyle only with tokens; do not invent a design.
   entry in `PROGRAM_REGISTRY` in `lib/programs.ts` (its icon, folder and the
   same rank bar as its page gate); `program-registry-drift.test.ts` and
   `program-routes.test.ts` fail until both exist. A page still starts with
-  `PageHeading` and owns no container: the window pads it. The E2E helper
+  `PageHeading` and owns no container: the window pads it. A window can be
+  470px wide on a wide screen, so a page lays itself out by its WINDOW's
+  width: use the kit's `page-sm:`/`page-md:`/`page-lg:`/`page-xl:` variants
+  (`packages/ui/src/styles/globals.css`; the same widths as `sm`…`xl`) for a
+  page's own scaffolding (the heading row, its column split, a table's switch
+  to cards). They measure the window's body (`data-page-container`) and fall
+  back to the screen outside one. Plain `sm:`…`xl:` still ask the screen;
+  a dialog or popover (portalled to `<body>`) keeps them. The E2E helper
   `tests/e2e/lib/console-nav.ts` drives the Start menu and folder windows on
   a desktop and the home screen and folder sheets on a phone
-  (`openConsoleNav(page, "Captains")` opens the Captains folder); it also
+  (`openConsoleNav(page, "Captains")` opens the Captains folder; on a
+  desktop the Start menu lists the Captains and Kitchen programs as groups of
+  their own, and a team folder opens from its desktop icon); it also
   has `expectDesktop` (something present before an absence on `/`),
-  `openToday` (the member's summary is behind the closed Today handle),
+  `openToday` (the member's summary is behind the closed Today handle; it is
+  on every screen now, over the windows),
   `desktopIcon` and `osWindow`. The shell's own cases are
   `tests/e2e/os-shell.spec.ts`; the held desktop and the builder's leave
   question need the questionnaire engine and are in

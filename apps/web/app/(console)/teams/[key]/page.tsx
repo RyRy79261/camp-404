@@ -176,8 +176,8 @@ export default async function TeamPage({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-3">
-        <div className="flex flex-col gap-6 lg:col-span-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 page-lg:grid-cols-3">
+        <div className="flex flex-col gap-6 page-lg:col-span-2">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">

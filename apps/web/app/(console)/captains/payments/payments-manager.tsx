@@ -253,12 +253,12 @@ export function PaymentsManager({
   ];
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-3">
+    <div className="grid items-start gap-6 page-lg:grid-cols-3">
       {confirmDialog}
 
       <section
         aria-labelledby="payments-ledger-heading"
-        className="flex min-w-0 flex-col gap-3 lg:col-span-2"
+        className="flex min-w-0 flex-col gap-3 page-lg:col-span-2"
       >
         <h2
           id="payments-ledger-heading"

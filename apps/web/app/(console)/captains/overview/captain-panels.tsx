@@ -103,8 +103,8 @@ export async function CaptainStatusBoard() {
   return (
     <>
       <KpiCards kpis={kpis} />
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      <div className="grid gap-4 page-lg:grid-cols-3">
+        <div className="page-lg:col-span-2">
           <ReadinessFunnelCard funnel={funnel} />
         </div>
         <div className="flex flex-col gap-4">

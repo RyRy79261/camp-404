@@ -5,6 +5,8 @@ import { buildProgramManifest, type ProgramFacts } from "../programs";
 import {
   INKBLOT_HREF,
   INKBLOT_ID,
+  INKBLOT_PASSWORD,
+  isTerminalEffect,
   runConsoleCommand,
   terminalContext,
   terminalHref,
@@ -109,9 +111,58 @@ describe("the rest", () => {
   });
 
   it("keeps its cat lines to the two real cats", () => {
-    expect(text("cat jinn")).toContain("Jinn is best.");
-    expect(text("cat prince")).toContain("Prince");
+    expect(text("cat")).toContain("Two cats live here.");
+    expect(text("cat jinn")).toMatch(/^JINN\.TXT\nBlack\. Shiny\./);
+    expect(text("cat JINN.txt")).toBe(text("cat jinn"));
+    expect(text("cat prince")).toMatch(/^PRINCE\.TXT\nWhite and fluffy/);
     expect(text("cat garfield")).toMatch(/No such file/);
+    // Only ever two.
+    expect(text("cat")).not.toMatch(/three|garfield/i);
+  });
+
+  it("hides .cat, which only ls -a shows, and its hint spells the password", () => {
+    expect(text("ls")).not.toContain(".cat");
+    expect(text("ls -a")).toMatch(/\n\.cat$/);
+    expect(text("ls -a")).toContain("Roster");
+    const hint = text("cat .cat");
+    expect(hint).toBe(text("cat ~/.cat"));
+    expect(hint).toContain("Hint: j_nn-_s-b_st");
+    expect(INKBLOT_PASSWORD).toBe("jinn-is-best");
+  });
+
+  it("opens INKBLOT for the password, whatever the case", () => {
+    for (const typed of ["jinn-is-best", "  JINN-IS-BEST "]) {
+      const r = runConsoleCommand(typed, member);
+      expect([typed, r.open]).toEqual([typed, INKBLOT_ID]);
+      expect(r.lines[0]!.text).toMatch(/ACCESS GRANTED/);
+    }
+    expect(runConsoleCommand("jinn is best", member).open).toBeUndefined();
+  });
+
+  it("asks the desktop for paw prints on meow, and for Jinn on sudo feed cat", () => {
+    expect(runConsoleCommand("meow", member).effect).toBe("paws");
+    expect(runConsoleCommand("MEOW", member).effect).toBe("paws");
+    for (const typed of ["sudo feed cat", "sudo  feed the cat"]) {
+      const r = runConsoleCommand(typed, member);
+      expect([typed, r.effect]).toEqual([typed, "peek"]);
+    }
+    // Without sudo, the tin stays shut.
+    const denied = runConsoleCommand("feed cat", member);
+    expect(denied.effect).toBeUndefined();
+    expect(denied.lines[0]!.kind).toBe("err");
+    // Any other sudo is refused, with nothing for the desktop.
+    expect(runConsoleCommand("sudo rm -rf /", member).effect).toBeUndefined();
+    expect(text("sudo rm -rf /")).toMatch(/Nice try/);
+    // Every effect a command asks for is one the desktop knows.
+    expect(isTerminalEffect("paws")).toBe(true);
+    expect(isTerminalEffect("peek")).toBe(true);
+    expect(isTerminalEffect("today")).toBe(false);
+  });
+
+  it("purrs when petted", () => {
+    expect(text("pet")).toMatch(/^prrr+…\nJinn leans into it/);
+    expect(text("purr Prince")).toContain("Prince tolerates it.");
+    expect(runConsoleCommand("pet", member).effect).toBeUndefined();
   });
 
   it("clears and exits through the shell", () => {

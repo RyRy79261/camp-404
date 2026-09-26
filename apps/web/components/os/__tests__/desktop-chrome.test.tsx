@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -50,6 +51,7 @@ import { Desktop, type DesktopProps } from "../desktop-shell";
 import { accountChipName, leadsLine } from "../account-chip";
 import { APPLICATION_SUBMITTED, HEALTH_SENTENCE } from "../desktop-tray";
 import { TerminalProgram } from "../terminal-program";
+import { windowStorageKey } from "../window-storage";
 import { terminalContext } from "@/lib/terminal-commands";
 
 const KITCHEN = Team.enum.kitchen;
@@ -134,7 +136,7 @@ describe("the account chip", () => {
 });
 
 describe("the Start menu", () => {
-  it("lists the groups, then Account, Report a problem, Line up icons, Show desktop and Log off", () => {
+  it("stands the groups in the prototype's columns, then Tidy windows, Line up icons, Show desktop, Report a problem and Log off", () => {
     render(
       <Desktop
         {...props(
@@ -149,24 +151,85 @@ describe("the Start menu", () => {
       />,
     );
     openStart();
-    const menu = within(screen.getByRole("navigation", { name: "Console" }));
-    for (const group of ["Me", "Camp", "Captains", "My teams"]) {
-      expect(menu.getByRole("group", { name: group })).toBeTruthy();
-    }
+    const nav = screen.getByRole("navigation", { name: "Console" });
+    const menu = within(nav);
+    const groups = menu
+      .getAllByRole("group")
+      .map((g) => g.getAttribute("aria-label"));
+    // Me with My teams under it, Camp with the Kitchen under it, Captains.
+    expect(groups).toEqual(["Me", "My teams", "Camp", "Kitchen", "Captains"]);
+    // The member's own team is a row in My teams, tagged as theirs to lead,
+    // and the Teams folder follows it.
+    const myTeams = within(menu.getByRole("group", { name: "My teams" }));
+    expect(
+      myTeams.getByRole("menuitem", { name: "Kitchen, you lead it" }),
+    ).toBeTruthy();
+    expect(myTeams.getByRole("menuitem", { name: "Teams" }).tagName).toBe(
+      "BUTTON",
+    );
+    // The folders are opened out: their programs are rows of their own.
+    expect(
+      within(menu.getByRole("group", { name: "Kitchen" })).getByRole(
+        "menuitem",
+        { name: "Recipes" },
+      ),
+    ).toBeTruthy();
+    const captains = within(menu.getByRole("group", { name: "Captains" }));
+    expect(
+      captains.getByRole("menuitem", { name: "Questionnaires" }),
+    ).toBeTruthy();
+    expect(captains.getByRole("menuitem", { name: "Terminal" })).toBeTruthy();
     const rows = menu.getAllByRole("menuitem").map((el) => el.textContent);
     expect(rows.slice(-5)).toEqual([
-      "Account",
-      "Report a problem",
+      "Tidy windows",
       "Line up icons",
       "Show desktop",
+      "Report a problem",
       "Log off",
     ]);
-    expect(rows).toContain("Terminal");
     // Log off is the sign-out link, never a plain button.
     const logOff = menu.getByRole("menuitem", { name: "Log off" });
     expect(logOff.tagName).toBe("A");
     expect(logOff.getAttribute("href")).toBe("/auth/sign-out");
     expect(menu.getByText("Team Lead · Leads Kitchen")).toBeTruthy();
+  });
+
+  it("tidies the windows: back to their opening size, cascaded, none full screen", () => {
+    window.sessionStorage.setItem(
+      windowStorageKey(props().userId),
+      JSON.stringify({
+        mode: "full",
+        windows: [
+          {
+            key: "calendar",
+            programId: "calendar",
+            lastUrl: "/calendar",
+            rect: { x: 500, y: 300, w: 300, h: 200 },
+            z: 1,
+            minimized: false,
+            maximized: true,
+            scrollTop: 0,
+          },
+        ],
+      }),
+    );
+    render(<Desktop {...props()} />);
+    openStart();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Tidy windows" }));
+    const frames = [
+      ...document.querySelectorAll<HTMLElement>("section[data-window]"),
+    ];
+    expect(frames.length).toBeGreaterThan(0);
+    for (const f of frames) {
+      expect(f.hasAttribute("data-maximized")).toBe(false);
+    }
+    const tasks = document.querySelector<HTMLElement>('[data-window="tasks"]')!;
+    const x = (el: HTMLElement) =>
+      parseInt(el.style.getPropertyValue("--win-x"));
+    const cal = document.querySelector<HTMLElement>('[data-window="calendar"]');
+    if (cal) expect(x(tasks)).toBeGreaterThan(x(cal));
+    // The live window stays on top.
+    expect(tasks.hasAttribute("data-top")).toBe(true);
   });
 
   it("sits above every window and all chrome, at most half the screen high", () => {
@@ -275,18 +338,16 @@ describe("pinned announcements", () => {
     { id: "a-2", title: "Kitchen shift swap" },
   ];
 
-  it("draws a strip with one pin at a time, and a tray count", () => {
+  it("draws a strip in the header with one pin at a time", () => {
     render(<Desktop {...props({ pins })} />);
     const strip = screen.getByRole("region", { name: "Pinned announcements" });
+    expect(strip.closest("header")).not.toBeNull();
     expect(strip.textContent).toContain("Water points moved");
     expect(strip.textContent).toContain("1 of 2");
     fireEvent.click(
       within(strip).getByRole("button", { name: "Next pinned announcement" }),
     );
     expect(strip.textContent).toContain("Kitchen shift swap");
-    expect(
-      screen.getByRole("button", { name: "Pinned announcements, 2 pinned" }),
-    ).toBeTruthy();
   });
 
   it("opens the pin's own page the desktop's way", () => {
@@ -350,5 +411,114 @@ describe("the Terminal", () => {
     type(input, "exit");
     expect(nav.replace).toHaveBeenCalledWith("/");
     expect(document.querySelector('[data-window="terminal"]')).toBeNull();
+  });
+});
+
+describe("the cats' places", () => {
+  it("puts Prince on the clock and Shadow Work under the Teams folder's icons, never labelled", async () => {
+    render(<Desktop {...props()} />);
+    // On the taskbar's clock. The cats arrive after the desktop
+    // (desktop-cats.tsx loads them lazily). An easter egg: no name, no Tab
+    // stop, hidden from assistive tech.
+    const taskbar = screen.getByRole("toolbar", { name: "Taskbar" });
+    await waitFor(() =>
+      expect(taskbar.querySelector('[data-cat="prince"]')).not.toBeNull(),
+    );
+    const prince = taskbar.querySelector<HTMLElement>('[data-cat="prince"]')!;
+    expect(prince.getAttribute("aria-hidden")).toBe("true");
+    expect(prince.tabIndex).toBe(-1);
+    expect(
+      within(taskbar).queryByRole("button", {
+        name: /^(a cat|prince|jinn)\b/i,
+      }),
+    ).toBeNull();
+    openStart();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Teams" }));
+    const teams = document.querySelector<HTMLElement>(
+      'section[data-window-title="Teams"]',
+    )!;
+    expect(teams).not.toBeNull();
+    await waitFor(() =>
+      expect(teams.querySelector("[data-shadow-work]")).not.toBeNull(),
+    );
+    const art = teams.querySelector<HTMLElement>("[data-shadow-work]")!;
+    expect(art.getAttribute("aria-hidden")).toBe("true");
+    // Below the icons, outside their list.
+    const list = within(teams).getByRole("list", { name: "Teams" });
+    expect(list.contains(art)).toBe(false);
+  });
+});
+
+describe("the cats keep out of the way", () => {
+  const KEYS = [
+    "ArrowUp",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+    "ArrowLeft",
+    "ArrowRight",
+    "b",
+    "a",
+  ];
+  const prince = () =>
+    document.querySelector<HTMLElement>(
+      '[role="toolbar"][aria-label="Taskbar"] [data-cat="prince"]',
+    );
+  /** The lazy cats (and the secret keys, in the same chunk) have arrived. */
+  const catsHere = () => waitFor(() => expect(prince()).not.toBeNull());
+  const konami = () =>
+    KEYS.forEach((key) => fireEvent.keyDown(window, { key }));
+
+  it("the full desktop's secret keys open the Terminal's game", async () => {
+    render(<Desktop {...props()} />);
+    await catsHere();
+    await waitFor(() => {
+      konami();
+      expect(nav.push).toHaveBeenCalledWith("/terminal/inkblot");
+    });
+  });
+
+  it("an applicant waiting for approval has no secret keys to press", async () => {
+    render(<Desktop {...props({ mode: "restricted" })} />);
+    await catsHere();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    konami();
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  it("Prince lets taps through to a window that reaches the clock", async () => {
+    const view = render(<Desktop {...props()} />);
+    await catsHere();
+    // The Tasks window opens right of the icons, clear of the bar.
+    expect(prince()!.className).not.toContain("pointer-events-none");
+    fireEvent.doubleClick(
+      document.querySelector<HTMLElement>(
+        '[data-window="tasks"] [data-titlebar]',
+      )!,
+    );
+    view.rerender(<Desktop {...props()} />);
+    expect(prince()!.className).toContain("pointer-events-none");
+  });
+});
+
+describe("a captain's Start menu header", () => {
+  it("counts the camp's members over the sign-ups waiting", () => {
+    render(<Desktop {...props({ headcount: { members: 34, waiting: 6 } })} />);
+    openStart();
+    const menu = screen.getByRole("menu", { name: "Start" });
+    expect(menu.textContent).toContain("34 members");
+    expect(menu.textContent).toContain("6 waiting");
+  });
+
+  it("says nothing of the sort for anyone else", () => {
+    render(<Desktop {...props()} />);
+    openStart();
+    expect(screen.getByRole("menu", { name: "Start" }).textContent).not.toMatch(
+      /waiting/,
+    );
   });
 });

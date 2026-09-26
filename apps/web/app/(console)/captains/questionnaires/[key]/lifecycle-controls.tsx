@@ -250,7 +250,7 @@ export function LifecycleRail({
   return (
     <aside
       aria-label="Publish and send"
-      className="flex flex-col gap-4 xl:sticky xl:top-32 xl:self-start"
+      className="flex flex-col gap-4 page-xl:sticky page-xl:top-32 page-xl:self-start"
     >
       {confirmDialog}
       <Card>

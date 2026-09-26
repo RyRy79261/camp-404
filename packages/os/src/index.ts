@@ -30,6 +30,8 @@ export { DesktopIcon } from "./desktop-icon";
 export { IconGroup } from "./icon-group";
 export { FolderWindow, type FolderItem } from "./folder-window";
 export { Boot } from "./boot";
+export { Surface } from "./surface";
+export { GlitchWordmark } from "./glitch-wordmark";
 export { PHONE_QUERY, usePhone } from "./use-phone";
 export {
   WindowDirtyProvider,
@@ -116,6 +118,8 @@ export {
   type BooleanStore,
 } from "./today-gadget";
 export {
+  TRAY_BOX,
+  TRAY_PIP,
   Tray,
   TrayBalloon,
   TrayButton,
@@ -123,3 +127,4 @@ export {
   type TraySlots,
 } from "./tray";
 export { focusFirst, tabStops, trapTab } from "./focus";
+export { OS_BUTTON_PRIMARY, OS_BUTTON_SECONDARY } from "./buttons";

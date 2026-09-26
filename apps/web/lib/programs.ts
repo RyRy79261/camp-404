@@ -133,6 +133,9 @@ const reviewsRecipes = (ctx: ProgramContext) =>
  */
 export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   // --- Me ------------------------------------------------------------------
+  // In the approved prototype's order (owner, 2026-09-26): Tasks and Calendar
+  // sit with the member's own things, then Camp is Roster, Teams, Meetings,
+  // Kitchen, Power, Family tree (the folders' `after` places them).
   {
     id: "inbox",
     label: "Inbox",
@@ -144,6 +147,24 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     applicants: true,
   },
   {
+    id: "tasks",
+    label: "Tasks",
+    fileName: "TASKS.EXE",
+    href: "/tasks",
+    icon: "tasks",
+    place: ME,
+    rank: "camp_member",
+  },
+  {
+    id: "calendar",
+    label: "Calendar",
+    fileName: "CALENDAR.EXE",
+    href: "/calendar",
+    icon: "calendar",
+    place: ME,
+    rank: "camp_member",
+  },
+  {
     id: "my-forms",
     label: "My forms",
     fileName: "MYFORMS.EXE",
@@ -153,20 +174,20 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     rank: "camp_member",
   },
   {
-    id: "account",
-    label: "My account",
-    fileName: "MY_ACCOUNT.CPL",
-    href: "/profile",
-    icon: "account",
-    place: ME,
-    rank: "camp_member",
-  },
-  {
     id: "invites",
     label: "Invites",
     fileName: "KEYGEN.EXE",
     href: "/tools/invite",
     icon: "invites",
+    place: ME,
+    rank: "camp_member",
+  },
+  {
+    id: "account",
+    label: "My account",
+    fileName: "MY_ACCOUNT.CPL",
+    href: "/profile",
+    icon: "account",
     place: ME,
     rank: "camp_member",
   },
@@ -184,24 +205,6 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   },
 
   // --- Camp ----------------------------------------------------------------
-  {
-    id: "tasks",
-    label: "Tasks",
-    fileName: "TASKS.EXE",
-    href: "/tasks",
-    icon: "tasks",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  {
-    id: "calendar",
-    label: "Calendar",
-    fileName: "CALENDAR.EXE",
-    href: "/calendar",
-    icon: "calendar",
-    place: CAMP,
-    rank: "camp_member",
-  },
   // A member program that lives under /captains: the page picks the
   // projection by rank (captain, lead or member), it never locks.
   {
@@ -222,15 +225,6 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
-  {
-    id: "family-tree",
-    label: "Family tree",
-    fileName: "LINEAGE.EXE",
-    href: "/family-tree",
-    icon: "family-tree",
-    place: CAMP,
-    rank: "camp_member",
-  },
   // /power sends on to the load list, so the icon goes straight there.
   {
     id: "power",
@@ -238,6 +232,15 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     fileName: "POWER.EXE",
     href: "/power/loads",
     icon: "power",
+    place: CAMP,
+    rank: "camp_member",
+  },
+  {
+    id: "family-tree",
+    label: "Family tree",
+    fileName: "LINEAGE.EXE",
+    href: "/family-tree",
+    icon: "family-tree",
     place: CAMP,
     rank: "camp_member",
   },
@@ -285,6 +288,15 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
 
   // --- Captains folder -------------------------------------------------------
   {
+    id: "overview",
+    label: "Camp overview",
+    fileName: "CAMPSTAT.EXE",
+    href: "/captains/overview",
+    icon: "overview",
+    place: CAPTAINS,
+    rank: "captain",
+  },
+  {
     id: "questionnaires",
     label: "Questionnaires",
     fileName: "FORMS.EXE",
@@ -310,15 +322,6 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     icon: "new-event",
     place: CAPTAINS,
     rank: "team_lead",
-  },
-  {
-    id: "overview",
-    label: "Camp overview",
-    fileName: "CAMPSTAT.EXE",
-    href: "/captains/overview",
-    icon: "overview",
-    place: CAPTAINS,
-    rank: "captain",
   },
   {
     id: "payments",
@@ -565,9 +568,23 @@ const FOLDERS: readonly {
   label: string;
   icon: string;
   group: ProgramGroup;
+  /** The program it follows on the desktop; else after the group's programs. */
+  after?: ProgramId;
 }[] = [
-  { id: "teams", label: "Teams", icon: "folder", group: "camp" },
-  { id: "kitchen", label: "Kitchen", icon: "folder", group: "camp" },
+  {
+    id: "teams",
+    label: "Teams",
+    icon: "folder",
+    group: "camp",
+    after: "roster",
+  },
+  {
+    id: "kitchen",
+    label: "Kitchen",
+    icon: "folder",
+    group: "camp",
+    after: "meetings",
+  },
   { id: "captains", label: "Captains", icon: "folder", group: "captains" },
 ];
 
@@ -791,6 +808,16 @@ export function buildProgramManifest(
     if (live && entry.id === "inbox" && inboxCount > 0) {
       program.badge = inboxCount;
     }
+    // System status wears the checks that need attention (the prototype's
+    // System health count), for the captain who may open it.
+    if (
+      live &&
+      entry.id === "system" &&
+      facts.healthWarnings !== null &&
+      facts.healthWarnings > 0
+    ) {
+      program.badge = facts.healthWarnings;
+    }
     return program;
   };
 
@@ -822,10 +849,12 @@ export function buildProgramManifest(
   }
 
   const programs = icons.filter((p) => p.folder === null);
-  const folders: ClientFolder[] = FOLDERS.map((folder) => ({
-    ...folder,
-    programs: icons.filter((p) => p.folder === folder.id),
-  })).filter((folder) => folder.programs.length > 0);
+  const folders: ClientFolder[] = FOLDERS.map(
+    ({ after: _after, ...folder }) => ({
+      ...folder,
+      programs: icons.filter((p) => p.folder === folder.id),
+    }),
+  ).filter((folder) => folder.programs.length > 0);
 
   // A program that ends its column (the Terminal) comes after the column's
   // folders. When nothing else is in its column (a member with no Captains
@@ -848,12 +877,28 @@ export function buildProgramManifest(
   const startMenu: StartMenuSection[] = [];
   for (const group of GROUPS) {
     const inGroup = programs.filter((p) => p.group === group.id);
+    const firsts = inGroup.filter(
+      (p) => !last.has(p.id as RegistryEntry["id"]),
+    );
+    const groupFolders = folders.filter((f) => f.group === group.id);
+    const anchorOf = (f: ClientFolder) =>
+      FOLDERS.find((x) => x.id === f.id)?.after;
+    // A folder follows its anchor program; one whose anchor this member
+    // does not have goes after the group's programs.
+    const anchored = (id: string) =>
+      groupFolders
+        .filter((f) => anchorOf(f) === id)
+        .map((f) => ({ kind: "folder" as const, id: f.id }));
     const items: DesktopItem[] = [
-      ...inGroup
-        .filter((p) => !last.has(p.id as RegistryEntry["id"]))
-        .map((p) => ({ kind: "program" as const, id: p.id })),
-      ...folders
-        .filter((f) => f.group === group.id)
+      ...firsts.flatMap((p) => [
+        { kind: "program" as const, id: p.id },
+        ...anchored(p.id),
+      ]),
+      ...groupFolders
+        .filter((f) => {
+          const at = anchorOf(f);
+          return !at || !firsts.some((p) => p.id === at);
+        })
         .map((f) => ({ kind: "folder" as const, id: f.id })),
       ...inGroup
         .filter((p) => last.has(p.id as RegistryEntry["id"]))
@@ -954,6 +999,10 @@ function accessVersion(body: Omit<ProgramManifest, "version">): string {
     JSON.stringify({
       ...body,
       programs: body.programs.map(noBadge),
+      folders: body.folders.map((f) => ({
+        ...f,
+        programs: f.programs.map(noBadge),
+      })),
       teamFolders: body.teamFolders.map((f) => ({
         ...f,
         programs: f.programs.map(noBadge),

@@ -47,6 +47,11 @@ type Props<K extends string> = {
    */
   onShowDesktop?: () => void;
   /**
+   * The console's taskbar (the approved prototype): a rule after Start, and
+   * a magenta line under the window button that is on top.
+   */
+  console?: boolean;
+  /**
    * Draw a Start menu of your own (the grouped one) instead of the flat list
    * of `startItems`. Given the Start button, to leave alone on a press away,
    * and the way to shut the menu.
@@ -71,6 +76,7 @@ export function Taskbar<K extends string>({
   tray,
   renderStartMenu,
   onShowDesktop,
+  console: consoleLook = false,
 }: Props<K>) {
   const [menu, setMenu] = useState(false);
   const start = useRef<HTMLButtonElement>(null);
@@ -108,12 +114,15 @@ export function Taskbar<K extends string>({
           onClick={() => setMenu((m) => !m)}
           className={`flex h-8 shrink-0 items-center gap-2 border px-3 font-pixel text-xs uppercase ${
             menu
-              ? "border-os-primary bg-os-primary text-os-primary-fg"
+              ? "border-os-primary bg-os-primary text-os-bg"
               : "border-os-line bg-os-panel text-os-fg hover:border-os-primary"
           }`}
         >
           {startLabel}
         </button>
+        {consoleLook && (
+          <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-os-line" />
+        )}
         <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
           {windows.map((w) => {
             const active = w.id === topId && !w.minimized;
@@ -127,7 +136,11 @@ export function Taskbar<K extends string>({
                 onClick={() => onToggleWindow(w.id)}
                 className={`flex h-8 min-w-0 max-w-44 shrink-0 items-center gap-2 border px-2 font-pixel text-[10px] uppercase ${
                   active
-                    ? "border-os-primary bg-os-bg text-os-fg"
+                    ? `border-os-primary bg-os-bg text-os-fg ${
+                        consoleLook
+                          ? "shadow-[inset_0_-2px_0_0_var(--os-primary)]"
+                          : ""
+                      }`
                     : w.minimized
                       ? "border-os-line border-dashed bg-os-panel text-os-muted"
                       : "border-os-line bg-os-panel text-os-fg"

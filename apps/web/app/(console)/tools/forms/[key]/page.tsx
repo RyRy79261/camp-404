@@ -72,8 +72,8 @@ export default async function FormReplayPage({
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      <div className="grid gap-6 page-lg:grid-cols-3">
+        <Card className="page-lg:col-span-2">
           <CardContent className="flex flex-col p-6">
             <FormReplay
               formKey={form.key}

@@ -196,6 +196,16 @@ export async function openConsoleNav(
     return folderList(page, place);
   }
   const group = menu.getByRole("group", { name: place, exact: true });
+  if ((await group.count()) === 0) {
+    // A team folder ("Kitchen team") lives on the desktop, not in the Start
+    // menu (its team's page is in My teams there): open it from its icon.
+    const teamFolder = desktopIcon(page, place);
+    if ((await teamFolder.count()) > 0) {
+      await closeConsoleNav(page);
+      await teamFolder.dblclick();
+      return folderList(page, place);
+    }
+  }
   await expect(group).toBeVisible();
   return group;
 }

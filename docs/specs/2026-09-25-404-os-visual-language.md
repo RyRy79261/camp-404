@@ -9,6 +9,102 @@ on the chrome, and the two cats (design doc, "The owner's second review").
 Several details still need his ruling (see section 12), and every control
 still needs his screenshot approval (section 7).
 
+[CORRECTION 2026-09-26] The owner approved the prototype as the design
+(2026-09-26, on PR C: "This doesn't have the same styling as we had in the
+prototype … the camp 404 message on the desktop isn't there and the CRT
+effect is missing and the folder icons look different"). Where this document
+and `apps/join/app/prototype/captain-desktop` (variant A) differ, the
+prototype wins, and the console now follows it:
+
+- **Today is on every screen, over the windows** (the prototype's pop-out:
+  the handle attached to a panel that slides in), not docked below the window
+  layer on `/` only (4.5, 4.9). It sits in band 30 of the desktop area,
+  under the taskbar (90) and the Start menu (100).
+- **Pinned announcements are a line in the header** (md and up), as the
+  prototype's ticker, not a strip above the taskbar (4.7); they do not turn
+  by themselves, and the tray no longer counts them.
+- **Title bar text** is the prototype's near-white on magenta (3.6:1,
+  measured in `apps/web/lib/__tests__/os-skin-contrast.test.ts`), not the dark
+  text 2.3 asks for; filled buttons in windows carry the dark text (5.3:1).
+  [CORRECTION 2026-09-26] The main button is the prototype's near-white slab
+  with a magenta shadow (below), dark text on near-white.
+- **Body text is Inter** (decision 10 B), Silkscreen the chrome; headings in
+  windows are Silkscreen (2.2's mapping, done with `data-os-skin`, 5).
+- **The Start menu** stands its groups in the prototype's three columns (Me
+  with My teams, Camp with the Kitchen's programs, Captains with the
+  Terminal); the Kitchen and Captains folders are opened out there, and My
+  teams lists the member's team pages then the Teams folder. Its bottom row
+  is Tidy windows, Line up icons, Show desktop, Report a problem and Log off.
+- **Team folders on the desktop** are the folder drawing with a LEAD tag,
+  as the prototype draws them; the team's pixel icon is on its page inside,
+  in the Teams folder and in My teams.
+- **The tray** is the prototype's row of bordered boxes: the bell, the
+  warning, "N days to the Burn" and the clock (with Prince's place on it).
+- The phone keeps PR C's bar functions (Home, Programs, the bell, Today) in
+  the prototype's cells, and adds its clock cell.
+- [CORRECTION 2026-09-26, second comparison] **The main button is Join's
+  "Run APPLY.EXE" slab**, as the prototype's kit draws its primary button: a
+  near-white block with dark `os-bg` text and a 4 px magenta offset shadow,
+  filled magenta under the pointer, the shadow dropped when pressed. Magenta
+  is the shadow and the hover, not the fill (`apps/web/app/globals.css`,
+  `packages/os/src/buttons.ts`).
+- **Windows open at the prototype's sizes** (its `_proto/programs.ts`): M
+  720 x 520 is the default; L 880 x 600 and XL 1040 x 660 for the pages it
+  gives them; New event S 520 x 440; Terminal 640 x 420; the Teams folder
+  620 x 600, Kitchen 440 x 180, Captains 560 x 340.
+- **The Today gadget has no greeting**: its title strip ("TODAY · SAT 26
+  SEPT", now the panel's heading) is the top, then the countdown, Needs you,
+  Coming up (each row a weekday-and-day tile, a kind icon, "Tomorrow ·
+  10:00") and My tasks, which is always drawn ("No open tasks. Nice.").
+- **Counts on icons**: System status wears the checks that need attention,
+  and a camp folder wears the sum of its programs' counts (the prototype's
+  Captains folder). The Captains folder lists Camp overview first.
+- **The blocking form's heading is lit** (`os-glow`), as the prototype's.
+- [CORRECTION 2026-09-26, review of PR D] **Inside a window the kit's parts
+  wear the prototype's kit**, not only its chrome: a field's label (the
+  kit's `Label`, a questionnaire's prompt, a filter's) is the prototype's
+  FieldLabel, 10 px Silkscreen capitals in `os-muted`; a headline number
+  (`data-kpi`) is its Kpi, the label and the figure in Silkscreen on a panel
+  tile with a coloured left edge; a filter chip is its tab, pixel capitals
+  with the count in a box; a progress bar is square and cut into blocks; a
+  toast is its toast, a panel with a magenta stripe (blue for done), a small
+  pixel title and no icon. `apps/web/lib/__tests__/os-skin-kit.test.tsx`.
+- [CORRECTION 2026-09-26] **Mono is the system's monospace** (ui-monospace,
+  SF Mono, Menlo, Consolas), as the prototype and Join, not JetBrains Mono:
+  the skin points `--font-mono` at `--os-font-mono`. Section 3's table is
+  the record of the earlier plan.
+- [CORRECTION 2026-09-26] **Contrast, as built** (2.3 re-measured in
+  `os-skin-contrast.test.ts`, which lists every pair the chrome draws):
+  near-white on magenta is only on a title bar (a window's, a dialog's, the
+  blocking form's, a gate's, a phone sheet's) and the Start menu's spine,
+  the one exception, and the test fails if it appears anywhere else; every
+  other magenta fill (a lit Start or menu row, the open Start button, an
+  open icon's name, the open Today handle, the phone bar's open cell, the
+  skip link) carries the dark violet (5.3:1). An unfocused title is the
+  quiet colour lifted (`color-mix(muted 60%, fg)`, 5.5:1 on the chrome);
+  small magenta text is lifted (`color-mix(primary 70%, fg)`, 6.6:1); an
+  icon on the chrome is the lifted blue (4.3:1); the focus ring on the
+  taskbar and the phone's bar is near-white (9.3:1), magenta elsewhere.
+- [CORRECTION 2026-09-26] **The cats are pointer-only easter eggs**: Prince
+  and Jinn are hidden from assistive tech and out of the Tab order, and
+  Shadow Work's whole strip is hidden; nothing names them. Prince lets taps
+  through (`pointer-events: none`) wherever a window, the Today panel or a
+  phone program reaches down to the clock.
+- [CORRECTION 2026-09-26] **The CRT surface and the wordmark rest when
+  covered**: the blocking form, a maximised window and, on a phone, a
+  program or sheet put them under `data-os-paused`, as a hidden tab does.
+  The beam steps at 8 frames a second (`steps(56)` over 7 s), like every
+  other loop on the desktop.
+- [CORRECTION 2026-09-26] **Held, the desktop stays whole behind the
+  form**, as the prototype's locked desktop: the header and a picture of the
+  taskbar (its Start slab and clock), inert and dimmed.
+- [CORRECTION 2026-09-26] **The captain's Start menu header** carries the
+  prototype's head count at its right ("34 MEMBERS" over a lifted-magenta
+  "6 WAITING"). **Today's countdown on a phone** carries the prototype's
+  24-block run-up bar, from last year's Burn to this one, when both dates
+  are known. The prototype's "Build starts in N days" line is not drawn:
+  the camp records no build date.
+
 Related documents:
 
 - Architecture and routing: `docs/specs/2026-09-25-404-os-console-design.md`
@@ -382,6 +478,12 @@ From the prototype (`_proto/desktop-items.tsx`, `ContextMenu`):
   above the taskbar, on `os-panel` with an `os-line` left border. It sits
   above the wallpaper and below the window layer, so it never covers a
   focused window. Esc inside it closes it and returns focus to the handle.
+- [CORRECTION 2026-09-26] As the approved prototype draws it: the panel
+  slides in OVER the windows, the handle attached to its left edge and level
+  with its top (8 px down), not centred. Only while a full-screen window is
+  up does the handle drop below that window's title bar, so it never sits on
+  its buttons; a new window leaves 52 px at the right edge for the same
+  reason.
 - The choice is remembered per browser (`localStorage`
   `camp404.os.today-open`, a boolean). Opening plays `.os-window-in`; closing
   is instant.
@@ -711,6 +813,9 @@ phone home screen, not a shrunk desktop.
   mono labels under glyphs.
 - **Today is a sheet** from the bottom bar, full width, up to 80% of the
   height, with a grab bar and a Close. It starts closed on a hard load.
+  [CORRECTION 2026-09-26] It fills the screen above the bar, with the big
+  Back, and the gadget sits boxed inside it, as the prototype's phone draws
+  Today. No grab bar.
 - History Back also works, as a second way out: opening a window from the
   home screen or the switcher pushes an entry, and a Back that lands on a
   different window's page closes the window it left, so background windows
@@ -760,6 +865,10 @@ today (Tasks, Roster, Power, Meal plan, Payments, questionnaire results, the
 builder, the recipe rail, `ResponsiveDataTable`) move to `@md:`/`@lg:`
 variants in PR E. Until a page is moved, its window opens maximised on
 desktop so the viewport breakpoints still tell the truth.
+[CORRECTION 2026-09-26] The pages now use the `page-*` variants, and no
+window opens maximised (see the design doc, section on what is deferred).
+A background window's last-seen copy (a shadow root) wears the skin too:
+every skin rule in `apps/web/app/globals.css` also names `:host`.
 
 ## 11. What stays from the current design
 

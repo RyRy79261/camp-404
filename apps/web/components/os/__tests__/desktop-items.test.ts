@@ -52,10 +52,11 @@ describe("desktopSpec", () => {
     );
     const spec = desktopSpec(m, EMPTY);
     const [me, camp, captains] = spec.columns;
-    expect(me).toContain("inbox");
-    expect(me).not.toContain("tasks");
+    // The approved prototype's columns: Tasks and Calendar with Me.
+    expect(me).toEqual(expect.arrayContaining(["inbox", "tasks", "calendar"]));
+    expect(camp).not.toContain("tasks");
     expect(camp).toEqual(
-      expect.arrayContaining(["tasks", "roster", "folder:teams"]),
+      expect.arrayContaining(["roster", "folder:teams", "folder:kitchen"]),
     );
     // The Terminal ends the Captains column, after the folder.
     expect(captains).toEqual(["folder:captains", "terminal"]);

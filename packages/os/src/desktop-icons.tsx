@@ -512,7 +512,7 @@ export function DesktopIcons({
             <span aria-hidden className="relative">
               {item.icon(iconClass)}
               {item.badge ? (
-                <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-4 place-items-center bg-os-primary px-0.5 font-mono text-[10px] font-bold leading-none text-os-primary-fg">
+                <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-4 place-items-center bg-os-primary px-0.5 font-mono text-[10px] font-bold leading-none text-os-bg">
                   {item.badge > 99 ? "99+" : item.badge}
                 </span>
               ) : null}
@@ -527,7 +527,7 @@ export function DesktopIcons({
               {item.lead && (
                 <span
                   data-lead
-                  className="absolute -left-4 -top-1.5 border border-os-primary bg-os-bg px-0.5 font-pixel text-[10px] uppercase leading-tight text-os-fg"
+                  className="absolute -left-4 -top-1.5 border border-os-primary bg-os-bg px-0.5 font-pixel text-[8px] uppercase leading-tight text-os-fg"
                 >
                   Lead
                 </span>
@@ -549,10 +549,10 @@ export function DesktopIcons({
             <span
               aria-hidden
               data-label={item.label}
-              className={`line-clamp-2 max-w-full px-1 py-0.5 text-center font-pixel text-[11px] uppercase leading-tight after:content-[attr(data-label)] ${
+              className={`line-clamp-2 max-w-full px-1 py-0.5 text-center font-pixel text-[10px] uppercase leading-tight tracking-normal after:content-[attr(data-label)] ${
                 item.open || isSelected
-                  ? "bg-os-primary text-os-primary-fg"
-                  : "bg-os-chrome/80 text-os-fg group-hover:bg-os-primary group-hover:text-os-primary-fg group-focus-visible:bg-os-primary group-focus-visible:text-os-primary-fg"
+                  ? "bg-os-primary text-os-bg"
+                  : "bg-os-chrome/80 text-os-fg group-hover:bg-os-primary group-hover:text-os-bg group-focus-visible:bg-os-primary group-focus-visible:text-os-bg"
               }`}
             />
           </div>

@@ -12,9 +12,11 @@ import {
 
 /**
  * The roster view on screen. The roster ships TWO views and keeps both in the
- * DOM, a table from md up (`hidden md:block`) and a card list below it
- * (`md:hidden`), so every row button exists twice: scope to the one this
- * width shows.
+ * DOM, a table from md up (`hidden page-md:block`, by the window's width) and
+ * a card list below it (`page-md:hidden`), so every row button exists twice:
+ * scope to the one this width shows. The roster opens as a large window
+ * (the prototype's XL, cut to the room right of the icons), wide enough for
+ * the table on a desktop screen.
  */
 function rosterView(page: Page) {
   return usesPhoneLayout(page)

@@ -17,6 +17,18 @@ type Props<K extends string> = {
   win: OsWindow<K>;
   title: string;
   /**
+   * The old file name's extension after the title, quiet (decision 9 B:
+   * "Roster .db"). Hidden from assistive tech and on a phone; the window's
+   * name is the title alone.
+   */
+  suffix?: string;
+  /**
+   * Something drawn over the frame's top edge, outside the body (a cat that
+   * peeks over the focused window now and then). Decorative: the caller
+   * keeps it `aria-hidden` and free of pointer events.
+   */
+  decoration?: ReactNode;
+  /**
    * Draw the title as an h2. Off by default: in the console the page inside
    * the window owns the headings. Join's windows sit under its page h1 and
    * start at h3, so Join turns it on.
@@ -128,6 +140,8 @@ function track(
 export function OsWindowFrame<K extends string>({
   win,
   title,
+  suffix,
+  decoration,
   titleHeading = false,
   isTop,
   hidden,
@@ -273,6 +287,7 @@ export function OsWindowFrame<K extends string>({
       style={placement}
       className={`os-window-in pointer-events-auto flex flex-col outline-none ${frameClass} bg-os-panel`}
     >
+      {decoration}
       <div
         data-titlebar
         onPointerDown={startDrag}
@@ -286,7 +301,9 @@ export function OsWindowFrame<K extends string>({
         } ${fills ? "" : responsive ? "md:cursor-grab md:active:cursor-grabbing" : "cursor-grab active:cursor-grabbing"} ${
           isTop
             ? "border-os-primary bg-os-primary text-os-primary-fg"
-            : "border-os-line bg-os-chrome text-os-muted"
+            : // The quiet colour lifted toward the text (5.5:1 on the chrome;
+              // plain muted is 3.7:1).
+              "border-os-line bg-os-chrome text-[color-mix(in_oklch,var(--os-muted)_60%,var(--os-fg))]"
         }`}
       >
         {responsive && (
@@ -299,22 +316,46 @@ export function OsWindowFrame<K extends string>({
             aria-label={`Back, close ${title}`}
             className="flex h-12 min-w-11 shrink-0 items-center gap-1 pl-2 pr-3 font-pixel text-xs uppercase hover:bg-os-bg/30 md:hidden"
           >
-            <span aria-hidden className="text-lg leading-none">
-              ‹
-            </span>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="square"
+              strokeLinejoin="miter"
+              aria-hidden
+              className="size-5 shrink-0"
+            >
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
             Back
           </button>
         )}
-        <Title
-          id={titleId}
-          className={`truncate font-pixel text-xs uppercase tracking-[0.2em] ${
-            responsive
-              ? "max-md:min-w-0 max-md:flex-1 max-md:text-center max-md:text-sm"
-              : ""
-          } ${pending ? "os-pending" : ""}`}
+        <span
+          className={`flex min-w-0 items-baseline gap-2 ${
+            responsive ? "max-md:flex-1 max-md:justify-center" : ""
+          }`}
         >
-          {title}
-        </Title>
+          <Title
+            id={titleId}
+            className={`truncate font-pixel text-xs uppercase tracking-[0.2em] ${
+              responsive ? "max-md:text-center max-md:text-sm" : ""
+            } ${pending ? "os-pending" : ""}`}
+          >
+            {title}
+          </Title>
+          {suffix && (
+            <span
+              aria-hidden
+              data-suffix
+              className={`shrink-0 font-mono text-[10px] normal-case tracking-normal opacity-55 ${
+                responsive ? "max-md:hidden" : ""
+              }`}
+            >
+              {suffix}
+            </span>
+          )}
+        </span>
         {responsive && (
           // Balances the Back button, so the title sits in the middle.
           <span aria-hidden className="w-[4.75rem] shrink-0 md:hidden" />
@@ -369,11 +410,14 @@ export function OsWindowFrame<K extends string>({
       </div>
       {/* Its own scroll box and size container, keyed by the window, so one
           window's scroll position never carries into another. Its text can be
-          selected, though the desktop's chrome around it cannot. */}
+          selected, though the desktop's chrome around it cannot. The page
+          container: the kit's page-sm/md/lg/xl variants lay the page out by
+          this box's width, not the screen's (@camp404/ui styles). */}
       <div
         key={win.id}
         data-window-body
-        className="@container min-h-0 flex-1 select-text overflow-auto overscroll-contain"
+        data-page-container
+        className="@container/page min-h-0 flex-1 select-text overflow-auto overscroll-contain"
       >
         <WindowKeyProvider windowKey={win.id}>{children}</WindowKeyProvider>
       </div>

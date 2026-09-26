@@ -56,6 +56,7 @@ const SIGNALS: DesktopSignals = {
   hold: () => {},
   open: () => {},
   closeLive: () => {},
+  effect: () => {},
 };
 /** A page inside the desktop: its signals are there. */
 const onDesktop = {

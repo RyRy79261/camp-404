@@ -42,6 +42,25 @@ function memoryStore(initial: boolean | null = null): BooleanStore & {
 afterEach(() => window.localStorage.clear());
 
 describe("TodayGadget", () => {
+  it("puts the handle at the panel's top, and below a full-screen title bar", () => {
+    const { rerender } = render(
+      <TodayGadget open={false} onOpenChange={() => {}}>
+        <p>Body</p>
+      </TodayGadget>,
+    );
+    const handle = () => screen.getByRole("button", { name: "Show Today" });
+    // The prototype's spot: level with the top of the panel.
+    expect(handle().className).toMatch(/\bmt-2\b/);
+    rerender(
+      <TodayGadget open={false} onOpenChange={() => {}} clearTitleBar>
+        <p>Body</p>
+      </TodayGadget>,
+    );
+    // Clear of a full-screen window's minimise, restore and close.
+    expect(handle().className).toMatch(/\bmt-12\b/);
+    expect(handle().className).not.toMatch(/\bmt-2\b/);
+  });
+
   it("is closed by default: a handle, and no body in the DOM", () => {
     render(<Gadget store={memoryStore()} count={3} />);
     const handle = screen.getByRole("button", { name: "Show Today, 3 due" });
@@ -111,5 +130,22 @@ describe("localStorageBoolean", () => {
       );
     });
     expect(screen.getByText("Your to-dos")).toBeTruthy();
+  });
+});
+
+describe("TodayGadget over the windows", () => {
+  it("lets a press through its frame to a window beneath, but not through its handle or panel", () => {
+    const store = memoryStore(true);
+    const { container } = render(<Gadget store={store} count={2} />);
+    const frame = container.querySelector<HTMLElement>("[data-os-today]")!;
+    expect(frame.className).toContain("pointer-events-none");
+    const handle = screen.getByRole("button", { name: /^Hide Today/ });
+    expect(handle.className).toContain("pointer-events-auto");
+    expect(
+      screen.getByRole("complementary", { name: "Today" }).className,
+    ).toContain("pointer-events-auto");
+    // It slides in when it opens; the handle rides on the panel's edge.
+    expect(frame.className).toContain("os-slide-in");
+    expect(frame.firstElementChild).toBe(handle);
   });
 });

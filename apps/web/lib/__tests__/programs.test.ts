@@ -120,18 +120,19 @@ describe("buildProgramManifest: the personas", () => {
       facts({ memberships: [{ team: STRUCTURES, isLead: false }] }),
     );
     expect(m.desktop).toEqual([
+      // The approved prototype's order (owner, 2026-09-26).
       { kind: "program", id: "inbox" },
-      { kind: "program", id: "my-forms" },
-      { kind: "program", id: "account" },
-      { kind: "program", id: "invites" },
       { kind: "program", id: "tasks" },
       { kind: "program", id: "calendar" },
+      { kind: "program", id: "my-forms" },
+      { kind: "program", id: "invites" },
+      { kind: "program", id: "account" },
       { kind: "program", id: "roster" },
-      { kind: "program", id: "meetings" },
-      { kind: "program", id: "family-tree" },
-      { kind: "program", id: "power" },
       { kind: "folder", id: "teams" },
+      { kind: "program", id: "meetings" },
       { kind: "folder", id: "kitchen" },
+      { kind: "program", id: "power" },
+      { kind: "program", id: "family-tree" },
       // No Captains column for them: the Terminal ends Camp.
       { kind: "program", id: "terminal" },
     ]);
@@ -163,6 +164,15 @@ describe("buildProgramManifest: the personas", () => {
       warnings: 2,
       href: "/captains/system",
     });
+    // System status wears the count, as the prototype's System health does.
+    const system = folder(m, "captains")?.programs.find(
+      (p) => p.id === "system",
+    );
+    expect(system?.badge).toBe(2);
+    const quiet = buildProgramManifest(facts({ rank: CAPTAIN }));
+    expect(
+      folder(quiet, "captains")?.programs.find((p) => p.id === "system")?.badge,
+    ).toBeUndefined();
   });
 
   it("gives a Kitchen lead Recipe review and the lead programs, and no captain ones", () => {
@@ -229,11 +239,12 @@ describe("buildProgramManifest: the personas", () => {
 
   it("gives a captain every program, and captain-only children", () => {
     const m = buildProgramManifest(facts({ rank: CAPTAIN }));
+    // The prototype's order: Camp overview first.
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
+      "overview",
       "questionnaires",
       "announcements",
       "new-event",
-      "overview",
       "payments",
       "camp-settings",
       "join-site",

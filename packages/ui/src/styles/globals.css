@@ -10,6 +10,63 @@
 @source "../components/**/*.{ts,tsx}";
 
 /* ===========================================================================
+   Page-width variants: page-sm, page-md, page-lg, page-xl.
+
+   Tailwind's sm/md/lg/xl ask how wide the SCREEN is. A console page lives in
+   a 404 OS window, which may be 470px wide on a 1920px screen, and a page
+   laid out for the screen then squeezes its heading to one word a line. These
+   ask how wide the PAGE's box is instead: inside an element marked
+   `data-page-container` with the `@container/page` class (every OS window's
+   body), they answer for that box; anywhere else (a page outside the
+   desktop, a sign-in page) they answer for the screen, exactly as sm/md/lg/xl
+   do. Same widths as Tailwind's breakpoints: 40rem, 48rem, 64rem, 80rem.
+
+   Use them for a page's own scaffolding (the heading row, a page's column
+   split, a data table's switch to cards). A dialog or popover is portalled to
+   <body>, outside any window, and keeps screen breakpoints either way.
+   =========================================================================== */
+@custom-variant page-sm {
+  @media (width >= 40rem) {
+    &:where(:not([data-page-container] *)) {
+      @slot;
+    }
+  }
+  @container page (width >= 40rem) {
+    @slot;
+  }
+}
+@custom-variant page-md {
+  @media (width >= 48rem) {
+    &:where(:not([data-page-container] *)) {
+      @slot;
+    }
+  }
+  @container page (width >= 48rem) {
+    @slot;
+  }
+}
+@custom-variant page-lg {
+  @media (width >= 64rem) {
+    &:where(:not([data-page-container] *)) {
+      @slot;
+    }
+  }
+  @container page (width >= 64rem) {
+    @slot;
+  }
+}
+@custom-variant page-xl {
+  @media (width >= 80rem) {
+    &:where(:not([data-page-container] *)) {
+      @slot;
+    }
+  }
+  @container page (width >= 80rem) {
+    @slot;
+  }
+}
+
+/* ===========================================================================
    Camp 404 design tokens — taken from the AfrikaBurn contributors app
    ("Tankwa Night": dark-mode-first, shadcn semantic tokens, Montserrat).
    Camp 404 wears its own accent skin, `.camp-accent` on <html>, the same way
@@ -94,8 +151,8 @@
   /* Brand face — Montserrat, supplied by each app via next/font as
      `--font-brand`. Falls through to the system stack until then. */
   --font-sans:
-    var(--font-brand), ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    var(--font-brand), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono:
     var(--font-brand-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
     Consolas, monospace;

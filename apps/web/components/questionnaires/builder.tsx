@@ -522,7 +522,7 @@ export function QuestionnaireBuilderV2({
         }}
       />
 
-      <div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
+      <div className="grid gap-6 page-lg:grid-cols-[13rem_minmax(0,1fr)] page-xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
         <PaletteRail
           activeLabel={activePage ? sectionLabel(activePage, activeIndex) : "—"}
           onAdd={(kind) => addBlock(kind)}
@@ -607,7 +607,7 @@ export function QuestionnaireBuilderV2({
 
       {/* Stays in view, as Camp 404's save bar did: a long questionnaire
           should not hide the one button that keeps the work. */}
-      <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+      <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur page-sm:-mx-6 page-sm:px-6">
         <span
           role="status"
           aria-live="polite"
@@ -663,7 +663,7 @@ function PaletteRail({
   return (
     <aside
       aria-label="Add a block"
-      className="lg:sticky lg:top-32 lg:max-h-[calc(100svh-9rem)] lg:self-start lg:overflow-y-auto"
+      className="page-lg:sticky page-lg:top-32 page-lg:max-h-[calc(100svh-9rem)] page-lg:self-start page-lg:overflow-y-auto"
     >
       <Card>
         <CardContent className="flex flex-col gap-3 p-3">

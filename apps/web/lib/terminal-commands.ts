@@ -67,7 +67,7 @@ export const WELCOME: readonly TermLine[] = [
 ];
 
 // Never a cat or a game here (visual-language doc 4.6: "if you know you
-// know").
+// know"). The last line is the prototype's, and names nothing.
 const HELP: readonly [string, string][] = [
   ["help", "this list"],
   ["ls [folder]", "list your programs, or what a folder holds"],
@@ -76,6 +76,22 @@ const HELP: readonly [string, string][] = [
   ["clear", "clear the screen"],
   ["exit", "close the terminal"],
 ];
+const HELP_TAIL = "…and a few things we're not telling you about.";
+
+/** The password that opens INKBLOT, the same as on the Join site. */
+export const INKBLOT_PASSWORD = "jinn-is-best";
+
+/**
+ * What a cat command asks the desktop for besides its lines (the approved
+ * prototype's): paw prints behind the pointer ("meow", again to stop), or
+ * Jinn peeking over the focused window at once ("sudo feed cat").
+ */
+export const TERMINAL_EFFECTS = ["paws", "peek"] as const;
+export type TerminalEffect = (typeof TERMINAL_EFFECTS)[number];
+
+export function isTerminalEffect(value: string): value is TerminalEffect {
+  return (TERMINAL_EFFECTS as readonly string[]).includes(value);
+}
 
 /** A typed name, loosened: case, a trailing file extension, extra spaces. */
 function loose(text: string): string {
@@ -106,6 +122,11 @@ export function findProgram(
 
 function ls(arg: string, ctx: TerminalContext): TermResult<string> {
   const folder = loose(arg).replace(/\/$/, "");
+  // `ls -a` shows the hidden file too, and nothing else ever names it.
+  if (folder === "-a" || folder === "-la" || folder === "-al") {
+    const all = ls("", ctx);
+    return { lines: [...all.lines, out(".cat")] };
+  }
   if (folder) {
     const inside = ctx.programs.filter(
       (p) => p.folder !== null && loose(p.folder) === folder,
@@ -130,19 +151,52 @@ function ls(arg: string, ctx: TerminalContext): TermResult<string> {
   return { lines: lines.length ? lines : [out("Nothing here yet.")] };
 }
 
-const CATS: Readonly<Record<string, readonly string[]>> = {
-  jinn: ["Jinn. All black. Who is best?", "Jinn is best."],
-  prince: [
-    "Prince. White and fluffy, black cap, black tail.",
-    "Asleep on the clock. Do not wake him.",
-  ],
-};
+// The two cats' files (the approved prototype's words), `cat` and `cat .cat`.
+const CAT_ART: readonly string[] = [
+  " /\\_/\\ ",
+  "( o.o )   Two cats live here. Jinn, head of camp security,",
+  " > ^ <    and Prince, asleep on the clock. Try 'cat jinn'.",
+];
+
+function catFile(arg: string): TermResult<string> {
+  const file = loose(arg)
+    .replace(/^~\//, "")
+    .replace(/\.txt$/, "");
+  if (!file) return { lines: CAT_ART.map(out) };
+  if (file === "jinn") {
+    return {
+      lines: [
+        hi("JINN.TXT"),
+        out("Black. Shiny. Knocks things off tables for sport."),
+        out("Has a password somewhere. It is not 'password'."),
+      ],
+    };
+  }
+  if (file === "prince") {
+    return {
+      lines: [
+        hi("PRINCE.TXT"),
+        out("White and fluffy, black cap, black tail like a feather duster."),
+        out("Sleeps on the clock, so time passes. Do not wake him."),
+      ],
+    };
+  }
+  if (file === ".cat") {
+    return {
+      lines: [
+        out("You found the hidden file. Jinn found it first."),
+        out(`Hint: ${INKBLOT_PASSWORD.replace(/[aeiou]/g, "_")}`),
+      ],
+    };
+  }
+  return { lines: [err(`cat: ${arg}: No such file. A cat sat on it.`)] };
+}
 
 export const CONSOLE_COMMANDS: CommandTable<string, TerminalContext> = {
   // Whole phrases first: the easter eggs, which `help` never lists.
   phrases: [
     ({ lower }) =>
-      lower === "jinn-is-best"
+      lower === INKBLOT_PASSWORD
         ? {
             lines: [
               hi("ACCESS GRANTED. Jinn is, in fact, best."),
@@ -151,26 +205,63 @@ export const CONSOLE_COMMANDS: CommandTable<string, TerminalContext> = {
             open: INKBLOT_ID,
           }
         : undefined,
-    ({ cmd }) =>
-      cmd === "meow"
-        ? { lines: [out("=^.^=  Somewhere, a black cat looks up.")] }
-        : undefined,
-    ({ cmd, arg }) => {
-      if (cmd !== "cat") return undefined;
-      const who = CATS[loose(arg)];
-      if (who) return { lines: who.map((t, i) => (i === 0 ? hi(t) : out(t))) };
-      return {
-        lines: [err(arg ? `cat: ${arg}: No such file.` : "cat: which file?")],
-      };
+    ({ lower }) => {
+      const said = lower.replace(/\s+/g, " ");
+      if (said === "sudo feed cat" || said === "sudo feed the cat") {
+        return {
+          lines: [
+            hi("[sudo] opening a tin…"),
+            out("Jinn appears from nowhere. Jinn was always here."),
+            out("Purring at 404 Hz. Watch the top of your windows."),
+          ],
+          effect: "peek" satisfies TerminalEffect,
+        };
+      }
+      if (said === "feed cat" || said === "feed the cat") {
+        return {
+          lines: [
+            err("Permission denied. Only captains with sudo may open the tin."),
+          ],
+        };
+      }
+      return undefined;
     },
     ({ cmd }) =>
+      cmd === "meow"
+        ? {
+            lines: [
+              out(
+                "meow? =^.^=  Little paws follow your pointer now. 'meow' again stops them.",
+              ),
+            ],
+            effect: "paws" satisfies TerminalEffect,
+          }
+        : undefined,
+    ({ cmd, arg }) =>
+      cmd === "pet" || cmd === "purr"
+        ? {
+            lines: [
+              out("prrrrrrrrrrrrr…"),
+              out(
+                arg
+                  ? `${arg} tolerates it. For now.`
+                  : "Jinn leans into it, then bites you. Affectionately.",
+              ),
+            ],
+          }
+        : undefined,
+    ({ cmd, arg }) => (cmd === "cat" ? catFile(arg) : undefined),
+    ({ cmd }) =>
       cmd === "sudo"
-        ? { lines: [err("Nice try. Captains have been told.")] }
+        ? { lines: [err("Nice try. Even captains answer to the cat.")] }
         : undefined,
   ],
   commands: {
     help: () => ({
-      lines: HELP.map(([c, d]) => out(`${c.padEnd(16)} ${d}`)),
+      lines: [
+        ...HELP.map(([c, d]) => out(`${c.padEnd(16)} ${d}`)),
+        out(HELP_TAIL),
+      ],
     }),
     ls: ({ arg }, ctx) => ls(arg, ctx),
     open: ({ arg }, ctx) => {

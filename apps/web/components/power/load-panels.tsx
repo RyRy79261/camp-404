@@ -54,7 +54,10 @@ export function PowerKpiCards({
   return (
     <section
       aria-label={label}
-      className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-4", className)}
+      className={cn(
+        "grid gap-4 page-sm:grid-cols-2 page-lg:grid-cols-4",
+        className,
+      )}
     >
       {kpis.map((kpi) => (
         <Card
@@ -144,7 +147,10 @@ export function GeneratorRail({
         ) : (
           <>
             <p className="flex flex-wrap items-baseline gap-x-2">
-              <span className="text-2xl font-extrabold tabular-nums">
+              <span
+                data-kpi-value
+                className="text-2xl font-extrabold tabular-nums"
+              >
                 {pct(generator.kvaBasedPct)}
               </span>
               <span className="text-xs text-muted-foreground">

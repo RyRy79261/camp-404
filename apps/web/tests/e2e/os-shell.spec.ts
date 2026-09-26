@@ -112,6 +112,57 @@ async function openIcon(page: Page, name: string) {
   await desktopIcon(page, name).dblclick();
 }
 
+/** The Konami code, as Playwright keys. */
+const KONAMI_KEYS = [
+  "ArrowUp",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowLeft",
+  "ArrowRight",
+  "b",
+  "a",
+];
+
+/** Drag a window's right edge until the window is `width` px wide. */
+async function resizeWindowTo(page: Page, win: Locator, width: number) {
+  const box = (await win.boundingBox())!;
+  const grip = (await win.locator('[data-grip="e"]').boundingBox())!;
+  const x = grip.x + grip.width / 2;
+  const y = grip.y + grip.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + (width - box.width), y, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => Math.round((await win.boundingBox())!.width))
+    .toBe(width);
+}
+
+/**
+ * The page heading in a window is stacked: its title on one line (never one
+ * word a line), the text block as wide as the window lets it be, and the
+ * actions under it rather than squeezed beside it.
+ */
+async function expectHeadingStacked(win: Locator) {
+  const heading = win.locator('[data-slot="page-heading"]');
+  const title = heading.locator("h1");
+  const lines = await title.evaluate((el) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    return new Set([...range.getClientRects()].map((r) => Math.round(r.top)))
+      .size;
+  });
+  expect(lines).toBe(1);
+  const text = (await heading.locator("> div").first().boundingBox())!;
+  const whole = (await heading.boundingBox())!;
+  expect(text.width).toBeGreaterThan(whole.width * 0.9);
+  const actions = (await heading.locator("> div").nth(1).boundingBox())!;
+  expect(actions.y).toBeGreaterThanOrEqual(text.y + text.height);
+}
+
 test.describe("404 OS desktop (test-mode)", () => {
   test.beforeEach(async ({ request }) => {
     await resetTestState(request);
@@ -208,9 +259,8 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(rows.first()).toBeFocused();
     await expect(rows.first()).toHaveAccessibleName(/^Inbox/);
     await page.keyboard.press("ArrowDown");
-    await expect(
-      menu.getByRole("menuitem", { name: "My forms" }),
-    ).toBeFocused();
+    // The prototype's order: Tasks follows Inbox in Me.
+    await expect(menu.getByRole("menuitem", { name: "Tasks" })).toBeFocused();
     await page.keyboard.press("End");
     await expect(menu.getByRole("menuitem", { name: "Log off" })).toBeFocused();
     await page.keyboard.press("Home");
@@ -224,10 +274,10 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(rows.first()).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL("/tools/forms");
-    await expect(osWindow(page, "My forms")).toBeVisible();
+    await expect(page).toHaveURL("/tasks");
+    await expect(osWindow(page, "Tasks")).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 1, name: "My forms" }),
+      page.getByRole("heading", { level: 1, name: "Tasks" }),
     ).toBeFocused();
     await expect(menu).toHaveCount(0);
   });
@@ -306,7 +356,7 @@ test.describe("404 OS desktop (test-mode)", () => {
     // window is brought forward.
     await openIcon(page, "Family tree");
     await expect(page).toHaveURL("/family-tree");
-    await openConsoleNav(page, "Camp");
+    await openConsoleNav(page, "Me");
     await startMenu(page).getByRole("menuitem", { name: "Tasks" }).click();
     await expect(page).toHaveURL("/tasks");
     await expect(
@@ -361,7 +411,7 @@ test.describe("404 OS desktop (test-mode)", () => {
     // The composer: what only a captain (or a lead) is sent.
     await expect(page.getByLabel("Title")).toBeVisible();
 
-    await navEntry(await openConsoleNav(page, "Camp"), "Tasks").click();
+    await navEntry(await openConsoleNav(page, "Me"), "Tasks").click();
     await expect(page).toHaveURL("/tasks");
     await expect(
       page.getByRole("heading", { level: 1, name: "Tasks" }),
@@ -531,7 +581,7 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(page.getByLabel("Search the roster")).toHaveCount(1);
 
     // Switch away: the Roster keeps a frozen copy of how it looked.
-    await openConsoleNav(page, "Camp");
+    await openConsoleNav(page, "Me");
     await startMenu(page).getByRole("menuitem", { name: "Tasks" }).click();
     await expect(page).toHaveURL("/tasks");
     await expect(
@@ -633,7 +683,7 @@ test.describe("404 OS desktop (test-mode)", () => {
 
     const today = await openToday(page);
     await expect(
-      today.getByRole("heading", { level: 2, name: "Hi Tia" }),
+      today.getByRole("heading", { level: 2, name: /^Today · / }),
     ).toBeVisible();
 
     await page.reload();
@@ -641,7 +691,7 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(
       page
         .getByRole("complementary", { name: "Today" })
-        .getByRole("heading", { level: 2, name: "Hi Tia" }),
+        .getByRole("heading", { level: 2, name: /^Today · / }),
     ).toBeVisible();
     // Closed again, it stays closed: the choice is written (the closed first
     // paint after a reload would pass on its own), then read back.
@@ -755,14 +805,15 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(account).toHaveAttribute("aria-selected", "true");
 
     // A box drawn from the empty desktop selects every icon it touches: from
-    // an empty cell low in the first column, up over My account and Invites.
+    // the empty desktop under the first column, up over My account and
+    // Invites (the column's last two, in the prototype's order).
     const grid = (await desktopIcons(page).boundingBox())!;
-    const from = { x: grid.x + 12 + CELL / 2, y: grid.y + 12 + 5 * CELL + 20 };
+    const from = { x: grid.x + 12 + CELL / 2, y: grid.y + 12 + 6 * CELL + 20 };
     await page.mouse.click(from.x, from.y); // clears the selection
     await expect(account).toHaveAttribute("aria-selected", "false");
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
-    await page.mouse.move(from.x + 10, grid.y + 12 + 2 * CELL + 40, {
+    await page.mouse.move(from.x + 10, grid.y + 12 + 4 * CELL + 40, {
       steps: 8,
     });
     await page.mouse.up();
@@ -1079,6 +1130,152 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(bottomBar(page)).toHaveCount(0);
   });
 
+  test("a narrow window lays its page out by the window's width: Recipes and Roster at 470px", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "windows are resized on the desktop only");
+    await asRank(page, request, "narrow-win", "captain");
+
+    // Recipes opens as a window (the prototype's L, 880px), the Roster as a
+    // larger one (its XL, cut to the room). Both on a 1280px screen, where
+    // Tailwind's screen breakpoints would lay the heading out in a row.
+    await page.goto("/kitchen/recipes");
+    const recipes = osWindow(page, "Recipes");
+    await expect(
+      recipes.getByRole("heading", { level: 1, name: "Recipe book" }),
+    ).toBeVisible();
+    await resizeWindowTo(page, recipes, 470);
+    await expectHeadingStacked(recipes);
+
+    await page.goto("/captains/camp-management");
+    const roster = osWindow(page, "Roster");
+    await expect(
+      roster.getByRole("heading", { level: 1, name: "Camp management" }),
+    ).toBeVisible();
+    // Never full screen: a window just right of the icons (the prototype's
+    // spot), so the icons stay in sight.
+    await expect(roster).not.toHaveAttribute("data-maximized");
+    const grid = (await desktopIcons(page).boundingBox())!;
+    const opened = (await roster.boundingBox())!;
+    expect(opened.x).toBeGreaterThanOrEqual(grid.x + 300);
+    expect(opened.x + opened.width).toBeLessThan(grid.x + grid.width);
+    await resizeWindowTo(page, roster, 470);
+    await expectHeadingStacked(roster);
+    // Its table turns into cards by the window's width too.
+    await expect(roster.getByRole("table")).toBeHidden();
+
+    // Given the room again, the heading's actions go back beside the title.
+    await resizeWindowTo(page, roster, 860);
+    await expect(roster.getByRole("table")).toBeVisible();
+    const title = roster.locator("h1");
+    const actions = roster.locator('[data-slot="page-heading"] > div').nth(1);
+    const t = (await title.boundingBox())!;
+    const a = (await actions.boundingBox())!;
+    expect(a.x).toBeGreaterThan(t.x + t.width);
+  });
+
+  test("the cats: Prince on the clock, Shadow Work in Teams, and the Terminal's cat commands", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "the taskbar clock and windows are the desktop's");
+    await asRank(page, request, "cats", "member");
+    await page.goto("/");
+    await expectDesktop(page);
+
+    // Prince, asleep on the taskbar clock: an easter egg, never labelled
+    // (hidden from assistive tech, no Tab stop), and he answers a pet.
+    const prince = taskbar(page).locator('[data-cat="prince"]');
+    await expect(prince).toHaveAttribute("aria-hidden", "true");
+    await expect(prince).toHaveAttribute("tabindex", "-1");
+    await prince.click();
+    await expect(prince.locator(".cat-bubble")).toHaveText("prrr");
+
+    // Shadow Work, pinned under the Teams folder's icons, in view, with
+    // Jinn on it; neither is named anywhere.
+    await openIcon(page, "Teams");
+    const teams = osWindow(page, "Teams");
+    const piece = teams.locator("[data-shadow-work]");
+    await expect(piece).toBeVisible();
+    await expect(piece).toHaveAttribute("aria-hidden", "true");
+    await expect(teams.locator('[data-cat="jinn"]')).toBeVisible();
+    const w = (await teams.boundingBox())!;
+    const strip = (await piece.boundingBox())!;
+    expect(strip.y + strip.height).toBeLessThanOrEqual(w.y + w.height);
+
+    // The Terminal: sudo feeds Jinn, who peeks over the window at once.
+    await page.goto("/terminal");
+    const prompt = liveWindow(page).getByRole("textbox");
+    const output = page.getByRole("log", { name: "Terminal output" });
+    await expect(liveWindow(page).locator(".cat-peek")).toHaveCount(0);
+    await prompt.fill("sudo feed cat");
+    await prompt.press("Enter");
+    await expect(output.getByText("[sudo] opening a tin…")).toBeVisible();
+    await expect(liveWindow(page).locator(".cat-peek")).toHaveCount(1);
+
+    // meow: paw prints follow the pointer, and meow again stops them.
+    await prompt.fill("meow");
+    await prompt.press("Enter");
+    await expect(
+      page.getByText("Paw prints follow your pointer.", { exact: false }),
+    ).toBeVisible();
+    await page.mouse.move(300, 300);
+    await page.mouse.move(420, 360, { steps: 6 });
+    await expect(page.locator(".cat-paw").first()).toBeAttached();
+    await prompt.fill("meow");
+    await prompt.press("Enter");
+    await expect(page.getByText("Paws off", { exact: true })).toBeVisible();
+    // The last prints fade (1.2 s); then a move leaves none. Counted once:
+    // prints still coming would fade by themselves under a retry.
+    await page.waitForTimeout(1500);
+    await page.mouse.move(200, 200, { steps: 6 });
+    await page.waitForTimeout(100);
+    expect(await page.locator(".cat-paw").count()).toBe(0);
+
+    // The hidden file, and its password opens INKBLOT.
+    await prompt.fill("ls -a");
+    await prompt.press("Enter");
+    await expect(output.getByText(".cat", { exact: true })).toBeVisible();
+    await prompt.fill("jinn-is-best");
+    await prompt.press("Enter");
+    await expect(page).toHaveURL("/terminal/inkblot");
+  });
+
+  test("the Konami code on the desktop opens INKBLOT; a secret typed into a field does nothing", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "a keyboard on the desktop");
+    await asRank(page, request, "konami", "member");
+    // The cats arrive after the desktop (a lazy chunk): wait for Prince.
+    const prince = taskbar(page).locator('[data-cat="prince"]');
+
+    // Typed into a field (the Terminal's prompt, not yet run), "meow" is
+    // the field's: no paw prints start.
+    await page.goto("/terminal");
+    await expect(prince).toBeVisible();
+    const prompt = liveWindow(page).getByRole("textbox");
+    await prompt.pressSequentially("meow");
+    await expect(prompt).toHaveValue("meow");
+    await page.waitForTimeout(300);
+    // Counted once, not retried: a toast that came would leave by itself.
+    expect(
+      await page
+        .getByText("Paw prints follow your pointer.", { exact: false })
+        .count(),
+    ).toBe(0);
+    await prompt.fill("");
+
+    await page.goto("/");
+    await expectDesktop(page);
+    await expect(prince).toBeVisible();
+    await page.mouse.click(700, 400);
+    for (const key of KONAMI_KEYS) await page.keyboard.press(key);
+    await expect(page).toHaveURL("/terminal/inkblot");
+    await expect(osWindow(page, "INKBLOT")).toBeVisible();
+  });
+
   test("an idle desktop with two windows open costs next to no CPU", async ({
     page,
     request,
@@ -1125,6 +1322,49 @@ test.describe("404 OS desktop (test-mode)", () => {
 test.describe("404 OS on a phone (test-mode)", () => {
   test.beforeEach(async ({ request }) => {
     await resetTestState(request);
+  });
+
+  test("the bottom bar shows keyboard focus, and Today's taps are at least 44 px", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await asRank(page, request, "phone-ring", "member");
+    await page.goto("/");
+    await expectDesktop(page);
+
+    // A Tab-focused cell draws a ring: `outline-none` beside
+    // `focus-visible:outline-2` alone would compute to none.
+    await page.keyboard.press("Tab");
+    const home = bottomBar(page).getByRole("button", { name: "Home" });
+    await home.focus();
+    const ring = await home.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return {
+        focusVisible: el.matches(":focus-visible"),
+        style: cs.outlineStyle,
+        width: cs.outlineWidth,
+      };
+    });
+    expect(ring.focusVisible).toBe(true);
+    expect(ring.style).not.toBe("none");
+    expect(ring.width).toBe("2px");
+
+    // Today's sheet: every link in it a thumb's target.
+    await bottomBar(page)
+      .getByRole("button", { name: /^Today/ })
+      .click();
+    const sheet = page.getByRole("region", { name: "Today" });
+    await expect(sheet.getByRole("link", { name: "Calendar" })).toBeVisible();
+    const heights = await sheet
+      .getByRole("link")
+      .evaluateAll((els) =>
+        els.map((el) => [el.textContent, el.getBoundingClientRect().height]),
+      );
+    expect(heights.length).toBeGreaterThan(0);
+    for (const [text, height] of heights) {
+      expect([text, (height as number) >= 44]).toEqual([text, true]);
+    }
   });
 
   test("a program open full screen: Tab never lands on the home screen under it", async ({
@@ -1292,7 +1532,7 @@ test.describe("404 OS on a phone (test-mode)", () => {
       // Today is a sheet, from any program (it goes home first).
       const today = await openToday(page);
       await expect(
-        today.getByRole("heading", { level: 2, name: "Hi Pip" }),
+        today.getByRole("heading", { level: 2, name: /^Today · / }),
       ).toBeVisible();
       await today.getByRole("button", { name: "Close Today" }).click();
       await expect(today).toHaveCount(0);

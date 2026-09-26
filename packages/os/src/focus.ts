@@ -13,10 +13,15 @@ const FOCUSABLE = [
   "[contenteditable='true']",
 ].join(",");
 
-/** The tab stops inside `root`, in document order, skipping hidden ones. */
+/**
+ * The tab stops inside `root`, in document order, skipping hidden ones and
+ * any taken out of the Tab order (`tabindex="-1"`: a dialog's × for the
+ * pointer, whose keyboard way is Esc).
+ */
 export function tabStops(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
-    (el) => !el.closest("[hidden],[inert]"),
+    (el) =>
+      el.getAttribute("tabindex") !== "-1" && !el.closest("[hidden],[inert]"),
   );
 }
 

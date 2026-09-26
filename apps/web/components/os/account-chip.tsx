@@ -1,5 +1,7 @@
 "use client";
 
+import { OsAvatar } from "./os-avatar";
+
 /**
  * The lead line under the member's name (owner, 2026-09-25: one person can
  * lead many teams): the team's name for exactly one, a count for more, and
@@ -23,12 +25,13 @@ export function accountChipName(
 }
 
 /**
- * The account chip at the top right (visual-language doc 4.7): the member's
- * name and rank chip, and for a lead a second line, "Leads Kitchen" or "Leads
- * 3 teams". The full list shows in a tooltip on hover and on keyboard focus,
- * and is in the chip's accessible name. All of it is the member's own, drawn
- * from what the server sent; none of it decides anything. A press opens My
- * account.
+ * The account chip at the top right (the approved prototype's header): the
+ * member's initials, their name and, for a lead, "Leads Kitchen" or "Leads 3
+ * teams" under it, then a solid magenta rank chip. The full list of led teams
+ * shows in a tooltip on hover and on keyboard focus, and is in the chip's
+ * accessible name. All of it is the member's own, drawn from what the server
+ * sent; none of it decides anything. A press opens My account. On a phone
+ * only the initials and the rank show.
  */
 export function AccountChip({
   name,
@@ -49,19 +52,23 @@ export function AccountChip({
       onClick={onOpen}
       aria-label={accountChipName(name, rank, leads)}
       data-os-account
-      className="group relative flex h-8 shrink-0 select-none items-center gap-2 border border-os-line bg-os-panel px-2 text-left outline-none hover:border-os-primary focus-visible:border-os-primary"
+      className="group relative flex h-8 shrink-0 select-none items-center gap-2 border border-os-line bg-os-panel pl-1 pr-2 text-left outline-none hover:border-os-primary focus-visible:border-os-primary"
     >
-      <span aria-hidden className="flex min-w-0 flex-col leading-tight">
+      <OsAvatar name={name} />
+      <span
+        aria-hidden
+        className="flex min-w-0 flex-col leading-tight max-md:hidden"
+      >
         <span className="max-w-48 truncate text-xs text-os-fg">{name}</span>
         {line && (
-          <span className="max-w-48 truncate font-mono text-[10px] text-os-muted">
+          <span className="max-w-48 truncate text-[10px] text-os-muted">
             {line}
           </span>
         )}
       </span>
       <span
         aria-hidden
-        className="shrink-0 border border-os-primary px-1 font-mono text-[10px] uppercase text-os-primary"
+        className="inline-flex h-5 shrink-0 items-center border border-os-primary bg-os-primary px-1.5 font-pixel text-[10px] uppercase leading-none tracking-wide text-os-bg"
       >
         {rank}
       </span>

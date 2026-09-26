@@ -469,7 +469,7 @@ function AnnouncementsManagerView({
   const activeMeta = PRESENTATION_META[form.presentation];
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+    <div className="grid items-start gap-6 page-lg:grid-cols-[minmax(0,1fr)_26rem]">
       <div className="flex min-w-0 flex-col gap-8">
         {/* Drafts */}
         <section

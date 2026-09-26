@@ -1337,6 +1337,16 @@ export const testStore = {
   findUserById(userId: string): TestUser | null {
     return findUserById(userId);
   },
+  /** Approved members and sign-ups waiting (getCampHeadcount's twin). */
+  getCampHeadcount(): { members: number; waiting: number } {
+    let members = 0;
+    let waiting = 0;
+    for (const user of usersByAuthId.values()) {
+      if (user.approvalStatus === "approved") members++;
+      else if (user.approvalStatus === "pending") waiting++;
+    }
+    return { members, waiting };
+  },
   /** How many captains there are (the system-status probe's twin). */
   countCaptains(): number {
     let count = 0;

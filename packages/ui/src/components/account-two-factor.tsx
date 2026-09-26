@@ -347,7 +347,7 @@ export function AccountTwoFactor({
         {/* ---- Enrolment: QR + setup key + verify. ---- */}
         {!enabled && open && totpUri && step === "verify" ? (
           <form onSubmit={verify} className="flex flex-col gap-4" noValidate>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex flex-col gap-4 page-sm:flex-row page-sm:items-start">
               {/* data-os-private: the 404 OS desktop blanks these in the
                   frozen copy a background window shows (the QR encodes the
                   secret). */}

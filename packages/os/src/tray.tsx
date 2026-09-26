@@ -50,7 +50,7 @@ export function Tray({
     <div
       role="group"
       aria-label={label}
-      className="flex shrink-0 select-none items-center gap-1 pl-1"
+      className="flex shrink-0 select-none items-center gap-1 pl-1 pr-1 sm:pl-2"
     >
       {present.map((k) => (
         <div key={k} data-tray={k} className="flex items-center">
@@ -74,6 +74,17 @@ type TrayButtonProps = Omit<
   children: ReactNode;
 };
 
+/**
+ * The tray's bordered box: the bell, the warning, the countdown and the clock
+ * all sit in one of these (the approved prototype's tray).
+ */
+export const TRAY_BOX =
+  "relative flex h-8 shrink-0 items-center gap-1.5 border border-os-line bg-os-panel px-2 text-os-fg";
+
+/** The count chip on a tray box's corner: magenta, dark digits. */
+export const TRAY_PIP =
+  "absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center bg-os-primary px-0.5 font-mono text-[10px] font-bold leading-none text-os-bg";
+
 /** A 32px tray button with an optional count chip. */
 export const TrayButton = forwardRef<HTMLButtonElement, TrayButtonProps>(
   function TrayButton(
@@ -87,14 +98,11 @@ export const TrayButton = forwardRef<HTMLButtonElement, TrayButtonProps>(
         aria-label={count > 0 ? `${label}, ${count} ${countNoun}` : label}
         title={label}
         {...rest}
-        className={`relative grid size-8 place-items-center border border-transparent text-os-fg outline-none hover:border-os-line focus-visible:border-os-primary aria-expanded:border-os-primary ${className}`}
+        className={`${TRAY_BOX} outline-none hover:border-os-primary focus-visible:border-os-primary aria-expanded:border-os-primary ${className}`}
       >
         {children}
         {count > 0 && (
-          <span
-            aria-hidden
-            className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center bg-os-primary px-0.5 font-mono text-[10px] font-bold leading-none text-os-primary-fg"
-          >
+          <span aria-hidden className={TRAY_PIP}>
             {count > 99 ? "99+" : count}
           </span>
         )}
