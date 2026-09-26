@@ -99,6 +99,10 @@ test("a member held by a blocking questionnaire: mid-session, then on a hard loa
   browser,
   request,
 }) => {
+  // Two questionnaires built, sent and answered, then the member's whole
+  // hold: the longest spec here. It used 1.9 of the default 2 minutes on CI
+  // under `next dev`, and ran out once the desktop grew (PR #288).
+  test.setTimeout(180_000);
   await resetTestState(request);
 
   // A member, signed in and on their desktop before anything is sent.

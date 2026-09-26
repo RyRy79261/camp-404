@@ -615,8 +615,10 @@ LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
 - Add or update tests with behavioural changes. Vitest covers units, and
   PGlite (`packages/db/src/__tests__/_harness.ts`) covers real queries.
   Playwright e2e in `apps/web/tests/e2e` is live: the `e2e` job in
-  `.github/workflows/ci.yml` runs it on every source PR against `next dev`
-  with `E2E_TEST_MODE=1`, and `ci-pass` needs it, so a failure blocks merge.
+  `.github/workflows/ci.yml` runs it on every source PR against a
+  production build (`E2E_SERVE_BUILD=1`, `next start`; locally the default is
+  `next dev`) with `E2E_TEST_MODE=1`, and `ci-pass` needs it, so a failure
+  blocks merge. The `e2e-db` job serves the same kind of build.
   (Owner's call on decision D-A, 2026-09-16.)
 - A privileged write to another member's data, or to camp config, writes an
   `audit_log` row through `writeAuditEvent` (`packages/db/src/audit.ts`) in the

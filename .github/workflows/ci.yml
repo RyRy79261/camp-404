@@ -345,7 +345,21 @@ jobs:
             sleep 5
           done
           exit 1
+      - name: Build the app for e2e
+        # A production build, as the e2e job serves: under `next dev` each
+        # page load took seconds on the runner, and desktop.spec.ts ran past
+        # its 2 minutes (PR #288). The e2e job's build env; the database env
+        # comes from playwright.db.config.ts at request time. CI=true (set by
+        # Actions) is what lets lib/env.ts start a production server with
+        # E2E_TEST_MODE.
+        env:
+          E2E_TEST_MODE: "1"
+          INVITE_CODES: test-invite-e2e-only-code
+          GOD_EMAILS: god@example.com
+        run: pnpm --filter @camp404/web build
       - name: Run real-database e2e tests
+        env:
+          E2E_SERVE_BUILD: "1"
         run: pnpm --filter @camp404/web test:e2e:db
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
