@@ -86,6 +86,9 @@ export default defineConfig({
           // (MIN_PREAPPROVED_ENV_CODE_LENGTH in lib/access-control.ts).
           INVITE_CODES: "test-invite-e2e-only-code",
           GOD_EMAILS: "god@example.com",
+          // The one test member who sees Prince come home (os-shell.spec.ts);
+          // nobody else's desktop changes.
+          PRINCE_KEEPER_EMAILS: "prince-keeper@example.com",
         },
       },
 });

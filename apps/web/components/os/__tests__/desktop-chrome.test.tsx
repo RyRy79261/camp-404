@@ -505,6 +505,17 @@ describe("the cats' places", () => {
     // Below the icons, outside their list.
     const list = within(teams).getByRole("list", { name: "Teams" });
     expect(list.contains(art)).toBe(false);
+    // Everyone but the one member on PRINCE_KEEPER_EMAILS: no reunion.
+    expect(document.querySelector("[data-reunion]")).toBeNull();
+  });
+
+  it("for the member the server says is his keeper, Prince comes home instead of sleeping on the clock", async () => {
+    render(<Desktop {...props()} princeKeeper />);
+    const taskbar = screen.getByRole("toolbar", { name: "Taskbar" });
+    await waitFor(() =>
+      expect(taskbar.querySelector("[data-reunion]")).not.toBeNull(),
+    );
+    expect(document.querySelector('[data-cat="prince"]')).toBeNull();
   });
 });
 

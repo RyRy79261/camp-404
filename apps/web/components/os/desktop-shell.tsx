@@ -107,6 +107,7 @@ import { folderIcon, iconFor, programIcon } from "./program-icons";
 import { ConsoleBoot } from "./console-boot";
 import {
   ClockPrince,
+  ClockReunion,
   DesktopSecrets,
   TeamsFolderArt,
   WindowPeek,
@@ -436,6 +437,11 @@ export interface DesktopProps {
    * in tests (the layout decides). Null for no boot.
    */
   boot?: { lines: readonly BootLine[]; welcome: string } | null;
+  /**
+   * This member sees Prince come home instead of asleep on the clock
+   * (lib/prince-keeper.ts decides on the server). A yes or no only.
+   */
+  princeKeeper?: boolean;
   children: ReactNode;
 }
 
@@ -472,6 +478,7 @@ function DesktopInner({
   tagline = null,
   today = null,
   boot = null,
+  princeKeeper = false,
   children,
 }: DesktopProps) {
   const router = useRouter();
@@ -1865,6 +1872,14 @@ function DesktopInner({
               w.y + w.h > viewport.height - 32)),
       );
   const princeClass = princeCovered ? "pointer-events-none" : "";
+  // Who sits on a clock: Prince asleep, or, for the one member who sees him
+  // come home, the two of them (it waits, or holds still, while covered).
+  const clockCat = (phone: boolean) =>
+    princeKeeper ? (
+      <ClockReunion covered={princeCovered} />
+    ) : (
+      <ClockPrince className={phone ? `right-2 ${princeClass}` : princeClass} />
+    );
   const switcherRows = [...wm.windows]
     .sort((a, b) => b.z - a.z)
     .map((w) => ({
@@ -2032,14 +2047,7 @@ function DesktopInner({
                   />
                 ) : null
               }
-              clock={
-                <PhoneClock
-                  burn={burn}
-                  decoration={
-                    <ClockPrince className={`right-2 ${princeClass}`} />
-                  }
-                />
-              }
+              clock={<PhoneClock burn={burn} decoration={clockCat(true)} />}
             />
             {switcherOpen && (
               <PhoneSheet
@@ -2081,7 +2089,7 @@ function DesktopInner({
                 headcount={headcount}
                 burn={burn}
                 year={year}
-                clockDecoration={<ClockPrince className={princeClass} />}
+                clockDecoration={clockCat(false)}
                 onOpenHref={openHref}
                 onTidyWindows={() => dispatch({ type: "tidy", viewport })}
                 onLineUpIcons={() => changeLayout(lineUpIcons(layout))}

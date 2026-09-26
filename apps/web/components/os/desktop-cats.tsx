@@ -17,6 +17,16 @@ export const ClockPrince = dynamic(
   { ssr: false },
 );
 
+/**
+ * Prince come home, on a clock, for the one member who sees it (the server
+ * decides; desktop-shell.tsx picks this or ClockPrince). Its own chunk, so
+ * nobody else downloads it.
+ */
+export const ClockReunion = dynamic(
+  () => import("@camp404/games/characters").then((m) => m.PrinceReunion),
+  { ssr: false },
+);
+
 export const WindowPeek = dynamic(
   () => import("./cats-on-desktop").then((m) => m.WindowPeek),
   { ssr: false },

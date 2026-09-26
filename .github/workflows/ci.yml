@@ -240,6 +240,7 @@ jobs:
           E2E_TEST_MODE: "1"
           INVITE_CODES: test-invite-e2e-only-code
           GOD_EMAILS: god@example.com
+          PRINCE_KEEPER_EMAILS: prince-keeper@example.com
         run: pnpm --filter @camp404/web build
       - name: Run e2e tests
         env:
