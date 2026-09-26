@@ -9,6 +9,7 @@ import {
   TEMPLATE_LETTERS,
   withLapCat,
   type CharacterLook,
+  type HumanPose,
 } from "./human";
 import {
   HUMAN_H,
@@ -191,6 +192,19 @@ describe("a person built from a look", () => {
     expect(lettersOf(buildCharacter(inked).frames.idle)).not.toContain("X");
     const bare = { ...inked, top: { ...inked.top, kind: "tank" as const } };
     expect(lettersOf(buildCharacter(bare).frames.idle)).toContain("X");
+  });
+
+  it("bares the waist on a crop top, in every pose", () => {
+    const topPixels = (look: CharacterLook, pose: HumanPose) =>
+      buildCharacter(look)
+        .frames[pose].flat()
+        .join("")
+        .replace(/[^Tt]/g, "").length;
+    const full = { ...OTHER, top: { ...OTHER.top, crop: false } };
+    const crop = { ...OTHER, top: { ...OTHER.top, crop: true } };
+    for (const pose of Object.keys(HUMAN_TEMPLATES) as HumanPose[]) {
+      expect(topPixels(crop, pose), pose).toBeLessThan(topPixels(full, pose));
+    }
   });
 });
 

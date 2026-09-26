@@ -2,7 +2,7 @@ import type { CharacterLook } from "./human";
 
 // Cloud, one of the camp's captains, from the owner's photos (2026-09-26):
 // long, wavy copper-red hair to mid-back (darker brown at the roots, bright
-// ginger lengths), fair skin, a tank top (white in the photos; light blue
+// ginger lengths), fair skin, a cropped tank top (white in the photos; light blue
 // here, the owner's choice, so white Prince shows up on her lap), a long navy
 // boho maxi skirt printed red, teal and cream, a colourful tattoo on her upper
 // arm, a small septum ring, bracelets and a thin dark choker. Barefoot.
@@ -27,6 +27,8 @@ export const CLOUD_LOOK: CharacterLook = {
     // white Prince stands out on her lap.
     colour: "oklch(0.76 0.09 235)",
     shade: "oklch(0.64 0.1 235)",
+    // Cropped, her middle bare: her style (owner, 2026-09-27).
+    crop: true,
   },
   bottoms: {
     kind: "maxi-skirt",

@@ -39,7 +39,8 @@ export type CharacterLook = {
   };
   eyes: string;
   mouth: string;
-  top: { kind: TopKind; colour: string; shade: string };
+  /** `crop`: the top stops above the waist, and her middle shows. */
+  top: { kind: TopKind; colour: string; shade: string; crop?: boolean };
   bottoms: {
     kind: BottomsKind;
     colour: string;
@@ -97,6 +98,8 @@ export const HUMAN_LETTERS = [
  *   .  clear                       o  line inside the figure
  *   S s  skin, skin shade          e m  eye, mouth
  *   T t  top, top shade            A a  upper arm: sleeve on a tee, else skin
+ *   w y  the waist row: top (w) or top shade (y), skin on a crop top
+ *   z  the waist's middle: top, or the navel (skin shade) on a crop top
  *   X  upper-arm tattoo (skin without one, sleeve on a tee)
  *   B b  bottoms, shade (printed)  g v  skirt only (and its shade): clear
  *        under trousers or shorts, so the legs show
@@ -107,7 +110,7 @@ export const HUMAN_LETTERS = [
  *   4  hair to the shoulders, else top   5  hair to mid-back, else top
  *   6  hair to the shoulders, else skin  7  hair to mid-back, else skin
  */
-export const TEMPLATE_LETTERS = ".oSsemTtAaXBbgvkFCNJ1234567";
+export const TEMPLATE_LETTERS = ".oSsemTtwyzAaXBbgvkFCNJ1234567";
 
 const TIER: Record<HairLength, number> = { short: 1, shoulder: 2, long: 3 };
 
@@ -137,6 +140,7 @@ export function resolveTemplate(template: Sprite, look: CharacterLook): Sprite {
   const tier = TIER[look.hair.length];
   const acc = look.accessories ?? {};
   const tee = look.top.kind === "tee";
+  const crop = look.top.crop === true;
   const skirt = look.bottoms.kind === "maxi-skirt";
   const shorts = look.bottoms.kind === "shorts";
   const pattern = Math.min(3, look.bottoms.pattern?.length ?? 0);
@@ -152,6 +156,12 @@ export function resolveTemplate(template: Sprite, look: CharacterLook): Sprite {
             return ".";
           case "o":
             return "l";
+          case "w":
+            return crop ? "S" : "T";
+          case "y":
+            return crop ? "S" : "t";
+          case "z":
+            return crop ? "s" : "T";
           case "A":
             return tee ? "T" : "S";
           case "a":
