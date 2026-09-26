@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { NotificationBell } from "@camp404/ui/components/notification-bell";
@@ -20,7 +20,7 @@ import {
   PanelQuestionnaireRow,
 } from "./notification-panel-row";
 
-// The console header's notification panel (AfrikaBurn's organiser console): the
+// The desktop tray's notification panel (from AfrikaBurn's organiser console): the
 // bell opens a Popover anchored under it with the last few items, "Mark all
 // read", and a link through to the inbox. Popover draws no page overlay, so the
 // console behind stays undimmed while Radix still gives focus management and
@@ -49,12 +49,16 @@ type PanelState =
   | { status: "error"; error: string };
 
 /**
- * The bell in the console header and the panel it opens. Fetches on open, drops
+ * The bell in the desktop's tray and the panel it opens. Fetches on open, drops
  * what it fetched on close, and marks nothing read — the badge is cleared by
  * the inbox or by "Mark all read", never by a peek.
  */
 export function NotificationPanel({
   count,
+  pinned,
+  triggerClassName,
+  icon,
+  badgeClassName,
 }: {
   /**
    * What the badge shows: `getInboxBadge(...).total` (lib/inbox-badge.ts),
@@ -62,6 +66,18 @@ export function NotificationPanel({
    * Notifications tile on Home.
    */
   count: number;
+  /**
+   * Drawn at the top of the panel: on a phone the pinned strip folds into
+   * the bell (visual-language doc, section 9). Given the way to shut the
+   * panel, for its links.
+   */
+  pinned?: (close: () => void) => ReactNode;
+  /** The bell's look where it sits (the tray's bordered box). */
+  triggerClassName?: string;
+  /** The bell's glyph, in place of the kit's. */
+  icon?: ReactNode;
+  /** The count badge's look. */
+  badgeClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<PanelState>({ status: "loading" });
@@ -112,7 +128,12 @@ export function NotificationPanel({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <NotificationBell count={count} />
+        <NotificationBell
+          count={count}
+          className={triggerClassName}
+          icon={icon}
+          badgeClassName={badgeClassName}
+        />
       </PopoverTrigger>
       <PopoverContent
         className={PANEL}
@@ -147,6 +168,8 @@ export function NotificationPanel({
             onDone={() => setNonce((n) => n + 1)}
           />
         </div>
+
+        {pinned?.(() => setOpen(false))}
 
         <div className="max-h-[60vh] overflow-y-auto">
           {state.status === "loading" ? (

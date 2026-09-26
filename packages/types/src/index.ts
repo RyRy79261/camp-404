@@ -21,3 +21,4 @@ export * from "./participation";
 export * from "./power";
 export * from "./meeting-note";
 export * from "./join-site";
+export * from "./desktop-layout";

@@ -1,7 +1,31 @@
 import { test, expect } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { completeOnboarding, login, resetTestState, setRank } from "./_helpers";
-import { consoleNavGroups, navEntry, openConsoleNav } from "./lib/console-nav";
+import {
+  closeConsoleNav,
+  consoleNavGroups,
+  expectDesktop,
+  navEntry,
+  openConsoleNav,
+  usesPhoneLayout,
+} from "./lib/console-nav";
+
+/**
+ * The roster view on screen. The roster ships TWO views and keeps both in the
+ * DOM, a table from md up (`hidden page-md:block`, by the window's width) and
+ * a card list below it (`page-md:hidden`), so every row button exists twice:
+ * scope to the one this width shows. The roster opens as a large window
+ * (the prototype's XL, cut to the room right of the icons), wide enough for
+ * the table on a desktop screen.
+ */
+function rosterView(page: Page) {
+  return usesPhoneLayout(page)
+    ? page
+        .getByRole("list")
+        .filter({ has: page.getByRole("button", { name: /Open .*profile/ }) })
+        .first()
+    : page.getByRole("table");
+}
 
 // Preview-but-locked (decision D3) for the two captain surfaces that used to
 // hard-redirect non-captains. A non-captain now gets a 200 with the page chrome
@@ -34,8 +58,9 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
 
     await page.goto("/");
 
-    // The captain destinations all live in the Captains menu, and a member's
-    // nav draws no such menu. Read once the Me menu is on screen.
+    // The captain destinations all live in the Captains folder, in the Start
+    // menu's Captains group, and a member's Start menu (or phone home screen)
+    // draws no such group. Read once the Me group is on screen.
     const groups = await consoleNavGroups(page);
     expect(groups).toContain("Me");
     expect(groups).not.toContain("Captains");
@@ -51,7 +76,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
 
     const camp = await openConsoleNav(page, "Camp");
     await expect(navEntry(camp, "Roster")).toBeVisible();
-    await page.keyboard.press("Escape");
+    await closeConsoleNav(page);
     const captains = await openConsoleNav(page, "Captains");
     for (const name of [
       "Camp overview",
@@ -59,7 +84,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
       "Announcements",
       "Payments",
       "Camp settings",
-      "Audit",
+      "Audit log",
       "System status",
     ]) {
       await expect(navEntry(captains, name)).toBeVisible();
@@ -72,9 +97,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await page.goto("/captains/tools");
 
     await expect(page).toHaveURL(/\/$/);
-    await expect(
-      page.getByRole("heading", { level: 1, name: /^Hi\b/ }),
-    ).toBeVisible();
+    await expectDesktop(page);
   });
 
   test("/captains/announcements: a non-captain sees the locked shell, no composer", async ({
@@ -130,13 +153,10 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await expect(page.getByLabel("Search the roster")).toBeVisible();
     // …and rows actually render (browse-positive: catch a zero-rows / error
     // regression that would otherwise look "locked down" yet be broken).
-    // The roster ships TWO views and keeps both in the DOM — a table for
-    // desktop (`hidden md:block`) and a card list for narrow screens
-    // (`md:hidden`) — so every row button exists twice. Scope to the table,
-    // the view Playwright's desktop viewport actually shows; an unscoped
-    // `.first()` could assert against the hidden copy. `.first()` inside the
-    // table is honest: there are several rows and any one proves rendering.
-    const roster = page.getByRole("table");
+    // Scope to the view this width shows (rosterView); an unscoped `.first()`
+    // could assert against the hidden copy. `.first()` inside the view is
+    // honest: there are several rows and any one proves rendering.
+    const roster = rosterView(page);
     await expect(
       roster.getByRole("button", { name: /Open .*profile/ }).first(),
     ).toBeVisible();
@@ -178,9 +198,9 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await expect(
       page.getByRole("heading", { name: "Camp management" }),
     ).toBeVisible();
-    // Scoped to the table — the view a desktop viewport shows — because the
-    // card list holds a second copy of every row (see the note above).
-    const roster = page.getByRole("table");
+    // Scoped to the view on screen, because the other holds a second copy of
+    // every row (see rosterView).
+    const roster = rosterView(page);
     await expect(
       roster.getByRole("button", { name: "Open Pia Applicant's profile" }),
     ).toBeVisible();
@@ -188,7 +208,7 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     await expect(
       page.getByRole("button", { name: /^Pending 1/ }),
     ).toBeVisible();
-    // Exactly one "Pending" badge in the table: hers. Unscoped this would also
+    // Exactly one "Pending" badge in the view: hers. Unscoped this would also
     // match the Pending filter chip.
     await expect(roster.getByText("Pending", { exact: true })).toHaveCount(1);
 

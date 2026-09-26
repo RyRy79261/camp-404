@@ -1,0 +1,110 @@
+/* The cats' styles (@camp404/games/cats and @camp404/games/shadow-work). An
+   app that shows a cat imports this from its own Tailwind entry, after
+   @camp404/os/styles.css: the cats wear the OS's colours and pixel face (the
+   --os-* variables and the os-* utilities). A hidden tab pauses them with
+   the rest of the desktop ([data-os-paused] in the OS's styles); reduced
+   motion stills them here. */
+
+/* Tailwind v4 scans only the consuming app: point it at the cats' classes. */
+@source "./**/*.{ts,tsx}";
+@source "../shadow-work/**/*.{ts,tsx}";
+
+/* Jinn's head rises over a window's top edge, looks, and ducks back. */
+@keyframes cat-peek {
+  0% {
+    transform: translateY(100%);
+  }
+  18%,
+  78% {
+    transform: translateY(0);
+  }
+  84% {
+    transform: translateY(12%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+.cat-peek {
+  animation: cat-peek 4.2s steps(12) both;
+}
+
+/* A sleeping cat's slow "z". */
+@keyframes cat-zzz {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(6px, -12px);
+  }
+}
+.cat-zzz {
+  animation: cat-zzz 3.2s steps(8) infinite;
+}
+
+/* A paw print fading behind the pointer. */
+@keyframes cat-paw {
+  0% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.cat-paw {
+  animation: cat-paw 1.1s steps(6) forwards;
+}
+
+/* Prince's answer when petted. */
+@keyframes cat-bubble {
+  0% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  15%,
+  80% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.cat-bubble {
+  animation: cat-bubble 1.6s steps(8) forwards;
+}
+
+/* Reduced motion: stills. The "z" stays, faintly. The bubble shows at once,
+   holds, and goes: its own keyframes step it from shown to gone with no
+   movement. (The kit's blanket rule, which finishes every animation at once,
+   would otherwise leave it on its last frame, gone before it was seen, so
+   this names it with !important too.) */
+@keyframes cat-bubble-still {
+  0%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cat-zzz,
+  .cat-peek {
+    animation: none;
+  }
+  .cat-zzz {
+    opacity: 0.6;
+  }
+  .cat-bubble {
+    animation: cat-bubble-still 1.6s steps(1, end) forwards !important;
+    animation-duration: 1.6s !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -57,6 +57,17 @@ pnpm db:local:up && pnpm db:local:migrate      # from the repo root
 pnpm --filter @camp404/web test:e2e:db
 ```
 
+CI's `e2e-db` job serves a production build instead of `next dev`, as the
+store run's job does (under `next dev` the runner took seconds per page and
+the longest spec ran out of time). To run it that way locally, build with the
+store run's env, then serve it (`next start` needs `CI` set, `lib/env.ts`):
+
+```bash
+E2E_TEST_MODE=1 INVITE_CODES=test-invite-e2e-only-code GOD_EMAILS=god@example.com \
+  pnpm --filter @camp404/web build
+CI=1 E2E_SERVE_BUILD=1 pnpm --filter @camp404/web test:e2e:db
+```
+
 - Specs live in `tests/e2e-db/`, with shared steps in `_flows.ts`:
   `questionnaire-lifecycle.spec.ts` (build, publish, a blocking send, a
   late-joining member answers, metrics, responses, CSV) and
@@ -161,9 +172,9 @@ complete and jump straight to the gates that follow it (home vs.
   its one sign-in link, and the lost link lands on sign-in. Signed in: an
   approved member gets their own Home, not the camp's; a captain gets the
   camp overview as one link and a member cannot open it; a member sees the
-  task they are responsible for under "Your tasks", with the Tasks tile's
-  count, and the row opens `/tasks`; a member with no tasks has no task list
-  and a plain Tasks tile; "Coming up" says the calendar is empty.
+  task they are responsible for under "My tasks" in the Today gadget, and
+  the row opens `/tasks`; a member with no tasks has no task list and a
+  plain Tasks program; "Coming up" says the calendar is empty.
 - `tasks.spec.ts` — the task board (`/tasks`) on the store's task twins: a
   captain adds a task and the person responsible moves it to Done; a lead
   adds only for a team they lead and a member cannot move others' tasks; a

@@ -23,6 +23,10 @@ export const metadata = { title: "Add an event — Camp 404" };
 // they lead. Anyone else sees the heading and a lock, and the server sends no
 // team list. The action checks the rule again, and the write checks it once
 // more inside its transaction.
+//
+// A lead whose led teams are all archived this year is still a lead (the
+// clearance is global), but has no team to add for: they get a sentence
+// saying so, not an empty picker (design doc, section 4).
 
 export default async function AddCalendarEventPage() {
   const gate = await captainPageGate("team_lead");
@@ -66,6 +70,14 @@ export default async function AddCalendarEventPage() {
           <CardContent className="p-8 text-center text-sm text-muted-foreground">
             The camp calendar isn&rsquo;t connected yet. A captain can connect
             it under System status.
+          </CardContent>
+        </Card>
+      ) : teams.length === 0 && !isCaptain ? (
+        <Card>
+          <CardContent className="p-8 text-center text-sm text-muted-foreground">
+            The teams you lead are archived this year, so there is no team to
+            add an event for. A captain can make a team active again in Camp
+            settings, or add the event for you.
           </CardContent>
         </Card>
       ) : (

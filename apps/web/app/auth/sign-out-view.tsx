@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@camp404/ui/components/button";
+import { forgetAllWindows } from "@/components/os/window-storage";
 import { authClient } from "@/lib/auth-client";
 
 /**
@@ -13,12 +14,21 @@ import { authClient } from "@/lib/auth-client";
  *
  * Better Auth deletes the session row and clears the cookies. If that call
  * fails the screen says so, rather than leaving for sign-in as if it worked.
+ *
+ * It forgets this tab's desktop windows and editor drafts first, whatever the
+ * way here: SignOutLink does it too, but erasure's server redirect and a
+ * typed address never pass through that link.
  */
 export function SignOutView() {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    try {
+      forgetAllWindows(window.sessionStorage);
+    } catch {
+      // Storage refused (a private window): nothing was kept there.
+    }
     authClient
       .signOut()
       .then((result) => {

@@ -17,7 +17,9 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+import { BlockingLayer } from "@camp404/os";
 import { BlockingNotice, RunnerHeader } from "../questionnaire/blocking-chrome";
+import { OutsideBlockingLayer } from "../questionnaire/outside-blocking-layer";
 
 // A questionnaire that holds the app says so and offers only Sign out; an
 // optional one says it is optional and can be left for later.
@@ -49,5 +51,43 @@ describe("RunnerHeader — required or optional", () => {
     expect(
       screen.getByRole("link", { name: "Later" }).getAttribute("href"),
     ).toBe("/notifications");
+  });
+});
+
+// On the 404 OS desktop a held member's runner and its completion page sit in
+// the blocking layer, which draws Sign out under the form: the page's own
+// Sign out goes, so there is exactly one. Bare, the page keeps its own.
+describe("one Sign out, inside the blocking layer or bare", () => {
+  const layerSignOut = <a href="/auth/sign-out?from=layer">Sign out</a>;
+
+  it("the runner's header: the layer's Sign out only, inside the layer", () => {
+    render(
+      <BlockingLayer title="Required form" signOut={layerSignOut}>
+        <RunnerHeader title="Tent check" blocking />
+      </BlockingLayer>,
+    );
+    const links = screen.getAllByRole("link", { name: "Sign out" });
+    expect(links).toHaveLength(1);
+    expect(links[0]!.getAttribute("href")).toBe("/auth/sign-out?from=layer");
+  });
+
+  it("the completion page's Sign out (OutsideBlockingLayer): gone inside, kept bare", () => {
+    const page = (
+      <OutsideBlockingLayer>
+        <a href="/auth/sign-out">Sign out</a>
+      </OutsideBlockingLayer>
+    );
+    const bare = render(page);
+    expect(screen.getAllByRole("link", { name: "Sign out" })).toHaveLength(1);
+    bare.unmount();
+
+    render(
+      <BlockingLayer title="Required form" signOut={layerSignOut}>
+        {page}
+      </BlockingLayer>,
+    );
+    const links = screen.getAllByRole("link", { name: "Sign out" });
+    expect(links).toHaveLength(1);
+    expect(links[0]!.getAttribute("href")).toBe("/auth/sign-out?from=layer");
   });
 });

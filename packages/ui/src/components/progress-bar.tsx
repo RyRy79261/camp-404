@@ -23,6 +23,7 @@ function ProgressBar({
   return (
     <div
       role="progressbar"
+      data-slot="progress"
       aria-valuenow={Math.round(pct)}
       aria-valuemin={0}
       aria-valuemax={100}
@@ -36,6 +37,7 @@ function ProgressBar({
       {/* scaleX, not width: a transform animates on the compositor, so the
           fill glides without re-laying out the bar on every frame. */}
       <div
+        data-slot="progress-fill"
         className="h-full w-full origin-left rounded-full bg-primary motion-safe:transition-transform motion-safe:duration-300"
         style={{ transform: `scaleX(${pct / 100})` }}
       />

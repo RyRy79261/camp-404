@@ -155,7 +155,7 @@ export default async function NotificationsPage({
                   : `A captain is waiting on these ${pending.length} questionnaires. They stay here until you finish them.`}
               </p>
             </div>
-            <ul className="grid gap-3 md:grid-cols-2">
+            <ul className="grid gap-3 page-md:grid-cols-2">
               {pending.map((q) => (
                 <li key={q.activationId}>
                   <QueueCard

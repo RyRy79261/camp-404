@@ -88,9 +88,9 @@ export function PublicMemberProfile({
         onClose={onClose}
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-3">
+      <div className="grid items-start gap-6 page-lg:grid-cols-3">
         {/* Public body: bio + this-year ideas (allowlisted). */}
-        <Card className="min-w-0 lg:col-span-2">
+        <Card className="min-w-0 page-lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">About</CardTitle>
           </CardHeader>
@@ -132,7 +132,7 @@ export function PublicMemberProfile({
         </Card>
 
         {/* Captain-only section — locked for members (decision: privacy). */}
-        <aside className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card/40 px-6 py-10 text-center lg:sticky lg:top-24">
+        <aside className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card/40 px-6 py-10 text-center page-lg:sticky page-lg:top-24">
           <Lock aria-hidden className="h-6 w-6 text-muted-foreground" />
           <p className="max-w-xs text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Captains only.</span>{" "}

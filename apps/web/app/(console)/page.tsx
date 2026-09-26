@@ -1,21 +1,8 @@
 import { redirect } from "next/navigation";
-import { deriveViewerRank } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { isCampBootstrapped } from "@/lib/bootstrap";
-import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
-import { getUpcomingEvents } from "@/lib/camp-calendar";
-import { buildHome } from "@/lib/home";
-import { getInboxBadge } from "@/lib/inbox-badge";
-import { getMyLift } from "@/lib/lifts";
 import { isAwaitingApproval, resolveMemberState } from "@/lib/member-gate";
-import { getProgramManifest } from "@/lib/program-manifest";
 import { signInRedirect } from "@/lib/sign-in-redirect";
-import { countUnreadByTeam } from "@/lib/notifications";
-import { isSignInSecured } from "@/lib/sign-in-security";
-import { listMyOpenTasks } from "@/lib/tasks";
-import { getMyTeams, getPendingQuestionnaires } from "@/lib/users";
-import { HomeView } from "@/components/home/home-view";
-import { EnablePush } from "@/components/push/enable-push";
 import { LandingHero } from "../landing-hero";
 
 // Reads the sign-in session cookie on every request, so can't be
@@ -23,15 +10,17 @@ import { LandingHero } from "../landing-hero";
 export const dynamic = "force-dynamic";
 
 /**
- * Home. Signed out, the landing page. Signed in, the member's OWN page (owner,
- * 2026-09-23): what they need to do, what's coming up, and the few places that
- * are theirs, built from their profile and status. The whole-camp view moved to
- * /captains/overview.
+ * Home. Signed out, the landing page. Signed in, the 404 OS desktop, which
+ * the console layout draws: its icons are the programs, and the member's own
+ * summary (owner, 2026-09-23: what they need to do, what's coming up) is the
+ * Today gadget, which the layout draws on every screen now (the prototype's
+ * pop-out, owner's approval 2026-09-26). So this page is the desktop's
+ * heading and nothing more. The whole-camp view is /captains/overview.
  *
  * The member ladder still applies — a fresh member goes to the invite gate or
  * the Burner Bio first — with one change: someone waiting for approval lands
- * here and is told so, rather than on a separate page. A declined applicant
- * still goes to /pending-approval, which gives the captain's reason.
+ * here and is told so (in Today), rather than on a separate page. A declined
+ * applicant still goes to /pending-approval, which gives the captain's reason.
  */
 export default async function HomePage() {
   const user = await getAuthenticatedUser();
@@ -48,77 +37,7 @@ export default async function HomePage() {
   const state = await resolveMemberState();
   if (state.kind === "signed_out") return signInRedirect();
   const { campUser, block } = state;
-  const waiting = isAwaitingApproval(campUser, block);
-  if (block && !waiting) redirect(block.href);
+  if (block && !isAwaitingApproval(campUser, block)) redirect(block.href);
 
-  const approval = waiting ? "pending" : "approved";
-  const [
-    memberships,
-    pending,
-    inbox,
-    unreadByTeam,
-    lift,
-    secured,
-    teamsConfig,
-    calendar,
-    myTasks,
-    manifest,
-  ] = await Promise.all([
-    waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
-    waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
-    // The Notifications tile shows the bell's own count, for every member,
-    // waiting for approval or not: both come from getInboxBadge.
-    getInboxBadge(campUser.id),
-    waiting
-      ? Promise.resolve({} as Partial<Record<string, number>>)
-      : countUnreadByTeam(campUser.id),
-    waiting ? Promise.resolve(null) : getMyLift(campUser.id),
-    isSignInSecured(),
-    getTeamsConfig(),
-    waiting ? Promise.resolve(null) : getUpcomingEvents(),
-    waiting
-      ? Promise.resolve({ items: [], total: 0 })
-      : listMyOpenTasks(campUser.id),
-    // The header's manifest, cached for this request: Home's tiles are a view
-    // of it, so the two cannot disagree.
-    getProgramManifest(),
-  ]);
-  const labels = teamLabelMap(teamsConfig);
-  const isCaptain =
-    deriveViewerRank(
-      campUser.rank,
-      memberships.some((m) => m.isLead),
-    ) === "captain";
-
-  const home = buildHome(
-    {
-      now: new Date(),
-      approval,
-      firstName: campUser.displayName?.trim().split(/\s+/)[0] ?? null,
-      isCaptain,
-      teams: memberships.map((m) => ({
-        key: m.team,
-        label: labels[m.team] ?? m.team,
-        isLead: m.isLead,
-        unread: unreadByTeam[m.team] ?? 0,
-      })),
-      pending,
-      inbox,
-      myTasks,
-      lift,
-      calendar,
-      teamLabels: labels,
-      secured,
-    },
-    manifest ?? undefined,
-  );
-
-  return (
-    <div className="flex flex-col gap-6">
-      <HomeView home={home} />
-      {/* Web push opt-in; renders nothing unless push is supported and the
-          member has not decided yet. */}
-      <EnablePush />
-    </div>
-  );
+  return <h1 className="sr-only">Desktop</h1>;
 }

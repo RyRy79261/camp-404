@@ -9,7 +9,10 @@
   "exports": {
     "./inkblot": "./src/inkblot/index.ts",
     "./inkblot/art": "./src/inkblot/art.ts",
-    "./inkblot/styles.css": "./src/inkblot/inkblot.css"
+    "./inkblot/styles.css": "./src/inkblot/inkblot.css",
+    "./cats": "./src/cats/index.ts",
+    "./cats/styles.css": "./src/cats/cats.css",
+    "./shadow-work": "./src/shadow-work/index.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -26,10 +29,12 @@
   "devDependencies": {
     "@camp404/eslint-config": "workspace:*",
     "@camp404/typescript-config": "workspace:*",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "eslint": "^10.4.0",
+    "jsdom": "^29.1.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   }

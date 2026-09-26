@@ -3,9 +3,10 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MessageCircleQuestion, Send } from "lucide-react";
+import { z } from "zod";
 import {
+  RecipeSourceSections,
   SOURCE_SECTIONS,
-  type RecipeSourceSections,
   type SourceDoc,
   type SourceSection,
 } from "@camp404/types";
@@ -30,6 +31,11 @@ import {
   type RunStage,
 } from "@/components/recipes/proofread-questions";
 import { SourceSectionEditor } from "@/components/recipes/source-section-editor";
+import {
+  useDraftAutosave,
+  useEditorDraft,
+  type EditorDraft,
+} from "@/components/os/editor-draft";
 import {
   ANSWER_QUESTIONS_LABEL,
   UNREACHABLE,
@@ -82,35 +88,81 @@ function initialPhase(run: OpenRun | null): Phase {
   return { kind: "idle" };
 }
 
-export function SourceEditor({
-  recipeId,
-  title,
-  basedOnSourceId,
-  serves: initialServes,
-  sections: initialSections,
-  run,
-}: {
+/**
+ * The source as typed, as an unsaved draft (components/os/editor-draft.tsx),
+ * for the dirty guard. It names the source version it was typed over. Not
+ * kept or restored while `restore` is off (below); the schema is what a
+ * restore would check.
+ */
+const SourceDraft = z.object({
+  basedOnSourceId: z.string().max(200).nullable(),
+  serves: z.string().max(20),
+  sections: RecipeSourceSections,
+});
+type SourceDraft = z.infer<typeof SourceDraft>;
+
+type SourceEditorProps = {
   recipeId: string;
   title: string;
   basedOnSourceId: string | null;
   serves: number | null;
   sections: RecipeSourceSections;
   run: OpenRun | null;
-}) {
+};
+
+/**
+ * The source editor. Unsaved text asks before its window goes. Nothing is
+ * kept or restored: PR C changes nothing inside a Kitchen page (plan section
+ * 0), and a restored draft would need a note the owner has not approved.
+ */
+export function SourceEditor(props: SourceEditorProps) {
+  const { basedOnSourceId, serves, sections } = props;
+  const draft = useEditorDraft<SourceDraft>({
+    editor: "recipe-source",
+    restore: false,
+    baseline: {
+      basedOnSourceId,
+      serves: serves === null ? "" : String(serves),
+      sections,
+    },
+    parse: (raw) => {
+      const parsed = SourceDraft.safeParse(raw);
+      return parsed.success && parsed.data.basedOnSourceId === basedOnSourceId
+        ? parsed.data
+        : null;
+    },
+  });
+  return <SourceEditorForm key={draft.generation} {...props} draft={draft} />;
+}
+
+function SourceEditorForm({
+  recipeId,
+  title,
+  basedOnSourceId,
+  run,
+  draft,
+}: SourceEditorProps & { draft: EditorDraft<SourceDraft> }) {
   const router = useRouter();
   const [sourceId, setSourceId] = useState(basedOnSourceId);
-  const [serves, setServes] = useState(
-    initialServes === null ? "" : String(initialServes),
-  );
+  const [serves, setServes] = useState(draft.start.serves);
+  const initialSections = draft.start.sections;
   const sections = useRef<RecipeSourceSections>(initialSections);
+  // The sections as typed, for the draft; the send reads the ref.
+  const [typed, setTyped] = useState<RecipeSourceSections>(initialSections);
   const [phase, setPhase] = useState<Phase>(() => initialPhase(run));
   const [dialogOpen, setDialogOpen] = useState(
     () => initialPhase(run).kind === "questions",
   );
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  // The source changed since Claude asked: the next send starts over.
-  const [edited, setEdited] = useState(false);
+  // The source changed since Claude asked: the next send starts over. A
+  // restored draft is a change.
+  const [edited, setEdited] = useState(draft.restored);
+  const { saved } = useDraftAutosave(draft, {
+    basedOnSourceId: sourceId,
+    serves,
+    sections: typed,
+  });
 
   const running = phase.kind === "running";
 
@@ -142,6 +194,7 @@ export function SourceEditor({
   const onSectionChange = useCallback(
     (section: SourceSection) => (doc: SourceDoc) => {
       sections.current = { ...sections.current, [section]: doc };
+      setTyped(sections.current);
       setEdited(true);
     },
     [],
@@ -170,6 +223,12 @@ export function SourceEditor({
       return;
     }
     setSourceId(result.data.sourceId);
+    // Saved as a source version: nothing unsaved is left to keep.
+    saved({
+      basedOnSourceId: result.data.sourceId,
+      serves,
+      sections: sections.current,
+    });
     runIdRef.current = result.data.runId;
     setDialogOpen(false);
     setEdited(false);

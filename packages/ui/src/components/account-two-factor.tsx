@@ -347,8 +347,14 @@ export function AccountTwoFactor({
         {/* ---- Enrolment: QR + setup key + verify. ---- */}
         {!enabled && open && totpUri && step === "verify" ? (
           <form onSubmit={verify} className="flex flex-col gap-4" noValidate>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <div className="rounded-lg border border-border bg-white p-3">
+            <div className="flex flex-col gap-4 page-sm:flex-row page-sm:items-start">
+              {/* data-os-private: the 404 OS desktop blanks these in the
+                  frozen copy a background window shows (the QR encodes the
+                  secret). */}
+              <div
+                data-os-private=""
+                className="rounded-lg border border-border bg-white p-3"
+              >
                 <QRCode value={totpUri} size={160} />
               </div>
               <div className="flex min-w-0 flex-col gap-2">
@@ -357,7 +363,10 @@ export function AccountTwoFactor({
                   Can&rsquo;t scan? Enter this setup key manually:
                 </p>
                 {secret ? (
-                  <code className="select-all break-all rounded-md border border-border bg-muted/40 px-2 py-1 font-mono text-xs">
+                  <code
+                    data-os-private=""
+                    className="select-all break-all rounded-md border border-border bg-muted/40 px-2 py-1 font-mono text-xs"
+                  >
                     {groupSecret(secret)}
                   </code>
                 ) : null}
@@ -418,7 +427,10 @@ export function AccountTwoFactor({
                 authenticator — we can&rsquo;t show them again.
               </p>
             </div>
-            <ul className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/30 p-3">
+            <ul
+              data-os-private=""
+              className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/30 p-3"
+            >
               {backupCodes.map((c) => (
                 <li key={c} className="font-mono text-sm">
                   {c}

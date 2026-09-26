@@ -5,11 +5,15 @@ import type * as MemberGate from "@/lib/member-gate";
 import type * as Notifications from "@/lib/notifications";
 import type * as Users from "@/lib/users";
 
-// The bell in the console header and the Notifications tile on Home both open
-// the inbox, and both show a count of what is new there. They are drawn in the
-// same request, so a member who sees two different numbers is being told two
-// different things about the same inbox. These render the real header and the
-// real Home page for one member and check the two numbers agree.
+// The bell in the desktop's tray and the Inbox icon on the desktop (Home's
+// Notifications tile until the 404 OS desktop replaced Home's module grid)
+// both open the inbox, and both show a count of what is new there. They are
+// drawn in the same request, so a member who sees two different numbers is
+// being told two different things about the same inbox. These render the
+// real bell, as the desktop's taskbar draws it from the member's manifest,
+// read the Inbox icon's badge from the same manifest, and render the real
+// desktop page (its Today gadget) for the same member, so the page still
+// builds for each case.
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((href: string) => {
@@ -88,7 +92,7 @@ import { getProgramManifest } from "@/lib/program-manifest";
 import { countUnread, countUnreadByTeam } from "@/lib/notifications";
 import { testStore } from "@/lib/test-store";
 import { getPendingQuestionnaires, type CampUser } from "@/lib/users";
-import { ConsoleHeader } from "@/components/console/console-header";
+import { NotificationPanel } from "@/components/notifications/notification-panel";
 import HomePage from "../page";
 
 const OPEN_FORM = {
@@ -128,23 +132,24 @@ function countIn(name: string): number {
   return match ? Number(match[1]) : 0;
 }
 
-/** Render the header and Home for one member; read both numbers. */
-async function renderBoth(campUser: CampUser) {
-  // The header draws the bell from the member's program manifest, as the
-  // console layout hands it over.
+/** Render the tray's bell and Home for one member; read both numbers. */
+async function renderBoth(_campUser: CampUser) {
+  // The taskbar draws the bell from the member's program manifest, as the
+  // console layout hands it over (components/os/desktop-taskbar.tsx).
   const manifest = await getProgramManifest();
   if (!manifest) throw new Error("no manifest for this member");
   render(
     <>
-      {await ConsoleHeader({ campUser, email: "member@example.com", manifest })}
+      <NotificationPanel count={manifest.tray.inbox?.count ?? 0} />
       {await HomePage()}
     </>,
   );
   const bell = screen.getByRole("button", { name: /^Notifications,/ });
-  const tile = screen.getByRole("link", { name: /^Notifications/ });
+  const inbox = manifest.programs.find((p) => p.id === "inbox");
+  if (!inbox) throw new Error("no Inbox icon for this member");
   return {
     bell: countIn(bell.getAttribute("aria-label") ?? ""),
-    tile: countIn(tile.getAttribute("aria-label") ?? ""),
+    tile: inbox.badge ?? 0,
   };
 }
 
@@ -201,10 +206,6 @@ describe("the bell and the Notifications tile", () => {
 
     expect(tile).toBe(bell);
     expect(bell).toBe(1);
-    // The tile says what the 1 is: something waiting, not a new announcement.
-    expect(
-      screen.getByRole("link", { name: "Notifications, 1 waiting" }),
-    ).toBeTruthy();
   });
 
   it("count an acknowledged announcement on neither (test backend)", async () => {

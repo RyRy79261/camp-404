@@ -174,6 +174,8 @@ function ToastItem({ toast: t }: { toast: ToastRecord }) {
     // (nesting a role="alert" inside aria-live="polite" is contradictory).
     <div
       role={t.variant === "error" ? "alert" : "status"}
+      data-slot="toast"
+      data-variant={t.variant}
       data-state={leaving ? "closed" : "open"}
       className={cn(
         "pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-lg",
@@ -181,9 +183,13 @@ function ToastItem({ toast: t }: { toast: ToastRecord }) {
         "data-[state=closed]:motion-safe:animate-out data-[state=closed]:motion-safe:fade-out-0 data-[state=closed]:motion-safe:slide-out-to-bottom-2",
       )}
     >
-      <span className="mt-0.5 shrink-0">{ICONS[t.variant]}</span>
+      <span data-slot="toast-icon" className="mt-0.5 shrink-0">
+        {ICONS[t.variant]}
+      </span>
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-foreground">{t.title}</p>
+        <p data-slot="toast-title" className="font-medium text-foreground">
+          {t.title}
+        </p>
         {t.description && (
           <p
             className={cn(
@@ -233,7 +239,7 @@ export function Toaster({ className }: { className?: string }) {
       role="region"
       aria-label="Notifications"
       className={cn(
-        "pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-4 sm:items-end",
+        "pointer-events-none fixed inset-x-0 bottom-0 z-[120] flex flex-col items-center gap-2 p-4 sm:items-end",
         className,
       )}
     >

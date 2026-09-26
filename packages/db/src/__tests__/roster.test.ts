@@ -8,6 +8,7 @@ import {
   makeUser,
 } from "./_factories";
 import {
+  getCampHeadcount,
   getCampManagementRoster,
   getCampMemberDetail,
   isTeamLead,
@@ -431,5 +432,28 @@ describe("getCampManagementRoster names the blocking actions a member owes", () 
     )!;
     expect(row.pendingRequiredActionItems).toEqual([]);
     expect(row.pendingRequiredActions).toBe(0);
+  });
+});
+
+// The captain's Start menu header: approved members over waiting sign-ups,
+// counted over the same people the roster lists.
+describe("getCampHeadcount", () => {
+  const h = useTestDb();
+
+  it("counts approved members and waiting sign-ups, never a system actor or an erased stub", async () => {
+    const db = h.db();
+    await makeUser(db, { approvalStatus: "approved" });
+    await makeUser(db, { approvalStatus: "approved" });
+    await makeUser(db, { approvalStatus: "pending" });
+    await makeUser(db, { approvalStatus: "rejected" });
+    await makeUser(db, { approvalStatus: "rejected" });
+    await makeUser(db, { approvalStatus: "approved", isSystem: true });
+    await makeUser(db, { approvalStatus: "pending", sanitised: true });
+
+    expect(await getCampHeadcount()).toEqual({ members: 2, waiting: 1 });
+  });
+
+  it("answers zeros for an empty camp", async () => {
+    expect(await getCampHeadcount()).toEqual({ members: 0, waiting: 0 });
   });
 });

@@ -388,7 +388,10 @@ export function QuestionnaireRunner({
               </span>
             </div>
           )}
-          <div className="flex items-center justify-between text-xs tabular-nums text-muted-foreground">
+          <div
+            data-slot="progress-text"
+            className="flex items-center justify-between text-xs tabular-nums text-muted-foreground"
+          >
             <span>
               {answeredProgress
                 ? `${progress.answered} of ${progress.total} answered`

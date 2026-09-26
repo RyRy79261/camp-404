@@ -455,10 +455,10 @@ export function JoinSiteEditor({
   };
 }) {
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
+    <div className="grid items-start gap-6 page-lg:grid-cols-[12rem_minmax(0,1fr)]">
       <nav
         aria-label="Join site windows"
-        className="hidden lg:sticky lg:top-44 lg:block"
+        className="hidden page-lg:sticky page-lg:top-44 page-lg:block"
       >
         <ul className="flex flex-col gap-1 text-sm">
           <li>

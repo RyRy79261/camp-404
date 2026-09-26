@@ -391,7 +391,7 @@ export default async function PowerLoadsPage() {
 
         {loads.length > 0 && (
           <>
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-6 page-lg:grid-cols-2">
               <BreakdownCard
                 id="by-area"
                 title="By area"

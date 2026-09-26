@@ -262,7 +262,7 @@ export function AcknowledgementGate() {
       aria-modal="true"
       aria-labelledby="ack-title"
       onKeyDown={trapTab}
-      className="fixed inset-0 z-[100] overflow-hidden bg-background"
+      className="fixed inset-0 z-[130] overflow-hidden bg-background"
     >
       <div
         ref={scrollRef}

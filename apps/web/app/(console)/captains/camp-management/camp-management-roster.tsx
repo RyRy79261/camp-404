@@ -265,22 +265,25 @@ export function CampManagementRoster({
               value: stats.members,
               sub: "All sign-ups",
               dot: "bg-primary",
+              tone: "primary",
             },
             {
               kicker: "Approved",
               value: stats.approved,
               sub: "Cleared to camp",
               dot: "bg-success",
+              tone: "accent",
             },
             {
               kicker: "Incomplete",
               value: stats.incomplete,
               sub: "Notices & questionnaires unfinished",
               dot: "bg-warning",
+              tone: "warn",
             },
           ] as const
         ).map((kpi) => (
-          <Card key={kpi.kicker} className="h-full">
+          <Card key={kpi.kicker} data-kpi={kpi.tone} className="h-full">
             <CardContent className="flex flex-col gap-2 p-3 sm:p-5">
               <div className="flex items-center gap-2">
                 <span
@@ -290,11 +293,17 @@ export function CampManagementRoster({
                     kpi.dot,
                   )}
                 />
-                <span className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                <span
+                  data-kpi-label
+                  className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-muted-foreground"
+                >
                   {kpi.kicker}
                 </span>
               </div>
-              <p className="text-3xl font-extrabold leading-none tabular-nums">
+              <p
+                data-kpi-value
+                className="text-3xl font-extrabold leading-none tabular-nums"
+              >
                 {kpi.value}
               </p>
               <p className="hidden text-xs font-medium text-muted-foreground sm:block">
@@ -393,7 +402,7 @@ export function CampManagementRoster({
             {filtered.length} {filtered.length === 1 ? "member" : "members"}
           </p>
           <RosterTable
-            className="hidden md:block"
+            className="hidden page-md:block"
             rows={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}
@@ -402,7 +411,7 @@ export function CampManagementRoster({
             onDecideThisYear={decideThisYear}
           />
           <RosterList
-            className="md:hidden"
+            className="page-md:hidden"
             rows={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}

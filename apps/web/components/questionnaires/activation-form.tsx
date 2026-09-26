@@ -370,8 +370,8 @@ export function ActivationForm({
             aria-label={`Who should answer “${title}”?`}
             className={cn(
               "grid gap-3",
-              scopeOptions.length > 1 && "sm:grid-cols-2",
-              scopeOptions.length > 2 && "lg:grid-cols-4",
+              scopeOptions.length > 1 && "page-sm:grid-cols-2",
+              scopeOptions.length > 2 && "page-lg:grid-cols-4",
             )}
             value={scope}
             onValueChange={(v) => {

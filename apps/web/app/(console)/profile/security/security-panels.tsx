@@ -64,7 +64,7 @@ export function SecurityPanels({ data }: { data: SecurityData }) {
   const refresh = () => router.refresh();
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-6 page-lg:grid-cols-2">
       {data.confirmEmail ? (
         <ConfirmEmail
           email={data.confirmEmail.email}

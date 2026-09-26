@@ -24,6 +24,11 @@ export interface ErrorRecoveryProps {
   backHref?: string;
   /** @default "Back to camp" */
   backLabel?: string;
+  /**
+   * The heading, when the boundary can name what failed ("Tasks stopped
+   * responding", inside a desktop window). @default "Something went sideways."
+   */
+  title?: string;
 }
 
 const TITLE = "Something went sideways.";
@@ -36,6 +41,7 @@ export function ErrorRecovery({
   frame,
   backHref = "/",
   backLabel = "Back to camp",
+  title = TITLE,
 }: ErrorRecoveryProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   // The reporter only opens for someone signed in.
@@ -96,7 +102,7 @@ export function ErrorRecovery({
               tabIndex={-1}
               className="text-lg font-semibold tracking-tight outline-none"
             >
-              {TITLE}
+              {title}
             </h1>
             <p className="mx-auto max-w-md text-sm text-muted-foreground">
               {DESCRIPTION}
@@ -113,7 +119,7 @@ export function ErrorRecovery({
     <GateScreen
       icon={<TriangleAlert aria-hidden />}
       eyebrow="Camp 404"
-      title={TITLE}
+      title={title}
       description={DESCRIPTION}
       meta={trace}
       headingRef={headingRef}

@@ -1,0 +1,543 @@
+/* The console's one Tailwind entry: the kit's tokens and components, then the
+   404 OS engine's classes (and INKBLOT's, for the Terminal). The OS packages
+   bring their own @source lines, so nothing here scans them. */
+@import "@camp404/ui/styles.css";
+@import "@camp404/os/styles.css";
+@import "@camp404/games/inkblot/styles.css";
+@import "@camp404/games/cats/styles.css";
+
+/* ===========================================================================
+   The 404 OS skin (PR D; the owner's approval of the prototype, 2026-09-26).
+
+   The palette is Join's, which is the landing page's: midnight violet,
+   magenta, electric blue, and three surfaces mixed from them. Nothing here is
+   a new colour. @camp404/os reads it through the --os-* variables, which are
+   set everywhere (only OS components read them).
+
+   The kit's own tokens (--color-background, --color-primary, …) are pointed
+   at the same palette only where something wears the OS look: the desktop
+   (#os-desktop), the blocking form and the gate screens each carry
+   `data-os-skin`. `:root:has(…)` rather than a class on the element, so the
+   Radix popovers, selects and dialogs a window opens (portalled into <body>,
+   outside the desktop) and the toasts wear it too. The sign-in pages and the
+   signed-out landing page carry no marker and keep their own look (decision
+   5 A; owner, 2026-09-23).
+
+   Each skin rule also names `:host` (and the wrapper right under it): a
+   background window's last-seen copy is drawn in a shadow root, where
+   `:root` matches nothing, the kit's `:root, :host` theme would reset the
+   tokens, and `.camp-accent` on the wrapper would re-tint them. Without
+   these the copies lose the pixel face, the square corners and the colours.
+   =========================================================================== */
+
+:root {
+  --os-bg: oklch(0.15 0.05 295);
+  --os-fg: oklch(0.97 0.02 330);
+  --os-primary: oklch(0.65 0.27 340);
+  --os-primary-fg: oklch(0.99 0.005 340);
+  --os-muted: oklch(0.7 0.05 325);
+  --os-accent: oklch(0.62 0.18 255);
+
+  --os-panel: color-mix(in oklch, var(--os-bg) 88%, var(--os-fg));
+  --os-chrome: color-mix(in oklch, var(--os-bg) 72%, var(--os-fg));
+  --os-line: color-mix(in oklch, var(--os-bg) 60%, var(--os-fg));
+  /* A delete row in a menu: the kit's destructive red, not magenta. */
+  --os-danger: #e0675b;
+
+  --os-font-pixel: var(--font-silkscreen), ui-monospace, monospace;
+  /* The wordmark's face, as Join and the landing page set it. */
+  --os-font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:root:has([data-os-skin]),
+:host,
+:host > div {
+  color-scheme: dark;
+
+  --color-background: var(--os-bg);
+  --color-foreground: var(--os-fg);
+  --color-card: var(--os-panel);
+  --color-card-foreground: var(--os-fg);
+  --color-popover: var(--os-panel);
+  --color-popover-foreground: var(--os-fg);
+  --color-muted: var(--os-chrome);
+  --color-muted-foreground: var(--os-muted);
+  --color-secondary: var(--os-chrome);
+  --color-secondary-foreground: var(--os-fg);
+  /* Decision 4 A: Join's magenta fills the main buttons, with the dark
+     violet on it (5.3:1). The chrome's title bars keep the prototype's
+     near-white (--os-primary-fg). */
+  --color-primary: var(--os-primary);
+  --color-primary-foreground: var(--os-bg);
+  /* The electric blue, lifted toward the text colour so a small eyebrow in
+     it reads (the prototype's ACCENT_TEXT). */
+  --color-accent: color-mix(in oklch, var(--os-accent) 65%, var(--os-fg));
+  --color-accent-foreground: var(--os-bg);
+  --color-border: var(--os-line);
+  /* A field's edge carries meaning, so it is the muted colour, not a rule. */
+  --color-input: color-mix(in oklch, var(--os-muted) 60%, var(--os-bg));
+  --color-ring: var(--os-primary);
+  --overlay: oklch(from var(--os-bg) l c h / 0.7);
+
+  /* Square, as the prototype draws every control. `rounded-full` (avatars,
+     dots) keeps its circle. */
+  --radius: 0px;
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+
+  /* Body text in Inter (decision 10), the pixel face for chrome. */
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Figures, the clock, the Terminal: the system's monospace, as the
+     prototype and Join draw them, not AfrikaBurn's JetBrains Mono. */
+  --font-mono: var(--os-font-mono);
+}
+
+/* Inside a program window the content keeps the console's softer colours:
+   charcoal, warm white text, the camp's magenta accent (owner, 2026-09-26:
+   the softer colours in the open programs "felt a bit less overwhelming than
+   the original prototype"). Only the colours: the chrome around the window,
+   the fonts and the square corners stay the OS look. The last-seen copies
+   (`:host`) are window bodies too. Themes (issue #290) will make this a
+   choice. */
+[data-window-body],
+:host,
+:host > div {
+  --color-background: #17191b;
+  --color-foreground: #f4f0e8;
+  --color-card: #1f2326;
+  --color-card-foreground: #f4f0e8;
+  --color-popover: #1f2326;
+  --color-popover-foreground: #f4f0e8;
+  --color-muted: #262b2f;
+  --color-muted-foreground: #adb6b3;
+  --color-secondary: #26333b;
+  --color-secondary-foreground: #dce8ed;
+  --color-primary: var(--color-camp-magenta);
+  --color-primary-foreground: #17191b;
+  --color-accent: var(--color-camp-magenta);
+  --color-accent-foreground: #17191b;
+  --color-border: #323a3f;
+  --color-input: #323a3f;
+  --color-ring: var(--color-camp-magenta);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+@layer base {
+  :root:has([data-os-skin]) {
+    background: var(--os-bg);
+  }
+  :root:has([data-os-skin]) ::selection,
+  :host ::selection {
+    background: var(--os-primary);
+    color: var(--os-primary-fg);
+  }
+  /* Join's focus: a 2px magenta outline. Base layer, so a utility that
+     draws its own (a ring, or none on the terminal prompt) still wins. */
+  :root:has([data-os-skin]) :focus-visible,
+  :host :focus-visible {
+    outline: 2px solid var(--os-primary);
+    outline-offset: 2px;
+  }
+  /* On the taskbar and the phone's bottom bar the ring sits on the chrome,
+     where magenta is 2.7:1: near-white there (9.3:1), past 3:1. */
+  :root:has([data-os-skin]) [role="toolbar"] :focus-visible,
+  :host [role="toolbar"] :focus-visible {
+    outline-color: var(--os-fg);
+  }
+  /* Scroll bars in the OS's look: a square magenta thumb on the dark track. */
+  :root:has([data-os-skin]) *,
+  :host * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--os-primary) var(--os-bg);
+  }
+  :root:has([data-os-skin]) ::-webkit-scrollbar,
+  :host ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  :root:has([data-os-skin]) ::-webkit-scrollbar-track,
+  :host ::-webkit-scrollbar-track {
+    background: var(--os-bg);
+    border-left: 1px solid var(--os-line);
+  }
+  :root:has([data-os-skin]) ::-webkit-scrollbar-thumb,
+  :host ::-webkit-scrollbar-thumb {
+    background: var(--os-primary);
+    border: 2px solid var(--os-bg);
+  }
+  :root:has([data-os-skin]) ::-webkit-scrollbar-corner,
+  :host ::-webkit-scrollbar-corner {
+    background: var(--os-bg);
+  }
+  /* Headings in the pixel face, uppercase (the prototype's in-window
+     headings), in place of Montserrat's 800 treatment. */
+  :root:has([data-os-skin]) h1,
+  :root:has([data-os-skin]) h2,
+  :host h1,
+  :host h2 {
+    font-family: var(--os-font-pixel);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+  }
+  /* lucide's glyphs, squared to Join's grammar. */
+  :root:has([data-os-skin]) svg.lucide,
+  :host svg.lucide {
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+  }
+}
+
+/* The kit's parts in the prototype's grammar (its _proto/kit.tsx). Each part
+   carries a data-slot; the specificity of these rules is what lets them win
+   over the part's own utilities, and a call site's. */
+@layer utilities {
+  /* Chips: square, pixel face. */
+  :root:has([data-os-skin]) [data-slot="badge"],
+  :host [data-slot="badge"] {
+    border-radius: 0;
+    font-family: var(--os-font-pixel);
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    padding: 0.25rem 0.375rem;
+  }
+  /* Buttons: pixel face, uppercase, and a hard shadow on the main one. */
+  :root:has([data-os-skin]) [data-slot="button"],
+  :host [data-slot="button"] {
+    font-family: var(--os-font-pixel);
+    font-weight: 400;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  /* The main button is Join's "Run APPLY.EXE" slab, as the prototype draws
+     it (_proto/kit.tsx, primary): a near-white block with dark text and a
+     magenta offset shadow, filled magenta under the pointer. */
+  :root:has([data-os-skin]) [data-slot="button"][data-variant="default"],
+  :host [data-slot="button"][data-variant="default"] {
+    border: 2px solid var(--os-fg);
+    background-color: var(--os-fg);
+    color: var(--os-bg);
+    box-shadow: 4px 4px 0 0 var(--os-primary);
+  }
+  :root:has([data-os-skin]) [data-slot="button"][data-variant="default"]:hover,
+  :host [data-slot="button"][data-variant="default"]:hover {
+    border-color: var(--os-primary);
+    background-color: var(--os-primary);
+    color: var(--os-bg);
+  }
+  :root:has([data-os-skin]) [data-slot="button"][data-variant="default"]:active,
+  :host [data-slot="button"][data-variant="default"]:active {
+    box-shadow: none;
+    translate: 4px 4px;
+  }
+  :root:has([data-os-skin]) [data-slot="button"][data-variant="outline"],
+  :host [data-slot="button"][data-variant="outline"] {
+    border-color: color-mix(in oklch, var(--os-muted) 60%, transparent);
+    /* The kit's card colour: the OS panel on the desktop, the softer charcoal
+       inside a program window. */
+    background-color: var(--color-card);
+  }
+  :root:has([data-os-skin]) [data-slot="button"][data-variant="outline"]:hover,
+  :root:has([data-os-skin]) [data-slot="button"][data-variant="ghost"]:hover,
+  :host [data-slot="button"][data-variant="outline"]:hover,
+  :host [data-slot="button"][data-variant="ghost"]:hover {
+    border-color: var(--os-primary);
+    background-color: color-mix(in oklch, var(--os-primary) 12%, transparent);
+    color: var(--os-fg);
+  }
+  /* A card's title: a pixel eyebrow, as the prototype's panel headers. */
+  :root:has([data-os-skin]) [data-slot="card-title"],
+  :host [data-slot="card-title"] {
+    font-family: var(--os-font-pixel);
+    font-weight: 400;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  :root:has([data-os-skin]) [data-slot="card"],
+  :host [data-slot="card"] {
+    box-shadow: none;
+  }
+  /* A page's own heading inside its window. */
+  :root:has([data-os-skin]) [data-slot="page-title"],
+  :host [data-slot="page-title"] {
+    font-size: 1.25rem;
+    text-transform: uppercase;
+  }
+  /* The blocking form's heading is lit like a tube, as the prototype's
+     required form draws its question (os-glow): it is the one thing on the
+     screen. */
+  :root:has([data-os-skin]) [data-os-blocking] h1,
+  :host [data-os-blocking] h1 {
+    text-shadow:
+      0 0 12px color-mix(in oklch, var(--os-primary) 70%, transparent),
+      -2px 0 0 rgba(255, 0, 128, 0.7),
+      2px 0 0 rgba(0, 200, 255, 0.7);
+  }
+  :root:has([data-os-skin]) [data-slot="page-eyebrow"],
+  :host [data-slot="page-eyebrow"] {
+    font-family: var(--os-font-pixel);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+  }
+
+  /* A field's label, the prototype's FieldLabel: small pixel capitals in the
+     quiet colour. The kit's Label, a questionnaire's prompt, a filter's. */
+  :root:has([data-os-skin]) [data-slot="label"],
+  :root:has([data-os-skin]) [data-slot="field-label"],
+  :host [data-slot="label"],
+  :host [data-slot="field-label"] {
+    font-family: var(--os-font-pixel);
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.3;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--os-muted);
+  }
+
+  /* A headline number, the prototype's Kpi: a panel tile with a coloured
+     left edge (data-kpi="primary" | "accent" | "warn"), its label in small
+     pixel capitals and its figure in the pixel face. */
+  :root:has([data-os-skin]) [data-kpi],
+  :host [data-kpi] {
+    border-color: var(--color-border);
+    background-color: var(--color-card);
+  }
+  :root:has([data-os-skin]) [data-kpi="primary"],
+  :root:has([data-os-skin]) [data-kpi="warn"],
+  :host [data-kpi="primary"],
+  :host [data-kpi="warn"] {
+    box-shadow: inset 3px 0 0 0 var(--os-primary);
+  }
+  :root:has([data-os-skin]) [data-kpi="accent"],
+  :host [data-kpi="accent"] {
+    box-shadow: inset 3px 0 0 0 var(--os-accent);
+  }
+  :root:has([data-os-skin]) [data-kpi-label],
+  :host [data-kpi-label] {
+    font-family: var(--os-font-pixel);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--os-muted);
+  }
+  :root:has([data-os-skin]) [data-kpi-value],
+  :host [data-kpi-value] {
+    font-family: var(--os-font-pixel);
+    font-size: 1.5rem;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  /* A filter chip, the prototype's roster chips: pixel capitals in a
+     bordered box with the count in a box of its own, edged and tinted
+     magenta when chosen, its count filled magenta. */
+  :root:has([data-os-skin]) [data-slot="filter-chip"],
+  :host [data-slot="filter-chip"] {
+    height: 2rem;
+    gap: 0.375rem;
+    padding-inline: 0.75rem;
+    border-color: var(--os-line);
+    background-color: transparent;
+    color: var(--os-muted);
+    font-family: var(--os-font-pixel);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  :root:has([data-os-skin]) [data-slot="filter-chip"]:hover,
+  :host [data-slot="filter-chip"]:hover {
+    background-color: color-mix(in oklch, var(--os-fg) 5%, transparent);
+    color: var(--os-fg);
+  }
+  :root:has([data-os-skin]) [data-slot="filter-chip"][aria-pressed="true"],
+  :host [data-slot="filter-chip"][aria-pressed="true"] {
+    border-color: var(--os-primary);
+    background-color: color-mix(in oklch, var(--os-primary) 18%, transparent);
+    color: var(--os-fg);
+  }
+  :root:has([data-os-skin]) [data-slot="filter-chip-count"],
+  :host [data-slot="filter-chip-count"] {
+    min-width: 1rem;
+    padding-inline: 0.25rem;
+    background-color: color-mix(in oklch, var(--os-fg) 10%, transparent);
+    color: var(--os-fg);
+    font-family: var(--os-font-mono);
+    font-size: 10px;
+    line-height: 1rem;
+    text-align: center;
+  }
+  :root:has([data-os-skin])
+    [data-slot="filter-chip"][aria-pressed="true"]
+    [data-slot="filter-chip-count"],
+  :host
+    [data-slot="filter-chip"][aria-pressed="true"]
+    [data-slot="filter-chip-count"] {
+    background-color: var(--os-primary);
+    color: var(--os-bg);
+  }
+
+  /* A progress bar, the prototype's: a square, bordered track with the fill
+     cut into blocks. */
+  :root:has([data-os-skin]) [data-slot="progress"],
+  :host [data-slot="progress"] {
+    border-radius: 0;
+    height: 0.625rem;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-background);
+    padding: 1px;
+  }
+  :root:has([data-os-skin]) [data-slot="progress-fill"],
+  :host [data-slot="progress-fill"] {
+    border-radius: 0;
+    background-color: var(--os-primary);
+    mask-image: repeating-linear-gradient(
+      to right,
+      #000 0 calc(5% - 2px),
+      transparent calc(5% - 2px) 5%
+    );
+  }
+  :root:has([data-os-skin]) [data-slot="progress-text"],
+  :host [data-slot="progress-text"] {
+    font-family: var(--os-font-pixel);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* A toast, the prototype's: a panel with a hard shadow and a coloured
+     stripe at its left (magenta, blue for done), a small pixel title in the
+     quiet colour, plain text under it, and no icon. */
+  :root:has([data-os-skin]) [data-slot="toast"],
+  :host [data-slot="toast"] {
+    border-color: var(--os-line);
+    background-color: var(--os-panel);
+    box-shadow:
+      inset 4px 0 0 0 var(--os-primary),
+      6px 6px 0 0 rgb(0 0 0 / 0.45);
+  }
+  :root:has([data-os-skin]) [data-slot="toast"][data-variant="success"],
+  :host [data-slot="toast"][data-variant="success"] {
+    box-shadow:
+      inset 4px 0 0 0 var(--os-accent),
+      6px 6px 0 0 rgb(0 0 0 / 0.45);
+  }
+  :root:has([data-os-skin]) [data-slot="toast-icon"],
+  :host [data-slot="toast-icon"] {
+    display: none;
+  }
+  :root:has([data-os-skin]) [data-slot="toast-title"],
+  :host [data-slot="toast-title"] {
+    font-family: var(--os-font-pixel);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--os-muted);
+  }
+  :root:has([data-os-skin]) [data-slot="toast"] p:not([data-slot]),
+  :host [data-slot="toast"] p:not([data-slot]) {
+    color: var(--os-fg);
+  }
+}
+
+/* TEAMS/ pixel icons (components/os/pixel-icons.tsx): the colour copies sit a
+   fraction of a pixel apart, and jump on hover, like the landing's glitched
+   404 (Join's rules, apps/join/app/globals.css). */
+.pixel-glitch-m {
+  transform: translate(-0.35px, 0);
+}
+.pixel-glitch-c {
+  transform: translate(0.35px, 0);
+}
+button:hover .pixel-glitch .pixel-glitch-m,
+[role="option"]:hover .pixel-glitch .pixel-glitch-m,
+a:hover .pixel-glitch .pixel-glitch-m {
+  animation: pixel-glitch-m 1.6s steps(1) infinite;
+}
+button:hover .pixel-glitch .pixel-glitch-c,
+[role="option"]:hover .pixel-glitch .pixel-glitch-c,
+a:hover .pixel-glitch .pixel-glitch-c {
+  animation: pixel-glitch-c 1.6s steps(1) infinite;
+}
+@keyframes pixel-glitch-m {
+  0%,
+  100% {
+    transform: translate(-0.35px, 0);
+  }
+  20% {
+    transform: translate(-1px, 0.3px);
+  }
+  22% {
+    transform: translate(-0.35px, 0);
+  }
+  60% {
+    transform: translate(-0.8px, -0.3px);
+  }
+  62% {
+    transform: translate(-0.35px, 0);
+  }
+}
+@keyframes pixel-glitch-c {
+  0%,
+  100% {
+    transform: translate(0.35px, 0);
+  }
+  20% {
+    transform: translate(1px, -0.3px);
+  }
+  22% {
+    transform: translate(0.35px, 0);
+  }
+  60% {
+    transform: translate(0.8px, 0.3px);
+  }
+  62% {
+    transform: translate(0.35px, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button:hover .pixel-glitch .pixel-glitch-m,
+  button:hover .pixel-glitch .pixel-glitch-c,
+  [role="option"]:hover .pixel-glitch .pixel-glitch-m,
+  [role="option"]:hover .pixel-glitch .pixel-glitch-c,
+  a:hover .pixel-glitch .pixel-glitch-m,
+  a:hover .pixel-glitch .pixel-glitch-c {
+    animation: none !important;
+  }
+}
+
+/* Where toasts sit: clear of the desktop's taskbar (2.5rem); on a phone,
+   clear of the bottom bar, which grows with the home indicator (the same sum
+   as the desktop's --os-phone-bar), and on the floor while the soft keyboard
+   has put the bar away. Without a desktop (the landing page, sign-in), on the
+   floor. */
+:root {
+  --os-toast-bottom: 0px;
+}
+body:has(#os-desktop) {
+  --os-toast-bottom: 2.5rem;
+}
+@media (max-width: 767px) {
+  body:has(#os-desktop) {
+    --os-toast-bottom: calc(3.5rem + max(0.25rem, env(safe-area-inset-bottom)));
+  }
+  body:has(#os-desktop[data-os-keyboard]) {
+    --os-toast-bottom: 0px;
+  }
+}

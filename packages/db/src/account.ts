@@ -147,6 +147,10 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.pushTokens)
       .where(eq(schema.pushTokens.userId, userId));
+    // Their desktop: icon cells and the folder names they typed.
+    await tx
+      .delete(schema.desktopLayouts)
+      .where(eq(schema.desktopLayouts.userId, userId));
     await tx
       .delete(schema.notificationDeliveries)
       .where(eq(schema.notificationDeliveries.userId, userId));

@@ -20,6 +20,8 @@
      --os-muted, --os-accent       quiet text; the second colour
      --os-panel, --os-chrome,      window body, bars, and rules: shades
      --os-line                     between bg and fg
+     --os-danger                   delete rows in menus (the primary colour
+                                   when unset)
      --os-font-pixel               the pixel face for titles and labels */
 @theme inline {
   --color-os-bg: var(--os-bg);
@@ -31,6 +33,7 @@
   --color-os-panel: var(--os-panel);
   --color-os-chrome: var(--os-chrome);
   --color-os-line: var(--os-line);
+  --color-os-danger: var(--os-danger, var(--os-primary));
   --font-pixel: var(--os-font-pixel);
 }
 
@@ -82,10 +85,423 @@
   }
 }
 
-/* Reduced motion: windows appear without the power-on; the cursor holds. */
+/* A program on its way (an icon or Start item pressed, the page not yet
+   there): a two-step blink, not a spinner. */
+.os-pending {
+  animation: os-pending-blink 0.8s steps(2) infinite;
+}
+@keyframes os-pending-blink {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Reduced motion: windows appear without the power-on; the cursor holds;
+   a pending program is dimmed, not blinking. */
 @media (prefers-reduced-motion: reduce) {
   .os-window-in,
   .os-cursor {
     animation: none;
   }
+  .os-pending {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* ---- The desktop's CRT surface (visual-language doc 4.1): Join's four
+   layers under the icons, never inside a window body. A faint magenta grid,
+   scanlines (.os-scanlines above), a still noise and one slow beam. The beam
+   is the only thing that moves: a transform on its own layer, stepped (8
+   frames a second, not the display's 60 to 120, so the compositor redraws
+   the screen that rarely), paused with the rest when the tab is hidden or
+   the desktop is covered, and gone under reduced motion. ---- */
+
+.os-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklch, var(--os-primary) 7%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklch, var(--os-primary) 7%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 32px 32px;
+}
+
+.os-noise {
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.6) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(255, 255, 255, 0.4) 0.5px, transparent 0.5px);
+  background-size:
+    3px 3px,
+    7px 7px;
+  background-position:
+    0 0,
+    1px 1px;
+  mix-blend-mode: overlay;
+}
+
+.os-scanbeam {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(180, 100, 255, 0.05) 40%,
+    rgba(255, 0, 200, 0.1) 50%,
+    rgba(180, 100, 255, 0.05) 60%,
+    transparent 100%
+  );
+  will-change: transform;
+  /* 56 steps in 7 s: 8 a second. Everything on the desktop steps. */
+  animation: os-scanbeam 7s steps(56) infinite;
+}
+@keyframes os-scanbeam {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(2200%);
+  }
+}
+
+/* A pixel word lit like a tube: the magenta haze and the colour fringe. For
+   chrome only (the header, a gate screen's heading), never window text. */
+.os-glow {
+  text-shadow:
+    0 0 12px color-mix(in oklch, var(--os-primary) 70%, transparent),
+    -2px 0 0 rgba(255, 0, 128, 0.7),
+    2px 0 0 rgba(0, 200, 255, 0.7);
+}
+
+/* ---- The glitched wordmark (the landing page's giant 404, as Join draws
+   it), sized by the caller through --glitch-size. Everything steps: a few
+   jumps every few seconds, nothing eased, so it costs next to nothing. ---- */
+
+.os-glitch-shake {
+  animation: os-glitch-shake 5s steps(1) infinite;
+}
+@keyframes os-glitch-shake {
+  0%,
+  4%,
+  8%,
+  100% {
+    transform: translate(0, 0);
+  }
+  2% {
+    transform: translate(-1px, 1px);
+  }
+  6% {
+    transform: translate(2px, -1px);
+  }
+  18% {
+    transform: translate(-2px, 0);
+  }
+  19% {
+    transform: translate(1px, 1px);
+  }
+  20%,
+  99% {
+    transform: translate(0, 0);
+  }
+}
+
+.os-glitch-base,
+.os-glitch-rgb,
+.os-glitch-tear {
+  display: block;
+  font-family: var(
+    --os-font-mono,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace
+  );
+  font-weight: 900;
+  font-size: var(--glitch-size, clamp(7rem, 30vw, 14rem));
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+  text-align: center;
+  white-space: nowrap;
+}
+.os-glitch-base::before,
+.os-glitch-rgb::before,
+.os-glitch-tear::before {
+  content: attr(data-text);
+}
+.os-glitch-base {
+  color: var(--os-fg);
+  position: relative;
+}
+.os-glitch-rgb {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.os-glitch-magenta {
+  color: rgba(255, 0, 140, 0.85);
+  animation: os-glitch-magenta 3.7s steps(1) infinite;
+}
+@keyframes os-glitch-magenta {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(-4px, 0);
+  }
+  11% {
+    transform: translate(-2px, 2px);
+  }
+  30% {
+    transform: translate(-3px, -1px);
+  }
+  50% {
+    transform: translate(-5px, 0);
+  }
+  70% {
+    transform: translate(-2px, 1px);
+  }
+  90% {
+    transform: translate(-4px, 0);
+  }
+}
+.os-glitch-cyan {
+  color: rgba(0, 220, 255, 0.85);
+  animation: os-glitch-cyan 3.7s steps(1) infinite;
+}
+@keyframes os-glitch-cyan {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(4px, 0);
+  }
+  11% {
+    transform: translate(2px, -2px);
+  }
+  30% {
+    transform: translate(3px, 1px);
+  }
+  50% {
+    transform: translate(5px, 0);
+  }
+  70% {
+    transform: translate(2px, -1px);
+  }
+  90% {
+    transform: translate(4px, 0);
+  }
+}
+.os-glitch-tear {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--os-fg);
+  mix-blend-mode: screen;
+}
+/* The tears: thin slices of the letters knocked sideways for a moment, a few
+   times a cycle. Each slice is its own copy with a fixed clip, and only its
+   opacity and transform move (in steps), so the compositor plays them: no
+   style work on the main thread while the desktop sits idle. (Animating the
+   clip itself, as Join does, restyled the page on every frame.) */
+.os-glitch-tear {
+  opacity: 0;
+}
+.os-glitch-tear-a1 {
+  clip-path: inset(20% 0 70% 0);
+  animation: os-glitch-tear-a1 4.3s steps(1) infinite;
+}
+@keyframes os-glitch-tear-a1 {
+  0%,
+  11%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  9% {
+    opacity: 1;
+    transform: translate(8px, 0);
+  }
+}
+.os-glitch-tear-a2 {
+  clip-path: inset(35% 0 55% 0);
+  animation: os-glitch-tear-a2 4.3s steps(1) infinite;
+}
+@keyframes os-glitch-tear-a2 {
+  0%,
+  13%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  11% {
+    opacity: 1;
+    transform: translate(-6px, 0);
+  }
+}
+.os-glitch-tear-a3 {
+  clip-path: inset(50% 0 40% 0);
+  animation: os-glitch-tear-a3 4.3s steps(1) infinite;
+}
+@keyframes os-glitch-tear-a3 {
+  0%,
+  15%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  13% {
+    opacity: 1;
+    transform: translate(10px, 0);
+  }
+}
+.os-glitch-tear-a4 {
+  clip-path: inset(15% 0 75% 0);
+  animation: os-glitch-tear-a4 4.3s steps(1) infinite;
+}
+@keyframes os-glitch-tear-a4 {
+  0%,
+  42%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  40% {
+    opacity: 1;
+    transform: translate(-12px, 0);
+  }
+}
+.os-glitch-tear-a5 {
+  clip-path: inset(45% 0 45% 0);
+  animation: os-glitch-tear-a5 4.3s steps(1) infinite;
+}
+@keyframes os-glitch-tear-a5 {
+  0%,
+  44%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  42% {
+    opacity: 1;
+    transform: translate(6px, 0);
+  }
+}
+.os-glitch-tear-b1 {
+  clip-path: inset(60% 0 25% 0);
+  animation: os-glitch-tear-b1 5.1s steps(1) infinite;
+}
+@keyframes os-glitch-tear-b1 {
+  0%,
+  24%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  22% {
+    opacity: 1;
+    transform: translate(-10px, 0);
+  }
+}
+.os-glitch-tear-b2 {
+  clip-path: inset(75% 0 10% 0);
+  animation: os-glitch-tear-b2 5.1s steps(1) infinite;
+}
+@keyframes os-glitch-tear-b2 {
+  0%,
+  26%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  24% {
+    opacity: 1;
+    transform: translate(4px, 0);
+  }
+}
+.os-glitch-tear-b3 {
+  clip-path: inset(8% 0 80% 0);
+  animation: os-glitch-tear-b3 5.1s steps(1) infinite;
+}
+@keyframes os-glitch-tear-b3 {
+  0%,
+  67%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  65% {
+    opacity: 1;
+    transform: translate(7px, 0);
+  }
+}
+.os-glitch-tear-b4 {
+  clip-path: inset(28% 0 60% 0);
+  animation: os-glitch-tear-b4 5.1s steps(1) infinite;
+}
+@keyframes os-glitch-tear-b4 {
+  0%,
+  69%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  67% {
+    opacity: 1;
+    transform: translate(-5px, 0);
+  }
+}
+
+/* A panel sliding in from the right edge with its handle (the Today
+   gadget). Opening only; closing is instant. */
+.os-slide-in {
+  animation: os-slide-in 200ms ease-out backwards;
+}
+@keyframes os-slide-in {
+  from {
+    transform: translateX(20rem);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Reduced motion: stills, as Join and the landing page draw them. Placed with
+   !important because the kit's blanket rule (packages/ui globals.css) would
+   otherwise stop each loop on its last keyframe instead of on these. */
+@media (prefers-reduced-motion: reduce) {
+  .os-scanbeam,
+  .os-glitch-tear {
+    display: none !important;
+  }
+  .os-glitch-shake,
+  .os-slide-in {
+    animation: none !important;
+  }
+  .os-glitch-magenta {
+    animation: none !important;
+    transform: translate(-3px, 0) !important;
+  }
+  .os-glitch-cyan {
+    animation: none !important;
+    transform: translate(3px, 0) !important;
+  }
+}
+
+/* Nobody can see it: every animation under data-os-paused holds still. The
+   app sets it on its desktop root while the tab is hidden, and on the
+   surface and wordmark while something covers them whole (a blocking form,
+   a maximised window, a program on a phone). The idle desktop costs nothing
+   (design doc, section 8). */
+[data-os-paused] *,
+[data-os-paused] *::before,
+[data-os-paused] *::after {
+  animation-play-state: paused !important;
 }

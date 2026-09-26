@@ -32,6 +32,7 @@ import {
 import { Slider } from "@camp404/ui/components/slider";
 import { TextareaWithCount } from "@camp404/ui/components/textarea-with-count";
 import { cn } from "@camp404/ui/lib/utils";
+import { isFieldLocked, isSafetyVisible } from "@camp404/core";
 import { RecorderPanel } from "../voice/recorder-panel";
 import { useDictationToggle } from "../voice/use-dictation-toggle";
 import { useVoiceSupported } from "../voice/use-voice-recorder";
@@ -145,14 +146,31 @@ export function QuestionField({
     </>
   );
 
+  // An ID number (ALWAYS_PRIVATE) and a safety answer (SAFETY_VISIBLE) are
+  // blanked in the desktop's last-seen copy of this window, so they never sit
+  // in a background picture.
+  const privateField = isPrivateQuestion(question);
+
   return (
-    <div className="flex flex-col gap-1.5">
+    <div
+      className="flex flex-col gap-1.5"
+      data-os-private={privateField ? "" : undefined}
+    >
       {labelable ? (
-        <label id={labelId} htmlFor={fieldId} className="text-sm font-medium">
+        <label
+          id={labelId}
+          htmlFor={fieldId}
+          data-slot="field-label"
+          className="text-sm font-medium"
+        >
           {prompt}
         </label>
       ) : (
-        <span id={labelId} className="text-sm font-medium">
+        <span
+          id={labelId}
+          data-slot="field-label"
+          className="text-sm font-medium"
+        >
           {prompt}
         </span>
       )}
@@ -1350,4 +1368,30 @@ function LongTextField({
         ))}
     </div>
   );
+}
+
+/**
+ * The question roles whose answers are saved to a SAFETY_VISIBLE column
+ * (@camp404/core), by that column's key.
+ */
+const SAFETY_ROLE_KEYS: ReadonlyMap<string, string> = new Map([
+  ["emergency_contact_name", "emergencyContacts"],
+  ["emergency_contact_phone", "emergencyContacts"],
+  ["emergency_contact_relationship", "emergencyContacts"],
+  ["dietary_allergies", "allergies"],
+  ["dietary_anaphylactic", "isAnaphylactic"],
+]);
+/** The burner profile's allergy question, which carries no role. */
+const SAFETY_QUESTION_KEYS: ReadonlyMap<string, string> = new Map([
+  ["dietary.allergies", "allergies"],
+]);
+
+/** An ALWAYS_PRIVATE answer, or one that lands in a SAFETY_VISIBLE column. */
+function isPrivateQuestion(question: Question): boolean {
+  if (isFieldLocked(question.id)) return true;
+  const role = "role" in question ? question.role : undefined;
+  const key =
+    (role && SAFETY_ROLE_KEYS.get(role)) ??
+    SAFETY_QUESTION_KEYS.get(question.id);
+  return key !== undefined && isSafetyVisible(key);
 }

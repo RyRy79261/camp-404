@@ -115,7 +115,7 @@ export default async function CampOverviewPage() {
           <CaptainStatusBoard />
           <section
             aria-label="Camp sections"
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            className="grid gap-4 page-sm:grid-cols-2 page-lg:grid-cols-3"
           >
             {SECTIONS.map(({ href, icon: Icon, title, desc }) => (
               <Link key={href} href={href} className="group">

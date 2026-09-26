@@ -45,6 +45,20 @@ describe("MemberNotes", () => {
     ).toBeTruthy();
   });
 
+  it("is blanked in the desktop's last-seen copy (data-os-private)", async () => {
+    const { container } = render(
+      <MemberNotes userId="m1" notes={[NOTE]} onChange={() => {}} />,
+    );
+    const marked = container.querySelector("[data-os-private]");
+    expect(marked?.textContent).toContain("Brings a generator.");
+    // The copy the desktop keeps of this window says "Hidden" instead.
+    const { captureLastSeen, PRIVATE_PLACEHOLDER } =
+      await import("@camp404/os");
+    const copy = captureLastSeen(container);
+    expect(copy?.html).not.toContain("Brings a generator.");
+    expect(copy?.html).toContain(PRIVATE_PLACEHOLDER);
+  });
+
   it("adds a note, hands back the list and clears the field", async () => {
     const onChange = vi.fn();
     vi.mocked(addMemberNoteAction).mockResolvedValue({

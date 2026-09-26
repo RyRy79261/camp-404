@@ -15,10 +15,11 @@ import {
   countryFlag,
 } from "./roster-presentation";
 
-// The roster below md: the console's stacked cards (the phone layout
-// `ResponsiveDataTable` draws), one per member. Each card is a full-width
-// button — avatar, name + sub-line (@handle · flag · country), then the status
-// badge (captain view) and the role badge. Buttons make every card
+// The roster below md (by its window's width, page-md): the console's
+// stacked cards (the phone layout `ResponsiveDataTable` draws), one per
+// member. Each card is a full-width button — avatar, name + sub-line
+// (@handle · flag · country), then the status badge (captain view) and the
+// role badge. Buttons make every card
 // keyboard-reachable. A public row has no `status`; a member's card shows the
 // one approval fact they may read — the applicant standing — in the same slot,
 // and nothing at all for someone already in camp.

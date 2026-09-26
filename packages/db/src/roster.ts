@@ -190,6 +190,36 @@ export async function getCampManagementRoster(
   }));
 }
 
+/** The camp's head count, for the captain's Start menu header. */
+export interface CampHeadcount {
+  /** Approved members: the camp. */
+  members: number;
+  /** Sign-ups waiting for a captain's approval. */
+  waiting: number;
+}
+
+/**
+ * How many approved members the camp has and how many sign-ups wait for a
+ * captain, over the same people the roster lists (real members, never a
+ * system actor or an erased "Lost Cat" stub). One aggregate row, so the
+ * desktop can show it on every page without reading the roster.
+ *
+ * Captain-only: callers MUST gate this behind a captain rank check.
+ */
+export async function getCampHeadcount(): Promise<CampHeadcount> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({
+      members: sql<number>`count(*) filter (where ${schema.users.approvalStatus} = 'approved')::int`,
+      waiting: sql<number>`count(*) filter (where ${schema.users.approvalStatus} = 'pending')::int`,
+    })
+    .from(schema.users)
+    .where(
+      and(eq(schema.users.isSystem, false), eq(schema.users.sanitised, false)),
+    );
+  return { members: row?.members ?? 0, waiting: row?.waiting ?? 0 };
+}
+
 // Full per-member detail behind the camp-management roster modal. Captain-
 // only: callers MUST gate this behind a captain rank check. Pulls the
 // burner-profile answers and invite provenance a captain reviews before

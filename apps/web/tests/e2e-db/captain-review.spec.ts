@@ -5,6 +5,7 @@ import {
   type APIRequestContext,
 } from "@playwright/test";
 import { login, redeemInviteAtGate, resetTestState } from "../e2e/_helpers";
+import { openToday } from "../e2e/lib/console-nav";
 import { signInCaptain } from "./_flows";
 
 // A captain reviews applications in the roster, on a real database: the member
@@ -35,10 +36,11 @@ async function applicant(
     },
   });
   expect(res.ok()).toBe(true);
-  // Home tells an applicant they are waiting (every other page holds them at
-  // /pending-approval).
+  // Home (the restricted desktop's Today gadget) tells an applicant they are
+  // waiting (every other page holds them at /pending-approval).
   await page.goto("/");
-  await expect(page.getByText("Waiting for a captain")).toBeVisible();
+  const today = await openToday(page);
+  await expect(today.getByText("Waiting for a captain")).toBeVisible();
   return page;
 }
 

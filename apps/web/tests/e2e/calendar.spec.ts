@@ -12,12 +12,18 @@ import {
   seedTeam,
   setRank,
 } from "./_helpers";
-import { goViaConsoleNav } from "./lib/console-nav";
+import {
+  closeConsoleNav,
+  goViaConsoleNav,
+  navEntry,
+  openConsoleNav,
+  openToday,
+} from "./lib/console-nav";
 
 // The camp calendar, part 2 (test-mode, where the store stands in for a
 // connected Google Calendar that starts empty). Captains and team leads add
-// events from Home's "Add event" tile, a lead only for a team they lead; Home's
-// "Coming up" marks the viewer's own team's events as theirs, gives another
+// events from the New event program in their Captains folder, a lead only for
+// a team they lead; the Today gadget's "Coming up" marks the viewer's own team's events as theirs, gives another
 // team's event a plain team badge, and leaves a whole-camp event unmarked.
 
 /** A week from now, as the camp's day (YYYY-MM-DD). */
@@ -37,10 +43,11 @@ async function approvedMember(
   await completeOnboarding(request, id);
 }
 
-/** Home's "Coming up" row for an event, once Home has painted. */
+/** Today's "Coming up" row for an event, once the gadget is open. */
 async function comingUp(page: Page, title: string) {
   await page.goto("/");
-  const list = page.getByRole("list", { name: "Coming up" });
+  const today = await openToday(page);
+  const list = today.getByRole("list", { name: "Coming up" });
   const row = list.getByRole("listitem").filter({ hasText: title });
   await expect(row).toBeVisible();
   return row;
@@ -84,10 +91,7 @@ test.describe("camp calendar (test-mode)", () => {
     await seedTeam(request, "cal-lead", "kitchen", true);
 
     await page.goto("/");
-    await page
-      .getByRole("navigation", { name: "Your modules" })
-      .getByRole("link", { name: /Add event/ })
-      .click();
+    await goViaConsoleNav(page, "New event", "Captains");
     await expect(page).toHaveURL(/\/captains\/calendar$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Add an event" }),
@@ -147,6 +151,42 @@ test.describe("camp calendar (test-mode)", () => {
     await expect(row.getByText("Kitchen", { exact: true })).toHaveCount(0);
   });
 
+  test("a lead whose only led team is archived gets a sentence, not an empty picker", async ({
+    page,
+    request,
+  }) => {
+    await approvedMember(page, request, "cal-water", "Water Lead");
+    await seedTeam(request, "cal-water", "water", true);
+
+    // While Water is active, the lead may add for it.
+    await page.goto("/captains/calendar");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Add an event" }),
+    ).toBeVisible();
+    await expect(page.locator("#event-team")).toBeVisible();
+
+    // A captain archives Water.
+    await login(page, { id: "cal-archiver", email: "god@example.com" });
+    await page.goto("/");
+    await completeOnboarding(request, "cal-archiver");
+    await setRank(request, "cal-archiver", "captain");
+    await page.goto("/captains/camp-settings");
+    const active = page.getByRole("switch", { name: "Water active" });
+    await active.click();
+    await expect(active).not.toBeChecked();
+
+    await login(page, { id: "cal-water", email: "cal-water@example.com" });
+    await page.goto("/captains/calendar");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Add an event" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("The teams you lead are archived this year"),
+    ).toBeVisible();
+    await expect(page.locator("#event-team")).toHaveCount(0);
+    await expect(page.getByText("Team leads and captains only")).toHaveCount(0);
+  });
+
   test("a plain member sees the lock on the add-event page", async ({
     page,
     request,
@@ -155,16 +195,13 @@ test.describe("camp calendar (test-mode)", () => {
     await seedTeam(request, "cal-plain", "kitchen");
 
     await page.goto("/");
-    await expect(
-      page
-        .getByRole("navigation", { name: "Your modules" })
-        .getByRole("link", { name: /My forms/ }),
-    ).toBeVisible();
-    await expect(
-      page
-        .getByRole("navigation", { name: "Your modules" })
-        .getByRole("link", { name: /Add event/ }),
-    ).toHaveCount(0);
+    // Present first: the member's own programs. No New event among them, and
+    // no Captains folder to hold one.
+    const programs = await openConsoleNav(page);
+    await expect(navEntry(programs, "My forms")).toBeVisible();
+    await expect(navEntry(programs, "Captains")).toHaveCount(0);
+    await expect(navEntry(programs, "New event")).toHaveCount(0);
+    await closeConsoleNav(page);
 
     await page.goto("/captains/calendar");
     await expect(

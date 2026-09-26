@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import {
   completeOnboarding,
   login,
@@ -7,6 +7,32 @@ import {
   seedTeam,
   setRank,
 } from "./_helpers";
+import {
+  closeConsoleNav,
+  expectDesktop,
+  navEntry,
+  openConsoleNav,
+  usesPhoneLayout,
+} from "./lib/console-nav";
+
+/**
+ * The pinned announcements. On a desktop they are a line in the header;
+ * on a phone they fold into the bell's panel, which this opens.
+ */
+async function pinnedPins(page: Page): Promise<Locator> {
+  if (usesPhoneLayout(page)) {
+    await page
+      .getByRole("toolbar", { name: "Bottom bar" })
+      .getByRole("button", { name: /^Notifications,/ })
+      .click();
+    const panel = page.getByRole("dialog");
+    await expect(
+      panel.getByRole("heading", { name: "Notifications" }),
+    ).toBeVisible();
+    return panel.getByRole("region", { name: "Pinned announcements" });
+  }
+  return page.getByRole("region", { name: "Pinned announcements" });
+}
 
 // Captain announcements & notifications, end to end against the in-memory
 // test store (E2E_TEST_MODE=1 — see playwright.config.ts). Covers the marquee
@@ -137,18 +163,16 @@ test.describe("captain announcements (test-mode)", () => {
     expect(approved.ok()).toBeTruthy();
     await page.goto("/");
     await expect(page).toHaveURL("/");
-    const inboxTile = page
-      .getByRole("navigation", { name: "Your modules" })
-      .getByRole("link", { name: /^Notifications/ });
-    await expect(inboxTile).toBeVisible();
+    await expectDesktop(page);
     const bellName = await page
       .getByRole("button", { name: /^Notifications,/ })
       .getAttribute("aria-label");
-    const tileName = await inboxTile.getAttribute("aria-label");
-    const countIn = (name: string | null) =>
-      Number(/(\d+)/.exec(name ?? "")?.[1] ?? 0);
-    expect(countIn(tileName)).toBe(countIn(bellName));
     expect(bellName).toBe("Notifications, none unread");
+    // The Inbox program carries the same count as the bell: none, so its
+    // name is its plain name (with one, "Inbox, 1 new").
+    const me = await openConsoleNav(page, "Me");
+    await expect(navEntry(me, "Inbox")).toHaveAccessibleName("Inbox");
+    await closeConsoleNav(page);
 
     // 6. The inbox tabs are links: the filter lives in the URL, and it is
     //    applied to the list rather than to the tab strip.
@@ -256,14 +280,13 @@ test.describe("captain announcements (test-mode)", () => {
     await card.getByRole("button", { name: "Pin to top" }).click();
     await expect(page.getByText("Pinned to the top")).toBeVisible();
 
-    // 4. The member finds it above the page, on more than one console page,
-    //    with no way to dismiss it themselves.
+    // 4. The member finds it above the page (a strip above the taskbar; on a
+    //    phone, in the bell), on more than one console page, with no way to
+    //    dismiss it themselves.
     await login(page, { id: "member-auth", email: "member@example.com" });
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { level: 1, name: /^Hi\b/ }),
-    ).toBeVisible();
-    const banner = page.getByRole("region", { name: "Pinned announcements" });
+    await expectDesktop(page);
+    let banner = await pinnedPins(page);
     await expect(banner.getByText("Water points moved")).toBeVisible();
     expect(await banner.getByRole("button").count()).toBe(0);
 
@@ -271,6 +294,7 @@ test.describe("captain announcements (test-mode)", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Notifications" }),
     ).toBeVisible();
+    banner = await pinnedPins(page);
     await expect(banner.getByText("Water points moved")).toBeVisible();
 
     // The banner's link is the way through to the whole announcement.
@@ -299,12 +323,8 @@ test.describe("captain announcements (test-mode)", () => {
     // Assert the page HAS rendered before asserting the banner's absence —
     // toHaveURL resolves before paint, and an empty document has no banner
     // either.
-    await expect(
-      page.getByRole("heading", { level: 1, name: /^Hi\b/ }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Pinned announcements" }),
-    ).toHaveCount(0);
+    await expectDesktop(page);
+    await expect(await pinnedPins(page)).toHaveCount(0);
     // It is unpinned, not unsent: the inbox still has it.
     await page.goto("/notifications");
     await expect(
@@ -438,7 +458,9 @@ test.describe("captain announcements (test-mode)", () => {
     await drafts.getByRole("button", { name: "Delete" }).click();
     const confirm = page.getByRole("dialog", { name: "Delete this draft?" });
     await expect(confirm).toBeVisible();
-    await expect(confirm.getByText(/"Ice run rota" will be deleted/)).toBeVisible();
+    await expect(
+      confirm.getByText(/"Ice run rota" will be deleted/),
+    ).toBeVisible();
     await confirm.getByRole("button", { name: "Cancel" }).click();
     await expect(confirm).toHaveCount(0);
     await expect(draftTitle).toBeVisible();

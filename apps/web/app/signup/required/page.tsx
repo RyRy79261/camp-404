@@ -44,6 +44,7 @@ export default async function SignupRequiredPage() {
 
   return (
     <AuthShell
+      os
       eyebrow="Invite required"
       icon={<KeyRound aria-hidden />}
       footer="Camp 404 is invite-only."

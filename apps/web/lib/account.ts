@@ -2,11 +2,14 @@ import "server-only";
 
 import { sanitiseAccount, type SanitiseResult } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "./avatar-blob";
-import { isE2ETestMode } from "./test-mode";
+import { isE2ETestMode, usesTestStore } from "./test-mode";
+import { testStore } from "./test-store";
 
 /**
  * Erase a member's account (anonymise to a "Lost Cat #N" stub). No-op under
- * E2E test mode (no DB) — account erasure isn't exercised by Playwright.
+ * E2E test mode (no DB) — account erasure isn't exercised by Playwright —
+ * except that the test store's twin of `desktop_layouts` goes, as the real
+ * erasure deletes the row.
  *
  * Anonymisation nulls `profileImageUrl` in the DB but the avatar blob object
  * outlives the row, so delete it here too. Best-effort: the DB scrub is the
@@ -25,7 +28,10 @@ export async function deleteAccount(input: {
   userId: string;
   authUserId: string;
 }): Promise<SanitiseResult> {
-  if (isE2ETestMode()) return { ok: true, lostCatNumber: 0 };
+  if (isE2ETestMode()) {
+    if (usesTestStore()) testStore.deleteDesktopLayout(input.userId);
+    return { ok: true, lostCatNumber: 0 };
+  }
   const result = await sanitiseAccount(input.userId);
   if (!result.ok) return result;
   try {

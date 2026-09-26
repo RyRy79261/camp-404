@@ -106,8 +106,8 @@ test.describe("/captains/system (test-mode)", () => {
     ).toBeVisible();
     await expect(page.getByText("Background work")).toHaveCount(0);
     await expect(checkRow(page, "Database")).toHaveCount(0);
-    // A lead's nav has no link to it either: their Captains menu holds the
-    // builder and nothing of a captain's.
+    // A lead's desktop has no way to it either: their Captains folder holds
+    // the builder and nothing of a captain's.
     const captains = await openConsoleNav(page, "Captains");
     await expect(navEntry(captains, "Questionnaires")).toBeVisible();
     await expect(navEntry(captains, "System status")).toHaveCount(0);

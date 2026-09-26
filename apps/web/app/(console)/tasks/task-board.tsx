@@ -226,7 +226,7 @@ export function TaskBoard({
       </div>
 
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 page-lg:grid-cols-3">
           {TASK_COLUMNS.map((column) => {
             const inColumn = visible.filter((c) => c.status === column.status);
             return (

@@ -4,7 +4,7 @@ import { cache } from "react";
 import { countUnread } from "./notifications";
 import { getPendingQuestionnaires } from "./users";
 
-// The one count of "what is new in your inbox". The bell in the console header
+// The one count of "what is new in your inbox". The bell in the desktop's tray
 // and the Notifications tile on Home (called Announcements until 2026-09-24)
 // both open the inbox, and both show this number. They used to add it up separately — the bell counted waiting
 // questionnaires and the tile did not, and Home skipped them for a member

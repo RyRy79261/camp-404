@@ -74,8 +74,8 @@ export default async function ProfilePage() {
       <div className="flex flex-col gap-6">
         <ProfileSections active="profile" />
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="flex flex-col gap-6 lg:col-span-2">
+        <div className="grid gap-6 page-lg:grid-cols-3">
+          <div className="flex flex-col gap-6 page-lg:col-span-2">
             <Card>
               <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
                 <div className="flex min-w-0 items-center gap-4">

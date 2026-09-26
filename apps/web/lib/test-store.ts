@@ -203,12 +203,14 @@ import {
   calendarEventRefusal,
   type AddCalendarEventResult,
 } from "@camp404/db/calendar-events";
+import { DesktopLayoutInvalidError } from "@camp404/db/desktop-layouts";
 import {
   ADJUST_INSTRUCTION_MAX,
   ADJUST_INSTRUCTION_NEEDED,
   ADJUST_INSTRUCTION_TOO_LONG,
   ANNOUNCEMENT_NOTIFICATION_KINDS,
   DEFAULT_PLATES,
+  DesktopLayout,
   KitchenRecipe,
   MealPlanInput,
   PROOFREAD_ANSWER_MAX,
@@ -218,6 +220,7 @@ import {
   RecipeDraft,
   RecipeSourceSections,
   SourceProofread,
+  parseStoredDesktopLayout,
   type DraftReport,
   type InboxFilter,
   type IngredientCategory,
@@ -644,6 +647,8 @@ interface TestStoreState {
   driverProfiles: TestDriverProfile[];
   /** `car_members`: who rides in whose car, per year. */
   carMembers: TestCarMember[];
+  /** `desktop_layouts`: each member's saved desktop, by user id. */
+  desktopLayouts: Map<string, unknown>;
 }
 
 /** The lift fields of a `driver_profiles` row. */
@@ -727,6 +732,7 @@ function globalState(): TestStoreState {
       campBlurbs: new Map<string, TestCampBlurb>(),
       driverProfiles: [] as TestDriverProfile[],
       carMembers: [] as TestCarMember[],
+      desktopLayouts: new Map<string, unknown>(),
     } satisfies TestStoreState;
   }
   return g[GLOBAL_KEY] as TestStoreState;
@@ -803,6 +809,7 @@ S.ingredientCatalogue ??= [];
 S.recipeLessons ??= [];
 S.recipeHistory ??= [];
 S.mealPlans ??= new Map<number, MealPlan>();
+S.desktopLayouts ??= new Map<string, unknown>();
 const recipes = S.recipes;
 const recipeRuns = S.recipeRuns;
 const recipeSources = S.recipeSources;
@@ -1329,6 +1336,16 @@ export const testStore = {
   },
   findUserById(userId: string): TestUser | null {
     return findUserById(userId);
+  },
+  /** Approved members and sign-ups waiting (getCampHeadcount's twin). */
+  getCampHeadcount(): { members: number; waiting: number } {
+    let members = 0;
+    let waiting = 0;
+    for (const user of usersByAuthId.values()) {
+      if (user.approvalStatus === "approved") members++;
+      else if (user.approvalStatus === "pending") waiting++;
+    }
+    return { members, waiting };
   },
   /** How many captains there are (the system-status probe's twin). */
   countCaptains(): number {
@@ -5092,6 +5109,37 @@ export const testStore = {
     S.campBlurbs.clear();
     driverProfiles.length = 0;
     carMembers.length = 0;
+    S.desktopLayouts.clear();
+  },
+
+  // --- Desktop layouts (the twin of @camp404/db/desktop-layouts) ----------
+  // Checked the same way on both sides: the write refuses what is not a
+  // layout and stores the parsed value; the read gives null for none or for a
+  // stored value that is not a layout (seeded past the writer by a unit test).
+
+  getDesktopLayout(userId: string): DesktopLayout | null {
+    return parseStoredDesktopLayout(S.desktopLayouts.get(userId));
+  },
+  saveDesktopLayout(userId: string, layout: unknown): DesktopLayout {
+    if (!findUserById(userId)) {
+      throw new Error(`No test user with id ${userId}`);
+    }
+    const parsed = DesktopLayout.safeParse(layout);
+    if (!parsed.success) {
+      throw new DesktopLayoutInvalidError(
+        parsed.error.issues.map((issue) => issue.message),
+      );
+    }
+    S.desktopLayouts.set(userId, structuredClone(parsed.data));
+    return parsed.data;
+  },
+  /** Seed a raw stored value, checked or not (unit tests only). */
+  seedRawDesktopLayout(userId: string, value: unknown): void {
+    S.desktopLayouts.set(userId, structuredClone(value));
+  },
+  /** Account erasure's delete of `desktop_layouts`. */
+  deleteDesktopLayout(userId: string): void {
+    S.desktopLayouts.delete(userId);
   },
 
   // --- Lifts (the twin of @camp404/db/cars getMyLift) ----------------------

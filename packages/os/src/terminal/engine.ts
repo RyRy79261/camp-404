@@ -11,6 +11,12 @@ export type TermResult<K extends string = string> = {
   open?: K;
   clear?: boolean;
   exit?: boolean;
+  /**
+   * Something the app should do besides printing (the console's cats: paw
+   * prints, a peek). The app names its own; the window hands it on with the
+   * output.
+   */
+  effect?: string;
 };
 
 export const out = (text: string): TermLine => ({ kind: "out", text });

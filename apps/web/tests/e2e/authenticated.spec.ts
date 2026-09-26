@@ -5,7 +5,12 @@ import {
   redeemInviteAtGate,
   resetTestState,
 } from "./_helpers";
-import { navEntry, openConsoleNav } from "./lib/console-nav";
+import {
+  expectDesktop,
+  navEntry,
+  openConsoleNav,
+  openToday,
+} from "./lib/console-nav";
 
 // All specs here rely on E2E_TEST_MODE=1 in the dev server env (see
 // playwright.config.ts). The /api/test/login + reset routes are only
@@ -66,16 +71,15 @@ test.describe("authenticated flow (test-mode)", () => {
 
     await page.goto("/");
     await expect(page).toHaveURL("/");
-    // Home is now the member's own page instead of the sign-in CTA: the
-    // greeting, and the console nav with a member destination in it.
-    await expect(
-      page.getByRole("heading", { level: 1, name: /^Hi\b/ }),
-    ).toBeVisible();
+    // Home is now the member's desktop instead of the sign-in CTA, with a
+    // member program in its Start menu (or phone home screen) that opens.
+    await expectDesktop(page);
     const me = await openConsoleNav(page, "Me");
-    await expect(navEntry(me, "My forms")).toHaveAttribute(
-      "href",
-      "/tools/forms",
-    );
+    await navEntry(me, "My forms").click();
+    await expect(page).toHaveURL("/tools/forms");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "My forms" }),
+    ).toBeVisible();
   });
 
   test("a member reaches their sign-in and security page from the profile", async ({
@@ -129,9 +133,11 @@ test.describe("authenticated flow (test-mode)", () => {
     await completeOnboarding(request, "pending-auth");
     await page.goto("/");
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByText("Waiting for a captain")).toBeVisible();
-    await expect(page.getByRole("list", { name: "To do" })).toHaveCount(0);
-    await expect(page.getByText("Coming up")).toHaveCount(0);
+    // The restricted desktop: its Today gadget says they are waiting.
+    const today = await openToday(page);
+    await expect(today.getByText("Waiting for a captain")).toBeVisible();
+    await expect(today.getByRole("list", { name: "Needs you" })).toHaveCount(0);
+    await expect(today.getByText("Coming up")).toHaveCount(0);
 
     // Every other member page still holds at the approval screen.
     await page.goto("/tools/forms");

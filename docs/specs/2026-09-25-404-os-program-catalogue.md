@@ -87,6 +87,9 @@ The rules it follows come from the design doc:
 - **L**: 960 x 680.
 - **Max**: opens maximised. Used for wide pages until they move to
   `@container` queries (migration plan, PR E).
+  [CORRECTION 2026-09-26] Nothing opens maximised now: the wide pages open
+  at the prototype's XL (1040 x 660) or L (880 x 600), cut to the screen
+  (owner's approval of the prototype, 2026-09-26).
 
 **Instances**
 - **Single**: one window per program. A second launch focuses it. Query
@@ -116,10 +119,16 @@ sections and the phone home screen rows. Icons can then be moved (decision
 
 | Group | What goes in it | Who gets it |
 | --- | --- | --- |
-| **Me** | Inbox, My forms, My account, Invites; My lift for a driver (decision 11) | Every approved member |
-| **Camp** | Tasks, Calendar, Roster, Meetings, Family tree, Power; the **Teams** folder; the **Kitchen** folder | Every approved member |
-| **Captains** | The Captains folder (Questionnaires, Announcements, New event, and the captain-only programs), then Terminal | The folder: `team_lead` or captain, not drawn for anyone else. Terminal: every approved member (for a plain member it ends the Camp column) |
+| **Me** | Inbox, Tasks, Calendar, My forms, Invites, My account; My lift for a driver (decision 11) | Every approved member |
+| **Camp** | Roster, the **Teams** folder, Meetings, the **Kitchen** folder, Power, Family tree | Every approved member |
+| **Captains** | The Captains folder (Questionnaires, Announcements, New event, and the captain-only programs; [CORRECTION 2026-09-26] in the prototype's order, Camp overview first), then Terminal | The folder: `team_lead` or captain, not drawn for anyone else. Terminal: every approved member (for a plain member it ends the Camp column) |
 | **Team folders** (right-hand side) | One folder per team the member is in this year (decision 8), led teams first, tagged LEAD | Every approved member with a team this year. On the phone, a "My teams" row |
+
+[CORRECTION 2026-09-26] Tasks and Calendar moved from Camp to Me, and each
+column is in the approved prototype's order, a folder after the program it
+follows (`after` in `FOLDERS`, `lib/programs.ts`). The owner's approval of
+the prototype, 2026-09-26: "the approved prototype (variant A) IS the
+design".
 
 Folders inside Camp:
 

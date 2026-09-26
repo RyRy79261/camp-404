@@ -103,6 +103,7 @@ function FilterField({
       {/* Each control carries its own accessible name. */}
       <span
         aria-hidden
+        data-slot="field-label"
         className="font-medium uppercase tracking-wide text-muted-foreground"
       >
         {label}
@@ -188,11 +189,13 @@ export function RosterToolbar({
                 key={value}
                 type="button"
                 aria-pressed={active}
+                data-slot="filter-chip"
                 onClick={() => onChipChange(value)}
                 className={cn(TOGGLE, active && TOGGLE_ON)}
               >
                 {label}{" "}
                 <span
+                  data-slot="filter-chip-count"
                   className={cn(
                     "tabular-nums",
                     active ? "text-foreground" : "text-muted-foreground",
@@ -209,6 +212,8 @@ export function RosterToolbar({
             <button
               type="button"
               aria-pressed={chip === "outstanding"}
+              data-slot="filter-chip"
+              data-tone="warn"
               onClick={() =>
                 onChipChange(chip === "outstanding" ? "all" : "outstanding")
               }
@@ -219,7 +224,10 @@ export function RosterToolbar({
             >
               <TriangleAlert aria-hidden className="h-3.5 w-3.5 text-warning" />
               Outstanding{" "}
-              <span className="tabular-nums text-warning">
+              <span
+                data-slot="filter-chip-count"
+                className="tabular-nums text-warning"
+              >
                 {stats.outstanding ?? 0}
               </span>
             </button>
@@ -275,7 +283,7 @@ export function RosterToolbar({
       {/* Sort — phones only; the table's column headers sort on wider
           screens. */}
       {sort && (
-        <FilterField label="Sort" className="w-full sm:w-52 md:hidden">
+        <FilterField label="Sort" className="w-full sm:w-52 page-md:hidden">
           <div className="relative">
             <select
               aria-label="Sort the roster"
