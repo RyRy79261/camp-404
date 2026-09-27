@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@camp404/ui/components/card";
+import type { TicketCounts } from "@camp404/core";
 import type {
   Kpi,
   ReadinessFunnel,
@@ -358,7 +359,14 @@ export function SendCompletionCard({ sends }: { sends: SendCompletion[] }) {
  * Counted over APPROVED members only, the people "Everyone" reaches, so "Not
  * answered" is an approved member with no answer for this year.
  */
-export function ThisYearCard({ counts }: { counts: ThisYearCounts }) {
+export function ThisYearCard({
+  counts,
+  tickets,
+}: {
+  counts: ThisYearCounts;
+  /** The year's ticket figures (#238), over the same approved members. */
+  tickets?: TicketCounts;
+}) {
   const { total } = counts;
   const segments = [
     { key: "coming", label: "Coming", n: counts.coming, bar: "bg-primary" },
@@ -435,6 +443,38 @@ export function ThisYearCard({ counts }: { counts: ThisYearCounts }) {
             </ul>
           </>
         )}
+        {tickets && (
+          <ul
+            aria-label="Tickets"
+            className="flex flex-col gap-1 border-t border-border pt-3 text-xs"
+          >
+            <li className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">
+                Have a place, no ticket yet
+              </span>
+              <span className="font-semibold tabular-nums">
+                {tickets.needTicket}
+              </span>
+            </li>
+            <li className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">
+                Early entry passes issued
+              </span>
+              <span className="font-semibold tabular-nums">
+                {tickets.earlyEntryIssued}
+              </span>
+            </li>
+          </ul>
+        )}
+        <p className="mt-auto pt-1 text-xs text-muted-foreground">
+          <Link
+            href="/captains/applications"
+            className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
+          >
+            Applications
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </p>
       </CardContent>
     </Card>
   );

@@ -296,6 +296,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "captain",
   },
+  // Who is coming this year, with tickets and early entry for captains
+  // (#238). A team lead reads the statuses only, so the bar is team_lead.
+  {
+    id: "applications",
+    label: "Applications",
+    fileName: "INTAKE.DB",
+    href: "/captains/applications",
+    icon: "applications",
+    place: CAPTAINS,
+    rank: "team_lead",
+  },
   {
     id: "questionnaires",
     label: "Questionnaires",

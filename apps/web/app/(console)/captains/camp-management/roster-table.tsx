@@ -67,9 +67,15 @@ export type ThisYearDecision = "accepted" | "waitlisted";
  * spins and reports a failure.
  */
 export type DecideThisYear = (
-  row: RosterDisplayRow,
+  row: ThisYearRow,
   to: ThisYearDecision,
 ) => Promise<{ ok: true } | { ok: false; error: string }>;
+
+/** What the decision buttons read of a row (the Applications page's too). */
+export type ThisYearRow = Pick<
+  RosterDisplayRow,
+  "id" | "displayName" | "thisYear"
+>;
 
 const DECISION_BUTTONS: {
   to: ThisYearDecision;
@@ -107,7 +113,7 @@ export function ThisYearDecisionButtons({
   onDecide,
   className,
 }: {
-  row: RosterDisplayRow;
+  row: ThisYearRow;
   onDecide: DecideThisYear;
   className?: string;
 }) {

@@ -166,6 +166,7 @@ describe("RolloverPanel — naming the founding year", () => {
         teamBudgetsStamped: 0,
         adopteesStamped: 0,
         participationsStamped: 5,
+        ticketsStamped: 0,
         auditLogId: "audit-1",
       },
     } as never);

@@ -531,6 +531,18 @@ Decisions baked into the schema — keep new code consistent with them:
   back Maybe; My forms edits that answer, and the same write rewrites the
   answer stored with the "Coming this year?" questionnaire so its results
   agree with the roster. Erasure deletes every year's row.
+- **Tickets and early entry.** `camp_tickets` (#238) is the same shape: one
+  row per member per burn year (adopted by `setFoundingYear`, erased with the
+  account), written only through `@camp404/db/tickets`. The member sets their
+  own `ticket_status` on their profile (under "This year", once they have said
+  Yes or Maybe); captains alone read it and alone record `directed_ticket` and
+  `early_entry`, each a compare-and-set on the value they saw, audited as
+  `ticket.pass_changed`. A team lead reads none of it, and a member's own read
+  carries only their ticket status. No row means every column's default. It
+  stores no ticket number, barcode, order reference or card detail. The
+  captains' view is `/captains/applications` (Applications: team lead and up,
+  statuses only below captain), and the overview's "This year" card counts
+  accepted members with no ticket yet and early-entry passes issued.
 - **Notifications.** `broadcasts` are composed messages fanned out by a
   worker into per-user `notification_deliveries` (a queue). `push_tokens`
   holds device tokens.

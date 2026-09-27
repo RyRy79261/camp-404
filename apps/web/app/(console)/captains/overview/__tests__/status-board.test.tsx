@@ -354,6 +354,27 @@ describe("ThisYearCard", () => {
     expect(bars[2]!.style.width).toBe("25%");
   });
 
+  it("adds the year's ticket figures, and a way to the Applications page", () => {
+    render(
+      <ThisYearCard
+        counts={counts}
+        tickets={{ needTicket: 3, earlyEntryIssued: 2 }}
+      />,
+    );
+    const card = screen.getByRole("article", { name: "This year" });
+    const tickets = within(card).getByRole("list", { name: "Tickets" });
+    expect(
+      within(tickets)
+        .getAllByRole("listitem")
+        .map((li) => li.textContent),
+    ).toEqual(["Have a place, no ticket yet3", "Early entry passes issued2"]);
+    expect(
+      within(card)
+        .getByRole("link", { name: "Applications" })
+        .getAttribute("href"),
+    ).toBe("/captains/applications");
+  });
+
   it("draws no segment for a zero count, but keeps it in the legend", () => {
     const { container } = render(
       <ThisYearCard
