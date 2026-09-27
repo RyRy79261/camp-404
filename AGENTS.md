@@ -499,6 +499,14 @@ Decisions baked into the schema — keep new code consistent with them:
     There are no kitchen settings any more (the owner removed the largest
     pot and the burner count), so `canSetKitchenSettings` is gone. Change the
     rule in those functions, never at a call site.
+  - **A team's program is another place team identity decides** (owner's
+    ruling 1, 2026-09-27): only a captain or a lead OF THAT TEAM changes what
+    a team's program says (its description and links today), by `canEditTeamProgram` in
+    `packages/core/src/team-programs.ts`, which fails closed. Every member
+    reads every team's program. The write re-reads the actor's rank and lead
+    teams inside its own transaction. Meeting notes keep their own, wider
+    rule (`canWorkInTeam`: the team's members this year). Change the rule in
+    that function, never at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping
