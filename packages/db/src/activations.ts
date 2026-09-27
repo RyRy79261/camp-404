@@ -286,7 +286,8 @@ export async function openActivation(
  * invited", nothing reminds them, and the results never count them.
  *
  * Called before the gate spine is read, so it runs on page loads. The steady
- * state is therefore five reads, sent together, and no writes:
+ * state is therefore one read when nothing open can reach the member, else
+ * that read and four more sent together, and no writes:
  *   - A gate that already points at this send is left alone, whatever its
  *     status. The member was gated at open time, or here earlier, and may
  *     have answered since.
@@ -302,23 +303,18 @@ export async function reconcileOpenActivations(
   userId: string,
 ): Promise<number> {
   const db = createHttpDb();
-  // One round trip, not three: every read goes out at once. The targets and
-  // gates name the open sends through a subquery instead of waiting for the
-  // list above, so the steady state (nothing to write) costs one wait on the
-  // database, which every console page pays before it can draw.
-  const openIds = db
-    .select({ id: schema.questionnaireActivations.id })
-    .from(schema.questionnaireActivations)
-    .where(eq(schema.questionnaireActivations.status, "open"));
-  const openKeys = db
-    .select({ key: schema.questionnaireActivations.questionnaireKey })
-    .from(schema.questionnaireActivations)
-    .where(eq(schema.questionnaireActivations.status, "open"));
-  const [openRows, meRows, memberships, targets, gates] = await Promise.all([
-    db
+  // The open sends first: with none this member could be pushed (the usual
+  // state between sends), that one read is all a page pays. With some, the
+  // member's own rows go out together, one wait more.
+  const open = (
+    await db
       .select()
       .from(schema.questionnaireActivations)
-      .where(eq(schema.questionnaireActivations.status, "open")),
+      .where(eq(schema.questionnaireActivations.status, "open"))
+  ).filter((act) => PUSH_SCOPES.has(act.scope));
+  if (open.length === 0) return 0;
+
+  const [meRows, memberships, targets, gates] = await Promise.all([
     db
       .select({
         id: schema.users.id,
@@ -346,7 +342,10 @@ export async function reconcileOpenActivations(
       .where(
         and(
           eq(schema.questionnaireActivationTargets.userId, userId),
-          inArray(schema.questionnaireActivationTargets.activationId, openIds),
+          inArray(
+            schema.questionnaireActivationTargets.activationId,
+            open.map((act) => act.id),
+          ),
         ),
       ),
     db
@@ -360,12 +359,13 @@ export async function reconcileOpenActivations(
       .where(
         and(
           eq(schema.requiredActions.userId, userId),
-          inArray(schema.requiredActions.actionKey, openKeys),
+          inArray(
+            schema.requiredActions.actionKey,
+            open.map((act) => act.questionnaireKey),
+          ),
         ),
       ),
   ]);
-  const open = openRows.filter((act) => PUSH_SCOPES.has(act.scope));
-  if (open.length === 0) return 0;
   const [me] = meRows;
   if (!me) return 0;
 

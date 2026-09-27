@@ -168,8 +168,10 @@ export default async function ConsoleLayout({
           ? null
           : {
               count: inbox?.waiting ?? 0,
-              body: <TodayBody userId={campUser.id} />,
-              warm: <TodayWarm userId={campUser.id} />,
+              // Keyed by the member: another member on this tab gets a new
+              // body, never the last one's state.
+              body: <TodayBody key={campUser.id} userId={campUser.id} />,
+              warm: <TodayWarm key={campUser.id} userId={campUser.id} />,
             }
       }
       boot={boot}

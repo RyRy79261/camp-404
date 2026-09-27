@@ -10,6 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import type { Route } from "next";
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import { refreshTodayAction } from "@/app/(console)/today-actions";
 import { MineStar } from "@/components/calendar/calendar-days";
 import dynamic from "next/dynamic";
@@ -306,6 +307,32 @@ export const TODAY_FRESH_MS = 5000;
  */
 let lastDrawn: { userId: string; model: TodayModel } | null = null;
 
+/** The tab's last copy, only for the member it was built for. */
+function lastCopyFor(userId: string | undefined): TodayModel | null {
+  if (!userId || !lastDrawn) return null;
+  if (lastDrawn.userId !== userId || lastDrawn.model.userId !== userId) {
+    return null;
+  }
+  return lastDrawn.model;
+}
+
+/**
+ * Whether a fresh read may be shown in a gadget drawn for `userId`: it was
+ * built for that member. A read that answered for anyone else is treated as
+ * a failed refresh, never drawn and never kept.
+ */
+function belongsTo(fresh: TodayModel, userId: string | undefined): boolean {
+  return userId === undefined || fresh.userId === userId;
+}
+
+/** "14:02", on the camp's clock (the taskbar's). */
+const CLOCK = new Intl.DateTimeFormat("en-GB", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: CAMP_TIME_ZONE,
+});
+
 /**
  * Reads Today once, in the background, after the first page of a visit has
  * settled, so the first opening shows it at once (the console no longer
@@ -314,12 +341,17 @@ let lastDrawn: { userId: string; model: TodayModel } | null = null;
  */
 export function TodayWarm({ userId }: { userId: string }) {
   useEffect(() => {
-    if (lastDrawn?.userId === userId) return;
+    if (lastCopyFor(userId)) return;
     let live = true;
     const run = () => {
       refreshTodayAction().then(
         (fresh) => {
-          if (live && fresh && lastDrawn?.userId !== userId) {
+          if (
+            live &&
+            fresh &&
+            fresh.userId === userId &&
+            lastCopyFor(userId) === null
+          ) {
             lastDrawn = { userId, model: fresh };
           }
         },
@@ -350,10 +382,10 @@ export function TodayBody({
   /** Whose Today this is, to key the tab's last copy. */
   userId?: string;
 }) {
-  const [model, setModel] = useState<TodayModel | null>(
-    () =>
-      initial ??
-      (userId && lastDrawn?.userId === userId ? lastDrawn.model : null),
+  // The console keys this by the member, so a different member signing in
+  // on this tab gets a new body; the copy it starts from is theirs or none.
+  const [model, setModel] = useState<TodayModel | null>(() =>
+    initial && belongsTo(initial, userId) ? initial : lastCopyFor(userId),
   );
   const [failed, setFailed] = useState(false);
   // Drawn only while the gadget is open, so this runs on each opening. The
@@ -369,9 +401,10 @@ export function TodayBody({
     refreshTodayAction().then(
       (fresh) => {
         if (!live) return;
-        if (fresh) {
+        if (fresh && belongsTo(fresh, userId)) {
           if (userId) lastDrawn = { userId, model: fresh };
           setModel(fresh);
+          setFailed(false);
         } else setFailed(true);
       },
       () => {
@@ -385,7 +418,10 @@ export function TodayBody({
     // Once per opening, with the copy it opened with.
   }, []);
 
-  if (!model) {
+  // Drawn for this member only: should the body be handed another member
+  // without being remounted, it shows nothing of the last one's.
+  const shown = model && belongsTo(model, userId) ? model : null;
+  if (!shown) {
     return (
       <div className="flex min-w-0 flex-col" aria-busy={!failed}>
         <div className="sticky top-0 z-10 flex h-8 shrink-0 items-center gap-1.5 border-b border-os-line bg-os-chrome pl-2.5 pr-1">
@@ -407,7 +443,7 @@ export function TodayBody({
     );
   }
 
-  const { home, date, burn } = model;
+  const { home, date, burn } = shown;
   const waiting = home.todos.length;
   const calendarNote =
     home.calendarState === "not_configured"
@@ -434,6 +470,18 @@ export function TodayBody({
       </div>
 
       <div className="grid gap-3 p-2.5">
+        {failed && (
+          // The refresh failed: what is below is the copy it opened with,
+          // which may be out of date. Said, not hidden.
+          <p
+            role="status"
+            data-today-stale
+            className="border border-dashed border-os-line px-2.5 py-1.5 text-xs text-os-muted"
+          >
+            Couldn&rsquo;t refresh Today just now. This is how it looked at{" "}
+            {CLOCK.format(shown.builtAt)}.
+          </p>
+        )}
         {burn && <Countdown burn={burn} />}
 
         {home.waitingForApproval ? (

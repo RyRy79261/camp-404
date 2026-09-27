@@ -46,6 +46,12 @@ export interface TodayModel {
   burn: TodayBurn | null;
   /** When the server built it (ms since the epoch). */
   builtAt: number;
+  /**
+   * The camp member it was built for (their own id). The gadget keeps or
+   * shows a copy only for the member it is drawn for, so a read that answered
+   * for someone else (the session changed under the page) is never shown.
+   */
+  userId: string;
 }
 
 const DATE = new Intl.DateTimeFormat("en-GB", {
@@ -139,6 +145,7 @@ export async function getTodayModel(
     date: DATE.format(now),
     burn: todayBurn(current, now, previousEnd),
     builtAt: now.getTime(),
+    userId: campUser.id,
   };
 }
 

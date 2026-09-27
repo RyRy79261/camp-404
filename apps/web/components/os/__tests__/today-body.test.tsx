@@ -53,6 +53,7 @@ function model(over: Partial<HomeModel> = {}, burn = true): TodayModel {
       : null,
     // Built long ago unless a test says otherwise: opening reads it again.
     builtAt: 0,
+    userId: "member-nova",
   };
 }
 
@@ -203,5 +204,77 @@ describe("TodayBody", () => {
     // 145 of 358 days: 41%, 10 of the 24 blocks.
     expect(bar.textContent).toContain("41% of the year’s run-up gone.");
     expect(bar.querySelectorAll(".bg-os-primary")).toHaveLength(10);
+  });
+
+  it("keeps the copy it opened with when the refresh fails, and says it may be out of date", async () => {
+    refresh.mockRejectedValue(new Error("offline"));
+    render(
+      <TodayBody
+        userId="member-nova"
+        initial={model({
+          todos: [
+            {
+              id: "form:1",
+              label: "Tent check",
+              href: "/questionnaires/1",
+              due: null,
+              urgent: false,
+            },
+          ],
+        })}
+      />,
+    );
+    await act(async () => {});
+    expect(screen.getByRole("link", { name: /Tent check/ })).toBeTruthy();
+    expect(screen.getByText(/Couldn.t refresh Today just now/)).toBeTruthy();
+  });
+
+  it("shows no stale note when the refresh worked", async () => {
+    refresh.mockResolvedValue(model());
+    render(<TodayBody userId="member-nova" initial={model()} />);
+    await act(async () => {});
+    expect(screen.queryByText(/Couldn.t refresh Today/)).toBeNull();
+  });
+});
+
+describe("Today belongs to one member", () => {
+  const as = (userId: string, over: Partial<HomeModel> = {}) => ({
+    ...model(over),
+    userId,
+  });
+  const todo = (label: string) => ({
+    todos: [
+      { id: `form:${label}`, label, href: "/x", due: null, urgent: false },
+    ],
+  });
+
+  it("never draws a read that answered for another member", async () => {
+    refresh.mockResolvedValue(as("member-ada", todo("Ada's form")));
+    render(<TodayBody userId="member-bo" />);
+    await act(async () => {});
+    expect(screen.queryByText("Ada's form")).toBeNull();
+    expect(screen.getByText(/Couldn.t load Today/)).toBeTruthy();
+  });
+
+  it("drops the last member's Today when handed another member", async () => {
+    refresh.mockResolvedValue(as("member-ada", todo("Ada's form")));
+    const view = render(<TodayBody userId="member-ada" />);
+    await act(async () => {});
+    expect(screen.getByText("Ada's form")).toBeTruthy();
+    // The same body, now drawn for someone else (no remount).
+    refresh.mockReturnValue(new Promise(() => {}));
+    view.rerender(<TodayBody userId="member-bo" />);
+    expect(screen.queryByText("Ada's form")).toBeNull();
+  });
+
+  it("never opens with another member's last copy from this tab", async () => {
+    refresh.mockResolvedValue(as("member-cy", todo("Cy's form")));
+    const first = render(<TodayBody userId="member-cy" />);
+    await act(async () => {});
+    first.unmount();
+    refresh.mockReturnValue(new Promise(() => {}));
+    render(<TodayBody userId="member-di" />);
+    expect(screen.queryByText("Cy's form")).toBeNull();
+    expect(screen.getByText("Loading…")).toBeTruthy();
   });
 });

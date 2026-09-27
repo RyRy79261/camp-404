@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { useTestDb } from "./_harness";
 import {
   addTarget,
@@ -342,6 +342,23 @@ describe("openActivation — the carry-over fan-out filter", () => {
 
 describe("reconcileOpenActivations — members who arrive after a send", () => {
   const h = useTestDb();
+
+  it("reads only the open sends when none can reach a member, and writes nothing", async () => {
+    const db = h.db();
+    const u = await makeUser(db);
+    // An open opt-in send is not pushed to anyone; a closed everyone send is
+    // not open: neither needs the member's own rows.
+    await makeActivation(db, { scope: "opt_in" });
+    await makeActivation(db, { scope: "everyone", status: "closed" });
+    const query = vi.spyOn(h.client(), "query");
+    try {
+      expect(await reconcileOpenActivations(u.id)).toBe(0);
+      expect(query).toHaveBeenCalledTimes(1);
+    } finally {
+      query.mockRestore();
+    }
+    expect(await requiredActionsFor(db, u.id)).toEqual([]);
+  });
 
   it("gates a member who joined after an everyone send opened, once", async () => {
     const db = h.db();
