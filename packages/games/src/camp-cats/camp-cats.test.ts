@@ -148,6 +148,21 @@ describe("the six-hour limit on feeding", () => {
     expect(mayFeed(store, 5 * HOUR)).toBe(true);
   });
 
+  it("keeps a feed the storage would not save, for the rest of the page", () => {
+    // Readable but full: every write throws.
+    const full: FeedStorage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+    };
+    expect(recordFeed(full, 1000)).toBe(true);
+    // The scene mounted again asks the same storage: still fed.
+    expect(mayFeed(full, 1000 + HOUR)).toBe(false);
+    expect(recordFeed(full, 1000 + HOUR)).toBe(false);
+    expect(mayFeed(full, 1000 + FEED_COOLDOWN_MS)).toBe(true);
+  });
+
   it("still feeds, once, where storage throws", () => {
     const broken: FeedStorage = {
       getItem: () => {

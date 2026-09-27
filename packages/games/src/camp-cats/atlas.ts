@@ -42,52 +42,62 @@ export function resolveColour(value: string, where: Element | null): string {
   return colour || value;
 }
 
-const drawn = new Map<object, string | null>();
+/** Each frame set's pictures, by the colours they were drawn in. */
+const drawn = new Map<object, Map<string, string | null>>();
 
 /**
- * The frames as one strip picture, drawn the first time and kept for the
- * page. Null without a canvas (a test's jsdom): the caller draws the frame
- * as squares instead.
+ * The frames as one strip picture, drawn once and kept for the page. Kept
+ * by the colours it was drawn in as well: the outline and white are the
+ * OS's CSS variables, looked up at the call, so should the desktop's colours
+ * change, the next call draws a new picture rather than reuse the old one.
+ * Null without a canvas (a test's jsdom): the caller draws the frame as
+ * squares instead.
  */
 export function atlasUrl<P extends string>(
   frames: Readonly<Record<P, readonly Sprite[]>>,
   palette: Readonly<Record<string, string>>,
   where: Element | null,
 ): string | null {
-  if (drawn.has(frames)) return drawn.get(frames)!;
-  let url: string | null = null;
-  if (typeof document !== "undefined") {
-    const { layout, total } = atlasLayout(frames);
-    const canvas = document.createElement("canvas");
-    canvas.width = total * CELL_W;
-    canvas.height = CELL_H;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      const colours = new Map<string, string>();
-      const colourOf = (ch: string) => {
-        if (!colours.has(ch)) {
-          const v = palette[ch];
-          colours.set(ch, v ? resolveColour(v, where) : "");
-        }
-        return colours.get(ch)!;
-      };
-      for (const pose of Object.keys(frames) as P[]) {
-        frames[pose].forEach((sprite, i) => {
-          const ox = (layout[pose].start + i) * CELL_W;
-          sprite.forEach((row, y) => {
-            for (let x = 0; x < row.length; x++) {
-              const fill = colourOf(row[x]!);
-              if (!fill) continue;
-              ctx.fillStyle = fill;
-              ctx.fillRect(ox + x, y, 1, 1);
-            }
-          });
-        });
+  if (typeof document === "undefined") return null;
+  // Only the letters these frames use, each resolved once.
+  const colours = new Map<string, string>();
+  for (const list of Object.values<readonly Sprite[]>(frames)) {
+    for (const sprite of list) {
+      for (const ch of sprite.join("")) {
+        if (colours.has(ch)) continue;
+        const v = palette[ch];
+        colours.set(ch, v ? resolveColour(v, where) : "");
       }
-      url = canvas.toDataURL();
     }
   }
-  drawn.set(frames, url);
+  const key = [...colours].map(([ch, c]) => `${ch}=${c}`).join(";");
+  let byColours = drawn.get(frames);
+  if (!byColours) drawn.set(frames, (byColours = new Map()));
+  if (byColours.has(key)) return byColours.get(key)!;
+
+  let url: string | null = null;
+  const { layout, total } = atlasLayout(frames);
+  const canvas = document.createElement("canvas");
+  canvas.width = total * CELL_W;
+  canvas.height = CELL_H;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    for (const pose of Object.keys(frames) as P[]) {
+      frames[pose].forEach((sprite, i) => {
+        const ox = (layout[pose].start + i) * CELL_W;
+        sprite.forEach((row, y) => {
+          for (let x = 0; x < row.length; x++) {
+            const fill = colours.get(row[x]!);
+            if (!fill) continue;
+            ctx.fillStyle = fill;
+            ctx.fillRect(ox + x, y, 1, 1);
+          }
+        });
+      });
+    }
+    url = canvas.toDataURL();
+  }
+  byColours.set(key, url);
   return url;
 }
 

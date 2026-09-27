@@ -12,17 +12,26 @@ export const FEED_STORAGE_KEY = "camp404:bowls-filled-at";
 /** The part of Storage the limit uses, so a test can hand it a fake. */
 export type FeedStorage = Pick<Storage, "getItem" | "setItem">;
 
+/**
+ * Feeds a storage refused to keep (full, or blocked from writing), held for
+ * the rest of the page's life, so the scene mounted again (the desktop
+ * redrawn) still counts them.
+ */
+const unsaved = new WeakMap<FeedStorage, number>();
+
 /** When the bowls were last filled here, or null for never (or unreadable). */
 export function lastFedAt(storage: FeedStorage): number | null {
+  const held = unsaved.get(storage) ?? null;
   let raw: string | null;
   try {
     raw = storage.getItem(FEED_STORAGE_KEY);
   } catch {
-    return null;
+    return held;
   }
-  if (raw === null) return null;
-  const at = Number(raw);
-  return Number.isFinite(at) ? at : null;
+  const at = raw === null ? NaN : Number(raw);
+  const stored = Number.isFinite(at) ? at : null;
+  if (stored === null) return held;
+  return held === null ? stored : Math.max(stored, held);
 }
 
 /**
@@ -47,8 +56,9 @@ export function recordFeed(storage: FeedStorage, now: number): boolean {
   try {
     storage.setItem(FEED_STORAGE_KEY, String(now));
   } catch {
-    // Storage full or blocked: this feed still counts for this page (the
-    // caller hides the bowls), it just is not remembered after a reload.
+    // Storage full or blocked: this feed still counts for the rest of this
+    // page's life, it just is not remembered after a reload.
+    unsaved.set(storage, now);
   }
   return true;
 }

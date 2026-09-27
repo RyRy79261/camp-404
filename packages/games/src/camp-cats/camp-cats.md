@@ -47,7 +47,8 @@ be put out and again at the click (a feed in another tab since then is
 refused and the bowls go). **When the limit is active the bowls are not shown
 at all** (rather than empty and unclickable): nothing on screen hints at a
 feed that cannot happen. A time from the future (the clock put back) is
-forgotten; a browser that refuses storage feeds once per page load.
+forgotten; a feed the storage refuses to keep still counts for the rest of the
+page, but not after a reload.
 
 ## Cost
 
