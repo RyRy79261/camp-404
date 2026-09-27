@@ -385,7 +385,10 @@ export function RosterTable({
                 {thisYearColumn && (
                   <TableCell>
                     <span className="flex flex-wrap items-center gap-2">
-                      <ThisYearBadge status={r.thisYear ?? null} />
+                      <ThisYearBadge
+                        status={r.thisYear ?? null}
+                        says={r.thisYearSays ?? null}
+                      />
                       {onDecideThisYear && (
                         <ThisYearDecisionButtons
                           row={r}

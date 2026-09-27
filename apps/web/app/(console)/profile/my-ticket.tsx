@@ -10,7 +10,7 @@ import { setMyTicketAction } from "./actions";
 
 // The member's own ticket for this year (#238), under "This year" on their
 // profile: four plain choices and Save. The captains read it on Applications;
-// the camp's directed ticket and early-entry pass are the captains' to record
+// the camp's DDT and WAP are the captains' to record
 // and are not shown here.
 
 const OPTIONS = TICKET_STATUSES.map((value) => ({

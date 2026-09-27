@@ -1,12 +1,16 @@
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import {
-  NOT_ANSWERED_LABEL,
-  PARTICIPATION_LABEL,
+  DECISION_LABEL,
+  INTENT_LABEL,
+  NOT_DECIDED_LABEL,
+  NO_ANSWER_LABEL,
+  participationDecision,
+  type ParticipationDecision,
   defaultTeamLabel,
   initialsFrom,
 } from "@camp404/core";
-import type { ParticipationStatus } from "@camp404/types";
+import type { ParticipationIntent, ParticipationStatus } from "@camp404/types";
 import { Badge, type BadgeProps } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { cn } from "@camp404/ui/lib/utils";
@@ -147,42 +151,104 @@ export function RosterStatusBadge({
   );
 }
 
-/**
- * This year's attendance status → Badge variant, in the status badges' own
- * vocabulary: a place given is success, the waiting list a warning, a Yes
- * still to decide the primary tint, a Maybe quiet, and a No quieter still.
- */
-const THIS_YEAR_VARIANT: Record<ParticipationStatus, BadgeVariant> = {
+/** What the member said → Badge variant: a Yes the primary tint, a Maybe
+ * quiet, a No quieter still. */
+const SAYS_VARIANT: Record<ParticipationIntent, BadgeVariant> = {
+  yes: "default",
+  maybe: "secondary",
+  no: "outline",
+};
+
+/** The captains' decision → Badge variant: a place is success, the waiting
+ * list a warning. */
+const DECISION_VARIANT: Record<ParticipationDecision, BadgeVariant> = {
   accepted: "success",
   waitlisted: "warning",
-  applied: "default",
-  maybe: "secondary",
-  not_attending: "outline",
 };
 
 /**
- * The "This year" pill (captains and team leads): Coming / Maybe / Accepted /
- * Waiting list / Not coming, or a dashed "Not answered" for a member with no
- * answer for the year.
+ * What the member said this year (captains and team leads): Coming, Maybe,
+ * Not coming, or a dashed "No answer yet". `prefix` reads it as "Says: …"
+ * where it shares a cell with the decision.
  */
-export function ThisYearBadge({
+export function SaysBadge({
+  says,
+  prefix = false,
+  className,
+}: {
+  says: ParticipationIntent | null;
+  prefix?: boolean;
+  className?: string;
+}) {
+  if (says === null) {
+    return (
+      <Badge variant="outline" className={cn("border-dashed", className)}>
+        {NO_ANSWER_LABEL}
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant={SAYS_VARIANT[says]} className={className}>
+      {prefix ? `Says: ${INTENT_LABEL[says]}` : INTENT_LABEL[says]}
+    </Badge>
+  );
+}
+
+/**
+ * The captains' decision this year: Accepted, Waiting list, or "Not decided
+ * yet" for a member who said Coming or Maybe. Nothing for a member who said
+ * No or has not answered: there is nothing to decide until they say Coming
+ * or Maybe.
+ */
+export function DecisionBadge({
   status,
   className,
 }: {
   status: ParticipationStatus | null;
   className?: string;
 }) {
-  if (status === null) {
+  const decision = participationDecision(status);
+  if (decision) {
     return (
-      <Badge variant="outline" className={cn("border-dashed", className)}>
-        {NOT_ANSWERED_LABEL}
+      <Badge variant={DECISION_VARIANT[decision]} className={className}>
+        {DECISION_LABEL[decision]}
       </Badge>
     );
   }
+  if (status === "applied" || status === "maybe") {
+    return (
+      <Badge
+        variant="outline"
+        className={cn("border-dashed text-muted-foreground", className)}
+      >
+        {NOT_DECIDED_LABEL}
+      </Badge>
+    );
+  }
+  return null;
+}
+
+/**
+ * The roster's "This year" cell (captains and team leads): what the member
+ * said and what the captains decided, as two badges, never one label for
+ * both.
+ */
+export function ThisYearBadge({
+  status,
+  says,
+  className,
+}: {
+  status: ParticipationStatus | null;
+  says: ParticipationIntent | null;
+  className?: string;
+}) {
   return (
-    <Badge variant={THIS_YEAR_VARIANT[status]} className={className}>
-      {PARTICIPATION_LABEL[status]}
-    </Badge>
+    <span
+      className={cn("inline-flex flex-wrap items-center gap-1.5", className)}
+    >
+      <SaysBadge says={says} prefix />
+      <DecisionBadge status={status} />
+    </span>
   );
 }
 

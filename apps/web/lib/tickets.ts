@@ -14,7 +14,7 @@ import {
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
-// Tickets and early entry (#238): the facade over `@camp404/db/tickets`,
+// Tickets and WAP (#238): the facade over `@camp404/db/tickets`,
 // routed through the in-memory test store under E2E_TEST_MODE so Playwright
 // can drive the member's own ticket and the captains' Applications page.
 // Every caller gates the viewer itself; this module gates nothing. What each
@@ -77,7 +77,7 @@ export interface MyTicket {
 
 /**
  * The member's own ticket status for the camp's current year (the default
- * when they have said nothing). Never the directed ticket or the early-entry
+ * when they have said nothing). Never the DDT or the WAP
  * pass: those are the captains' (#238).
  */
 export async function getMyTicket(userId: string): Promise<MyTicket> {
@@ -111,15 +111,15 @@ export async function listTicketsThisYear(): Promise<Map<string, TicketFacts>> {
       r.userId,
       {
         ticketStatus: r.ticketStatus,
-        directedTicket: r.directedTicket,
-        earlyEntry: r.earlyEntry,
+        ddt: r.ddt,
+        wap: r.wap,
       },
     ]),
   );
 }
 
 /**
- * A captain records a member's directed ticket or early-entry pass for this
+ * A captain records a member's DDT or WAP for this
  * year. False when the value had already moved from `from`.
  */
 export function setTicketPass(

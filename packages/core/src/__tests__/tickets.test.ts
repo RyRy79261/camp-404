@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  DIRECTED_TICKET_STATUSES,
-  EARLY_ENTRY_STATUSES,
+  DDT_STATUSES,
+  WAP_STATUSES,
   PARTICIPATION_STATUSES,
   TICKET_STATUSES,
 } from "@camp404/types";
 import {
   DEFAULT_TICKET,
-  DIRECTED_TICKET_LABEL,
-  EARLY_ENTRY_LABEL,
+  DDT_LABEL,
+  WAP_LABEL,
   TICKET_STATUS_LABEL,
   TICKET_STATUS_OPTION,
   deriveTicketCounts,
@@ -29,11 +29,11 @@ describe("ticket words", () => {
     expect(Object.keys(TICKET_STATUS_LABEL).sort()).toEqual(
       [...TICKET_STATUSES].sort(),
     );
-    expect(Object.keys(DIRECTED_TICKET_LABEL).sort()).toEqual(
-      [...DIRECTED_TICKET_STATUSES].sort(),
+    expect(Object.keys(DDT_LABEL).sort()).toEqual(
+      [...DDT_STATUSES].sort(),
     );
-    expect(Object.keys(EARLY_ENTRY_LABEL).sort()).toEqual(
-      [...EARLY_ENTRY_STATUSES].sort(),
+    expect(Object.keys(WAP_LABEL).sort()).toEqual(
+      [...WAP_STATUSES].sort(),
     );
   });
 });
@@ -46,12 +46,12 @@ describe("stillNeedsTicket", () => {
     expect(stillNeedsTicket(null)).toBe(false);
   });
 
-  it("is settled by the member's own ticket or an allocated directed ticket", () => {
+  it("is settled by the member's own ticket or an allocated DDT", () => {
     expect(
       stillNeedsTicket("accepted", ticket({ ticketStatus: "has_ticket" })),
     ).toBe(false);
     expect(
-      stillNeedsTicket("accepted", ticket({ directedTicket: "allocated" })),
+      stillNeedsTicket("accepted", ticket({ ddt: "allocated" })),
     ).toBe(false);
     expect(
       stillNeedsTicket("accepted", ticket({ ticketStatus: "buying_own" })),
@@ -61,7 +61,7 @@ describe("stillNeedsTicket", () => {
         "accepted",
         ticket({
           ticketStatus: "needs_directed_ticket",
-          directedTicket: "can_transfer",
+          ddt: "can_transfer",
         }),
       ),
     ).toBe(true);
@@ -69,7 +69,7 @@ describe("stillNeedsTicket", () => {
 });
 
 describe("deriveTicketCounts", () => {
-  it("counts accepted members without a ticket and issued early-entry passes", () => {
+  it("counts accepted members without a ticket and issued WAPs", () => {
     const members = [
       { id: "a", thisYear: "accepted" as const },
       { id: "b", thisYear: "accepted" as const },
@@ -78,23 +78,23 @@ describe("deriveTicketCounts", () => {
       { id: "e", thisYear: null },
     ];
     const tickets = new Map<string, TicketFacts>([
-      ["a", ticket({ ticketStatus: "has_ticket", earlyEntry: "issued" })],
-      ["b", ticket({ earlyEntry: "requested" })],
-      ["d", ticket({ earlyEntry: "issued" })],
+      ["a", ticket({ ticketStatus: "has_ticket", wap: "issued" })],
+      ["b", ticket({ wap: "requested" })],
+      ["d", ticket({ wap: "issued" })],
       // A row for someone not in the list is not counted.
-      ["zz", ticket({ earlyEntry: "issued" })],
+      ["zz", ticket({ wap: "issued" })],
     ]);
     expect(deriveTicketCounts(members, tickets)).toEqual({
       // b (no ticket yet) and c (no row: the defaults).
       needTicket: 2,
-      earlyEntryIssued: 2,
+      wapIssued: 2,
     });
   });
 
   it("is zero for no members", () => {
     expect(deriveTicketCounts([], new Map())).toEqual({
       needTicket: 0,
-      earlyEntryIssued: 0,
+      wapIssued: 0,
     });
   });
 });

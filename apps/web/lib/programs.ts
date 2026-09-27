@@ -296,7 +296,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "captain",
   },
-  // Who is coming this year, with tickets and early entry for captains
+  // Who is coming this year, with tickets and WAP for captains
   // (#238). A team lead reads the statuses only, so the bar is team_lead.
   {
     id: "applications",

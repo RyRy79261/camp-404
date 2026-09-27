@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Applications — Camp 404" };
 
 // The year's application pipeline (#238): who said they are coming, who has a
-// place, and, for captains, where each member's ticket and early-entry pass
+// place, and, for captains, where each member's ticket, DDT and WAP
 // stand. Team lead and up, because a lead reads everyone's "This year" status
 // (campParticipations.status in MEMBER_FIELD_READERS); a lead reads nothing of
 // the tickets, which the server leaves off their rows (applicationRows).
@@ -40,9 +40,9 @@ export default async function ApplicationsPage() {
         title="Applications"
         description={
           isCaptain
-            ? "Who is coming this year. Give places, and keep track of tickets and early entry."
+            ? "Who is coming this year. Give places, and keep track of tickets, DDTs and WAPs."
             : cleared
-              ? "Who is coming this year. Only captains give places and see tickets."
+              ? "What each member says about this year, and what the captains decided. Only captains give places and see tickets."
               : "Who is coming this year."
         }
       />

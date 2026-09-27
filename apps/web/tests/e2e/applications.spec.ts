@@ -15,7 +15,7 @@ import {
 
 // The year's application pipeline (#238), on the test store's participations
 // and tickets twins: the member says where their own ticket stands on their
-// profile; a captain gives places and records early entry on Applications and
+// profile; a captain gives places and records WAP on Applications and
 // sees the overview count it; a team lead sees who is coming and nothing of
 // the tickets; a plain member gets a lock.
 
@@ -64,18 +64,19 @@ async function thisYearCard(page: Page) {
   return card;
 }
 
-test.describe("applications: tickets and early entry", () => {
+test.describe("applications: tickets and WAP", () => {
   test.beforeEach(async ({ page, request }) => {
     await resetTestState(request);
     // Ada said Yes; Ben already has a place.
     await person(page, request, "ada", "Ada Yes");
     await seedParticipation(request, "ada", "applied");
     await person(page, request, "ben", "Ben Placed");
-    await seedParticipation(request, "ben", "accepted");
+    // Accepted, though he said Maybe: the two are shown apart.
+    await seedParticipation(request, "ben", "accepted", "maybe");
     await person(page, request, "cy", "Cy Captain", "captain");
   });
 
-  test("a member says they have a ticket, and a captain gives a place and early entry that the overview counts", async ({
+  test("a member says they have a ticket, and a captain gives a place and WAP that the overview counts", async ({
     page,
   }) => {
     // Before: Ben has a place and no ticket.
@@ -98,14 +99,35 @@ test.describe("applications: tickets and early entry", () => {
       page.getByRole("status").filter({ hasText: "Saved." }),
     ).toBeVisible();
     // The captain-only passes are not on his page.
-    await expect(page.getByText(/early entry/i)).toHaveCount(0);
+    await expect(page.getByText(/WAP/i)).toHaveCount(0);
 
-    // The captain sees it, accepts Ada and issues Ben's early entry.
+    // The captain sees it, accepts Ada and issues Ben's WAP.
     await as(page, "cy", "Cy Captain");
     await openApplications(page);
     await expect(
       row(page, "Ben Placed").getByText("Has ticket", { exact: true }),
     ).toBeVisible();
+    // What he said and what the captains decided, each in its own column.
+    await expect(
+      row(page, "Ben Placed").getByText("Maybe", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      row(page, "Ben Placed").getByText("Accepted", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      row(page, "Ada Yes").getByText("Not decided yet", { exact: true }),
+    ).toBeVisible();
+    // "Coming, not decided" is Ada alone: Ben's decision takes him out.
+    await page
+      .getByRole("group", { name: "Show" })
+      .getByRole("button", { name: /^Coming, not decided/ })
+      .click();
+    await expect(row(page, "Ada Yes")).toBeVisible();
+    await expect(row(page, "Ben Placed")).toHaveCount(0);
+    await page
+      .getByRole("group", { name: "Show" })
+      .getByRole("button", { name: /^All/ })
+      .click();
     await page
       .getByRole("button", { name: "Accept Ada Yes for this year" })
       .filter({ visible: true })
@@ -114,12 +136,12 @@ test.describe("applications: tickets and early entry", () => {
       row(page, "Ada Yes").getByText("Accepted", { exact: true }),
     ).toBeVisible();
     await page
-      .getByRole("combobox", { name: "Early entry for Ben Placed" })
+      .getByRole("combobox", { name: "WAP for Ben Placed" })
       .filter({ visible: true })
       .selectOption({ label: "Issued" });
     await expect(
       page
-        .getByRole("combobox", { name: "Early entry for Ben Placed" })
+        .getByRole("combobox", { name: "WAP for Ben Placed" })
         .filter({ visible: true }),
     ).toHaveValue("issued");
 
@@ -133,14 +155,14 @@ test.describe("applications: tickets and early entry", () => {
       after.getByRole("listitem").filter({ hasText: "no ticket yet" }),
     ).toHaveText(/1$/);
     await expect(
-      after.getByRole("listitem").filter({ hasText: "Early entry" }),
+      after.getByRole("listitem").filter({ hasText: "WAP" }),
     ).toHaveText(/1$/);
 
     // And the reload keeps it.
     await openApplications(page);
     await expect(
       page
-        .getByRole("combobox", { name: "Early entry for Ben Placed" })
+        .getByRole("combobox", { name: "WAP for Ben Placed" })
         .filter({ visible: true }),
     ).toHaveValue("issued");
   });
@@ -158,13 +180,19 @@ test.describe("applications: tickets and early entry", () => {
       row(page, "Ada Yes").getByText("Coming", { exact: true }),
     ).toBeVisible();
     await expect(
+      row(page, "Ada Yes").getByText("Not decided yet", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      row(page, "Ben Placed").getByText("Maybe", { exact: true }),
+    ).toBeVisible();
+    await expect(
       row(page, "Ben Placed").getByText("Accepted", { exact: true }),
     ).toBeVisible();
     await expect(page.getByRole("combobox")).toHaveCount(0);
-    await expect(
-      page.getByRole("columnheader", { name: "Early entry" }),
-    ).toHaveCount(0);
-    await expect(page.getByText("Needs directed")).toHaveCount(0);
+    await expect(page.getByRole("columnheader", { name: "WAP" })).toHaveCount(
+      0,
+    );
+    await expect(page.getByText("Needs DDT")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /for this year$/ }),
     ).toHaveCount(0);

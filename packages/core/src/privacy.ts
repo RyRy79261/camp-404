@@ -245,21 +245,23 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "campParticipations.cycle": "camp_member",
   "campParticipations.status": "team_lead",
   // The member's own Yes / Maybe / No, apart from the captain's decision.
-  "campParticipations.intent": "captain",
+  // Team lead (owner, 2026-09-28: the answer and the decision are shown apart
+  // wherever the status shows, and a lead reads the status).
+  "campParticipations.intent": "team_lead",
   "campParticipations.decidedByUserId": "captain",
   "campParticipations.decidedAt": "captain",
   "campParticipations.reason": "captain",
   "campParticipations.createdAt": "captain",
   "campParticipations.updatedAt": "captain",
 
-  // camp_tickets — a member's ticket and early entry for one year (#238). A
+  // camp_tickets — a member's ticket and WAP for one year (#238). A
   // member reads their own ticket status (and never the two passes, which the
   // issue keeps captain-only); team leads read none of it.
   "campTickets.userId": "captain",
   "campTickets.cycle": "captain",
   "campTickets.ticketStatus": "captain",
-  "campTickets.directedTicket": "captain",
-  "campTickets.earlyEntry": "captain",
+  "campTickets.ddt": "captain",
+  "campTickets.wap": "captain",
   "campTickets.passesUpdatedByUserId": "captain",
   "campTickets.createdAt": "captain",
   "campTickets.updatedAt": "captain",

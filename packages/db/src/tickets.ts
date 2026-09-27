@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { DEFAULT_TICKET } from "@camp404/core";
 import type {
-  DirectedTicketStatus,
-  EarlyEntryStatus,
+  DdtStatus,
+  WapStatus,
   TicketPass,
   TicketStatus,
 } from "@camp404/types";
@@ -12,7 +12,7 @@ import { writeAuditEvent } from "./audit";
 import { currentCycleNumber } from "./cycles";
 
 // The write path for `camp_tickets` (#238): a member's Burn ticket, the camp's
-// directed ticket for them and their early-entry pass, one row per member per
+// DDT for them and their WAP, one row per member per
 // burn year. No row means nothing has been said yet, which reads as every
 // column's default.
 //
@@ -82,18 +82,18 @@ export async function setOwnTicketStatus(input: {
 /** One captain-only change, typed so a pass only takes its own values. */
 export type TicketPassChange =
   | {
-      pass: Extract<TicketPass, "directed_ticket">;
-      from: DirectedTicketStatus;
-      to: DirectedTicketStatus;
+      pass: Extract<TicketPass, "ddt">;
+      from: DdtStatus;
+      to: DdtStatus;
     }
   | {
-      pass: Extract<TicketPass, "early_entry">;
-      from: EarlyEntryStatus;
-      to: EarlyEntryStatus;
+      pass: Extract<TicketPass, "wap">;
+      from: WapStatus;
+      to: WapStatus;
     };
 
 /**
- * A captain records a member's directed ticket or early-entry pass for the
+ * A captain records a member's DDT or WAP for the
  * camp's current year.
  *
  * Compare-and-set on `from`, the value the captain saw (a member with no row
@@ -117,9 +117,9 @@ export async function setTicketPass(
     // the compare-and-set below has a row to compare. (When they saw anything
     // else, a missing row is already a lost race.)
     const sawDefault =
-      input.pass === "directed_ticket"
-        ? input.from === DEFAULT_TICKET.directedTicket
-        : input.from === DEFAULT_TICKET.earlyEntry;
+      input.pass === "ddt"
+        ? input.from === DEFAULT_TICKET.ddt
+        : input.from === DEFAULT_TICKET.wap;
     if (sawDefault) {
       await tx
         .insert(schema.campTickets)
@@ -139,26 +139,26 @@ export async function setTicketPass(
       eq(schema.campTickets.cycle, cycle),
     );
     const rows =
-      input.pass === "directed_ticket"
+      input.pass === "ddt"
         ? await tx
             .update(schema.campTickets)
             .set({
-              directedTicket: input.to,
+              ddt: input.to,
               passesUpdatedByUserId: input.actorUserId,
               updatedAt: now,
             })
             .where(
-              and(where, eq(schema.campTickets.directedTicket, input.from)),
+              and(where, eq(schema.campTickets.ddt, input.from)),
             )
             .returning({ userId: schema.campTickets.userId })
         : await tx
             .update(schema.campTickets)
             .set({
-              earlyEntry: input.to,
+              wap: input.to,
               passesUpdatedByUserId: input.actorUserId,
               updatedAt: now,
             })
-            .where(and(where, eq(schema.campTickets.earlyEntry, input.from)))
+            .where(and(where, eq(schema.campTickets.wap, input.from)))
             .returning({ userId: schema.campTickets.userId });
     if (rows.length === 0) return false;
 

@@ -339,12 +339,12 @@ describe("ThisYearCard", () => {
     expect(within(card).getByText("16 approved members")).toBeTruthy();
     const legend = within(card).getAllByRole("listitem");
     expect(legend.map((li) => li.textContent)).toEqual([
-      "Coming3",
-      "Maybe2",
+      "Coming, not decided3",
+      "Maybe, not decided2",
       "Accepted4",
       "Waiting list1",
       "Not coming1",
-      "Not answered5",
+      "No answer yet5",
     ]);
     // One bar segment per non-zero count, sized from the number beside it.
     const bars = container.querySelectorAll<HTMLElement>(
@@ -358,7 +358,7 @@ describe("ThisYearCard", () => {
     render(
       <ThisYearCard
         counts={counts}
-        tickets={{ needTicket: 3, earlyEntryIssued: 2 }}
+        tickets={{ needTicket: 3, wapIssued: 2 }}
       />,
     );
     const card = screen.getByRole("article", { name: "This year" });
@@ -367,7 +367,7 @@ describe("ThisYearCard", () => {
       within(tickets)
         .getAllByRole("listitem")
         .map((li) => li.textContent),
-    ).toEqual(["Have a place, no ticket yet3", "Early entry passes issued2"]);
+    ).toEqual(["Have a place, no ticket yet3", "WAPs issued2"]);
     expect(
       within(card)
         .getByRole("link", { name: "Applications" })

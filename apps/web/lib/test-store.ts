@@ -2545,7 +2545,7 @@ export const testStore = {
     return { ...row };
   },
 
-  // --- Tickets and early entry (mirrors @camp404/db/tickets) -------------
+  // --- Tickets and WAP (mirrors @camp404/db/tickets) -------------
 
   /** A member's ticket record for one year, or null when nothing is said. */
   getTicket(userId: string, cycle: number): TestTicket | null {
@@ -2589,7 +2589,7 @@ export const testStore = {
   },
 
   /**
-   * A captain's directed ticket or early-entry change for THIS year: the same
+   * A captain's DDT or WAP change for THIS year: the same
    * compare-and-set as production (a missing row stands at the defaults),
    * without the audit row. A change to the value already there throws.
    */
@@ -2609,12 +2609,12 @@ export const testStore = {
       createdAt: now,
       updatedAt: now,
     };
-    if (input.pass === "directed_ticket") {
-      if (row.directedTicket !== input.from) return false;
-      row.directedTicket = input.to;
+    if (input.pass === "ddt") {
+      if (row.ddt !== input.from) return false;
+      row.ddt = input.to;
     } else {
-      if (row.earlyEntry !== input.from) return false;
-      row.earlyEntry = input.to;
+      if (row.wap !== input.from) return false;
+      row.wap = input.to;
     }
     row.passesUpdatedByUserId = input.actorUserId;
     row.updatedAt = now;
@@ -2672,6 +2672,8 @@ export const testStore = {
           country,
           participation:
             participations.get(participationKey(u.id, cycle))?.status ?? null,
+          participationIntent:
+            participations.get(participationKey(u.id, cycle))?.intent ?? null,
           // The test store keeps no sign-in email for a member.
           ...(options.includeEmail ? { email: null } : {}),
           createdAt: u.createdAt,

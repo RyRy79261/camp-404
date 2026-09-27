@@ -197,7 +197,7 @@ describe("sanitiseAccount", () => {
       {
         userId: member.id,
         cycle: 2027,
-        earlyEntry: "issued",
+        wap: "issued",
         passesUpdatedByUserId: captain.id,
       },
       { userId: other.id, cycle: 2027, ticketStatus: "buying_own" },

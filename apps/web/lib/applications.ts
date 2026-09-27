@@ -3,10 +3,11 @@ import {
   stillNeedsTicket,
   type TicketFacts,
 } from "@camp404/core";
-import type { ParticipationStatus } from "@camp404/types";
+import type { ParticipationIntent, ParticipationStatus } from "@camp404/types";
 
 // The Applications page's rows (#238): who is coming this year, and for a
-// captain each member's ticket and early entry. Pure, so the one rule that
+// captain each member's ticket, DDT and WAP. What the member said (`says`)
+// and the captains' decision (read from `thisYear`) are kept apart. Pure, so the one rule that
 // matters here is testable without a page: a team lead's rows carry NO ticket
 // key at all. The server builds the rows; the browser never gets a captain's
 // data to hide.
@@ -17,6 +18,7 @@ export interface ApplicationMember {
   displayName: string | null;
   approvalStatus: "pending" | "approved" | "rejected";
   participation: ParticipationStatus | null;
+  participationIntent: ParticipationIntent | null;
 }
 
 export interface ApplicationRow {
@@ -24,6 +26,8 @@ export interface ApplicationRow {
   displayName: string;
   /** Where the member stands this year, or null when they have not answered. */
   thisYear: ParticipationStatus | null;
+  /** What the member themselves said this year, or null with no answer. */
+  says: ParticipationIntent | null;
   /** A captain's rows only: the member's ticket record (defaults if none). */
   ticket?: TicketFacts;
 }
@@ -45,6 +49,7 @@ export function applicationRows(
         id: m.id,
         displayName: m.displayName?.trim() || "Unnamed burner",
         thisYear: m.participation,
+        says: m.participationIntent,
       };
       if (tickets) row.ticket = tickets.get(m.id) ?? { ...DEFAULT_TICKET };
       return row;
@@ -52,7 +57,10 @@ export function applicationRows(
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-/** The page's filters: a status, no answer, or (captains) no ticket yet. */
+/**
+ * The page's filters: one group per stored status (STANDING_LABEL: "Coming,
+ * not decided", "Accepted", …), no answer, or (captains) no ticket yet.
+ */
 export type ApplicationFilter =
   | "all"
   | ParticipationStatus

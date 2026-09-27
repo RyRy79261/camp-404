@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// setTicketPassAction: a captain records a member's directed ticket or
-// early-entry pass. Covers the captain bar (a team lead is refused), the
+// setTicketPassAction: a captain records a member's DDT or
+// WAP. Covers the captain bar (a team lead is refused), the
 // boundary (a pass only takes its own values), and the compare-and-set: a
 // change another captain made first is not overwritten, and the captain is
 // told so by name.
@@ -42,7 +42,7 @@ describe("setTicketPassAction", () => {
 
     const res = await setTicketPassAction({
       userId: "member-1",
-      pass: "early_entry",
+      pass: "wap",
       from: "requested",
       to: "issued",
     });
@@ -51,7 +51,7 @@ describe("setTicketPassAction", () => {
     expect(captainActionGate).toHaveBeenCalledWith("captain");
     expect(setTicketPass).toHaveBeenCalledWith({
       userId: "member-1",
-      pass: "early_entry",
+      pass: "wap",
       from: "requested",
       to: "issued",
       actorUserId: CAPTAIN,
@@ -68,7 +68,7 @@ describe("setTicketPassAction", () => {
 
     const res = await setTicketPassAction({
       userId: "member-1",
-      pass: "directed_ticket",
+      pass: "ddt",
       from: "none",
       to: "allocated",
     });
@@ -83,7 +83,7 @@ describe("setTicketPassAction", () => {
     expect(
       await setTicketPassAction({
         userId: "member-1",
-        pass: "early_entry",
+        pass: "wap",
         from: "not_needed",
         to: "allocated",
       }),
@@ -105,7 +105,7 @@ describe("setTicketPassAction", () => {
 
     const res = await setTicketPassAction({
       userId: "member-1",
-      pass: "directed_ticket",
+      pass: "ddt",
       from: "none",
       to: "allocated",
     });
@@ -123,7 +123,7 @@ describe("setTicketPassAction", () => {
 
     const res = await setTicketPassAction({
       userId: "gone",
-      pass: "directed_ticket",
+      pass: "ddt",
       from: "none",
       to: "allocated",
     });

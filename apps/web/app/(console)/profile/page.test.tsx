@@ -115,12 +115,12 @@ describe("profile: the member's own ticket", () => {
       expect(
         screen
           .getByRole("radio", {
-            name: "I need a directed ticket from the camp",
+            name: "I need a DDT (direct distribution ticket) from the camp",
           })
           .getAttribute("aria-checked"),
       ).toBe("true");
       // The captain-only passes are never on the member's page.
-      expect(screen.queryByText(/early entry/i)).toBeNull();
+      expect(screen.queryByText(/WAP/i)).toBeNull();
       expect(screen.queryByText(/allocated/i)).toBeNull();
     },
   );

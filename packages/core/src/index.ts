@@ -88,10 +88,12 @@
 //   - questionnaire status: memberQuestionnaireStatuses — where each
 //     questionnaire stands for one member (./questionnaire-status)
 //   - participation: participationAfterIntent, isParticipationDecision,
-//     PARTICIPATION_LABEL, NOT_ANSWERED_LABEL — who is coming this year, how a
+//     INTENT_LABEL, DECISION_LABEL, STANDING_LABEL, participationDecision — who
+//     is coming this year (the member's answer and the captains' decision,
+//     kept apart), how a
 //     member's answer moves it and which moves a captain may make
 //     (./participation)
-//   - tickets: the words for a member's ticket, directed ticket and early
+//   - tickets: the words for a member's ticket, DDT and early
 //     entry, and the year's ticket counts (stillNeedsTicket,
 //     deriveTicketCounts) (./tickets)
 //   - power: canEditPower (a captain or a Power & Lighting lead), the load

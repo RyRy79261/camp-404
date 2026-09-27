@@ -29,8 +29,8 @@ import {
   NOTIFICATION_KINDS,
   PARTICIPATION_INTENTS,
   PARTICIPATION_STATUSES,
-  DIRECTED_TICKET_STATUSES,
-  EARLY_ENTRY_STATUSES,
+  DDT_STATUSES,
+  WAP_STATUSES,
   TICKET_STATUSES,
   type CurrentKind,
   type FuelType,
@@ -261,18 +261,14 @@ export const participationIntentEnum = pgEnum(
   PARTICIPATION_INTENTS,
 );
 
-// A member's Burn ticket, the camp's directed ticket for them, and their
-// early-entry pass, for one burn year (TICKET_STATUSES,
-// DIRECTED_TICKET_STATUSES, EARLY_ENTRY_STATUSES in @camp404/types).
+// A member's Burn ticket, the camp's DDT (direct distribution ticket) for
+// them, and their WAP (work access pass), for one burn year (TICKET_STATUSES,
+// DDT_STATUSES, WAP_STATUSES in @camp404/types). The Postgres names keep the
+// words the table was first created with (directed_ticket, early_entry), so a
+// rename needs no migration.
 export const ticketStatusEnum = pgEnum("ticket_status", TICKET_STATUSES);
-export const directedTicketStatusEnum = pgEnum(
-  "directed_ticket_status",
-  DIRECTED_TICKET_STATUSES,
-);
-export const earlyEntryStatusEnum = pgEnum(
-  "early_entry_status",
-  EARLY_ENTRY_STATUSES,
-);
+export const ddtStatusEnum = pgEnum("directed_ticket_status", DDT_STATUSES);
+export const wapStatusEnum = pgEnum("early_entry_status", WAP_STATUSES);
 
 export const broadcastScopeEnum = pgEnum("broadcast_scope", [
   "everyone",
@@ -913,11 +909,10 @@ export const campParticipations = pgTable(
   }),
 );
 
-// --- Tickets and early entry (#238) ----------------------------------------
+// --- Tickets and WAP (#238) ----------------------------------------
 // One row per member per burn year, written only through @camp404/db/tickets.
 // The member says where their own ticket stands; a captain records the camp's
-// directed ticket and the early-entry pass. No row means nothing said yet:
-// every column's default. Only what the captains plan with is kept, never a
+// DDT and the WAP. No row means nothing said yet: every column's default. Only what the captains plan with is kept, never a
 // ticket number, barcode, order reference or card detail.
 
 export const campTickets = pgTable(
@@ -935,13 +930,9 @@ export const campTickets = pgTable(
       .notNull()
       .default("unknown"),
     // Captain-only, to read and to write.
-    directedTicket: directedTicketStatusEnum("directed_ticket")
-      .notNull()
-      .default("none"),
-    earlyEntry: earlyEntryStatusEnum("early_entry")
-      .notNull()
-      .default("not_needed"),
-    // The captain who last changed the directed ticket or early-entry pass.
+    ddt: ddtStatusEnum("directed_ticket").notNull().default("none"),
+    wap: wapStatusEnum("early_entry").notNull().default("not_needed"),
+    // The captain who last changed the DDT or WAP.
     passesUpdatedByUserId: uuid("passes_updated_by_user_id").references(
       () => users.id,
       { onDelete: "set null" },

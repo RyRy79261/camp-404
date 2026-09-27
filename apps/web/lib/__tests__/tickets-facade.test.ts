@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // The tickets facade's member read: what a member gets of their own record is
-// their own ticket status and nothing else. The directed ticket and the
-// early-entry pass are captain-only (#238), so they never leave the server on
+// their own ticket status and nothing else. The DDT and the
+// WAP are captain-only (#238), so they never leave the server on
 // the member's read.
 
 vi.mock("server-only", () => ({}));
@@ -32,8 +32,8 @@ const ROW = {
   userId: "u1",
   cycle: 2027,
   ticketStatus: "needs_directed_ticket" as const,
-  directedTicket: "allocated" as const,
-  earlyEntry: "issued" as const,
+  ddt: "allocated" as const,
+  wap: "issued" as const,
   passesUpdatedByUserId: "cap-1",
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -76,8 +76,8 @@ describe("listTicketsThisYear", () => {
     expect(listTickets).toHaveBeenCalledWith(2027);
     expect(map.get("u1")).toEqual({
       ticketStatus: "needs_directed_ticket",
-      directedTicket: "allocated",
-      earlyEntry: "issued",
+      ddt: "allocated",
+      wap: "issued",
     });
   });
 });

@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@camp404/ui/components/card";
-import type { TicketCounts } from "@camp404/core";
+import {
+  NO_ANSWER_LABEL,
+  STANDING_LABEL,
+  type TicketCounts,
+} from "@camp404/core";
 import type {
   Kpi,
   ReadinessFunnel,
@@ -369,34 +373,39 @@ export function ThisYearCard({
 }) {
   const { total } = counts;
   const segments = [
-    { key: "coming", label: "Coming", n: counts.coming, bar: "bg-primary" },
+    {
+      key: "coming",
+      label: STANDING_LABEL.applied,
+      n: counts.coming,
+      bar: "bg-primary",
+    },
     {
       key: "maybe",
-      label: "Maybe",
+      label: STANDING_LABEL.maybe,
       n: counts.maybe,
       bar: "bg-muted-foreground",
     },
     {
       key: "accepted",
-      label: "Accepted",
+      label: STANDING_LABEL.accepted,
       n: counts.accepted,
       bar: "bg-success",
     },
     {
       key: "waitlisted",
-      label: "Waiting list",
+      label: STANDING_LABEL.waitlisted,
       n: counts.waitlisted,
       bar: "bg-warning",
     },
     {
       key: "not-coming",
-      label: "Not coming",
+      label: STANDING_LABEL.not_attending,
       n: counts.notComing,
       bar: "bg-muted-foreground/40",
     },
     {
       key: "not-answered",
-      label: "Not answered",
+      label: NO_ANSWER_LABEL,
       n: counts.notAnswered,
       bar: "bg-muted",
     },
@@ -457,11 +466,9 @@ export function ThisYearCard({
               </span>
             </li>
             <li className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">
-                Early entry passes issued
-              </span>
+              <span className="text-muted-foreground">WAPs issued</span>
               <span className="font-semibold tabular-nums">
-                {tickets.earlyEntryIssued}
+                {tickets.wapIssued}
               </span>
             </li>
           </ul>

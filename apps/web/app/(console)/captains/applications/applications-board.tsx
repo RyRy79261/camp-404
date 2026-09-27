@@ -4,15 +4,18 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Loader2 } from "lucide-react";
 import {
-  DIRECTED_TICKET_LABEL,
-  EARLY_ENTRY_LABEL,
+  DDT_LABEL,
+  NO_ANSWER_LABEL,
+  STANDING_LABEL,
+  WAP_LABEL,
   TICKET_STATUS_LABEL,
   stillNeedsTicket,
   type TicketFacts,
 } from "@camp404/core";
 import {
-  DIRECTED_TICKET_STATUSES,
-  EARLY_ENTRY_STATUSES,
+  DDT_STATUSES,
+  PARTICIPATION_STATUSES,
+  WAP_STATUSES,
   type TicketPass,
 } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
@@ -33,7 +36,10 @@ import {
   type ApplicationRow,
 } from "@/lib/applications";
 import { decideParticipationAction } from "../camp-management/actions";
-import { ThisYearBadge } from "../camp-management/roster-presentation";
+import {
+  DecisionBadge,
+  SaysBadge,
+} from "../camp-management/roster-presentation";
 import {
   ThisYearDecisionButtons,
   type DecideThisYear,
@@ -49,14 +55,15 @@ import { setTicketPassAction } from "./actions";
 // A change on a row is one tap: only that control spins, and a failure is a
 // toast, as on every captain list.
 
+// One group per stored status, each label saying whether it is about the
+// member's answer or the captains' decision (STANDING_LABEL).
 const FILTERS: { value: ApplicationFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "applied", label: "Coming" },
-  { value: "maybe", label: "Maybe" },
-  { value: "accepted", label: "Accepted" },
-  { value: "waitlisted", label: "Waiting list" },
-  { value: "not_attending", label: "Not coming" },
-  { value: "none", label: "Not answered" },
+  ...PARTICIPATION_STATUSES.map((value) => ({
+    value,
+    label: STANDING_LABEL[value],
+  })),
+  { value: "none", label: NO_ANSWER_LABEL },
 ];
 
 // AfrikaBurn's outline toggle, as the roster's filter strip draws it.
@@ -70,23 +77,23 @@ const SELECT =
   "h-8 w-full min-w-32 cursor-pointer appearance-none rounded-md border border-input bg-background pl-2.5 pr-8 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60";
 
 const PASS_OPTIONS: Record<TicketPass, { value: string; label: string }[]> = {
-  directed_ticket: DIRECTED_TICKET_STATUSES.map((v) => ({
+  ddt: DDT_STATUSES.map((v) => ({
     value: v,
-    label: DIRECTED_TICKET_LABEL[v],
+    label: DDT_LABEL[v],
   })),
-  early_entry: EARLY_ENTRY_STATUSES.map((v) => ({
+  wap: WAP_STATUSES.map((v) => ({
     value: v,
-    label: EARLY_ENTRY_LABEL[v],
+    label: WAP_LABEL[v],
   })),
 };
 
 const PASS_NAME: Record<TicketPass, (member: string) => string> = {
-  directed_ticket: (member) => `Directed ticket for ${member}`,
-  early_entry: (member) => `Early entry for ${member}`,
+  ddt: (member) => `DDT for ${member}`,
+  wap: (member) => `WAP for ${member}`,
 };
 
 function passValue(ticket: TicketFacts, pass: TicketPass): string {
-  return pass === "directed_ticket" ? ticket.directedTicket : ticket.earlyEntry;
+  return pass === "ddt" ? ticket.ddt : ticket.wap;
 }
 
 /** One captain-only pass on one row, saved the moment it changes. */
@@ -237,6 +244,16 @@ export function ApplicationsBoard({
         ))}
       </div>
 
+      {canEdit && (
+        <p className="text-sm text-muted-foreground">
+          Says is what the member answered; Decision is yours. You can accept,
+          or put on the waiting list, a member who says Coming or Maybe. Someone
+          who says Not coming, or has not answered, has to answer first. DDT
+          (direct distribution ticket) and WAP (work access pass) are for
+          captains only.
+        </p>
+      )}
+
       {rows.length === 0 ? (
         <Card>
           <CardContent className="p-5 text-sm text-muted-foreground">
@@ -256,12 +273,13 @@ export function ApplicationsBoard({
               <TableHeader>
                 <TableRow>
                   <TableHead scope="col">Member</TableHead>
-                  <TableHead scope="col">This year</TableHead>
+                  <TableHead scope="col">Says</TableHead>
+                  <TableHead scope="col">Decision</TableHead>
                   {canEdit && (
                     <>
                       <TableHead scope="col">Ticket</TableHead>
-                      <TableHead scope="col">Directed ticket</TableHead>
-                      <TableHead scope="col">Early entry</TableHead>
+                      <TableHead scope="col">DDT</TableHead>
+                      <TableHead scope="col">WAP</TableHead>
                     </>
                   )}
                 </TableRow>
@@ -273,8 +291,11 @@ export function ApplicationsBoard({
                       {row.displayName}
                     </TableCell>
                     <TableCell>
+                      <SaysBadge says={row.says} />
+                    </TableCell>
+                    <TableCell>
                       <span className="flex flex-wrap items-center gap-2">
-                        <ThisYearBadge status={row.thisYear} />
+                        <DecisionBadge status={row.thisYear} />
                         {canEdit && (
                           <ThisYearDecisionButtons
                             row={row}
@@ -292,14 +313,14 @@ export function ApplicationsBoard({
                           <PassSelect
                             row={row}
                             ticket={row.ticket}
-                            pass="directed_ticket"
+                            pass="ddt"
                           />
                         </TableCell>
                         <TableCell className="w-44">
                           <PassSelect
                             row={row}
                             ticket={row.ticket}
-                            pass="early_entry"
+                            pass="wap"
                           />
                         </TableCell>
                       </>
@@ -317,7 +338,10 @@ export function ApplicationsBoard({
                   <CardContent className="flex flex-col gap-3 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-medium">{row.displayName}</span>
-                      <ThisYearBadge status={row.thisYear} />
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <SaysBadge says={row.says} prefix />
+                        <DecisionBadge status={row.thisYear} />
+                      </span>
                     </div>
                     {canEdit && (
                       <ThisYearDecisionButtons row={row} onDecide={decide} />
@@ -328,22 +352,20 @@ export function ApplicationsBoard({
                         <dd>
                           <TicketBadge row={row} ticket={row.ticket} />
                         </dd>
-                        <dt className="text-muted-foreground">
-                          Directed ticket
-                        </dt>
+                        <dt className="text-muted-foreground">DDT</dt>
                         <dd>
                           <PassSelect
                             row={row}
                             ticket={row.ticket}
-                            pass="directed_ticket"
+                            pass="ddt"
                           />
                         </dd>
-                        <dt className="text-muted-foreground">Early entry</dt>
+                        <dt className="text-muted-foreground">WAP</dt>
                         <dd>
                           <PassSelect
                             row={row}
                             ticket={row.ticket}
-                            pass="early_entry"
+                            pass="wap"
                           />
                         </dd>
                       </dl>

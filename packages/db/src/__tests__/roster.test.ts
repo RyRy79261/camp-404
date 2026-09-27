@@ -275,6 +275,25 @@ describe("getCampManagementRoster reads this year's attendance", () => {
       "waitlisted",
     );
   });
+  it("returns what the member said apart from the decision, for this year only", async () => {
+    const db = h.db();
+    const placed = await makeUser(db, { displayName: "Ada" });
+    const lastYear = await makeUser(db, { displayName: "Bo" });
+    await db.insert(schema.campParticipations).values([
+      // Accepted, though they said Maybe.
+      { userId: placed.id, cycle: 2027, status: "accepted", intent: "maybe" },
+      { userId: lastYear.id, cycle: 2026, status: "applied", intent: "yes" },
+    ]);
+    await foundedAt(db, 2027);
+
+    const roster = await getCampManagementRoster();
+    const ada = roster.find((m) => m.id === placed.id)!;
+    expect(ada.participation).toBe("accepted");
+    expect(ada.participationIntent).toBe("maybe");
+    expect(
+      roster.find((m) => m.id === lastYear.id)?.participationIntent,
+    ).toBeNull();
+  });
 });
 
 describe("captain-only columns are selected only when asked for", () => {

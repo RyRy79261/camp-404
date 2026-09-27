@@ -85,8 +85,8 @@ describe("camp_tickets", () => {
     // The passes stay at their defaults, and the member's answer is not
     // audited (it is their own).
     const row = await getTicket(member.id, 2027);
-    expect(row?.directedTicket).toBe("none");
-    expect(row?.earlyEntry).toBe("not_needed");
+    expect(row?.ddt).toBe("none");
+    expect(row?.wap).toBe("not_needed");
     expect(await audits(db)).toHaveLength(0);
     expect((await listTickets(2027)).map((r) => r.userId)).toEqual([member.id]);
   });
@@ -100,14 +100,14 @@ describe("camp_tickets", () => {
     const won = await setTicketPass({
       userId: member.id,
       actorUserId: captain.id,
-      pass: "early_entry",
+      pass: "wap",
       from: "not_needed",
       to: "requested",
     });
 
     expect(won).toBe(true);
     const row = await getTicket(member.id, 2027);
-    expect(row?.earlyEntry).toBe("requested");
+    expect(row?.wap).toBe("requested");
     expect(row?.passesUpdatedByUserId).toBe(captain.id);
     const rows = await audits(db);
     expect(rows).toHaveLength(1);
@@ -116,7 +116,7 @@ describe("camp_tickets", () => {
       target: member.id,
       metadata: {
         cycle: 2027,
-        pass: "early_entry",
+        pass: "wap",
         from: "not_needed",
         to: "requested",
       },
@@ -137,14 +137,14 @@ describe("camp_tickets", () => {
     await setTicketPass({
       userId: member.id,
       actorUserId: captain.id,
-      pass: "directed_ticket",
+      pass: "ddt",
       from: "none",
       to: "allocated",
     });
 
     const row = await getTicket(member.id, 2027);
     expect(row?.ticketStatus).toBe("needs_directed_ticket");
-    expect(row?.directedTicket).toBe("allocated");
+    expect(row?.ddt).toBe("allocated");
   });
 
   it("the second of two captains who saw the same value loses, and writes no audit row", async () => {
@@ -157,21 +157,21 @@ describe("camp_tickets", () => {
     const a = await setTicketPass({
       userId: member.id,
       actorUserId: first.id,
-      pass: "directed_ticket",
+      pass: "ddt",
       from: "none",
       to: "allocated",
     });
     const b = await setTicketPass({
       userId: member.id,
       actorUserId: second.id,
-      pass: "directed_ticket",
+      pass: "ddt",
       from: "none",
       to: "can_transfer",
     });
 
     expect([a, b]).toEqual([true, false]);
     const row = await getTicket(member.id, 2027);
-    expect(row?.directedTicket).toBe("allocated");
+    expect(row?.ddt).toBe("allocated");
     expect(row?.passesUpdatedByUserId).toBe(first.id);
     const rows = await audits(db);
     expect(rows.map((r) => r.actorId)).toEqual([first.id]);
@@ -186,7 +186,7 @@ describe("camp_tickets", () => {
     const won = await setTicketPass({
       userId: member.id,
       actorUserId: captain.id,
-      pass: "early_entry",
+      pass: "wap",
       from: "issued",
       to: "not_needed",
     });
@@ -203,18 +203,18 @@ describe("camp_tickets", () => {
     const captain = await makeUser(db, { rank: "captain" });
     await db
       .insert(schema.campTickets)
-      .values({ userId: member.id, cycle: 2026, earlyEntry: "issued" });
+      .values({ userId: member.id, cycle: 2026, wap: "issued" });
 
     await setTicketPass({
       userId: member.id,
       actorUserId: captain.id,
-      pass: "early_entry",
+      pass: "wap",
       from: "not_needed",
       to: "requested",
     });
 
     const [last] = await db
-      .select({ earlyEntry: schema.campTickets.earlyEntry })
+      .select({ wap: schema.campTickets.wap })
       .from(schema.campTickets)
       .where(
         and(
@@ -222,8 +222,8 @@ describe("camp_tickets", () => {
           eq(schema.campTickets.cycle, 2026),
         ),
       );
-    expect(last?.earlyEntry).toBe("issued");
-    expect((await getTicket(member.id, 2027))?.earlyEntry).toBe("requested");
+    expect(last?.wap).toBe("issued");
+    expect((await getTicket(member.id, 2027))?.wap).toBe("requested");
   });
 
   it("refuses a change to the value already there", async () => {
@@ -234,7 +234,7 @@ describe("camp_tickets", () => {
       setTicketPass({
         userId: member.id,
         actorUserId: captain.id,
-        pass: "early_entry",
+        pass: "wap",
         from: "issued",
         to: "issued",
       }),

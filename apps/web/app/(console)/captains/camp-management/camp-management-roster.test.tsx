@@ -59,6 +59,7 @@ function member(
     driverProfileComplete: false,
     country: null,
     participation: null,
+    participationIntent: null,
     createdAt: new Date("2026-01-01"),
     email: null,
   } as CampManagementMember;

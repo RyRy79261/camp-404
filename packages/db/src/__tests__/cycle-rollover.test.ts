@@ -1204,7 +1204,7 @@ describe("setFoundingYear adopts the year-scoped roster facts", () => {
     await db.insert(schema.campTickets).values({
       userId: other.id,
       cycle: 2025,
-      earlyEntry: "issued",
+      wap: "issued",
     });
 
     const res = await setFoundingYear({ year: 2026, actorUserId: null });

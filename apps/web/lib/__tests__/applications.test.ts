@@ -15,30 +15,35 @@ const members: ApplicationMember[] = [
     displayName: "Ben",
     approvalStatus: "approved",
     participation: "accepted",
+    participationIntent: "maybe",
   },
   {
     id: "a",
     displayName: " Ada ",
     approvalStatus: "approved",
     participation: "applied",
+    participationIntent: "yes",
   },
   {
     id: "p",
     displayName: "Pat",
     approvalStatus: "pending",
     participation: "applied",
+    participationIntent: "yes",
   },
   {
     id: "r",
     displayName: "Rae",
     approvalStatus: "rejected",
     participation: null,
+    participationIntent: null,
   },
   {
     id: "n",
     displayName: null,
     approvalStatus: "approved",
     participation: null,
+    participationIntent: null,
   },
 ];
 
@@ -47,8 +52,8 @@ const tickets = new Map<string, TicketFacts>([
     "b",
     {
       ticketStatus: "buying_own",
-      directedTicket: "none",
-      earlyEntry: "issued",
+      ddt: "none",
+      wap: "issued",
     },
   ],
 ]);
@@ -61,6 +66,11 @@ describe("applicationRows", () => {
       "Ben",
       "Unnamed burner",
     ]);
+  });
+
+  it("keeps what the member said apart from the captains' decision", () => {
+    const ben = applicationRows(members, tickets).find((r) => r.id === "b");
+    expect(ben).toMatchObject({ thisYear: "accepted", says: "maybe" });
   });
 
   it("gives a captain every member's ticket, the defaults where none is saved", () => {
@@ -76,10 +86,24 @@ describe("applicationRows", () => {
       expect(Object.keys(row).sort()).toEqual([
         "displayName",
         "id",
+        "says",
         "thisYear",
       ]);
     }
-    expect(JSON.stringify(rows)).not.toMatch(/issued|buying_own|earlyEntry/);
+    expect(JSON.stringify(rows)).not.toMatch(/issued|buying_own|wap/);
+  });
+});
+
+describe("applicationRows: the answer and the decision", () => {
+  it("keeps what the member said apart from the captains' decision", () => {
+    const rows = applicationRows(members, null);
+    // Ben was accepted after saying Maybe: both show, neither overwrites.
+    expect(rows.find((r) => r.id === "b")).toMatchObject({
+      thisYear: "accepted",
+      says: "maybe",
+    });
+    expect(rows.find((r) => r.id === "a")?.says).toBe("yes");
+    expect(rows.find((r) => r.id === "n")?.says).toBeNull();
   });
 });
 

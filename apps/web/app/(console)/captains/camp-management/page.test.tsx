@@ -141,6 +141,7 @@ describe("camp-management: this year's status on a non-captain's roster", () => 
     driverProfileComplete: false,
     country: null,
     participation: "applied",
+    participationIntent: null,
     createdAt: new Date("2026-01-01"),
   } satisfies CampManagementMember;
 

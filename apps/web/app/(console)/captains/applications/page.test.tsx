@@ -38,8 +38,15 @@ function member(
   id: string,
   displayName: string,
   participation: "applied" | "accepted" | null,
+  participationIntent: "yes" | "maybe" | null = participation ? "yes" : null,
 ) {
-  return { id, displayName, approvalStatus: "approved", participation };
+  return {
+    id,
+    displayName,
+    approvalStatus: "approved",
+    participation,
+    participationIntent,
+  };
 }
 
 function gate(rank: "captain" | "team_lead" | "camp_member") {
@@ -59,7 +66,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getCampManagementRoster).mockResolvedValue([
     member("m1", "Ada Yes", "applied"),
-    member("m2", "Ben Placed", "accepted"),
+    // Accepted, though he said Maybe: the page shows both, apart.
+    member("m2", "Ben Placed", "accepted", "maybe"),
   ] as never);
   vi.mocked(listTicketsThisYear).mockResolvedValue(
     new Map([
@@ -67,8 +75,8 @@ beforeEach(() => {
         "m2",
         {
           ticketStatus: "needs_directed_ticket",
-          directedTicket: "none",
-          earlyEntry: "requested",
+          ddt: "none",
+          wap: "requested",
         },
       ],
     ]),
@@ -86,12 +94,15 @@ describe("Applications page", () => {
       screen.getByRole("heading", { level: 1, name: "Applications" }),
     ).toBeTruthy();
     const t = table();
-    expect(
-      within(t).getByRole("columnheader", { name: "Early entry" }),
-    ).toBeTruthy();
-    expect(within(t).getByText("Needs directed")).toBeTruthy();
+    expect(within(t).getByRole("columnheader", { name: "WAP" })).toBeTruthy();
+    expect(within(t).getByText("Needs DDT")).toBeTruthy();
+    // The two short names are spelled out once, with the decision rule.
+    const hint = screen.getByText(/Decision is yours/);
+    expect(hint.textContent).toMatch(/DDT \(direct distribution ticket\)/);
+    expect(hint.textContent).toMatch(/WAP \(work access pass\)/);
+    expect(hint.textContent).toMatch(/says Coming or Maybe/);
     const early = within(t).getByRole("combobox", {
-      name: "Early entry for Ben Placed",
+      name: "WAP for Ben Placed",
     }) as HTMLSelectElement;
     expect(early.value).toBe("requested");
     expect(
@@ -110,7 +121,16 @@ describe("Applications page", () => {
     // Present first, then the absences.
     const t = table();
     expect(within(t).getByText("Ada Yes")).toBeTruthy();
-    expect(within(t).getByText("Coming")).toBeTruthy();
+    expect(within(t).getByRole("columnheader", { name: "Says" })).toBeTruthy();
+    expect(
+      within(t).getByRole("columnheader", { name: "Decision" }),
+    ).toBeTruthy();
+    const ada = within(t).getByText("Ada Yes").closest("tr")!;
+    expect(within(ada).getByText("Coming")).toBeTruthy();
+    expect(within(ada).getByText("Not decided yet")).toBeTruthy();
+    const ben = within(t).getByText("Ben Placed").closest("tr")!;
+    expect(within(ben).getByText("Maybe")).toBeTruthy();
+    expect(within(ben).getByText("Accepted")).toBeTruthy();
     expect(listTicketsThisYear).not.toHaveBeenCalled();
     expect(
       within(t).queryByRole("columnheader", { name: "Ticket" }),
@@ -156,7 +176,7 @@ describe("Applications page", () => {
 
     fireEvent.change(
       within(table()).getByRole("combobox", {
-        name: "Early entry for Ben Placed",
+        name: "WAP for Ben Placed",
       }),
       { target: { value: "issued" } },
     );
@@ -164,7 +184,7 @@ describe("Applications page", () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(setTicketPassAction).toHaveBeenCalledWith({
       userId: "m2",
-      pass: "early_entry",
+      pass: "wap",
       from: "requested",
       to: "issued",
     });
@@ -181,7 +201,7 @@ describe("Applications page", () => {
 
     fireEvent.change(
       within(table()).getByRole("combobox", {
-        name: "Directed ticket for Ben Placed",
+        name: "DDT for Ben Placed",
       }),
       { target: { value: "allocated" } },
     );

@@ -73,30 +73,30 @@ describe("auditDetail", () => {
     ).toBeNull();
   });
 
-  it("labels and says a change to a member's directed ticket or early entry", () => {
+  it("labels and says a change to a member's DDT or WAP", () => {
     expect(auditActionLabel("ticket.pass_changed")).toBe(
-      "Changed a member's ticket or early entry",
+      "Changed a member's DDT or WAP",
     );
     expect(
       auditDetail("ticket.pass_changed", {
         cycle: 2027,
-        pass: "early_entry",
+        pass: "wap",
         from: "requested",
         to: "issued",
       }),
-    ).toBe("Early entry: issued for 2027");
+    ).toBe("WAP: issued for 2027");
     expect(
       auditDetail("ticket.pass_changed", {
-        pass: "directed_ticket",
+        pass: "ddt",
         from: "none",
         to: "can_transfer",
       }),
-    ).toBe("Directed ticket: can transfer");
+    ).toBe("DDT: can transfer");
     // A value of the other pass, an unknown pass, or a prototype key adds
     // nothing.
     expect(
       auditDetail("ticket.pass_changed", {
-        pass: "early_entry",
+        pass: "wap",
         to: "allocated",
       }),
     ).toBeNull();
@@ -105,7 +105,7 @@ describe("auditDetail", () => {
     ).toBeNull();
     expect(
       auditDetail("ticket.pass_changed", {
-        pass: "early_entry",
+        pass: "wap",
         to: "toString",
       }),
     ).toBeNull();

@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { DIRECTED_TICKET_STATUSES, EARLY_ENTRY_STATUSES } from "@camp404/types";
+import { DDT_STATUSES, WAP_STATUSES } from "@camp404/types";
 import { runAction } from "@/lib/action-result";
 import { captainActionGate } from "@/lib/captain-gate";
 import { setTicketPass } from "@/lib/tickets";
 import { findCampUserById } from "@/lib/users";
 
 // The Applications page's own write (#238): a captain records a member's
-// directed ticket or early-entry pass. The Accept / Waiting list buttons on
+// DDT or WAP. The Accept / Waiting list buttons on
 // the same page reuse the roster's decideParticipationAction.
 
 export type TicketPassResult = { ok: true } | { ok: false; error: string };
@@ -17,20 +17,20 @@ export type TicketPassResult = { ok: true } | { ok: false; error: string };
 const TicketPassInput = z.discriminatedUnion("pass", [
   z.object({
     userId: z.string().min(1),
-    pass: z.literal("directed_ticket"),
-    from: z.enum(DIRECTED_TICKET_STATUSES),
-    to: z.enum(DIRECTED_TICKET_STATUSES),
+    pass: z.literal("ddt"),
+    from: z.enum(DDT_STATUSES),
+    to: z.enum(DDT_STATUSES),
   }),
   z.object({
     userId: z.string().min(1),
-    pass: z.literal("early_entry"),
-    from: z.enum(EARLY_ENTRY_STATUSES),
-    to: z.enum(EARLY_ENTRY_STATUSES),
+    pass: z.literal("wap"),
+    from: z.enum(WAP_STATUSES),
+    to: z.enum(WAP_STATUSES),
   }),
 ]);
 
 /**
- * A captain changes a member's directed ticket or early-entry pass for this
+ * A captain changes a member's DDT or WAP for this
  * year. Captains only: a team lead reads who is coming and nothing of the
  * tickets. A compare-and-set on `from`, the value the captain saw, so a
  * change another captain made first is not overwritten; the captain is told
