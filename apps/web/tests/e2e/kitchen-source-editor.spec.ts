@@ -73,9 +73,11 @@ async function approvedRecipe(page: Page, text: string): Promise<string> {
 
 async function openEditor(page: Page, recipeUrl: string, title: string) {
   await page.goto(`${recipeUrl}/edit`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: title }),
-  ).toBeVisible();
+  // By the element, not its role: with Claude's questions waiting, the
+  // editor opens their dialog by itself, which hides the page behind it from
+  // assistive tech, so a role query loses the heading if the dialog opens
+  // first (it did on CI, all three tries).
+  await expect(page.locator("h1").filter({ hasText: title })).toBeVisible();
 }
 
 test.describe("recipe source editor (test-mode)", () => {

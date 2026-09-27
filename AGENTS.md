@@ -266,6 +266,14 @@ keyboard's way to them is the Terminal.
   open one comes to the front at once; the desktop wears a busy cursor
   (`aria-busy` on `#os-desktop`). Streaming inside a page, below its gate, is
   allowed (the gotcha under Commands).
+- System themes (issue #290): every colour the desktop's chrome and a window
+  read is a variable in `apps/web/lib/os-themes.ts`, one set per theme
+  (404 Night, Calm, High contrast, Colour-blind safe). A new colour is a new
+  token in every theme, never a literal in a component; the drift and
+  contrast tests (`lib/__tests__/os-themes.test.ts`,
+  `os-skin-contrast.test.ts`) hold each theme to it. High contrast and Effects
+  off take decoration out of the DOM, not just out of sight. The landing page,
+  Join and the sign-in pages are never themed.
 
 ## Database — read this before touching the schema
 

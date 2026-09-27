@@ -174,6 +174,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/profile", "account", "MY_ACCOUNT.CPL"),
   route("/profile/edit", "account", "MY_ACCOUNT.CPL"),
   route("/profile/security", "account", "MY_ACCOUNT.CPL"),
+  route("/profile/display", "account", "MY_ACCOUNT.CPL"),
   route("/tools/forms", "my-forms", "MYFORMS.EXE"),
   route(
     "/tools/forms/answers/[key]/[cycle]",

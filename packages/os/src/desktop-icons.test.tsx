@@ -45,7 +45,9 @@ function Harness({
   onDrop,
   onMenu,
   initial = {},
+  openOnClick,
 }: {
+  openOnClick?: boolean;
   onOpen?: (key: string) => void;
   onDrop?: (folder: string, key: string) => void;
   onMenu?: (r: DesktopMenuRequest) => void;
@@ -61,6 +63,7 @@ function Harness({
         size={SIZE}
         onCellsChange={setCells}
         onOpen={onOpen}
+        openOnClick={openOnClick}
         onDropIntoFolder={onDrop}
         onContextMenu={onMenu}
       />
@@ -159,6 +162,25 @@ describe("DesktopIcons", () => {
     fireEvent.doubleClick(icon("Tasks"));
     fireEvent.keyDown(icon("Roster"), { key: "Enter" });
     expect(onOpen.mock.calls).toEqual([["tasks"], ["roster"]]);
+  });
+
+  it("with Open with one click: a plain click opens, once; Ctrl, Shift and a drag still select or move", () => {
+    const onOpen = vi.fn();
+    render(<Harness onOpen={onOpen} openOnClick />);
+    click(icon("Tasks"));
+    expect(onOpen.mock.calls).toEqual([["tasks"]]);
+    expect(selectedNames()).toEqual(["Tasks"]);
+    // The rest of a double-click opens nothing more.
+    click(icon("Tasks"));
+    fireEvent.doubleClick(icon("Tasks"));
+    expect(onOpen.mock.calls).toEqual([["tasks"]]);
+    onOpen.mockClear();
+    click(icon("Roster"), { ctrlKey: true });
+    click(icon(/Mine/), { shiftKey: true });
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(selectedNames()).toHaveLength(3);
+    drag(icon("Roster"), at(1, 0), at(3, 0));
+    expect(onOpen).not.toHaveBeenCalled();
   });
 
   it("opens on a double tap (a tablet), once, and never on one tap or a mouse", () => {

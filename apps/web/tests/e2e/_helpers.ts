@@ -24,6 +24,9 @@ export interface LoginUser {
   /** Defaults to true. False signs in as a member who has not confirmed
    * their email yet (a password member moved from Neon Auth). */
   emailVerified?: boolean;
+  /** True: the welcome wizard opens as for a real new member. Otherwise it
+   * counts as seen, so it never covers a desktop a spec drives. */
+  welcome?: boolean;
 }
 
 /**

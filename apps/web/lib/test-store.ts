@@ -203,7 +203,10 @@ import {
   calendarEventRefusal,
   type AddCalendarEventResult,
 } from "@camp404/db/calendar-events";
-import { DesktopLayoutInvalidError } from "@camp404/db/desktop-layouts";
+import {
+  DesktopLayoutInvalidError,
+  DesktopPreferencesInvalidError,
+} from "@camp404/db/desktop-layouts";
 import {
   ADJUST_INSTRUCTION_MAX,
   ADJUST_INSTRUCTION_NEEDED,
@@ -211,6 +214,7 @@ import {
   ANNOUNCEMENT_NOTIFICATION_KINDS,
   DEFAULT_PLATES,
   DesktopLayout,
+  DesktopPreferencesPatch,
   KitchenRecipe,
   MealPlanInput,
   PROOFREAD_ANSWER_MAX,
@@ -221,6 +225,8 @@ import {
   RecipeSourceSections,
   SourceProofread,
   parseStoredDesktopLayout,
+  parseStoredDesktopPreferences,
+  type DesktopPreferences,
   type DraftReport,
   type InboxFilter,
   type IngredientCategory,
@@ -649,6 +655,8 @@ interface TestStoreState {
   carMembers: TestCarMember[];
   /** `desktop_layouts`: each member's saved desktop, by user id. */
   desktopLayouts: Map<string, unknown>;
+  /** `desktop_layouts.preferences`: the stored value, by user id. */
+  desktopPreferences: Map<string, Record<string, unknown>>;
 }
 
 /** The lift fields of a `driver_profiles` row. */
@@ -733,6 +741,7 @@ function globalState(): TestStoreState {
       driverProfiles: [] as TestDriverProfile[],
       carMembers: [] as TestCarMember[],
       desktopLayouts: new Map<string, unknown>(),
+      desktopPreferences: new Map<string, Record<string, unknown>>(),
     } satisfies TestStoreState;
   }
   return g[GLOBAL_KEY] as TestStoreState;
@@ -810,6 +819,7 @@ S.recipeLessons ??= [];
 S.recipeHistory ??= [];
 S.mealPlans ??= new Map<number, MealPlan>();
 S.desktopLayouts ??= new Map<string, unknown>();
+S.desktopPreferences ??= new Map<string, Record<string, unknown>>();
 const recipes = S.recipes;
 const recipeRuns = S.recipeRuns;
 const recipeSources = S.recipeSources;
@@ -5110,6 +5120,7 @@ export const testStore = {
     driverProfiles.length = 0;
     carMembers.length = 0;
     S.desktopLayouts.clear();
+    S.desktopPreferences.clear();
   },
 
   // --- Desktop layouts (the twin of @camp404/db/desktop-layouts) ----------
@@ -5137,9 +5148,43 @@ export const testStore = {
   seedRawDesktopLayout(userId: string, value: unknown): void {
     S.desktopLayouts.set(userId, structuredClone(value));
   },
-  /** Account erasure's delete of `desktop_layouts`. */
+  /** Account erasure's delete of `desktop_layouts`, preferences and all. */
   deleteDesktopLayout(userId: string): void {
     S.desktopLayouts.delete(userId);
+    S.desktopPreferences.delete(userId);
+  },
+
+  // --- Display preferences (the twin of the same file's preferences half) ---
+  // Merged into what is stored, as the real write's jsonb `||` does, and read
+  // field by field (a bad field reads as its default).
+
+  getDesktopPreferences(userId: string): DesktopPreferences {
+    return parseStoredDesktopPreferences(S.desktopPreferences.get(userId));
+  },
+  saveDesktopPreferences(userId: string, patch: unknown): DesktopPreferences {
+    if (!findUserById(userId)) {
+      throw new Error(`No test user with id ${userId}`);
+    }
+    const parsed = DesktopPreferencesPatch.safeParse(patch);
+    if (!parsed.success) {
+      throw new DesktopPreferencesInvalidError(
+        parsed.error.issues.map((issue) => issue.message),
+      );
+    }
+    const merged = { ...S.desktopPreferences.get(userId), ...parsed.data };
+    S.desktopPreferences.set(userId, merged);
+    return parseStoredDesktopPreferences(merged);
+  },
+  markWelcomeSeen(userId: string, at: Date = new Date()): DesktopPreferences {
+    if (!findUserById(userId)) {
+      throw new Error(`No test user with id ${userId}`);
+    }
+    const merged = {
+      ...S.desktopPreferences.get(userId),
+      welcomeSeenAt: at.toISOString(),
+    };
+    S.desktopPreferences.set(userId, merged);
+    return parseStoredDesktopPreferences(merged);
   },
 
   // --- Lifts (the twin of @camp404/db/cars getMyLift) ----------------------

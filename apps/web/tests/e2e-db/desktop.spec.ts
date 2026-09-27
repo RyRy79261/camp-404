@@ -111,6 +111,9 @@ test("a member held by a blocking questionnaire: mid-session, then on a hard loa
     id: "db-held",
     email: "held@example.com",
     displayName: "Hel Held",
+    // The welcome wizard as a real new member gets it: open on the full
+    // desktop, never over the blocking form (issue #289).
+    welcome: true,
   });
   await redeemInviteAtGate(member, "TEST-INVITE-E2E-ONLY-CODE");
   await expect(member).toHaveURL(/\/onboarding\/questionnaire/);
@@ -119,6 +122,8 @@ test("a member held by a blocking questionnaire: mid-session, then on a hard loa
   await expectDesktop(member);
   const roster = desktopIcon(member, "Roster");
   await expect(roster).toBeVisible();
+  const welcome = member.getByRole("dialog", { name: "Welcome to 404 OS" });
+  await expect(welcome).toBeVisible();
 
   // A captain pins an announcement: the member's desktop shows it (present
   // first, so its absence while held means something).
@@ -144,6 +149,8 @@ test("a member held by a blocking questionnaire: mid-session, then on a hard loa
     timeout: 60_000,
   });
   await expectHeld(member);
+  // The welcome, still unseen, is never drawn over the form.
+  await expect(welcome).toHaveCount(0);
   // The icons behind the form cannot be reached: they sit in the inert
   // desktop (a pointer lands on the layer over them).
   const heldAt = member.url();
@@ -161,6 +168,7 @@ test("a member held by a blocking questionnaire: mid-session, then on a hard loa
   // A hard load: the layout draws the held desktop itself.
   await member.goto(heldAt);
   await expectHeld(member);
+  await expect(welcome).toHaveCount(0);
   await member.goto("/");
   await expect(member).toHaveURL(heldAt);
   await expectHeld(member);

@@ -31,7 +31,12 @@ const sample = (pattern: string) =>
 
 describe("matchProgram", () => {
   it("opens one window for a program's sub-pages", () => {
-    for (const p of ["/profile", "/profile/edit", "/profile/security"]) {
+    for (const p of [
+      "/profile",
+      "/profile/edit",
+      "/profile/security",
+      "/profile/display",
+    ]) {
       expect(matchProgram(p)).toEqual({
         programId: "account",
         instanceKey: "account",

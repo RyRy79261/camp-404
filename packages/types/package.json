@@ -8,7 +8,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./desktop-keys": "./src/desktop-keys.ts"
+    "./desktop-keys": "./src/desktop-keys.ts",
+    "./desktop-preferences": "./src/desktop-preferences.ts"
   },
   "scripts": {
     "lint": "eslint .",

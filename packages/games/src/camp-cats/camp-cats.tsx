@@ -83,6 +83,11 @@ export type CampCatsProps = {
   now?: () => number;
   /** Classes for the layer (it fills its positioned parent). */
   className?: string;
+  /**
+   * Hold them still whatever the device says, as reduced motion does (the
+   * app's "Effects off"): they still come, sit and eat, without walking.
+   */
+  still?: boolean;
 };
 
 const MODA_ATLAS = atlasLayout(MODA_FRAMES);
@@ -165,6 +170,12 @@ function CatSprite<P extends string>({
       a.cancel();
     };
   }, [leg, cat.at]);
+
+  // Held still (reduced motion, or the app's Effects off turned on mid
+  // walk): the walk ends where it was going, at once.
+  useEffect(() => {
+    if (still) walk.current?.finish();
+  }, [still]);
 
   // A hidden tab: the walk holds where it is, and goes on on return.
   useEffect(() => {
@@ -262,8 +273,9 @@ function CampCatsLayer({
   storage,
   now = Date.now,
   className = "",
+  still: holdStill = false,
 }: CampCatsProps) {
-  const reduced = useReducedMotion(true);
+  const reduced = useReducedMotion(true) || holdStill;
   const visible = useTabVisible();
   const layer = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState<Shown | null>(null);
@@ -470,5 +482,6 @@ export const CampCats = memo(
     a.delayMs === b.delayMs &&
     a.storage === b.storage &&
     a.now === b.now &&
-    a.className === b.className,
+    a.className === b.className &&
+    a.still === b.still,
 );
