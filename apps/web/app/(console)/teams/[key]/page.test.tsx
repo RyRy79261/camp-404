@@ -75,6 +75,7 @@ vi.mock("@/lib/power", () => ({
 
 import type { ViewerRank } from "@camp404/types";
 import { captainPageGate } from "@/lib/captain-gate";
+import { listPowerLoads } from "@/lib/power";
 import { getLeadTeams } from "@/lib/users";
 import TeamPage from "./page";
 
@@ -141,5 +142,19 @@ describe("a team's program", () => {
     expect(
       screen.queryByRole("region", { name: "Power plan at a glance" }),
     ).toBeNull();
+  });
+
+  it("keeps the shared cards when the team's own panel fails", async () => {
+    viewAs("camp_member");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(listPowerLoads).mockRejectedValueOnce(new Error("down"));
+    await show("power_and_lighting");
+    expect(screen.getByText("We keep the lights on.")).toBeTruthy();
+    expect(screen.getByText("Generator test Saturday")).toBeTruthy();
+    expect(
+      screen.queryByRole("region", { name: "Power plan at a glance" }),
+    ).toBeNull();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });

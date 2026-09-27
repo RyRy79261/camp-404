@@ -139,9 +139,15 @@ export default async function TeamPage({
     ]);
   const canEdit = canEditTeamProgram(rank, leadTeams, team.data);
   // The team's own panels read their own data; drawn here, before the page,
-  // so the whole program arrives in one server render.
+  // so the whole program arrives in one server render. A panel that fails
+  // leaves the shared cards standing: it is logged and left out.
   const teamPanel = TEAM_PANELS[team.data];
-  const panel = teamPanel ? await teamPanel({ rank, leadTeams }) : null;
+  const panel = teamPanel
+    ? await teamPanel({ rank, leadTeams }).catch((error: unknown) => {
+        console.error(`[team-panel:${team.data}]`, error);
+        return null;
+      })
+    : null;
   const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
   const teamLabels = Object.fromEntries(teams.map((t) => [t.key, t.label]));
   const page = buildTeamPage({
