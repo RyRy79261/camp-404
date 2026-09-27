@@ -171,6 +171,12 @@ function CatSprite<P extends string>({
     };
   }, [leg, cat.at]);
 
+  // Held still (reduced motion, or the app's Effects off turned on mid
+  // walk): the walk ends where it was going, at once.
+  useEffect(() => {
+    if (still) walk.current?.finish();
+  }, [still]);
+
   // A hidden tab: the walk holds where it is, and goes on on return.
   useEffect(() => {
     const a = walk.current;
@@ -476,5 +482,6 @@ export const CampCats = memo(
     a.delayMs === b.delayMs &&
     a.storage === b.storage &&
     a.now === b.now &&
-    a.className === b.className,
+    a.className === b.className &&
+    a.still === b.still,
 );

@@ -210,4 +210,13 @@ describe("the two visiting cats, rendered", () => {
     await advance(90_000);
     expect(layer(container).dataset.campCats).toBe("settled");
   });
+
+  it("takes Effects off turned on while they wait (the prop reaches them)", async () => {
+    const storage = memoryStorage();
+    const props = { windows: [WIN], perches, storage, now };
+    const r = render(<CampCats {...props} />);
+    r.rerender(<CampCats {...props} still />);
+    await advance(90_000);
+    expect(layer(r.container).dataset.campCats).toBe("settled");
+  });
 });
