@@ -8,9 +8,10 @@ import {
   useDesktopSecrets,
   usePeek,
 } from "@camp404/games/cats";
+import { CampCats, type Rect, type WindowBox } from "@camp404/games/camp-cats";
 import { ShadowWork } from "@camp404/games/shadow-work";
 
-// Where the desktop puts Camp 404's two cats (owner, 2026-09-25; the
+// Where the desktop puts Camp 404's cats (owner, 2026-09-25; the
 // prototype's _proto/cats.md). The cats themselves are @camp404/games's; this
 // only says where each sits. Never labelled: each is a toy for the pointer,
 // hidden from assistive tech and out of the Tab order (the games package
@@ -65,4 +66,43 @@ export function DesktopSecrets({
 }) {
   useDesktopSecrets({ onKonami, onMeow });
   return <PawTrail on={paws} />;
+}
+
+/**
+ * The desktop icons' pictures, where the two visiting cats sit: read when
+ * they need it, never on a timer.
+ */
+function iconPictures(): Rect[] {
+  const pictures = document.querySelectorAll<HTMLElement>(
+    "[data-os-icons] [data-key] > span:first-child",
+  );
+  return [...pictures].flatMap((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0
+      ? [{ x: r.left, y: r.top, w: r.width, h: r.height }]
+      : [];
+  });
+}
+
+/**
+ * Moda and Nipster (@camp404/games/camp-cats): a program's window left open
+ * 1.5 minutes, and they turn up under it; move the window and out they come.
+ * Desktop only (the shell leaves it out on a phone). Until then all it runs
+ * is one timeout.
+ */
+export function WindowCats({
+  windows,
+  delayMs,
+}: {
+  windows: readonly WindowBox[];
+  delayMs?: number;
+}) {
+  return (
+    <CampCats
+      windows={windows}
+      perches={iconPictures}
+      delayMs={delayMs}
+      className="z-10"
+    />
+  );
 }
