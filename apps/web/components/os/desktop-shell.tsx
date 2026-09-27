@@ -22,7 +22,6 @@ import {
   DesktopIcons,
   FolderNameDialog,
   FolderWindow,
-  GlitchWordmark,
   INITIAL_WM,
   LastSeenStore,
   OsWindowFrame,
@@ -60,6 +59,10 @@ import {
   type WmState,
 } from "@camp404/os";
 import { desktopFolderKey } from "@camp404/types/desktop-keys";
+import {
+  defaultDesktopPreferences,
+  type DesktopPreferences,
+} from "@camp404/types/desktop-preferences";
 import { toast } from "@camp404/ui/components/toast";
 import { saveDesktopLayoutAction } from "@/app/(console)/desktop-layout-actions";
 import { SignOutLink } from "@/components/auth/sign-out-link";
@@ -105,6 +108,14 @@ import {
 import { PinnedList, PinnedStrip, type PinnedItem } from "./pinned-strip";
 import { folderIcon, iconFor, programIcon } from "./program-icons";
 import { ConsoleBoot } from "./console-boot";
+import {
+  DesktopDisplayContext,
+  OsWordmark,
+  displayAttributes,
+  useDesktopDisplay,
+  useDisplayState,
+} from "./desktop-display";
+import { WelcomeWizard } from "./welcome-wizard";
 import {
   ClockPrince,
   ClockReunion,
@@ -439,6 +450,12 @@ export interface DesktopProps {
    */
   boot?: { lines: readonly BootLine[]; welcome: string } | null;
   /**
+   * The member's display preferences (issues #289 and #290): the theme and
+   * switches the desktop root wears from the first paint, one-click opening,
+   * and whether the welcome wizard has been closed before.
+   */
+  preferences?: DesktopPreferences;
+  /**
    * This member sees Prince come home instead of asleep on the clock
    * (lib/prince-keeper.ts decides on the server). A yes or no only.
    */
@@ -457,12 +474,28 @@ export interface DesktopProps {
   children: ReactNode;
 }
 
+/**
+ * No preferences given (a test's desktop): the defaults, with the welcome
+ * counted as seen, so it does not open by itself. The console layout always
+ * passes the member's own.
+ */
+const SEEN_DEFAULTS: DesktopPreferences = {
+  ...defaultDesktopPreferences(),
+  welcomeSeenAt: "2000-01-01T00:00:00.000Z",
+};
+
 /** The desktop. Wraps the dirty registry every window's guard reads. */
 export function Desktop(props: DesktopProps) {
+  // The wizard opens by itself on a full desktop the member has not closed
+  // it on before (never on the restricted or held one).
+  const preferences = props.preferences ?? SEEN_DEFAULTS;
+  const display = useDisplayState(preferences, props.mode === "full");
   return (
     <WindowDirtyProvider>
       <DraftOwnerContext.Provider value={props.userId}>
-        <DesktopInner {...props} />
+        <DesktopDisplayContext.Provider value={display}>
+          <DesktopInner {...props} />
+        </DesktopDisplayContext.Provider>
       </DraftOwnerContext.Provider>
     </WindowDirtyProvider>
   );
@@ -504,6 +537,10 @@ function DesktopInner({
   const liveKey = page?.instanceKey ?? null;
   const mayLeave = useLeaveGuard();
   const keptDrafts = useKeptDrafts();
+  // The theme, the switches and the wizard (desktop-display.tsx).
+  const display = useDesktopDisplay()!;
+  const { effects } = display;
+  const effectsOff = display.prefs.effectsOff;
 
   // --- The cats (desktop-cats.tsx) ----------------------------------------------
   // Paw prints behind the pointer ("meow" on the desktop or in the Terminal,
@@ -516,8 +553,11 @@ function DesktopInner({
     const on = !pawsNow.current;
     pawsNow.current = on;
     setPaws(on);
-    // No prints under reduced motion, so nothing to announce.
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    // No prints under reduced motion or Effects off, so nothing to announce.
+    if (
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+      document.getElementById("os-desktop")?.dataset.osEffects === "off"
+    ) {
       return;
     }
     if (on) {
@@ -1772,7 +1812,7 @@ function DesktopInner({
               suffix={suffixOf(w)}
               // Jinn, now and then, over the focused window's top edge.
               decoration={
-                w.id === top?.id && !w.maximized ? (
+                w.id === top?.id && !w.maximized && !effectsOff ? (
                   <WindowPeek fedAt={fedAt} />
                 ) : undefined
               }
@@ -1908,7 +1948,10 @@ function DesktopInner({
   // come home, the two of them (it waits, or holds still, while covered).
   const clockCat = (phone: boolean) =>
     princeKeeper ? (
-      <ClockReunion covered={princeCovered} delayMs={reunionDelayMs} />
+      <ClockReunion
+        covered={princeCovered || effectsOff}
+        delayMs={reunionDelayMs}
+      />
     ) : (
       <ClockPrince className={phone ? `right-2 ${princeClass}` : princeClass} />
     );
@@ -1929,7 +1972,11 @@ function DesktopInner({
   // form by its server gate. The blocking layer holds only the form.
   if (mode === "held" && page?.programId !== "questionnaire") {
     return (
-      <div data-os-skin className={HELD_BARE}>
+      <div
+        data-os-skin
+        {...displayAttributes(display.prefs)}
+        className={HELD_BARE}
+      >
         {children}
       </div>
     );
@@ -1940,6 +1987,7 @@ function DesktopInner({
       <div
         id="os-desktop"
         data-os-skin
+        {...displayAttributes(display.prefs)}
         inert={held || undefined}
         // A page on its way: a busy cursor everywhere on the desktop.
         aria-busy={navigating || undefined}
@@ -1953,9 +2001,13 @@ function DesktopInner({
         }`}
       >
         {/* The CRT surface under everything: grid, scanlines, noise, beam. */}
-        <div data-os-paused={decorCovered || undefined} className="contents">
-          <Surface />
-        </div>
+        {/* Calm keeps it still, without the beam; High contrast and Effects
+            off leave it out of the page. */}
+        {effects !== "none" && (
+          <div data-os-paused={decorCovered || undefined} className="contents">
+            <Surface beam={effects === "full"} />
+          </div>
+        )}
         {page && !held && (
           <a
             href="#os-window-content"
@@ -1995,11 +2047,11 @@ function DesktopInner({
             data-os-paused={decorCovered || undefined}
             className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 max-md:hidden"
           >
-            <GlitchWordmark text="404 OS" size="clamp(3rem, 7vw, 5.5rem)" />
+            <OsWordmark text="404 OS" size="clamp(3rem, 7vw, 5.5rem)" />
             {tagline && (
               <p
                 data-label={tagline}
-                className="os-chromatic font-mono text-[11px] uppercase tracking-[0.3em] text-os-fg after:content-[attr(data-label)]"
+                className={`${effects === "full" ? "os-chromatic " : ""}font-mono text-[11px] uppercase tracking-[0.3em] text-os-fg after:content-[attr(data-label)]`}
               />
             )}
           </div>
@@ -2013,6 +2065,7 @@ function DesktopInner({
               const entry = entryByKey.get(key);
               if (entry && !held) openEntry(entry);
             }}
+            openOnClick={display.prefs.oneClickOpen}
             onDropIntoFolder={onDropIntoFolder}
             onContextMenu={held ? undefined : onDesktopMenu}
           />
@@ -2044,6 +2097,18 @@ function DesktopInner({
             >
               {today.body}
             </TodayGadget>
+          )}
+          {/* Welcome to 404 OS: a full desktop only, never over a form. */}
+          {display.welcomeOpen && mode === "full" && !held && (
+            <WelcomeWizard
+              prefs={display.prefs}
+              effects={effects}
+              onChange={display.change}
+              onOpenToday={
+                today && !phoneNow ? () => setTodayStored(true) : undefined
+              }
+              onClose={display.closeWelcome}
+            />
           )}
         </div>
         <div
@@ -2132,6 +2197,7 @@ function DesktopInner({
                 onTidyWindows={() => dispatch({ type: "tidy", viewport })}
                 onLineUpIcons={() => changeLayout(lineUpIcons(layout))}
                 onShowDesktop={showDesktop}
+                onOpenWelcome={display.openWelcome}
               />
             </div>
           </>
@@ -2162,12 +2228,12 @@ function DesktopInner({
           desktop has: an applicant waiting for approval gets none. */}
       {mode === "full" && !held && (
         <DesktopSecrets
-          paws={paws}
+          paws={paws && !effectsOff}
           onKonami={() => openHref(INKBLOT_HREF)}
           onMeow={togglePaws}
         />
       )}
-      {boot && !held && (
+      {boot && !held && effects === "full" && (
         <ConsoleBoot lines={boot.lines} welcome={boot.welcome} />
       )}
     </DesktopSignalsContext.Provider>

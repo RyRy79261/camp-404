@@ -2,15 +2,11 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
-import {
-  GlitchWordmark,
-  iconName,
-  useMinuteClock,
-  type DesktopIconItem,
-} from "@camp404/os";
+import { iconName, useMinuteClock, type DesktopIconItem } from "@camp404/os";
 import { burnCountdownLabel } from "@/lib/burn-countdown";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 import { openReportProblem } from "@/components/feedback/report-problem";
+import { OsWordmark } from "./desktop-display";
 import { LineIcon } from "./line-icons";
 
 // The phone's Classic desktop (below md; design doc, section 5; visual
@@ -79,7 +75,7 @@ export function PhoneHome({
         data-os-paused={covered || undefined}
         className="pointer-events-none relative flex flex-col items-center gap-1.5 pt-5 [@media(max-height:700px)]:hidden"
       >
-        <GlitchWordmark text="404" size="clamp(3.25rem, 20vw, 5rem)" />
+        <OsWordmark text="404" size="clamp(3.25rem, 20vw, 5rem)" />
         {tagline && (
           <p
             aria-hidden

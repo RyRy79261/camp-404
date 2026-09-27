@@ -136,7 +136,7 @@ describe("the account chip", () => {
 });
 
 describe("the Start menu", () => {
-  it("stands the groups in the prototype's columns, then Tidy windows, Line up icons, Show desktop, Report a problem and Log off", () => {
+  it("stands the groups in the prototype's columns, then Tidy windows, Line up icons, Show desktop, Welcome, Report a problem and Log off", () => {
     render(
       <Desktop
         {...props(
@@ -180,10 +180,11 @@ describe("the Start menu", () => {
     ).toBeTruthy();
     expect(captains.getByRole("menuitem", { name: "Terminal" })).toBeTruthy();
     const rows = menu.getAllByRole("menuitem").map((el) => el.textContent);
-    expect(rows.slice(-5)).toEqual([
+    expect(rows.slice(-6)).toEqual([
       "Tidy windows",
       "Line up icons",
       "Show desktop",
+      "Welcome",
       "Report a problem",
       "Log off",
     ]);

@@ -40,6 +40,7 @@ test.describe("signed-out visitor", () => {
     "/profile",
     "/profile/edit",
     "/profile/security",
+    "/profile/display",
     "/family-tree",
     // My lift (decision 11 A), new in the program manifest PR.
     "/lift",

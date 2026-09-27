@@ -75,6 +75,7 @@ const PAGE_ICONS: Record<string, LucideIcon> = {
   "/tools/forms": FileText,
   "/tools/invite": UserPlus,
   "/profile/security": ShieldCheck,
+  "/profile/display": Palette,
   "/captains/overview": LayoutDashboard,
   "/captains/questionnaires": ClipboardList,
   "/captains/announcements": Megaphone,

@@ -1,9 +1,13 @@
 # 404 OS: a welcome wizard and system themes
 
-Status: spec, 2026-09-26. Not built. It follows the 404 OS console refactor
-(PRs A to E, `docs/plans/2026-09-25-404-os-console-migration.md`) and ships
-as its own PR after it (owner, 2026-09-26: decision "A", themes after the
-refactor).
+Status: spec, 2026-09-26. [CORRECTION 2026-09-27] Built (issues #289 and
+#290), with the recommended answers to the open questions below (owner: go
+with the defaults): all four themes ship, the wizard shows once to every
+member (those who used the desktop before it too), plain and short, no cats.
+The themes' colours live in `apps/web/lib/os-themes.ts`; the preferences in
+`desktop_layouts.preferences` (migration `0064`). It followed the 404 OS
+console refactor (PRs A to E, `docs/plans/2026-09-25-404-os-console-migration.md`)
+as its own PR (owner, 2026-09-26: decision "A", themes after the refactor).
 
 Related docs: `docs/specs/2026-09-25-404-os-console-design.md` (the shell),
 `docs/specs/2026-09-25-404-os-visual-language.md` (tokens, fonts, motion).
@@ -116,7 +120,7 @@ These do not wait for themes; the refactor must already meet them:
 
 - A per-member preferences value on the server, next to the desktop layout
   (`desktop_layouts`, migration `0063`), e.g. `{theme, biggerText,
-  effectsOff, oneClickOpen, welcomeSeenAt}`, Zod-checked on write and read (a
+effectsOff, oneClickOpen, welcomeSeenAt}`, Zod-checked on write and read (a
   bad value means the defaults). One drizzle-kit migration, add-only; erasure
   deletes it with the layout; a test-store twin.
 - Applied on the server's first paint (a `data-os-theme` attribute and the

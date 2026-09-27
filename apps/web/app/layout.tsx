@@ -12,6 +12,10 @@ import { FeedbackGate } from "./feedback-gate";
 import "./globals.css";
 import { SITE_URL } from "@/lib/site";
 import { OS_SKIN_SCRIPT } from "@/lib/os-skin";
+import { osThemeCss } from "@/lib/os-themes";
+
+// The system themes' colours (lib/os-themes.ts), built once per server.
+const OS_THEME_CSS = osThemeCss();
 
 // Brand faces, exposed as CSS vars consumed by --font-sans / --font-mono in
 // @camp404/ui globals.css. Montserrat is the AfrikaBurn app's face (body 500,
@@ -98,6 +102,11 @@ export default function RootLayout({
             `data-os-skin` (lib/os-skin.ts), before the first paint. The
             class is not React's, which suppressHydrationWarning allows. */}
         <script dangerouslySetInnerHTML={{ __html: OS_SKIN_SCRIPT }} />
+        {/* The 404 OS themes' colours: 404 Night on :root, each other theme
+            on [data-os-theme], which only the desktop (and <html>, from the
+            script above) carries. In the head, so the first paint is in the
+            member's theme. Built from constants, never from input. */}
+        <style dangerouslySetInnerHTML={{ __html: OS_THEME_CSS }} />
       </head>
       <body className="font-sans antialiased">
         <Providers>

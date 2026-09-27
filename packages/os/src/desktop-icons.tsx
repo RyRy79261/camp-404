@@ -33,7 +33,9 @@ import {
 // decision 14). Click selects; Ctrl, Cmd or Shift adds or takes away; a box
 // drawn from the empty desktop selects every icon it touches; a drag moves the
 // selection by whole cells and it is simply there on drop, no slide; a
-// double-click or Enter opens. By keyboard the grid is one tab stop: arrows
+// double-click or Enter opens. With `openOnClick` (the member's "Open with one
+// click", issue #289) a plain click opens as well, and selecting is Ctrl, Cmd
+// or Shift, or the box. By keyboard the grid is one tab stop: arrows
 // move focus, Shift or Ctrl with an arrow adds, Space selects, Esc clears,
 // and Shift+F10 or the Menu key asks for the right-click menu.
 //
@@ -90,6 +92,11 @@ type Props = {
   /** Icons moved: every placed key's new cell, to save. */
   onCellsChange: (cells: Cells) => void;
   onOpen: (key: string) => void;
+  /**
+   * A plain click (or one tap) opens the icon, not only a double-click: the
+   * member's "Open with one click". Ctrl, Cmd or Shift still select.
+   */
+  openOnClick?: boolean;
   /** One droppable icon let go on a member's folder. */
   onDropIntoFolder?: (folderKey: string, key: string) => void;
   onContextMenu?: (request: DesktopMenuRequest) => void;
@@ -178,6 +185,7 @@ export function DesktopIcons({
   cells,
   onCellsChange,
   onOpen,
+  openOnClick = false,
   onDropIntoFolder,
   onContextMenu,
   geometry = DEFAULT_GEOMETRY,
@@ -283,6 +291,16 @@ export function DesktopIcons({
       (dx, dy) => setDrag({ ids, x: dx, y: dy }),
       (dx, dy, moved) => {
         setDrag(null);
+        if (!moved && openOnClick && !additive) {
+          // One click opens. The second click of a double-click, and the
+          // dblclick after it, open nothing more.
+          const now = Date.now();
+          if (now - tapOpenedAt.current < DOUBLE_TAP_MS) return;
+          tapOpenedAt.current = now;
+          setSelection(new Set([key]));
+          onOpen(key);
+          return;
+        }
         if (!moved && touch) {
           const now = Date.now();
           const before = lastTap.current;

@@ -1,0 +1,1 @@
+ALTER TABLE "desktop_layouts" ADD COLUMN "preferences" jsonb;

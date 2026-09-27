@@ -19,6 +19,12 @@ interface LoginBody {
   displayName?: string;
   /** Defaults to true; false shows the confirm-email card. */
   emailVerified?: boolean;
+  /**
+   * True: the 404 OS welcome wizard opens as it does for a real new member.
+   * Otherwise it counts as seen (lib/desktop-preferences.ts), so it never
+   * sits over a desktop a spec is driving.
+   */
+  welcome?: boolean;
 }
 
 export async function POST(req: Request) {
@@ -31,6 +37,7 @@ export async function POST(req: Request) {
     primaryEmail: body.email ?? null,
     displayName: body.displayName ?? body.email ?? null,
     emailVerified: body.emailVerified !== false,
+    ...(body.welcome === true && { welcome: true }),
   };
 
   // In the real-database run, give the login the sign-in identity (`user`

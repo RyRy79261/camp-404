@@ -30,8 +30,9 @@ import { desktopFolderKey } from "@camp404/types/desktop-keys";
 // member at the top, then three columns: Me with My teams under it, Camp with
 // the Kitchen's programs under it, and the Captains folder's programs with
 // the Terminal. Along the bottom: Tidy windows, Line up icons, Show desktop,
-// Report a problem and Log off. It sits above every window and all chrome
-// (band 100), at most half the screen high before it scrolls.
+// Welcome (the welcome wizard again), Report a problem and Log off. It sits
+// above every window and all chrome (band 100), at most half the screen high
+// before it scrolls.
 
 const ICON =
   "size-5 shrink-0 text-os-accent group-hover:text-os-bg group-focus-visible:text-os-bg";
@@ -76,6 +77,8 @@ export interface DesktopTaskbarProps {
   onLineUpIcons: () => void;
   /** Minimise every window. */
   onShowDesktop: () => void;
+  /** Open the welcome wizard again (a full desktop only). */
+  onOpenWelcome?: () => void;
 }
 
 /** Who is signed in: their name, rank label and the teams they lead. */
@@ -102,6 +105,7 @@ export function DesktopTaskbar({
   onTidyWindows,
   onLineUpIcons,
   onShowDesktop,
+  onOpenWelcome,
 }: DesktopTaskbarProps) {
   const programs = new Map(manifest.programs.map((p) => [p.id, p]));
   const folders = new Map(manifest.folders.map((f) => [f.id, f]));
@@ -236,6 +240,16 @@ export function DesktopTaskbar({
       icon: <LineIcon name="chevron-down" className={GLYPH} />,
       onSelect: onShowDesktop,
     },
+    ...(onOpenWelcome
+      ? [
+          {
+            key: "welcome",
+            label: "Welcome",
+            icon: <LineIcon name="info" className={GLYPH} />,
+            onSelect: onOpenWelcome,
+          } satisfies StartMenuItem,
+        ]
+      : []),
     {
       key: "report",
       label: "Report a problem",

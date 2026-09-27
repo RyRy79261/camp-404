@@ -7,6 +7,8 @@ import { campCatsDelayMs } from "@/lib/camp-cats";
 import { getCampSettings } from "@/lib/camp-config";
 import { rankLabel } from "@/lib/camp-roster";
 import { getMyDesktopLayout } from "@/lib/desktop-layout";
+import { getMyDesktopPreferences } from "@/lib/desktop-preferences";
+import { osEffects } from "@/lib/os-themes";
 import { prefetchMemberState, resolveMemberState } from "@/lib/member-gate";
 import { listPinnedForUser } from "@/lib/notifications";
 import { isPrinceKeeper, reunionDelayMs } from "@/lib/prince-keeper";
@@ -92,6 +94,7 @@ export default async function ConsoleLayout({
     inbox,
     jar,
     headcount,
+    preferences,
   ] = await Promise.all([
     getProgramManifest(),
     getMyDesktopLayout(),
@@ -105,6 +108,8 @@ export default async function ConsoleLayout({
     full ? getInboxBadge(state.campUser.id) : Promise.resolve(null),
     cookies(),
     captain ? getCampHeadcount() : Promise.resolve(null),
+    // The theme and switches, on the desktop root from the first paint.
+    getMyDesktopPreferences(),
   ]);
   // Null would mean the member's state changed under this render: draw the
   // page bare rather than guess.
@@ -132,9 +137,13 @@ export default async function ConsoleLayout({
     ? `AfrikaBurn ${cycle.year}${cycle.name ? ` · ${cycle.name}` : ""}`
     : null;
   // The boot screen: once per browser session, never in tests, never over
-  // a blocking form (decision 6 A).
+  // a blocking form (decision 6 A), and only with every effect on (not under
+  // Calm, High contrast or Effects off).
   const boot =
-    !held && !isE2ETestMode() && !jar.has(BOOT_COOKIE)
+    !held &&
+    !isE2ETestMode() &&
+    !jar.has(BOOT_COOKIE) &&
+    osEffects(preferences.theme, preferences.effectsOff) === "full"
       ? bootLog({
           name: account.name,
           rank: account.rank,
@@ -177,6 +186,7 @@ export default async function ConsoleLayout({
             }
       }
       boot={boot}
+      preferences={preferences}
       // Prince comes home for one member (lib/prince-keeper.ts): a yes or
       // no, decided here; the address list never leaves the server.
       princeKeeper={isPrinceKeeper(process.env, authUser)}

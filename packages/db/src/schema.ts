@@ -37,6 +37,7 @@ import {
   type LoadSchedule,
   type BuilderQuestionnaire,
   type DesktopLayout,
+  type DesktopPreferences,
   type DraftReport,
   type JoinSiteContent,
   type KitchenRecipe,
@@ -1765,12 +1766,20 @@ export const teamBudgets = pgTable(
 // against the member's manifest, so it is never authority. Only the member
 // writes their own row; it is not privileged, so no audit row. Account
 // erasure deletes it (account.ts), since the kept users row stops the cascade.
+//
+// `preferences` (issues #289 and #290) rides on the same row: the member's
+// system theme, "Bigger text", "Effects off", "Open with one click" and when
+// they closed the welcome wizard, in the `DesktopPreferences` shape. Null until
+// they choose something; checked field by field on read (a bad field reads as
+// its default). A member who sets a preference before moving an icon gets a
+// row with the empty layout, which reads as the default layout.
 
 export const desktopLayouts = pgTable("desktop_layouts", {
   userId: uuid("user_id")
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),
   layout: jsonb("layout").$type<DesktopLayout>().notNull(),
+  preferences: jsonb("preferences").$type<Partial<DesktopPreferences>>(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 

@@ -33,20 +33,10 @@
    these the copies lose the pixel face, the square corners and the colours.
    =========================================================================== */
 
+/* The colours themselves are the system themes' (lib/os-themes.ts): 404 Night
+   on :root, each other theme on [data-os-theme], written into the root
+   layout's <head>. Only the faces live here. */
 :root {
-  --os-bg: oklch(0.15 0.05 295);
-  --os-fg: oklch(0.97 0.02 330);
-  --os-primary: oklch(0.65 0.27 340);
-  --os-primary-fg: oklch(0.99 0.005 340);
-  --os-muted: oklch(0.7 0.05 325);
-  --os-accent: oklch(0.62 0.18 255);
-
-  --os-panel: color-mix(in oklch, var(--os-bg) 88%, var(--os-fg));
-  --os-chrome: color-mix(in oklch, var(--os-bg) 72%, var(--os-fg));
-  --os-line: color-mix(in oklch, var(--os-bg) 60%, var(--os-fg));
-  /* A delete row in a menu: the kit's destructive red, not magenta. */
-  --os-danger: #e0675b;
-
   --os-font-pixel: var(--font-silkscreen), ui-monospace, monospace;
   /* The wordmark's face, as Join and the landing page set it. */
   --os-font-mono:
@@ -104,32 +94,33 @@
 }
 
 /* Inside a program window the content keeps the console's softer colours:
-   charcoal, warm white text, the camp's magenta accent (owner, 2026-09-26:
-   the softer colours in the open programs "felt a bit less overwhelming than
-   the original prototype"). Only the colours: the chrome around the window,
-   the fonts and the square corners stay the OS look. The last-seen copies
-   (`:host`) are window bodies too. Themes (issue #290) will make this a
-   choice. */
+   charcoal, warm white text, the camp's magenta accent (owner, 2026-09-26: the
+   softer colours in the open programs "felt a bit less overwhelming than the
+   original prototype"). Only the colours: the chrome around the window, the
+   fonts and the square corners stay the OS look. The last-seen copies
+   (`:host`) are window bodies too. Each theme sets the --os-win-* values
+   (lib/os-themes.ts); 404 Night keeps these soft ones. The copies read them
+   from the desktop they sit in: custom properties inherit into a shadow root. */
 [data-window-body],
 :host,
 :host > div {
-  --color-background: #17191b;
-  --color-foreground: #f4f0e8;
-  --color-card: #1f2326;
-  --color-card-foreground: #f4f0e8;
-  --color-popover: #1f2326;
-  --color-popover-foreground: #f4f0e8;
-  --color-muted: #262b2f;
-  --color-muted-foreground: #adb6b3;
-  --color-secondary: #26333b;
-  --color-secondary-foreground: #dce8ed;
-  --color-primary: var(--color-camp-magenta);
-  --color-primary-foreground: #17191b;
-  --color-accent: var(--color-camp-magenta);
-  --color-accent-foreground: #17191b;
-  --color-border: #323a3f;
-  --color-input: #323a3f;
-  --color-ring: var(--color-camp-magenta);
+  --color-background: var(--os-win-bg);
+  --color-foreground: var(--os-win-fg);
+  --color-card: var(--os-win-card);
+  --color-card-foreground: var(--os-win-fg);
+  --color-popover: var(--os-win-card);
+  --color-popover-foreground: var(--os-win-fg);
+  --color-muted: var(--os-win-muted);
+  --color-muted-foreground: var(--os-win-muted-fg);
+  --color-secondary: var(--os-win-secondary);
+  --color-secondary-foreground: var(--os-win-secondary-fg);
+  --color-primary: var(--os-win-primary);
+  --color-primary-foreground: var(--os-win-primary-fg);
+  --color-accent: var(--os-win-primary);
+  --color-accent-foreground: var(--os-win-primary-fg);
+  --color-border: var(--os-win-border);
+  --color-input: var(--os-win-input);
+  --color-ring: var(--os-win-primary);
   background-color: var(--color-background);
   color: var(--color-foreground);
 }
@@ -543,4 +534,93 @@ body:has(#os-desktop) {
   body:has(#os-desktop[data-os-keyboard]) {
     --os-toast-bottom: 0px;
   }
+}
+
+/* ===========================================================================
+   The system themes' switches and effects (issue #290; lib/os-themes.ts has
+   the colours). The desktop root carries the attributes from the server's
+   first paint, and the head script copies them to <html> (lib/os-skin.ts),
+   so these rules reach the menus and dialogs portalled into <body> too.
+   Unlayered, so they win over the utilities they adjust.
+   =========================================================================== */
+
+/* Effects off (any theme), and High contrast: no glow, no colour fringe, no
+   moving decoration. The surface, the glitched wordmark, the boot screen and
+   the peeking cat are left out of the page by the desktop itself; these are
+   the effects that live in class names. The cats stay, still. */
+:is([data-os-effects="off"], [data-os-theme="high-contrast"])
+  :is(.os-glow, .os-chromatic),
+:is([data-os-effects="off"], [data-os-theme="high-contrast"])
+  [data-os-blocking]
+  h1,
+[data-os-theme="calm"] :is(.os-glow, .os-chromatic),
+[data-os-theme="calm"] [data-os-blocking] h1 {
+  text-shadow: none;
+}
+[data-os-effects="off"] .os-window-in::before,
+[data-os-effects="off"] .os-window-in::after,
+[data-os-effects="off"]
+  :is(.os-slide-in, .os-cursor, .pixel-glitch-m, .pixel-glitch-c, .cat-zzz) {
+  animation: none !important;
+}
+[data-os-effects="off"] .os-pending {
+  animation: none !important;
+  opacity: 0.7;
+}
+[data-os-effects="off"] .cat-zzz {
+  opacity: 0.6;
+}
+/* A focused window's magenta haze and an open icon's glow: a hard shadow
+   alone under Calm, nothing under High contrast. */
+[data-os-theme="calm"] [data-window][data-top] {
+  box-shadow: 8px 8px 0 0 rgb(0 0 0 / 0.45) !important;
+}
+[data-os-theme="high-contrast"] [data-window] {
+  box-shadow: none !important;
+}
+:is([data-os-theme="calm"], [data-os-theme="high-contrast"])
+  [class*="drop-shadow-"] {
+  filter: none !important;
+}
+
+/* High contrast: a thicker focus ring, everywhere, in the theme's yellow, and
+   the selection solid. */
+[data-os-theme="high-contrast"] :focus-visible {
+  outline: 3px solid var(--os-primary) !important;
+  outline-offset: 2px !important;
+}
+[data-os-theme="high-contrast"] [role="toolbar"] :focus-visible {
+  outline-color: var(--os-fg) !important;
+}
+
+/* Bigger text: the root size one step up (every rem follows), and the pixel
+   face's small fixed sizes with it, so no label stays at 8 to 10 px. */
+:root[data-os-text="bigger"] {
+  font-size: 112.5%;
+}
+[data-os-text="bigger"] :is(.text-\[8px\], .text-\[9px\], .text-\[10px\]) {
+  font-size: 11px;
+}
+[data-os-text="bigger"] .text-\[11px\] {
+  font-size: 12px;
+}
+[data-os-text="bigger"] .text-\[12px\] {
+  font-size: 13px;
+}
+[data-os-text="bigger"]
+  :is(
+    [data-slot="badge"],
+    [data-slot="label"],
+    [data-slot="field-label"],
+    [data-slot="filter-chip"],
+    [data-slot="filter-chip-count"],
+    [data-slot="page-eyebrow"],
+    [data-slot="progress-text"],
+    [data-slot="toast-title"],
+    [data-kpi-label]
+  ) {
+  font-size: 12px;
+}
+[data-os-text="bigger"] :is([data-slot="button"], [data-slot="card-title"]) {
+  font-size: 13px;
 }
