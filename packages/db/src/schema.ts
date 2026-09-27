@@ -1821,6 +1821,40 @@ export const desktopLayouts = pgTable("desktop_layouts", {
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// INKBLOT's "speed of chaos" board on the web desktop (Terminal > play
+// inkblot): one row per clean sweep a member chose to put their initials to.
+// The board is the fastest INKBLOT_BOARD_SIZE rows across the camp. The time
+// is what the member's browser measured; the CHECKs bound it (the same bounds
+// as `InkblotRun` in @camp404/types) and keep initials to three characters.
+// Only the member writes their own rows; not privileged, so no audit row.
+// Account erasure deletes them (account.ts), since the kept users row stops
+// the cascade.
+
+export const inkblotScores = pgTable(
+  "inkblot_scores",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    initials: text("initials").notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    boardIdx: index("inkblot_scores_board_idx").on(t.durationMs, t.createdAt),
+    userIdx: index("inkblot_scores_user_id_idx").on(t.userId),
+    initialsCheck: check(
+      "inkblot_scores_initials_check",
+      sql`${t.initials} ~ '^([A-Z0-9]{1,3}|[?]{3})$'`,
+    ),
+    durationCheck: check(
+      "inkblot_scores_duration_check",
+      sql`${t.durationMs} between 8000 and 3600000`,
+    ),
+  }),
+);
+
 // --- Push notifications --------------------------------------------------
 
 export const pushTokens = pgTable(

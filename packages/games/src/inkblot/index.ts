@@ -3,3 +3,4 @@
 
 export { InkblotWindow } from "./inkblot-window";
 export type { InkblotCopy } from "./copy";
+export type { Entry as InkblotEntry, InkblotBoard } from "./leaderboard";

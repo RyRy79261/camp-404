@@ -6,7 +6,7 @@ import { iconName, useMinuteClock, type DesktopIconItem } from "@camp404/os";
 import { burnCountdownLabel } from "@/lib/burn-countdown";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 import { openReportProblem } from "@/components/feedback/report-problem";
-import { OsWordmark } from "./desktop-display";
+import { OS_SUBLINE, OsWordmark } from "./desktop-display";
 import { LineIcon } from "./line-icons";
 
 // The phone's Classic desktop (below md; design doc, section 5; visual
@@ -76,6 +76,11 @@ export function PhoneHome({
         className="pointer-events-none relative flex flex-col items-center gap-1.5 pt-5 [@media(max-height:700px)]:hidden"
       >
         <OsWordmark text="404" size="clamp(3.25rem, 20vw, 5rem)" />
+        <p
+          aria-hidden
+          data-label={OS_SUBLINE}
+          className="px-4 text-center font-mono text-[10px] uppercase tracking-[0.3em] text-os-fg after:content-[attr(data-label)]"
+        />
         {tagline && (
           <p
             aria-hidden

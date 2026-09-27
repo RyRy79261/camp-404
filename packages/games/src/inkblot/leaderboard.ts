@@ -1,11 +1,27 @@
 // INKBLOT.EXE's "speed of chaos" leaderboard: the ten fastest clean sweeps.
-// The site has no database, so it lives in each visitor's browser
-// (localStorage). A shared board would need the main app.
+// By default it lives in each visitor's browser (localStorage): Join has no
+// sign-in, so it has no shared board. An app with one hands the game an
+// InkblotBoard (the web desktop's is the camp's, in its database).
 
 export const BOARD_SIZE = 10;
 export const BOARD_KEY = "inkblot.leaderboard.v1";
 
 export type Entry = { name: string; seconds: number; at: string };
+
+/**
+ * Where the board is kept. `load` reads it; `save` records a run under the
+ * player's initials and answers with the board as it now stands and the
+ * entry it stored, or a sentence to show when it could not.
+ */
+export type InkblotBoard = {
+  load(): Promise<Entry[]>;
+  save(run: {
+    name: string;
+    seconds: number;
+  }): Promise<
+    { ok: true; board: Entry[]; mine: Entry } | { ok: false; error: string }
+  >;
+};
 
 /** Three letters or digits, upper case, like an arcade cabinet. */
 export function cleanInitials(raw: string): string {
@@ -81,3 +97,16 @@ export function saveBoard(board: readonly Entry[]) {
     // Private browsing or storage full: the board just does not persist.
   }
 }
+
+/** The board in this browser only: the default when the app gives none. */
+export const browserBoard: InkblotBoard = {
+  async load() {
+    return loadBoard();
+  },
+  async save({ name, seconds }) {
+    const mine = { name, seconds, at: new Date().toISOString() };
+    const board = addEntry(loadBoard(), mine);
+    saveBoard(board);
+    return { ok: true, board, mine };
+  },
+};

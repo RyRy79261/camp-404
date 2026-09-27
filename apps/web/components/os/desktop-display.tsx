@@ -112,6 +112,9 @@ export function useDisplayState(initial: DesktopPreferences, welcome: boolean) {
   );
 }
 
+/** The sub line under the wallpaper's wordmark, desktop and phone alike. */
+export const OS_SUBLINE = "The lost clutter of imagination";
+
 /**
  * The wallpaper's wordmark as the theme wants it: glitched under 404 Night and
  * Colour-blind safe; held still otherwise (Calm, High contrast, Effects off),
