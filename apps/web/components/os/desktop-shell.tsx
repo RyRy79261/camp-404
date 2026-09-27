@@ -110,6 +110,7 @@ import {
   ClockReunion,
   DesktopSecrets,
   TeamsFolderArt,
+  WindowCats,
   WindowPeek,
 } from "./desktop-cats";
 import { INKBLOT_HREF, type TerminalEffect } from "@/lib/terminal-commands";
@@ -447,6 +448,12 @@ export interface DesktopProps {
    * scene's own 30 s. Only the E2E harness shortens it.
    */
   reunionDelayMs?: number;
+  /**
+   * How long a program's window stays open before two more cats turn up
+   * under it, in ms. Unset: the games package's own 1.5 minutes. Only the
+   * E2E harness shortens it (lib/camp-cats.ts).
+   */
+  catsDelayMs?: number;
   children: ReactNode;
 }
 
@@ -485,6 +492,7 @@ function DesktopInner({
   boot = null,
   princeKeeper = false,
   reunionDelayMs,
+  catsDelayMs,
   children,
 }: DesktopProps) {
   const router = useRouter();
@@ -1571,6 +1579,24 @@ function DesktopInner({
     localStorageBoolean(TODAY_OPEN_KEY),
   );
   const phoneNow = usePhone();
+  // The program windows (not folders) as the cats see them: where each is.
+  // Remade only when the window stack changes (a drag writes it once, at
+  // the drop), and the cats' layer ignores a copy that is the same.
+  const catWindows = useMemo(
+    () =>
+      wm.windows
+        .filter((w) => !!w.lastUrl)
+        .map((w) => ({
+          id: w.id,
+          x: w.x,
+          y: w.y,
+          w: w.w,
+          h: w.h,
+          minimized: !!w.minimized,
+          maximized: !!w.maximized,
+        })),
+    [wm.windows],
+  );
 
   const titleOf = (w: OsWindow<string>): string => {
     const entry = entryByKey.get(w.id);
@@ -1998,6 +2024,12 @@ function DesktopInner({
           />
           {/* The desktop's own page (/): its heading, nothing to see. */}
           {!page && !held && children}
+          {/* Two more cats, who come under a program's window left open a
+              while: over the icons, under the windows. The desktop's only;
+              a phone has no windows to hide them. */}
+          {!held && !phoneNow && (
+            <WindowCats windows={catWindows} delayMs={catsDelayMs} />
+          )}
           {windowLayer}
           {/* Today: shut until its handle is pulled; it slides in over the
               windows, on every screen (the prototype's pop-out). */}

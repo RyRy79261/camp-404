@@ -3,6 +3,7 @@ import { Desktop } from "@/components/os/desktop-shell";
 import { TodayBody, TodayWarm } from "@/components/os/today-body";
 import { BOOT_COOKIE, bootLog } from "@/lib/boot";
 import { isCampBootstrapped } from "@/lib/bootstrap";
+import { campCatsDelayMs } from "@/lib/camp-cats";
 import { getCampSettings } from "@/lib/camp-config";
 import { rankLabel } from "@/lib/camp-roster";
 import { getMyDesktopLayout } from "@/lib/desktop-layout";
@@ -182,6 +183,8 @@ export default async function ConsoleLayout({
       // The empty clock's 30 s wait before she walks on; shorter under
       // the E2E harness only.
       reunionDelayMs={reunionDelayMs()}
+      // The visiting cats' wait; shorter under the E2E harness only.
+      catsDelayMs={campCatsDelayMs()}
     >
       {children}
     </Desktop>

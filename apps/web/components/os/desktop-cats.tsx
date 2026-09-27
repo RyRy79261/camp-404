@@ -44,3 +44,8 @@ export const DesktopSecrets = dynamic(
   () => import("./cats-on-desktop").then((m) => m.DesktopSecrets),
   { ssr: false },
 );
+
+export const WindowCats = dynamic(
+  () => import("./cats-on-desktop").then((m) => m.WindowCats),
+  { ssr: false },
+);

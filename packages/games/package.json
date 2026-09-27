@@ -13,7 +13,8 @@
     "./cats": "./src/cats/index.ts",
     "./cats/styles.css": "./src/cats/cats.css",
     "./shadow-work": "./src/shadow-work/index.ts",
-    "./characters": "./src/characters/index.ts"
+    "./characters": "./src/characters/index.ts",
+    "./camp-cats": "./src/camp-cats/index.ts"
   },
   "scripts": {
     "lint": "eslint .",
