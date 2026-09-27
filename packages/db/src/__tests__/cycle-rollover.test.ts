@@ -1191,4 +1191,41 @@ describe("setFoundingYear adopts the year-scoped roster facts", () => {
     const [audit] = await db.select().from(schema.auditLog);
     expect(audit!.metadata).toMatchObject({ participationsStamped: 1 });
   });
+
+  it("adopts a ticket record written before the camp had a year", async () => {
+    const db = h.db();
+    const early = await makeUser(db);
+    const other = await makeUser(db);
+    // Said before the year was named: the column default, the sentinel.
+    await db
+      .insert(schema.campTickets)
+      .values({ userId: early.id, ticketStatus: "has_ticket" });
+    // A row already under a real year stays put.
+    await db.insert(schema.campTickets).values({
+      userId: other.id,
+      cycle: 2025,
+      earlyEntry: "issued",
+    });
+
+    const res = await setFoundingYear({ year: 2026, actorUserId: null });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.report.ticketsStamped).toBe(1);
+
+    const rows = await db
+      .select({
+        userId: schema.campTickets.userId,
+        cycle: schema.campTickets.cycle,
+      })
+      .from(schema.campTickets);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { userId: early.id, cycle: 2026 },
+        { userId: other.id, cycle: 2025 },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+    const [audit] = await db.select().from(schema.auditLog);
+    expect(audit!.metadata).toMatchObject({ ticketsStamped: 1 });
+  });
 });

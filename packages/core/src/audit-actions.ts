@@ -64,6 +64,7 @@ export const AUDIT_ACTION_LABELS = {
   "reimbursement.status_changed": "Moved a reimbursement",
   "safety.emergency_contacts.view": "Read emergency contacts",
   "team_budget.set": "Set a team budget",
+  "ticket.pass_changed": "Changed a member's ticket or early entry",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
@@ -85,6 +86,24 @@ const text = (metadata: Metadata, key: string): string | null => {
 const count = (metadata: Metadata, key: string): number | null => {
   const value = metadata?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+};
+
+// The captain-only passes on a member's ticket row, and their values.
+const TICKET_PASS_WORDS: Record<string, string> = {
+  directed_ticket: "Directed ticket",
+  early_entry: "Early entry",
+};
+const TICKET_PASS_VALUE_WORDS: Record<string, Record<string, string>> = {
+  directed_ticket: {
+    none: "none",
+    allocated: "allocated",
+    can_transfer: "can transfer",
+  },
+  early_entry: {
+    not_needed: "not needed",
+    requested: "asked for",
+    issued: "issued",
+  },
 };
 
 const APPROVAL_WORDS: Record<string, string> = {
@@ -186,6 +205,16 @@ export function auditDetail(
         text(metadata, "from"),
         count(metadata, "cycle"),
       );
+    case "ticket.pass_changed": {
+      const pass = text(metadata, "pass");
+      const to = text(metadata, "to");
+      if (!pass || !Object.hasOwn(TICKET_PASS_WORDS, pass) || !to) return null;
+      const values = TICKET_PASS_VALUE_WORDS[pass]!;
+      if (!Object.hasOwn(values, to)) return null;
+      const cycle = count(metadata, "cycle");
+      const line = `${TICKET_PASS_WORDS[pass]}: ${values[to]}`;
+      return cycle === null ? line : `${line} for ${cycle}`;
+    }
     case "payment.recorded": {
       const reference = text(metadata, "reference");
       const status = text(metadata, "status");

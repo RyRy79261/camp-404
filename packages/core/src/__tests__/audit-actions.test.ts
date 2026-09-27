@@ -73,6 +73,44 @@ describe("auditDetail", () => {
     ).toBeNull();
   });
 
+  it("labels and says a change to a member's directed ticket or early entry", () => {
+    expect(auditActionLabel("ticket.pass_changed")).toBe(
+      "Changed a member's ticket or early entry",
+    );
+    expect(
+      auditDetail("ticket.pass_changed", {
+        cycle: 2027,
+        pass: "early_entry",
+        from: "requested",
+        to: "issued",
+      }),
+    ).toBe("Early entry: issued for 2027");
+    expect(
+      auditDetail("ticket.pass_changed", {
+        pass: "directed_ticket",
+        from: "none",
+        to: "can_transfer",
+      }),
+    ).toBe("Directed ticket: can transfer");
+    // A value of the other pass, an unknown pass, or a prototype key adds
+    // nothing.
+    expect(
+      auditDetail("ticket.pass_changed", {
+        pass: "early_entry",
+        to: "allocated",
+      }),
+    ).toBeNull();
+    expect(
+      auditDetail("ticket.pass_changed", { pass: "vehicle", to: "issued" }),
+    ).toBeNull();
+    expect(
+      auditDetail("ticket.pass_changed", {
+        pass: "early_entry",
+        to: "toString",
+      }),
+    ).toBeNull();
+  });
+
   it("says how an application was decided", () => {
     expect(
       auditDetail("member.approval_decided", {

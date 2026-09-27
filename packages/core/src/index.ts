@@ -91,6 +91,9 @@
 //     PARTICIPATION_LABEL, NOT_ANSWERED_LABEL — who is coming this year, how a
 //     member's answer moves it and which moves a captain may make
 //     (./participation)
+//   - tickets: the words for a member's ticket, directed ticket and early
+//     entry, and the year's ticket counts (stillNeedsTicket,
+//     deriveTicketCounts) (./tickets)
 //   - power: canEditPower (a captain or a Power & Lighting lead), the load
 //     maths (loadWatts, energyPerDay, hourlyBuckets, peakLoad,
 //     surgeHeadroomWatts, amps at MAINS_VOLTS, generatorLoadPct, loadBand,
@@ -155,6 +158,7 @@ export * from "./time-zone";
 export * from "./questionnaire-status";
 export * from "./password";
 export * from "./participation";
+export * from "./tickets";
 export * from "./power";
 export * from "./recipes";
 export * from "./recipe-source";

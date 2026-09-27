@@ -187,6 +187,30 @@ describe("sanitiseAccount", () => {
     expect(left).toEqual([{ userId: other.id }]);
   });
 
+  it("deletes every year's ticket record, and keeps other members'", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const captain = await makeUser(db, { rank: "captain" });
+    const other = await makeUser(db);
+    await db.insert(schema.campTickets).values([
+      { userId: member.id, cycle: 2026, ticketStatus: "has_ticket" },
+      {
+        userId: member.id,
+        cycle: 2027,
+        earlyEntry: "issued",
+        passesUpdatedByUserId: captain.id,
+      },
+      { userId: other.id, cycle: 2027, ticketStatus: "buying_own" },
+    ]);
+
+    expect(await sanitiseAccount(member.id)).toMatchObject({ ok: true });
+
+    const left = await db
+      .select({ userId: schema.campTickets.userId })
+      .from(schema.campTickets);
+    expect(left).toEqual([{ userId: other.id }]);
+  });
+
   it("deletes captains' notes about the member, and keeps the notes they wrote", async () => {
     const db = h.db();
     const member = await makeUser(db, { rank: "captain" });

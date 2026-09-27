@@ -18,6 +18,7 @@ export * from "./voice-intent";
 export * from "./task";
 export * from "./calendar";
 export * from "./participation";
+export * from "./tickets";
 export * from "./power";
 export * from "./meeting-note";
 export * from "./join-site";

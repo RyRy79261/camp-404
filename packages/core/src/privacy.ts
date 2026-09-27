@@ -251,6 +251,18 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "campParticipations.reason": "captain",
   "campParticipations.createdAt": "captain",
   "campParticipations.updatedAt": "captain",
+
+  // camp_tickets — a member's ticket and early entry for one year (#238). A
+  // member reads their own ticket status (and never the two passes, which the
+  // issue keeps captain-only); team leads read none of it.
+  "campTickets.userId": "captain",
+  "campTickets.cycle": "captain",
+  "campTickets.ticketStatus": "captain",
+  "campTickets.directedTicket": "captain",
+  "campTickets.earlyEntry": "captain",
+  "campTickets.passesUpdatedByUserId": "captain",
+  "campTickets.createdAt": "captain",
+  "campTickets.updatedAt": "captain",
 };
 
 /**
