@@ -26,6 +26,9 @@ import {
   LOAD_CATEGORIES,
   LOAD_OWNERS,
   LOAD_SCHEDULES,
+  CAN_LOCATIONS,
+  GRID_NODE_KINDS,
+  SHARE_GENERATOR_SOURCES,
   NOTIFICATION_KINDS,
   PARTICIPATION_INTENTS,
   PARTICIPATION_STATUSES,
@@ -35,6 +38,9 @@ import {
   type LoadCategory,
   type LoadOwner,
   type LoadSchedule,
+  type CanLocation,
+  type GridNodeKind,
+  type ShareGeneratorSource,
   type BuilderQuestionnaire,
   type DesktopLayout,
   type DesktopPreferences,
@@ -2500,6 +2506,13 @@ export const powerLoads = pgTable(
       { onDelete: "set null" },
     ),
     circuit: text("circuit"),
+    // The point on the grid plan it plugs in at (#256), in the same year. Set
+    // from the grid page, not the load's own form, so it does not bump the
+    // load's version: an edit open in the load dialog is not spoiled by it.
+    gridNodeId: uuid("grid_node_id").references(
+      (): AnyPgColumn => powerGridNodes.id,
+      { onDelete: "set null" },
+    ),
     sort: integer("sort").notNull().default(0),
     version: integer("version").notNull().default(1),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
@@ -2510,6 +2523,7 @@ export const powerLoads = pgTable(
   },
   (l) => ({
     cycleIdx: index("power_loads_cycle_idx").on(l.cycle),
+    gridNodeIdx: index("power_loads_grid_node_idx").on(l.gridNodeId),
     categoryCheck: check(
       "power_loads_category_check",
       oneOf(l.category, LOAD_CATEGORIES),
@@ -2562,6 +2576,9 @@ export const powerPlans = pgTable(
     safetyMarginPct: doublePrecision("safety_margin_pct").notNull().default(20),
     canLitres: doublePrecision("can_litres").notNull().default(20),
     cansOwned: integer("cans_owned").notNull().default(0),
+    // Warn on site when the fuel left covers fewer days than this (#255); 0
+    // turns the warning off.
+    lowFuelDays: integer("low_fuel_days").notNull().default(2),
     version: integer("version").notNull().default(1),
     updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -2574,6 +2591,10 @@ export const powerPlans = pgTable(
       sql`${p.powerFactor} between 0.5 and 1`,
     ),
     daysCheck: check("power_plans_days_check", sql`${p.daysOnSite} >= 1`),
+    lowFuelCheck: check(
+      "power_plans_low_fuel_check",
+      sql`${p.lowFuelDays} >= 0`,
+    ),
     hoursCheck: check(
       "power_plans_hours_check",
       sql`${p.runFromHour} between 0 and 23 and ${p.runToHour} between 0 and 23`,
@@ -2581,6 +2602,240 @@ export const powerPlans = pgTable(
     fuelCheck: check(
       "power_plans_fuel_check",
       sql`${p.lowLoadFactor} >= 1 and ${p.safetyMarginPct} between 0 and 100 and ${p.canLitres} > 0 and ${p.cansOwned} >= 0`,
+    ),
+  }),
+);
+
+// --- Power on site (#255, #256, #257) ---------------------------------------
+// The same team's tools for the burn itself: the fuel in the cans and the
+// refuelling log, the grid of cables from the generator out, each generator's
+// readiness checklist, the team's work plan on the task board, and a year's
+// agreement to share a generator with a neighbouring camp. Written only by a
+// captain or a Power & Lighting lead (canEditPower, re-read in each write's
+// transaction); read by anyone in the camp. No money: litres, amps and dates.
+
+// A can of fuel in this year's stock. Cans are counted per year: the litres
+// in them are this year's. `litres` falls when a refuelling says it came from
+// the can, and a stock-take sets it.
+export const fuelCans = pgTable(
+  "fuel_cans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    label: text("label").notNull(),
+    capacityLitres: doublePrecision("capacity_litres").notNull(),
+    litres: doublePrecision("litres").notNull(),
+    location: text("location").$type<CanLocation>().notNull(),
+    // The can itself, when the inventory lists it (#246).
+    inventoryItemId: uuid("inventory_item_id").references(
+      () => inventoryItems.id,
+      { onDelete: "set null" },
+    ),
+    sort: integer("sort").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (c) => ({
+    cycleIdx: index("fuel_cans_cycle_idx").on(c.cycle),
+    locationCheck: check(
+      "fuel_cans_location_check",
+      oneOf(c.location, CAN_LOCATIONS),
+    ),
+    fillCheck: check(
+      "fuel_cans_fill_check",
+      sql`${c.capacityLitres} > 0 and ${c.litres} >= 0 and ${c.litres} <= ${c.capacityLitres}`,
+    ),
+  }),
+);
+
+// The refuelling log. APPEND-ONLY: no write updates or deletes a row. A
+// correction is a new row naming the one it replaces (`corrects_entry_id`);
+// a strike-out is a new row naming it with `voided`. The unique index lets
+// each entry be replaced once, so two people correcting it at once cannot
+// both win. `done_by_user_id` is the member who filled the generator.
+export const refuelEntries = pgTable(
+  "refuel_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    generatorId: uuid("generator_id")
+      .notNull()
+      .references(() => generators.id),
+    refuelledAt: timestamp("refuelled_at", { mode: "date" }).notNull(),
+    litres: doublePrecision("litres").notNull(),
+    fromCanId: uuid("from_can_id").references(() => fuelCans.id, {
+      onDelete: "set null",
+    }),
+    doneByUserId: uuid("done_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    hourMeter: doublePrecision("hour_meter"),
+    note: text("note"),
+    // Typed in afterwards from the paper sheet at the generator.
+    fromPaper: boolean("from_paper").notNull().default(false),
+    correctsEntryId: uuid("corrects_entry_id").references(
+      (): AnyPgColumn => refuelEntries.id,
+    ),
+    voided: boolean("voided").notNull().default(false),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    cycleIdx: index("refuel_entries_cycle_idx").on(r.cycle, r.refuelledAt),
+    correctsUniq: uniqueIndex("refuel_entries_corrects_uniq").on(
+      r.correctsEntryId,
+    ),
+    litresCheck: check(
+      "refuel_entries_litres_check",
+      sql`${r.litres} > 0`,
+    ),
+    voidCheck: check(
+      "refuel_entries_void_check",
+      sql`not ${r.voided} or ${r.correctsEntryId} is not null`,
+    ),
+  }),
+);
+
+// A point on this year's grid plan (#256): the generator, a junction, or an
+// end point where things plug in. Every point but a generator holds the run
+// that FEEDS it from its parent: the cable, its length and rating, and the
+// adapter at the far end, and whether the camp has them. So the grid is a
+// tree, one run into each point. A parent cannot be removed while it feeds
+// anything.
+export const powerGridNodes = pgTable(
+  "power_grid_nodes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind").$type<GridNodeKind>().notNull(),
+    parentId: uuid("parent_id").references(
+      (): AnyPgColumn => powerGridNodes.id,
+    ),
+    cable: text("cable"),
+    cableLengthM: doublePrecision("cable_length_m"),
+    cableGaugeMm2: doublePrecision("cable_gauge_mm2"),
+    // Typed from the cable's label; null shows "rating unknown", never a guess.
+    cableRatedAmps: doublePrecision("cable_rated_amps"),
+    adapter: text("adapter"),
+    haveCable: boolean("have_cable").notNull().default(true),
+    haveAdapter: boolean("have_adapter").notNull().default(true),
+    sort: integer("sort").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (n) => ({
+    cycleIdx: index("power_grid_nodes_cycle_idx").on(n.cycle),
+    parentIdx: index("power_grid_nodes_parent_idx").on(n.parentId),
+    kindCheck: check(
+      "power_grid_nodes_kind_check",
+      oneOf(n.kind, GRID_NODE_KINDS),
+    ),
+    rootCheck: check(
+      "power_grid_nodes_root_check",
+      sql`(${n.kind} = 'generator') = (${n.parentId} is null)`,
+    ),
+  }),
+);
+
+// A generator's readiness checklist for one year (#257): the template's items
+// and any the team adds, each with who sees to it, by when, and whether it is
+// done.
+export const generatorReadinessItems = pgTable(
+  "generator_readiness_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    generatorId: uuid("generator_id")
+      .notNull()
+      .references(() => generators.id),
+    // A READINESS_TEMPLATE key, or 'custom' for one the team added.
+    itemKey: text("item_key").notNull(),
+    label: text("label").notNull(),
+    ownerUserId: uuid("owner_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    dueOn: date("due_on", { mode: "string" }),
+    doneAt: timestamp("done_at", { mode: "date" }),
+    doneByUserId: uuid("done_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    sort: integer("sort").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (i) => ({
+    generatorIdx: index("generator_readiness_items_generator_idx").on(
+      i.cycle,
+      i.generatorId,
+    ),
+  }),
+);
+
+// The Power & Lighting team's work plan for a year (#257): the tasks it put on
+// the task board, so "copy last year" knows which tasks to copy and a second
+// press cannot put them there twice.
+export const powerWorkPlanTasks = pgTable(
+  "power_work_plan_tasks",
+  {
+    cycle: integer("cycle").notNull(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    sort: integer("sort").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (w) => ({
+    pk: primaryKey({ columns: [w.cycle, w.taskId] }),
+  }),
+);
+
+// A year's agreement to share a generator with a neighbouring camp (#257).
+// One row per year, the year its key. It names the camp and a contact ROLE,
+// never a person's phone or email; the fuel split is in percent and litres,
+// never money. It is camp-internal: nothing here is shown outside the app.
+export const powerSharingAgreements = pgTable(
+  "power_sharing_agreements",
+  {
+    cycle: integer("cycle").primaryKey(),
+    partnerCamp: text("partner_camp").notNull(),
+    contactRole: text("contact_role"),
+    generatorSource: text("generator_source")
+      .$type<ShareGeneratorSource>()
+      .notNull(),
+    generatorId: uuid("generator_id").references(() => generators.id),
+    theirGenerator: text("their_generator"),
+    // Their share of the fuel; null uses the share proposed from the kWh.
+    partnerFuelPct: doublePrecision("partner_fuel_pct"),
+    watchCover: text("watch_cover"),
+    version: integer("version").notNull().default(1),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    sourceCheck: check(
+      "power_sharing_agreements_source_check",
+      oneOf(a.generatorSource, SHARE_GENERATOR_SOURCES),
+    ),
+    pctCheck: check(
+      "power_sharing_agreements_pct_check",
+      sql`${a.partnerFuelPct} between 0 and 100`,
     ),
   }),
 );

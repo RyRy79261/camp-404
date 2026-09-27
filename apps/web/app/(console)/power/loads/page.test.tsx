@@ -85,6 +85,7 @@ const PLAN = {
   safetyMarginPct: 20,
   canLitres: 20,
   cansOwned: 0,
+  lowFuelDays: 2,
   version: 0,
   updatedAt: null,
 };

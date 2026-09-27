@@ -62,7 +62,7 @@ export const ALREADY_HAS_PLAN =
   "This year already has a plan, so last year's wasn't copied.";
 export const NOTHING_TO_COPY = "There is no earlier year to copy from.";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // --- Shapes ------------------------------------------------------------------
 
@@ -145,6 +145,7 @@ export const DEFAULT_POWER_PLAN: PowerPlanSettings & { version: 0 } = {
   safetyMarginPct: POWER_PLAN_DEFAULTS.safetyMarginPct,
   canLitres: POWER_PLAN_DEFAULTS.canLitres,
   cansOwned: POWER_PLAN_DEFAULTS.cansOwned,
+  lowFuelDays: POWER_PLAN_DEFAULTS.lowFuelDays,
   version: 0,
 };
 
@@ -209,6 +210,7 @@ function planOf(row: PlanRow): PowerPlan {
     safetyMarginPct: row.safetyMarginPct,
     canLitres: row.canLitres,
     cansOwned: row.cansOwned,
+    lowFuelDays: row.lowFuelDays,
     version: row.version,
     updatedAt: row.updatedAt,
   };
@@ -233,18 +235,18 @@ function settingsPatch(
 // --- Transactions ------------------------------------------------------------
 
 /** A refusal thrown inside a transaction, so it rolls back everything. */
-class Refused extends Error {
+export class Refused extends Error {
   constructor(readonly sentence: string) {
     super(sentence);
     this.name = "Refused";
   }
 }
 
-function refuse(sentence: string): never {
+export function refuse(sentence: string): never {
   throw new Refused(sentence);
 }
 
-async function write<T extends object>(
+export async function write<T extends object>(
   fn: (tx: Tx) => Promise<T>,
 ): Promise<PowerWriteResult<T>> {
   try {
@@ -283,12 +285,15 @@ export async function lockPowerEditor(
   return canEditPower(reachRank(reach), reach ?? []);
 }
 
-async function assertPowerEditor(tx: Tx, actorId: string): Promise<void> {
+export async function assertPowerEditor(
+  tx: Tx,
+  actorId: string,
+): Promise<void> {
   if (!(await lockPowerEditor(tx, actorId))) refuse(NOT_A_POWER_EDITOR);
 }
 
 /** A linked inventory item must exist and not be archived. */
-async function assertInventoryItem(tx: Tx, itemId: string | null) {
+export async function assertInventoryItem(tx: Tx, itemId: string | null) {
   if (itemId === null) return;
   if (!UUID.test(itemId)) refuse(INVENTORY_ITEM_GONE);
   const [row] = await tx
