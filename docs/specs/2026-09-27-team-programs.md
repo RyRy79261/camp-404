@@ -1,0 +1,200 @@
+# Team programs on the 404 OS desktop
+
+Status: proposal, 2026-09-27. Read from `origin/main` at `2834404`.
+Nothing here is built yet.
+
+## What the owner asked for
+
+Each camp team gets its **own** program on the desktop. It is bespoke, not a
+generic team engine (AGENTS.md, "Bespoke over generic"; owner, 2026-09-23:
+"I don't want to have a generalized team thing yet because each team will
+have their own control interface"). Teams stay defined in code.
+
+- **Every approved member can open any team's program, read-only** (owner's
+  decision 2, 2026-09-26).
+- **Only the team's leads and the captains can change things in it.**
+  `team_lead` clearance stays global. Team identity only decides which team
+  a lead may act for, as `canApproveRecipe` does for the Kitchen and
+  `canEditPower` does for Power.
+- Each program is shaped with that team's lead, one team at a time (design
+  doc, section 4: "Team programs are bespoke per team").
+
+## 1. The teams, and what each has today
+
+There are 14 teams. They come from `teamEnum` (`packages/db/src/schema.ts:98`)
+and the `Team` Zod enum (`packages/types/src/roles.ts`). Their names, order
+and archived flag are camp settings (`DEFAULT_TEAMS` in
+`packages/db/src/camp-config.ts`). Captains can rename or archive a team, but
+cannot add one.
+
+Every team already has these, from the same code:
+
+- **A team page**, `/teams/[key]`, shown as `TEAM.EXE`. It is one shared page
+  (#267's "common frame", built with #268). It has four cards: Coming up (the
+  team's calendar events), Open tasks (the team's cards from `/tasks`),
+  Meetings (with New meeting for the team's members and captains), and People
+  this year (leads and members).
+- **An icon in the Teams folder** (Camp column) for every active team.
+- **A team folder on the right-hand side** for each team the member is on this
+  year ("Kitchen team", tagged LEAD for a lead). It holds the team page, plus
+  `TEAM_TOOLS` (`apps/web/lib/programs.ts`) when the member may open them.
+- **Calendar events** named "`<Team>` Team - …" (`teamEventTitle`), filtered
+  with `/calendar?team=<key>`.
+- **Tasks** carry a `team`. Captains add tasks for any team, a lead only for
+  the teams they lead.
+- **Announcements** can be sent to one team (scope `team`). Only that team's
+  members receive them. They are **not** shown on the team page.
+- **Meeting notes** (`/meetings?team=`), which use `canWorkInTeam` (team
+  members and captains).
+- The tables `team_budgets`, `reimbursements`, `inventory_items` and
+  `documents` have a `team` column, but no screen uses them yet.
+
+What each team has beyond that:
+
+| Team (key) | Its own tools today | Team-folder tools (`TEAM_TOOLS`) | Planned in the epics |
+| --- | --- | --- | --- |
+| Kitchen (`kitchen`) | Recipe book, recipe review, source editor with Claude proofreading, meal plan (`/kitchen/**`, #262). Kitchen leads and captains act | Recipes, Meal plan, Recipe review | #243 sub-recipes and batch prep, #244 menu planner (partly the meal plan), snacks section, #245 shopping list, dietary cross-check and costing |
+| Structures (`structures`) | None | None | None named. Inventory (#246) and the layout builder (#271) touch it |
+| Power and Lighting (`power_and_lighting`) | Load list and fuel estimate (`/power/loads`, `/power/fuel`, #263). P&L leads and captains edit (`canEditPower`) | Power | #255 fuel stock and refuelling log, #256 grid plan (circuits, cables), #257 generator readiness and sharing |
+| Sanitation and MOOP (`sanitation_and_water`) | None | None | None named. Survival Guide chapters on MOOP and bins (#250) |
+| Safety (`health_and_safety`) | None. Safety data is read through the roster, not a team tool | None | None named. Safety playbook chapter (#250) |
+| Art and Activities (`art_and_activities`) | None | None | Parking lot: art-project and grant register (#235) |
+| Ministry of Memes (`ministry_of_memes`) | None | None | None |
+| Ministry of Vibes (`ministry_of_vibes`) | None. `workshops` tables exist, unused | None | #269 activity and DJ offers, the lounge programme grid |
+| Finance (`finance`) | None of its own. Payments (`/captains/payments`) is captain-only | Payments (captains only) | #240 dues and refunds, #242 budgets (discovery first) and reimbursements. #267 says: link, don't copy |
+| Transport and Logistics (`transport_and_logistics`) | None of its own. My lift (`/lift`) shows a member their own car | None | #270 cars, trailers, drivers, riders, and a driver messaging their car. #247 logistics calendar |
+| Communications & HR (`communications_and_hr`) | None of its own | Announcements, Questionnaires, Join site (camp-wide tools, at their own bars) | None named |
+| Mutant Vehicle (`mutant_vehicle`) | None | None | None named. MV registration deadline in #247 |
+| Sound (`sound`) | None | None | None named |
+| Water (`water`) | None | None | None named. Water intent deadline in #247 |
+
+Epic state on 2026-09-27. #236 and #237 are closed. #266 is closed. Power
+#263 and Kitchen #262 are merged, but #243, #244, #252 and #253–#257 are
+still open as issues. #267 (team dashboards), #268 (meeting notes, built),
+#269, #270 and #271 are open.
+
+## 2. What the epics say, and where they now disagree
+
+- **#267 (team dashboards)** asks for the common frame (built), plus a remit
+  line, the team's links, a budget summary after #242, a start-of-year lead
+  checklist, and a team tools area under the frame. Nothing after the frame is
+  built.
+- **Who may act.** #267 (2026-09-24) says **team members** work in a team's
+  tools (`canWorkInTeam`). Meeting notes are built that way, and so are #269
+  and #270. The owner's current ask is **leads and captains**, which matches
+  Power (`canEditPower`), the Kitchen review (`canApproveRecipe`) and adding
+  tasks. This is question 1 below.
+- **Finance** (#242 owner note): budgets start with discovery. The Finance
+  dashboard links to the money screens. Each team shows its own budget
+  summary only once the budget model is settled.
+- **Kitchen**: sub-recipes and batch prep (#243 note), and snacks as their own
+  section (#244 note). No Kitchen screen may be built until the owner approves
+  its layout (he rejected two layouts on 2026-09-24).
+- **Power**: the MVP (#253, #254) shipped in #263. #255–#257 remain.
+- **Transport** (#270) needs a new broadcast audience (`car`) in
+  `canSendToAudience`. That is a security-sensitive change, not a first slice.
+
+## 3. What a team's folder and program show today, and what's missing
+
+Today:
+
+- Every team's program is the **same page**. Kitchen and Sound look the same
+  apart from their data.
+- A team folder holds that page and, for four teams only, shortcuts to
+  camp-wide tools.
+
+Missing:
+
+- **Anything specific to the team**, even on the teams that have tools.
+  - The Power program does not show the power plan's headline figures (peak
+    load, generator load, fuel for the burn). You must open Power to see them.
+  - The Kitchen program does not show the meal plan or the recipes waiting
+    for review.
+- **The team's announcements.** Nothing lists what a team has sent.
+- **A line saying what the team does (its remit), and the team's links.**
+  There is no column for either yet.
+- **Authority shown on the page.** "You lead this team" is shown as a badge,
+  but the page gives a lead no tools of its own, only New meeting.
+- **Ten teams have no tools at all.** Their folder holds only their page.
+
+## 4. Proposal
+
+### The shape
+
+Each team gets its own program component (for example
+`components/teams/power-program.tsx`). `/teams/[key]` stays the route and the
+window. The page picks the team's own component by key from a code map.
+Teams without one keep today's shared page. It is a map in code, not a
+configurable engine. Each program:
+
+- reuses the existing cards (Coming up, Open tasks, Meetings, People) where
+  they fit, so a first version is mostly composition;
+- adds at most one or two panels of its own, read from data that already
+  exists;
+- shows edit controls only to captains and the team's leads. Each action
+  still runs its own gate on the server (a team folder is a shortcut, never a
+  grant).
+
+The look follows AGENTS.md "Design" as corrected on 2026-09-26: copy the
+**nearest existing program window**, which is today's team page (Home's
+layout: main cards on the left, people on the right), with the soft in-window
+colours. The older rule, "copy AfrikaBurn's nearest page", is kept only as a
+record. The AfrikaBurn repo exists at
+`/home/ryan/repos/Personal/afrikaburn-contributors-app`. Its nearest page is
+the registration detail page, `apps/org/app/(console)/registrations/[id]/page.tsx`:
+one group's page, with its details, its people and an action card
+(Placement). The team page already follows that composition, and the console
+dashboard `apps/org/app/(console)/page.tsx` (KPI cards, then a grid of cards)
+is the model for a figures row.
+
+### A first version per team (only data that exists)
+
+| Team | Panels (first version) | Later tools (from the epics) |
+| --- | --- | --- |
+| **Power and Lighting** | 1. **Power plan at a glance**: peak load, generator load % with its green/amber/red band, litres and jerry cans for the burn, from `powerTotals`, `generatorLoadPct` and `fuelForPlan` in `@camp404/core`. Links to Load list and Fuel. 2. Coming up and Open tasks. 3. People | #255 fuel log, #256 grid plan, #257 readiness and sharing |
+| **Kitchen** | 1. **This year's meal plan** in short (days, plates per meal) and **recipes waiting for review** (count, visible to all, actions for reviewers). 2. Coming up and Open tasks. 3. People. *Layout needs the owner's approval first* | Snacks, #244 menu planner, #245 shopping list, batch prep |
+| **Transport and Logistics** | 1. **Cars this year**: drivers, seats offered and seats left, riders count, from `driver_profiles` and `car_members` (names and cars only). 2. Coming up and Open tasks. 3. People | #270 trailers, matching, the `car` message audience. #247 logistics calendar |
+| **Finance** | 1. Links to Payments (captains) and a plain "budgets are being worked out" note. 2. Coming up and Open tasks. 3. People | #240 dues and refunds, #242 claims, then budgets after discovery |
+| **Ministry of Vibes** | Coming up, Open tasks, People (the shared page) | #269 offers and lounge programme |
+| **Communications & HR** | Shared page, plus its folder's links (Announcements, Questionnaires, Join site) | None named |
+| **Structures, Sanitation and MOOP, Safety, Art and Activities, Ministry of Memes, Mutant Vehicle, Sound, Water** | Shared page, until each lead says what they need | Inventory for the team (#246), Survival Guide chapters (#250), the layout builder (#271), AfrikaBurn deadlines (#247) |
+
+**Announcements on a program.** A team's announcements go only to that team.
+Showing them to every member would widen who reads them, so the first version
+leaves them out. Question 3 asks about this.
+
+### Build first: Power and Lighting
+
+- **Its tools exist and are merged** (#263), so the first version is a
+  read-only summary of data that already exists, plus links. No new schema
+  and no new permission.
+- **Its rule is already the one the owner asked for.** `canEditPower` lets a
+  P&L lead or a captain edit and lets everyone else read. No predicate needs
+  changing.
+- **Kitchen is blocked.** The owner must approve any Kitchen layout first, and
+  rejected two.
+- **Transport needs new security work.** It needs a new audience scope and a
+  lock on the car's riders, which is too much for a first slice.
+- The pattern it sets (a code map by key, the shared cards, one own panel,
+  edit only for leads and captains) is then copied team by team.
+
+### Questions only the owner can answer
+
+1. **Who may act in a team's program: leads and captains, or every team
+   member?** #267 and meeting notes say members. Your latest ask says leads
+   and captains. *Default: leads and captains for the team's tools (as Power
+   and Kitchen do now). Meeting notes stay open to team members, so any
+   member can still write up a meeting.*
+2. **Build Power first?** *Default: yes. The first version is a read-only
+   "power plan at a glance" panel on the P&L program, beside the shared cards.
+   You approve a screenshot before it merges.*
+3. **Should every member see a team's announcements on its program?** Today
+   only the team receives them. *Default: no. Show them only to the team's
+   members and captains, in a "Sent to this team" card.*
+4. **A remit line and the team's links (#267): who writes them?** *Default:
+   the team's leads and captains write one short remit line and a few links.
+   This needs one small year-agnostic table.*
+5. **The ten teams with no tools: talk to each lead first, or ship them the
+   shared page as their program for now?** *Default: keep the shared page for
+   them, and build each team's own program only after its lead says what it
+   needs.*
