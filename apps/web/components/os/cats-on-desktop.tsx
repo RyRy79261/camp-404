@@ -93,15 +93,19 @@ function iconPictures(): Rect[] {
 export function WindowCats({
   windows,
   delayMs,
+  still,
 }: {
   windows: readonly WindowBox[];
   delayMs?: number;
+  /** Effects off: they come and stay, still, as under reduced motion. */
+  still?: boolean;
 }) {
   return (
     <CampCats
       windows={windows}
       perches={iconPictures}
       delayMs={delayMs}
+      still={still}
       className="z-10"
     />
   );

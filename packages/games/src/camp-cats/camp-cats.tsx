@@ -83,6 +83,11 @@ export type CampCatsProps = {
   now?: () => number;
   /** Classes for the layer (it fills its positioned parent). */
   className?: string;
+  /**
+   * Hold them still whatever the device says, as reduced motion does (the
+   * app's "Effects off"): they still come, sit and eat, without walking.
+   */
+  still?: boolean;
 };
 
 const MODA_ATLAS = atlasLayout(MODA_FRAMES);
@@ -262,8 +267,9 @@ function CampCatsLayer({
   storage,
   now = Date.now,
   className = "",
+  still: holdStill = false,
 }: CampCatsProps) {
-  const reduced = useReducedMotion(true);
+  const reduced = useReducedMotion(true) || holdStill;
   const visible = useTabVisible();
   const layer = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState<Shown | null>(null);

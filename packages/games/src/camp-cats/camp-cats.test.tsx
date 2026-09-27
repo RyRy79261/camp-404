@@ -195,4 +195,19 @@ describe("the two visiting cats, rendered", () => {
     expect(layer(container).dataset.campCats).toBe("done");
     expect(container.querySelector("[data-camp-bowl]")).toBeNull();
   });
+
+  it("held still by the app (Effects off) as under reduced motion, whatever the device says", async () => {
+    const storage = memoryStorage();
+    const { container } = render(
+      <CampCats
+        windows={[WIN]}
+        perches={perches}
+        storage={storage}
+        now={now}
+        still
+      />,
+    );
+    await advance(90_000);
+    expect(layer(container).dataset.campCats).toBe("settled");
+  });
 });

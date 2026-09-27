@@ -2081,7 +2081,11 @@ function DesktopInner({
               while: over the icons, under the windows. The desktop's only;
               a phone has no windows to hide them. */}
           {!held && !phoneNow && (
-            <WindowCats windows={catWindows} delayMs={catsDelayMs} />
+            <WindowCats
+              windows={catWindows}
+              delayMs={catsDelayMs}
+              still={effectsOff}
+            />
           )}
           {windowLayer}
           {/* Today: shut until its handle is pulled; it slides in over the
