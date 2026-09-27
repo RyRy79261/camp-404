@@ -196,6 +196,37 @@ describe("the welcome wizard", () => {
     expect(wizard()).toBeNull();
   });
 
+  it("moves beside the icons for Your desktop, so the team folders on the right stay in sight, and back after", () => {
+    render(<Desktop {...props()} />);
+    const panel = wizard()!;
+    const next = () =>
+      fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
+    const docks: (string | null)[] = [panel.getAttribute("data-dock")];
+    for (let i = 0; i < 4; i++) {
+      next();
+      docks.push(panel.getAttribute("data-dock"));
+    }
+    // Welcome, Opening things, Windows, Your desktop, Today.
+    expect(docks).toEqual(["right", "right", "right", "beside-icons", "right"]);
+  });
+
+  it("offers the one-click switch on a desktop only; a phone is told one tap opens", () => {
+    render(<Desktop {...props()} />);
+    const panel = wizard()!;
+    fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
+    const wide = panel.querySelector("[data-welcome-desktop]")!;
+    const phone = panel.querySelector("[data-welcome-phone]")!;
+    expect(wide.className).toContain("max-md:hidden");
+    expect(
+      within(wide as HTMLElement).getByRole("switch", {
+        name: /Open with one click/,
+      }),
+    ).toBeTruthy();
+    expect(phone.className).toContain("md:hidden");
+    expect(phone.textContent).toBe("Tap a program once to open it.");
+    expect(phone.textContent).not.toMatch(/double|Enter|Ctrl|Shift|box/i);
+  });
+
   it("turns on Open with one click from its second step, saved at once", async () => {
     render(<Desktop {...props()} />);
     const panel = wizard()!;

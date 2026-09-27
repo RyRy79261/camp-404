@@ -160,12 +160,23 @@ export function WelcomeWizard({
       title: "Opening things",
       body: (
         <>
-          <p>
-            Double-click an icon to open it, or select it and press Enter. On a
-            phone, one tap opens it.
+          {/* By CSS, as the phone's layout is (phone-chrome.tsx): the
+              server's first paint is right at either width. A phone always
+              opens with one tap, so it gets no switch and no talk of
+              double-clicks, keys or boxes. */}
+          <div
+            data-welcome-desktop
+            className="flex flex-col gap-3 max-md:hidden"
+          >
+            <p>
+              Double-click an icon to open it, or select it and press Enter.
+            </p>
+            <p>If double-clicking is hard, turn this on:</p>
+            <OneClickSwitch prefs={prefs} onChange={onChange} />
+          </div>
+          <p data-welcome-phone className="md:hidden">
+            Tap a program once to open it.
           </p>
-          <p>If double-clicking is hard, turn this on:</p>
-          <OneClickSwitch prefs={prefs} onChange={onChange} />
         </>
       ),
     },
@@ -252,6 +263,7 @@ export function WelcomeWizard({
   ];
   const last = steps.length - 1;
   const step = steps[index]!;
+  const besideIcons = step.key === "desktop";
 
   // Focus into the panel on opening, and to each new step's heading.
   useEffect(() => {
@@ -295,7 +307,14 @@ export function WelcomeWizard({
       aria-labelledby={titleId}
       data-os-welcome
       onKeyDown={onKeyDown}
-      className={`pointer-events-auto absolute right-11 top-3 bottom-2 z-40 flex w-96 max-w-[calc(100%-3.5rem)] select-text flex-col border border-os-primary bg-os-bg text-os-fg shadow-[6px_6px_0_0_rgb(0_0_0/0.45)] max-md:inset-x-0 max-md:top-0 max-md:bottom-0 max-md:right-0 max-md:w-auto max-md:max-w-none max-md:z-[95] ${
+      data-dock={besideIcons ? "beside-icons" : "right"}
+      className={`pointer-events-auto absolute ${
+        // "Your desktop" talks about the team folders on the right, so on a
+        // wide screen the panel moves beside the icons for that step,
+        // covering neither the icons nor the team folders. It jumps; it
+        // never slides.
+        besideIcons ? "left-[19.5rem]" : "right-11"
+      } top-3 bottom-2 z-40 flex w-96 max-w-[calc(100%-3.5rem)] select-text flex-col border border-os-primary bg-os-bg text-os-fg shadow-[6px_6px_0_0_rgb(0_0_0/0.45)] max-md:inset-x-0 max-md:top-0 max-md:bottom-0 max-md:right-0 max-md:w-auto max-md:max-w-none max-md:z-[95] ${
         effects === "none" ? "" : "os-slide-in"
       }`}
     >

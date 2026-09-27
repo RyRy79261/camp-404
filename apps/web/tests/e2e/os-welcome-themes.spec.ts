@@ -5,6 +5,7 @@ import {
   login,
   redeemInviteAtGate,
   resetTestState,
+  seedTeam,
 } from "./_helpers";
 import { desktopOnly } from "./lib/dom";
 import {
@@ -110,6 +111,79 @@ test.describe("404 OS welcome and themes (test-mode)", () => {
     await page.keyboard.press("Escape");
     await expect(wizard(page)).toHaveCount(0);
     await expect(page.locator("#os-desktop :focus")).toHaveCount(1);
+  });
+
+  test("Your desktop: the panel moves aside so the team folders on the right show; Today's handle is reachable on the next step", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "the phone has no team folders on the right");
+    await approvedMember(page, request, "welcome-teams", true);
+    await page.goto("/"); // the camp user row, before the team
+    await seedTeam(request, "welcome-teams", "kitchen", true);
+    await page.goto("/");
+    await expectDesktop(page);
+    const panel = wizard(page);
+    await expect(panel).toBeVisible();
+    const folder = desktopIcon(page, "Kitchen team");
+    await expect(folder).toBeVisible();
+    const overlaps = async () => {
+      const a = (await panel.boundingBox())!;
+      const b = (await folder.boundingBox())!;
+      return (
+        a.x < b.x + b.width &&
+        b.x < a.x + a.width &&
+        a.y < b.y + b.height &&
+        b.y < a.y + a.height
+      );
+    };
+    // On the right edge it covers the team folder (which is why it moves).
+    expect(await overlaps()).toBe(true);
+    for (let i = 0; i < 3; i++) {
+      await panel.getByRole("button", { name: "Next" }).click();
+    }
+    await expect(
+      panel.getByRole("heading", { name: "Your desktop" }),
+    ).toBeFocused();
+    expect(await overlaps()).toBe(false);
+    // Nor does it sit on the icons at the left.
+    const inbox = (await desktopIcon(page, "Inbox").boundingBox())!;
+    expect((await panel.boundingBox())!.x).toBeGreaterThan(
+      inbox.x + inbox.width,
+    );
+
+    // Today: back on the right, the handle still takes a click.
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel.getByRole("heading", { name: "Today" })).toBeFocused();
+    await page.getByRole("button", { name: /^Show Today/ }).click();
+    await expect(
+      page.getByRole("complementary", { name: "Today", exact: true }),
+    ).toBeVisible();
+  });
+
+  test("on a phone, Opening things says one tap opens, with no switch and no double-click", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await approvedMember(page, request, "welcome-phone", true);
+    await page.goto("/");
+    const panel = wizard(page);
+    await expect(panel).toBeVisible();
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(
+      panel.getByRole("heading", { name: "Opening things" }),
+    ).toBeFocused();
+    await expect(
+      panel.getByText("Tap a program once to open it."),
+    ).toBeVisible();
+    // Every mention of a double-click is the desktop's, out of sight here.
+    for (const el of await panel.getByText(/double-click/i).all()) {
+      await expect(el).toBeHidden();
+    }
+    await expect(
+      panel.getByRole("switch", { name: /Open with one click/ }),
+    ).toBeHidden();
   });
 
   test("an applicant waiting for approval gets no welcome; once approved, it opens on their first full desktop", async ({
