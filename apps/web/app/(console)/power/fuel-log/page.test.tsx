@@ -1,4 +1,10 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The refuelling page (#255). Every approved member reads it; only a captain
@@ -38,6 +44,7 @@ vi.mock("@/lib/power-site", () => ({
   listRefuelEntries: vi.fn(),
 }));
 
+import { saveLowFuelDaysAction } from "@/app/(console)/power/fuel-log/actions";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getPowerPlan } from "@/lib/power";
 import { POWER_REFUSAL } from "@/lib/power-copy";
@@ -194,5 +201,18 @@ describe("the refuelling page", () => {
     ).toHaveLength(2);
     // 12 L over 6 h.
     expect(within(kpi("Using")).getByText("48 L")).toBeTruthy();
+  });
+
+  it("refuses a blank warning field rather than saving 0, which turns it off", async () => {
+    await renderAs("team_lead", ["power_and_lighting"]);
+    const field = screen.getByLabelText(
+      "Warn when the fuel left covers fewer days than",
+    );
+    fireEvent.change(field, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save warning" }));
+    expect(
+      screen.getByText("Give a number of days, or 0 to turn the warning off."),
+    ).toBeTruthy();
+    expect(saveLowFuelDaysAction).not.toHaveBeenCalled();
   });
 });

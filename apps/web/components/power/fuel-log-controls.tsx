@@ -963,9 +963,14 @@ export function LowFuelForm({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    // A blank field is not 0: 0 turns the warning off for everyone.
+    if (value.trim() === "" || !Number.isFinite(Number(value))) {
+      setError("Give a number of days, or 0 to turn the warning off.");
+      return;
+    }
     startTransition(async () => {
       const result = await saveLowFuelDaysAction({
-        lowFuelDays: figure(value),
+        lowFuelDays: Number(value),
         expectedVersion: version,
       });
       if (!result.ok) {
