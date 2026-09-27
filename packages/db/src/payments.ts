@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   type Currency,
@@ -8,15 +8,20 @@ import {
   type PaymentStatus,
   UnknownCurrencyError,
 } from "@camp404/core";
+import type { PaymentMethod, PaymentSource } from "@camp404/types";
 import { writeAuditEvent } from "./audit";
 import { currentCycleNumber } from "./cycles";
+import { lockMoneyKeeper, MoneyRefused, NOT_A_MONEY_KEEPER } from "./dues";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 
 // The payments ledger (owner's call, 2026-09-16). The app never moves money:
 // a member pays the camp by EFT quoting their reference, and a captain records
 // what the bank statement shows. Every write leaves an audit row in the same
-// transaction. Captain-gated by every caller.
+// transaction. The Finance team (captains and Finance leads, canManageMoney)
+// records and moves payments, and each write re-checks that inside its own
+// transaction (lockMoneyKeeper); a member may add only their own pending
+// payment, with a proof file (#240).
 
 /** Postgres unique_violation, which drizzle may nest under `.cause`. */
 function isUniqueViolation(err: unknown): boolean {
@@ -87,6 +92,16 @@ export interface RecordPaymentInput {
   /** What the captain saw, e.g. the bank statement line. */
   note?: string | null;
   recordedByUserId: string;
+  /**
+   * Who put it on the ledger; `captain` (the Finance team) when left out. A
+   * `member` payment is the member's own, pending, with a proof file.
+   */
+  source?: PaymentSource;
+  method?: PaymentMethod | null;
+  /** The day it was paid, YYYY-MM-DD. */
+  paidOn?: string | null;
+  proofPathname?: string | null;
+  proofContentType?: string | null;
 }
 
 /**
@@ -111,10 +126,23 @@ export async function recordPayment(
   // Resolved before the transaction; see team-memberships.ts.
   const cycle = await currentCycleNumber();
   const note = input.note?.trim() || null;
+  const source = input.source ?? "captain";
+  if (
+    source === "member" &&
+    (input.recordedByUserId !== input.userId || input.status !== "pending")
+  ) {
+    throw new MoneyRefused(NOT_A_MONEY_KEEPER);
+  }
 
   for (let attempt = 0; attempt < RETRIES; attempt++) {
     try {
       return await withTransaction(async (tx) => {
+        if (
+          source !== "member" &&
+          !(await lockMoneyKeeper(tx, input.recordedByUserId))
+        ) {
+          throw new MoneyRefused(NOT_A_MONEY_KEEPER);
+        }
         const [existing] = await tx
           .select({ n: count() })
           .from(schema.payments)
@@ -140,6 +168,11 @@ export async function recordPayment(
             status: input.status,
             note,
             recordedByUserId: input.recordedByUserId,
+            source,
+            method: input.method ?? null,
+            paidOn: input.paidOn ?? null,
+            proofPathname: input.proofPathname ?? null,
+            proofContentType: input.proofContentType ?? null,
           })
           .returning({ id: schema.payments.id });
         await writeAuditEvent(tx, {
@@ -152,6 +185,7 @@ export async function recordPayment(
             amountCents: input.amountCents,
             currency: input.currency,
             status: input.status,
+            source,
           },
         });
         return { id: row!.id, reference };
@@ -169,6 +203,7 @@ export async function recordPayment(
  * Move a payment between statuses (received, waived, or back to pending).
  * Compare-and-set on `from`, the status the captain saw: false when it had
  * already moved, so a captain on a stale page is told instead of overwriting.
+ * Throws MoneyRefused for anyone but a captain or a Finance lead.
  */
 export async function setPaymentStatus(input: {
   paymentId: string;
@@ -178,6 +213,9 @@ export async function setPaymentStatus(input: {
 }): Promise<boolean> {
   if (input.from === input.to) return false;
   return withTransaction(async (tx) => {
+    if (!(await lockMoneyKeeper(tx, input.actorId))) {
+      throw new MoneyRefused(NOT_A_MONEY_KEEPER);
+    }
     const [row] = await tx
       .update(schema.payments)
       .set({ status: input.to, updatedAt: new Date() })
@@ -214,6 +252,13 @@ export interface PaymentRow {
   status: PaymentStatus;
   note: string | null;
   recordedByName: string | null;
+  source: PaymentSource;
+  method: PaymentMethod | null;
+  paidOn: string | null;
+  /** A proof file is attached (read through /api/payment-proof). */
+  hasProof: boolean;
+  /** Its refund's state, when one was asked for and not declined. */
+  refundStatus: "requested" | "refunded" | null;
   createdAt: Date;
 }
 
@@ -222,7 +267,7 @@ export async function listPayments(cycle: number): Promise<PaymentRow[]> {
   const db = createHttpDb();
   const member = alias(schema.users, "member");
   const recorder = alias(schema.users, "recorder");
-  return db
+  const rows = await db
     .select({
       id: schema.payments.id,
       userId: schema.payments.userId,
@@ -235,13 +280,34 @@ export async function listPayments(cycle: number): Promise<PaymentRow[]> {
       status: schema.payments.status,
       note: schema.payments.note,
       recordedByName: recorder.displayName,
+      source: schema.payments.source,
+      method: schema.payments.method,
+      paidOn: schema.payments.paidOn,
+      proofPathname: schema.payments.proofPathname,
+      refundStatus: schema.paymentRefunds.status,
       createdAt: schema.payments.createdAt,
     })
     .from(schema.payments)
     .innerJoin(member, eq(member.id, schema.payments.userId))
     .leftJoin(recorder, eq(recorder.id, schema.payments.recordedByUserId))
+    // At most one refund per payment is not declined (payment_refunds_one_live_idx).
+    .leftJoin(
+      schema.paymentRefunds,
+      and(
+        eq(schema.paymentRefunds.paymentId, schema.payments.id),
+        ne(schema.paymentRefunds.status, "declined"),
+      ),
+    )
     .where(eq(schema.payments.cycle, cycle))
     .orderBy(desc(schema.payments.createdAt), desc(schema.payments.id));
+  return rows.map(({ proofPathname, refundStatus, ...row }) => ({
+    ...row,
+    hasProof: proofPathname !== null,
+    refundStatus:
+      refundStatus === "requested" || refundStatus === "refunded"
+        ? refundStatus
+        : null,
+  }));
 }
 
 /**
@@ -268,13 +334,35 @@ export async function receivedTotal(cycle: number): Promise<number> {
 }
 
 /**
- * SQL for "this member's dues are settled for `cycle`": any payment that year
- * reconciled or waived. The roster and the member panel both read this.
+ * SQL for "this member's dues are settled for `cycle`", the same rule as
+ * duesSettled in @camp404/core: with live charges (#240), the balance is paid
+ * down to zero or below; with none, any payment that year received or waived.
+ * The roster and the member panel both read this.
  */
 export function duesSettledSql(userId: typeof schema.users.id, cycle: number) {
-  return sql<boolean>`exists (
-    select 1 from payments p
-    where p.user_id = ${userId} and p.cycle = ${cycle}
-      and p.status in ('reconciled', 'waived')
-  )`;
+  return sql<boolean>`case
+    when exists (
+      select 1 from dues_charges c
+      where c.user_id = ${userId} and c.cycle = ${cycle} and c.cancelled_at is null
+    ) then (
+      coalesce((
+        select sum(c.amount_cents) from dues_charges c
+        where c.user_id = ${userId} and c.cycle = ${cycle} and c.cancelled_at is null
+      ), 0)
+      - coalesce((
+        select sum(p.amount_cents) from payments p
+        where p.user_id = ${userId} and p.cycle = ${cycle}
+          and p.status in ('reconciled', 'waived')
+      ), 0)
+      + coalesce((
+        select sum(r.amount_cents) from payment_refunds r
+        where r.user_id = ${userId} and r.cycle = ${cycle} and r.status = 'refunded'
+      ), 0)
+    ) <= 0
+    else exists (
+      select 1 from payments p
+      where p.user_id = ${userId} and p.cycle = ${cycle}
+        and p.status in ('reconciled', 'waived')
+    )
+  end`;
 }

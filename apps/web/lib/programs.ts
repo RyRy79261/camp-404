@@ -1,6 +1,11 @@
 import "server-only";
 
-import { canApproveRecipe, canWorkInTeam, hasClearance } from "@camp404/core";
+import {
+  canApproveRecipe,
+  canManageMoney,
+  canWorkInTeam,
+  hasClearance,
+} from "@camp404/core";
 import { Team, type ViewerRank } from "@camp404/types";
 import type { ProgramId } from "./program-routes";
 
@@ -191,6 +196,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: ME,
     rank: "camp_member",
   },
+  // Every member's own dues (#240): what they owe, their pledge, and where
+  // they send their proof of payment.
+  {
+    id: "my-dues",
+    label: "My dues",
+    fileName: "MY_DUES.TXT",
+    href: "/dues",
+    icon: "my-dues",
+    place: ME,
+    rank: "camp_member",
+  },
   // Decision 11 A (owner, 2026-09-26): a driver, or a member with a seat in
   // someone's car, gets their lift as a program.
   {
@@ -323,6 +339,10 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "team_lead",
   },
+  // The Finance tools (#240): captains and Finance leads (canManageMoney).
+  // The page's rank gate is team_lead, because clearance is global; the rule
+  // narrows it, so a lead of another team is not offered it. A Finance lead
+  // also finds it in their Finance team folder (TEAM_TOOLS).
   {
     id: "payments",
     label: "Payments",
@@ -330,7 +350,8 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     href: "/captains/payments",
     icon: "payments",
     place: CAPTAINS,
-    rank: "captain",
+    rank: "team_lead",
+    requires: (ctx) => canManageMoney(ctx.rank, ctx.ledTeams),
   },
   {
     id: "camp-settings",

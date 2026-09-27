@@ -13,6 +13,7 @@ export * from "./referral";
 export * from "./recipe";
 export * from "./recipe-source";
 export * from "./money";
+export * from "./dues";
 export * from "./reimbursement";
 export * from "./voice-intent";
 export * from "./task";

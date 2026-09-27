@@ -127,6 +127,8 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "my-forms" },
       { kind: "program", id: "invites" },
       { kind: "program", id: "account" },
+      // Their own dues (#240).
+      { kind: "program", id: "my-dues" },
       { kind: "program", id: "roster" },
       { kind: "folder", id: "teams" },
       { kind: "program", id: "meetings" },
@@ -379,20 +381,30 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     ]);
   });
 
-  it("puts no Payments in the Finance folder of a Finance member who is not a captain", () => {
+  it("puts Payments in the Finance folder of a Finance lead or a captain, never a Finance member's", () => {
     const member = buildProgramManifest(
       facts({ memberships: [{ team: FINANCE, isLead: false }] }),
     );
     expect(teamFolder(member, FINANCE)?.programs.map((p) => p.id)).toEqual([
       `team:${FINANCE}`,
     ]);
-    // A Finance LEAD is still not a captain (decision 13 A).
+    // The Finance tools (#240) are for captains and Finance leads
+    // (canManageMoney), which replaced decision 13 A's "captains only".
     const lead = buildProgramManifest(
       facts({ rank: LEAD, memberships: [{ team: FINANCE, isLead: true }] }),
     );
     expect(teamFolder(lead, FINANCE)?.programs.map((p) => p.id)).toEqual([
       `team:${FINANCE}`,
+      "payments",
     ]);
+    expect(folder(lead, "captains")?.programs.map((p) => p.id)).toContain(
+      "payments",
+    );
+    // A lead of another team stands on the same rung and gets none of it.
+    const kitchenLead = buildProgramManifest(
+      facts({ rank: LEAD, memberships: [{ team: KITCHEN, isLead: true }] }),
+    );
+    expect(ids(kitchenLead)).not.toContain("payments");
     const captain = buildProgramManifest(
       facts({ rank: CAPTAIN, memberships: [{ team: FINANCE, isLead: false }] }),
     );

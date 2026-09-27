@@ -20,6 +20,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
+  CHARGE_KINDS,
   CURRENT_KINDS,
   FUEL_TYPES,
   GENERATOR_OWNERS,
@@ -29,6 +30,9 @@ import {
   NOTIFICATION_KINDS,
   PARTICIPATION_INTENTS,
   PARTICIPATION_STATUSES,
+  PAYMENT_METHODS,
+  PAYMENT_SOURCES,
+  REFUND_STATUSES,
   type CurrentKind,
   type FuelType,
   type GeneratorOwner,
@@ -182,6 +186,13 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "reconciled",
   "waived",
 ]);
+
+// Dues (#240). Mirror CHARGE_KINDS, PAYMENT_METHODS, PAYMENT_SOURCES and
+// REFUND_STATUSES in @camp404/types dues.ts.
+export const duesChargeKindEnum = pgEnum("dues_charge_kind", CHARGE_KINDS);
+export const paymentMethodEnum = pgEnum("payment_method", PAYMENT_METHODS);
+export const paymentSourceEnum = pgEnum("payment_source", PAYMENT_SOURCES);
+export const refundStatusEnum = pgEnum("refund_status", REFUND_STATUSES);
 
 export const reimbursementAccountTypeEnum = pgEnum(
   "reimbursement_account_type",
@@ -928,6 +939,20 @@ export const payments = pgTable(
     recordedByUserId: uuid("recorded_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
+    // Who put it on the ledger (#240): a captain or Finance lead by hand, the
+    // member with a proof file, or the statement import. Rows from before are
+    // a captain's.
+    source: paymentSourceEnum("source").notNull().default("captain"),
+    // How and when the money was paid, as the member or the statement says.
+    method: paymentMethodEnum("method"),
+    paidOn: date("paid_on", { mode: "string" }),
+    // The member's proof of payment: a private blob (`payment-proofs/<member
+    // id>/…`), streamed only through /api/payment-proof to the member and the
+    // Finance team, every other-person read audited. Never a card number:
+    // the app records what arrived, never how to take money. Cleared, and the
+    // file deleted, on erasure.
+    proofPathname: text("proof_pathname"),
+    proofContentType: text("proof_content_type"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -935,6 +960,256 @@ export const payments = pgTable(
     userCycleIdx: index("payments_user_cycle_idx").on(p.userId, p.cycle),
     cycleIdx: index("payments_cycle_idx").on(p.cycle),
     currencyCheck: check("payments_currency_check", sql`${p.currency} = 'ZAR'`),
+  }),
+);
+
+// --- Dues (#240) ----------------------------------------------------------
+// What each member owes the camp for a year, next to the payments ledger
+// above. All of it is read and written by the Finance team (captains and
+// Finance leads, canManageMoney in @camp404/core); a member reads only their
+// own. Money is whole rand cents, ZAR only, each table held by its CHECK.
+// Every Finance write leaves an audit row in the same transaction.
+
+// The year's dues dates, one row per burn year, set in the Finance tools:
+// the deadline and the refund schedule (a full refund up to one day, a
+// partial one at a percentage up to a later day, nothing after). Stored here,
+// never in code (#240). `version` makes each save a compare-and-set.
+export const duesYears = pgTable(
+  "dues_years",
+  {
+    cycle: integer("cycle").primaryKey(),
+    deadline: date("deadline", { mode: "string" }),
+    fullRefundUntil: date("full_refund_until", { mode: "string" }),
+    partialRefundUntil: date("partial_refund_until", { mode: "string" }),
+    partialRefundPct: integer("partial_refund_pct"),
+    version: integer("version").notNull().default(0),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    pctCheck: check(
+      "dues_years_partial_refund_pct_check",
+      sql`${d.partialRefundPct} is null or (${d.partialRefundPct} between 1 and 99)`,
+    ),
+  }),
+);
+
+// The year's fee tiers: what a member may pledge. A tier with pledges is
+// archived, never deleted, so a pledge keeps its label.
+export const feeTiers = pgTable(
+  "fee_tiers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    label: text("label").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    // ISO 4217 code, always ZAR (CURRENCIES in @camp404/core).
+    currency: text("currency").notNull().default("ZAR"),
+    archivedAt: timestamp("archived_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("fee_tiers_cycle_idx").on(t.cycle),
+    amountCheck: check("fee_tiers_amount_check", sql`${t.amountCents} > 0`),
+    currencyCheck: check(
+      "fee_tiers_currency_check",
+      sql`${t.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// A member's dues account for one year: their pledge (a tier, or an amount
+// below the lowest tier, which is a valid answer), and the version of their
+// payment plan, so a plan edit is a compare-and-set.
+export const duesAccounts = pgTable(
+  "dues_accounts",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    pledgedTierId: uuid("pledged_tier_id").references(() => feeTiers.id, {
+      onDelete: "set null",
+    }),
+    // The amount pledged, kept even when the tier is archived.
+    pledgedAmountCents: integer("pledged_amount_cents"),
+    pledgedAt: timestamp("pledged_at", { mode: "date" }),
+    planVersion: integer("plan_version").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    pk: primaryKey({ columns: [a.userId, a.cycle] }),
+    pledgeCheck: check(
+      "dues_accounts_pledge_check",
+      sql`${a.pledgedAmountCents} is null or ${a.pledgedAmountCents} > 0`,
+    ),
+  }),
+);
+
+// A post-burn settle-up (#240): a total shared out across members as
+// `settle_up` charges, published in one transaction. A refund settle-up's
+// charges are negative (money back to each member).
+export const duesSettleUps = pgTable(
+  "dues_settle_ups",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    description: text("description").notNull(),
+    // Signed: below zero for money back to the members.
+    totalCents: integer("total_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    memberCount: integer("member_count").notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (s) => ({
+    currencyCheck: check(
+      "dues_settle_ups_currency_check",
+      sql`${s.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// What a member is charged for a year: the camp fee (from their pledge when
+// they are accepted, or set by the Finance team, with a concession), rentals,
+// their settle-up share and anything else. A charge is cancelled, never
+// deleted, so the account keeps its history.
+export const duesCharges = pgTable(
+  "dues_charges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    kind: duesChargeKindEnum("kind").notNull(),
+    description: text("description").notNull(),
+    // Whole cents; only a settle-up refund share is below zero.
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    // A fee's pledged amount, when a concession set it lower.
+    standardAmountCents: integer("standard_amount_cents"),
+    // Why the fee was lowered. Read only by the Finance team, never by the
+    // member; cleared on erasure.
+    concessionReason: text("concession_reason"),
+    settleUpId: uuid("settle_up_id").references(() => duesSettleUps.id, {
+      onDelete: "set null",
+    }),
+    cancelledAt: timestamp("cancelled_at", { mode: "date" }),
+    cancelledByUserId: uuid("cancelled_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (c) => ({
+    userCycleIdx: index("dues_charges_user_cycle_idx").on(c.userId, c.cycle),
+    cycleIdx: index("dues_charges_cycle_idx").on(c.cycle),
+    // One live camp fee per member per year. Partial: an ON CONFLICT against
+    // it must repeat the WHERE (AGENTS.md).
+    oneFeeIdx: uniqueIndex("dues_charges_one_fee_idx")
+      .on(c.userId, c.cycle)
+      .where(sql`${c.kind} = 'fee' and ${c.cancelledAt} is null`),
+    amountCheck: check(
+      "dues_charges_amount_check",
+      sql`${c.amountCents} > 0 or (${c.kind} = 'settle_up' and ${c.amountCents} < 0)`,
+    ),
+    currencyCheck: check(
+      "dues_charges_currency_check",
+      sql`${c.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// A member's payment plan for a year: the instalments they expect to pay,
+// replaced as a whole under dues_accounts.plan_version.
+export const duesInstalments = pgTable(
+  "dues_instalments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    dueOn: date("due_on", { mode: "string" }).notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (i) => ({
+    userCycleIdx: index("dues_instalments_user_cycle_idx").on(
+      i.userId,
+      i.cycle,
+    ),
+    amountCheck: check(
+      "dues_instalments_amount_check",
+      sql`${i.amountCents} > 0`,
+    ),
+    currencyCheck: check(
+      "dues_instalments_currency_check",
+      sql`${i.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// A refund of a received payment (owner, 2026-09-24: "there should be a refund
+// state"): asked for, then refunded or declined with a reason. The amount is
+// proposed from the year's schedule and the day the member withdrew; the
+// Finance team may change it. A refunded amount counts as money going out.
+export const paymentRefunds = pgTable(
+  "payment_refunds",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => payments.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    status: refundStatusEnum("status").notNull().default("requested"),
+    // What the schedule proposed, and what is (or was) to be paid back.
+    proposedCents: integer("proposed_cents"),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    // The note given when it was asked for, and why it was declined. Cleared
+    // on erasure.
+    note: text("note"),
+    declineReason: text("decline_reason"),
+    requestedByUserId: uuid("requested_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedByUserId: uuid("decided_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedAt: timestamp("decided_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    userCycleIdx: index("payment_refunds_user_cycle_idx").on(r.userId, r.cycle),
+    // One refund per payment that is not declined. Partial: an ON CONFLICT
+    // against it must repeat the WHERE (AGENTS.md).
+    oneLivePerPaymentIdx: uniqueIndex("payment_refunds_one_live_idx")
+      .on(r.paymentId)
+      .where(sql`${r.status} <> 'declined'`),
+    amountCheck: check(
+      "payment_refunds_amount_check",
+      sql`${r.amountCents} >= 0`,
+    ),
+    currencyCheck: check(
+      "payment_refunds_currency_check",
+      sql`${r.currency} = 'ZAR'`,
+    ),
   }),
 );
 

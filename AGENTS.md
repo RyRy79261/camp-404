@@ -393,7 +393,8 @@ activation_id)` would allow any number of duplicates whose
   `captain_promotion_open_per_target_idx`,
   `recipe_proofread_runs_open_plates_idx`,
   `questionnaire_activations_one_open_per_key_idx`,
-  `notification_deliveries_broadcast_user_uniq`. A bare `ON CONFLICT DO
+  `notification_deliveries_broadcast_user_uniq`, `dues_charges_one_fee_idx`,
+  `payment_refunds_one_live_idx`. A bare `ON CONFLICT DO
 NOTHING`, with no target, is not affected.
 
 **Driver choice.** `@camp404/db` exposes two drivers: `createHttpDb()` is
@@ -659,6 +660,14 @@ LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
   `.returning()` tells the caller whether it won. A lost race returns a
   sentence the user can act on, never a silent overwrite. See
   `setUserApproval` and `decideCaptainPromotion`.
+- **Dues (#240): the Finance tools are for captains and Finance leads.**
+  `canManageMoney` in `packages/core/src/dues.ts` is the one rule (fail-closed;
+  a lead of any other team is refused), and every Finance write re-checks it
+  inside its own transaction (`lockMoneyKeeper`). A member reads only their own
+  dues; a concession's reason and the ledger notes never reach them. Proof of
+  payment files are private blobs read only through `/api/payment-proof`, and
+  the bank statement import reads the file in memory and stores nothing but
+  the payments someone confirms.
 - **Money is in South African rands only** (owner's call, 2026-09-24:
   "Everything should be in South African rands"). The ledger keeps integer
   cents, and every write path (payments, reimbursements, team budgets) refuses

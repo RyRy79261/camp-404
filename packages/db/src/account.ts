@@ -226,10 +226,21 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
 
     // The dues ledger stays for accounting, like reimbursements below, but the
     // captain's free-text note may name the person, so it goes.
+    // Their proof-of-payment files go too (the web app deletes the files
+    // themselves after the erasure commits), and the words the Finance team
+    // wrote about them: a concession's reason, a refund's note and reason.
     await tx
       .update(schema.payments)
-      .set({ note: null })
+      .set({ note: null, proofPathname: null, proofContentType: null })
       .where(eq(schema.payments.userId, userId));
+    await tx
+      .update(schema.duesCharges)
+      .set({ concessionReason: null })
+      .where(eq(schema.duesCharges.userId, userId));
+    await tx
+      .update(schema.paymentRefunds)
+      .set({ note: null, declineReason: null })
+      .where(eq(schema.paymentRefunds.userId, userId));
 
     // Scrub encrypted bank details (NOT NULL → empty string, not null) while
     // keeping the reimbursement record for accounting.

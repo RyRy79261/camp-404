@@ -48,6 +48,9 @@
 //     roster CSV's columns by rank, from the field list (./member-export)
 //   - payment references: formatMemberRefCode, paymentReference,
 //     PAYMENT_STATUSES, paymentSettlesDues (./payment-references)
+//   - dues: canManageMoney (captains and Finance leads), duesBalance,
+//     duesSettled, nextInstalment, splitEvenly, proposeRefund and the
+//     statement import (parseStatement, proposeStatementMatches) (./dues)
 //   - money: CURRENCIES, DEFAULT_CURRENCY, isCurrency, UnknownCurrencyError,
 //     formatMoney, parseMoneyToMinor, decimalToMinor, sumMinor — money is in
 //     rands (ZAR) only, with one formatter; formatForeignEquivalent and
@@ -134,6 +137,7 @@ export * from "./privacy";
 export * from "./member-export";
 export * from "./payment-references";
 export * from "./money";
+export * from "./dues";
 export * from "./audience-authz";
 export * from "./pinned-order";
 export * from "./csv";
