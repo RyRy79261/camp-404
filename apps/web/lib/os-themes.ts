@@ -92,7 +92,8 @@ export const OS_THEMES_DEF: readonly OsThemeDef[] = [
   {
     id: "night",
     label: "404 Night",
-    description: "The standard look: bright chrome, softer colours in windows.",
+    description:
+      "The standard look: bright chrome, softer colours inside programs.",
     effects: "full",
     textLevel: "AA",
     colours: {

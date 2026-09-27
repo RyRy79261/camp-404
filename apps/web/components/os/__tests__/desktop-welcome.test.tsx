@@ -90,6 +90,16 @@ function props(over: Partial<DesktopProps> = {}): DesktopProps {
   };
 }
 
+/** What a reader sees at one width: the other width's words left out. */
+function seenText(el: Element | null, at: "desktop" | "phone"): string {
+  if (!el) return "";
+  const copy = el.cloneNode(true) as Element;
+  const other =
+    at === "desktop" ? "[data-welcome-phone]" : "[data-welcome-desktop]";
+  copy.querySelectorAll(other).forEach((n) => n.remove());
+  return copy.textContent ?? "";
+}
+
 const wizard = () =>
   screen.queryByRole("dialog", { name: "Welcome to 404 OS" });
 const desktop = () => document.getElementById("os-desktop")!;
@@ -125,7 +135,7 @@ describe("the welcome wizard", () => {
     for (let i = 0; i < 6; i++) {
       fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
       await act(async () => {});
-      titles.push(document.activeElement?.textContent ?? "");
+      titles.push(seenText(document.activeElement, "desktop"));
     }
     expect(titles).toEqual([
       "Opening things",
@@ -141,7 +151,7 @@ describe("the welcome wizard", () => {
     ).toBeNull();
     fireEvent.click(within(panel).getByRole("button", { name: "Back" }));
     await act(async () => {});
-    expect(document.activeElement?.textContent).toBe("How it looks");
+    expect(seenText(document.activeElement, "desktop")).toBe("How it looks");
   });
 
   it("closes on Esc, counts that as seen once, and hands focus back to the desktop", async () => {
@@ -196,18 +206,17 @@ describe("the welcome wizard", () => {
     expect(wizard()).toBeNull();
   });
 
-  it("moves beside the icons for Your desktop, so the team folders on the right stay in sight, and back after", () => {
+  it("stays on the right edge, clear of the Today handle, on every step (owner, 2026-09-27)", () => {
     render(<Desktop {...props()} />);
     const panel = wizard()!;
-    const next = () =>
-      fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
-    const docks: (string | null)[] = [panel.getAttribute("data-dock")];
-    for (let i = 0; i < 4; i++) {
-      next();
-      docks.push(panel.getAttribute("data-dock"));
+    for (let i = 0; i < 7; i++) {
+      const cls = panel.className.split(/\s+/);
+      expect(cls).toContain("right-11");
+      expect(cls.some((c) => /^left-/.test(c))).toBe(false);
+      if (i < 6) {
+        fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
+      }
     }
-    // Welcome, Opening things, Windows, Your desktop, Today.
-    expect(docks).toEqual(["right", "right", "right", "beside-icons", "right"]);
   });
 
   it("offers the one-click switch on a desktop only; a phone is told one tap opens", () => {
@@ -225,6 +234,44 @@ describe("the welcome wizard", () => {
     expect(phone.className).toContain("md:hidden");
     expect(phone.textContent).toBe("Tap a program once to open it.");
     expect(phone.textContent).not.toMatch(/double|Enter|Ctrl|Shift|box/i);
+  });
+
+  it("tells a phone only what a phone does, on every step, with the same count of steps", () => {
+    render(<Desktop {...props()} />);
+    const panel = wizard()!;
+    const phone: { title: string; body: string }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const heading = within(panel).getAllByRole("heading")[0]!;
+      const body = heading.nextElementSibling;
+      phone.push({
+        title: seenText(heading, "phone"),
+        body: seenText(body, "phone"),
+      });
+      expect(within(panel).getByText(`Step ${i + 1} of 7`)).toBeTruthy();
+      if (i < 6) {
+        fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
+      }
+    }
+    expect(phone.map((p) => p.title)).toEqual([
+      "Welcome",
+      "Opening things",
+      "Open programs",
+      "Your home screen",
+      "Today",
+      "How it looks",
+      "Done",
+    ]);
+    // Nothing a phone cannot do or does not have.
+    const desktopOnly =
+      /double|right-click|drag|title bar|window|Start menu|Ctrl|Shift|Enter|right edge|on the right/i;
+    for (const { title, body } of phone) {
+      expect(`${title} ${body}`).not.toMatch(desktopOnly);
+    }
+    // And the phone's own controls, by the names the bottom bar gives them.
+    const all = phone.map((p) => p.body).join(" ");
+    for (const word of ["Back", "Home", "Programs", "My teams", "Today"]) {
+      expect(all).toContain(word);
+    }
   });
 
   it("turns on Open with one click from its second step, saved at once", async () => {

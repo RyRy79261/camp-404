@@ -42,9 +42,47 @@ export interface WelcomeWizardProps {
 
 type Step = {
   key: string;
-  title: string;
+  title: ReactNode;
   body: ReactNode;
 };
+
+// The desktop's words and the phone's, both in the page, one shown by CSS
+// (the phone layout's own rule, below `md`; phone-chrome.tsx), so the
+// server's first paint is right at either width and nothing flips after
+// hydration. The hidden one is out of the accessibility tree too. Every step
+// has something true to say on a phone, so the step count is the same.
+
+/** Only on a wide screen (the desktop). */
+function Wide({ children, inline }: { children: ReactNode; inline?: boolean }) {
+  return inline ? (
+    <span data-welcome-desktop className="max-md:hidden">
+      {children}
+    </span>
+  ) : (
+    <div data-welcome-desktop className="flex flex-col gap-3 max-md:hidden">
+      {children}
+    </div>
+  );
+}
+
+/** Only on a phone (below `md`). */
+function Narrow({
+  children,
+  inline,
+}: {
+  children: ReactNode;
+  inline?: boolean;
+}) {
+  return inline ? (
+    <span data-welcome-phone className="md:hidden">
+      {children}
+    </span>
+  ) : (
+    <div data-welcome-phone className="flex flex-col gap-3 md:hidden">
+      {children}
+    </div>
+  );
+}
 
 /** The small window on the "Windows" step, which the member can drag. */
 function DemoWindow() {
@@ -147,10 +185,18 @@ export function WelcomeWizard({
       title: "Welcome",
       body: (
         <>
-          <p>
-            This is your camp desktop. Each of your camp tools opens in its own
-            window, like programs on a computer.
-          </p>
+          <Wide>
+            <p>
+              This is your camp desktop. Each of your camp tools opens in its
+              own window, like programs on a computer.
+            </p>
+          </Wide>
+          <Narrow>
+            <p>
+              This is your camp home screen. Each of your camp tools is a
+              program: tap it and it fills the screen.
+            </p>
+          </Narrow>
           <p>A few short tips follow. You can skip them at any time.</p>
         </>
       ),
@@ -160,53 +206,80 @@ export function WelcomeWizard({
       title: "Opening things",
       body: (
         <>
-          {/* By CSS, as the phone's layout is (phone-chrome.tsx): the
-              server's first paint is right at either width. A phone always
-              opens with one tap, so it gets no switch and no talk of
+          {/* A phone always opens with one tap: no switch, and no talk of
               double-clicks, keys or boxes. */}
-          <div
-            data-welcome-desktop
-            className="flex flex-col gap-3 max-md:hidden"
-          >
+          <Wide>
             <p>
               Double-click an icon to open it, or select it and press Enter.
             </p>
             <p>If double-clicking is hard, turn this on:</p>
             <OneClickSwitch prefs={prefs} onChange={onChange} />
-          </div>
-          <p data-welcome-phone className="md:hidden">
-            Tap a program once to open it.
-          </p>
+          </Wide>
+          <Narrow>
+            <p>Tap a program once to open it.</p>
+          </Narrow>
         </>
       ),
     },
     {
       key: "windows",
-      title: "Windows",
+      title: (
+        <>
+          <Wide inline>Windows</Wide>
+          <Narrow inline>Open programs</Narrow>
+        </>
+      ),
       body: (
         <>
-          <p>
-            Drag a window by its title bar to move it. The bar along the bottom
-            shows what is open: click a name there to bring it to the front.
-            Close a window with ×.
-          </p>
-          <DemoWindow />
+          <Wide>
+            <p>
+              Drag a window by its title bar to move it. The bar along the
+              bottom shows what is open: click a name there to bring it to the
+              front. Close a window with ×.
+            </p>
+            <DemoWindow />
+          </Wide>
+          {/* The phone's own: one program at a time, full screen (Back at
+              its top), and the bottom bar's Home and Programs. */}
+          <Narrow>
+            <p>
+              An open program fills the screen. Back, at its top, closes it.
+            </p>
+            <p>
+              On the bar at the bottom, Home takes you back to your home screen,
+              and Programs lists what is still open: tap one to return to it.
+            </p>
+          </Narrow>
         </>
       ),
     },
     {
       key: "desktop",
-      title: "Your desktop",
+      title: (
+        <>
+          <Wide inline>Your desktop</Wide>
+          <Narrow inline>Your home screen</Narrow>
+        </>
+      ),
       body: (
         <>
-          <p>
-            Right-click an empty spot to make a folder, or right-click a program
-            to make a shortcut. Drag icons wherever you like; they stay put.
-          </p>
-          <p>
-            Your teams sit on the right. The Teams folder holds every team in
-            the camp.
-          </p>
+          <Wide>
+            <p>
+              Right-click an empty spot to make a folder, or right-click a
+              program to make a shortcut. Drag icons wherever you like; they
+              stay put.
+            </p>
+            <p>
+              Your teams&rsquo; folders sit on the right edge of the desktop,
+              behind this panel. The Teams folder holds every team in the camp.
+            </p>
+          </Wide>
+          <Narrow>
+            <p>
+              Your programs sit in groups on the home screen. Your own teams are
+              under My teams, and the Teams folder holds every team in the camp.
+            </p>
+          </Narrow>
         </>
       ),
     },
@@ -215,25 +288,33 @@ export function WelcomeWizard({
       title: "Today",
       body: (
         <>
-          <p className="flex items-start gap-2">
-            <span>
-              The tab on the right edge, marked Today, opens your list: what
-              needs you, and what is coming up.
-            </span>
-            <LineIcon
-              name="chevron-right"
-              className="mt-0.5 size-5 shrink-0 text-os-primary"
-            />
-          </p>
-          {onOpenToday && (
-            <button
-              type="button"
-              onClick={onOpenToday}
-              className="w-fit border border-os-line bg-os-panel px-3 py-1.5 font-pixel text-[11px] uppercase text-os-fg hover:border-os-primary"
-            >
-              Open Today
-            </button>
-          )}
+          <Wide>
+            <p className="flex items-start gap-2">
+              <span>
+                The tab on the right edge, marked Today, opens your list: what
+                needs you, and what is coming up.
+              </span>
+              <LineIcon
+                name="chevron-right"
+                className="mt-0.5 size-5 shrink-0 text-os-primary"
+              />
+            </p>
+            {onOpenToday && (
+              <button
+                type="button"
+                onClick={onOpenToday}
+                className="w-fit border border-os-line bg-os-panel px-3 py-1.5 font-pixel text-[11px] uppercase text-os-fg hover:border-os-primary"
+              >
+                Open Today
+              </button>
+            )}
+          </Wide>
+          <Narrow>
+            <p>
+              Today, on the bar at the bottom, opens your list: what needs you,
+              and what is coming up.
+            </p>
+          </Narrow>
         </>
       ),
     },
@@ -254,16 +335,25 @@ export function WelcomeWizard({
       key: "done",
       title: "Done",
       body: (
-        <p>
-          That&rsquo;s it. You can open this again from the Start menu
-          (Welcome), or from My account, under Display.
-        </p>
+        <>
+          <Wide>
+            <p>
+              That&rsquo;s it. You can open this again from the Start menu
+              (Welcome), or from My account, under Display.
+            </p>
+          </Wide>
+          <Narrow>
+            <p>
+              That&rsquo;s it. You can open this again from My account, under
+              Display.
+            </p>
+          </Narrow>
+        </>
       ),
     },
   ];
   const last = steps.length - 1;
   const step = steps[index]!;
-  const besideIcons = step.key === "desktop";
 
   // Focus into the panel on opening, and to each new step's heading.
   useEffect(() => {
@@ -307,14 +397,10 @@ export function WelcomeWizard({
       aria-labelledby={titleId}
       data-os-welcome
       onKeyDown={onKeyDown}
-      data-dock={besideIcons ? "beside-icons" : "right"}
-      className={`pointer-events-auto absolute ${
-        // "Your desktop" talks about the team folders on the right, so on a
-        // wide screen the panel moves beside the icons for that step,
-        // covering neither the icons nor the team folders. It jumps; it
-        // never slides.
-        besideIcons ? "left-[19.5rem]" : "right-11"
-      } top-3 bottom-2 z-40 flex w-96 max-w-[calc(100%-3.5rem)] select-text flex-col border border-os-primary bg-os-bg text-os-fg shadow-[6px_6px_0_0_rgb(0_0_0/0.45)] max-md:inset-x-0 max-md:top-0 max-md:bottom-0 max-md:right-0 max-md:w-auto max-md:max-w-none max-md:z-[95] ${
+      // On the right edge on every step (owner, 2026-09-27), clear of the
+      // Today handle.
+      data-dock="right"
+      className={`pointer-events-auto absolute right-11 top-3 bottom-2 z-40 flex w-96 max-w-[calc(100%-3.5rem)] select-text flex-col border border-os-primary bg-os-bg text-os-fg shadow-[6px_6px_0_0_rgb(0_0_0/0.45)] max-md:inset-x-0 max-md:top-0 max-md:bottom-0 max-md:right-0 max-md:w-auto max-md:max-w-none max-md:z-[95] ${
         effects === "none" ? "" : "os-slide-in"
       }`}
     >

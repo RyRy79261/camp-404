@@ -5,7 +5,6 @@ import {
   login,
   redeemInviteAtGate,
   resetTestState,
-  seedTeam,
 } from "./_helpers";
 import { desktopOnly } from "./lib/dom";
 import {
@@ -113,52 +112,38 @@ test.describe("404 OS welcome and themes (test-mode)", () => {
     await expect(page.locator("#os-desktop :focus")).toHaveCount(1);
   });
 
-  test("Your desktop: the panel moves aside so the team folders on the right show; Today's handle is reachable on the next step", async ({
+  test("the panel stays on the right edge on every step, and Today's handle takes a click beside it", async ({
     page,
     request,
   }, testInfo) => {
-    desktopOnly(testInfo, "the phone has no team folders on the right");
-    await approvedMember(page, request, "welcome-teams", true);
-    await page.goto("/"); // the camp user row, before the team
-    await seedTeam(request, "welcome-teams", "kitchen", true);
+    desktopOnly(testInfo, "the phone's panel fills the screen");
+    await approvedMember(page, request, "welcome-right", true);
     await page.goto("/");
     await expectDesktop(page);
     const panel = wizard(page);
     await expect(panel).toBeVisible();
-    const folder = desktopIcon(page, "Kitchen team");
-    await expect(folder).toBeVisible();
-    const overlaps = async () => {
-      const a = (await panel.boundingBox())!;
-      const b = (await folder.boundingBox())!;
-      return (
-        a.x < b.x + b.width &&
-        b.x < a.x + a.width &&
-        a.y < b.y + b.height &&
-        b.y < a.y + a.height
-      );
-    };
-    // On the right edge it covers the team folder (which is why it moves).
-    expect(await overlaps()).toBe(true);
-    for (let i = 0; i < 3; i++) {
-      await panel.getByRole("button", { name: "Next" }).click();
-    }
-    await expect(
-      panel.getByRole("heading", { name: "Your desktop" }),
-    ).toBeFocused();
-    expect(await overlaps()).toBe(false);
-    // Nor does it sit on the icons at the left.
+    const width = page.viewportSize()!.width;
     const inbox = (await desktopIcon(page, "Inbox").boundingBox())!;
-    expect((await panel.boundingBox())!.x).toBeGreaterThan(
-      inbox.x + inbox.width,
-    );
-
-    // Today: back on the right, the handle still takes a click.
-    await panel.getByRole("button", { name: "Next" }).click();
-    await expect(panel.getByRole("heading", { name: "Today" })).toBeFocused();
-    await page.getByRole("button", { name: /^Show Today/ }).click();
-    await expect(
-      page.getByRole("complementary", { name: "Today", exact: true }),
-    ).toBeVisible();
+    for (let i = 0; i < 7; i++) {
+      // After its slide in has finished.
+      await panel.evaluate((el) =>
+        Promise.all(el.getAnimations().map((a) => a.finished)),
+      );
+      const box = (await panel.boundingBox())!;
+      // Flush with the Today handle's 44 px, never over the icons.
+      expect(Math.round(width - (box.x + box.width))).toBe(44);
+      expect(box.x).toBeGreaterThan(inbox.x + inbox.width);
+      if (i === 4) {
+        await expect(
+          panel.getByRole("heading", { name: "Today" }),
+        ).toBeFocused();
+        await page.getByRole("button", { name: /^Show Today/ }).click();
+        await expect(
+          page.getByRole("complementary", { name: "Today", exact: true }),
+        ).toBeVisible();
+      }
+      if (i < 6) await panel.getByRole("button", { name: "Next" }).click();
+    }
   });
 
   test("on a phone, Opening things says one tap opens, with no switch and no double-click", async ({
@@ -184,6 +169,24 @@ test.describe("404 OS welcome and themes (test-mode)", () => {
     await expect(
       panel.getByRole("switch", { name: /Open with one click/ }),
     ).toBeHidden();
+
+    // Open programs and the home screen: the phone's own controls, and none
+    // of the desktop's (dragging, right-click, the taskbar).
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(
+      panel.getByRole("heading", { name: "Open programs" }),
+    ).toBeFocused();
+    await expect(panel.getByText("Step 3 of 7")).toBeVisible();
+    await expect(panel.getByText(/Back, at its top, closes it/)).toBeVisible();
+    await expect(panel.locator("[data-welcome-demo]")).toBeHidden();
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(
+      panel.getByRole("heading", { name: "Your home screen" }),
+    ).toBeFocused();
+    await expect(panel.getByText(/under My teams/)).toBeVisible();
+    for (const el of await panel.getByText(/right-click|drag/i).all()) {
+      await expect(el).toBeHidden();
+    }
   });
 
   test("an applicant waiting for approval gets no welcome; once approved, it opens on their first full desktop", async ({
