@@ -29,7 +29,10 @@ export async function deleteAccount(input: {
   authUserId: string;
 }): Promise<SanitiseResult> {
   if (isE2ETestMode()) {
-    if (usesTestStore()) testStore.deleteDesktopLayout(input.userId);
+    if (usesTestStore()) {
+      testStore.deleteDesktopLayout(input.userId);
+      testStore.deleteInkblotRuns(input.userId);
+    }
     return { ok: true, lostCatNumber: 0 };
   }
   const result = await sanitiseAccount(input.userId);

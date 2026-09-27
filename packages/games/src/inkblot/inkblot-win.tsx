@@ -4,13 +4,12 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { CAT_FRAMES } from "./cat";
 import type { InkblotCopy } from "./copy";
 import {
-  addEntry,
+  browserBoard,
   cleanInitials,
   formatRun,
-  loadBoard,
   qualifies,
-  saveBoard,
   type Entry,
+  type InkblotBoard,
 } from "./leaderboard";
 import { COLOURS, type Sprite } from "./sprites";
 
@@ -65,23 +64,40 @@ export function InkblotWin({
   copy,
   seconds,
   knocked,
+  board: store = browserBoard,
   onAgain,
 }: {
   copy: InkblotCopy;
   seconds: number;
   knocked: number;
+  board?: InkblotBoard;
   onAgain: () => void;
 }) {
   const id = useId();
   const [board, setBoard] = useState<Entry[] | null>(null);
   const [initials, setInitials] = useState("");
   const [mine, setMine] = useState<Entry | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   const initialsRef = useRef<HTMLInputElement>(null);
   const againRef = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setBoard(loadBoard()), []);
+  useEffect(() => {
+    let live = true;
+    store.load().then(
+      (loaded) => live && setBoard(loaded),
+      () => {
+        if (!live) return;
+        setBoard([]);
+        setProblem("The hall of fame couldn't be loaded.");
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [store]);
 
   const canEnter = board !== null && !mine && qualifies(board, seconds);
 
@@ -94,14 +110,25 @@ export function InkblotWin({
     root.current?.scrollTo({ top: 0 });
   }, [board, canEnter]);
 
-  function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     const name = cleanInitials(initials) || "???";
-    const entry = { name, seconds, at: new Date().toISOString() };
-    const next = addEntry(board ?? [], entry);
-    saveBoard(next);
-    setBoard(next);
-    setMine(entry);
+    setSaving(true);
+    setProblem(null);
+    try {
+      const result = await store.save({ name, seconds });
+      if (result.ok) {
+        setBoard(result.board);
+        setMine(result.mine);
+      } else {
+        setProblem(result.error);
+      }
+    } catch {
+      setProblem("Your time couldn't be saved. Try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -203,11 +230,17 @@ export function InkblotWin({
               />
               <button
                 type="submit"
+                disabled={saving}
                 className="border-2 border-os-fg bg-os-fg px-3 font-pixel text-xs uppercase text-os-bg shadow-[3px_3px_0_0_var(--os-primary)] hover:bg-os-primary hover:text-os-primary-fg"
               >
-                Save
+                {saving ? "Saving…" : "Save"}
               </button>
             </div>
+            {problem && (
+              <p role="alert" className="font-mono text-xs text-os-primary">
+                {problem}
+              </p>
+            )}
           </form>
         )}
 
@@ -245,7 +278,12 @@ export function InkblotWin({
             </ol>
           ) : (
             <p className="font-mono text-xs uppercase text-os-muted">
-              No records yet.
+              {board === null ? "Loading…" : "No records yet."}
+            </p>
+          )}
+          {problem && !canEnter && (
+            <p role="alert" className="mt-1 font-mono text-xs text-os-primary">
+              {problem}
             </p>
           )}
           <p className="mt-1 font-mono text-[10px] text-os-muted">

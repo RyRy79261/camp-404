@@ -33,6 +33,7 @@
     "./cycles": "./src/cycles.ts",
     "./cycle-rollover": "./src/cycle-rollover.ts",
     "./desktop-layouts": "./src/desktop-layouts.ts",
+    "./inkblot": "./src/inkblot.ts",
     "./questionnaire-definitions": "./src/questionnaire-definitions.ts",
     "./questionnaire-lifecycle": "./src/questionnaire-lifecycle.ts",
     "./questionnaire-responses": "./src/questionnaire-responses.ts",

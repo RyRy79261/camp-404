@@ -28,6 +28,7 @@ import {
   type Sprite,
 } from "./sprites";
 import { InkblotWin } from "./inkblot-win";
+import type { InkblotBoard } from "./leaderboard";
 
 // INKBLOT.EXE's screen, in 16-bit pixel art (owner, 2026-09-25). The scene is
 // drawn on a small canvas, one pixel per PX world units, then blown up with
@@ -411,10 +412,13 @@ const KEYS: Record<string, keyof Input> = {
 export function InkblotWindow({
   copy,
   photoBase,
+  board,
 }: {
   copy: InkblotCopy;
   /** Where the app serves the wall's photos, e.g. "/inkblot". */
   photoBase: string;
+  /** A shared leaderboard; without one, it is kept in this browser. */
+  board?: InkblotBoard;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -630,6 +634,7 @@ export function InkblotWindow({
             copy={copy}
             seconds={won.seconds}
             knocked={won.knocked}
+            board={board}
             onAgain={restart}
           />
         )}

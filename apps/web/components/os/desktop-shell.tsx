@@ -110,6 +110,7 @@ import { folderIcon, iconFor, programIcon } from "./program-icons";
 import { ConsoleBoot } from "./console-boot";
 import {
   DesktopDisplayContext,
+  OS_SUBLINE,
   OsWordmark,
   displayAttributes,
   useDesktopDisplay,
@@ -2041,13 +2042,17 @@ function DesktopInner({
           }
         />
         <div className="relative min-h-0 flex-1">
-          {/* The wallpaper: the wordmark and the year, centred. */}
+          {/* The wallpaper: the wordmark, its sub line and the year, centred. */}
           <div
             aria-hidden
             data-os-paused={decorCovered || undefined}
             className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 max-md:hidden"
           >
             <OsWordmark text="404 OS" size="clamp(3rem, 7vw, 5.5rem)" />
+            <p
+              data-label={OS_SUBLINE}
+              className="font-mono text-[11px] uppercase tracking-[0.3em] text-os-fg after:content-[attr(data-label)]"
+            />
             {tagline && (
               <p
                 data-label={tagline}
