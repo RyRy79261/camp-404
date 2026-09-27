@@ -7,8 +7,8 @@ export const metadata = { title: "INKBLOT — Camp 404" };
 
 /**
  * INKBLOT, the shared game from @camp404/games, opened from the Terminal
- * (`play inkblot`). Every approved member, the Terminal's own gate. It reads
- * and writes nothing of the camp's: its scores stay in this browser.
+ * (`play inkblot`). Every approved member, the Terminal's own gate. Its
+ * hall of fame is the camp's, shared in the database (./actions.ts).
  */
 export default async function InkblotPage() {
   await requireMemberPage();

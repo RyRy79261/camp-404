@@ -207,6 +207,7 @@ import {
   DesktopLayoutInvalidError,
   DesktopPreferencesInvalidError,
 } from "@camp404/db/desktop-layouts";
+import { InkblotRunInvalidError } from "@camp404/db/inkblot";
 import {
   ADJUST_INSTRUCTION_MAX,
   ADJUST_INSTRUCTION_NEEDED,
@@ -215,6 +216,8 @@ import {
   DEFAULT_PLATES,
   DesktopLayout,
   DesktopPreferencesPatch,
+  INKBLOT_BOARD_SIZE,
+  InkblotRun,
   KitchenRecipe,
   MealPlanInput,
   PROOFREAD_ANSWER_MAX,
@@ -228,6 +231,7 @@ import {
   parseStoredDesktopPreferences,
   type DesktopPreferences,
   type DraftReport,
+  type InkblotBoardEntry,
   type InboxFilter,
   type IngredientCategory,
   type PlateLine,
@@ -657,6 +661,8 @@ interface TestStoreState {
   desktopLayouts: Map<string, unknown>;
   /** `desktop_layouts.preferences`: the stored value, by user id. */
   desktopPreferences: Map<string, Record<string, unknown>>;
+  /** `inkblot_scores`: every run put on the board, in the order played. */
+  inkblotRuns: (InkblotBoardEntry & { userId: string })[];
 }
 
 /** The lift fields of a `driver_profiles` row. */
@@ -742,6 +748,7 @@ function globalState(): TestStoreState {
       carMembers: [] as TestCarMember[],
       desktopLayouts: new Map<string, unknown>(),
       desktopPreferences: new Map<string, Record<string, unknown>>(),
+      inkblotRuns: [],
     } satisfies TestStoreState;
   }
   return g[GLOBAL_KEY] as TestStoreState;
@@ -820,6 +827,7 @@ S.recipeHistory ??= [];
 S.mealPlans ??= new Map<number, MealPlan>();
 S.desktopLayouts ??= new Map<string, unknown>();
 S.desktopPreferences ??= new Map<string, Record<string, unknown>>();
+S.inkblotRuns ??= [];
 const recipes = S.recipes;
 const recipeRuns = S.recipeRuns;
 const recipeSources = S.recipeSources;
@@ -5121,6 +5129,47 @@ export const testStore = {
     carMembers.length = 0;
     S.desktopLayouts.clear();
     S.desktopPreferences.clear();
+    S.inkblotRuns.length = 0;
+  },
+
+  // --- INKBLOT's board (the twin of @camp404/db/inkblot) --------------------
+  // The same check on the write, and the same order on the read: fastest
+  // first, the earlier run first on a tie, cut to the board's size.
+
+  getInkblotBoard(): InkblotBoardEntry[] {
+    return S.inkblotRuns
+      .map((run, order) => ({ run, order }))
+      .sort(
+        (a, b) =>
+          a.run.durationMs - b.run.durationMs ||
+          a.run.at.localeCompare(b.run.at) ||
+          a.order - b.order,
+      )
+      .slice(0, INKBLOT_BOARD_SIZE)
+      .map(({ run: { userId: _userId, ...entry } }) => entry);
+  },
+  recordInkblotRun(userId: string, run: unknown): InkblotBoardEntry {
+    if (!findUserById(userId)) {
+      throw new Error(`No test user with id ${userId}`);
+    }
+    const parsed = InkblotRun.safeParse(run);
+    if (!parsed.success) {
+      throw new InkblotRunInvalidError(
+        parsed.error.issues.map((issue) => issue.message),
+      );
+    }
+    const entry: InkblotBoardEntry = {
+      id: crypto.randomUUID(),
+      initials: parsed.data.initials,
+      durationMs: parsed.data.durationMs,
+      at: new Date().toISOString(),
+    };
+    S.inkblotRuns.push({ ...entry, userId });
+    return entry;
+  },
+  /** Account erasure's delete of the member's `inkblot_scores` rows. */
+  deleteInkblotRuns(userId: string): void {
+    S.inkblotRuns = S.inkblotRuns.filter((run) => run.userId !== userId);
   },
 
   // --- Desktop layouts (the twin of @camp404/db/desktop-layouts) ----------

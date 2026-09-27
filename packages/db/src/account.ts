@@ -151,6 +151,10 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.desktopLayouts)
       .where(eq(schema.desktopLayouts.userId, userId));
+    // Their INKBLOT runs: the initials they typed on the board.
+    await tx
+      .delete(schema.inkblotScores)
+      .where(eq(schema.inkblotScores.userId, userId));
     await tx
       .delete(schema.notificationDeliveries)
       .where(eq(schema.notificationDeliveries.userId, userId));

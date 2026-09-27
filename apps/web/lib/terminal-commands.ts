@@ -57,7 +57,7 @@ export const INKBLOT_COPY = {
   start: "Press any key or tap to start",
   winTitle: "GOODEST BOI",
   winLine: "Everything is on the floor.",
-  boardNote: "Scores live in this browser only.",
+  boardNote: "The whole camp shares this board.",
   againButton: "Knock it all over again",
 } as const;
 
