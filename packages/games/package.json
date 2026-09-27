@@ -12,7 +12,8 @@
     "./inkblot/styles.css": "./src/inkblot/inkblot.css",
     "./cats": "./src/cats/index.ts",
     "./cats/styles.css": "./src/cats/cats.css",
-    "./shadow-work": "./src/shadow-work/index.ts"
+    "./shadow-work": "./src/shadow-work/index.ts",
+    "./characters": "./src/characters/index.ts"
   },
   "scripts": {
     "lint": "eslint .",

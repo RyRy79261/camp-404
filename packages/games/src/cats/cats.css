@@ -1,13 +1,14 @@
-/* The cats' styles (@camp404/games/cats and @camp404/games/shadow-work). An
-   app that shows a cat imports this from its own Tailwind entry, after
-   @camp404/os/styles.css: the cats wear the OS's colours and pixel face (the
-   --os-* variables and the os-* utilities). A hidden tab pauses them with
-   the rest of the desktop ([data-os-paused] in the OS's styles); reduced
-   motion stills them here. */
+/* The cats' styles (@camp404/games/cats, @camp404/games/shadow-work and
+   @camp404/games/characters). An app that shows a cat imports this from its
+   own Tailwind entry, after @camp404/os/styles.css: the cats wear the OS's
+   colours and pixel face (the --os-* variables and the os-* utilities). A
+   hidden tab pauses them with the rest of the desktop ([data-os-paused] in
+   the OS's styles); reduced motion stills them here. */
 
 /* Tailwind v4 scans only the consuming app: point it at the cats' classes. */
 @source "./**/*.{ts,tsx}";
 @source "../shadow-work/**/*.{ts,tsx}";
+@source "../characters/**/*.{ts,tsx}";
 
 /* Jinn's head rises over a window's top edge, looks, and ducks back. */
 @keyframes cat-peek {

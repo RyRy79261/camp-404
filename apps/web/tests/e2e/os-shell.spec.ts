@@ -1177,6 +1177,10 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(prince).toHaveAttribute("tabindex", "-1");
     await prince.click();
     await expect(prince.locator(".cat-bubble")).toHaveText("prrr");
+    // Not the member on PRINCE_KEEPER_EMAILS: no reunion, and the list of
+    // who sees it is nowhere in what this browser was sent.
+    await expect(page.locator("[data-reunion]")).toHaveCount(0);
+    expect(await page.content()).not.toContain("prince-keeper@example.com");
 
     // Shadow Work, pinned under the Teams folder's icons, in view, with
     // Jinn on it; neither is named anywhere.
@@ -1345,6 +1349,69 @@ test.describe("404 OS desktop (test-mode)", () => {
     expect(startMs).toBeLessThan(150);
   });
 
+  test("Prince comes home: only the member on PRINCE_KEEPER_EMAILS sees Cloud call him, once a session", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "the taskbar clock is the desktop's");
+    // playwright.config.ts lists prince-keeper@example.com, confirmed (the
+    // test login's default). The cats test above is everyone else: Prince
+    // asleep on the clock.
+    await approvedMember(page, request, "prince-keeper", "Cloud");
+    await page.goto("/");
+    await expectDesktop(page);
+
+    // No Prince asleep on the clock, not even while the scene loads.
+    const bar = taskbar(page);
+    await expect(bar.locator("[data-reunion]")).toBeAttached();
+    await expect(bar.locator('[data-cat="prince"]')).toHaveCount(0);
+    // First the clock stands empty (30 s; E2E_REUNION_DELAY_MS, 3 s, under
+    // the harness): he is missing, and the session is not marked yet, so
+    // leaving now plays it next time.
+    expect(
+      await page.evaluate(() => sessionStorage.getItem("camp404:reunion-seen")),
+    ).toBeNull();
+
+    // She calls him (the scene is hidden from assistive tech), he comes, and
+    // they sit together: one picture with a plain name.
+    const scene = bar.locator('[data-reunion="scene"]');
+    await expect(scene).toHaveAttribute("aria-hidden", "true");
+    await expect(
+      scene.getByText("Prince, prince, prince", { exact: true }),
+    ).toBeVisible({
+      timeout: 12_000,
+    });
+    const pair = bar.getByRole("img", { name: "Cloud and Prince" });
+    await expect(pair).toBeVisible({ timeout: 20_000 });
+    await expect(bar.locator('[data-cat="prince"]')).toHaveCount(0);
+    // Tapped, he purrs.
+    await bar.locator('[data-reunion="together"] button').click();
+    await expect(bar.locator(".cat-bubble")).toHaveText("prrr");
+
+    // Once per browser session: a reload goes straight to the two of them.
+    await page.reload();
+    await expectDesktop(page);
+    await expect(pair).toBeVisible();
+    await expect(page.locator('[data-reunion="scene"]')).toHaveCount(0);
+  });
+
+  test("Prince comes home: under reduced motion they are simply there", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "the taskbar clock is the desktop's");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await approvedMember(page, request, "prince-keeper", "Cloud");
+    await page.goto("/");
+    await expectDesktop(page);
+    const bar = taskbar(page);
+    await expect(
+      bar.getByRole("img", { name: "Cloud and Prince" }),
+    ).toBeVisible();
+    await expect(bar.locator('[data-reunion="scene"]')).toHaveCount(0);
+    await expect(bar.locator('[data-cat="prince"]')).toHaveCount(0);
+  });
+
   test("an idle desktop with two windows open costs next to no CPU", async ({
     page,
     request,
@@ -1391,6 +1458,22 @@ test.describe("404 OS desktop (test-mode)", () => {
 test.describe("404 OS on a phone (test-mode)", () => {
   test.beforeEach(async ({ request }) => {
     await resetTestState(request);
+  });
+
+  test("Prince comes home on the bottom bar's clock too", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await approvedMember(page, request, "prince-keeper", "Cloud");
+    await page.goto("/");
+    await expectDesktop(page);
+    const bar = bottomBar(page);
+    await expect(
+      bar.getByRole("img", { name: "Cloud and Prince" }),
+    ).toBeVisible();
+    await expect(bar.locator('[data-cat="prince"]')).toHaveCount(0);
   });
 
   test("the bottom bar shows keyboard focus, and Today's taps are at least 44 px", async ({
