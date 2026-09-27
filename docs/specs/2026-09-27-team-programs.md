@@ -197,9 +197,10 @@ came with the review; all six are built in the first version.
    or a key that is not a team answers no, a captain's included). Surfaces
    that already exist keep their own rules: meeting notes stay open to the
    team's members this year (`canWorkInTeam`), which is wider than this
-   ruling. [UNRESOLVED 2026-09-27] Whether meeting notes should narrow to
-   leads and captains is the owner's call; it is listed as a follow-up, not
-   changed silently.
+   ruling. The owner settled it on
+   review (2026-09-27): meeting notes can be added by anyone on the team, as
+   today. Ruling 1's "leads and captains" covers the team program's own tools
+   and its description, not meeting notes.
 2. **Power and Lighting goes first.** Its program has a read-only "Power plan
    at a glance" panel: peak load, generator load (% of rated kVA with its
    green/amber/red band), litres for the burn (with the safety margin) and
