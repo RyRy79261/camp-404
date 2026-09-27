@@ -501,8 +501,9 @@ Decisions baked into the schema — keep new code consistent with them:
     rule in those functions, never at a call site.
   - **A team's program is another place team identity decides** (owner's
     ruling 1, 2026-09-27): only a captain or a lead OF THAT TEAM changes what
-    a team's program says (its description and links today), by `canEditTeamProgram` in
-    `packages/core/src/team-programs.ts`, which fails closed. Every member
+    a team's program says (its description today), by
+    `canEditTeamProgram` in `packages/core/src/team-programs.ts`, which fails
+    closed. Every member
     reads every team's program. The write re-reads the actor's rank and lead
     teams inside its own transaction. Meeting notes keep their own, wider
     rule (`canWorkInTeam`: the team's members this year). Change the rule in
@@ -645,6 +646,9 @@ LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
 
 ## Conventions
 
+- **Nothing a feature needs may live outside the app** (owner, 2026-09-27).
+  Never add links to Google Drive, Docs, Sheets, Forms or any other outside
+  tool as a feature; build what the camp needs inside the app instead.
 - TypeScript throughout; shared types and Zod schemas live in
   `@camp404/types`. Validate external input at the boundary with Zod.
 - Lint via `@camp404/eslint-config`; format via Prettier (`.prettierrc.json`).

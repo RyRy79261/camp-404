@@ -13,8 +13,8 @@ import {
 import { saveTeamProgram } from "@/lib/team-programs";
 import { getLeadTeams } from "@/lib/users";
 
-// A team program's one write today: its description and links (owner's
-// ruling 4, 2026-09-27). The gate (the team_lead rung, clearance being
+// A team program's one write today: its description (owner's ruling 4,
+// 2026-09-27). The gate (the team_lead rung, clearance being
 // global), the Zod boundary, then canEditTeamProgram on the teams the actor
 // leads, so a lead of another team is told here. The rule is checked again
 // inside the write's own transaction, which re-reads the actor's rank and led

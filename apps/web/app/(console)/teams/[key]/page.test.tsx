@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // A team's program as each viewer gets it (owner's rulings 1-3, 2026-09-27).
-// Every member reads the description, the links, the announcements and, on
+// Every member reads the description, the announcements and, on
 // Power and Lighting, the power plan at a glance. Only a captain or a lead OF
 // THAT TEAM gets the Edit control; a lead of another team does not.
 
@@ -40,7 +40,6 @@ vi.mock("@/lib/team-programs", () => ({
   getTeamProgram: vi.fn(async (team: string) => ({
     team,
     description: "We keep the lights on.",
-    links: [{ label: "Grid plan", url: "https://example.com/grid" }],
     version: 1,
     updatedAt: new Date(),
   })),
@@ -91,17 +90,16 @@ async function show(key: string) {
   render(await TeamPage({ params: Promise.resolve({ key }) }));
 }
 
-const EDIT = /^Edit what .* does and its links$/;
+const EDIT = /^Edit what .* does$/;
 
 afterEach(cleanup);
 beforeEach(() => vi.clearAllMocks());
 
 describe("a team's program", () => {
-  it("shows a member the description, links, announcements and power plan, with no edit controls", async () => {
+  it("shows a member the description, announcements and power plan, with no edit controls", async () => {
     viewAs("camp_member");
     await show("power_and_lighting");
     expect(screen.getByText("We keep the lights on.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Grid plan" })).toBeTruthy();
     expect(screen.getByText("Generator test Saturday")).toBeTruthy();
     expect(
       screen.getByRole("region", { name: "Power plan at a glance" }),

@@ -670,7 +670,7 @@ interface TestStoreState {
   desktopLayouts: Map<string, unknown>;
   /** `desktop_layouts.preferences`: the stored value, by user id. */
   desktopPreferences: Map<string, Record<string, unknown>>;
-  /** `team_programs`: a team's description and links, by team key. */
+  /** `team_programs`: a team's description, by team key. */
   teamPrograms: Map<string, TeamProgram>;
   /** `inkblot_scores`: every run put on the board, in the order played. */
   inkblotRuns: (InkblotBoardEntry & { userId: string })[];
@@ -2196,13 +2196,12 @@ export const testStore = {
     const row = S.teamPrograms.get(team);
     return row
       ? structuredClone(row)
-      : { team, description: "", links: [], version: 0, updatedAt: null };
+      : { team, description: "", version: 0, updatedAt: null };
   },
   saveTeamProgram(input: {
     actorId: string;
     team: Team;
     description: string;
-    links: { label: string; url: string }[];
     expectedVersion: number;
   }): TeamProgramWriteResult {
     // Like the real write, the store reads the actor's reach itself.
@@ -2218,7 +2217,6 @@ export const testStore = {
     S.teamPrograms.set(input.team, {
       team: input.team,
       description: input.description,
-      links: input.links.map((l) => ({ ...l })),
       version,
       updatedAt: new Date(),
     });

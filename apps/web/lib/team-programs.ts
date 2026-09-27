@@ -9,13 +9,13 @@ import type {
   TeamProgram,
   TeamProgramWriteResult,
 } from "@camp404/db/team-programs";
-import type { Team, TeamLink } from "@camp404/types";
+import type { Team } from "@camp404/types";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
 // A team's program (docs/specs/2026-09-27-team-programs.md), from the
-// database or, under E2E, the test store: its description and links (owner's
-// ruling 4) and the announcements it has sent (ruling 3). The rules live in
+// database or, under E2E, the test store: its description (owner's ruling
+// 4) and the announcements it has sent (ruling 3). The rules live in
 // @camp404/db; the store repeats them. The write re-checks the actor itself
 // (a captain or a lead of that team), so a caller passes only who is acting.
 
@@ -31,7 +31,6 @@ export async function saveTeamProgram(input: {
   actorId: string;
   team: Team;
   description: string;
-  links: TeamLink[];
   expectedVersion: number;
 }): Promise<TeamProgramWriteResult> {
   return usesTestStore()

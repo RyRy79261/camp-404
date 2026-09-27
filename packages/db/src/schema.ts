@@ -1758,12 +1758,15 @@ export const teamBudgets = pgTable(
 
 // --- Team programs -------------------------------------------------------
 // What a team's own program on the 404 OS desktop says about the team (owner's
-// ruling 4, 2026-09-27): one short description of what the team does and a
-// few links, written by the team's leads and captains (canEditTeamProgram in
-// @camp404/core). One row per team, NOT year-scoped: what a team does and
-// where its documents live outlast the rollover. No row means nothing written
-// yet. Every write is a compare-and-set on `version` and writes an audit_log
-// row in the same transaction (packages/db/src/team-programs.ts).
+// ruling 4, 2026-09-27): one short description of what the team does, written
+// by the team's leads and captains (canEditTeamProgram in @camp404/core). One
+// row per team, NOT year-scoped: what a team does outlasts the rollover. No
+// row means nothing written yet. Every write is a compare-and-set on
+// `version` and writes an audit_log row in the same transaction
+// (packages/db/src/team-programs.ts).
+//
+// No links (owner, 2026-09-27): nothing a team needs lives outside the app,
+// so a program never offers links to outside tools.
 //
 // It holds no member data: no author column (the audit row says who), and the
 // text is about the team. Erasure has nothing to clear here.
@@ -1772,24 +1775,14 @@ export const teamPrograms = pgTable(
   {
     team: teamEnum("team").primaryKey(),
     description: text("description").notNull().default(""),
-    // `TeamLink[]` from @camp404/types: `{ label, url }`, http(s) only, checked
-    // with Zod on every write.
-    links: jsonb("links")
-      .$type<{ label: string; url: string }[]>()
-      .notNull()
-      .default(sql`'[]'::jsonb`),
     version: integer("version").notNull().default(1),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
   (tp) => ({
-    // TEAM_DESCRIPTION_MAX and TEAM_LINKS_MAX in @camp404/types; the last guard.
+    // TEAM_DESCRIPTION_MAX in @camp404/types; the last guard.
     descriptionLength: check(
       "team_programs_description_length",
       sql`char_length(${tp.description}) <= 300`,
-    ),
-    linksShape: check(
-      "team_programs_links_shape",
-      sql`jsonb_typeof(${tp.links}) = 'array' and jsonb_array_length(${tp.links}) <= 8`,
     ),
   }),
 );

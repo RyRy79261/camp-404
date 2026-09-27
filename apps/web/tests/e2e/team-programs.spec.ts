@@ -14,7 +14,8 @@ import {
 } from "./_helpers";
 
 // Team programs (test-mode; docs/specs/2026-09-27-team-programs.md). Every
-// member reads every team's program: its description and links (ruling 4),
+// member reads every team's program: its description (ruling 4; no links to
+// outside tools: everything happens inside the app),
 // the announcements it has sent (ruling 3) and, on Power and Lighting, the
 // power plan at a glance (ruling 2). Only a captain or a lead OF THAT TEAM
 // changes what it says (ruling 1): a lead of another team gets no Edit.
@@ -24,7 +25,7 @@ import {
 // 1.07 kW, 24.2% of the generator, 236.7 L with the 20% margin, 12 cans.
 
 const PROGRAM = "/teams/power_and_lighting";
-const EDIT = /^Edit what .* does and its links$/;
+const EDIT = /^Edit what .* does$/;
 
 async function approvedMember(
   page: Page,
@@ -150,17 +151,8 @@ test.describe("team programs (test-mode)", () => {
     await dialog
       .getByLabel("What the team does")
       .fill("We keep the lights on and the freezers cold.");
-    await dialog.getByRole("button", { name: "Add a link" }).click();
-    await dialog.getByLabel("Link 1 name").fill("Grid plan");
-    // A bad address is refused beside its field, and nothing is saved.
-    await dialog.getByLabel("Link 1 address").fill("javascript:alert(1)");
-    await dialog.getByRole("button", { name: "Save" }).click();
-    await expect(
-      dialog.getByText(
-        "A link must be a web address that starts with https:// or http://.",
-      ),
-    ).toBeVisible();
-    await dialog.getByLabel("Link 1 address").fill("https://example.com/grid");
+    // The dialog takes the description only: nothing to link out to.
+    await expect(dialog.getByRole("button", { name: /link/i })).toHaveCount(0);
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("About this team saved")).toBeVisible();
     await expect(
@@ -186,11 +178,7 @@ test.describe("team programs (test-mode)", () => {
     await expect(
       page.getByText("We keep the lights on and the freezers cold."),
     ).toBeVisible();
-    await expect(
-      page
-        .getByRole("list", { name: "Team links" })
-        .getByRole("link", { name: "Grid plan" }),
-    ).toHaveAttribute("href", "https://example.com/grid");
+    await expect(page.getByRole("list", { name: "Team links" })).toHaveCount(0);
     const sent = page.getByRole("list", { name: "Team announcements" });
     await expect(sent.getByText("Generator test Saturday")).toBeVisible();
     await expect(sent.getByText("Bring ear plugs.")).toBeVisible();

@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { canEditTeamProgram } from "@camp404/core";
-import type { Team, TeamLink } from "@camp404/types";
+import type { Team } from "@camp404/types";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
 import { createHttpDb, withTransaction } from "./index";
@@ -8,7 +8,8 @@ import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // Team programs (docs/specs/2026-09-27-team-programs.md): what a team's own
-// program says about the team, its description and its links.
+// program says about the team: its description. No links (owner,
+// 2026-09-27): everything happens inside the app.
 //
 //  - Every approved member reads them (the page gates the reader).
 //  - Only a captain or a lead OF THAT TEAM writes (owner's ruling 1,
@@ -35,7 +36,6 @@ export const TEAM_PROGRAM_CHANGED =
 export interface TeamProgram {
   team: Team;
   description: string;
-  links: TeamLink[];
   /** 0 when nothing has been saved for the team yet. */
   version: number;
   updatedAt: Date | null;
@@ -46,7 +46,7 @@ export type TeamProgramWriteResult =
   | { ok: false; error: string };
 
 function empty(team: Team): TeamProgram {
-  return { team, description: "", links: [], version: 0, updatedAt: null };
+  return { team, description: "", version: 0, updatedAt: null };
 }
 
 async function read(db: DbOrTx, team: Team): Promise<TeamProgram> {
@@ -58,19 +58,18 @@ async function read(db: DbOrTx, team: Team): Promise<TeamProgram> {
   return {
     team: row.team,
     description: row.description,
-    links: row.links,
     version: row.version,
     updatedAt: row.updatedAt,
   };
 }
 
-/** A team's description and links, or the empty program (version 0). */
+/** A team's description, or the empty program (version 0). */
 export async function getTeamProgram(team: Team): Promise<TeamProgram> {
   return read(createHttpDb(), team);
 }
 
 /**
- * Save a team's description and links, as `actorId`. Refuses anyone but a
+ * Save a team's description, as `actorId`. Refuses anyone but a
  * captain or a lead of that team this year, re-read inside the transaction.
  * The input must already have passed TeamProgramInput.
  */
@@ -78,7 +77,6 @@ export async function saveTeamProgram(input: {
   actorId: string;
   team: Team;
   description: string;
-  links: TeamLink[];
   expectedVersion: number;
 }): Promise<TeamProgramWriteResult> {
   return withTransaction(async (tx) => {
@@ -89,7 +87,6 @@ export async function saveTeamProgram(input: {
     const now = new Date();
     const values = {
       description: input.description,
-      links: input.links,
       updatedAt: now,
     };
     const [row] =
@@ -121,7 +118,6 @@ export async function saveTeamProgram(input: {
         team: input.team,
         version: row.version,
         description: input.description || null,
-        links: input.links.map((l) => l.url),
       },
     });
     return { ok: true, version: row.version } as const;

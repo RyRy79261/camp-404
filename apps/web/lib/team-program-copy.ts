@@ -6,8 +6,7 @@
 /** What anyone who may not edit a team's program is told, by the action. */
 export const TEAM_PROGRAM_REFUSAL =
   "Only captains and this team's leads can change what its program says.";
-export const CHECK_TEAM_PROGRAM =
-  "Check the description and links and try again.";
+export const CHECK_TEAM_PROGRAM = "Check the description and try again.";
 
 /** The path of a team's program. */
 export function teamProgramPath(team: string): string {

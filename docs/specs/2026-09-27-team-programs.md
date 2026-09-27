@@ -79,7 +79,8 @@ still open as issues. #267 (team dashboards), #268 (meeting notes, built),
 ## 2. What the epics say, and where they now disagree
 
 - **#267 (team dashboards)** asks for the common frame (built), plus a remit
-  line, the team's links, a budget summary after #242, a start-of-year lead
+  line, the team's links [CORRECTION 2026-09-27: no links, see ruling 6], a
+  budget summary after #242, a start-of-year lead
   checklist, and a team tools area under the frame. Nothing after the frame is
   built.
 - **Who may act.** #267 (2026-09-24) says **team members** work in a team's
@@ -114,8 +115,9 @@ Missing:
   - The Kitchen program does not show the meal plan or the recipes waiting
     for review.
 - **The team's announcements.** Nothing lists what a team has sent.
-- **A line saying what the team does (its remit), and the team's links.**
-  There is no column for either yet.
+- **A line saying what the team does (its remit).** There is no column for
+  it yet. (The team's links were also listed here; the owner ruled them out,
+  ruling 6.)
 - **Authority shown on the page.** "You lead this team" is shown as a badge,
   but the page gives a lead no tools of its own, only New meeting.
 - **Ten teams have no tools at all.** Their folder holds only their page.
@@ -170,8 +172,8 @@ Who receives them does not change.
 
 - **Its tools exist and are merged** (#263), so the first version is a
   read-only summary of data that already exists, plus links. The panel needs
-  no new schema and no new permission (the description and links table of
-  ruling 4 is shared by every team).
+  no new schema and no new permission (the description table of ruling 4 is
+  shared by every team).
 - **Its rule is already the one the owner asked for.** `canEditPower` lets a
   P&L lead or a captain edit and lets everyone else read. No predicate needs
   changing.
@@ -184,8 +186,8 @@ Who receives them does not change.
 
 ## Decisions (owner, 2026-09-27)
 
-The five questions the proposal ended with are answered; the answers are
-built in the first version.
+The five questions the proposal ended with are answered, and a sixth ruling
+came with the review; all six are built in the first version.
 
 1. **Who may change things in a team's program: only a lead OF THAT TEAM, or a
    captain.** Team identity decides authority here, as `canApproveRecipe` and
@@ -213,13 +215,11 @@ built in the first version.
    pin, audience count or read receipt (`listTeamAnnouncements` in
    `packages/db/src/broadcasts.ts`). Notifications do not change: they still
    go only to the team's members, and a captain or lead sends them as before.
-4. **A team's short description and its links are written by its leads and
-   captains.** One small table, `team_programs` (one row per team, not
-   year-scoped; migration `0065_team_programs`, add-only). Checked with Zod
-   at the boundary (`TeamProgramInput` in `@camp404/types`: up to 300
-   characters, up to 8 links, a link is a web address starting with http://
-   or https://, name up to 60 and address up to 500 characters), and by
-   CHECK constraints in the table. The write (`saveTeamProgram` in
+4. **A team's short description is written by its leads and captains.** One
+   small table, `team_programs` (one row per team, not year-scoped; migration
+   `0066_team_programs`, add-only: team, description, version, updated_at).
+   Checked with Zod at the boundary (`TeamProgramInput` in `@camp404/types`:
+   up to 300 characters) and by a CHECK constraint in the table. The write (`saveTeamProgram` in
    `packages/db/src/team-programs.ts`) runs on the pooled driver in one
    transaction: it re-reads the actor's rank and led teams inside it
    (`lockSenderReach`), is a compare-and-set on `version`, and writes an
@@ -227,11 +227,19 @@ built in the first version.
    no member data (no author column; the audit row says who), so erasure has
    nothing to clear there. It is separate from the join site's one-line team
    description (`camp.teams.described`, captains only, public).
-5. **Every team gets a program with the basics now**: its description and
-   links, its own panels (Power only, for now), its announcements, its coming
+5. **Every team gets a program with the basics now**: its description, its
+   own panels (Power only, for now), its announcements, its coming
    events, its open tasks, its meetings and its people, on today's TEAM.EXE
    page (`/teams/[key]`). Each team's own tools come later, shaped with its
    lead, as entries in `TEAM_PANELS` (`apps/web/components/teams/team-panels.tsx`,
    a map in code by team key). Every active team is in the Teams folder, and
    a member's own team folders on the right each open with that team's
    program (unchanged from before, and tested in `programs.test.ts`).
+6. **No outside links: everything happens inside the app.** (Owner,
+   2026-09-27, on review of the first version.) The whole point of Camp 404
+   is that nothing happens outside the app: no Google Drive, no spreadsheets,
+   no Google Forms. A team program never offers or shows links to outside
+   tools, so the team links #267 asked for are not built, and the
+   description is the only thing a lead writes. What a team needs that lives
+   in an outside tool today becomes a tool inside the app, shaped with the
+   team's lead.

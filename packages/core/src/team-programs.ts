@@ -16,7 +16,7 @@ import { Team, ViewerRank } from "@camp404/types";
 // here; it never takes a team list from the caller.
 
 /**
- * Whether someone may change a team's program (its description and links
+ * Whether someone may change a team's program (its description
  * today). `ledTeams` are the team keys they lead this year.
  */
 export function canEditTeamProgram(

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { AUDIT_ACTION_LABELS, type AuditAction } from "@camp404/core";
 import { TeamProgramInput } from "@camp404/types";
@@ -20,7 +20,7 @@ import { useTestDb } from "./_harness";
 import { makeMembership, makeUser } from "./_factories";
 
 // Team programs on a real Postgres (PGlite). What matters: only a captain or
-// a lead OF THAT TEAM writes a team's description and links (owner's ruling
+// a lead OF THAT TEAM writes a team's description (owner's ruling
 // 1), checked again inside the write's own transaction; every write is a
 // compare-and-set and leaves exactly one audit row beside its change; and a
 // team's program lists only the announcements that have gone out (ruling 3).
@@ -31,7 +31,6 @@ const ACTION: AuditAction = "team.program_changed";
 const TEXT = TeamProgramInput.parse({
   team: "power_and_lighting",
   description: "We keep the lights on and the freezers cold.",
-  links: [{ label: "Grid plan", url: "https://example.com/grid" }],
   expectedVersion: 0,
 });
 
@@ -69,11 +68,22 @@ describe("team programs", () => {
       .where(eq(schema.auditLog.action, ACTION));
   }
 
+  it("keeps no links: the table holds the description and its bookkeeping only", async () => {
+    const columns = await h.db().execute<{
+      column_name: string;
+    }>(sql`select column_name from information_schema.columns where table_name = 'team_programs' order by column_name`);
+    expect(columns.rows.map((r) => r.column_name)).toEqual([
+      "description",
+      "team",
+      "updated_at",
+      "version",
+    ]);
+  });
+
   it("reads an empty program, version 0, for a team nobody has written", async () => {
     expect(await getTeamProgram("water")).toEqual({
       team: "water",
       description: "",
-      links: [],
       version: 0,
       updatedAt: null,
     });
@@ -87,7 +97,6 @@ describe("team programs", () => {
     });
     expect(await getTeamProgram("power_and_lighting")).toMatchObject({
       description: TEXT.description,
-      links: TEXT.links,
       version: 1,
     });
     const rows = await audits();
@@ -99,7 +108,6 @@ describe("team programs", () => {
         team: "power_and_lighting",
         version: 1,
         description: TEXT.description,
-        links: ["https://example.com/grid"],
       },
     });
     expect(AUDIT_ACTION_LABELS[ACTION]).toBeTruthy();
@@ -112,14 +120,12 @@ describe("team programs", () => {
       await saveTeamProgram({
         ...TEXT,
         description: "",
-        links: [],
         expectedVersion: 1,
         actorId: captain.id,
       }),
     ).toEqual({ ok: true, version: 2 });
     expect(await getTeamProgram("power_and_lighting")).toMatchObject({
       description: "",
-      links: [],
       version: 2,
     });
 
@@ -191,13 +197,6 @@ describe("team programs", () => {
       saveTeamProgram({
         ...TEXT,
         description: "x".repeat(301),
-        actorId: captain.id,
-      }),
-    ).rejects.toThrow();
-    await expect(
-      saveTeamProgram({
-        ...TEXT,
-        links: Array.from({ length: 9 }, () => TEXT.links[0]!),
         actorId: captain.id,
       }),
     ).rejects.toThrow();

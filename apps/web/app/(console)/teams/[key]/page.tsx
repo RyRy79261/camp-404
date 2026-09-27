@@ -59,11 +59,12 @@ export async function generateMetadata({
 
 // A team's own program (TEAM.EXE; docs/specs/2026-09-27-team-programs.md).
 // Every approved member opens every team's program, read-only (owner's
-// decision 2, 2026-09-26). It holds the team's own description and links
-// (ruling 4), the team's own panels from TEAM_PANELS (Power and Lighting's
-// power plan at a glance, ruling 2), the announcements the team has sent
-// (ruling 3), then the common frame of #267: its upcoming events, its open
-// tasks, its meeting notes (#268) and this year's leads and members.
+// decision 2, 2026-09-26). It holds the team's own description (ruling 4; no
+// links: everything happens inside the app), the team's own panels from
+// TEAM_PANELS (Power and Lighting's power plan at a glance, ruling 2), the
+// announcements the team has sent (ruling 3), then the common frame of #267:
+// its upcoming events, its open tasks, its meeting notes (#268) and this
+// year's leads and members.
 //
 // Who may change things (ruling 1): a captain or a lead of THIS team, by
 // canEditTeamProgram; only they get the Edit control, and the action checks
@@ -204,7 +205,6 @@ export default async function TeamPage({
         <div className="flex flex-col gap-6 page-lg:col-span-2">
           <TeamAboutCard
             description={about.description}
-            links={about.links}
             editor={
               canEdit ? (
                 <TeamAboutEditor
@@ -212,7 +212,6 @@ export default async function TeamPage({
                   team={team.data}
                   teamLabel={entry.label}
                   description={about.description}
-                  links={about.links}
                   version={about.version}
                 />
               ) : undefined

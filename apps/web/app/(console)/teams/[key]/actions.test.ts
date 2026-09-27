@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// A team program's description and links (owner's rulings 1 and 4,
+// A team program's description (owner's rulings 1 and 4,
 // 2026-09-27). What matters here:
 //  1. Only a captain or a lead OF THAT TEAM gets through: a lead of another
 //     team stands on the same global rung and is refused before the facade
 //     is called; a member is refused by the rank gate.
-//  2. The text is checked at the boundary (http(s) links only, limits).
+//  2. The text is checked at the boundary (its length); no links pass.
 //  3. The write names the signed-in actor and nothing else: never a team list.
 // The rule is checked again inside the write (packages/db, on PGlite).
 
@@ -39,7 +39,6 @@ function actAs(rank: ViewerRank, led: string[] = [], id = "user-1") {
 const INPUT = {
   team: "power_and_lighting",
   description: "Lights, freezers, the generator.",
-  links: [{ label: "Grid plan", url: "https://example.com/grid" }],
   expectedVersion: 2,
 };
 
@@ -83,19 +82,27 @@ describe("saveTeamProgramAction", () => {
     expect(saveTeamProgram).not.toHaveBeenCalled();
   });
 
-  it("refuses a link that is not a web address, with the sentence", async () => {
+  it("refuses a description over the limit, with the sentence", async () => {
     actAs("captain");
     expect(
-      await saveTeamProgramAction({
-        ...INPUT,
-        links: [{ label: "Bad", url: "javascript:alert(1)" }],
-      }),
+      await saveTeamProgramAction({ ...INPUT, description: "x".repeat(301) }),
     ).toEqual({
       ok: false,
-      error:
-        "A link must be a web address that starts with https:// or http://.",
+      error: "Keep the description under 300 characters.",
     });
     expect(saveTeamProgram).not.toHaveBeenCalled();
+  });
+
+  it("never passes links on to the write", async () => {
+    actAs("captain", [], "cap-1");
+    await saveTeamProgramAction({
+      ...INPUT,
+      links: [{ label: "Drive", url: "https://drive.google.com" }],
+    });
+    expect(saveTeamProgram).toHaveBeenCalledWith({
+      ...INPUT,
+      actorId: "cap-1",
+    });
   });
 
   it("passes the write's own refusal through", async () => {

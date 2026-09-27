@@ -9,9 +9,9 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // A team's program (docs/specs/2026-09-27-team-programs.md): its About card
-// (description and links, ruling 4), its announcements (ruling 3), Power and
-// Lighting's power plan at a glance (ruling 2), and the Edit dialog a
-// captain or the team's lead gets (ruling 1).
+// (its description, ruling 4; no links to outside tools), its announcements
+// (ruling 3), Power and Lighting's power plan at a glance (ruling 2), and the
+// Edit dialog a captain or the team's lead gets (ruling 1).
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -38,41 +38,21 @@ afterEach(cleanup);
 beforeEach(() => vi.clearAllMocks());
 
 describe("TeamAboutCard", () => {
-  it("shows the description and the links, opening in a new tab", () => {
-    render(
-      <TeamAboutCard
-        description="We keep the lights on."
-        links={[{ label: "Grid plan", url: "https://example.com/grid" }]}
-      />,
-    );
+  it("shows the description, and no links of any kind", () => {
+    render(<TeamAboutCard description="We keep the lights on." />);
     expect(screen.getByText("We keep the lights on.")).toBeTruthy();
-    const link = within(
-      screen.getByRole("list", { name: "Team links" }),
-    ).getByRole("link", { name: "Grid plan" });
-    expect(link.getAttribute("href")).toBe("https://example.com/grid");
-    expect(link.getAttribute("target")).toBe("_blank");
-    expect(link.getAttribute("rel")).toContain("noopener");
+    expect(screen.queryByRole("link")).toBeNull();
   });
 
-  it("never draws a stored link that is not a web address", () => {
-    render(
-      <TeamAboutCard
-        description=""
-        links={[
-          { label: "Bad", url: "javascript:alert(1)" },
-          { label: "Good", url: "https://example.com" },
-        ]}
-      />,
-    );
-    expect(screen.queryByRole("link", { name: "Bad" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Good" })).toBeTruthy();
+  it("says when nobody has written one yet", () => {
+    render(<TeamAboutCard description="" />);
     expect(
       screen.getByText("Nobody has written what this team does yet."),
     ).toBeTruthy();
   });
 
   it("has no Edit control unless the page passes one", () => {
-    render(<TeamAboutCard description="x" links={[]} />);
+    render(<TeamAboutCard description="x" />);
     expect(screen.queryByRole("button")).toBeNull();
   });
 });
@@ -182,54 +162,39 @@ describe("TeamAboutEditor", () => {
         team="water"
         teamLabel="Water"
         description="Old words."
-        links={[]}
         version={1}
       />,
     );
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Edit what Water does and its links",
-      }),
+      screen.getByRole("button", { name: "Edit what Water does" }),
     );
     return screen.getByRole("dialog", { name: "About Water" });
   }
 
-  it("saves the description and links for its team and version", async () => {
+  it("saves the description for its team and version, and offers no links", async () => {
     const dialog = open();
+    expect(within(dialog).queryByRole("button", { name: /link/i })).toBeNull();
+    expect(within(dialog).queryByLabelText(/link/i)).toBeNull();
     fireEvent.change(within(dialog).getByLabelText("What the team does"), {
       target: { value: "We bring the water." },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add a link" }));
-    fireEvent.change(within(dialog).getByLabelText("Link 1 name"), {
-      target: { value: "Tank log" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Link 1 address"), {
-      target: { value: "https://example.com/tanks" },
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(saveTeamProgramAction).toHaveBeenCalledWith({
       team: "water",
       description: "We bring the water.",
-      links: [{ label: "Tank log", url: "https://example.com/tanks" }],
       expectedVersion: 1,
     });
   });
 
-  it("shows a bad address beside its field and sends nothing", () => {
+  it("shows a description over the limit beside its field and sends nothing", () => {
     const dialog = open();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add a link" }));
-    fireEvent.change(within(dialog).getByLabelText("Link 1 name"), {
-      target: { value: "Sneaky" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Link 1 address"), {
-      target: { value: "javascript:alert(1)" },
-    });
+    const box = within(dialog).getByLabelText("What the team does");
+    box.removeAttribute("maxlength");
+    fireEvent.change(box, { target: { value: "x".repeat(301) } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect(
-      within(dialog).getByText(
-        "A link must be a web address that starts with https:// or http://.",
-      ),
+      within(dialog).getByText("Keep the description under 300 characters."),
     ).toBeTruthy();
     expect(saveTeamProgramAction).not.toHaveBeenCalled();
   });
