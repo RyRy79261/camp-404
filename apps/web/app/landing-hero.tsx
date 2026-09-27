@@ -50,7 +50,12 @@ export function LandingHero() {
           </p>
         </div>
 
-        <Glitch404 />
+        <div className="flex flex-col items-center gap-4">
+          <Glitch404 />
+          <p className="camp404-chromatic font-mono text-[11px] uppercase tracking-[0.3em] text-[color:var(--color-foreground)]">
+            The lost clutter of imagination
+          </p>
+        </div>
 
         <div className="flex w-full max-w-xs flex-col items-center gap-2">
           <Button asChild size="lg" className="w-full">
