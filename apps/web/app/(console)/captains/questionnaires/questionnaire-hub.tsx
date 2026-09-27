@@ -192,11 +192,14 @@ export function QuestionnaireHub({
       <PageHeading
         {...heading}
         actions={
-          <div className="flex flex-col gap-1.5 sm:items-end">
+          <div className="flex flex-col gap-1.5 page-sm:items-end">
             <div className="flex flex-wrap items-center gap-2">
               {canCreateAttendanceCheck ? (
                 <Button
                   variant="outline"
+                  // Its label is long: on a phone, or in a narrow window, it
+                  // wraps inside the button rather than run past the page.
+                  className="h-auto min-h-10 max-w-full whitespace-normal text-left"
                   onClick={attendanceCheck}
                   disabled={checking}
                   aria-describedby={checkError ? checkErrorId : undefined}

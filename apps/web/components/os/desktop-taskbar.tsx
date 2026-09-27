@@ -20,7 +20,7 @@ import { DesktopTray } from "./desktop-tray";
 import { LineIcon } from "./line-icons";
 import { OsAvatar } from "./os-avatar";
 import { folderIcon, programIcon } from "./program-icons";
-import { desktopFolderKey } from "@camp404/types";
+import { desktopFolderKey } from "@camp404/types/desktop-keys";
 
 // The taskbar (the approved prototype's): "404 START", a button per open
 // window, and the tray. What the Start menu lists and what the tray holds come
@@ -121,6 +121,10 @@ export function DesktopTaskbar({
     render: ({ onClick, children, ...row }) => (
       <Link
         href={program.href as Route}
+        // No prefetch: opening the menu sent one request per row (dozens),
+        // each rendering the console layout on the server for nothing, as a
+        // click goes through the desktop anyway.
+        prefetch={false}
         {...row}
         onClick={(e) => {
           if (!plainClick(e)) return;

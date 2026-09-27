@@ -371,7 +371,7 @@ export function QuestionnaireRunner({
                         className={cn(
                           "sr-only max-w-[12rem] truncate text-xs font-medium",
                           (!compactRail || state === "current") &&
-                            "sm:not-sr-only",
+                            "page-sm:not-sr-only",
                           state === "upcoming"
                             ? "text-muted-foreground"
                             : "text-foreground",
@@ -492,14 +492,14 @@ export function QuestionnaireRunner({
         <div
           className={cn(
             "flex items-center gap-3",
-            soloSubmit && "w-full flex-col-reverse sm:flex-row",
+            soloSubmit && "w-full flex-col-reverse page-sm:flex-row",
           )}
         >
           {autosave && <AutosaveIndicator state={saveState} />}
           <Button
             type="submit"
             disabled={isPending}
-            className={soloSubmit ? "w-full sm:flex-1" : ""}
+            className={soloSubmit ? "w-full page-sm:flex-1" : ""}
           >
             {isPending
               ? isLast

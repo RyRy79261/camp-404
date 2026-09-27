@@ -69,7 +69,7 @@ function NameForm({ fresh, name, onSave, onCancel }: Props) {
           }
           trapTab(e, box.current);
         }}
-        className="os-window-in flex w-[26rem] max-w-full select-text flex-col border border-os-primary bg-os-panel shadow-[0_0_40px_-8px_var(--os-primary),8px_8px_0_0_rgb(0_0_0/0.45)]"
+        className="os-window-in relative flex w-[26rem] max-w-full select-text flex-col border border-os-primary bg-os-panel shadow-[0_0_40px_-8px_var(--os-primary),8px_8px_0_0_rgb(0_0_0/0.45)]"
       >
         <div className="flex h-8 select-none items-center justify-between border-b border-os-primary bg-os-primary pl-3 pr-1 text-os-primary-fg">
           <span className="font-pixel text-xs uppercase tracking-[0.2em]">

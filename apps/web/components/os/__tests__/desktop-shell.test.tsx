@@ -226,8 +226,10 @@ describe("held by a blocking questionnaire", () => {
 });
 
 describe("back and forward", () => {
-  it("hides a page restored from the router's cache until the gate ran again", async () => {
-    render(<Desktop {...props()} />);
+  it("hides a page restored from the router's cache until the gate ran again, once it is there", async () => {
+    nav.pathname = "/tasks";
+    window.history.replaceState(null, "", "/tasks");
+    const view = render(<Desktop {...props()} />);
     // What the window showed while the refresh (the gate) was running.
     const during: { hidden?: unknown; status?: string | null } = {};
     nav.refresh.mockImplementation(() => {
@@ -235,13 +237,44 @@ describe("back and forward", () => {
       during.status = screen.queryByRole("status")?.textContent;
     });
     expect(document.getElementById("os-window-content")?.hidden).toBe(false);
+    // Back to /profile: the browser's address moves first...
+    window.history.replaceState(null, "", "/profile");
     await act(async () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    // ...and nothing is refreshed until the router has shown it: a refresh
+    // now would re-render the page being left, and the move would then fetch
+    // the destination as well.
+    expect(nav.refresh).not.toHaveBeenCalled();
+    expect(document.getElementById("os-window-content")?.hidden).toBe(true);
+    nav.pathname = "/profile";
+    await act(async () => {
+      view.rerender(<Desktop {...props()} />);
     });
     expect(nav.refresh).toHaveBeenCalledTimes(1);
     expect(during).toEqual({ hidden: true, status: "Checking…" });
     // The refresh done, the page shows again.
     expect(document.getElementById("os-window-content")?.hidden).toBe(false);
+  });
+
+  it("checks whatever the router shows when it never reaches the popped address", async () => {
+    vi.useFakeTimers();
+    try {
+      nav.pathname = "/tasks";
+      window.history.replaceState(null, "", "/tasks");
+      render(<Desktop {...props()} />);
+      window.history.replaceState(null, "", "/profile");
+      await act(async () => {
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+      expect(nav.refresh).not.toHaveBeenCalled();
+      await act(async () => {
+        vi.advanceTimersByTime(1600);
+      });
+      expect(nav.refresh).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

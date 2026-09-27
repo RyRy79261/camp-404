@@ -17,6 +17,8 @@ vi.mock("@/lib/background-work", () => ({
 }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
+  peekCampUser: vi.fn(async () => null),
+  getMyMemberships: vi.fn(async () => []),
   getPendingRequiredActions: vi.fn(),
   hasCampAccess: vi.fn(),
   isApproved: vi.fn(),
@@ -84,20 +86,36 @@ describe("memberBlock", () => {
     });
   });
 
-  it("hands a late joiner the gates of open sends before it reads them", async () => {
+  it("hands a late joiner the gates of open sends, reading again after a write", async () => {
     const order: string[] = [];
     vi.mocked(syncOpenGates).mockImplementation(async () => {
       order.push("sync");
+      return 1;
     });
+    let reads = 0;
     vi.mocked(getPendingRequiredActions).mockImplementation(async () => {
       order.push("read");
-      return [];
+      reads += 1;
+      // The first read raced the sync's write; the second one sees the gate.
+      return reads === 1 ? [] : [BLOCKING_SEND];
     });
 
-    await memberBlock(campUser, null);
-
+    expect(await memberBlock(campUser, null)).toEqual({
+      reason: "questionnaire",
+      href: "/questionnaires/act-1",
+    });
     expect(syncOpenGates).toHaveBeenCalledWith("user-1");
-    expect(order).toEqual(["sync", "read"]);
+    // The last read comes after the sync, so a gate it wrote is never missed.
+    expect(order.lastIndexOf("read")).toBeGreaterThan(order.indexOf("sync"));
+    expect(reads).toBe(2);
+  });
+
+  it("reads the gates once when the sync wrote nothing", async () => {
+    vi.mocked(syncOpenGates).mockResolvedValue(0);
+    vi.mocked(getPendingRequiredActions).mockResolvedValue([]);
+
+    expect(await memberBlock(campUser, null)).toBeNull();
+    expect(getPendingRequiredActions).toHaveBeenCalledTimes(1);
   });
 
   it("ignores an optional questionnaire", async () => {

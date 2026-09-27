@@ -1312,6 +1312,38 @@ export async function countUnread(
 }
 
 /**
+ * The member's unread deliveries in one read, split so a caller can leave out
+ * the notices of the questionnaires it counts as waiting WITHOUT knowing them
+ * first: `total` is every unread delivery, `byQuestionnaire` the unread
+ * questionnaire notices per activation id. `total` minus the waiting ids'
+ * counts equals {@link countUnread} with those `exceptActivationIds`, so the
+ * inbox badge can read this beside the waiting list instead of after it.
+ */
+export async function countUnreadSplit(
+  userId: string,
+): Promise<{ total: number; byQuestionnaire: Map<string, number> }> {
+  const d = schema.notificationDeliveries;
+  const db = createHttpDb();
+  const questionnaireRef = sql<
+    string | null
+  >`case when ${d.refType} = ${QUESTIONNAIRE_REF_TYPE} then ${d.refId} end`;
+  const rows = await db
+    .select({ ref: questionnaireRef, count: sql<number>`count(*)::int` })
+    .from(d)
+    .where(and(eq(d.userId, userId), isNull(d.readAt)))
+    // By position: the CASE carries a bound parameter, and Postgres does not
+    // match a GROUP BY expression to the select list across parameters.
+    .groupBy(sql`1`);
+  let total = 0;
+  const byQuestionnaire = new Map<string, number>();
+  for (const row of rows) {
+    total += row.count;
+    if (row.ref) byQuestionnaire.set(row.ref, row.count);
+  }
+  return { total, byQuestionnaire };
+}
+
+/**
  * The member's unread announcements per team: how many of the deliveries
  * {@link countUnread} counts came from a broadcast addressed to one team. Home
  * puts this on each team's icon, so "something new for Kitchen" is visible

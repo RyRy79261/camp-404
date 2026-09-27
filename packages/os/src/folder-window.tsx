@@ -6,6 +6,8 @@ export type FolderItem = {
   icon: (className: string) => ReactNode;
   /** Its window is open. */
   open?: boolean;
+  /** Its page is on the way (clicked, not there yet): the icon blinks. */
+  pending?: boolean;
   /** New things in it (unread, pending): a chip, and "N new" read out. */
   badge?: number;
   /**
@@ -76,7 +78,10 @@ function FolderIcon({ item }: { item: FolderItem }) {
       aria-label={name}
       // Two lines at most; a longer name is whole in the tooltip.
       title={item.label}
-      className="group relative flex w-full flex-col items-center gap-1.5 p-1 text-os-accent outline-none"
+      aria-busy={item.pending || undefined}
+      className={`group relative flex w-full flex-col items-center gap-1.5 p-1 text-os-accent outline-none ${
+        item.pending ? "os-pending" : ""
+      }`}
     >
       <span aria-hidden className="relative">
         {item.icon(

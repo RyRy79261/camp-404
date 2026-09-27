@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowRight, CalendarPlus } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
+import { Skeleton, SkeletonRegion } from "@camp404/ui/components/skeleton";
 import {
   CalendarDayCards,
   teamHref,
@@ -45,17 +47,66 @@ export default async function CalendarPage({
 }: {
   searchParams: Promise<{ team?: string }>;
 }) {
+  // The gate first, before any boundary: a redirect or a refusal is decided
+  // here, on the server, with the page's own status.
   const { campUser, rank } = await captainPageGate("camp_member");
+
+  return (
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow="Camp / Calendar"
+        title="Calendar"
+        description="Everything on the camp's shared calendar for the year ahead, by day. A team's badge opens that team's page."
+        actions={
+          // Captains and team leads add events; the page checks the rule.
+          rank !== "camp_member" ? (
+            <Button asChild>
+              <Link href="/captains/calendar">
+                <CalendarPlus aria-hidden />
+                Add event
+              </Link>
+            </Button>
+          ) : null
+        }
+      />
+      {/* The Google Calendar read can take seconds (up to its 5 s timeout,
+          cached 5 minutes per server): the heading shows first, and the days
+          stream in behind a skeleton. Nothing below decides access. */}
+      <Suspense fallback={<CalendarSkeleton />}>
+        <CalendarDays userId={campUser.id} searchParams={searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+function CalendarSkeleton() {
+  return (
+    <SkeletonRegion
+      label="Loading the calendar…"
+      className="flex flex-col gap-6"
+    >
+      <Skeleton className="h-10 w-full max-w-xs" />
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} className="h-24 w-full rounded-xl" />
+      ))}
+    </SkeletonRegion>
+  );
+}
+
+async function CalendarDays({
+  userId,
+  searchParams,
+}: {
+  userId: string;
+  searchParams: Promise<{ team?: string }>;
+}) {
   const [config, calendar, memberships, { team: requested }] =
     await Promise.all([
       getTeamsConfig(),
       getUpcomingEvents(CALENDAR_PAGE_RANGE),
-      getMyTeams(campUser.id),
+      getMyTeams(userId),
       searchParams,
     ]);
-
-  // Every team the config names, archived ones too, so an old event and an
-  // old link still find their team.
   const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
   const filter = parseCalendarFilter(requested, teams);
   const days =
@@ -97,24 +148,7 @@ export default async function CalendarPage({
         : "Nothing on the calendar for the year ahead.";
 
   return (
-    <div className="flex flex-col">
-      <PageHeading
-        eyebrow="Camp / Calendar"
-        title="Calendar"
-        description="Everything on the camp's shared calendar for the year ahead, by day. A team's badge opens that team's page."
-        actions={
-          // Captains and team leads add events; the page checks the rule.
-          rank !== "camp_member" ? (
-            <Button asChild>
-              <Link href="/captains/calendar">
-                <CalendarPlus aria-hidden />
-                Add event
-              </Link>
-            </Button>
-          ) : null
-        }
-      />
-
+    <>
       {calendar.status !== "ok" ? (
         <Card>
           <CardContent className="p-8 text-center text-sm text-muted-foreground">
@@ -123,7 +157,7 @@ export default async function CalendarPage({
         </Card>
       ) : (
         <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 page-sm:flex-row page-sm:items-end page-sm:justify-between">
             <CalendarFilter
               value={value}
               teams={options}
@@ -154,6 +188,6 @@ export default async function CalendarPage({
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }

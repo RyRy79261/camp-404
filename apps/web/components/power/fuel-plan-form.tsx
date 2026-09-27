@@ -232,7 +232,7 @@ export function FuelPlanForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="flex flex-col gap-5" noValidate>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 page-md:grid-cols-2">
             <Field
               label="Generator"
               htmlFor={id("generator")}
@@ -273,7 +273,7 @@ export function FuelPlanForm({
             </Field>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 page-md:grid-cols-2">
             <ScheduleField
               idBase={id("run")}
               legend="Hours running"
@@ -286,7 +286,7 @@ export function FuelPlanForm({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 page-sm:grid-cols-2 page-lg:grid-cols-3">
             {numberField(
               "daysOnSite",
               <span className="leading-snug">

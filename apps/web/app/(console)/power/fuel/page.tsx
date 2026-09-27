@@ -462,7 +462,7 @@ export default async function PowerFuelPage() {
               description="Add one from its datasheet: the rated and maximum kVA, the tank and how long it lasts at half and full load."
             />
           ) : (
-            <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
+            <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
               <ResponsiveDataTable
                 columns={generatorColumns(
                   canEdit,

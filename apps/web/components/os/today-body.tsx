@@ -10,12 +10,20 @@ import {
 } from "react";
 import Link from "next/link";
 import type { Route } from "next";
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import { refreshTodayAction } from "@/app/(console)/today-actions";
 import { MineStar } from "@/components/calendar/calendar-days";
-import { EnablePush } from "@/components/push/enable-push";
+import dynamic from "next/dynamic";
 import type { TodayModel } from "@/lib/today";
 import { DesktopSignalsContext } from "./held-screen";
 import { LineIcon, type IconKey } from "./line-icons";
+
+// Loaded when Today draws it, not with every console page: it brings in
+// Firebase messaging, which no other part of the desktop needs.
+const EnablePush = dynamic(
+  () => import("@/components/push/enable-push").then((m) => m.EnablePush),
+  { ssr: false },
+);
 
 // The Today gadget's body, as the approved prototype draws it
 // (_proto/bodies/today.tsx): a "TODAY · <date>" strip with what is waiting,
@@ -71,6 +79,10 @@ function DesktopLink({
     <Link
       href={href as Route}
       onClick={onClick}
+      // No prefetch: with no loading.tsx each one renders the console layout
+      // on the server (the member's gate and desktop reads), twice per link,
+      // every time Today opens. The desktop opens the page on click anyway.
+      prefetch={false}
       data-mine={mine ? "" : undefined}
       className={className}
     >
@@ -288,20 +300,116 @@ function upcomingWhen(item: TodayModel["home"]["upcoming"][number]): string {
  */
 export const TODAY_FRESH_MS = 5000;
 
-export function TodayBody({ initial }: { initial: TodayModel }) {
-  const [model, setModel] = useState(initial);
-  // Drawn only while the gadget is open, so this runs on each opening: the
-  // layout's copy may be from before the member answered a form or finished
-  // a task in a window. Not when that copy was built just now.
+/**
+ * The last Today this tab drew, per member: shown at once when the gadget
+ * opens again, while the fresh read is on its way. Memory only, keyed by the
+ * member, so a different member signing in on this tab never sees it.
+ */
+let lastDrawn: { userId: string; model: TodayModel } | null = null;
+
+/** The tab's last copy, only for the member it was built for. */
+function lastCopyFor(userId: string | undefined): TodayModel | null {
+  if (!userId || !lastDrawn) return null;
+  if (lastDrawn.userId !== userId || lastDrawn.model.userId !== userId) {
+    return null;
+  }
+  return lastDrawn.model;
+}
+
+/**
+ * Whether a fresh read may be shown in a gadget drawn for `userId`: it was
+ * built for that member. A read that answered for anyone else is treated as
+ * a failed refresh, never drawn and never kept.
+ */
+function belongsTo(fresh: TodayModel, userId: string | undefined): boolean {
+  return userId === undefined || fresh.userId === userId;
+}
+
+/** "14:02", on the camp's clock (the taskbar's). */
+const CLOCK = new Intl.DateTimeFormat("en-GB", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: CAMP_TIME_ZONE,
+});
+
+/**
+ * Reads Today once, in the background, after the first page of a visit has
+ * settled, so the first opening shows it at once (the console no longer
+ * reads it with every page). Renders nothing. Once per tab and member: the
+ * opening itself reads it fresh every time.
+ */
+export function TodayWarm({ userId }: { userId: string }) {
   useEffect(() => {
-    if (Math.abs(Date.now() - initial.builtAt) < TODAY_FRESH_MS) return;
+    if (lastCopyFor(userId)) return;
+    let live = true;
+    const run = () => {
+      refreshTodayAction().then(
+        (fresh) => {
+          if (
+            live &&
+            fresh &&
+            fresh.userId === userId &&
+            lastCopyFor(userId) === null
+          ) {
+            lastDrawn = { userId, model: fresh };
+          }
+        },
+        () => {
+          // The opening will read it.
+        },
+      );
+    };
+    const idle = typeof window.requestIdleCallback === "function";
+    const id = idle
+      ? window.requestIdleCallback(run, { timeout: 4000 })
+      : window.setTimeout(run, 1500);
+    return () => {
+      live = false;
+      if (idle) window.cancelIdleCallback(id);
+      else window.clearTimeout(id);
+    };
+  }, [userId]);
+  return null;
+}
+
+export function TodayBody({
+  initial = null,
+  userId,
+}: {
+  /** A copy built with this page, if the server made one. */
+  initial?: TodayModel | null;
+  /** Whose Today this is, to key the tab's last copy. */
+  userId?: string;
+}) {
+  // The console keys this by the member, so a different member signing in
+  // on this tab gets a new body; the copy it starts from is theirs or none.
+  const [model, setModel] = useState<TodayModel | null>(() =>
+    initial && belongsTo(initial, userId) ? initial : lastCopyFor(userId),
+  );
+  const [failed, setFailed] = useState(false);
+  // Drawn only while the gadget is open, so this runs on each opening. The
+  // console no longer reads Today with every page (it cost every screen the
+  // gadget's reads, the calendar included, open or not): the body reads it
+  // here, when it is opened, and shows the tab's last copy meanwhile. Not
+  // when a copy was built just now.
+  useEffect(() => {
+    if (initial && Math.abs(Date.now() - initial.builtAt) < TODAY_FRESH_MS) {
+      return;
+    }
     let live = true;
     refreshTodayAction().then(
       (fresh) => {
-        if (live && fresh) setModel(fresh);
+        if (!live) return;
+        if (fresh && belongsTo(fresh, userId)) {
+          if (userId) lastDrawn = { userId, model: fresh };
+          setModel(fresh);
+          setFailed(false);
+        } else setFailed(true);
       },
       () => {
-        // Keep the copy the page came with.
+        // Keep the copy it has, if any.
+        if (live) setFailed(true);
       },
     );
     return () => {
@@ -310,7 +418,32 @@ export function TodayBody({ initial }: { initial: TodayModel }) {
     // Once per opening, with the copy it opened with.
   }, []);
 
-  const { home, date, burn } = model;
+  // Drawn for this member only: should the body be handed another member
+  // without being remounted, it shows nothing of the last one's.
+  const shown = model && belongsTo(model, userId) ? model : null;
+  if (!shown) {
+    return (
+      <div className="flex min-w-0 flex-col" aria-busy={!failed}>
+        <div className="sticky top-0 z-10 flex h-8 shrink-0 items-center gap-1.5 border-b border-os-line bg-os-chrome pl-2.5 pr-1">
+          <h2 className="flex min-w-0 items-center gap-1.5 truncate font-pixel text-[10px] font-normal uppercase tracking-widest text-os-fg">
+            <LineIcon
+              name="today"
+              className={`size-3.5 shrink-0 ${ACCENT_LIFT}`}
+            />
+            Today
+          </h2>
+        </div>
+        <p
+          role="status"
+          className={`p-2.5 font-pixel text-[10px] uppercase tracking-widest text-os-muted ${failed ? "" : "os-pending"}`}
+        >
+          {failed ? "Couldn’t load Today just now." : "Loading…"}
+        </p>
+      </div>
+    );
+  }
+
+  const { home, date, burn } = shown;
   const waiting = home.todos.length;
   const calendarNote =
     home.calendarState === "not_configured"
@@ -337,6 +470,18 @@ export function TodayBody({ initial }: { initial: TodayModel }) {
       </div>
 
       <div className="grid gap-3 p-2.5">
+        {failed && (
+          // The refresh failed: what is below is the copy it opened with,
+          // which may be out of date. Said, not hidden.
+          <p
+            role="status"
+            data-today-stale
+            className="border border-dashed border-os-line px-2.5 py-1.5 text-xs text-os-muted"
+          >
+            Couldn&rsquo;t refresh Today just now. This is how it looked at{" "}
+            {CLOCK.format(shown.builtAt)}.
+          </p>
+        )}
         {burn && <Countdown burn={burn} />}
 
         {home.waitingForApproval ? (

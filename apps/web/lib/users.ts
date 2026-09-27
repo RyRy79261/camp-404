@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import {
   createCampUser,
+  findOrCreateCampUser,
   findUserByAuthId,
   findUserById,
   getBurnerProfileByUserId,
@@ -27,7 +28,7 @@ import type {
 } from "@camp404/types";
 import { encrypt, decryptOrNull } from "@camp404/db/crypto";
 import { idColumnsFor } from "@camp404/db/id-documents";
-import { getTeamMembershipsForCycle as dbGetTeamMembershipsForCycle } from "@camp404/db/team-memberships";
+import { getTeamMembershipsEveryYear as dbGetTeamMembershipsEveryYear } from "@camp404/db/team-memberships";
 import {
   ensureRequiredAction,
   satisfyRequiredAction as dbSatisfyRequiredAction,
@@ -81,24 +82,31 @@ export interface CampUser {
  */
 export async function ensureCampUser(
   authUser: AuthenticatedUser,
+  /** The row as already read this request (`peekCampUser`), if it was. */
+  preRead?: Promise<CampUser | null>,
 ): Promise<CampUser> {
   const god = isGodEmail(authUser.primaryEmail);
   const store = usesTestStore() ? testBackend : realBackend;
-  const existing = await store.findUserByAuthId(authUser.id);
+  const existing = await (preRead ?? store.findUserByAuthId(authUser.id));
   if (existing) return existing;
 
   // God accounts bypass the invite gate entirely — give them a real,
-  // approved row on first sign-in.
+  // approved row on first sign-in. The first page load sends several requests
+  // at once, and each of them gets here with no row, so the create is
+  // race-safe: one inserts, the others read its row. The row and its
+  // burner-profile gate are written in one transaction, so a request that
+  // finds the row above (and returns it at once) always finds the gate too;
+  // every caller here seeds it again as well (idempotent) before going on.
   if (god) {
-    const created = await store.createUser({
+    const { user } = await store.findOrCreateUser({
       authUserId: authUser.id,
       displayName: authUser.displayName ?? authUser.primaryEmail,
       inviteCode: null,
       rank: "member",
       approvalStatus: "approved",
     });
-    await seedBurnerProfileAction(created.id);
-    return created;
+    await seedBurnerProfileAction(user.id);
+    return user;
   }
 
   // Signed in, but no row and no invite redeemed yet. Hand back a synthetic,
@@ -116,6 +124,20 @@ export async function ensureCampUser(
     approvalDecisionReason: null,
   };
 }
+
+/**
+ * The camp row for an auth id, read at most once per request: a plain read
+ * that never creates one. The member ladder reads the row through it, and the
+ * console starts it early (`prefetchMemberState`), beside the setup check,
+ * rather than after it. React `cache()` only, so a server action that writes
+ * the row and then asks again in a LATER request reads it fresh.
+ */
+export const peekCampUser = cache(
+  async (authUserId: string): Promise<CampUser | null> => {
+    const store = usesTestStore() ? testBackend : realBackend;
+    return store.findUserByAuthId(authUserId);
+  },
+);
 
 export type RedeemInviteResult = { ok: true } | { ok: false; error: string };
 
@@ -274,9 +296,9 @@ export async function satisfyBurnerProfileAction(
  * Call it before reading the gate spine. No-op under E2E test mode, where
  * there are no required actions at all.
  */
-export async function syncOpenGates(userId: string): Promise<void> {
-  if (usesTestStore()) return;
-  await reconcileOpenActivations(userId);
+export async function syncOpenGates(userId: string): Promise<number> {
+  if (usesTestStore()) return 0;
+  return reconcileOpenActivations(userId);
 }
 
 /**
@@ -353,9 +375,15 @@ export const getMyMemberships = cache(
         .getTeamMemberships(userId)
         .map((m) => ({ team: m.team, isLead: m.isLead }));
     }
-    const { cycleNumber } = await getCampSettings();
-    const rows = await dbGetTeamMembershipsForCycle(userId, cycleNumber);
-    return rows.map((m) => ({ team: m.team, isLead: m.isLead }));
+    // Read beside the settings, not after them: every year's rows (a few),
+    // kept to this year's. One database wait instead of two.
+    const [{ cycleNumber }, rows] = await Promise.all([
+      getCampSettings(),
+      dbGetTeamMembershipsEveryYear(userId),
+    ]);
+    return rows
+      .filter((m) => m.cycle === cycleNumber)
+      .map((m) => ({ team: m.team, isLead: m.isLead }));
   },
 );
 
@@ -447,6 +475,17 @@ interface UserBackend {
     rank: Rank;
     approvalStatus: ApprovalStatus;
   }): Promise<CampUser>;
+  /**
+   * Create the row unless one exists for the auth id; never throws on a race.
+   * The row starts with the burner-profile gate, written with it.
+   */
+  findOrCreateUser(input: {
+    authUserId: string;
+    displayName: string | null;
+    inviteCode: string | null;
+    rank: Rank;
+    approvalStatus: ApprovalStatus;
+  }): Promise<{ user: CampUser; created: boolean }>;
   setUserInviteCode(userId: string, code: string): Promise<void>;
   setUserRank(userId: string, rank: Rank): Promise<void>;
   setUserApprovalStatus(userId: string, status: ApprovalStatus): Promise<void>;
@@ -607,6 +646,15 @@ const realBackend: UserBackend = {
     const row = await createCampUser(input);
     return toCampUser(row);
   },
+  async findOrCreateUser(input) {
+    const { user, created } = await findOrCreateCampUser(input, {
+      type: "questionnaire",
+      actionKey: "burner_profile",
+      title: "Complete your burner profile",
+      version: QUESTIONNAIRE_VERSION,
+    });
+    return { user: toCampUser(user), created };
+  },
   async setUserInviteCode(userId, code) {
     await setUserInviteCode(userId, code);
   },
@@ -691,6 +739,19 @@ const testBackend: UserBackend = {
   async createUser(input) {
     const row = testStore.createUser(input);
     return toCampUser(row);
+  },
+  async findOrCreateUser(input) {
+    // Synchronous, so two requests cannot interleave between the read and
+    // the write.
+    const existing = testStore.findUserByAuthId(input.authUserId);
+    const user = existing ?? testStore.createUser(input);
+    testStore.ensureRequiredAction({
+      userId: user.id,
+      actionKey: "burner_profile",
+      title: "Complete your burner profile",
+      version: QUESTIONNAIRE_VERSION,
+    });
+    return { user: toCampUser(user), created: !existing };
   },
   async setUserInviteCode(userId, code) {
     testStore.setUserInviteCode(userId, code);

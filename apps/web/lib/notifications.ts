@@ -7,6 +7,7 @@ import {
   countAnnouncementAudience as dbCountAnnouncementAudience,
   countUnread as dbCountUnread,
   countUnreadByTeam as dbCountUnreadByTeam,
+  countUnreadSplit as dbCountUnreadSplit,
   explainDraftRefusal as dbExplainDraftRefusal,
   createAnnouncementDraft as dbCreateDraft,
   getAnnouncementPinContext as dbGetPinContext,
@@ -370,4 +371,22 @@ export function setAnnouncementPinned(input: PinInput): Promise<PinResult> {
 
 export function claimPopups(userId: string): Promise<ClaimedPopup[]> {
   return backend().claimPopups(userId);
+}
+
+/**
+ * Every unread delivery, with the unread questionnaire notices per activation
+ * (see countUnreadSplit in @camp404/db/broadcasts): the inbox badge reads it
+ * beside the waiting forms rather than after them. The test store models no
+ * questionnaire notices, so its twin is the plain count and an empty split.
+ */
+export async function countUnreadSplit(
+  userId: string,
+): Promise<{ total: number; byQuestionnaire: Map<string, number> }> {
+  if (usesTestStore()) {
+    return {
+      total: await testStore.countUnread(userId),
+      byQuestionnaire: new Map(),
+    };
+  }
+  return dbCountUnreadSplit(userId);
 }

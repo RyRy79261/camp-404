@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { QUESTIONNAIRE_REF_TYPE } from "@camp404/core";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
-import { countUnread } from "../broadcasts";
+import { countUnread, countUnreadSplit } from "../broadcasts";
 import * as schema from "../schema";
 
 // The notices half of the inbox badge. A questionnaire send delivers a notice
@@ -77,5 +77,66 @@ describe("countUnread", () => {
 
     expect(await countUnread(member.id, { exceptActivationIds: [id] })).toBe(1);
     expect(await countUnread(other.id, { exceptActivationIds: [id] })).toBe(0);
+  });
+});
+
+describe("countUnreadSplit", () => {
+  const h = useTestDb();
+
+  /** What the inbox badge computes from the split, for these waiting ids. */
+  async function noticesFromSplit(userId: string, waiting: string[]) {
+    const { total, byQuestionnaire } = await countUnreadSplit(userId);
+    return [...new Set(waiting)].reduce(
+      (n, id) => n - (byQuestionnaire.get(id) ?? 0),
+      total,
+    );
+  }
+
+  it("gives the same notices count as countUnread with the waiting ids left out", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const other = await makeUser(db);
+    const waiting = randomUUID();
+    const answered = randomUUID();
+    const shared = randomUUID();
+    await deliver(db, member.id, NO_REF);
+    await deliver(db, member.id, {
+      refType: QUESTIONNAIRE_REF_TYPE,
+      refId: waiting,
+    });
+    // A reminder: a second notice for the same waiting form.
+    await deliver(db, member.id, {
+      refType: QUESTIONNAIRE_REF_TYPE,
+      refId: waiting,
+    });
+    await deliver(db, member.id, {
+      refType: QUESTIONNAIRE_REF_TYPE,
+      refId: answered,
+    });
+    // Another ref kind with a waiting form's id is not a questionnaire notice.
+    await deliver(db, member.id, { refType: "broadcast", refId: shared });
+    await deliver(db, member.id, {
+      refType: QUESTIONNAIRE_REF_TYPE,
+      refId: null,
+    });
+    await deliver(db, member.id, NO_REF, new Date());
+    await deliver(db, other.id, {
+      refType: QUESTIONNAIRE_REF_TYPE,
+      refId: waiting,
+    });
+
+    for (const except of [
+      [],
+      [waiting],
+      [answered, waiting],
+      [shared],
+      [waiting, waiting],
+    ]) {
+      expect(await noticesFromSplit(member.id, except)).toBe(
+        await countUnread(member.id, { exceptActivationIds: except }),
+      );
+    }
+    expect(await noticesFromSplit(member.id, [waiting])).toBe(4);
+    expect(await noticesFromSplit(other.id, [waiting])).toBe(0);
   });
 });

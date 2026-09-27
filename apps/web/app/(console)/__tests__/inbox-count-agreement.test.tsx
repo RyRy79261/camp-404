@@ -63,6 +63,7 @@ vi.mock("@/lib/notifications", async (importActual) => {
   return {
     ...actual,
     countUnread: vi.fn(actual.countUnread),
+    countUnreadSplit: vi.fn(actual.countUnreadSplit),
     countUnreadByTeam: vi.fn(actual.countUnreadByTeam),
   };
 });
@@ -89,7 +90,11 @@ vi.mock("@/components/push/device-token", () => ({
 
 import { resolveMemberState } from "@/lib/member-gate";
 import { getProgramManifest } from "@/lib/program-manifest";
-import { countUnread, countUnreadByTeam } from "@/lib/notifications";
+import {
+  countUnread,
+  countUnreadByTeam,
+  countUnreadSplit,
+} from "@/lib/notifications";
 import { testStore } from "@/lib/test-store";
 import { getPendingQuestionnaires, type CampUser } from "@/lib/users";
 import { NotificationPanel } from "@/components/notifications/notification-panel";
@@ -167,6 +172,10 @@ beforeEach(() => {
 describe("the bell and the Notifications tile", () => {
   it("show the same count for a member with unread notices and an open form", async () => {
     vi.mocked(countUnread).mockResolvedValue(5);
+    vi.mocked(countUnreadSplit).mockResolvedValue({
+      total: 5,
+      byQuestionnaire: new Map(),
+    });
     vi.mocked(countUnreadByTeam).mockResolvedValue({});
     vi.mocked(getPendingQuestionnaires).mockResolvedValue([OPEN_FORM]);
     const campUser = campMember();
@@ -180,6 +189,10 @@ describe("the bell and the Notifications tile", () => {
 
   it("show the same count for a member waiting for approval who has an open form", async () => {
     vi.mocked(countUnread).mockResolvedValue(2);
+    vi.mocked(countUnreadSplit).mockResolvedValue({
+      total: 2,
+      byQuestionnaire: new Map(),
+    });
     vi.mocked(countUnreadByTeam).mockResolvedValue({});
     vi.mocked(getPendingQuestionnaires).mockResolvedValue([OPEN_FORM]);
     const campUser = campMember({ approvalStatus: "pending" });
@@ -197,6 +210,10 @@ describe("the bell and the Notifications tile", () => {
     vi.mocked(countUnread).mockImplementation(async (_userId, options) =>
       options?.exceptActivationIds?.includes(OPEN_FORM.activationId) ? 0 : 1,
     );
+    vi.mocked(countUnreadSplit).mockResolvedValue({
+      total: 1,
+      byQuestionnaire: new Map([[OPEN_FORM.activationId, 1]]),
+    });
     vi.mocked(countUnreadByTeam).mockResolvedValue({});
     vi.mocked(getPendingQuestionnaires).mockResolvedValue([OPEN_FORM]);
     const campUser = campMember();

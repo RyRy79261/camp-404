@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { isCampBootstrapped } from "@/lib/bootstrap";
-import { isAwaitingApproval, resolveMemberState } from "@/lib/member-gate";
+import {
+  isAwaitingApproval,
+  prefetchMemberState,
+  resolveMemberState,
+} from "@/lib/member-gate";
 import { signInRedirect } from "@/lib/sign-in-redirect";
 import { LandingHero } from "../landing-hero";
 
@@ -30,6 +34,8 @@ export default async function HomePage() {
 
   // First-time setup: on a fresh system (no captain yet) the first signed-in
   // person becomes the founding captain, before any invite or onboarding gate.
+  // The ladder's plain reads start beside the setup check.
+  prefetchMemberState();
   if (!(await isCampBootstrapped())) {
     redirect("/setup");
   }

@@ -128,7 +128,7 @@ function RowsInput({
       {rows.map((row, i) => (
         <fieldset
           key={i}
-          className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-2"
+          className="grid gap-2 rounded-md border border-border p-3 page-sm:grid-cols-2"
         >
           <legend className="px-1 text-xs text-muted-foreground">
             {i + 1}
@@ -140,7 +140,7 @@ function RowsInput({
             return (
               <div
                 key={c.key}
-                className={`flex flex-col gap-1 ${wide ? "sm:col-span-2" : ""}`}
+                className={`flex flex-col gap-1 ${wide ? "page-sm:col-span-2" : ""}`}
               >
                 {c.kind === "check" ? (
                   <label className="flex items-center gap-2 pt-5 text-sm">
@@ -207,7 +207,7 @@ function RowsInput({
               </div>
             );
           })}
-          <div className="flex gap-1 sm:col-span-2">
+          <div className="flex gap-1 page-sm:col-span-2">
             <Button
               type="button"
               size="sm"

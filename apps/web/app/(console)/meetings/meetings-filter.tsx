@@ -50,7 +50,7 @@ export function MeetingsFilter({
     <Field
       label="Team"
       htmlFor="meetings-filter-team"
-      className="w-full sm:w-60"
+      className="w-full page-sm:w-60"
     >
       <Select value={value} onValueChange={choose} disabled={pending}>
         <SelectTrigger id="meetings-filter-team">

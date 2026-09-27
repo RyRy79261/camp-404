@@ -157,7 +157,7 @@ export function PlateBar({
   return (
     <div
       data-plate-bar=""
-      className="flex flex-col gap-3 rounded-lg bg-muted/60 p-3.5 sm:px-4 sm:py-3.5"
+      className="flex flex-col gap-3 rounded-lg bg-muted/60 p-3.5 page-sm:px-4 page-sm:py-3.5"
     >
       <nav
         aria-label="Plate count"

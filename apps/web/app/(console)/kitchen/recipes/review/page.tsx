@@ -245,7 +245,7 @@ function Section({
           <p className="text-sm text-muted-foreground">
             {count} {count === 1 ? "recipe" : "recipes"}
           </p>
-          <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
+          <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
             {children}
           </div>
         </>

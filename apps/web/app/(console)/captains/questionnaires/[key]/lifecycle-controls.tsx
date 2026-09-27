@@ -248,9 +248,12 @@ export function LifecycleRail({
   const anyBusy = publishing || busy !== null;
 
   return (
+    // In the builder's grid: under the questionnaire while the page has two
+    // columns (never under the palette, which sticks down its column and
+    // would cover it), its own third column from xl.
     <aside
       aria-label="Publish and send"
-      className="flex flex-col gap-4 page-xl:sticky page-xl:top-32 page-xl:self-start"
+      className="flex flex-col gap-4 page-lg:col-start-2 page-xl:sticky page-xl:top-6 page-xl:col-start-3 page-xl:row-start-1 page-xl:self-start"
     >
       {confirmDialog}
       <Card>

@@ -103,7 +103,7 @@ function FieldGrid({ items }: { items: DetailItem[] }) {
     return <p className="text-sm text-muted-foreground">Nothing recorded.</p>;
   }
   return (
-    <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+    <dl className="grid gap-x-8 gap-y-4 page-sm:grid-cols-2">
       {items.map((item, i) => (
         <div key={`${item.label}-${i}`}>
           <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -463,7 +463,7 @@ export function MemberProfile({
           </div>
 
           {/* The action rail — decisions, rank and teams. */}
-          <aside className="flex flex-col gap-6 page-lg:sticky page-lg:top-24">
+          <aside className="flex flex-col gap-6 page-lg:sticky page-lg:top-6">
             <Card className="border-accent/40">
               <CardHeader>
                 <CardTitle className="text-base">Decision</CardTitle>

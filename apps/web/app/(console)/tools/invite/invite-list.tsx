@@ -122,7 +122,7 @@ export function InviteList({
                 return (
                   <li
                     key={item.code}
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-background/40 px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-background/40 px-4 py-3 page-sm:flex-row page-sm:items-center page-sm:gap-4"
                   >
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -159,7 +159,7 @@ export function InviteList({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="shrink-0 self-start text-destructive hover:bg-destructive/10 hover:text-destructive sm:self-center"
+                        className="shrink-0 self-start text-destructive hover:bg-destructive/10 hover:text-destructive page-sm:self-center"
                         onClick={() => {
                           setError(null);
                           setConfirming(item);

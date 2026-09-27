@@ -35,14 +35,17 @@ export interface BootstrapState {
 /** Read whether the camp has been set up (a captain exists / the latch is set). */
 export async function getBootstrapState(): Promise<BootstrapState> {
   const db = createHttpDb();
-  const [captains] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(users)
-    .where(isRealCaptain);
-  const [settings] = await db
-    .select({ bootstrappedAt: campSettings.bootstrappedAt })
-    .from(campSettings)
-    .limit(1);
+  // Both reads at once: the console asks on every page before anything else.
+  const [[captains], [settings]] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(users)
+      .where(isRealCaptain),
+    db
+      .select({ bootstrappedAt: campSettings.bootstrappedAt })
+      .from(campSettings)
+      .limit(1),
+  ]);
   return {
     bootstrappedAt: settings?.bootstrappedAt ?? null,
     captainCount: captains?.count ?? 0,

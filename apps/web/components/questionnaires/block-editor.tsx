@@ -250,7 +250,7 @@ export function BlockEditor({
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-[1fr_13rem]">
+        <div className="grid gap-3 page-sm:grid-cols-[1fr_13rem]">
           <PrimaryInput block={block} onChange={onChange} />
           <Select
             value={paletteKind}
@@ -270,7 +270,7 @@ export function BlockEditor({
         </div>
 
         {isAnswerableBlock(block) ? (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 page-sm:grid-cols-2">
             <Labelled
               label="Helper text (optional)"
               hint="Shown under the question."
@@ -518,7 +518,7 @@ function BlockBody({
     case "header_break":
       return (
         <div className="flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 page-sm:grid-cols-2">
             <Labelled label="Eyebrow (optional)">
               <Input
                 value={block.eyebrow ?? ""}
@@ -616,7 +616,7 @@ function BlockBody({
       return (
         <div className="flex flex-col gap-3">
           {block.kind === "combobox" ? (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 page-sm:grid-cols-2">
               <Labelled label="Placeholder">
                 <Input
                   value={block.placeholder ?? ""}
@@ -685,7 +685,7 @@ function BlockBody({
 
     case "long_text":
       return (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 page-sm:grid-cols-3">
           <Labelled label="Placeholder">
             <Input
               value={block.placeholder ?? ""}
@@ -732,7 +732,7 @@ function BlockBody({
     case "linear_scale":
       return (
         <div className="flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 page-sm:grid-cols-2">
             <Labelled label="Starts at">
               <Select
                 value={String(block.min)}
@@ -774,7 +774,7 @@ function BlockBody({
     case "slider":
       return (
         <div className="flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 page-sm:grid-cols-4">
             <Labelled label="Min">
               <Input
                 type="number"
@@ -840,7 +840,7 @@ function BlockBody({
     case "number":
       return (
         <div className="flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 page-sm:grid-cols-2">
             <Labelled label="Lowest number">
               <Input
                 type="number"
@@ -879,7 +879,7 @@ function BlockBody({
 
     case "rating":
       return (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 page-sm:grid-cols-2">
           <Labelled label="Steps">
             <Select
               value={String(block.steps)}
@@ -966,7 +966,7 @@ function EndLabels({
   onChange: (next: PageBlock) => void;
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid gap-3 page-sm:grid-cols-2">
       <Labelled label={`Label for ${block.min}`}>
         <Input
           value={block.minLabel ?? ""}
@@ -1001,7 +1001,7 @@ function ShortTextBody({
   const numeric = block.format === "number" || block.format === "integer";
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 page-sm:grid-cols-2">
         <Labelled label="Placeholder">
           <Input
             value={block.placeholder ?? ""}
@@ -1047,7 +1047,7 @@ function ShortTextBody({
           </Select>
         </Labelled>
       </div>
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 page-sm:grid-cols-4">
         <Labelled label="Min length">
           <Input
             type="number"
@@ -1152,7 +1152,7 @@ function ImageBlockBody({
           </span>
         ) : null}
       </Labelled>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 page-sm:grid-cols-2">
         <Labelled
           label="Alt text"
           hint="Required. Describe the picture for people using screen readers."
@@ -1218,7 +1218,7 @@ function ChoiceBody({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 page-sm:grid-cols-2">
         <Labelled label="Shown as">
           {single ? (
             <Select
@@ -1296,7 +1296,7 @@ function ChoiceBody({
         </span>
         {block.options.map((option, optionIndex) => (
           <div key={option.value} className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-start gap-2 sm:flex-nowrap">
+            <div className="flex flex-wrap items-start gap-2 page-sm:flex-nowrap">
               <Input
                 value={option.label}
                 onChange={(e) =>
@@ -1317,7 +1317,7 @@ function ChoiceBody({
                   }
                 >
                   <SelectTrigger
-                    className="w-full sm:w-56 sm:shrink-0"
+                    className="w-full page-sm:w-56 page-sm:shrink-0"
                     aria-label={`Where option ${optionIndex + 1} goes`}
                   >
                     <SelectValue />
@@ -1557,7 +1557,7 @@ function GridBody({
   const single = block.kind === "multi_choice_grid";
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid gap-3 page-sm:grid-cols-2">
       {/* Rows — the labels down the left; each row keys the response map. */}
       <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
         <span className="text-xs font-medium text-muted-foreground">Rows</span>
@@ -1660,7 +1660,7 @@ function GridBody({
         </Button>
       </div>
 
-      <p className="text-xs text-muted-foreground sm:col-span-2">
+      <p className="text-xs text-muted-foreground page-sm:col-span-2">
         {single
           ? "Members pick one column per row."
           : "Members can pick any number of columns per row."}{" "}

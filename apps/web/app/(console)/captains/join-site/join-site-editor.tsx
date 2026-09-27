@@ -327,7 +327,7 @@ function BurnDatesCard({
               save(start, end);
             }}
           >
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 page-sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="burn-start">First day</Label>
                 <Input
@@ -458,7 +458,7 @@ export function JoinSiteEditor({
     <div className="grid items-start gap-6 page-lg:grid-cols-[12rem_minmax(0,1fr)]">
       <nav
         aria-label="Join site windows"
-        className="hidden page-lg:sticky page-lg:top-44 page-lg:block"
+        className="hidden page-lg:sticky page-lg:top-6 page-lg:block"
       >
         <ul className="flex flex-col gap-1 text-sm">
           <li>

@@ -39,6 +39,11 @@ test("name the year, answer, start the next year, and be asked again", async ({
   await captain.getByLabel("The new year").fill("2027");
   await captain.getByLabel("Type 2027 again to confirm").fill("2027");
   await captain.getByRole("button", { name: "Start 2027" }).click();
+  // Wait for the rollover to finish before moving on: a page loaded while it
+  // is still writing the new year's gates would rightly show no gate yet.
+  await expect(
+    captain.getByText("The camp is now in 2027").first(),
+  ).toBeVisible();
 
   // Asked again in the new year.
   await captain.goto("/tools/forms");

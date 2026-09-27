@@ -399,19 +399,25 @@ describe("keyboard and screen readers", () => {
 });
 
 describe("the desktop's loops at rest", () => {
-  it("run while the desktop shows, and hold still under a maximised window", () => {
+  it("run on the bare desktop, and hold still under a program's window", () => {
+    nav.pathname = "/";
     const view = render(<Desktop {...props()} />);
     const beam = () => document.querySelector("[data-os-scanbeam]")!;
     const mark = () =>
       document.querySelector("#os-desktop [data-os-wordmark]")!;
     expect(beam().closest("[data-os-paused]")).toBeNull();
     expect(mark().closest("[data-os-paused]")).toBeNull();
+    // A program's window has focus: the loops hold still.
+    nav.pathname = "/tasks";
+    view.rerender(<Desktop {...props()} />);
+    expect(beam().closest("[data-os-paused]")).not.toBeNull();
+    expect(mark().closest("[data-os-paused]")).not.toBeNull();
+    // Maximised, still.
     const title =
       frame("tasks")!.querySelector<HTMLElement>("[data-titlebar]")!;
     fireEvent.doubleClick(title);
     view.rerender(<Desktop {...props()} />);
     expect(beam().closest("[data-os-paused]")).not.toBeNull();
-    expect(mark().closest("[data-os-paused]")).not.toBeNull();
   });
 });
 

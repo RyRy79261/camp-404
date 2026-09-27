@@ -20,7 +20,7 @@ export function MeetingRow({
   return (
     <Link
       href={`/meetings/${note.id}`}
-      className="grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 transition-colors hover:text-accent sm:grid-cols-[1rem_minmax(0,1fr)_auto]"
+      className="grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 transition-colors hover:text-accent page-sm:grid-cols-[1rem_minmax(0,1fr)_auto]"
     >
       <NotebookPen className="h-4 w-4 text-muted-foreground" aria-hidden />
       <span className="min-w-0">
@@ -30,7 +30,7 @@ export function MeetingRow({
         </span>
       </span>
       {teamLabel ? (
-        <span className="col-start-2 flex sm:col-start-3 sm:row-start-1 sm:justify-end">
+        <span className="col-start-2 flex page-sm:col-start-3 page-sm:row-start-1 page-sm:justify-end">
           <Badge variant="outline">{teamLabel}</Badge>
         </span>
       ) : null}

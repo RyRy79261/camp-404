@@ -138,7 +138,13 @@ export function resizeRect(
   return { x, y, w, h };
 }
 
-function clampPosition(x: number, y: number, w: number, viewport: Viewport) {
+/** Where a window of width `w` may sit: its title bar always in reach. */
+export function clampPosition(
+  x: number,
+  y: number,
+  w: number,
+  viewport: Viewport,
+) {
   return {
     x: Math.min(Math.max(x, GRAB_MARGIN - w), viewport.width - GRAB_MARGIN),
     y: Math.min(Math.max(y, 0), viewport.height - 32),

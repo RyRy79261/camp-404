@@ -19,7 +19,10 @@ const dateFmt = new Intl.DateTimeFormat("en-ZA", {
 // Server-renderable — the page passes the edits in.
 export function ChangeLog({ edits }: { edits: FormEdit[] }) {
   return (
-    <section aria-labelledby="change-log-heading" className="lg:self-start">
+    <section
+      aria-labelledby="change-log-heading"
+      className="page-lg:self-start"
+    >
       <Card>
         <CardHeader>
           <h2

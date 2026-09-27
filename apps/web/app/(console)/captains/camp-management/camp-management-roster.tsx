@@ -256,7 +256,7 @@ export function CampManagementRoster({
           the AfrikaBurn console's KPI cards. */}
       <section
         aria-label="Roster at a glance"
-        className="grid grid-cols-3 gap-2 sm:gap-4"
+        className="grid grid-cols-3 gap-2 page-sm:gap-4"
       >
         {(
           [
@@ -284,12 +284,12 @@ export function CampManagementRoster({
           ] as const
         ).map((kpi) => (
           <Card key={kpi.kicker} data-kpi={kpi.tone} className="h-full">
-            <CardContent className="flex flex-col gap-2 p-3 sm:p-5">
+            <CardContent className="flex flex-col gap-2 p-3 page-sm:p-5">
               <div className="flex items-center gap-2">
                 <span
                   aria-hidden
                   className={cn(
-                    "hidden h-2 w-2 shrink-0 rounded-full sm:block",
+                    "hidden h-2 w-2 shrink-0 rounded-full page-sm:block",
                     kpi.dot,
                   )}
                 />
@@ -306,7 +306,7 @@ export function CampManagementRoster({
               >
                 {kpi.value}
               </p>
-              <p className="hidden text-xs font-medium text-muted-foreground sm:block">
+              <p className="hidden text-xs font-medium text-muted-foreground page-sm:block">
                 {kpi.sub}
               </p>
             </CardContent>

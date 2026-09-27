@@ -146,26 +146,63 @@ export async function getMyLift(
 ): Promise<MyLift | null> {
   cycle ??= await currentCycleNumber();
   const db = createHttpDb();
-  const [driving] = await db
-    .select({
-      vehicleMake: schema.driverProfiles.vehicleMake,
-      vehicleModel: schema.driverProfiles.vehicleModel,
-      seatsOffered: schema.driverProfiles.seatsOffered,
-      departureCity: schema.driverProfiles.departureCity,
-      arrivalAt: schema.driverProfiles.arrivalAt,
-      departureAt: schema.driverProfiles.departureAt,
-    })
-    .from(schema.driverProfiles)
-    .where(
-      and(
-        eq(schema.driverProfiles.userId, userId),
-        eq(schema.driverProfiles.cycle, cycle),
-        eq(schema.driverProfiles.intendsToDrive, true),
-      ),
-    )
-    .limit(1);
+  // All three reads at once (a lift shows on every console page, through the
+  // manifest): whether they drive, the car they ride in, and their riders.
+  // Only one of the answers is used; the others are cheap and empty.
+  const [[driving], [riding], riders] = await Promise.all([
+    db
+      .select({
+        vehicleMake: schema.driverProfiles.vehicleMake,
+        vehicleModel: schema.driverProfiles.vehicleModel,
+        seatsOffered: schema.driverProfiles.seatsOffered,
+        departureCity: schema.driverProfiles.departureCity,
+        arrivalAt: schema.driverProfiles.arrivalAt,
+        departureAt: schema.driverProfiles.departureAt,
+      })
+      .from(schema.driverProfiles)
+      .where(
+        and(
+          eq(schema.driverProfiles.userId, userId),
+          eq(schema.driverProfiles.cycle, cycle),
+          eq(schema.driverProfiles.intendsToDrive, true),
+        ),
+      )
+      .limit(1),
+    db
+      .select({
+        driverName: schema.users.displayName,
+        vehicleMake: schema.driverProfiles.vehicleMake,
+        vehicleModel: schema.driverProfiles.vehicleModel,
+        departureCity: schema.driverProfiles.departureCity,
+        arrivalAt: schema.driverProfiles.arrivalAt,
+        departureAt: schema.driverProfiles.departureAt,
+      })
+      .from(schema.carMembers)
+      .innerJoin(
+        schema.driverProfiles,
+        and(
+          eq(schema.driverProfiles.userId, schema.carMembers.driverUserId),
+          eq(schema.driverProfiles.cycle, schema.carMembers.cycle),
+          // A driver who has since switched off driving keeps their seat rows
+          // (nothing deletes them), but there is no car to ride in.
+          eq(schema.driverProfiles.intendsToDrive, true),
+        ),
+      )
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.carMembers.driverUserId),
+      )
+      .where(
+        and(
+          eq(schema.carMembers.memberUserId, userId),
+          eq(schema.carMembers.cycle, cycle),
+        ),
+      )
+      .orderBy(asc(schema.carMembers.createdAt))
+      .limit(1),
+    listCarRiders(userId, cycle),
+  ]);
   if (driving) {
-    const riders = await listCarRiders(userId, cycle);
     return {
       role: "driver",
       vehicle: vehicleName(driving.vehicleMake, driving.vehicleModel),
@@ -177,38 +214,6 @@ export async function getMyLift(
     };
   }
 
-  const [riding] = await db
-    .select({
-      driverName: schema.users.displayName,
-      vehicleMake: schema.driverProfiles.vehicleMake,
-      vehicleModel: schema.driverProfiles.vehicleModel,
-      departureCity: schema.driverProfiles.departureCity,
-      arrivalAt: schema.driverProfiles.arrivalAt,
-      departureAt: schema.driverProfiles.departureAt,
-    })
-    .from(schema.carMembers)
-    .innerJoin(
-      schema.driverProfiles,
-      and(
-        eq(schema.driverProfiles.userId, schema.carMembers.driverUserId),
-        eq(schema.driverProfiles.cycle, schema.carMembers.cycle),
-        // A driver who has since switched off driving keeps their seat rows
-        // (nothing deletes them), but there is no car to ride in.
-        eq(schema.driverProfiles.intendsToDrive, true),
-      ),
-    )
-    .innerJoin(
-      schema.users,
-      eq(schema.users.id, schema.carMembers.driverUserId),
-    )
-    .where(
-      and(
-        eq(schema.carMembers.memberUserId, userId),
-        eq(schema.carMembers.cycle, cycle),
-      ),
-    )
-    .orderBy(asc(schema.carMembers.createdAt))
-    .limit(1);
   if (!riding) return null;
   return {
     role: "rider",

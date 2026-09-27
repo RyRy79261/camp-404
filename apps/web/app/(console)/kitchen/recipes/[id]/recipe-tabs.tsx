@@ -27,7 +27,7 @@ export function RecipeTabs({
   return (
     <SegmentedLinks
       aria-label="Recipe tabs"
-      className="sm:w-auto"
+      className="page-sm:w-auto"
       value={tab}
       linkAs={Link}
       options={[

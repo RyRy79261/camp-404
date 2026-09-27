@@ -37,13 +37,13 @@ export function CompletionHero({
               ? "1 more required before you’re unlocked"
               : `${pendingCount} more required before you’re unlocked`}
           </p>
-          <Button asChild className="w-full sm:w-auto">
+          <Button asChild className="w-full page-sm:w-auto">
             <Link href={nextHref}>Start next questionnaire</Link>
           </Button>
         </div>
       ) : (
         <div className="flex w-full flex-col items-center gap-2 pt-4">
-          <Button asChild className="w-full sm:w-auto">
+          <Button asChild className="w-full page-sm:w-auto">
             <Link href="/">Back to camp</Link>
           </Button>
           <p className="text-xs text-muted-foreground">

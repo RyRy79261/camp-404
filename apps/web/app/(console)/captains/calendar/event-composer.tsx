@@ -124,7 +124,7 @@ export function EventComposer({
     : "Pick a date";
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+    <div className="flex flex-col gap-6 page-lg:flex-row page-lg:items-start">
       <form
         onSubmit={submit}
         noValidate
@@ -170,7 +170,7 @@ export function EventComposer({
               />
             </Field>
 
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-5 page-sm:grid-cols-2">
               <Field
                 label="Team"
                 htmlFor="event-team"
@@ -232,7 +232,7 @@ export function EventComposer({
             </div>
 
             {allDay ? null : (
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-5 page-sm:grid-cols-2">
                 <Field
                   label="Starts"
                   htmlFor="event-start"
@@ -285,7 +285,7 @@ export function EventComposer({
           </p>
         ) : null}
 
-        <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-border pt-4 page-sm:flex-row page-sm:items-center page-sm:justify-between">
           <p className="text-xs text-muted-foreground">
             {teamLabel
               ? `Everyone sees it under Coming up; the ${teamLabel} team sees it marked as theirs.`
@@ -298,7 +298,7 @@ export function EventComposer({
         </div>
       </form>
 
-      <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-80">
+      <aside className="flex w-full shrink-0 flex-col gap-3 page-lg:w-80">
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
           {/* The team's own view: the border and star mark an event of one of
               the viewer's teams, and this preview is how that team sees it,

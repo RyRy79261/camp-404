@@ -98,7 +98,7 @@ function DayLabel({ label }: { label: string }) {
       {date ? (
         <>
           {" "}
-          <span className="block whitespace-nowrap sm:inline">{date}</span>
+          <span className="block whitespace-nowrap page-sm:inline">{date}</span>
         </>
       ) : null}
     </>
@@ -331,7 +331,7 @@ function MealPlanEditorForm({
         )}
       </div>
 
-      <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
+      <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
         <Table aria-label="Plates per day">
           <TableHeader>
             <TableRow>
@@ -374,7 +374,7 @@ function MealPlanEditorForm({
                             aria-describedby={
                               errors[key] ? `plates-${key}-error` : undefined
                             }
-                            className="w-16 sm:w-20"
+                            className="w-16 page-sm:w-20"
                             onChange={(e) =>
                               changePlates(i, meal, e.target.value)
                             }

@@ -56,6 +56,92 @@ export async function createCampUser(input: {
 }
 
 /**
+ * The camp user for this auth id, creating it with `input` when there is none.
+ * Race-safe: two first requests from one new account (the founder's first
+ * page load fires several at once) both see no row, and a plain insert made
+ * the second one fail on the unique `auth_user_id`. The insert does nothing
+ * on that conflict, and the loser reads the winner's row. `created` says which
+ * one this call was. The target is `auth_user_id` alone (a plain unique
+ * constraint, not a partial index), so any other conflict still throws.
+ *
+ * `gate`, when given, is the blocking required action the new row starts with
+ * (the founder's burner profile). It is written in the SAME transaction as
+ * the row, so no other request can see the row without its gate: a request
+ * that finds the row already there (and returns it at once) never lets the
+ * member past a gate the winner has not written yet. The loser writes it too
+ * (idempotent), so the gate exists whichever call returns first.
+ */
+export async function findOrCreateCampUser(
+  input: {
+    authUserId: string;
+    displayName: string | null;
+    inviteCode: string | null;
+    rank?: "captain" | "member";
+    approvalStatus?: "pending" | "approved" | "rejected";
+  },
+  gate?: {
+    type: "questionnaire";
+    actionKey: string;
+    title: string;
+    version: string | null;
+  },
+): Promise<{ user: typeof schema.users.$inferSelect; created: boolean }> {
+  const values = {
+    authUserId: input.authUserId,
+    displayName: input.displayName,
+    inviteCode: input.inviteCode,
+    ...(input.rank ? { rank: input.rank } : {}),
+    ...(input.approvalStatus ? { approvalStatus: input.approvalStatus } : {}),
+  };
+  if (!gate) {
+    const db = createHttpDb();
+    const [created] = await db
+      .insert(schema.users)
+      .values(values)
+      .onConflictDoNothing({ target: schema.users.authUserId })
+      .returning();
+    if (created) return { user: created, created: true };
+    const existing = await findUserByAuthId(input.authUserId);
+    if (!existing) throw new Error("Failed to insert or find camp user row");
+    return { user: existing, created: false };
+  }
+  return withTransaction(async (tx) => {
+    const [created] = await tx
+      .insert(schema.users)
+      .values(values)
+      .onConflictDoNothing({ target: schema.users.authUserId })
+      .returning();
+    const user =
+      created ??
+      (
+        await tx
+          .select()
+          .from(schema.users)
+          .where(eq(schema.users.authUserId, input.authUserId))
+          .limit(1)
+      )[0];
+    if (!user) throw new Error("Failed to insert or find camp user row");
+    await tx
+      .insert(schema.requiredActions)
+      .values({
+        userId: user.id,
+        type: gate.type,
+        actionKey: gate.actionKey,
+        title: gate.title,
+        version: gate.version,
+        blocking: true,
+      })
+      .onConflictDoNothing({
+        target: [
+          schema.requiredActions.userId,
+          schema.requiredActions.actionKey,
+        ],
+      });
+    return { user, created: !!created };
+  });
+}
+
+/**
  * Set a member's approval status without a deciding captain — used to drop a
  * redeemer into the `pending` queue at signup. Captain decisions go through
  * {@link setUserApproval}, which also records who decided.

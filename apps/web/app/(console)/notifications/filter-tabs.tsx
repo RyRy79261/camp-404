@@ -55,7 +55,7 @@ export function NotificationFilterTabs({
   return (
     <SegmentedLinks
       aria-label="Filter notifications"
-      className="sm:w-auto"
+      className="page-sm:w-auto"
       value={filter}
       linkAs={Link}
       options={INBOX_TAB_ORDER.map((tab) => ({

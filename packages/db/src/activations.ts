@@ -286,7 +286,8 @@ export async function openActivation(
  * invited", nothing reminds them, and the results never count them.
  *
  * Called before the gate spine is read, so it runs on page loads. The steady
- * state is therefore four reads and no writes:
+ * state is therefore one read when nothing open can reach the member, else
+ * that read and four more sent together, and no writes:
  *   - A gate that already points at this send is left alone, whatever its
  *     status. The member was gated at open time, or here earlier, and may
  *     have answered since.
@@ -302,6 +303,9 @@ export async function reconcileOpenActivations(
   userId: string,
 ): Promise<number> {
   const db = createHttpDb();
+  // The open sends first: with none this member could be pushed (the usual
+  // state between sends), that one read is all a page pays. With some, the
+  // member's own rows go out together, one wait more.
   const open = (
     await db
       .select()
@@ -310,19 +314,17 @@ export async function reconcileOpenActivations(
   ).filter((act) => PUSH_SCOPES.has(act.scope));
   if (open.length === 0) return 0;
 
-  const [me] = await db
-    .select({
-      id: schema.users.id,
-      isSystem: schema.users.isSystem,
-      sanitised: schema.users.sanitised,
-      approvalStatus: schema.users.approvalStatus,
-    })
-    .from(schema.users)
-    .where(eq(schema.users.id, userId))
-    .limit(1);
-  if (!me) return 0;
-
-  const [memberships, targets, gates] = await Promise.all([
+  const [meRows, memberships, targets, gates] = await Promise.all([
+    db
+      .select({
+        id: schema.users.id,
+        isSystem: schema.users.isSystem,
+        sanitised: schema.users.sanitised,
+        approvalStatus: schema.users.approvalStatus,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1),
     db
       .select({
         userId: schema.teamMemberships.userId,
@@ -364,6 +366,8 @@ export async function reconcileOpenActivations(
         ),
       ),
   ]);
+  const [me] = meRows;
+  if (!me) return 0;
 
   let written = 0;
   for (const act of open) {

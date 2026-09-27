@@ -77,6 +77,20 @@ Traps that already cost real time:
   icon, taskbar button or window title blinks instead (`pendingKey` in
   `components/os/desktop-shell.tsx`, a `useTransition` round the desktop's
   own `router.push`).
+  **What is allowed (2026-09-27): a `<Suspense>` INSIDE a page, below its
+  gate.** The page's own body runs every gate, `notFound()` and `redirect()`
+  first and draws its `PageHeading`; only then may it wrap a slow part that
+  decides nothing (a Google Calendar read, a long list, audit rows) in
+  `<Suspense fallback={<Skeleton… />}>` around a child async server
+  component that takes what the gate returned as props. Never a boundary
+  above the gate, around the whole page or around a window, and never a
+  `loading.tsx`. `/calendar` and `/captains/audit` do this;
+  `tests/e2e/streamed-pages.spec.ts` checks each one: signed out is still a
+  server 307, a `notFound()` page is still a 404, and the h1 is in the DOM
+  once with no hidden `S:` copy. Add a new streamed page to its list. The
+  window itself opens at the click with a skeleton body
+  (`WindowSkeleton` in `components/os/last-seen-view.tsx`) until the page
+  commits, so no server boundary is needed for that feedback.
 - **Only one window body is ever mounted.** The console is the 404 OS
   desktop (`components/os/desktop-shell.tsx`): the URL is the focused window,
   and the page for it renders live inside that window. Every other open
@@ -196,10 +210,14 @@ keyboard's way to them is the Terminal.
   the `dark` class in `app/layout.tsx`. [CORRECTION 2026-09-26] Those stay
   for the sign-in pages only (decision 5 A). Everything with `data-os-skin`
   on the page (the desktop, the held form's page, `GateScreen`, the invite
-  gate) wears the 404 OS skin from `apps/web/app/globals.css`:
-  `:root:has([data-os-skin])` points the kit's tokens at the `--os-*`
-  palette, zeroes the radius variables and sets Inter, so Radix popovers and
-  toasts portalled into `<body>` wear it too. The OS's own classes (surface,
+  gate) wears the 404 OS skin from `apps/web/app/globals.css`: while a
+  marker is on the page `<html>` carries `os-skinned` (a script in the root
+  layout's head keeps it in step, `lib/os-skin.ts`), and `:root.os-skinned`
+  points the kit's tokens at the `--os-*` palette, zeroes the radius
+  variables and sets Inter, so Radix popovers and toasts portalled into
+  `<body>` wear it too. Never key a rule on `:root:has(...)`: Chrome then
+  restyles the whole document on every DOM change (3x the style work of a
+  window switch, measured 2026-09-26). The OS's own classes (surface,
   wordmark, window power-on, slide-in) are in `packages/os/src/styles.css`;
   a kit part the skin restyles further carries a `data-slot` (badge, button,
   card, card-title, page-title, page-eyebrow, label, field-label,
@@ -243,7 +261,11 @@ keyboard's way to them is the Terminal.
 - Loading: no `loading.tsx` in the console (see the gotcha under Commands);
   the pressed nav item pulses while the next page renders. [CORRECTION
   2026-09-26] The pressed icon, taskbar button or window title blinks
-  (`.os-pending`) while the next page renders.
+  (`.os-pending`) while the next page renders. [2026-09-27] A program not yet open gets
+  its window at the click, with a skeleton body, and its taskbar button; an
+  open one comes to the front at once; the desktop wears a busy cursor
+  (`aria-busy` on `#os-desktop`). Streaming inside a page, below its gate, is
+  allowed (the gotcha under Commands).
 
 ## Database — read this before touching the schema
 
