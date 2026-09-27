@@ -73,13 +73,18 @@ export function useDisplayState(initial: DesktopPreferences, welcome: boolean) {
   // Marked once per page life, however many times it is closed.
   const marked = useRef(initial.welcomeSeenAt !== null);
 
+  // Saves go one after another, in the order the member made them, so a
+  // slow earlier save can never land after (and undo) a later one.
+  const saving = useRef<Promise<unknown>>(Promise.resolve());
   const change = useCallback((patch: DesktopPreferencesPatch) => {
     setPrefs((p) => ({ ...p, ...patch }));
-    void saveDesktopPreferencesAction(patch).then(
-      (result) => {
-        if (!result.ok) toast.error(result.error);
-      },
-      () => toast.error("Your display settings couldn't be saved."),
+    saving.current = saving.current.then(() =>
+      saveDesktopPreferencesAction(patch).then(
+        (result) => {
+          if (!result.ok) toast.error(result.error);
+        },
+        () => toast.error("Your display settings couldn't be saved."),
+      ),
     );
   }, []);
 

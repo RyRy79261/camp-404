@@ -196,17 +196,18 @@ describe("the welcome wizard", () => {
     expect(wizard()).toBeNull();
   });
 
-  it("turns on Open with one click from its second step, saved at once", () => {
+  it("turns on Open with one click from its second step, saved at once", async () => {
     render(<Desktop {...props()} />);
     const panel = wizard()!;
     fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
     fireEvent.click(
       within(panel).getByRole("switch", { name: /Open with one click/ }),
     );
+    await act(async () => {});
     expect(actions.save).toHaveBeenCalledWith({ oneClickOpen: true });
   });
 
-  it("changes the theme from How it looks: the desktop wears it at once, and it is saved", () => {
+  it("changes the theme from How it looks: the desktop wears it at once, and it is saved", async () => {
     render(<Desktop {...props()} />);
     const panel = wizard()!;
     for (let i = 0; i < 5; i++) {
@@ -215,10 +216,42 @@ describe("the welcome wizard", () => {
     expect(desktop().getAttribute("data-os-theme")).toBe("night");
     fireEvent.click(within(panel).getByRole("radio", { name: /Calm/ }));
     expect(desktop().getAttribute("data-os-theme")).toBe("calm");
+    await act(async () => {});
     expect(actions.save).toHaveBeenCalledWith({ theme: "calm" });
     fireEvent.click(within(panel).getByRole("switch", { name: /Bigger text/ }));
     expect(desktop().getAttribute("data-os-text")).toBe("bigger");
     expect(within(panel).getByText("In use")).toBeTruthy();
+  });
+});
+
+describe("saving display choices", () => {
+  it("sends them one after another, in the order they were made", async () => {
+    let finishFirst: () => void = () => {};
+    actions.save.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishFirst = () => resolve({ ok: true });
+        }),
+    );
+    render(<Desktop {...props()} />);
+    const panel = wizard()!;
+    for (let i = 0; i < 5; i++) {
+      fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
+    }
+    fireEvent.click(within(panel).getByRole("radio", { name: /Calm/ }));
+    await act(async () => {});
+    fireEvent.click(
+      within(panel).getByRole("radio", { name: /High contrast/ }),
+    );
+    await act(async () => {});
+    // The second waits for the first.
+    expect(actions.save.mock.calls).toEqual([[{ theme: "calm" }]]);
+    await act(async () => finishFirst());
+    expect(actions.save.mock.calls).toEqual([
+      [{ theme: "calm" }],
+      [{ theme: "high-contrast" }],
+    ]);
+    expect(desktop().getAttribute("data-os-theme")).toBe("high-contrast");
   });
 });
 

@@ -259,7 +259,13 @@ keyboard's way to them is the Terminal.
   question need the questionnaire engine and are in
   `tests/e2e-db/desktop.spec.ts`.
 - Loading: no `loading.tsx` in the console (see the gotcha under Commands);
-  the pressed nav item pulses while the next page renders.
+  the pressed nav item pulses while the next page renders. [CORRECTION
+  2026-09-26] The pressed icon, taskbar button or window title blinks
+  (`.os-pending`) while the next page renders. [2026-09-27] A program not yet open gets
+  its window at the click, with a skeleton body, and its taskbar button; an
+  open one comes to the front at once; the desktop wears a busy cursor
+  (`aria-busy` on `#os-desktop`). Streaming inside a page, below its gate, is
+  allowed (the gotcha under Commands).
 - System themes (issue #290): every colour the desktop's chrome and a window
   read is a variable in `apps/web/lib/os-themes.ts`, one set per theme
   (404 Night, Calm, High contrast, Colour-blind safe). A new colour is a new
@@ -267,13 +273,7 @@ keyboard's way to them is the Terminal.
   contrast tests (`lib/__tests__/os-themes.test.ts`,
   `os-skin-contrast.test.ts`) hold each theme to it. High contrast and Effects
   off take decoration out of the DOM, not just out of sight. The landing page,
-  Join and the sign-in pages are never themed. [CORRECTION
-  2026-09-26] The pressed icon, taskbar button or window title blinks
-  (`.os-pending`) while the next page renders. [2026-09-27] A program not yet open gets
-  its window at the click, with a skeleton body, and its taskbar button; an
-  open one comes to the front at once; the desktop wears a busy cursor
-  (`aria-busy` on `#os-desktop`). Streaming inside a page, below its gate, is
-  allowed (the gotcha under Commands).
+  Join and the sign-in pages are never themed.
 
 ## Database — read this before touching the schema
 
