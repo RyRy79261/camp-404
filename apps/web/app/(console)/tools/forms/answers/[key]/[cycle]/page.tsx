@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { CAMP_TIME_ZONE } from "@camp404/core";
+import { CAMP_TIME_ZONE, questionnaireForViewer } from "@camp404/core";
 import { displayResponseValue, pageQuestions } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent, CardHeader } from "@camp404/ui/components/card";
@@ -9,6 +9,7 @@ import { PageHeading } from "@camp404/ui/components/page-heading";
 import { cn } from "@camp404/ui/lib/utils";
 import { getAnsweredQuestionnaire } from "@/lib/forms";
 import { requireMemberPage } from "@/lib/member-gate";
+import { viewerSeesLeadsOnly } from "@/lib/questionnaire-viewer";
 
 export const dynamic = "force-dynamic";
 
@@ -44,8 +45,13 @@ export default async function AnsweredQuestionnairePage({
   );
   if (!answers) notFound();
 
+  // "Team leads and up" questions (#251) stay out of a plain member's copy.
+  const questionnaire = questionnaireForViewer(answers.questionnaire, {
+    seesLeadsOnly: await viewerSeesLeadsOnly(campUser, answers.questionnaire),
+  });
+
   // Intro pages take no answer, so only questions pages carry a card.
-  const pages = answers.questionnaire.pages
+  const pages = questionnaire.pages
     .flatMap((page) => (page.kind === "questions" ? [page] : []))
     .map((page) => ({ page, questions: pageQuestions(page) }))
     .filter((p) => p.questions.length > 0);

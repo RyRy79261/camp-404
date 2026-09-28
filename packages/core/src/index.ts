@@ -143,6 +143,8 @@ export * from "./questionnaire-definition";
 export * from "./questionnaire-runtime";
 export * from "./questionnaire-versioning";
 export * from "./questionnaire-submission";
+export * from "./questionnaire-viewer";
+export * from "./questionnaire-templates";
 export * from "./questionnaire-copy";
 export * from "./notification-links";
 export * from "./notifications";

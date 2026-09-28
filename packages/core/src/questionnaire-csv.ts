@@ -1,5 +1,6 @@
 import {
   displayResponseValue,
+  ratingGridCellLabel,
   type Question,
   type QuestionnaireResponses,
   type QuestionnaireResponseValue,
@@ -99,6 +100,14 @@ export function displayOrphanedAnswer(
     return value.length === 0 ? EMPTY_ANSWER : value.join(", ");
   }
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") {
+    // A grid or rating grid map: `row: answer`, never "[object Object]".
+    const cells = Object.entries(value).map(
+      ([key, cell]) =>
+        `${key}: ${Array.isArray(cell) ? cell.join(", ") : String(cell)}`,
+    );
+    return cells.length === 0 ? EMPTY_ANSWER : cells.join("; ");
+  }
   return String(value);
 }
 
@@ -135,6 +144,44 @@ function questionHeaders(questions: readonly Question[]): string[] {
   );
 }
 
+/** One export column: its header and how a respondent's answers fill it. */
+interface CsvColumn {
+  header: string;
+  cell: (responses: QuestionnaireResponses) => string;
+}
+
+/**
+ * The question columns, in document order. A rating grid (#251) spreads over
+ * one column per row, `Prompt: Row`, each holding that row's point label (or
+ * N/A), so a spreadsheet can sort and average a row; every other question is
+ * one column rendered by `displayResponseValue`.
+ */
+function questionColumns(questions: readonly Question[]): CsvColumn[] {
+  const headers = questionHeaders(questions);
+  return questions.flatMap((q, index): CsvColumn[] => {
+    const header = headers[index] ?? q.prompt;
+    if (q.kind !== "rating_grid") {
+      return [{ header, cell: (r) => displayResponseValue(q, r[q.id]) }];
+    }
+    return q.rows.map((row) => ({
+      header: `${header}: ${row.label}`,
+      cell: (r) =>
+        ratingGridCellLabel(q, ratingRowCell(r[q.id], row.id)) || EMPTY_ANSWER,
+    }));
+  });
+}
+
+/** One row's cell of a stored rating grid answer; undefined when not a map. */
+function ratingRowCell(
+  value: QuestionnaireResponseValue | undefined,
+  rowId: string,
+): unknown {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return (value as Record<string, unknown>)[rowId];
+}
+
 /**
  * The full rectangle: one header row, then one row per respondent.
  *
@@ -155,9 +202,10 @@ export function buildQuestionnaireCsvRows(
   const { questions, respondents } = input;
   const orphanIds = collectOrphanFieldIds(questions, respondents);
 
+  const columns = questionColumns(questions);
   const header: CsvCell[] = [
     ...FIXED_HEADERS,
-    ...questionHeaders(questions),
+    ...columns.map((column) => column.header),
     ...orphanIds.map((id) => `${id} ${ORPHAN_COLUMN_SUFFIX}`),
   ];
 
@@ -166,9 +214,7 @@ export function buildQuestionnaireCsvRows(
     respondent.cycle,
     respondent.submittedAt ? respondent.submittedAt.toISOString() : "",
     respondent.definitionVersion,
-    ...questions.map((q) =>
-      displayResponseValue(q, respondent.responses[q.id]),
-    ),
+    ...columns.map((column) => column.cell(respondent.responses)),
     ...orphanIds.map((id) => displayOrphanedAnswer(respondent.responses[id])),
   ]);
 
