@@ -24,5 +24,10 @@ export function notificationLink(
   if (refType === "task" && refId && UUID.test(refId)) {
     return "/tasks";
   }
+  // A required action has no page of its own; home sends the member on to
+  // whatever still blocks them (requireMemberPage).
+  if (refType === "required_action" && refId && UUID.test(refId)) {
+    return "/";
+  }
   return NOTIFICATION_FALLBACK_LINK;
 }

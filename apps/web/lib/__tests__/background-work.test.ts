@@ -11,6 +11,7 @@ vi.mock("@camp404/db/email", () => ({ drainQueuedEmail: vi.fn() }));
 vi.mock("@camp404/db/push", () => ({ drainQueuedPush: vi.fn() }));
 vi.mock("@camp404/db/questionnaire-lifecycle", () => ({
   remindDueSoon: vi.fn(),
+  remindRequiredActionsDueSoon: vi.fn(),
 }));
 vi.mock("@camp404/db/tasks", () => ({ remindTaskDeadlines: vi.fn() }));
 vi.mock("@camp404/db/rate-limit", () => ({ consumeRateLimit: vi.fn() }));
@@ -43,7 +44,10 @@ import {
 import { dispatchDueBroadcasts } from "@camp404/db/broadcasts";
 import { drainQueuedEmail } from "@camp404/db/email";
 import { drainQueuedPush } from "@camp404/db/push";
-import { remindDueSoon } from "@camp404/db/questionnaire-lifecycle";
+import {
+  remindDueSoon,
+  remindRequiredActionsDueSoon,
+} from "@camp404/db/questionnaire-lifecycle";
 import { remindTaskDeadlines } from "@camp404/db/tasks";
 import { consumeRateLimit } from "@camp404/db/rate-limit";
 import {
@@ -123,6 +127,7 @@ describe("runDueWork", () => {
       windowMs: MAINTENANCE_EVERY_MS,
     });
     expect(remindDueSoon).toHaveBeenCalledWith({ now: NOON });
+    expect(remindRequiredActionsDueSoon).toHaveBeenCalledWith({ now: NOON });
     expect(remindTaskDeadlines).toHaveBeenCalledWith({ now: NOON });
     expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
     expect(backfillIdEncryption).toHaveBeenCalledOnce();
@@ -152,6 +157,7 @@ describe("runDueWork", () => {
   it("sends no reminders at night, but still delivers", async () => {
     await runDueWork(NIGHT);
     expect(remindDueSoon).not.toHaveBeenCalled();
+    expect(remindRequiredActionsDueSoon).not.toHaveBeenCalled();
     expect(remindTaskDeadlines).not.toHaveBeenCalled();
     expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
   });
@@ -177,7 +183,11 @@ describe("runDueWork", () => {
 
   it("keeps going when one reminder job throws", async () => {
     vi.mocked(remindDueSoon).mockRejectedValue(new Error("boom"));
+    vi.mocked(remindRequiredActionsDueSoon).mockRejectedValue(
+      new Error("boom"),
+    );
     await runDueWork(NOON);
+    expect(remindRequiredActionsDueSoon).toHaveBeenCalledOnce();
     expect(remindTaskDeadlines).toHaveBeenCalledOnce();
     expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
     expect(console.error).toHaveBeenCalled();
