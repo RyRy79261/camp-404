@@ -24,3 +24,4 @@ export * from "./join-site";
 export * from "./desktop-layout";
 export * from "./desktop-preferences";
 export * from "./inkblot";
+export * from "./lounge";

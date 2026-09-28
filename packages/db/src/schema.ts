@@ -26,6 +26,10 @@ import {
   LOAD_CATEGORIES,
   LOAD_OWNERS,
   LOAD_SCHEDULES,
+  LOUNGE_BANDS,
+  LOUNGE_NEEDS,
+  LOUNGE_OFFER_KINDS,
+  LOUNGE_OFFER_STATUSES,
   NOTIFICATION_KINDS,
   PARTICIPATION_INTENTS,
   PARTICIPATION_STATUSES,
@@ -35,6 +39,10 @@ import {
   type LoadCategory,
   type LoadOwner,
   type LoadSchedule,
+  type LoungeBand,
+  type LoungeNeed,
+  type LoungeOfferKind,
+  type LoungeOfferStatus,
   type BuilderQuestionnaire,
   type DesktopLayout,
   type DesktopPreferences,
@@ -2223,6 +2231,8 @@ export const adoptees = pgTable(
 );
 
 // --- Workshops -----------------------------------------------------------
+// Never read or written; the lounge programme (below) replaces them. Kept
+// because migrations are add-only; dropping them is the owner's call.
 
 export const workshops = pgTable("workshops", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -2250,6 +2260,133 @@ export const workshopRsvps = pgTable(
     pk: primaryKey({ columns: [r.workshopId, r.userId] }),
   }),
 );
+
+// --- Lounge programme (#269) -----------------------------------------------
+// The Ministry of Vibes' lounge: members offer an activity or a DJ set, a
+// captain or a Ministry of Vibes lead decides it (canRunLounge) and places an
+// accepted one on the year's days × time-bands grid.
+//
+// Year-scoped: `cycle` is stamped by the writer with currentCycleNumber(),
+// never a default, so a row cannot land on the sentinel year by accident.
+// Days are programme days counted from 1 (the Burn's dates only label them);
+// a start is minutes after midnight, camp time, and a programme day runs
+// 06:00 to 06:00.
+
+export const loungeOffers = pgTable(
+  "lounge_offers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    // The member who offered it. Erasure deletes their offers (account.ts).
+    hostId: uuid("host_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<LoungeOfferKind>().notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    durationMinutes: integer("duration_minutes").notNull(),
+    needs: text("needs")
+      .array()
+      .$type<LoungeNeed[]>()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    needsNote: text("needs_note"),
+    preferredDays: integer("preferred_days")
+      .array()
+      .$type<number[]>()
+      .notNull()
+      .default(sql`'{}'::integer[]`),
+    preferredBands: text("preferred_bands")
+      .array()
+      .$type<LoungeBand[]>()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    recurring: boolean("recurring").notNull().default(false),
+    publicGuide: boolean("public_guide").notNull().default(false),
+    status: text("status")
+      .$type<LoungeOfferStatus>()
+      .notNull()
+      .default("offered"),
+    // The reviewer's words to the host on a decline or a request for changes.
+    decisionNote: text("decision_note"),
+    decidedByUserId: uuid("decided_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedAt: timestamp("decided_at", { mode: "date" }),
+    // Compare-and-set: every edit and decision names the version it saw.
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (o) => ({
+    cycleIdx: index("lounge_offers_cycle_idx").on(o.cycle, o.status),
+    hostIdx: index("lounge_offers_host_idx").on(o.hostId, o.cycle),
+    kindCheck: check(
+      "lounge_offers_kind_check",
+      oneOf(o.kind, LOUNGE_OFFER_KINDS),
+    ),
+    statusCheck: check(
+      "lounge_offers_status_check",
+      oneOf(o.status, LOUNGE_OFFER_STATUSES),
+    ),
+    durationCheck: check(
+      "lounge_offers_duration_check",
+      sql`${o.durationMinutes} between 15 and 480`,
+    ),
+    needsCheck: check(
+      "lounge_offers_needs_check",
+      sql`${o.needs} <@ array[${sql.raw(LOUNGE_NEEDS.map((v) => `'${v}'`).join(", "))}]::text[]`,
+    ),
+    bandsCheck: check(
+      "lounge_offers_bands_check",
+      sql`${o.preferredBands} <@ array[${sql.raw(LOUNGE_BANDS.map((v) => `'${v}'`).join(", "))}]::text[]`,
+    ),
+  }),
+);
+
+// An accepted offer placed on the grid. A recurring offer is placed once per
+// day it runs. Leaving `accepted` deletes its slots in the same transaction.
+export const loungeSlots = pgTable(
+  "lounge_slots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    offerId: uuid("offer_id")
+      .notNull()
+      .references(() => loungeOffers.id, { onDelete: "cascade" }),
+    day: integer("day").notNull(),
+    startMinute: integer("start_minute").notNull(),
+    placedByUserId: uuid("placed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (s) => ({
+    cycleIdx: index("lounge_slots_cycle_idx").on(s.cycle),
+    placeUniq: uniqueIndex("lounge_slots_offer_place_uniq").on(
+      s.offerId,
+      s.day,
+      s.startMinute,
+    ),
+    dayCheck: check("lounge_slots_day_check", sql`${s.day} between 1 and 14`),
+    startCheck: check(
+      "lounge_slots_start_check",
+      sql`${s.startMinute} between 0 and 1439`,
+    ),
+  }),
+);
+
+// The year's lounge settings: for now only the team's music note for DJs.
+// No row means none; the first save inserts it.
+export const loungeSettings = pgTable("lounge_settings", {
+  cycle: integer("cycle").primaryKey(),
+  musicPolicy: text("music_policy"),
+  version: integer("version").notNull().default(1),
+  updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
 
 // --- Inventory -----------------------------------------------------------
 // The camp's stocked gear, tracked for a status page reachable from the

@@ -194,6 +194,10 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.workshopRsvps)
       .where(eq(schema.workshopRsvps.userId, userId));
+    // Lounge offers are the member's own words; their slots go with them.
+    await tx
+      .delete(schema.loungeOffers)
+      .where(eq(schema.loungeOffers.hostId, userId));
     // Captains' notes ABOUT the member are about the person, so they go.
     // Notes the member wrote about others stay; their author link is kept to
     // the tombstone row.

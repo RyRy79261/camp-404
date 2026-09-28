@@ -43,6 +43,7 @@
     "./tasks": "./src/tasks.ts",
     "./meeting-notes": "./src/meeting-notes.ts",
     "./power": "./src/power.ts",
+    "./lounge": "./src/lounge.ts",
     "./meal-plan": "./src/meal-plan.ts",
     "./recipes": "./src/recipes.ts",
     "./calendar-events": "./src/calendar-events.ts",
