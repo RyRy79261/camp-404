@@ -154,6 +154,73 @@ describe("with the database", () => {
     expect(ids).toEqual(["claimed0001", "claimed0001"]);
   });
 
+  it("follows a newer save that landed while it was at Google", async () => {
+    // This step put version 1; by the time it marks, version 2 is saved, so
+    // Google may now show the older days. It makes Google match version 2.
+    vi.mocked(db.setLogisticsPhase).mockResolvedValue({ ok: true, row: row() });
+    vi.mocked(db.markLogisticsCalendarSynced)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    vi.mocked(db.listLogisticsPhases).mockResolvedValueOnce([
+      row({ version: 2, startDate: "2027-04-20" }),
+    ]);
+    expect(await saveLogisticsPhase("user-1", BUILD)).toEqual({
+      ok: true,
+      calendar: "synced",
+    });
+    expect(db.listLogisticsPhases).toHaveBeenCalledWith(2027);
+    const puts = vi.mocked(putCalendarEvent).mock.calls;
+    expect(puts.map((c) => [c[1], c[2].start])).toEqual([
+      ["claimed0001", { date: "2027-04-24" }],
+      ["claimed0001", { date: "2027-04-20" }],
+    ]);
+    expect(db.markLogisticsCalendarSynced).toHaveBeenLastCalledWith({
+      cycle: 2027,
+      phase: "build",
+      version: 2,
+      removed: false,
+    });
+    expect(deleteCalendarEvent).not.toHaveBeenCalled();
+  });
+
+  it("takes back an event it put after the days were cleared", async () => {
+    vi.mocked(db.setLogisticsPhase).mockResolvedValue({ ok: true, row: row() });
+    vi.mocked(db.markLogisticsCalendarSynced).mockResolvedValueOnce(false);
+    vi.mocked(db.listLogisticsPhases).mockResolvedValueOnce([
+      row({
+        version: 3,
+        startDate: null,
+        endDate: null,
+        calendarEventId: null,
+        calendarSyncedVersion: 3,
+      }),
+    ]);
+    expect(await saveLogisticsPhase("user-1", BUILD)).toEqual({
+      ok: true,
+      calendar: "synced",
+    });
+    expect(deleteCalendarEvent).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      "claimed0001",
+    );
+    expect(putCalendarEvent).toHaveBeenCalledOnce();
+  });
+
+  it("gives up and says failed if newer saves keep landing", async () => {
+    vi.mocked(db.setLogisticsPhase).mockResolvedValue({ ok: true, row: row() });
+    for (const version of [2, 3, 4]) {
+      vi.mocked(db.markLogisticsCalendarSynced).mockResolvedValueOnce(false);
+      vi.mocked(db.listLogisticsPhases).mockResolvedValueOnce([
+        row({ version }),
+      ]);
+    }
+    expect(await saveLogisticsPhase("user-1", BUILD)).toEqual({
+      ok: true,
+      calendar: "failed",
+    });
+    expect(putCalendarEvent).toHaveBeenCalledTimes(3);
+  });
+
   it("keeps the save and says so when Google fails", async () => {
     vi.mocked(db.setLogisticsPhase).mockResolvedValue({ ok: true, row: row() });
     vi.mocked(putCalendarEvent).mockRejectedValueOnce(new Error("update 500"));

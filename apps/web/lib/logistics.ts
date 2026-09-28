@@ -106,10 +106,34 @@ export function logisticsEventBody(
   };
 }
 
-/** Make the camp calendar match a phase as saved. Never throws. */
+/** How many times a sync follows a newer save before it gives up. */
+const MAX_SYNC_ROUNDS = 3;
+
+/** The phase as it stands now, from the same source as the write. */
+async function currentPhase(
+  row: LogisticsPhaseRow,
+): Promise<LogisticsPhaseRow | undefined> {
+  const rows = usesTestStore()
+    ? testStore.listLogisticsPhases(row.cycle)
+    : await db.listLogisticsPhases(row.cycle);
+  return rows.find((r) => r.phase === row.phase);
+}
+
+/**
+ * Make the camp calendar match a phase as saved. Never throws.
+ *
+ * Google is written with no lock held, so two saves close together can reach
+ * Google in the wrong order. The mark is a compare-and-set on the version:
+ * when it misses, a newer save has landed, and what this step just wrote may
+ * be stale. So it reads the phase again and makes Google match that instead,
+ * first taking off an event it put under an id the phase no longer holds.
+ * Whichever step finishes last therefore leaves Google matching the newest
+ * save.
+ */
 async function syncToCalendar(
   row: LogisticsPhaseRow,
   actorId: string,
+  round = 1,
 ): Promise<LogisticsCalendarOutcome> {
   if (!isLogisticsCalendarConnected()) return "not_connected";
   const step = logisticsCalendarStep(row);
@@ -128,7 +152,12 @@ async function syncToCalendar(
           version: row.version,
           removed,
         });
+  const remove = async (id: string) =>
+    usesTestStore()
+      ? testStore.deleteCalendarEvent(id)
+      : await deleteCalendarEvent(process.env, id);
   try {
+    let marked = true;
     if (step === "put" && eventId && row.startDate && row.endDate) {
       const teamLabel = await logisticsTeamLabel();
       const body = logisticsEventBody(
@@ -147,16 +176,26 @@ async function syncToCalendar(
       } else {
         await putCalendarEvent(process.env, eventId, body);
       }
-      await mark(false);
+      marked = await mark(false);
     } else if (step === "remove" && eventId) {
-      const gone = usesTestStore()
-        ? testStore.deleteCalendarEvent(eventId)
-        : await deleteCalendarEvent(process.env, eventId);
-      if (!gone) return "failed";
-      await mark(true);
+      if (!(await remove(eventId))) return "failed";
+      marked = await mark(true);
     }
     forgetCalendarCache();
-    return "synced";
+    if (marked) return "synced";
+
+    // A newer save landed while this step was at Google.
+    const latest = await currentPhase(row);
+    if (
+      step === "put" &&
+      eventId &&
+      latest?.calendarEventId !== eventId &&
+      !(await remove(eventId))
+    ) {
+      return "failed";
+    }
+    if (!latest || round >= MAX_SYNC_ROUNDS) return "failed";
+    return await syncToCalendar(latest, actorId, round + 1);
   } catch {
     // putCalendarEvent has logged the HTTP status, and nothing secret.
     return "failed";
