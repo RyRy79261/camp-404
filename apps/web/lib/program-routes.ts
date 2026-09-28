@@ -30,6 +30,7 @@ export type ProgramId =
   | "team"
   | "roster"
   | "family-tree"
+  | "about"
   | "meetings"
   | "meeting"
   | "new-meeting"
@@ -85,6 +86,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   team: "Team",
   roster: "Roster",
   "family-tree": "Family tree",
+  about: "About Camp 404",
   meetings: "Meetings",
   meeting: "Meeting",
   "new-meeting": "New meeting",
@@ -192,6 +194,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/teams/[key]", "team", "TEAM.EXE", keyed("team")),
   route("/captains/camp-management", "roster", "ROSTER.DB"),
   route("/family-tree", "family-tree", "LINEAGE.EXE"),
+  route("/about", "about", "README.TXT"),
   route("/meetings", "meetings", "MINUTES.EXE"),
   route("/meetings/new", "new-meeting", "NEWMEET.TXT"),
   route("/meetings/[id]", "meeting", "MEETING.TXT", keyed("meeting")),

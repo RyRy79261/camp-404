@@ -74,6 +74,14 @@ export function LandingHero() {
             aria-label="Policies"
             className="mt-2 flex gap-4 font-mono text-[10px] uppercase tracking-[0.3em] text-[color:var(--color-muted-foreground)]"
           >
+            {/* What Camp 404 is: the camp's public site, whose words
+                captains keep in the app (#264). */}
+            <a
+              href="https://join.camp-404.com"
+              className="hover:text-[color:var(--color-foreground)]"
+            >
+              About
+            </a>
             <a
               href="/privacy"
               className="hover:text-[color:var(--color-foreground)]"
