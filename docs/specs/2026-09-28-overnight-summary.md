@@ -192,8 +192,13 @@ worktree but no commits yet).
 
 - `docs/specs/2026-09-28-team-budgets-and-reimbursements.md` (#242)
 - `docs/specs/2026-09-28-shift-roster.md` (#248)
-- `docs/specs/2026-09-28-logistics-calendar.md` (#247): **the camp calendar
-  still lives in Google Calendar**; the doc proposes moving it into the app.
+- `docs/specs/2026-09-28-logistics-calendar.md` (#247): the camp calendar
+  **stays on Google Calendar** (owner, 2026-09-28: "We still need the
+  calendar and the telegram"). The app keeps the camp's own dates and writes
+  each one to Google as one event, updated or deleted when the date changes.
+  The first slice (the year's pack, travel, build, burn, strike and unpack
+  dates) is built on `feat/logistics`, committed locally, waiting to be pushed
+  because it has a migration.
 - `docs/specs/2026-09-28-kitchen-menu-and-shopping.md` (#244, #245): two
   layouts per screen for your approval.
 - `docs/specs/2026-09-28-survival-guide-and-printables.md` (#250, #249)
