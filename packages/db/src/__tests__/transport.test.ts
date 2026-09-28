@@ -284,6 +284,38 @@ describe("seats", () => {
     ).toEqual({ ok: false, error: NOT_A_MEMBER });
   });
 
+  it("lets a member whose driver stopped driving take a seat in another car, and only one", async () => {
+    const db = h.db();
+    const ada = await driver(db, "Ada");
+    const cai = await driver(db, "Cai");
+    const bea = await approved(db, "Bea");
+    expect(
+      await addRider({
+        actorId: ada.id,
+        driverUserId: ada.id,
+        memberUserId: bea.id,
+      }),
+    ).toEqual({ ok: true });
+    // Ada stops driving: her car leaves the board, and Bea's old row with it.
+    await db
+      .update(schema.driverProfiles)
+      .set({ intendsToDrive: false })
+      .where(eq(schema.driverProfiles.userId, ada.id));
+    expect(
+      await addRider({
+        actorId: cai.id,
+        driverUserId: cai.id,
+        memberUserId: bea.id,
+      }),
+    ).toEqual({ ok: true });
+    // Her seat in Ada's car is gone, so Ada driving again cannot give her two.
+    const rows = await db
+      .select({ driverUserId: schema.carMembers.driverUserId })
+      .from(schema.carMembers)
+      .where(eq(schema.carMembers.memberUserId, bea.id));
+    expect(rows).toEqual([{ driverUserId: cai.id }]);
+  });
+
   it("lets a rider leave, but not take someone else out", async () => {
     const db = h.db();
     const ada = await driver(db, "Ada");

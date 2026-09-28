@@ -233,19 +233,23 @@ async function seat(
   if (!driver) refuse(NOT_DRIVING);
   if (!(await approvedMember(tx, memberUserId, true))) refuse(NOT_A_MEMBER);
   if (await isDriving(tx, memberUserId, cycle)) refuse(IS_DRIVING);
-  // Any row this year, even in a car whose driver stopped driving: the
-  // primary key would refuse a second row in the same car anyway.
-  const [seated] = await tx
-    .select({ driverUserId: schema.carMembers.driverUserId })
-    .from(schema.carMembers)
-    .where(
-      and(
-        eq(schema.carMembers.memberUserId, memberUserId),
-        eq(schema.carMembers.cycle, cycle),
-      ),
-    )
-    .limit(1);
-  if (seated) refuse(ALREADY_SEATED);
+  // A seat in a car whose driver stopped driving is no seat: every read
+  // (seatOf, the board, the unseated list) already ignores it, and nobody can
+  // see that car to take the member out. Drop it here, so the member can be
+  // seated again and cannot end up in two cars if the old driver drives
+  // again. The member's own row is locked above, so this cannot race.
+  await tx.delete(schema.carMembers).where(
+    and(
+      eq(schema.carMembers.memberUserId, memberUserId),
+      eq(schema.carMembers.cycle, cycle),
+      sql`${schema.carMembers.driverUserId} not in (
+          select ${schema.driverProfiles.userId} from ${schema.driverProfiles}
+          where ${schema.driverProfiles.cycle} = ${cycle}
+            and ${schema.driverProfiles.intendsToDrive} = true
+        )`,
+    ),
+  );
+  if (await seatOf(tx, memberUserId, cycle)) refuse(ALREADY_SEATED);
   if (
     driver.seatsOffered !== null &&
     (await ridersIn(tx, driverUserId, cycle)) >= driver.seatsOffered

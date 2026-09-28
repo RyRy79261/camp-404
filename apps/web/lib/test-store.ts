@@ -1040,6 +1040,18 @@ function transportSeatIn(input: {
   if (transportDriving(memberUserId, cycle)) {
     return { ok: false, error: IS_DRIVING };
   }
+  // As the db: a seat in a car whose driver stopped driving is dropped, and
+  // only a seat in a car that still drives refuses.
+  for (let i = carMembers.length - 1; i >= 0; i--) {
+    const c = carMembers[i]!;
+    if (
+      c.memberUserId === memberUserId &&
+      c.cycle === cycle &&
+      !transportDriving(c.driverUserId, cycle)
+    ) {
+      carMembers.splice(i, 1);
+    }
+  }
   if (
     carMembers.some((c) => c.memberUserId === memberUserId && c.cycle === cycle)
   ) {
