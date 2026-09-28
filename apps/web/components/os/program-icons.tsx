@@ -25,6 +25,7 @@ const LINE: Readonly<Record<string, IconKey>> = {
   "new-meeting": "minutes",
   "edit-meeting": "minutes",
   "family-tree": "lineage",
+  about: "readme",
   power: "power",
   recipes: "cookbook",
   recipe: "cookbook",

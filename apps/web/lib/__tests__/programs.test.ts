@@ -133,6 +133,7 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
       { kind: "program", id: "family-tree" },
+      { kind: "program", id: "about" },
       // No Captains column for them: the Terminal ends Camp.
       { kind: "program", id: "terminal" },
     ]);

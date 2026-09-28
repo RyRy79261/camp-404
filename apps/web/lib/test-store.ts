@@ -5533,6 +5533,21 @@ export const testStore = {
   setCampBlurb(userId: string, blurb: TestCampBlurb): void {
     S.campBlurbs.set(userId, { ...blurb });
   },
+  /** Captains who chose to be shown, by name (getJoinCaptains' twin). */
+  listJoinCaptains(): { name: string; title: string; blurb: string }[] {
+    const out: { name: string; title: string; blurb: string }[] = [];
+    for (const user of usersByAuthId.values()) {
+      const card = S.campBlurbs.get(user.id);
+      const name = (user.displayName ?? "").trim();
+      if (user.rank !== "captain" || !card?.showOnJoin || name === "") continue;
+      out.push({
+        name,
+        title: (card.title ?? "").trim() || "Captain",
+        blurb: (card.blurb ?? "").trim(),
+      });
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+  },
 };
 
 export type {
