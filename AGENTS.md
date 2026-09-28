@@ -646,9 +646,11 @@ LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
 
 ## Conventions
 
-- **Nothing a feature needs may live outside the app** (owner, 2026-09-27).
-  Never add links to Google Drive, Docs, Sheets, Forms or any other outside
-  tool as a feature; build what the camp needs inside the app instead.
+- **No Google Sheets or Google Forms** (owner, 2026-09-27; narrowed
+  2026-09-28). Never build a feature that sends people to a spreadsheet or
+  a form, or that links out to Drive or Docs; build what the camp needs
+  inside the app instead. Google Calendar (the camp calendar) and Telegram
+  stay: the owner wants both.
 - TypeScript throughout; shared types and Zod schemas live in
   `@camp404/types`. Validate external input at the boundary with Zod.
 - Lint via `@camp404/eslint-config`; format via Prettier (`.prettierrc.json`).

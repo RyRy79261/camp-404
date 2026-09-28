@@ -236,10 +236,10 @@ came with the review; all six are built in the first version.
    a map in code by team key). Every active team is in the Teams folder, and
    a member's own team folders on the right each open with that team's
    program (unchanged from before, and tested in `programs.test.ts`).
-6. **No outside links: everything happens inside the app.** (Owner,
-   2026-09-27, on review of the first version.) The whole point of Camp 404
-   is that nothing happens outside the app: no Google Drive, no spreadsheets,
-   no Google Forms. A team program never offers or shows links to outside
+6. **No outside links.** (Owner, 2026-09-27, on review of the first
+   version; narrowed 2026-09-28.) Camp 404 replaces Google Sheets, Google
+   Forms and Drive documents, so a team program never links out to them.
+   Google Calendar and Telegram are not affected: the owner keeps both. A team program never offers or shows links to outside
    tools, so the team links #267 asked for are not built, and the
    description is the only thing a lead writes. What a team needs that lives
    in an outside tool today becomes a tool inside the app, shaped with the
