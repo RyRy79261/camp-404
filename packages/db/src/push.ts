@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import {
@@ -16,8 +16,29 @@ import { notificationLink, plainPreview } from "@camp404/core";
 
 type Platform = (typeof schema.platformEnum.enumValues)[number];
 
-/** Register / refresh a device token. Upserts on the unique `token` index so a
- * re-register (or a device handed to another user) rebinds cleanly. */
+/**
+ * Register / refresh a device token. Upserts on the unique `token` index, so a
+ * re-register refreshes the row and a token another member registered moves to
+ * the caller.
+ *
+ * Why a token may move between members (audit #134, decided 2026-09-28):
+ * - The FCM token is the only proof of a device the server has. A web token is
+ *   minted by this device's browser and read back only by code running on it,
+ *   so a caller who presents it is, as far as anything here can tell, on that
+ *   device. "The same phone, now signed in by someone else" and "someone who
+ *   learnt another device's token" look identical: there is no sound way to
+ *   tell them apart.
+ * - A conflict means the last member never forgot the token (a sign-out
+ *   through /auth/sign-out deletes the row and the Firebase token). Refusing
+ *   the move would keep the LAST member's notices going to a phone someone else
+ *   now holds: a leak of their messages.
+ * - Moving it costs a caller who only knows a token nothing they could read: a
+ *   push goes to the device, never to the caller. The worst case is that the
+ *   other member's phone stops getting their pushes (and gets the caller's
+ *   own, which the caller can read anyway). So the token moves.
+ * - What the last member chose for this device (topics) does not move with it:
+ *   the row starts again for its new owner. Nothing about the move is logged.
+ */
 export async function upsertPushToken(input: {
   userId: string;
   token: string;
@@ -38,7 +59,10 @@ export async function upsertPushToken(input: {
       set: {
         userId: input.userId,
         platform: input.platform,
-        ...(input.topics ? { topics: input.topics } : {}),
+        topics:
+          input.topics ??
+          sql`CASE WHEN ${schema.pushTokens.userId} = excluded.user_id
+              THEN ${schema.pushTokens.topics} ELSE '[]'::jsonb END`,
         lastSeenAt: new Date(),
       },
     });

@@ -10,7 +10,7 @@ vi.mock("@/lib/bootstrap", () => ({
   isCampBootstrapped: vi.fn(),
   mayFoundCamp: vi.fn(),
   runFirstTimeSetup: vi.fn(),
-  SETUP_REFUSED_MESSAGE: "refused sentence",
+  setupRefusedMessage: () => "refused sentence",
 }));
 
 import { revalidatePath } from "next/cache";

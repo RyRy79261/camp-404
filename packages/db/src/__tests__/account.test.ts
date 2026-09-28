@@ -141,6 +141,24 @@ describe("sanitiseAccount", () => {
     ).toEqual([bystander.authUserId]);
   });
 
+  it("forgets the member's devices, so no push reaches a phone after erasure", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const other = await makeUser(db);
+    await db.insert(schema.pushTokens).values([
+      { userId: member.id, token: "member-phone", platform: "web" },
+      { userId: member.id, token: "member-laptop", platform: "web" },
+      { userId: other.id, token: "other-phone", platform: "web" },
+    ]);
+
+    expect(await sanitiseAccount(member.id)).toMatchObject({ ok: true });
+
+    const left = await db
+      .select({ token: schema.pushTokens.token })
+      .from(schema.pushTokens);
+    expect(left).toEqual([{ token: "other-phone" }]);
+  });
+
   it("removes every questionnaire answer the member ever gave", async () => {
     // The defect: erasure deleted the bespoke questionnaire tables but left
     // the generic builder store, so "erase my account" kept the answers.

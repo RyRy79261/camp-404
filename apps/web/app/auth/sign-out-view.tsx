@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { Button } from "@camp404/ui/components/button";
 import { forgetAllWindows } from "@/components/os/window-storage";
+import {
+  FORGET_TOKEN_TIMEOUT_MS,
+  forgetDeviceToken,
+} from "@/components/push/device-token";
 import { authClient } from "@/lib/auth-client";
 
 /**
@@ -18,6 +22,13 @@ import { authClient } from "@/lib/auth-client";
  * It forgets this tab's desktop windows and editor drafts first, whatever the
  * way here: SignOutLink does it too, but erasure's server redirect and a
  * typed address never pass through that link.
+ *
+ * Then it forgets this device's push token, while the session still exists to
+ * authorise the DELETE, so the next person on this phone does not get the last
+ * member's notifications. That gets two seconds; a slow network never holds a
+ * member on a page they chose to leave. After erasure the session is already
+ * gone and the DELETE is refused, but erasure deleted the tokens on the server,
+ * and the Firebase side is still dropped here.
  */
 export function SignOutView() {
   const [failed, setFailed] = useState(false);
@@ -29,8 +40,11 @@ export function SignOutView() {
     } catch {
       // Storage refused (a private window): nothing was kept there.
     }
-    authClient
-      .signOut()
+    Promise.race([
+      forgetDeviceToken(),
+      new Promise((resolve) => setTimeout(resolve, FORGET_TOKEN_TIMEOUT_MS)),
+    ])
+      .then(() => authClient.signOut())
       .then((result) => {
         if (cancelled) return;
         if (result?.error) {
