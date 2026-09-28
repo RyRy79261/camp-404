@@ -184,6 +184,7 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   tasks: XL_SIZE,
   roster: XL_SIZE,
   payments: XL_SIZE,
+  applications: XL_SIZE,
   "edit-questionnaire": XL_SIZE,
   "edit-recipe": XL_SIZE,
   results: XL_SIZE,

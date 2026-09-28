@@ -470,6 +470,13 @@
       "when": 1790542815772,
       "tag": "0066_team_programs",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790593484798,
+      "tag": "0067_camp_tickets",
+      "breakpoints": true
     }
   ]
 }

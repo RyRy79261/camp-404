@@ -27,10 +27,15 @@ const PUBLIC_ROSTER_SOURCES = {
   // Only on a team lead's rows: `toPublicRosterRow` leaves the key off a plain
   // member's, which is why it is in LEAD_ONLY below.
   thisYear: ["campParticipations.status"],
+  // What the member said, shown apart from the decision (owner, 2026-09-28).
+  thisYearSays: ["campParticipations.intent"],
 } satisfies Record<keyof PublicRosterRow, readonly string[]>;
 
 /** Columns a plain member's row never carries; a team lead's does. */
-const LEAD_ONLY: ReadonlySet<keyof PublicRosterRow> = new Set(["thisYear"]);
+const LEAD_ONLY: ReadonlySet<keyof PublicRosterRow> = new Set([
+  "thisYear",
+  "thisYearSays",
+]);
 
 function readable(source: string): boolean {
   return source.startsWith("answer:")

@@ -185,6 +185,7 @@ describe("buildProgramManifest: the personas", () => {
       "recipe-review",
     ]);
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
+      "applications",
       "questionnaires",
       "announcements",
       "new-event",
@@ -224,6 +225,7 @@ describe("buildProgramManifest: the personas", () => {
       }),
     );
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
+      "applications",
       "questionnaires",
       "announcements",
       "new-event",
@@ -242,6 +244,7 @@ describe("buildProgramManifest: the personas", () => {
     // The prototype's order: Camp overview first.
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
       "overview",
+      "applications",
       "questionnaires",
       "announcements",
       "new-event",

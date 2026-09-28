@@ -540,6 +540,36 @@ Decisions baked into the schema — keep new code consistent with them:
   back Maybe; My forms edits that answer, and the same write rewrites the
   answer stored with the "Coming this year?" questionnaire so its results
   agree with the roster. Erasure deletes every year's row.
+- **The member's answer and the captains' decision are two things** (owner,
+  2026-09-28). "Coming" / "Maybe" / "Not coming" is what the member said
+  (`intent`); "Accepted" (on the camp's list this year) and "Waiting list"
+  (said Coming, but the camp is full) are the captains' decision. The stored
+  `status` still holds both; screens split it with the helpers in
+  `@camp404/core/participation` (`INTENT_LABEL`, `participationDecision`,
+  `DECISION_LABEL`, and `STANDING_LABEL` for filters and counts, e.g.
+  "Coming, not decided"). Never write one label that mixes the two.
+  `intent` reads at `team_lead`, like `status`, so a lead sees both halves.
+- **Tickets, DDT and WAP.** `camp_tickets` (#238) is the same shape: one
+  row per member per burn year (adopted by `setFoundingYear`, which merges a
+  member's sentinel row into one they already have for the founding year,
+  the founding year's non-default values winning; erased with the account),
+  written only through `@camp404/db/tickets`. Who reads what (owner,
+  2026-09-28): a member reads their own row only (ticket status, DDT and WAP,
+  under "This year" on their profile) and sets only their own ticket status;
+  captains read every member's ticket data, may set a member's ticket status
+  for them, and alone set the DDT (direct distribution ticket) and the WAP
+  (work access pass). A ticket status, by the member or a captain, is only
+  for someone who said Coming or Maybe (`mayRecordTicket`); the DDT and WAP
+  are not bound by it. Each captain change is a compare-and-set on the value
+  they saw, audited as `ticket.pass_changed`. In code they are
+  `ddt` and `wap`; the Postgres columns keep their first names
+  (`directed_ticket`, `early_entry`) so the rename needed no migration. A team
+  lead reads none of it, and a member's own read carries only their own row.
+  No row means every column's default. It stores no ticket number,
+  barcode, order reference or card detail. The captains' view is
+  `/captains/applications` (Applications: team lead and up, no tickets below
+  captain), and the overview's "This year" card counts accepted members with
+  no ticket yet and WAPs issued.
 - **Notifications.** `broadcasts` are composed messages fanned out by a
   worker into per-user `notification_deliveries` (a queue). `push_tokens`
   holds device tokens.

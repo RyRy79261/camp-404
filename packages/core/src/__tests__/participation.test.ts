@@ -7,8 +7,12 @@ import {
 } from "@camp404/types";
 import {
   isParticipationDecision,
-  NOT_ANSWERED_LABEL,
-  PARTICIPATION_LABEL,
+  DECISION_LABEL,
+  INTENT_LABEL,
+  NOT_DECIDED_LABEL,
+  NO_ANSWER_LABEL,
+  STANDING_LABEL,
+  participationDecision,
   participationAfterIntent,
   type ParticipationChange,
 } from "../participation";
@@ -111,14 +115,36 @@ describe("isParticipationDecision", () => {
 });
 
 describe("participation labels", () => {
-  it("names every status in the captain's words", () => {
-    expect(PARTICIPATION_LABEL).toEqual({
-      applied: "Coming",
+  it("keeps the member's answer and the captains' decision apart", () => {
+    expect(INTENT_LABEL).toEqual({
+      yes: "Coming",
       maybe: "Maybe",
+      no: "Not coming",
+    });
+    expect(NO_ANSWER_LABEL).toBe("No answer yet");
+    expect(DECISION_LABEL).toEqual({
+      accepted: "Accepted",
+      waitlisted: "Waiting list",
+    });
+    expect(NOT_DECIDED_LABEL).toBe("Not decided yet");
+  });
+
+  it("finds the decision in a stored status, and none where there is none", () => {
+    expect(participationDecision("accepted")).toBe("accepted");
+    expect(participationDecision("waitlisted")).toBe("waitlisted");
+    for (const s of ["applied", "maybe", "not_attending"] as const) {
+      expect(participationDecision(s)).toBeNull();
+    }
+    expect(participationDecision(null)).toBeNull();
+  });
+
+  it("names each group so that no label reads as both halves", () => {
+    expect(STANDING_LABEL).toEqual({
+      applied: "Coming, not decided",
+      maybe: "Maybe, not decided",
       accepted: "Accepted",
       waitlisted: "Waiting list",
       not_attending: "Not coming",
     });
-    expect(NOT_ANSWERED_LABEL).toBe("Not answered");
   });
 });

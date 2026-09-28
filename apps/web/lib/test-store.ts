@@ -7,6 +7,7 @@ import {
   approvalNotification,
   canEditPower,
   canEditTeamProgram,
+  DEFAULT_TICKET,
   captainPromotionNotification,
   FOUNDER_CODE,
   formatMemberRefCode,
@@ -85,6 +86,7 @@ import type {
   ParticipationIntentResult,
   ParticipationRow,
 } from "@camp404/db/participations";
+import type { TicketPassChange, TicketRow } from "@camp404/db/tickets";
 import {
   CANNOT_EDIT,
   CANNOT_MOVE,
@@ -612,6 +614,9 @@ interface TestRecipeEvent {
 /** One member's answer for one year (mirrors `camp_participations`). */
 type TestParticipation = ParticipationRow;
 
+/** One member's ticket record for one year (mirrors `camp_tickets`). */
+type TestTicket = TicketRow;
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -635,6 +640,8 @@ interface TestStoreState {
   memberRefCodes: Map<string, string>;
   /** `camp_participations`, keyed `${userId}:${cycle}` like its primary key. */
   participations: Map<string, TestParticipation>;
+  /** `camp_tickets`, keyed `${userId}:${cycle}` like its primary key. */
+  tickets: Map<string, TestTicket>;
   /** Power and fuel (#253, #254): the twins of their tables. */
   powerLoads: PowerLoadRow[];
   /** `power_plans`, keyed by year like the table's primary key. */
@@ -738,6 +745,7 @@ function globalState(): TestStoreState {
       payments: [] as TestPayment[],
       memberRefCodes: new Map<string, string>(),
       participations: new Map<string, TestParticipation>(),
+      tickets: new Map<string, TestTicket>(),
       powerLoads: [] as PowerLoadRow[],
       powerPlans: new Map<number, PowerPlan>(),
       generators: [] as GeneratorRow[],
@@ -818,6 +826,8 @@ S.participations ??= new Map<string, TestParticipation>();
 const participations = S.participations;
 const participationKey = (userId: string, cycle: number) =>
   `${userId}:${cycle}`;
+S.tickets ??= new Map<string, TestTicket>();
+const tickets = S.tickets;
 const payments = S.payments;
 const memberRefCodes = S.memberRefCodes;
 S.powerLoads ??= [];
@@ -2609,6 +2619,87 @@ export const testStore = {
     return { ...row };
   },
 
+  // --- Tickets and WAP (mirrors @camp404/db/tickets) -------------
+
+  /** A member's ticket record for one year, or null when nothing is said. */
+  getTicket(userId: string, cycle: number): TestTicket | null {
+    const row = tickets.get(participationKey(userId, cycle));
+    return row ? { ...row } : null;
+  },
+
+  /** Every ticket record for one year. */
+  listTickets(cycle: number): TestTicket[] {
+    return Array.from(tickets.values())
+      .filter((t) => t.cycle === cycle)
+      .map((t) => ({ ...t }));
+  },
+
+  /** The member's own ticket status: an upsert, as production. */
+  setOwnTicketStatus(input: {
+    userId: string;
+    cycle: number;
+    ticketStatus: TestTicket["ticketStatus"];
+  }): void {
+    if (!findUserById(input.userId)) {
+      throw new Error(`No test user with id ${input.userId}`);
+    }
+    const now = new Date();
+    const key = participationKey(input.userId, input.cycle);
+    const row = tickets.get(key);
+    if (row) {
+      row.ticketStatus = input.ticketStatus;
+      row.updatedAt = now;
+      return;
+    }
+    tickets.set(key, {
+      ...DEFAULT_TICKET,
+      userId: input.userId,
+      cycle: input.cycle,
+      ticketStatus: input.ticketStatus,
+      passesUpdatedByUserId: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+
+  /**
+   * A captain's DDT or WAP change for THIS year: the same
+   * compare-and-set as production (a missing row stands at the defaults),
+   * without the audit row. A change to the value already there throws.
+   */
+  setTicketPass(
+    input: TicketPassChange & { userId: string; actorUserId: string },
+  ): boolean {
+    if (input.from === input.to) {
+      throw new Error(`setTicketPass: ${input.pass} is already ${input.to}`);
+    }
+    const key = participationKey(input.userId, currentCycleNumber());
+    const now = new Date();
+    const row: TestTicket = tickets.get(key) ?? {
+      ...DEFAULT_TICKET,
+      userId: input.userId,
+      cycle: currentCycleNumber(),
+      passesUpdatedByUserId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (input.pass === "ticket") {
+      if (row.ticketStatus !== input.from) return false;
+      row.ticketStatus = input.to;
+    } else if (input.pass === "ddt") {
+      if (row.ddt !== input.from) return false;
+      row.ddt = input.to;
+      row.passesUpdatedByUserId = input.actorUserId;
+    } else {
+      if (row.wap !== input.from) return false;
+      row.wap = input.to;
+      row.passesUpdatedByUserId = input.actorUserId;
+    }
+    row.updatedAt = now;
+    tickets.set(key, row);
+    return true;
+  },
+
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
   // The test store models users, burner profiles, team memberships, the
   // payments ledger and the required_actions twin, but not driver profiles, so
@@ -2659,6 +2750,8 @@ export const testStore = {
           country,
           participation:
             participations.get(participationKey(u.id, cycle))?.status ?? null,
+          participationIntent:
+            participations.get(participationKey(u.id, cycle))?.intent ?? null,
           // The test store keeps no sign-in email for a member.
           ...(options.includeEmail ? { email: null } : {}),
           createdAt: u.createdAt,
@@ -5182,6 +5275,7 @@ export const testStore = {
     payments.length = 0;
     memberRefCodes.clear();
     participations.clear();
+    tickets.clear();
     powerLoads.length = 0;
     powerPlans.clear();
     generators.length = 0;

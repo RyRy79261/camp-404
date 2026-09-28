@@ -29,6 +29,9 @@ import {
   NOTIFICATION_KINDS,
   PARTICIPATION_INTENTS,
   PARTICIPATION_STATUSES,
+  DDT_STATUSES,
+  WAP_STATUSES,
+  TICKET_STATUSES,
   type CurrentKind,
   type FuelType,
   type GeneratorOwner,
@@ -257,6 +260,15 @@ export const participationIntentEnum = pgEnum(
   "participation_intent",
   PARTICIPATION_INTENTS,
 );
+
+// A member's Burn ticket, the camp's DDT (direct distribution ticket) for
+// them, and their WAP (work access pass), for one burn year (TICKET_STATUSES,
+// DDT_STATUSES, WAP_STATUSES in @camp404/types). The Postgres names keep the
+// words the table was first created with (directed_ticket, early_entry), so a
+// rename needs no migration.
+export const ticketStatusEnum = pgEnum("ticket_status", TICKET_STATUSES);
+export const ddtStatusEnum = pgEnum("directed_ticket_status", DDT_STATUSES);
+export const wapStatusEnum = pgEnum("early_entry_status", WAP_STATUSES);
 
 export const broadcastScopeEnum = pgEnum("broadcast_scope", [
   "everyone",
@@ -894,6 +906,42 @@ export const campParticipations = pgTable(
       cp.cycle,
       cp.status,
     ),
+  }),
+);
+
+// --- Tickets and WAP (#238) ----------------------------------------
+// One row per member per burn year, written only through @camp404/db/tickets.
+// The member says where their own ticket stands; a captain records the camp's
+// DDT and the WAP. No row means nothing said yet: every column's default. Only what the captains plan with is kept, never a
+// ticket number, barcode, order reference or card detail.
+
+export const campTickets = pgTable(
+  "camp_tickets",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The burn year. Defaults to the UNSET_CYCLE sentinel (1) like
+    // camp_participations: a row written before the camp names its founding
+    // year is adopted into that year by setFoundingYear().
+    cycle: integer("cycle").notNull().default(1),
+    // The member's own answer. Captains read it; team leads do not.
+    ticketStatus: ticketStatusEnum("ticket_status")
+      .notNull()
+      .default("unknown"),
+    // Captain-only, to read and to write.
+    ddt: ddtStatusEnum("directed_ticket").notNull().default("none"),
+    wap: wapStatusEnum("early_entry").notNull().default("not_needed"),
+    // The captain who last changed the DDT or WAP.
+    passesUpdatedByUserId: uuid("passes_updated_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.cycle] }),
   }),
 );
 
