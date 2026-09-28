@@ -38,6 +38,7 @@ import {
   inventoryItemPath,
 } from "@/lib/inventory-copy";
 import { NativeSelect, type SelectOption } from "./native-select";
+import { reached } from "@/lib/reach-action";
 
 // Add or edit one item (#246): the AfrikaBurn categories manager's dialog.
 // Only a captain or a lead of the item's team sees it; the team picker offers
@@ -202,7 +203,7 @@ export function ItemDialog({
     setErrors({});
     startTransition(async () => {
       if (editing) {
-        const result = await updateItemAction(payload);
+        const result = await reached(updateItemAction(payload));
         if (!result.ok) {
           setError(result.error);
           return;
@@ -212,7 +213,7 @@ export function ItemDialog({
         router.refresh();
         return;
       }
-      const result = await addItemAction(payload);
+      const result = await reached(addItemAction(payload));
       if (!result.ok) {
         setError(result.error);
         return;

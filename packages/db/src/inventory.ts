@@ -7,6 +7,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  or,
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -637,7 +638,14 @@ export async function listInventoryLoans(
     .leftJoin(lender, eq(lender.id, schema.inventoryLoans.lentByUserId))
     .where(
       and(
-        eq(schema.inventoryLoans.cycle, cycle),
+        // A loan still out carries over into a new year: it keeps counting
+        // against what can be lent (lendInventoryItem), so it must stay in
+        // sight until someone marks it returned. Returned loans are this
+        // year's only.
+        or(
+          isNull(schema.inventoryLoans.returnedAt),
+          eq(schema.inventoryLoans.cycle, cycle),
+        ),
         itemId ? eq(schema.inventoryLoans.itemId, itemId) : undefined,
       ),
     )

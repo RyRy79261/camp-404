@@ -589,6 +589,33 @@ describe("inventory", () => {
       ).toEqual({ ok: false, error: LOAN_RETURNED });
     });
 
+    it("keeps a loan still out in sight in a later year, but not one returned", async () => {
+      const p = await people();
+      const id = await cooler(p.captain.id);
+      const out = await lendInventoryItem({
+        ...loan(id, 1),
+        actorId: p.kitchenLead.id,
+      });
+      const back = await lendInventoryItem({
+        ...loan(id, 1),
+        actorId: p.kitchenLead.id,
+      });
+      if (!out.ok || !back.ok) throw new Error("lend failed");
+      await returnInventoryLoan({ loanId: back.id, actorId: p.captain.id });
+      // Both were lent in another year than this one.
+      await h
+        .db()
+        .update(schema.inventoryLoans)
+        .set({ cycle: 2 })
+        .where(eq(schema.inventoryLoans.itemId, id));
+      const shown = await listInventoryLoans(id);
+      expect(shown.map((l) => l.id)).toEqual([out.id]);
+      // And it can still be marked returned from there.
+      expect(
+        await returnInventoryLoan({ loanId: out.id, actorId: p.captain.id }),
+      ).toEqual({ ok: true });
+    });
+
     it("has no column for a borrower's name or phone", () => {
       const columns = Object.keys(schema.inventoryLoans);
       expect(

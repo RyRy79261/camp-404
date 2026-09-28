@@ -45,6 +45,7 @@ import {
   reviewChangeAction,
 } from "@/app/(console)/inventory/actions";
 import type { ActionResult } from "@/lib/action-result";
+import { reached } from "@/lib/reach-action";
 import {
   CONDITION_LABELS,
   INVENTORY_PATH,
@@ -64,7 +65,7 @@ function useOneTap() {
   const run = React.useCallback(
     (action: () => Promise<ActionResult>, done: string, after?: () => void) =>
       start(async () => {
-        const result = await action();
+        const result = await reached(action());
         if (!result.ok) {
           toast.error(result.error);
           return;
@@ -163,7 +164,7 @@ export function SuggestChangeButton({
     }
     setErrors({});
     start(async () => {
-      const result = await proposeChangeAction(payload);
+      const result = await reached(proposeChangeAction(payload));
       if (!result.ok) {
         setError(result.error);
         return;
@@ -402,10 +403,9 @@ export function ArchiveItemButton({
         pending={pending}
         onConfirm={() =>
           start(async () => {
-            const result = await archiveItemAction({
-              itemId,
-              expectedVersion: version,
-            });
+            const result = await reached(
+              archiveItemAction({ itemId, expectedVersion: version }),
+            );
             setConfirming(false);
             if (!result.ok) {
               toast.error(result.error);
@@ -512,7 +512,7 @@ export function LendButton({ itemId, name }: { itemId: string; name: string }) {
     }
     setErrors({});
     start(async () => {
-      const result = await lendItemAction(payload);
+      const result = await reached(lendItemAction(payload));
       if (!result.ok) {
         setError(result.error);
         return;

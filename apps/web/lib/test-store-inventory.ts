@@ -352,7 +352,9 @@ export const inventoryStore = {
     return s.loans
       .filter(
         (l) =>
-          l.cycle === cycle() && (itemId === undefined || l.itemId === itemId),
+          // As the db: a loan still out stays in sight across years.
+          (l.returnedAt === null || l.cycle === cycle()) &&
+          (itemId === undefined || l.itemId === itemId),
       )
       .sort(
         (a, b) =>

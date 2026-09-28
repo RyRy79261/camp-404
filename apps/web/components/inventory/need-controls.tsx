@@ -30,6 +30,7 @@ import {
   withdrawPledgeAction,
 } from "@/app/(console)/inventory/actions";
 import { NativeSelect, type SelectOption } from "./native-select";
+import { reached } from "@/lib/reach-action";
 
 // A team's needs for the year and members' pledges against them (#246). A
 // captain or a lead of that team keeps the list; any member pledges.
@@ -119,8 +120,8 @@ function NeedDialog({
     setErrors({});
     start(async () => {
       const result = editing
-        ? await updateNeedAction(payload)
-        : await addNeedAction(payload);
+        ? await reached(updateNeedAction(payload))
+        : await reached(addNeedAction(payload));
       if (!result.ok) {
         setError(result.error);
         return;
@@ -345,10 +346,12 @@ export function NeedRowActions({
         pending={removing}
         onConfirm={() =>
           start(async () => {
-            const result = await removeNeedAction({
-              needId: need.id,
-              expectedVersion: need.version,
-            });
+            const result = await reached(
+              removeNeedAction({
+                needId: need.id,
+                expectedVersion: need.version,
+              }),
+            );
             setConfirming(false);
             if (!result.ok) {
               toast.error(result.error);
@@ -406,7 +409,7 @@ export function PledgeButton({
     }
     setErrors({});
     start(async () => {
-      const result = await pledgeAction(payload);
+      const result = await reached(pledgeAction(payload));
       if (!result.ok) {
         setError(result.error);
         return;
@@ -436,7 +439,7 @@ export function PledgeButton({
           aria-label={`Take back my pledge for ${name}`}
           onClick={() =>
             startWithdraw(async () => {
-              const result = await withdrawPledgeAction({ needId });
+              const result = await reached(withdrawPledgeAction({ needId }));
               if (!result.ok) {
                 toast.error(result.error);
                 return;
