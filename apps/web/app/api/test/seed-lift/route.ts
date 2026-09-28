@@ -23,6 +23,8 @@ interface Body {
   vehicleModel?: string;
   seatsOffered?: number;
   departureCity?: string;
+  /** A driver's arrival day, YYYY-MM-DD (the camp layout's arrival counts). */
+  arrivalDay?: string;
 }
 
 export async function POST(req: Request) {
@@ -50,6 +52,10 @@ export async function POST(req: Request) {
       vehicleModel: body.vehicleModel ?? null,
       seatsOffered: body.seatsOffered ?? null,
       departureCity: body.departureCity ?? null,
+      arrivalAt:
+        body.arrivalDay && /^\d{4}-\d{2}-\d{2}$/.test(body.arrivalDay)
+          ? new Date(`${body.arrivalDay}T00:00:00.000Z`)
+          : null,
     });
     return NextResponse.json({ ok: true });
   }

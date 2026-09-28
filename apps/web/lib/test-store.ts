@@ -5269,6 +5269,16 @@ export const testStore = {
     return row;
   },
 
+  /**
+   * Every arrival day members gave for a year: the days alone, never who (the
+   * camp layout's arrival counts read these; @camp404/db/camp-layout's twin).
+   */
+  arrivalDaysIn(cycle: number): (Date | null)[] {
+    return driverProfiles
+      .filter((d) => d.cycle === cycle && d.arrivalAt !== null)
+      .map((d) => d.arrivalAt);
+  },
+
   /** Seat a member in a driver's car for a year (this year by default). */
   seedCarRider(input: {
     driverUserId: string;

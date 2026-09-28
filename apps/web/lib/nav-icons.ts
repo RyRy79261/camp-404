@@ -68,6 +68,7 @@ const PAGE_ICONS: Record<string, LucideIcon> = {
   "/captains/camp-management": Users,
   "/family-tree": Network,
   "/power": Plug,
+  "/camp-layout": LayoutGrid,
   "/kitchen/recipes": BookOpen,
   "/meetings": NotebookPen,
   "/profile": UserRound,
