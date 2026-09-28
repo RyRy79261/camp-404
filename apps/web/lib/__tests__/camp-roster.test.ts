@@ -35,6 +35,7 @@ function member(
     driverProfileComplete: false,
     country: "ZA",
     participation: null,
+    participationIntent: null,
     createdAt: new Date("2026-01-01"),
     ...overrides,
   };
@@ -229,6 +230,26 @@ describe("toRosterRow thisYear", () => {
     const unanswered = toRosterRow(member({ participation: null }));
     expect("thisYear" in unanswered).toBe(true);
     expect(unanswered.thisYear).toBeNull();
+  });
+  it("carries what the member said apart from the decision", () => {
+    // Accepted by a captain, but the member said Maybe: both show.
+    const row = toRosterRow(
+      member({ participation: "accepted", participationIntent: "maybe" }),
+    );
+    expect(row.thisYear).toBe("accepted");
+    expect(row.thisYearSays).toBe("maybe");
+  });
+
+  it("gives a lead's public row the answer too, and a plain member's neither", () => {
+    const m = member({
+      participation: "waitlisted",
+      participationIntent: "yes",
+    });
+    const lead = toPublicRosterRow(m, { withThisYear: true });
+    expect(lead.thisYearSays).toBe("yes");
+    const plain = toPublicRosterRow(m);
+    expect("thisYear" in plain).toBe(false);
+    expect("thisYearSays" in plain).toBe(false);
   });
 });
 

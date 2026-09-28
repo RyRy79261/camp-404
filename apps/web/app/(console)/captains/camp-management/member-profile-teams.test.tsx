@@ -47,6 +47,7 @@ const row: RosterRow = {
   duesPaid: false,
   membershipTier: null,
   thisYear: null,
+  thisYearSays: null,
 };
 
 function loaded(overrides: Record<string, unknown> = {}) {

@@ -1070,6 +1070,17 @@ function SectionEditor({
               }
             />
             <ToggleRow
+              label="Team leads only"
+              hint="Only team leads and captains see this section. Members skip it."
+              checked={page.leadsOnly ?? false}
+              onCheckedChange={(leadsOnly) =>
+                onChangePage({
+                  ...page,
+                  leadsOnly: leadsOnly || undefined,
+                })
+              }
+            />
+            <ToggleRow
               label="Content only"
               hint="Text, notes and images, with no questions."
               checked={page.pageType === "content"}

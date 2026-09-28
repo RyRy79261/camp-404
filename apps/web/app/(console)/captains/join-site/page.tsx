@@ -23,7 +23,7 @@ export default async function JoinSitePage() {
       <PageHeading
         eyebrow="Captains / Join site"
         title="Join site"
-        description="The words on join.camp-404.com. A save shows on the site within a minute."
+        description="The words on join.camp-404.com, and in About Camp 404 for members. A save shows on the site within a minute."
         actions={
           <Button asChild variant="secondary" size="sm">
             <a

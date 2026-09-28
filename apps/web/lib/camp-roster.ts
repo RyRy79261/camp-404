@@ -1,5 +1,5 @@
 import type { CampManagementMember } from "@camp404/db/roster";
-import type { ParticipationStatus } from "@camp404/types";
+import type { ParticipationIntent, ParticipationStatus } from "@camp404/types";
 import { COUNTRIES } from "./countries";
 import { requiredActionName } from "./required-actions";
 
@@ -127,6 +127,12 @@ export interface PublicRosterRow {
    * merely null: `toPublicRosterRow` sets it only when asked to.
    */
   thisYear?: ParticipationStatus | null;
+  /**
+   * What the member themselves said this year (Yes / Maybe / No), shown apart
+   * from the captains' decision; null with no answer. Present exactly when
+   * `thisYear` is (the same readers).
+   */
+  thisYearSays?: ParticipationIntent | null;
 }
 
 /**
@@ -165,6 +171,8 @@ export interface RosterRow extends PublicRosterRow {
   membershipTier: CampManagementMember["membershipTier"];
   /** This year's attendance status; always present on a captain's row. */
   thisYear: ParticipationStatus | null;
+  /** The member's own answer this year; always present on a captain's row. */
+  thisYearSays: ParticipationIntent | null;
 }
 
 /**
@@ -213,6 +221,7 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
   return {
     ...toPublicRosterRow(member),
     thisYear: member.participation,
+    thisYearSays: member.participationIntent,
     email: member.email ?? null,
     status,
     statusLabel: STATUS_LABEL[status],
@@ -268,7 +277,10 @@ export function toPublicRosterRow(
           ? "rejected"
           : null,
   };
-  if (withThisYear) row.thisYear = member.participation;
+  if (withThisYear) {
+    row.thisYear = member.participation;
+    row.thisYearSays = member.participationIntent;
+  }
   return row;
 }
 

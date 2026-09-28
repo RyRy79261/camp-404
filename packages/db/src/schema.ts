@@ -29,6 +29,9 @@ import {
   NOTIFICATION_KINDS,
   PARTICIPATION_INTENTS,
   PARTICIPATION_STATUSES,
+  DDT_STATUSES,
+  WAP_STATUSES,
+  TICKET_STATUSES,
   type CurrentKind,
   type FuelType,
   type GeneratorOwner,
@@ -257,6 +260,15 @@ export const participationIntentEnum = pgEnum(
   "participation_intent",
   PARTICIPATION_INTENTS,
 );
+
+// A member's Burn ticket, the camp's DDT (direct distribution ticket) for
+// them, and their WAP (work access pass), for one burn year (TICKET_STATUSES,
+// DDT_STATUSES, WAP_STATUSES in @camp404/types). The Postgres names keep the
+// words the table was first created with (directed_ticket, early_entry), so a
+// rename needs no migration.
+export const ticketStatusEnum = pgEnum("ticket_status", TICKET_STATUSES);
+export const ddtStatusEnum = pgEnum("directed_ticket_status", DDT_STATUSES);
+export const wapStatusEnum = pgEnum("early_entry_status", WAP_STATUSES);
 
 export const broadcastScopeEnum = pgEnum("broadcast_scope", [
   "everyone",
@@ -894,6 +906,42 @@ export const campParticipations = pgTable(
       cp.cycle,
       cp.status,
     ),
+  }),
+);
+
+// --- Tickets and WAP (#238) ----------------------------------------
+// One row per member per burn year, written only through @camp404/db/tickets.
+// The member says where their own ticket stands; a captain records the camp's
+// DDT and the WAP. No row means nothing said yet: every column's default. Only what the captains plan with is kept, never a
+// ticket number, barcode, order reference or card detail.
+
+export const campTickets = pgTable(
+  "camp_tickets",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The burn year. Defaults to the UNSET_CYCLE sentinel (1) like
+    // camp_participations: a row written before the camp names its founding
+    // year is adopted into that year by setFoundingYear().
+    cycle: integer("cycle").notNull().default(1),
+    // The member's own answer. Captains read it; team leads do not.
+    ticketStatus: ticketStatusEnum("ticket_status")
+      .notNull()
+      .default("unknown"),
+    // Captain-only, to read and to write.
+    ddt: ddtStatusEnum("directed_ticket").notNull().default("none"),
+    wap: wapStatusEnum("early_entry").notNull().default("not_needed"),
+    // The captain who last changed the DDT or WAP.
+    passesUpdatedByUserId: uuid("passes_updated_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.cycle] }),
   }),
 );
 
@@ -1752,6 +1800,37 @@ export const teamBudgets = pgTable(
     currencyCheck: check(
       "team_budgets_currency_check",
       sql`${tb.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// --- Team programs -------------------------------------------------------
+// What a team's own program on the 404 OS desktop says about the team (owner's
+// ruling 4, 2026-09-27): one short description of what the team does, written
+// by the team's leads and captains (canEditTeamProgram in @camp404/core). One
+// row per team, NOT year-scoped: what a team does outlasts the rollover. No
+// row means nothing written yet. Every write is a compare-and-set on
+// `version` and writes an audit_log row in the same transaction
+// (packages/db/src/team-programs.ts).
+//
+// No links (owner, 2026-09-27): nothing a team needs lives outside the app,
+// so a program never offers links to outside tools.
+//
+// It holds no member data: no author column (the audit row says who), and the
+// text is about the team. Erasure has nothing to clear here.
+export const teamPrograms = pgTable(
+  "team_programs",
+  {
+    team: teamEnum("team").primaryKey(),
+    description: text("description").notNull().default(""),
+    version: integer("version").notNull().default(1),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (tp) => ({
+    // TEAM_DESCRIPTION_MAX in @camp404/types; the last guard.
+    descriptionLength: check(
+      "team_programs_description_length",
+      sql`char_length(${tp.description}) <= 300`,
     ),
   }),
 );

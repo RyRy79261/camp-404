@@ -27,8 +27,10 @@ vi.mock("@camp404/db/questionnaire-lifecycle", () => ({
   sendReminder: vi.fn(),
   closeActivation: vi.fn(),
 }));
+vi.mock("@/lib/meal-plan", () => ({ getMealPlan: vi.fn() }));
 vi.mock("@/lib/questionnaire-definitions", () => ({
   createAttendanceCheck: vi.fn(),
+  createDraftFromTemplate: vi.fn(),
   getBuilderDefinition: vi.fn(),
   createDraft: vi.fn(),
   deleteDraft: vi.fn(),
@@ -43,6 +45,8 @@ import {
   closeActivationAction,
   createAttendanceCheckAction,
   createDraftAction,
+  createFromTemplateAction,
+  mealPlanRowsAction,
   deleteDraftAction,
   duplicateDraftAction,
   previewAudienceCount,
@@ -56,8 +60,10 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getLeadTeams, isTeamLead } from "@/lib/users";
 import { getCampManagementRoster } from "@/lib/roster";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
+import { getMealPlan } from "@/lib/meal-plan";
 import {
   createAttendanceCheck,
+  createDraftFromTemplate,
   getBuilderDefinition,
   createDraft,
   deleteDraft,
@@ -1040,5 +1046,80 @@ describe("draft authoring — a captain", () => {
       error: "Only drafts can be deleted — unpublish it first.",
     });
     expect(deleteDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe("createFromTemplateAction (#251)", () => {
+  const plan = {
+    cycle: 3,
+    daysOnSite: 2,
+    firstDay: null,
+    days: [
+      { breakfast: 0, lunch: 0, dinner: 30 },
+      { breakfast: 30, lunch: 0, dinner: 0 },
+    ],
+    version: 1,
+    updatedAt: null,
+  };
+
+  it("refuses a plain member", async () => {
+    asViewer("member");
+    expect(await createFromTemplateAction("post_burn_survey")).toEqual({
+      ok: false,
+      error: "Team-lead access only.",
+    });
+    expect(createDraftFromTemplate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a template that does not exist", async () => {
+    asViewer("captain");
+    expect(await createFromTemplateAction("gdpr_audit")).toEqual({
+      ok: false,
+      error: "That template doesn't exist.",
+    });
+    expect(createDraftFromTemplate).not.toHaveBeenCalled();
+  });
+
+  it("starts a draft for a lead, with a meal row per served meal, and sends nothing", async () => {
+    asViewer("member", true);
+    vi.mocked(getMealPlan).mockResolvedValue(plan);
+    vi.mocked(createDraftFromTemplate).mockResolvedValue("post-burn-survey");
+    expect(await createFromTemplateAction("post_burn_survey")).toEqual({
+      ok: true,
+      key: "post-burn-survey",
+    });
+    expect(createDraftFromTemplate).toHaveBeenCalledWith({
+      template: "post_burn_survey",
+      createdBy: "u1",
+      mealRows: [
+        { id: "meal_d1_dinner", label: "Day 1 dinner" },
+        { id: "meal_d2_breakfast", label: "Day 2 breakfast" },
+      ],
+    });
+    expect(publishDefinition).not.toHaveBeenCalled();
+    expect(sendActivation).not.toHaveBeenCalled();
+  });
+});
+
+describe("mealPlanRowsAction (#251)", () => {
+  it("refuses a plain member", async () => {
+    asViewer("member");
+    expect((await mealPlanRowsAction()).ok).toBe(false);
+    expect(getMealPlan).not.toHaveBeenCalled();
+  });
+
+  it("says so when the meal plan serves nothing yet", async () => {
+    asViewer("captain");
+    vi.mocked(getMealPlan).mockResolvedValue({
+      cycle: 3,
+      daysOnSite: 1,
+      firstDay: null,
+      days: [{ breakfast: 0, lunch: 0, dinner: 0 }],
+      version: 0,
+      updatedAt: null,
+    });
+    const result = await mealPlanRowsAction();
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/no meals yet/);
   });
 });

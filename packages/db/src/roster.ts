@@ -1,6 +1,10 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import type { MembershipTier, ParticipationStatus } from "@camp404/types";
+import type {
+  MembershipTier,
+  ParticipationIntent,
+  ParticipationStatus,
+} from "@camp404/types";
 import { writeAuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
 import { duesSettledSql } from "./payments";
@@ -52,6 +56,12 @@ export interface CampManagementMember {
    * layer keeps it off a member's roster.
    */
   participation: ParticipationStatus | null;
+  /**
+   * What the member themselves answered this year (Yes / Maybe / No), apart
+   * from the captains' decision in `participation`; null with no answer. Team
+   * lead and up, like `participation`.
+   */
+  participationIntent: ParticipationIntent | null;
   /**
    * Sign-in email, from the Better Auth `user` table. Present ONLY when the caller passed
    * `includeEmail: true` (a captain); members never see another's email.
@@ -139,6 +149,10 @@ export async function getCampManagementRoster(
         select cp.status::text from camp_participations cp
         where cp.user_id = ${schema.users.id} and cp.cycle = ${cycle}
       )`,
+      participationIntent: sql<ParticipationIntent | null>`(
+        select cp.intent::text from camp_participations cp
+        where cp.user_id = ${schema.users.id} and cp.cycle = ${cycle}
+      )`,
       ...(includeEmail ? { email: schema.user.email } : {}),
       createdAt: schema.users.createdAt,
     })
@@ -186,6 +200,7 @@ export async function getCampManagementRoster(
     driverProfileComplete: r.driverCompletedAt != null,
     country: r.country,
     participation: r.participation ?? null,
+    participationIntent: r.participationIntent ?? null,
     ...(includeEmail ? { email: r.email ?? null } : {}),
     createdAt: r.createdAt,
   }));

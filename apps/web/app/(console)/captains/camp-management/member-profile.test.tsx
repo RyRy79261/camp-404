@@ -60,6 +60,7 @@ function row(over: Partial<RosterRow> = {}): RosterRow {
     duesPaid: false,
     membershipTier: null,
     thisYear: null,
+    thisYearSays: null,
     ...over,
   };
 }

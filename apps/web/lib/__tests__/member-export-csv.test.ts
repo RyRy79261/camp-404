@@ -30,6 +30,7 @@ function member(
     driverProfileComplete: false,
     country: "ZA",
     participation: null,
+    participationIntent: null,
     createdAt: new Date("2026-03-01T10:00:00Z"),
     email: "nova@example.com",
     ...over,

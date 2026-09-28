@@ -633,5 +633,7 @@ function isRequired(question: Question): boolean {
 
 function isEmptyAnswer(value: QuestionnaireResponseValue | undefined): boolean {
   if (value === undefined || value === null || value === "") return true;
-  return Array.isArray(value) && value.length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  // A grid or rating grid with no row answered (a cleared row leaves `{}`).
+  return typeof value === "object" && Object.keys(value).length === 0;
 }

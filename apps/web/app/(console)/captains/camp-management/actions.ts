@@ -848,6 +848,7 @@ export async function decideParticipationAction(input: {
     });
     // Either way: on a lost race the roster the captain sees is stale.
     revalidatePath("/captains/camp-management");
+    revalidatePath("/captains/applications");
     revalidatePath("/captains/overview");
     if (!decided) {
       const name = target.displayName?.trim() || "This member";

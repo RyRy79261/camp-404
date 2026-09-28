@@ -73,6 +73,52 @@ describe("auditDetail", () => {
     ).toBeNull();
   });
 
+  it("labels and says a change to a member's DDT or WAP", () => {
+    expect(auditActionLabel("ticket.pass_changed")).toBe(
+      "Changed a member's ticket, DDT or WAP",
+    );
+    expect(
+      auditDetail("ticket.pass_changed", {
+        cycle: 2027,
+        pass: "ticket",
+        from: "unknown",
+        to: "has_ticket",
+      }),
+    ).toBe("Ticket: has ticket for 2027");
+    expect(
+      auditDetail("ticket.pass_changed", {
+        cycle: 2027,
+        pass: "wap",
+        from: "requested",
+        to: "issued",
+      }),
+    ).toBe("WAP: issued for 2027");
+    expect(
+      auditDetail("ticket.pass_changed", {
+        pass: "ddt",
+        from: "none",
+        to: "can_transfer",
+      }),
+    ).toBe("DDT: can transfer");
+    // A value of the other pass, an unknown pass, or a prototype key adds
+    // nothing.
+    expect(
+      auditDetail("ticket.pass_changed", {
+        pass: "wap",
+        to: "allocated",
+      }),
+    ).toBeNull();
+    expect(
+      auditDetail("ticket.pass_changed", { pass: "vehicle", to: "issued" }),
+    ).toBeNull();
+    expect(
+      auditDetail("ticket.pass_changed", {
+        pass: "wap",
+        to: "toString",
+      }),
+    ).toBeNull();
+  });
+
   it("says how an application was decided", () => {
     expect(
       auditDetail("member.approval_decided", {
@@ -176,6 +222,9 @@ describe("auditDetail", () => {
     expect(auditDetail("team_budget.set", { team: "kitchen" }, teams)).toBe(
       "Kitchen",
     );
+    expect(
+      auditDetail("team.program_changed", { team: "kitchen" }, teams),
+    ).toBe("Kitchen");
   });
 
   it("names a document and its new version", () => {

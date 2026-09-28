@@ -65,7 +65,9 @@ export const AUDIT_ACTION_LABELS = {
   "recipe.written_by_claude": "Had Claude write a recipe version",
   "reimbursement.status_changed": "Moved a reimbursement",
   "safety.emergency_contacts.view": "Read emergency contacts",
+  "team.program_changed": "Changed a team's description or links",
   "team_budget.set": "Set a team budget",
+  "ticket.pass_changed": "Changed a member's ticket, DDT or WAP",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
@@ -87,6 +89,31 @@ const text = (metadata: Metadata, key: string): string | null => {
 const count = (metadata: Metadata, key: string): number | null => {
   const value = metadata?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+};
+
+// The captain-only passes on a member's ticket row, and their values.
+const TICKET_PASS_WORDS: Record<string, string> = {
+  ticket: "Ticket",
+  ddt: "DDT",
+  wap: "WAP",
+};
+const TICKET_PASS_VALUE_WORDS: Record<string, Record<string, string>> = {
+  ticket: {
+    unknown: "not sorted",
+    buying_own: "buying own",
+    has_ticket: "has ticket",
+    needs_directed_ticket: "needs a DDT",
+  },
+  ddt: {
+    none: "none",
+    allocated: "allocated",
+    can_transfer: "can transfer",
+  },
+  wap: {
+    not_needed: "not needed",
+    requested: "asked for",
+    issued: "issued",
+  },
 };
 
 const APPROVAL_WORDS: Record<string, string> = {
@@ -200,6 +227,16 @@ export function auditDetail(
         text(metadata, "from"),
         count(metadata, "cycle"),
       );
+    case "ticket.pass_changed": {
+      const pass = text(metadata, "pass");
+      const to = text(metadata, "to");
+      if (!pass || !Object.hasOwn(TICKET_PASS_WORDS, pass) || !to) return null;
+      const values = TICKET_PASS_VALUE_WORDS[pass]!;
+      if (!Object.hasOwn(values, to)) return null;
+      const cycle = count(metadata, "cycle");
+      const line = `${TICKET_PASS_WORDS[pass]}: ${values[to]}`;
+      return cycle === null ? line : `${line} for ${cycle}`;
+    }
     case "payment.recorded": {
       const reference = text(metadata, "reference");
       const status = text(metadata, "status");
@@ -236,6 +273,7 @@ export function auditDetail(
         ? `${formatMoney(minor, currency)}, ${moved}`
         : `${currency} ${amount}, ${moved}`;
     }
+    case "team.program_changed":
     case "team_budget.set": {
       const team = text(metadata, "team");
       return team ? teamLabel(team) : null;

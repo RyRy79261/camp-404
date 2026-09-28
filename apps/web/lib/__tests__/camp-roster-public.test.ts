@@ -79,6 +79,7 @@ function member(
     driverProfileComplete: false,
     country: "ZA",
     participation: "accepted",
+    participationIntent: null,
     createdAt: new Date("2026-01-01"),
     ...overrides,
   };
@@ -317,7 +318,7 @@ describe("rosterForViewer (the page fork — the leak boundary)", () => {
       for (const row of out.rows as unknown as Record<string, unknown>[]) {
         expect("thisYear" in row).toBe(true);
         expect(Object.keys(row).sort()).toEqual(
-          [...PUBLIC_KEYS, "thisYear"].sort(),
+          [...PUBLIC_KEYS, "thisYear", "thisYearSays"].sort(),
         );
         for (const leaked of PRIVATE_KEYS) {
           expect(row[leaked]).toBeUndefined();
