@@ -132,6 +132,7 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "meetings" },
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
+      { kind: "program", id: "logistics" },
       { kind: "program", id: "family-tree" },
       // No Captains column for them: the Terminal ends Camp.
       { kind: "program", id: "terminal" },
@@ -212,6 +213,17 @@ describe("buildProgramManifest: the personas", () => {
       `team:${POWER}`,
       "power",
     ]);
+  });
+
+  it("puts Logistics in a Transport and Logistics member's team folder", () => {
+    const m = buildProgramManifest(
+      facts({
+        memberships: [{ team: "transport_and_logistics", isLead: false }],
+      }),
+    );
+    expect(
+      teamFolder(m, "transport_and_logistics")?.programs.map((p) => p.id),
+    ).toEqual(["team:transport_and_logistics", "logistics"]);
   });
 
   it("keeps the lead programs for a lead whose only led team is archived", () => {

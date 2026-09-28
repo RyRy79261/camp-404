@@ -321,9 +321,14 @@ export interface CalendarEventBody {
   id?: string;
   summary: string;
   description?: string;
+  location?: string;
+  /** "confirmed" brings back an event someone deleted in Google. */
+  status?: "confirmed";
   start: GoogleTime;
   end: GoogleTime;
-  extendedProperties?: { private: { [TEAM_PROPERTY]: string } };
+  extendedProperties?: {
+    private: { [TEAM_PROPERTY]: string } & Record<string, string>;
+  };
 }
 
 /**
@@ -400,8 +405,60 @@ export async function createCalendarEvent(
 }
 
 /**
- * Take an event off the camp calendar. Used only to undo a create that failed
- * or whose audit row could not be saved. Never throws: false when it did not happen.
+ * Put an event on the camp calendar under OUR id, whether or not it is there
+ * yet: an update of the event with that id, or, when Google has none, a
+ * create with it. Saving the same thing twice leaves one event, so a phase
+ * that owns an id can be written again and again (the logistics calendar,
+ * #247). An event deleted in Google comes back, as the body says "confirmed".
+ * Throws when the calendar is not set up or Google refuses; the error carries
+ * the HTTP status only.
+ */
+export async function putCalendarEvent(
+  env: EnvBag,
+  eventId: string,
+  body: CalendarEventBody,
+  now: Date = new Date(),
+  timeoutMs: number = CALENDAR_TIMEOUT_MS,
+): Promise<void> {
+  const config = calendarConfig(env);
+  if (!config) throw new Error("calendar not configured");
+  try {
+    const token = await accessToken(config, WRITE_SCOPE, now, timeoutMs);
+    const send = (method: "PUT" | "POST", url: URL, payload: object) =>
+      fetch(url, {
+        method,
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    const { id: _id, ...rest } = body;
+    const updated = await send("PUT", eventsUrl(config.calendarId, eventId), {
+      ...rest,
+      status: "confirmed",
+    });
+    if (updated.ok) return;
+    if (updated.status !== 404) throw new Error(`update ${updated.status}`);
+    const created = await send("POST", eventsUrl(config.calendarId), {
+      ...rest,
+      id: eventId,
+    });
+    if (!created.ok) throw new Error(`create ${created.status}`);
+  } catch (error) {
+    const line = logSafe(error, env);
+    console.error("camp calendar write failed", line);
+    // No `cause`, as createCalendarEvent.
+    // eslint-disable-next-line preserve-caught-error
+    throw new Error(line);
+  }
+}
+
+/**
+ * Take an event off the camp calendar: to undo a create that failed or whose
+ * audit row could not be saved, or when a logistics phase loses its days.
+ * Never throws: false when it did not happen.
  */
 export async function deleteCalendarEvent(
   env: EnvBag,

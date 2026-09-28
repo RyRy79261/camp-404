@@ -6,6 +6,7 @@ import {
   nextCampDay,
   approvalNotification,
   canEditPower,
+  canEditLogistics,
   captainPromotionNotification,
   FOUNDER_CODE,
   formatMemberRefCode,
@@ -116,6 +117,12 @@ import {
   type PowerPlanSettings,
   type PowerWriteResult,
 } from "@camp404/db/power";
+import {
+  NOT_A_LOGISTICS_EDITOR,
+  PHASE_CHANGED,
+  type LogisticsPhaseRow,
+  type LogisticsWriteResult,
+} from "@camp404/db/logistics";
 import {
   ANSWER_NEEDED,
   ANSWER_TOO_LONG,
@@ -242,6 +249,8 @@ import {
   type EditLoadInput,
   type GeneratorInput,
   type LoadInput,
+  LOGISTICS_PHASES,
+  type LogisticsPhase,
   Team as TeamKeys,
 } from "@camp404/types";
 import {
@@ -633,6 +642,8 @@ interface TestStoreState {
   generators: GeneratorRow[];
   /** The inventory items the "From inventory" helper offers (none archived). */
   powerInventory: PowerInventoryItem[];
+  /** `logistics_phases`, keyed `${cycle}:${phase}` like its primary key. */
+  logisticsPhases: Map<string, LogisticsPhaseRow>;
   recipes: TestRecipe[];
   recipeRuns: TestRecipeRun[];
   recipeSources: TestRecipeSource[];
@@ -731,6 +742,7 @@ function globalState(): TestStoreState {
       powerPlans: new Map<number, PowerPlan>(),
       generators: [] as GeneratorRow[],
       powerInventory: [] as PowerInventoryItem[],
+      logisticsPhases: new Map<string, LogisticsPhaseRow>(),
       recipes: [] as TestRecipe[],
       recipeRuns: [] as TestRecipeRun[],
       recipeSources: [] as TestRecipeSource[],
@@ -816,6 +828,8 @@ const powerLoads = S.powerLoads;
 const powerPlans = S.powerPlans;
 const generators = S.generators;
 const powerInventory = S.powerInventory;
+S.logisticsPhases ??= new Map<string, LogisticsPhaseRow>();
+const logisticsPhases = S.logisticsPhases;
 S.recipes ??= [];
 S.recipeRuns ??= [];
 S.recipeSources ??= [];
@@ -3286,6 +3300,131 @@ export const testStore = {
     return { ok: true, eventId: id };
   },
 
+  // --- Logistics calendar (#247): twins of @camp404/db/logistics ----------
+  // The same rules: a captain or a Transport and Logistics lead writes, each
+  // write a compare-and-set on the version, and a phase claims one calendar
+  // event id for life. The store keeps no audit log. The camp calendar here
+  // is the store's own list of events, standing in for Google.
+
+  listLogisticsPhases(cycle?: number): LogisticsPhaseRow[] {
+    const year = cycle ?? currentCycleNumber();
+    return LOGISTICS_PHASES.flatMap((phase) => {
+      const row = logisticsPhases.get(`${year}:${phase}`);
+      return row ? [{ ...row }] : [];
+    });
+  },
+
+  setLogisticsPhase(input: {
+    actorId: string;
+    phase: LogisticsPhase;
+    startDate: string;
+    endDate: string;
+    place: string | null;
+    note: string | null;
+    expectedVersion: number;
+    newEventId: string;
+  }): LogisticsWriteResult<{ row: LogisticsPhaseRow }> {
+    const reach = testStore.senderReach(input.actorId);
+    if (!canEditLogistics(reachRank(reach), reach ?? [])) {
+      return { ok: false, error: NOT_A_LOGISTICS_EDITOR };
+    }
+    const cycle = currentCycleNumber();
+    const key = `${cycle}:${input.phase}`;
+    const current = logisticsPhases.get(key);
+    const expected = current?.version ?? 0;
+    if (expected !== input.expectedVersion) {
+      return { ok: false, error: PHASE_CHANGED };
+    }
+    const row: LogisticsPhaseRow = {
+      cycle,
+      phase: input.phase,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      place: input.place,
+      note: input.note,
+      calendarEventId: current?.calendarEventId ?? input.newEventId,
+      calendarSyncedVersion: current?.calendarSyncedVersion ?? null,
+      version: expected + 1,
+      updatedAt: new Date(),
+    };
+    logisticsPhases.set(key, row);
+    return { ok: true, row: { ...row } };
+  },
+
+  clearLogisticsPhase(input: {
+    actorId: string;
+    phase: LogisticsPhase;
+    expectedVersion: number;
+  }): LogisticsWriteResult<{ row: LogisticsPhaseRow }> {
+    const reach = testStore.senderReach(input.actorId);
+    if (!canEditLogistics(reachRank(reach), reach ?? [])) {
+      return { ok: false, error: NOT_A_LOGISTICS_EDITOR };
+    }
+    const key = `${currentCycleNumber()}:${input.phase}`;
+    const current = logisticsPhases.get(key);
+    if (!current || current.version !== input.expectedVersion) {
+      return { ok: false, error: PHASE_CHANGED };
+    }
+    const row: LogisticsPhaseRow = {
+      ...current,
+      startDate: null,
+      endDate: null,
+      place: null,
+      note: null,
+      version: current.version + 1,
+      updatedAt: new Date(),
+    };
+    logisticsPhases.set(key, row);
+    return { ok: true, row: { ...row } };
+  },
+
+  markLogisticsCalendarSynced(input: {
+    cycle: number;
+    phase: LogisticsPhase;
+    version: number;
+    removed: boolean;
+  }): boolean {
+    const row = logisticsPhases.get(`${input.cycle}:${input.phase}`);
+    if (!row || row.version !== input.version) return false;
+    row.calendarSyncedVersion = input.version;
+    if (input.removed) row.calendarEventId = null;
+    return true;
+  },
+
+  /**
+   * Twin of putCalendarEvent: the event with this id, replaced if the store's
+   * calendar has it, added if not. Never two with one id.
+   */
+  putCalendarEvent(input: {
+    id: string;
+    title: string;
+    date: string;
+    location: string | null;
+    teamTag: string | null;
+    actorId: string;
+  }): void {
+    const event: TestCalendarEvent = {
+      id: input.id,
+      title: input.title,
+      start: input.date,
+      allDay: true,
+      location: input.location,
+      teamTag: input.teamTag,
+      startsAt: campDayStart(input.date),
+      createdById: input.actorId,
+    };
+    const at = calendarEvents.findIndex((e) => e.id === input.id);
+    if (at === -1) calendarEvents.push(event);
+    else calendarEvents[at] = event;
+  },
+
+  /** Twin of deleteCalendarEvent: gone, or never there. */
+  deleteCalendarEvent(id: string): boolean {
+    const at = calendarEvents.findIndex((e) => e.id === id);
+    if (at !== -1) calendarEvents.splice(at, 1);
+    return true;
+  },
+
   // --- payments ledger (mirrors @camp404/db/payments) -----------------------
   // The same rules as the real ledger, asserted case for case in
   // lib/__tests__/test-store-payments.test.ts: any currency but ZAR is
@@ -5112,6 +5251,7 @@ export const testStore = {
     powerPlans.clear();
     generators.length = 0;
     powerInventory.length = 0;
+    logisticsPhases.clear();
     recipes.length = 0;
     recipeRuns.length = 0;
     recipeSources.length = 0;

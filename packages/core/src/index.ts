@@ -97,6 +97,8 @@
 //     powerTotals, dayLabel)
 //     and the fuel maths (fuelLine, fuelPerHour, fuelForPlan,
 //     jerryCansNeeded, legacyFuelEstimate) (./power)
+//   - logistics: canEditLogistics (a captain or a Transport and Logistics
+//     lead), logisticsEventTitle, logisticsCalendarStep (./logistics)
 //   - recipes: canApproveRecipe and canRunProofread (a captain or a Kitchen
 //     lead), RECIPE_TRANSITIONS/canMoveRecipe, groupLinesByCategory +
 //     groupStepsByPhase for the recipe page, defaultPlates, and the meal
@@ -156,6 +158,7 @@ export * from "./questionnaire-status";
 export * from "./password";
 export * from "./participation";
 export * from "./power";
+export * from "./logistics";
 export * from "./recipes";
 export * from "./recipe-source";
 export * from "./calendar-titles";

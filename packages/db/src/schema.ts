@@ -24,6 +24,7 @@ import {
   FUEL_TYPES,
   GENERATOR_OWNERS,
   LOAD_CATEGORIES,
+  LOGISTICS_PHASES,
   LOAD_OWNERS,
   LOAD_SCHEDULES,
   NOTIFICATION_KINDS,
@@ -2581,6 +2582,47 @@ export const powerPlans = pgTable(
     fuelCheck: check(
       "power_plans_fuel_check",
       sql`${p.lowLoadFactor} >= 1 and ${p.safetyMarginPct} between 0 and 100 and ${p.canLitres} > 0 and ${p.cansOwned} >= 0`,
+    ),
+  }),
+);
+
+// --- Logistics calendar (#247) ----------------------------------------------
+// The year's pack, travel, build, burn, strike and unpack days. The camp
+// calendar stays on Google (owner, 2026-09-28): each phase with days is ONE
+// Google event, whose id the row claims in the transaction that first saves
+// it, before Google is called, so a re-save or a retry updates that event and
+// never makes a second. Clearing the days takes the event off Google; the id
+// stays until Google confirms, so a failed delete is retried by the next save.
+// Captains and Transport and Logistics leads write (canEditLogistics).
+
+export const logisticsPhaseEnum = pgEnum("logistics_phase", LOGISTICS_PHASES);
+
+export const logisticsPhases = pgTable(
+  "logistics_phases",
+  {
+    cycle: integer("cycle").notNull(),
+    phase: logisticsPhaseEnum("phase").notNull(),
+    // Whole camp days, both counted; both null when the days were cleared.
+    startDate: date("start_date", { mode: "string" }),
+    endDate: date("end_date", { mode: "string" }),
+    // A named place ("storage unit", "on site"), never a home address.
+    place: text("place"),
+    note: text("note"),
+    // The Google Calendar event this phase owns (our own id, base32hex).
+    calendarEventId: text("calendar_event_id"),
+    // The row version the camp calendar last matched; null when it never has.
+    calendarSyncedVersion: integer("calendar_synced_version"),
+    version: integer("version").notNull().default(1),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (l) => ({
+    pk: primaryKey({ columns: [l.cycle, l.phase] }),
+    daysCheck: check(
+      "logistics_phases_days_check",
+      sql`(${l.startDate} is null) = (${l.endDate} is null) and (${l.endDate} is null or ${l.endDate} >= ${l.startDate})`,
     ),
   }),
 );
