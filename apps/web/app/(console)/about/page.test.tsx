@@ -81,6 +81,27 @@ describe("About Camp 404", () => {
     ).toBeTruthy();
   });
 
+  it("drops the 'dates to be confirmed' note once the Burn's dates are set", async () => {
+    asRank("camp_member");
+    render(await AboutPage());
+    expect(
+      screen.queryByText(DEFAULT_JOIN_CONTENT.schedule.datesNote, {
+        exact: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("shows the 'dates to be confirmed' note while the Burn's dates are unset", async () => {
+    vi.mocked(getAboutCamp).mockResolvedValue({ ...ABOUT, burn: null });
+    asRank("camp_member");
+    render(await AboutPage());
+    expect(
+      screen.getByText(DEFAULT_JOIN_CONTENT.schedule.datesNote, {
+        exact: false,
+      }),
+    ).toBeTruthy();
+  });
+
   it("shows the fee scale in rands but not last year's spend amounts", async () => {
     asRank("camp_member");
     render(await AboutPage());

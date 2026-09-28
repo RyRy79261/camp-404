@@ -206,11 +206,12 @@ export default async function AboutPage() {
             title="What you put in"
             icon={<CalendarDays className={icon} aria-hidden />}
           >
+            {/* The note says the dates are still to be confirmed, so it only
+                shows until this year's Burn dates are set. */}
             <p className="text-muted-foreground">
               {dates
-                ? `${about.yearName ?? `The ${about.year} Burn`}: ${dates}. `
-                : ""}
-              {content.schedule.datesNote}
+                ? `${about.yearName ?? `The ${about.year} Burn`}: ${dates}.`
+                : content.schedule.datesNote}
             </p>
             <Schedule title="Before" entries={content.schedule.before} />
             <Schedule title="On site" entries={content.schedule.onSite} />
