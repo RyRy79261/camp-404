@@ -14,6 +14,7 @@ export const PROGRAM_ICON_KEYS = [
   "lineage",
   "minutes",
   "power",
+  "inventory",
   "myforms",
   "keygen",
   "account",
@@ -111,6 +112,13 @@ const PATHS: Record<IconKey, ReactNode> = {
       <path d="M8 3v5M16 3v5" />
       <path d="M5 8h14v4a7 7 0 0 1-14 0z" />
       <path d="M13 11l-3 4h4l-3 4" />
+    </>
+  ),
+  inventory: (
+    <>
+      <path d="M3 8l9-4 9 4v11l-9 4-9-4z" />
+      <path d="M3 8l9 4 9-4M12 12v11" />
+      <path d="M7.5 6l9 4" />
     </>
   ),
   myforms: (

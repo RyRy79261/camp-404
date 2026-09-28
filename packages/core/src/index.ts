@@ -156,6 +156,7 @@ export * from "./questionnaire-status";
 export * from "./password";
 export * from "./participation";
 export * from "./power";
+export * from "./inventory";
 export * from "./recipes";
 export * from "./recipe-source";
 export * from "./calendar-titles";

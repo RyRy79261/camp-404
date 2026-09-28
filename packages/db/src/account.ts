@@ -194,6 +194,14 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.workshopRsvps)
       .where(eq(schema.workshopRsvps.userId, userId));
+    // Gear the member booked or pledged to bring (#246) names them, so it
+    // goes. Items kept at their home keep pointing at the tombstone row.
+    await tx
+      .delete(schema.inventoryBookings)
+      .where(eq(schema.inventoryBookings.userId, userId));
+    await tx
+      .delete(schema.inventoryPledges)
+      .where(eq(schema.inventoryPledges.userId, userId));
     // Captains' notes ABOUT the member are about the person, so they go.
     // Notes the member wrote about others stay; their author link is kept to
     // the tombstone row.

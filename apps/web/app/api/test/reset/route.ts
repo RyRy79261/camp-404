@@ -7,6 +7,7 @@ import {
   usesTestStore,
 } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
+import { resetInventoryStore } from "@/lib/test-store-inventory";
 import { resetRateLimitsForE2E } from "@/lib/rate-limit";
 
 // Resets the test data between specs: the in-memory store, or the local
@@ -19,8 +20,10 @@ export async function POST() {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   // The real-database run empties the local stack instead of the store.
-  if (usesTestStore()) testStore.reset();
-  else await resetDatabaseForE2E();
+  if (usesTestStore()) {
+    testStore.reset();
+    resetInventoryStore();
+  } else await resetDatabaseForE2E();
   // Every spec comes from one address, so the per-IP buckets would otherwise
   // drain across the whole run.
   resetRateLimitsForE2E();

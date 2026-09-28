@@ -19,6 +19,7 @@ export * from "./task";
 export * from "./calendar";
 export * from "./participation";
 export * from "./power";
+export * from "./inventory";
 export * from "./meeting-note";
 export * from "./join-site";
 export * from "./desktop-layout";

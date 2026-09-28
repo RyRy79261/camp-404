@@ -132,6 +132,7 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "meetings" },
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
+      { kind: "program", id: "inventory" },
       { kind: "program", id: "family-tree" },
       // No Captains column for them: the Terminal ends Camp.
       { kind: "program", id: "terminal" },
@@ -199,6 +200,22 @@ describe("buildProgramManifest: the personas", () => {
     expect(m.allowedChildren).toContain("edit-recipe");
     expect(m.allowedChildren).toContain("send-questionnaire");
     expect(m.allowedChildren).not.toContain(pid("results"));
+  });
+
+  it("puts Inventory in the Transport and Logistics team's folder, for every member on it", () => {
+    const m = buildProgramManifest(
+      facts({
+        memberships: [
+          { team: Team.enum.transport_and_logistics, isLead: false },
+        ],
+      }),
+    );
+    expect(
+      teamFolder(m, Team.enum.transport_and_logistics)?.programs.map(
+        (p) => p.id,
+      ),
+    ).toEqual([`team:${Team.enum.transport_and_logistics}`, "inventory"]);
+    expect(m.allowedChildren).toContain(pid("inventory-item"));
   });
 
   it("gives a Power lead no Recipe review, but the lead programs", () => {

@@ -633,6 +633,18 @@ export async function setFoundingYear(input: {
       .set({ cycle: input.year })
       .where(eq(schema.campParticipations.cycle, UNSET_CYCLE))
       .returning({ userId: schema.campParticipations.userId });
+    // The inventory's year-scoped rows (#246): needs (their pledges ride
+    // along), bookings and loans written before the camp had a year.
+    for (const table of [
+      schema.inventoryNeeds,
+      schema.inventoryBookings,
+      schema.inventoryLoans,
+    ]) {
+      await tx
+        .update(table)
+        .set({ cycle: input.year })
+        .where(eq(table.cycle, UNSET_CYCLE));
+    }
 
     const [audit] = await tx
       .insert(schema.auditLog)
