@@ -20,6 +20,10 @@ export function notificationLink(
   if (refType === "announcement" && refId && UUID.test(refId)) {
     return `/announcements/${refId}`;
   }
+  // A driver's message is about the car the rider shares: My lift.
+  if (refType === "car_message") {
+    return "/lift";
+  }
   // The board has no page per task; the task is a card on /tasks.
   if (refType === "task" && refId && UUID.test(refId)) {
     return "/tasks";

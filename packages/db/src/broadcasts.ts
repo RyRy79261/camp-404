@@ -177,39 +177,44 @@ export async function resolveAudience(
   db: DbOrTx = createHttpDb(),
 ): Promise<string[]> {
   const cycle = await currentCycleNumber(db);
-  const [members, memberships, drivers, targets] = await Promise.all([
-    db
-      .select({
-        id: schema.users.id,
-        isSystem: schema.users.isSystem,
-        sanitised: schema.users.sanitised,
-        approvalStatus: schema.users.approvalStatus,
-      })
-      .from(schema.users),
-    db
-      .select({
-        userId: schema.teamMemberships.userId,
-        team: schema.teamMemberships.team,
-        isLead: schema.teamMemberships.isLead,
-      })
-      .from(schema.teamMemberships)
-      .where(eq(schema.teamMemberships.cycle, cycle)),
-    db
-      .select({ userId: schema.driverProfiles.userId })
-      .from(schema.driverProfiles)
-      .where(
-        and(
-          eq(schema.driverProfiles.intendsToDrive, true),
-          eq(schema.driverProfiles.cycle, cycle),
+  const [members, memberships, drivers, targets, carRiders] = await Promise.all(
+    [
+      db
+        .select({
+          id: schema.users.id,
+          isSystem: schema.users.isSystem,
+          sanitised: schema.users.sanitised,
+          approvalStatus: schema.users.approvalStatus,
+        })
+        .from(schema.users),
+      db
+        .select({
+          userId: schema.teamMemberships.userId,
+          team: schema.teamMemberships.team,
+          isLead: schema.teamMemberships.isLead,
+        })
+        .from(schema.teamMemberships)
+        .where(eq(schema.teamMemberships.cycle, cycle)),
+      db
+        .select({ userId: schema.driverProfiles.userId })
+        .from(schema.driverProfiles)
+        .where(
+          and(
+            eq(schema.driverProfiles.intendsToDrive, true),
+            eq(schema.driverProfiles.cycle, cycle),
+          ),
         ),
-      ),
-    broadcast.scope === "individual"
-      ? db
-          .select({ userId: schema.broadcastTargets.userId })
-          .from(schema.broadcastTargets)
-          .where(eq(schema.broadcastTargets.broadcastId, broadcast.id))
-      : Promise.resolve([] as { userId: string }[]),
-  ]);
+      broadcast.scope === "individual"
+        ? db
+            .select({ userId: schema.broadcastTargets.userId })
+            .from(schema.broadcastTargets)
+            .where(eq(schema.broadcastTargets.broadcastId, broadcast.id))
+        : Promise.resolve([] as { userId: string }[]),
+      broadcast.scope === "car" && senderId
+        ? carRidersOf(db, senderId, cycle)
+        : Promise.resolve([] as { userId: string }[]),
+    ],
+  );
 
   return computeAudience(
     broadcast,
@@ -218,9 +223,39 @@ export async function resolveAudience(
       memberships,
       driverUserIds: drivers.map((d) => d.userId),
       targetUserIds: targets.map((t) => t.userId),
+      carRiderUserIds: carRiders.map((r) => r.userId),
     },
     senderId,
   );
+}
+
+/**
+ * The riders of `driverUserId`'s own car this year, and nobody when they are
+ * not driving this year: the join on their driver profile is the check. A
+ * `car` broadcast reads its car from its SENDER, never from a stored id.
+ */
+function carRidersOf(
+  db: DbOrTx,
+  driverUserId: string,
+  cycle: number,
+): Promise<{ userId: string }[]> {
+  return db
+    .select({ userId: schema.carMembers.memberUserId })
+    .from(schema.carMembers)
+    .innerJoin(
+      schema.driverProfiles,
+      and(
+        eq(schema.driverProfiles.userId, schema.carMembers.driverUserId),
+        eq(schema.driverProfiles.cycle, schema.carMembers.cycle),
+        eq(schema.driverProfiles.intendsToDrive, true),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.carMembers.driverUserId, driverUserId),
+        eq(schema.carMembers.cycle, cycle),
+      ),
+    );
 }
 
 export interface AnnouncementSummary {

@@ -35,6 +35,7 @@ export type ProgramId =
   | "new-meeting"
   | "edit-meeting"
   | "power"
+  | "transport"
   | "recipes"
   | "new-recipe"
   | "recipe-review"
@@ -90,6 +91,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "new-meeting": "New meeting",
   "edit-meeting": "Edit meeting",
   power: "Power",
+  transport: "Transport",
   recipes: "Recipes",
   "new-recipe": "New recipe",
   "recipe-review": "Recipe review",
@@ -204,6 +206,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/power", "power", "POWER.EXE"),
   route("/power/loads", "power", "POWER.EXE"),
   route("/power/fuel", "power", "POWER.EXE"),
+  route("/transport", "transport", "CARPOOL.EXE"),
 
   // Kitchen
   route("/kitchen/recipes", "recipes", "COOKBOOK.EXE"),

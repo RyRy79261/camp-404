@@ -4,6 +4,7 @@ import {
   announcementNotification,
   approvalNotification,
   captainPromotionNotification,
+  carMessageNotification,
   kindForBroadcast,
   notificationMentionsAny,
   payloadLink,
@@ -140,6 +141,7 @@ describe("payload builders", () => {
         requesterName: "Jo",
       }),
       taskDeadlineNotification({ taskId: TASK, title: "a", stage: "due_day" }),
+      carMessageNotification({ broadcastId: BROADCAST, title: "a", body: "b" }),
     ].map((p) => p.kind);
     for (const kind of kinds) expect(NOTIFICATION_KINDS).toContain(kind);
   });
@@ -173,11 +175,30 @@ describe("taskDeadlineNotification", () => {
   });
 });
 
+describe("carMessageNotification", () => {
+  it("carries the driver's own words and opens My lift", () => {
+    const payload = carMessageNotification({
+      broadcastId: BROADCAST,
+      title: "Leaving at 6",
+      body: "Meet at the garage.",
+    });
+    expect(payload).toEqual({
+      kind: "car_message",
+      title: "Leaving at 6",
+      body: "Meet at the garage.",
+      refType: "car_message",
+      refId: BROADCAST,
+    });
+    expect(payloadLink(payload)).toBe("/lift");
+  });
+});
+
 describe("kindForBroadcast", () => {
   it("maps each broadcast kind to what the member is told it is", () => {
     expect(kindForBroadcast("announcement", null)).toBe("announcement");
     expect(kindForBroadcast("team_message", null)).toBe("team_message");
     expect(kindForBroadcast("lead_directive", null)).toBe("lead_directive");
+    expect(kindForBroadcast("car_message", null)).toBe("car_message");
     expect(kindForBroadcast("reminder", "questionnaire_activation")).toBe(
       "questionnaire_reminder",
     );

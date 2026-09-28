@@ -112,6 +112,11 @@
 //   - meeting notes: canWorkInTeam (a team's members this year, or a
 //     captain; a whole-camp note is a captain's), meetingInstant,
 //     meetingTimeKey and MEETING_NOTE_PRIVACY_REMINDER (./meeting-notes)
+//   - transport: canEditTransport (a captain or a Transport & Logistics
+//     lead), canManageCar (those, or the car's own driver), canRemoveRider
+//     (those, or the rider), seatsLeft, vehicleLabel, transportTotals
+//     (./transport). Who may message a car is canSendToAudience's `car`
+//     scope, not here.
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -160,3 +165,4 @@ export * from "./recipes";
 export * from "./recipe-source";
 export * from "./calendar-titles";
 export * from "./meeting-notes";
+export * from "./transport";

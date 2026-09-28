@@ -132,6 +132,7 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "meetings" },
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
+      { kind: "program", id: "transport" },
       { kind: "program", id: "family-tree" },
       // No Captains column for them: the Terminal ends Camp.
       { kind: "program", id: "terminal" },
@@ -211,6 +212,17 @@ describe("buildProgramManifest: the personas", () => {
     expect(teamFolder(m, POWER)?.programs.map((p) => p.id)).toEqual([
       `team:${POWER}`,
       "power",
+    ]);
+  });
+
+  it("puts Transport in a Transport & Logistics member's team folder", () => {
+    const TRANSPORT = Team.enum.transport_and_logistics;
+    const m = buildProgramManifest(
+      facts({ memberships: [{ team: TRANSPORT, isLead: false }] }),
+    );
+    expect(teamFolder(m, TRANSPORT)?.programs.map((p) => p.id)).toEqual([
+      `team:${TRANSPORT}`,
+      "transport",
     ]);
   });
 

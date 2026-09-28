@@ -1191,4 +1191,54 @@ describe("setFoundingYear adopts the year-scoped roster facts", () => {
     const [audit] = await db.select().from(schema.auditLog);
     expect(audit!.metadata).toMatchObject({ participationsStamped: 1 });
   });
+
+  it("adopts the year's trailers and lift requests made before the camp had a year", async () => {
+    const db = h.db();
+    const early = await makeUser(db);
+    const other = await makeUser(db);
+    await db.insert(schema.transportTrailers).values({ name: "Early" });
+    await db
+      .insert(schema.transportTrailers)
+      .values({ name: "Kept", cycle: 2025 });
+    await db.insert(schema.liftRequests).values({ userId: early.id });
+    await db
+      .insert(schema.liftRequests)
+      .values({ userId: other.id, cycle: 2025 });
+
+    const res = await setFoundingYear({ year: 2026, actorUserId: null });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.report.trailersStamped).toBe(1);
+    expect(res.report.liftRequestsStamped).toBe(1);
+
+    const trailers = await db
+      .select({
+        name: schema.transportTrailers.name,
+        cycle: schema.transportTrailers.cycle,
+      })
+      .from(schema.transportTrailers);
+    expect(trailers).toEqual(
+      expect.arrayContaining([
+        { name: "Early", cycle: 2026 },
+        { name: "Kept", cycle: 2025 },
+      ]),
+    );
+    const requests = await db
+      .select({
+        userId: schema.liftRequests.userId,
+        cycle: schema.liftRequests.cycle,
+      })
+      .from(schema.liftRequests);
+    expect(requests).toEqual(
+      expect.arrayContaining([
+        { userId: early.id, cycle: 2026 },
+        { userId: other.id, cycle: 2025 },
+      ]),
+    );
+    const [audit] = await db.select().from(schema.auditLog);
+    expect(audit!.metadata).toMatchObject({
+      trailersStamped: 1,
+      liftRequestsStamped: 1,
+    });
+  });
 });

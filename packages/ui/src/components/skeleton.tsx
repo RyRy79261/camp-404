@@ -1,6 +1,6 @@
-import * as React from "react"
+import * as React from "react";
 
-import { cn } from "../lib/utils"
+import { cn } from "../lib/utils";
 
 // Loading placeholders for the `force-dynamic` pages — a `loading.tsx` body that
 // holds the page's shape while the server work runs.
@@ -15,26 +15,22 @@ import { cn } from "../lib/utils"
 // The pulse is `motion-safe:` throughout: a full-page bank of pulsing bars is
 // precisely the animation a `prefers-reduced-motion` reader opted out of.
 
-export type SkeletonProps = React.HTMLAttributes<HTMLDivElement>
+export type SkeletonProps = React.HTMLAttributes<HTMLDivElement>;
 
 // One decorative bar. `className` is merged verbatim, so callers size it.
 function Skeleton({ className, ...props }: SkeletonProps) {
   return (
     <div
       aria-hidden
-      className={cn(
-        "motion-safe:animate-pulse rounded-md bg-muted",
-        className,
-      )}
+      className={cn("motion-safe:animate-pulse rounded-md bg-muted", className)}
       {...props}
     />
-  )
+  );
 }
 
-export interface SkeletonRegionProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+export interface SkeletonRegionProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Screen-reader label announced while the region loads. */
-  label?: string
+  label?: string;
 }
 
 // The announcing wrapper. Everything a reader learns about the wait comes from
@@ -56,12 +52,12 @@ function SkeletonRegion({
       <span className="sr-only">{label}</span>
       {children}
     </div>
-  )
+  );
 }
 
 export interface SkeletonTextProps extends SkeletonProps {
   /** Number of lines to draw. */
-  lines?: number
+  lines?: number;
 }
 
 // A paragraph of text lines; the last runs short so the block reads as prose.
@@ -75,12 +71,12 @@ function SkeletonText({ lines = 3, className, ...props }: SkeletonTextProps) {
         />
       ))}
     </div>
-  )
+  );
 }
 
 export interface SkeletonAvatarProps extends SkeletonProps {
   /** Diameter in px, matching the avatar it stands in for. */
-  px?: number
+  px?: number;
 }
 
 function SkeletonAvatar({ px = 40, className, ...props }: SkeletonAvatarProps) {
@@ -90,11 +86,11 @@ function SkeletonAvatar({ px = 40, className, ...props }: SkeletonAvatarProps) {
       style={{ width: px, height: px }}
       {...props}
     />
-  )
+  );
 }
 
 export interface SkeletonCardProps extends SkeletonRegionProps {
-  lines?: number
+  lines?: number;
 }
 
 // A card-shaped placeholder — title bar plus body lines, on the card surface.
@@ -113,13 +109,13 @@ function SkeletonCard({
       <Skeleton className="h-5 w-1/3" />
       <SkeletonText lines={lines} className="mt-4" />
     </SkeletonRegion>
-  )
+  );
 }
 
 export interface SkeletonListProps extends SkeletonRegionProps {
-  rows?: number
+  rows?: number;
   /** Draw a leading avatar circle on each row (roster/member lists). */
-  avatar?: boolean
+  avatar?: boolean;
 }
 
 function SkeletonList({
@@ -143,12 +139,12 @@ function SkeletonList({
         </div>
       ))}
     </SkeletonRegion>
-  )
+  );
 }
 
 export interface SkeletonTableProps extends SkeletonRegionProps {
-  rows?: number
-  columns?: number
+  rows?: number;
+  columns?: number;
 }
 
 // Stands in for a data table: a header strip over evenly-weighted cell bars.
@@ -178,12 +174,12 @@ function SkeletonTable({
         </div>
       ))}
     </SkeletonRegion>
-  )
+  );
 }
 
 export interface SkeletonFormProps extends SkeletonRegionProps {
   /** Number of label + field pairs. */
-  fields?: number
+  fields?: number;
 }
 
 function SkeletonForm({
@@ -205,13 +201,13 @@ function SkeletonForm({
         </div>
       ))}
     </SkeletonRegion>
-  )
+  );
 }
 
 export interface SkeletonPageProps extends SkeletonRegionProps {
   /** Draw the page title + subtitle block above the body. */
-  header?: boolean
-  rows?: number
+  header?: boolean;
+  rows?: number;
 }
 
 // A whole-page body for `loading.tsx`. Built from the primitives, not from the
@@ -241,7 +237,7 @@ function SkeletonPage({
         ))}
       </div>
     </SkeletonRegion>
-  )
+  );
 }
 
 export {
@@ -254,4 +250,4 @@ export {
   SkeletonTable,
   SkeletonForm,
   SkeletonPage,
-}
+};

@@ -1,26 +1,26 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { Check } from "lucide-react"
+import * as React from "react";
+import { Check } from "lucide-react";
 
-import { cn } from "../lib/utils"
+import { cn } from "../lib/utils";
 
 // A vertical stack of large tappable radio cards — the redesign's single-choice
 // picker (replaces a plain Select for `single_select`), with optional per-option
 // description. Radiogroup semantics with roving focus + arrow-key navigation.
 export interface OptionCard {
-  value: string
-  label: React.ReactNode
-  description?: React.ReactNode
+  value: string;
+  label: React.ReactNode;
+  description?: React.ReactNode;
 }
 
 export interface OptionCardGroupProps {
-  options: OptionCard[]
-  value?: string
-  onValueChange: (value: string) => void
-  id?: string
-  "aria-label"?: string
-  className?: string
+  options: OptionCard[];
+  value?: string;
+  onValueChange: (value: string) => void;
+  id?: string;
+  "aria-label"?: string;
+  className?: string;
 }
 
 function OptionCardGroup({
@@ -31,30 +31,30 @@ function OptionCardGroup({
   className,
   "aria-label": ariaLabel,
 }: OptionCardGroupProps) {
-  const refs = React.useRef<(HTMLButtonElement | null)[]>([])
-  const selectedIndex = options.findIndex((o) => o.value === value)
+  const refs = React.useRef<(HTMLButtonElement | null)[]>([]);
+  const selectedIndex = options.findIndex((o) => o.value === value);
 
   function focusSelect(index: number) {
-    const target = (index + options.length) % options.length
-    const next = options[target]
-    if (!next) return
-    onValueChange(next.value)
-    refs.current[target]?.focus()
+    const target = (index + options.length) % options.length;
+    const next = options[target];
+    if (!next) return;
+    onValueChange(next.value);
+    refs.current[target]?.focus();
   }
 
   function onKeyDown(e: React.KeyboardEvent, index: number) {
     if (e.key === "ArrowDown" || e.key === "ArrowRight") {
-      e.preventDefault()
-      focusSelect(index + 1)
+      e.preventDefault();
+      focusSelect(index + 1);
     } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
-      e.preventDefault()
-      focusSelect(index - 1)
+      e.preventDefault();
+      focusSelect(index - 1);
     } else if (e.key === "Home") {
-      e.preventDefault()
-      focusSelect(0)
+      e.preventDefault();
+      focusSelect(0);
     } else if (e.key === "End") {
-      e.preventDefault()
-      focusSelect(options.length - 1)
+      e.preventDefault();
+      focusSelect(options.length - 1);
     }
   }
 
@@ -66,13 +66,13 @@ function OptionCardGroup({
       className={cn("flex flex-col gap-2", className)}
     >
       {options.map((option, i) => {
-        const selected = option.value === value
-        const tabbable = selected || (selectedIndex === -1 && i === 0)
+        const selected = option.value === value;
+        const tabbable = selected || (selectedIndex === -1 && i === 0);
         return (
           <button
             key={option.value}
             ref={(el) => {
-              refs.current[i] = el
+              refs.current[i] = el;
             }}
             type="button"
             role="radio"
@@ -82,9 +82,7 @@ function OptionCardGroup({
             onKeyDown={(e) => onKeyDown(e, i)}
             className={cn(
               "flex items-start gap-3 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              selected
-                ? "border-primary bg-primary/10"
-                : "hover:bg-accent/30",
+              selected ? "border-primary bg-primary/10" : "hover:bg-accent/30",
             )}
           >
             <span
@@ -107,24 +105,24 @@ function OptionCardGroup({
               )}
             </span>
           </button>
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
-export { OptionCardGroup }
+export { OptionCardGroup };
 
 // Multiple choice as cards (board 35, owner's call 2026-09-16: cards, not a
 // plain checkbox list, so it matches the single-choice picker). Each card is a
 // checkbox: Space or a tap toggles it, Tab moves between them.
 export interface CheckboxCardProps {
-  checked: boolean
-  onCheckedChange: (checked: boolean) => void
-  label: React.ReactNode
-  description?: React.ReactNode
-  id?: string
-  className?: string
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  label: React.ReactNode;
+  description?: React.ReactNode;
+  id?: string;
+  className?: string;
 }
 
 function CheckboxCard({
@@ -177,18 +175,18 @@ function CheckboxCard({
         )}
       </span>
     </button>
-  )
+  );
 }
 
 export interface CheckboxCardGroupProps {
-  options: OptionCard[]
-  values: readonly string[]
-  onValuesChange: (values: string[]) => void
-  id?: string
-  "aria-label"?: string
-  className?: string
+  options: OptionCard[];
+  values: readonly string[];
+  onValuesChange: (values: string[]) => void;
+  id?: string;
+  "aria-label"?: string;
+  className?: string;
   /** Extra cards after the options, such as an "Other…" answer. */
-  children?: React.ReactNode
+  children?: React.ReactNode;
 }
 
 function CheckboxCardGroup({
@@ -200,7 +198,7 @@ function CheckboxCardGroup({
   children,
   "aria-label": ariaLabel,
 }: CheckboxCardGroupProps) {
-  const selected = new Set(values)
+  const selected = new Set(values);
   return (
     <div
       id={id}
@@ -226,7 +224,7 @@ function CheckboxCardGroup({
       ))}
       {children}
     </div>
-  )
+  );
 }
 
-export { CheckboxCard, CheckboxCardGroup }
+export { CheckboxCard, CheckboxCardGroup };

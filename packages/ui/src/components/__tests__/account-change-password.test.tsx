@@ -19,10 +19,11 @@ import { Toaster, toast } from "../toast";
 
 /** Stand-in for @quagga/core's assessPassword, with a spy on the call. */
 function policy(minLength = 12) {
-  return vi.fn((password: string): PasswordAssessment =>
-    password.length >= minLength
-      ? { ok: true, error: null }
-      : { ok: false, error: `Use at least ${minLength} characters.` },
+  return vi.fn(
+    (password: string): PasswordAssessment =>
+      password.length >= minLength
+        ? { ok: true, error: null }
+        : { ok: false, error: `Use at least ${minLength} characters.` },
   );
 }
 

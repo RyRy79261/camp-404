@@ -1,7 +1,7 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 
-import { cn } from "../lib/utils"
+import { cn } from "../lib/utils";
 
 // Inline callout for status messages — info, success, warning, error. Tone comes
 // from the P0 semantic tokens. Presentational leaf; pass an icon + content as
@@ -22,10 +22,11 @@ const alertVariants = cva(
     },
     defaultVariants: { variant: "info" },
   },
-)
+);
 
 export interface AlertProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends
+    React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof alertVariants> {}
 
 function Alert({ className, variant, ...props }: AlertProps) {
@@ -35,7 +36,7 @@ function Alert({ className, variant, ...props }: AlertProps) {
       className={cn(alertVariants({ variant }), className)}
       {...props}
     />
-  )
+  );
 }
 
-export { Alert, alertVariants }
+export { Alert, alertVariants };
