@@ -634,11 +634,50 @@ export async function setFoundingYear(input: {
       .set({ cycle: input.year })
       .where(eq(schema.campParticipations.cycle, UNSET_CYCLE))
       .returning({ userId: schema.campParticipations.userId });
-    const tickets = await tx
+    // Tickets: a member may already have a row for the founding year (the
+    // key is (user_id, cycle)), so moving their sentinel row onto it would
+    // break the primary key and abort the founding. Such a pair is merged
+    // first: the founding year's row wins, field by field, except where it
+    // still holds the default and the sentinel row says something (a member's
+    // answer or a captain's DDT / WAP is never lost to a blank). Then the
+    // sentinel row goes, and every other sentinel row moves as before.
+    const merged = await tx.execute<{ user_id: string }>(sql`
+      with pair as (
+        select s.user_id,
+               s.ticket_status as s_ticket, s.directed_ticket as s_ddt,
+               s.early_entry as s_wap,
+               s.passes_updated_by_user_id as s_by, s.updated_at as s_at
+        from camp_tickets s
+        join camp_tickets t
+          on t.user_id = s.user_id and t.cycle = ${input.year}
+        where s.cycle = ${UNSET_CYCLE}
+      ),
+      kept as (
+        update camp_tickets t set
+          ticket_status = case when t.ticket_status = 'unknown'
+            then p.s_ticket else t.ticket_status end,
+          directed_ticket = case when t.directed_ticket = 'none'
+            then p.s_ddt else t.directed_ticket end,
+          early_entry = case when t.early_entry = 'not_needed'
+            then p.s_wap else t.early_entry end,
+          passes_updated_by_user_id =
+            coalesce(t.passes_updated_by_user_id, p.s_by),
+          updated_at = greatest(t.updated_at, p.s_at)
+        from pair p
+        where t.user_id = p.user_id and t.cycle = ${input.year}
+        returning t.user_id
+      )
+      delete from camp_tickets s
+      using kept k
+      where s.user_id = k.user_id and s.cycle = ${UNSET_CYCLE}
+      returning s.user_id
+    `);
+    const moved = await tx
       .update(schema.campTickets)
       .set({ cycle: input.year })
       .where(eq(schema.campTickets.cycle, UNSET_CYCLE))
       .returning({ userId: schema.campTickets.userId });
+    const tickets = [...merged.rows, ...moved];
 
     const [audit] = await tx
       .insert(schema.auditLog)

@@ -550,10 +550,13 @@ Decisions baked into the schema — keep new code consistent with them:
   "Coming, not decided"). Never write one label that mixes the two.
   `intent` reads at `team_lead`, like `status`, so a lead sees both halves.
 - **Tickets, DDT and WAP.** `camp_tickets` (#238) is the same shape: one
-  row per member per burn year (adopted by `setFoundingYear`, erased with the
-  account), written only through `@camp404/db/tickets`. The member sets their
-  own ticket status on their profile (under "This year", once they have said
-  Coming or Maybe); captains alone read it and alone record the DDT (direct
+  row per member per burn year (adopted by `setFoundingYear`, which merges a
+  member's sentinel row into one they already have for the founding year,
+  the founding year's non-default values winning; erased with the account),
+  written only through `@camp404/db/tickets`. Who reads what: a member reads
+  and sets only their own ticket status, on their profile (under "This year",
+  once they have said Coming or Maybe), and never their DDT or WAP; captains
+  read every member's ticket data and alone record the DDT (direct
   distribution ticket) and the WAP (work access pass), each a compare-and-set
   on the value they saw, audited as `ticket.pass_changed`. In code they are
   `ddt` and `wap`; the Postgres columns keep their first names
