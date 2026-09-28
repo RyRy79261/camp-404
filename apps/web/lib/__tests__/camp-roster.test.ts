@@ -130,6 +130,15 @@ describe("toRosterRow derivations", () => {
     expect(row.country).toBeNull();
   });
 
+  it("carries how long the member stays onto the captain row", () => {
+    expect(
+      toRosterRow(member({ membershipTier: "build_week_only" })).membershipTier,
+    ).toBe("build_week_only");
+    expect(toRosterRow(member({ membershipTier: null })).membershipTier).toBe(
+      null,
+    );
+  });
+
   it("surfaces driver intent", () => {
     expect(toRosterRow(member({ intendsToDrive: true })).isDriver).toBe(true);
     expect(toRosterRow(member({ intendsToDrive: false })).isDriver).toBe(false);

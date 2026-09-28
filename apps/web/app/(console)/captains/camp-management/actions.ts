@@ -21,6 +21,7 @@ import {
   listMemberQuestionnaireGates,
   removeTeam,
   setLead,
+  setMembershipTier,
 } from "@/lib/roster";
 import { ID_UNREADABLE_LABEL, mergeIdNumber } from "@camp404/db/id-documents";
 import {
@@ -37,6 +38,7 @@ import {
   type ReviewOption,
 } from "@camp404/core";
 import {
+  MembershipTier,
   PARTICIPATION_STATUSES,
   type ApprovalStatus,
   type Team,
@@ -852,6 +854,59 @@ export async function decideParticipationAction(input: {
       return {
         ok: false,
         error: `${name}'s answer changed while you were looking. Refresh to see it.`,
+      };
+    }
+    return { ok: true };
+  });
+}
+
+export type MembershipTierResult = { ok: true } | { ok: false; error: string };
+
+const MembershipTierInput = z
+  .object({
+    userId: UserId,
+    /** The value the captain saw; null when not set. */
+    from: MembershipTier.nullable(),
+    to: MembershipTier,
+  })
+  .refine((v) => v.from !== v.to);
+
+/**
+ * A captain sets how long a member stays: the whole event, or build week only
+ * (#129). One tap in the member panel. A compare-and-set on the value the
+ * captain saw, so a member who changed it themselves, or another captain, is
+ * not overwritten; the captain is told instead. Audited in the same
+ * transaction.
+ */
+export async function setMembershipTierAction(input: {
+  userId: string;
+  from: string | null;
+  to: string;
+}): Promise<MembershipTierResult> {
+  return runAction("setMembershipTierAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+
+    const parsed = MembershipTierInput.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Unknown choice." };
+    const { userId, from, to } = parsed.data;
+
+    const target = await findCampUserById(userId);
+    if (!target) return { ok: false, error: "Member not found." };
+
+    const saved = await setMembershipTier({
+      userId,
+      from,
+      to,
+      actorId: gate.captainId,
+    });
+    // Either way: on a lost race the roster the captain sees is stale.
+    revalidatePath("/captains/camp-management");
+    if (!saved) {
+      const name = target.displayName?.trim() || "This member";
+      return {
+        ok: false,
+        error: `${name}'s stay changed while you were looking. Refresh to see it.`,
       };
     }
     return { ok: true };

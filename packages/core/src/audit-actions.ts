@@ -3,6 +3,7 @@
 // `AuditEvent.action` in @camp404/db is typed from this list, so a writer with
 // a new action does not compile until the action has a label here.
 
+import { MEMBERSHIP_TIER_LABEL } from "./membership-tier";
 import { decimalToMinor, formatMoney, isCurrency } from "./money";
 
 export const AUDIT_ACTION_LABELS = {
@@ -35,6 +36,7 @@ export const AUDIT_ACTION_LABELS = {
   "member.bank_details.viewed": "Viewed bank details",
   "member.export": "Exported the member list",
   "member.id_document.viewed": "Viewed an ID number",
+  "member.membership_tier_set": "Changed how long a member stays",
   "member.note_added": "Added a captain note",
   "member.notes.viewed": "Read captain notes",
   "member.rank_changed": "Changed a rank",
@@ -173,6 +175,18 @@ export function auditDetail(
       return metadata?.isLead === true
         ? `Now leads ${teamLabel(team)}`
         : `No longer leads ${teamLabel(team)}`;
+    }
+    case "member.membership_tier_set": {
+      const tierWord = (key: string): string | null => {
+        const value = text(metadata, key);
+        return value !== null && Object.hasOwn(MEMBERSHIP_TIER_LABEL, value)
+          ? MEMBERSHIP_TIER_LABEL[value as keyof typeof MEMBERSHIP_TIER_LABEL]
+          : null;
+      };
+      const to = tierWord("to");
+      if (!to) return null;
+      const from = tierWord("from");
+      return from ? `${from} to ${to}` : to;
     }
     case "participation.decided":
       return participationDetail(
