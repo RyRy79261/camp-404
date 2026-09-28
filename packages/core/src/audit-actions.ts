@@ -63,6 +63,7 @@ export const AUDIT_ACTION_LABELS = {
   "recipe.written_by_claude": "Had Claude write a recipe version",
   "reimbursement.status_changed": "Moved a reimbursement",
   "safety.emergency_contacts.view": "Read emergency contacts",
+  "team.program_changed": "Changed a team's description or links",
   "team_budget.set": "Set a team budget",
   "ticket.pass_changed": "Changed a member's DDT or WAP",
 } as const;
@@ -251,6 +252,7 @@ export function auditDetail(
         ? `${formatMoney(minor, currency)}, ${moved}`
         : `${currency} ${amount}, ${moved}`;
     }
+    case "team.program_changed":
     case "team_budget.set": {
       const team = text(metadata, "team");
       return team ? teamLabel(team) : null;

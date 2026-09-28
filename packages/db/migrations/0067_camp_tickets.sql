@@ -1,6 +1,6 @@
 CREATE TYPE "public"."directed_ticket_status" AS ENUM('none', 'allocated', 'can_transfer');--> statement-breakpoint
-CREATE TYPE "public"."early_entry_status" AS ENUM('not_needed', 'requested', 'issued');--> statement-breakpoint
 CREATE TYPE "public"."ticket_status" AS ENUM('unknown', 'buying_own', 'has_ticket', 'needs_directed_ticket');--> statement-breakpoint
+CREATE TYPE "public"."early_entry_status" AS ENUM('not_needed', 'requested', 'issued');--> statement-breakpoint
 CREATE TABLE "camp_tickets" (
 	"user_id" uuid NOT NULL,
 	"cycle" integer DEFAULT 1 NOT NULL,

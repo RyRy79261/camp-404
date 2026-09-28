@@ -196,6 +196,9 @@ describe("auditDetail", () => {
     expect(auditDetail("team_budget.set", { team: "kitchen" }, teams)).toBe(
       "Kitchen",
     );
+    expect(
+      auditDetail("team.program_changed", { team: "kitchen" }, teams),
+    ).toBe("Kitchen");
   });
 
   it("names a document and its new version", () => {

@@ -1,6 +1,6 @@
 {
-  "id": "ca406625-22fe-44f9-b733-9c62e6d079fd",
-  "prevId": "a13ea500-258d-4684-aaac-ac151eb917d4",
+  "id": "b6b212c0-4897-4ed7-a609-95329994913b",
+  "prevId": "ca406625-22fe-44f9-b733-9c62e6d079fd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -979,6 +979,111 @@
           "value": "\"camp_settings\".\"id\""
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.camp_tickets": {
+      "name": "camp_tickets",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cycle": {
+          "name": "cycle",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "ticket_status": {
+          "name": "ticket_status",
+          "type": "ticket_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "directed_ticket": {
+          "name": "directed_ticket",
+          "type": "directed_ticket_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "early_entry": {
+          "name": "early_entry",
+          "type": "early_entry_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'not_needed'"
+        },
+        "passes_updated_by_user_id": {
+          "name": "passes_updated_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "camp_tickets_user_id_users_id_fk": {
+          "name": "camp_tickets_user_id_users_id_fk",
+          "tableFrom": "camp_tickets",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "camp_tickets_passes_updated_by_user_id_users_id_fk": {
+          "name": "camp_tickets_passes_updated_by_user_id_users_id_fk",
+          "tableFrom": "camp_tickets",
+          "tableTo": "users",
+          "columnsFrom": [
+            "passes_updated_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "camp_tickets_user_id_cycle_pk": {
+          "name": "camp_tickets_user_id_cycle_pk",
+          "columns": [
+            "user_id",
+            "cycle"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.captain_promotion_requests": {
@@ -8890,6 +8995,15 @@
         "individual"
       ]
     },
+    "public.directed_ticket_status": {
+      "name": "directed_ticket_status",
+      "schema": "public",
+      "values": [
+        "none",
+        "allocated",
+        "can_transfer"
+      ]
+    },
     "public.email_delivery_status": {
       "name": "email_delivery_status",
       "schema": "public",
@@ -9216,6 +9330,25 @@
         "used",
         "expired",
         "revoked"
+      ]
+    },
+    "public.ticket_status": {
+      "name": "ticket_status",
+      "schema": "public",
+      "values": [
+        "unknown",
+        "buying_own",
+        "has_ticket",
+        "needs_directed_ticket"
+      ]
+    },
+    "public.early_entry_status": {
+      "name": "early_entry_status",
+      "schema": "public",
+      "values": [
+        "not_needed",
+        "requested",
+        "issued"
       ]
     }
   },

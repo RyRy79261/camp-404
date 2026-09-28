@@ -44,6 +44,7 @@
     "./tasks": "./src/tasks.ts",
     "./meeting-notes": "./src/meeting-notes.ts",
     "./power": "./src/power.ts",
+    "./team-programs": "./src/team-programs.ts",
     "./meal-plan": "./src/meal-plan.ts",
     "./recipes": "./src/recipes.ts",
     "./calendar-events": "./src/calendar-events.ts",

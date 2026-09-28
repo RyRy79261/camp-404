@@ -499,6 +499,15 @@ Decisions baked into the schema — keep new code consistent with them:
     There are no kitchen settings any more (the owner removed the largest
     pot and the burner count), so `canSetKitchenSettings` is gone. Change the
     rule in those functions, never at a call site.
+  - **A team's program is another place team identity decides** (owner's
+    ruling 1, 2026-09-27): only a captain or a lead OF THAT TEAM changes what
+    a team's program says (its description today), by
+    `canEditTeamProgram` in `packages/core/src/team-programs.ts`, which fails
+    closed. Every member
+    reads every team's program. The write re-reads the actor's rank and lead
+    teams inside its own transaction. Meeting notes keep their own, wider
+    rule (`canWorkInTeam`: the team's members this year). Change the rule in
+    that function, never at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping
@@ -661,6 +670,11 @@ LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
 
 ## Conventions
 
+- **No Google Sheets or Google Forms** (owner, 2026-09-27; narrowed
+  2026-09-28). Never build a feature that sends people to a spreadsheet or
+  a form, or that links out to Drive or Docs; build what the camp needs
+  inside the app instead. Google Calendar (the camp calendar) and Telegram
+  stay: the owner wants both.
 - TypeScript throughout; shared types and Zod schemas live in
   `@camp404/types`. Validate external input at the boundary with Zod.
 - Lint via `@camp404/eslint-config`; format via Prettier (`.prettierrc.json`).
