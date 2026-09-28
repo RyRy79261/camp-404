@@ -253,6 +253,7 @@ import {
   type EditLoadInput,
   type GeneratorInput,
   type LoadInput,
+  type MembershipTier,
   Team as TeamKeys,
 } from "@camp404/types";
 import {
@@ -307,6 +308,8 @@ interface TestUser {
   approvalDecidedByUserId: string | null;
   approvalDecidedAt: Date | null;
   approvalDecisionReason: string | null;
+  /** How long they stay; null (not set) unless a captain set it. */
+  membershipTier: MembershipTier | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -1368,6 +1371,7 @@ export const testStore = {
       approvalDecidedByUserId: null,
       approvalDecidedAt: null,
       approvalDecisionReason: null,
+      membershipTier: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -2589,6 +2593,23 @@ export const testStore = {
   },
 
   /**
+   * A captain sets how long a member stays (@camp404/db/roster's
+   * setMembershipTier twin): the same compare-and-set on the value the captain
+   * saw, without the audit row.
+   */
+  setMembershipTier(input: {
+    userId: string;
+    from: MembershipTier | null;
+    to: MembershipTier;
+  }): boolean {
+    const user = findUserById(input.userId);
+    if (!user || user.membershipTier !== input.from) return false;
+    user.membershipTier = input.to;
+    user.updatedAt = new Date();
+    return true;
+  },
+
+  /**
    * Put a member at any status for a year (this year unless `cycle` is
    * given): a fixture, not a production path. Replaces an existing row, as
    * the primary key would.
@@ -2738,7 +2759,7 @@ export const testStore = {
           isLead: mine.some((m) => m.isLead),
           teams: mine.map((m) => m.team).sort((a, b) => a.localeCompare(b)),
           duesPaid: settled.has(u.id),
-          membershipTier: null,
+          membershipTier: u.membershipTier,
           onboardingComplete: profile?.completedAt != null,
           pendingRequiredActions: owed.length,
           pendingRequiredActionItems: owed.map((a) => ({

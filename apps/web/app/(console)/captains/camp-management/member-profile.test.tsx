@@ -19,6 +19,7 @@ vi.mock("./actions", () => ({
   // Imported at module scope by AssignCaptainDialog.
   sendCaptainPromotionAction: vi.fn(),
   cancelCaptainPromotionAction: vi.fn(),
+  setMembershipTierAction: vi.fn(),
 }));
 
 import { MemberProfile } from "./member-profile";
@@ -57,6 +58,7 @@ function row(over: Partial<RosterRow> = {}): RosterRow {
     isDriver: false,
     driverProfileComplete: false,
     duesPaid: false,
+    membershipTier: null,
     thisYear: null,
     thisYearSays: null,
     ...over,
@@ -326,6 +328,35 @@ describe("MemberProfile — what the member still owes", () => {
     renderProfile({ approvalStatus: "approved" });
     await screen.findByText("Outstanding", { selector: "dt" });
     expect(outstandingValue()).toBe("All complete");
+  });
+});
+
+describe("MemberProfile — how long they stay", () => {
+  function stayingFor() {
+    const term = screen.getByText("Staying for", { selector: "dt" });
+    return term.nextElementSibling?.textContent;
+  }
+
+  it("shows the stored value in the overview and on the control", async () => {
+    vi.mocked(getMemberDetailAction).mockResolvedValue(detail("approved"));
+    renderProfile({
+      approvalStatus: "approved",
+      membershipTier: "build_week_only",
+    });
+    await screen.findByText("Staying for", { selector: "dt" });
+    expect(stayingFor()).toBe("Build week only");
+    expect(
+      screen
+        .getByRole("radio", { name: "Build week only" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+  });
+
+  it("says Not set when the member never said", async () => {
+    vi.mocked(getMemberDetailAction).mockResolvedValue(detail("approved"));
+    renderProfile({ approvalStatus: "approved" });
+    await screen.findByText("Staying for", { selector: "dt" });
+    expect(stayingFor()).toBe("Not set");
   });
 });
 

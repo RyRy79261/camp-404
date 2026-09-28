@@ -12,7 +12,8 @@ export const NOTIFICATION_KINDS = [
   "lead_directive",
   // A questionnaire was sent to the member.
   "questionnaire_release",
-  // A captain or the deadline reminders nudged the member about a questionnaire.
+  // A captain or the deadline reminders nudged the member about a questionnaire,
+  // or about another required action with a deadline (#134).
   "questionnaire_reminder",
   // A captain approved the member's place in the camp.
   "approval_decision",

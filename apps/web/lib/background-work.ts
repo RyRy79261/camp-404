@@ -9,7 +9,10 @@ import {
   listLiveAuthUserIds,
 } from "@camp404/db/maintenance";
 import { drainQueuedPush } from "@camp404/db/push";
-import { remindDueSoon } from "@camp404/db/questionnaire-lifecycle";
+import {
+  remindDueSoon,
+  remindRequiredActionsDueSoon,
+} from "@camp404/db/questionnaire-lifecycle";
 import { consumeRateLimit } from "@camp404/db/rate-limit";
 import { remindTaskDeadlines } from "@camp404/db/tasks";
 import { sweepOrphanAvatarBlobs } from "./avatar-blob";
@@ -160,9 +163,14 @@ export async function runDueWork(
   if (!(await claim(DUE_WORK_KEY, DUE_WORK_EVERY_MS))) return "not_due";
 
   if (isReminderHour(now)) {
-    // Questionnaires due within 48 hours (24-hour dedup per member), and the
-    // task deadline nudges (deduped in task_deadline_reminders).
+    // Questionnaires due within 48 hours (24-hour dedup per member), required
+    // actions with a deadline that no questionnaire send stands behind (the
+    // same window and dedup, per row), and the task deadline nudges (deduped
+    // in task_deadline_reminders).
     await step("questionnaire reminders", () => remindDueSoon({ now }));
+    await step("required action reminders", () =>
+      remindRequiredActionsDueSoon({ now }),
+    );
     await step("task reminders", () => remindTaskDeadlines({ now }));
   }
   await deliverDue();

@@ -164,6 +164,7 @@ export * from "./time-zone";
 export * from "./questionnaire-status";
 export * from "./password";
 export * from "./participation";
+export * from "./membership-tier";
 export * from "./tickets";
 export * from "./power";
 export * from "./recipes";
