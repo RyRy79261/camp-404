@@ -121,6 +121,28 @@ describe("buildQuestionnaireCsvRows — rating_grid", () => {
   });
 });
 
+describe("buildQuestionnaireCsvRows — a removed rating row", () => {
+  it("keeps a column for answers under a row the grid no longer has", () => {
+    const rows = buildQuestionnaireCsvRows({
+      questions: [{ ...MEALS, rows: [MEALS.rows[0]!] }],
+      respondents: [
+        {
+          name: "Nova",
+          cycle: 2027,
+          definitionVersion: "1",
+          submittedAt: null,
+          responses: { meals: { d1_dinner: 4, d2_lunch: 2 } },
+        },
+      ],
+    });
+    expect(rows[0]?.slice(4)).toEqual([
+      "Rate the meals: Day 1 dinner",
+      "Rate the meals: d2_lunch",
+    ]);
+    expect(rows[1]?.slice(4)).toEqual(["4 stars", "2 stars"]);
+  });
+});
+
 describe("validateQuestionnaireDefinition — rating_grid", () => {
   it("publishes a well-formed rating grid", () => {
     expect(validateQuestionnaireDefinition(DEF).ok).toBe(true);
@@ -187,6 +209,17 @@ describe("classifyChange — rating_grid and leads only", () => {
       "breaking",
     );
     expect(classifyChange(DEF, withGrid({ allowNa: false }))).toBe("breaking");
+  });
+
+  it("calls a relabelled point breaking, and a point added at the end cosmetic", () => {
+    const relabelled = [...MEALS.scale];
+    relabelled[0] = "Awful";
+    expect(classifyChange(DEF, withGrid({ scale: relabelled }))).toBe(
+      "breaking",
+    );
+    expect(
+      classifyChange(DEF, withGrid({ scale: [...MEALS.scale, "6 stars"] })),
+    ).toBe("cosmetic");
   });
 
   it("calls a question moved to team leads only breaking", () => {

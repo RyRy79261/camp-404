@@ -156,14 +156,34 @@ interface CsvColumn {
  * N/A), so a spreadsheet can sort and average a row; every other question is
  * one column rendered by `displayResponseValue`.
  */
-function questionColumns(questions: readonly Question[]): CsvColumn[] {
+function questionColumns(
+  questions: readonly Question[],
+  respondents: readonly { responses: QuestionnaireResponses }[],
+): CsvColumn[] {
   const headers = questionHeaders(questions);
   return questions.flatMap((q, index): CsvColumn[] => {
     const header = headers[index] ?? q.prompt;
     if (q.kind !== "rating_grid") {
       return [{ header, cell: (r) => displayResponseValue(q, r[q.id]) }];
     }
-    return q.rows.map((row) => ({
+    // Rows the grid no longer declares keep a column while someone's answer
+    // still sits under them (robustness property 2), labelled by their id.
+    const declared = new Set(q.rows.map((row) => row.id));
+    const removed = new Set<string>();
+    for (const { responses } of respondents) {
+      const value = responses[q.id];
+      if (value === null || typeof value !== "object" || Array.isArray(value))
+        continue;
+      for (const [rowId, cell] of Object.entries(value)) {
+        if (!declared.has(rowId) && (cell === "na" || typeof cell === "number"))
+          removed.add(rowId);
+      }
+    }
+    const rows = [
+      ...q.rows,
+      ...[...removed].sort().map((id) => ({ id, label: id })),
+    ];
+    return rows.map((row) => ({
       header: `${header}: ${row.label}`,
       cell: (r) =>
         ratingGridCellLabel(q, ratingRowCell(r[q.id], row.id)) || EMPTY_ANSWER,
@@ -202,7 +222,7 @@ export function buildQuestionnaireCsvRows(
   const { questions, respondents } = input;
   const orphanIds = collectOrphanFieldIds(questions, respondents);
 
-  const columns = questionColumns(questions);
+  const columns = questionColumns(questions, respondents);
   const header: CsvCell[] = [
     ...FIXED_HEADERS,
     ...columns.map((column) => column.header),

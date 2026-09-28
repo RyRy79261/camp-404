@@ -136,6 +136,9 @@ function breakingParamChange(prev: Question, next: Question): boolean {
       return true;
     }
     if (next.scale.length < prev.scale.length) return true;
+    // A stored answer is a position, so relabelling one changes what every
+    // answer at it means. Adding a point at the end does not.
+    if (prev.scale.some((label, i) => next.scale[i] !== label)) return true;
     if (prev.allowNa === true && next.allowNa !== true) return true;
   }
 
