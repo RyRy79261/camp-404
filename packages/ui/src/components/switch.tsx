@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import * as SwitchPrimitive from "@radix-ui/react-switch"
+import * as React from "react";
+import * as SwitchPrimitive from "@radix-ui/react-switch";
 
-import { cn } from "../lib/utils"
+import { cn } from "../lib/utils";
 
 // On/off toggle (settings, preferences). Radix primitive for the a11y +
 // keyboard behaviour, styled on the P0 tokens. Same shadcn shape as Checkbox.
@@ -25,7 +25,7 @@ const Switch = React.forwardRef<
       )}
     />
   </SwitchPrimitive.Root>
-))
-Switch.displayName = SwitchPrimitive.Root.displayName
+));
+Switch.displayName = SwitchPrimitive.Root.displayName;
 
-export { Switch }
+export { Switch };

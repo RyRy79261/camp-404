@@ -1,47 +1,41 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import {
-  CircleCheck,
-  Info,
-  TriangleAlert,
-  X,
-  XCircle,
-} from "lucide-react"
+import * as React from "react";
+import { CircleCheck, Info, TriangleAlert, X, XCircle } from "lucide-react";
 
-import { cn } from "../lib/utils"
+import { cn } from "../lib/utils";
 
 // Lightweight toast system — a module-level store (no context provider needed)
 // surfaced imperatively via `toast()`, rendered by a single mounted <Toaster/>.
 // Mount <Toaster/> once near the app root; call toast/toast.success/etc anywhere
 // (client). Same shape as sonner so swapping later is cheap.
 
-export type ToastVariant = "info" | "success" | "warning" | "error"
+export type ToastVariant = "info" | "success" | "warning" | "error";
 
 export interface ToastAction {
-  label: string
-  onClick: () => void
+  label: string;
+  onClick: () => void;
 }
 
 export interface ToastOptions {
-  description?: string
+  description?: string;
   /** ms before auto-dismiss; `Infinity` to persist until dismissed. */
-  duration?: number
+  duration?: number;
   /**
    * One follow-up the toast offers ("Open", "Undo"). Pressing it runs onClick
    * and dismisses the toast. With an action, a long description is clipped to
    * three lines, since the action leads to the whole of it.
    */
-  action?: ToastAction
+  action?: ToastAction;
 }
 
 export interface ToastRecord {
-  id: number
-  variant: ToastVariant
-  title: string
-  description?: string
-  duration: number
-  action?: ToastAction
+  id: number;
+  variant: ToastVariant;
+  title: string;
+  description?: string;
+  duration: number;
+  action?: ToastAction;
 }
 
 // Module store. CLIENT-ONLY: toast()/dismiss are imperative client APIs and the
@@ -49,51 +43,55 @@ export interface ToastRecord {
 // (getServerSnapshot returns a stable EMPTY), so there's no cross-request
 // bleed under SSR. Reassigned (not mutated) so useSyncExternalStore's
 // referential equality holds between unrelated renders.
-let toasts: ToastRecord[] = []
-const EMPTY: ToastRecord[] = []
-const listeners = new Set<() => void>()
-let nextId = 1
+let toasts: ToastRecord[] = [];
+const EMPTY: ToastRecord[] = [];
+const listeners = new Set<() => void>();
+let nextId = 1;
 
 function emit() {
-  for (const listener of listeners) listener()
+  for (const listener of listeners) listener();
 }
 function subscribe(listener: () => void) {
-  listeners.add(listener)
+  listeners.add(listener);
   return () => {
-    listeners.delete(listener)
-  }
+    listeners.delete(listener);
+  };
 }
 function getSnapshot() {
-  return toasts
+  return toasts;
 }
 function getServerSnapshot() {
-  return EMPTY
+  return EMPTY;
 }
 
 /** The current toast stack — a defensive copy so callers can't mutate the store
  *  out-of-band (mutations must go through toast()/dismiss() to notify subscribers). */
 export function getToasts(): readonly ToastRecord[] {
-  return toasts.slice()
+  return toasts.slice();
 }
 
 /** Dismiss one toast by id, or all of them when called with no id. */
 function dismiss(id?: number) {
-  toasts = id === undefined ? [] : toasts.filter((t) => t.id !== id)
-  emit()
+  toasts = id === undefined ? [] : toasts.filter((t) => t.id !== id);
+  emit();
 }
 
-const DEFAULT_DURATION = 5000
+const DEFAULT_DURATION = 5000;
 
 // Accept a non-negative finite ms or Infinity (persist); anything else (negative,
 // NaN) falls back to the default so a bad value can't make setTimeout fire at ~0.
 function normalizeDuration(d: number | undefined): number {
-  if (d === undefined) return DEFAULT_DURATION
-  if (d === Infinity) return Infinity
-  return Number.isFinite(d) && d >= 0 ? d : DEFAULT_DURATION
+  if (d === undefined) return DEFAULT_DURATION;
+  if (d === Infinity) return Infinity;
+  return Number.isFinite(d) && d >= 0 ? d : DEFAULT_DURATION;
 }
 
-function push(variant: ToastVariant, title: string, opts?: ToastOptions): number {
-  const id = nextId++
+function push(
+  variant: ToastVariant,
+  title: string,
+  opts?: ToastOptions,
+): number {
+  const id = nextId++;
   toasts = [
     ...toasts,
     {
@@ -104,30 +102,32 @@ function push(variant: ToastVariant, title: string, opts?: ToastOptions): number
       duration: normalizeDuration(opts?.duration),
       action: opts?.action,
     },
-  ]
-  emit()
-  return id
+  ];
+  emit();
+  return id;
 }
 
 type ToastFn = ((title: string, opts?: ToastOptions) => number) & {
-  success: (title: string, opts?: ToastOptions) => number
-  error: (title: string, opts?: ToastOptions) => number
-  warning: (title: string, opts?: ToastOptions) => number
-  info: (title: string, opts?: ToastOptions) => number
+  success: (title: string, opts?: ToastOptions) => number;
+  error: (title: string, opts?: ToastOptions) => number;
+  warning: (title: string, opts?: ToastOptions) => number;
+  info: (title: string, opts?: ToastOptions) => number;
   /** Dismiss one toast by id, or all of them when called with no id. */
-  dismiss: (id?: number) => void
-}
+  dismiss: (id?: number) => void;
+};
 
 export const toast: ToastFn = Object.assign(
   (title: string, opts?: ToastOptions) => push("info", title, opts),
   {
-    success: (title: string, opts?: ToastOptions) => push("success", title, opts),
+    success: (title: string, opts?: ToastOptions) =>
+      push("success", title, opts),
     error: (title: string, opts?: ToastOptions) => push("error", title, opts),
-    warning: (title: string, opts?: ToastOptions) => push("warning", title, opts),
+    warning: (title: string, opts?: ToastOptions) =>
+      push("warning", title, opts),
     info: (title: string, opts?: ToastOptions) => push("info", title, opts),
     dismiss,
   },
-)
+);
 
 // Decorative — the variant is conveyed by role + text, so hide icons from AT.
 const ICONS: Record<ToastVariant, React.ReactNode> = {
@@ -135,37 +135,37 @@ const ICONS: Record<ToastVariant, React.ReactNode> = {
   success: <CircleCheck className="h-4 w-4 text-success" aria-hidden />,
   warning: <TriangleAlert className="h-4 w-4 text-warning" aria-hidden />,
   error: <XCircle className="h-4 w-4 text-destructive" aria-hidden />,
-}
+};
 
 /** How long a toast takes to leave, in ms. */
-const EXIT_MS = 150
+const EXIT_MS = 150;
 
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  )
+  );
 }
 
 function ToastItem({ toast: t }: { toast: ToastRecord }) {
-  const [leaving, setLeaving] = React.useState(false)
+  const [leaving, setLeaving] = React.useState(false);
 
   // Slide out, then leave the store. With reduced motion, leave at once.
   const close = React.useCallback(() => {
     if (prefersReducedMotion()) {
-      dismiss(t.id)
-      return
+      dismiss(t.id);
+      return;
     }
-    setLeaving(true)
-    setTimeout(() => dismiss(t.id), EXIT_MS)
-  }, [t.id])
+    setLeaving(true);
+    setTimeout(() => dismiss(t.id), EXIT_MS);
+  }, [t.id]);
 
   React.useEffect(() => {
-    if (!Number.isFinite(t.duration)) return
-    const timer = setTimeout(close, t.duration)
-    return () => clearTimeout(timer)
-  }, [close, t.duration])
+    if (!Number.isFinite(t.duration)) return;
+    const timer = setTimeout(close, t.duration);
+    return () => clearTimeout(timer);
+  }, [close, t.duration]);
 
   return (
     // Each toast carries its own live semantics — role="alert" (implicitly
@@ -204,8 +204,8 @@ function ToastItem({ toast: t }: { toast: ToastRecord }) {
           <button
             type="button"
             onClick={() => {
-              t.action?.onClick()
-              close()
+              t.action?.onClick();
+              close();
             }}
             className="mt-1.5 rounded-sm text-[13px] font-semibold text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -222,7 +222,7 @@ function ToastItem({ toast: t }: { toast: ToastRecord }) {
         <X className="h-4 w-4" />
       </button>
     </div>
-  )
+  );
 }
 
 /** Mount once near the app root. Renders the live toast stack. */
@@ -231,7 +231,7 @@ export function Toaster({ className }: { className?: string }) {
     subscribe,
     getSnapshot,
     getServerSnapshot,
-  )
+  );
   return (
     // A labelled region, NOT a live region — each toast announces via its own
     // role (status/alert) so error urgency isn't flattened to polite.
@@ -247,5 +247,5 @@ export function Toaster({ className }: { className?: string }) {
         <ToastItem key={t.id} toast={t} />
       ))}
     </div>
-  )
+  );
 }

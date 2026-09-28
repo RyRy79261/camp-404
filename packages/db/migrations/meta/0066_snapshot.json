@@ -1,5 +1,5 @@
 {
-  "id": "9a1b5040-4e71-4368-97f8-ad9e799d583e",
+  "id": "ca406625-22fe-44f9-b733-9c62e6d079fd",
   "prevId": "a13ea500-258d-4684-aaac-ac151eb917d4",
   "version": "7",
   "dialect": "postgresql",
@@ -1623,325 +1623,6 @@
           ]
         }
       },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.fuel_cans": {
-      "name": "fuel_cans",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "capacity_litres": {
-          "name": "capacity_litres",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "litres": {
-          "name": "litres",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "location": {
-          "name": "location",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "inventory_item_id": {
-          "name": "inventory_item_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sort": {
-          "name": "sort",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "fuel_cans_cycle_idx": {
-          "name": "fuel_cans_cycle_idx",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "fuel_cans_inventory_item_id_inventory_items_id_fk": {
-          "name": "fuel_cans_inventory_item_id_inventory_items_id_fk",
-          "tableFrom": "fuel_cans",
-          "tableTo": "inventory_items",
-          "columnsFrom": [
-            "inventory_item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "fuel_cans_created_by_user_id_users_id_fk": {
-          "name": "fuel_cans_created_by_user_id_users_id_fk",
-          "tableFrom": "fuel_cans",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "fuel_cans_location_check": {
-          "name": "fuel_cans_location_check",
-          "value": "\"fuel_cans\".\"location\" in ('storage', 'vehicle', 'on_site')"
-        },
-        "fuel_cans_fill_check": {
-          "name": "fuel_cans_fill_check",
-          "value": "\"fuel_cans\".\"capacity_litres\" > 0 and \"fuel_cans\".\"litres\" >= 0 and \"fuel_cans\".\"litres\" <= \"fuel_cans\".\"capacity_litres\""
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.generator_readiness_items": {
-      "name": "generator_readiness_items",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "generator_id": {
-          "name": "generator_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "item_key": {
-          "name": "item_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "owner_user_id": {
-          "name": "owner_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "due_on": {
-          "name": "due_on",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "done_at": {
-          "name": "done_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "done_by_user_id": {
-          "name": "done_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sort": {
-          "name": "sort",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "generator_readiness_items_generator_idx": {
-          "name": "generator_readiness_items_generator_idx",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "generator_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "generator_readiness_items_generator_id_generators_id_fk": {
-          "name": "generator_readiness_items_generator_id_generators_id_fk",
-          "tableFrom": "generator_readiness_items",
-          "tableTo": "generators",
-          "columnsFrom": [
-            "generator_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "generator_readiness_items_owner_user_id_users_id_fk": {
-          "name": "generator_readiness_items_owner_user_id_users_id_fk",
-          "tableFrom": "generator_readiness_items",
-          "tableTo": "users",
-          "columnsFrom": [
-            "owner_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "generator_readiness_items_done_by_user_id_users_id_fk": {
-          "name": "generator_readiness_items_done_by_user_id_users_id_fk",
-          "tableFrom": "generator_readiness_items",
-          "tableTo": "users",
-          "columnsFrom": [
-            "done_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "generator_readiness_items_created_by_user_id_users_id_fk": {
-          "name": "generator_readiness_items_created_by_user_id_users_id_fk",
-          "tableFrom": "generator_readiness_items",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -4633,195 +4314,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.power_grid_nodes": {
-      "name": "power_grid_nodes",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "parent_id": {
-          "name": "parent_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cable": {
-          "name": "cable",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cable_length_m": {
-          "name": "cable_length_m",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cable_gauge_mm2": {
-          "name": "cable_gauge_mm2",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cable_rated_amps": {
-          "name": "cable_rated_amps",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "adapter": {
-          "name": "adapter",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "have_cable": {
-          "name": "have_cable",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "have_adapter": {
-          "name": "have_adapter",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "sort": {
-          "name": "sort",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "power_grid_nodes_cycle_idx": {
-          "name": "power_grid_nodes_cycle_idx",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "power_grid_nodes_parent_idx": {
-          "name": "power_grid_nodes_parent_idx",
-          "columns": [
-            {
-              "expression": "parent_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "power_grid_nodes_parent_id_power_grid_nodes_id_fk": {
-          "name": "power_grid_nodes_parent_id_power_grid_nodes_id_fk",
-          "tableFrom": "power_grid_nodes",
-          "tableTo": "power_grid_nodes",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "power_grid_nodes_created_by_user_id_users_id_fk": {
-          "name": "power_grid_nodes_created_by_user_id_users_id_fk",
-          "tableFrom": "power_grid_nodes",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "power_grid_nodes_kind_check": {
-          "name": "power_grid_nodes_kind_check",
-          "value": "\"power_grid_nodes\".\"kind\" in ('generator', 'junction', 'end_point')"
-        },
-        "power_grid_nodes_root_check": {
-          "name": "power_grid_nodes_root_check",
-          "value": "(\"power_grid_nodes\".\"kind\" = 'generator') = (\"power_grid_nodes\".\"parent_id\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.power_loads": {
       "name": "power_loads",
       "schema": "",
@@ -4950,12 +4442,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "grid_node_id": {
-          "name": "grid_node_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "sort": {
           "name": "sort",
           "type": "integer",
@@ -5006,21 +4492,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "power_loads_grid_node_idx": {
-          "name": "power_loads_grid_node_idx",
-          "columns": [
-            {
-              "expression": "grid_node_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -5030,19 +4501,6 @@
           "tableTo": "inventory_items",
           "columnsFrom": [
             "inventory_item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "power_loads_grid_node_id_power_grid_nodes_id_fk": {
-          "name": "power_loads_grid_node_id_power_grid_nodes_id_fk",
-          "tableFrom": "power_loads",
-          "tableTo": "power_grid_nodes",
-          "columnsFrom": [
-            "grid_node_id"
           ],
           "columnsTo": [
             "id"
@@ -5177,13 +4635,6 @@
           "notNull": true,
           "default": 0
         },
-        "low_fuel_days": {
-          "name": "low_fuel_days",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 2
-        },
         "version": {
           "name": "version",
           "type": "integer",
@@ -5246,10 +4697,6 @@
           "name": "power_plans_days_check",
           "value": "\"power_plans\".\"days_on_site\" >= 1"
         },
-        "power_plans_low_fuel_check": {
-          "name": "power_plans_low_fuel_check",
-          "value": "\"power_plans\".\"low_fuel_days\" >= 0"
-        },
         "power_plans_hours_check": {
           "name": "power_plans_hours_check",
           "value": "\"power_plans\".\"run_from_hour\" between 0 and 23 and \"power_plans\".\"run_to_hour\" between 0 and 23"
@@ -5259,184 +4706,6 @@
           "value": "\"power_plans\".\"low_load_factor\" >= 1 and \"power_plans\".\"safety_margin_pct\" between 0 and 100 and \"power_plans\".\"can_litres\" > 0 and \"power_plans\".\"cans_owned\" >= 0"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.power_sharing_agreements": {
-      "name": "power_sharing_agreements",
-      "schema": "",
-      "columns": {
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "partner_camp": {
-          "name": "partner_camp",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "contact_role": {
-          "name": "contact_role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "generator_source": {
-          "name": "generator_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "generator_id": {
-          "name": "generator_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "their_generator": {
-          "name": "their_generator",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "partner_fuel_pct": {
-          "name": "partner_fuel_pct",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "watch_cover": {
-          "name": "watch_cover",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "updated_by_user_id": {
-          "name": "updated_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "power_sharing_agreements_generator_id_generators_id_fk": {
-          "name": "power_sharing_agreements_generator_id_generators_id_fk",
-          "tableFrom": "power_sharing_agreements",
-          "tableTo": "generators",
-          "columnsFrom": [
-            "generator_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "power_sharing_agreements_updated_by_user_id_users_id_fk": {
-          "name": "power_sharing_agreements_updated_by_user_id_users_id_fk",
-          "tableFrom": "power_sharing_agreements",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "power_sharing_agreements_source_check": {
-          "name": "power_sharing_agreements_source_check",
-          "value": "\"power_sharing_agreements\".\"generator_source\" in ('ours', 'theirs')"
-        },
-        "power_sharing_agreements_pct_check": {
-          "name": "power_sharing_agreements_pct_check",
-          "value": "\"power_sharing_agreements\".\"partner_fuel_pct\" between 0 and 100"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.power_work_plan_tasks": {
-      "name": "power_work_plan_tasks",
-      "schema": "",
-      "columns": {
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "task_id": {
-          "name": "task_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sort": {
-          "name": "sort",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "power_work_plan_tasks_task_id_tasks_id_fk": {
-          "name": "power_work_plan_tasks_task_id_tasks_id_fk",
-          "tableFrom": "power_work_plan_tasks",
-          "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "power_work_plan_tasks_cycle_task_id_pk": {
-          "name": "power_work_plan_tasks_cycle_task_id_pk",
-          "columns": [
-            "cycle",
-            "task_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.push_tokens": {
@@ -7640,219 +6909,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.refuel_entries": {
-      "name": "refuel_entries",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "generator_id": {
-          "name": "generator_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "refuelled_at": {
-          "name": "refuelled_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "litres": {
-          "name": "litres",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "from_can_id": {
-          "name": "from_can_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "done_by_user_id": {
-          "name": "done_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "hour_meter": {
-          "name": "hour_meter",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "from_paper": {
-          "name": "from_paper",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "corrects_entry_id": {
-          "name": "corrects_entry_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "voided": {
-          "name": "voided",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "refuel_entries_cycle_idx": {
-          "name": "refuel_entries_cycle_idx",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "refuelled_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "refuel_entries_corrects_uniq": {
-          "name": "refuel_entries_corrects_uniq",
-          "columns": [
-            {
-              "expression": "corrects_entry_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "refuel_entries_generator_id_generators_id_fk": {
-          "name": "refuel_entries_generator_id_generators_id_fk",
-          "tableFrom": "refuel_entries",
-          "tableTo": "generators",
-          "columnsFrom": [
-            "generator_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "refuel_entries_from_can_id_fuel_cans_id_fk": {
-          "name": "refuel_entries_from_can_id_fuel_cans_id_fk",
-          "tableFrom": "refuel_entries",
-          "tableTo": "fuel_cans",
-          "columnsFrom": [
-            "from_can_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "refuel_entries_done_by_user_id_users_id_fk": {
-          "name": "refuel_entries_done_by_user_id_users_id_fk",
-          "tableFrom": "refuel_entries",
-          "tableTo": "users",
-          "columnsFrom": [
-            "done_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "refuel_entries_corrects_entry_id_refuel_entries_id_fk": {
-          "name": "refuel_entries_corrects_entry_id_refuel_entries_id_fk",
-          "tableFrom": "refuel_entries",
-          "tableTo": "refuel_entries",
-          "columnsFrom": [
-            "corrects_entry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "refuel_entries_created_by_user_id_users_id_fk": {
-          "name": "refuel_entries_created_by_user_id_users_id_fk",
-          "tableFrom": "refuel_entries",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "refuel_entries_litres_check": {
-          "name": "refuel_entries_litres_check",
-          "value": "\"refuel_entries\".\"litres\" > 0"
-        },
-        "refuel_entries_void_check": {
-          "name": "refuel_entries_void_check",
-          "value": "not \"refuel_entries\".\"voided\" or \"refuel_entries\".\"corrects_entry_id\" is not null"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.reimbursements": {
       "name": "reimbursements",
       "schema": "",
@@ -8717,6 +7773,52 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.team_programs": {
+      "name": "team_programs",
+      "schema": "",
+      "columns": {
+        "team": {
+          "name": "team",
+          "type": "team",
+          "typeSchema": "public",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "team_programs_description_length": {
+          "name": "team_programs_description_length",
+          "value": "char_length(\"team_programs\".\"description\") <= 300"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.telegram_announcements": {

@@ -1191,4 +1191,150 @@ describe("setFoundingYear adopts the year-scoped roster facts", () => {
     const [audit] = await db.select().from(schema.auditLog);
     expect(audit!.metadata).toMatchObject({ participationsStamped: 1 });
   });
+
+  it("merges a sentinel ticket row into the founding year's row instead of failing", async () => {
+    const db = h.db();
+    const both = await makeUser(db);
+    const captain = await makeUser(db, { rank: "captain" });
+    await db.insert(schema.campTickets).values([
+      // Before the year: the member's answer and a captain's WAP.
+      {
+        userId: both.id,
+        ticketStatus: "has_ticket",
+        wap: "issued",
+        passesUpdatedByUserId: captain.id,
+      },
+      // Already under the founding year: a DDT, the rest at the defaults.
+      { userId: both.id, cycle: 2026, ddt: "allocated" },
+    ]);
+
+    const res = await setFoundingYear({ year: 2026, actorUserId: null });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.report.ticketsStamped).toBe(1);
+
+    const rows = await db.select().from(schema.campTickets);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      userId: both.id,
+      cycle: 2026,
+      // The founding year's own value wins; a default there takes the
+      // sentinel's answer.
+      ddt: "allocated",
+      ticketStatus: "has_ticket",
+      wap: "issued",
+      passesUpdatedByUserId: captain.id,
+    });
+  });
+
+  it("keeps the founding year's own answer over the sentinel's", async () => {
+    const db = h.db();
+    const both = await makeUser(db);
+    await db.insert(schema.campTickets).values([
+      { userId: both.id, ticketStatus: "buying_own", wap: "requested" },
+      {
+        userId: both.id,
+        cycle: 2026,
+        ticketStatus: "has_ticket",
+        wap: "issued",
+      },
+    ]);
+
+    const res = await setFoundingYear({ year: 2026, actorUserId: null });
+    expect(res.ok).toBe(true);
+
+    const rows = await db.select().from(schema.campTickets);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      cycle: 2026,
+      ticketStatus: "has_ticket",
+      wap: "issued",
+    });
+  });
+
+  it("adopts a ticket record written before the camp had a year", async () => {
+    const db = h.db();
+    const early = await makeUser(db);
+    const other = await makeUser(db);
+    // Said before the year was named: the column default, the sentinel.
+    await db
+      .insert(schema.campTickets)
+      .values({ userId: early.id, ticketStatus: "has_ticket" });
+    // A row already under a real year stays put.
+    await db.insert(schema.campTickets).values({
+      userId: other.id,
+      cycle: 2025,
+      wap: "issued",
+    });
+
+    const res = await setFoundingYear({ year: 2026, actorUserId: null });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.report.ticketsStamped).toBe(1);
+
+    const rows = await db
+      .select({
+        userId: schema.campTickets.userId,
+        cycle: schema.campTickets.cycle,
+      })
+      .from(schema.campTickets);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { userId: early.id, cycle: 2026 },
+        { userId: other.id, cycle: 2025 },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+    const [audit] = await db.select().from(schema.auditLog);
+    expect(audit!.metadata).toMatchObject({ ticketsStamped: 1 });
+  });
+  it("adopts the year's trailers and lift requests made before the camp had a year", async () => {
+    const db = h.db();
+    const early = await makeUser(db);
+    const other = await makeUser(db);
+    await db.insert(schema.transportTrailers).values({ name: "Early" });
+    await db
+      .insert(schema.transportTrailers)
+      .values({ name: "Kept", cycle: 2025 });
+    await db.insert(schema.liftRequests).values({ userId: early.id });
+    await db
+      .insert(schema.liftRequests)
+      .values({ userId: other.id, cycle: 2025 });
+
+    const res = await setFoundingYear({ year: 2026, actorUserId: null });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.report.trailersStamped).toBe(1);
+    expect(res.report.liftRequestsStamped).toBe(1);
+
+    const trailers = await db
+      .select({
+        name: schema.transportTrailers.name,
+        cycle: schema.transportTrailers.cycle,
+      })
+      .from(schema.transportTrailers);
+    expect(trailers).toEqual(
+      expect.arrayContaining([
+        { name: "Early", cycle: 2026 },
+        { name: "Kept", cycle: 2025 },
+      ]),
+    );
+    const requests = await db
+      .select({
+        userId: schema.liftRequests.userId,
+        cycle: schema.liftRequests.cycle,
+      })
+      .from(schema.liftRequests);
+    expect(requests).toEqual(
+      expect.arrayContaining([
+        { userId: early.id, cycle: 2026 },
+        { userId: other.id, cycle: 2025 },
+      ]),
+    );
+    const [audit] = await db.select().from(schema.auditLog);
+    expect(audit!.metadata).toMatchObject({
+      trailersStamped: 1,
+      liftRequestsStamped: 1,
+    });
+  });
 });

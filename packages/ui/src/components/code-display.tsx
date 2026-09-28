@@ -1,13 +1,12 @@
-import * as React from "react"
+import * as React from "react";
 
-import { cn } from "../lib/utils"
+import { cn } from "../lib/utils";
 
 // Prominent monospace display for a short code — invite codes, trace codes.
 // Presentational leaf; the copy-to-clipboard affordance is a client concern an
 // organism layers on top.
-export interface CodeDisplayProps
-  extends React.HTMLAttributes<HTMLElement> {
-  code: string
+export interface CodeDisplayProps extends React.HTMLAttributes<HTMLElement> {
+  code: string;
 }
 
 function CodeDisplay({ code, className, ...props }: CodeDisplayProps) {
@@ -21,7 +20,7 @@ function CodeDisplay({ code, className, ...props }: CodeDisplayProps) {
     >
       {code}
     </code>
-  )
+  );
 }
 
-export { CodeDisplay }
+export { CodeDisplay };

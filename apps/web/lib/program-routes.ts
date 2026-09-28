@@ -25,16 +25,19 @@ export type ProgramId =
   | "form-answers"
   | "invites"
   | "my-lift"
+  | "my-dues"
   | "tasks"
   | "calendar"
   | "team"
   | "roster"
   | "family-tree"
+  | "about"
   | "meetings"
   | "meeting"
   | "new-meeting"
   | "edit-meeting"
   | "power"
+  | "transport"
   | "recipes"
   | "new-recipe"
   | "recipe-review"
@@ -52,6 +55,7 @@ export type ProgramId =
   | "announcements"
   | "new-event"
   | "overview"
+  | "applications"
   | "payments"
   | "camp-settings"
   | "join-site"
@@ -80,16 +84,19 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "form-answers": "Answers",
   invites: "Invites",
   "my-lift": "My lift",
+  "my-dues": "My dues",
   tasks: "Tasks",
   calendar: "Calendar",
   team: "Team",
   roster: "Roster",
   "family-tree": "Family tree",
+  about: "About Camp 404",
   meetings: "Meetings",
   meeting: "Meeting",
   "new-meeting": "New meeting",
   "edit-meeting": "Edit meeting",
   power: "Power",
+  transport: "Transport",
   recipes: "Recipes",
   "new-recipe": "New recipe",
   "recipe-review": "Recipe review",
@@ -107,6 +114,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   announcements: "Announcements",
   "new-event": "New event",
   overview: "Camp overview",
+  applications: "Applications",
   payments: "Payments",
   "camp-settings": "Camp settings",
   "join-site": "Join site",
@@ -185,6 +193,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/tools/forms/[key]", "form", "FORM.DOC", keyed("form")),
   route("/tools/invite", "invites", "KEYGEN.EXE"),
   route("/lift", "my-lift", "MY_LIFT.EXE"),
+  route("/dues", "my-dues", "MY_DUES.TXT"),
 
   // Camp
   route("/tasks", "tasks", "TASKS.EXE"),
@@ -192,6 +201,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/teams/[key]", "team", "TEAM.EXE", keyed("team")),
   route("/captains/camp-management", "roster", "ROSTER.DB"),
   route("/family-tree", "family-tree", "LINEAGE.EXE"),
+  route("/about", "about", "README.TXT"),
   route("/meetings", "meetings", "MINUTES.EXE"),
   route("/meetings/new", "new-meeting", "NEWMEET.TXT"),
   route("/meetings/[id]", "meeting", "MEETING.TXT", keyed("meeting")),
@@ -207,6 +217,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/power/fuel-log", "power", "POWER.EXE"),
   route("/power/grid", "power", "POWER.EXE"),
   route("/power/readiness", "power", "POWER.EXE"),
+  route("/transport", "transport", "CARPOOL.EXE"),
 
   // Kitchen
   route("/kitchen/recipes", "recipes", "COOKBOOK.EXE"),
@@ -275,7 +286,13 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/captains/announcements", "announcements", "BROADCAST.EXE"),
   route("/captains/calendar", "new-event", "NEWEVENT.EXE"),
   route("/captains/overview", "overview", "CAMPSTAT.EXE"),
+  route("/captains/applications", "applications", "INTAKE.DB"),
   route("/captains/payments", "payments", "LEDGER.DB"),
+  route("/captains/payments/members", "payments", "LEDGER.DB"),
+  route("/captains/payments/members/[userId]", "payments", "LEDGER.DB"),
+  route("/captains/payments/import", "payments", "LEDGER.DB"),
+  route("/captains/payments/settle-up", "payments", "LEDGER.DB"),
+  route("/captains/payments/settings", "payments", "LEDGER.DB"),
   route("/captains/camp-settings", "camp-settings", "SETTINGS.CPL"),
   route("/captains/camp-settings/cycle", "camp-settings", "SETTINGS.CPL"),
   route("/captains/join-site", "join-site", "JOINSITE.EXE"),
