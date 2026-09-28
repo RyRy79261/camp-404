@@ -214,6 +214,9 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/power", "power", "POWER.EXE"),
   route("/power/loads", "power", "POWER.EXE"),
   route("/power/fuel", "power", "POWER.EXE"),
+  route("/power/fuel-log", "power", "POWER.EXE"),
+  route("/power/grid", "power", "POWER.EXE"),
+  route("/power/readiness", "power", "POWER.EXE"),
   route("/transport", "transport", "CARPOOL.EXE"),
 
   // Kitchen

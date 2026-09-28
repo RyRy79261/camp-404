@@ -21,6 +21,10 @@ vi.mock("@/app/(console)/power/actions", () => ({
 }));
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn(async () => []) }));
+vi.mock("@/lib/power-site", () => ({
+  previousRefuelCycle: vi.fn(async () => null),
+  listRefuelEntries: vi.fn(async () => []),
+}));
 vi.mock("@/lib/power", () => ({
   listPowerLoads: vi.fn(),
   getPowerPlan: vi.fn(),
@@ -39,6 +43,7 @@ import {
   previousPlanCycle,
 } from "@/lib/power";
 import { POWER_REFUSAL } from "@/lib/power-copy";
+import { listRefuelEntries, previousRefuelCycle } from "@/lib/power-site";
 import { getLeadTeams } from "@/lib/users";
 import PowerFuelPage from "./page";
 
@@ -127,9 +132,41 @@ beforeEach(() => {
   vi.mocked(listGenerators).mockResolvedValue([GENERATOR] as never);
   vi.mocked(listPowerLoads).mockResolvedValue([LOAD] as never);
   vi.mocked(previousPlanCycle).mockResolvedValue(null);
+  vi.mocked(previousRefuelCycle).mockResolvedValue(null);
 });
 
 describe("the fuel estimate", () => {
+  it("shows last year's actual litres a day beside the estimate (#255)", async () => {
+    vi.mocked(previousRefuelCycle).mockResolvedValue(2025);
+    const entry = (at: string, id: string) => ({
+      id,
+      refuelledAt: new Date(at),
+      litres: 10,
+      correctsEntryId: null,
+      voided: false,
+    });
+    vi.mocked(listRefuelEntries).mockResolvedValue([
+      entry("2025-04-25T04:00:00Z", "a"),
+      entry("2025-04-25T10:00:00Z", "b"),
+    ] as never);
+    await renderAs("camp_member");
+    expect(listRefuelEntries).toHaveBeenCalledWith(2025);
+    expect(
+      within(screen.getByRole("article", { name: "Litres a day" })).getByText(
+        /2025 used 40 L a day/,
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says nothing of last year when it has no log", async () => {
+    await renderAs("camp_member");
+    expect(
+      within(screen.getByRole("article", { name: "Litres a day" })).queryByText(
+        /used .* L a day/,
+      ),
+    ).toBeNull();
+  });
+
   it("shows a member every control disabled, pointing at the one refusal line", async () => {
     await renderAs("camp_member");
     const refusal = screen.getByText(POWER_REFUSAL);

@@ -169,6 +169,12 @@ import {
   type PowerWriteResult,
 } from "@camp404/db/power";
 import {
+  emptyPowerSite,
+  powerSiteTwins,
+  type PowerSiteDeps,
+  type TestPowerSite,
+} from "./test-store-power-site";
+import {
   ANSWER_NEEDED,
   ANSWER_TOO_LONG,
   CHANGES_NOTE_NEEDED,
@@ -698,6 +704,8 @@ interface TestStoreState {
   generators: GeneratorRow[];
   /** The inventory items the "From inventory" helper offers (none archived). */
   powerInventory: PowerInventoryItem[];
+  /** Power on site (#255–#257): cans, the log, the grid, readiness, sharing. */
+  powerSite: TestPowerSite;
   recipes: TestRecipe[];
   recipeRuns: TestRecipeRun[];
   recipeSources: TestRecipeSource[];
@@ -824,6 +832,7 @@ function globalState(): TestStoreState {
       powerPlans: new Map<number, PowerPlan>(),
       generators: [] as GeneratorRow[],
       powerInventory: [] as PowerInventoryItem[],
+      powerSite: emptyPowerSite(),
       recipes: [] as TestRecipe[],
       recipeRuns: [] as TestRecipeRun[],
       recipeSources: [] as TestRecipeSource[],
@@ -911,6 +920,7 @@ S.powerLoads ??= [];
 S.powerPlans ??= new Map<number, PowerPlan>();
 S.generators ??= [];
 S.powerInventory ??= [];
+S.powerSite ??= emptyPowerSite();
 const powerLoads = S.powerLoads;
 const powerPlans = S.powerPlans;
 const generators = S.generators;
@@ -4072,6 +4082,28 @@ export const testStore = {
     });
   },
 
+  // --- Power on site (#255–#257): twins in ./test-store-power-site ---------
+  ...powerSiteTwins({
+    state: () => S.powerSite,
+    cycle: () => currentCycleNumber(),
+    isPowerEditor: (userId) => isPowerEditor(userId),
+    member: (userId) => {
+      const user = findUserById(userId);
+      return user
+        ? {
+            displayName: user.displayName ?? null,
+            approved: user.approvalStatus === "approved",
+          }
+        : null;
+    },
+    generators: () => generators,
+    loads: () => powerLoads,
+    task: (id) => tasks.find((t) => t.id === id) ?? null,
+    // Annotated, so the store's type does not depend on itself.
+    addTask: (input): ReturnType<PowerSiteDeps["addTask"]> =>
+      testStore.addTask(input),
+  }),
+
   // --- Recipes: twins of @camp404/db/recipes, same rules, same words --------
   // The store is one synchronous process, so every check runs before the
   // first change and a refusal leaves nothing behind, as the real rollback
@@ -5537,6 +5569,7 @@ export const testStore = {
     powerPlans.clear();
     generators.length = 0;
     powerInventory.length = 0;
+    S.powerSite = emptyPowerSite();
     recipes.length = 0;
     recipeRuns.length = 0;
     recipeSources.length = 0;

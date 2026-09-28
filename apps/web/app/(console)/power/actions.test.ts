@@ -100,6 +100,7 @@ const PLAN = {
   safetyMarginPct: 20,
   canLitres: 20,
   cansOwned: 2,
+  lowFuelDays: 2,
   version: 3,
   updatedAt: new Date("2026-09-20T08:00:00Z"),
 };
