@@ -47,6 +47,10 @@ export type DdtStatus = (typeof DDT_STATUSES)[number];
 export const WAP_STATUSES = ["not_needed", "requested", "issued"] as const;
 export type WapStatus = (typeof WAP_STATUSES)[number];
 
-/** The two things only a captain records on a member's ticket row. */
-export const TICKET_PASSES = ["ddt", "wap"] as const;
+/**
+ * What a captain may record on a member's ticket row (owner, 2026-09-28):
+ * the member's ticket status too (a captain may set it for them), and the DDT
+ * and WAP, which only a captain sets.
+ */
+export const TICKET_PASSES = ["ticket", "ddt", "wap"] as const;
 export type TicketPass = (typeof TICKET_PASSES)[number];

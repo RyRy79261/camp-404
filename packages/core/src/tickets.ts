@@ -11,10 +11,11 @@ import type {
 // and the counts the captains plan with. The rows live in camp_tickets
 // (@camp404/db/tickets).
 //
-// Who reads what (MEMBER_FIELD_READERS in ./privacy):
-// - the member reads and sets their own ticket status, and nothing else here;
-// - captains read every row, and alone record the DDT and the
-//   WAP;
+// Who reads what (MEMBER_FIELD_READERS in ./privacy; owner, 2026-09-28):
+// - the member reads their own row (ticket status, DDT and WAP) and sets only
+//   their own ticket status; they never read another member's;
+// - captains read every row, may set a member's ticket status for them, and
+//   alone set the DDT and the WAP;
 // - team leads read none of it (they read only who is coming).
 
 /** The member's own ticket, in the member's words (the form's options). */
@@ -48,9 +49,20 @@ export const WAP_LABEL: Readonly<Record<WapStatus, string>> = {
 
 /** What each captain-only pass is called. */
 export const TICKET_PASS_LABEL: Readonly<Record<TicketPass, string>> = {
+  ticket: "Ticket",
   ddt: "DDT",
   wap: "WAP",
 };
+
+/**
+ * Whether a ticket status may be recorded for a member, by them or by a
+ * captain: only for someone who might come this year, so not before they
+ * answer and not once they say Not coming. The DDT and WAP are not bound by
+ * it: a captain may arrange those for anyone.
+ */
+export function mayRecordTicket(status: ParticipationStatus | null): boolean {
+  return status !== null && status !== "not_attending";
+}
 
 /** A member's ticket row as the counts need it; absent means the defaults. */
 export interface TicketFacts {

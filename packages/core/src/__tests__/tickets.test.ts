@@ -12,6 +12,7 @@ import {
   TICKET_STATUS_LABEL,
   TICKET_STATUS_OPTION,
   deriveTicketCounts,
+  mayRecordTicket,
   stillNeedsTicket,
   type TicketFacts,
 } from "../tickets";
@@ -29,12 +30,8 @@ describe("ticket words", () => {
     expect(Object.keys(TICKET_STATUS_LABEL).sort()).toEqual(
       [...TICKET_STATUSES].sort(),
     );
-    expect(Object.keys(DDT_LABEL).sort()).toEqual(
-      [...DDT_STATUSES].sort(),
-    );
-    expect(Object.keys(WAP_LABEL).sort()).toEqual(
-      [...WAP_STATUSES].sort(),
-    );
+    expect(Object.keys(DDT_LABEL).sort()).toEqual([...DDT_STATUSES].sort());
+    expect(Object.keys(WAP_LABEL).sort()).toEqual([...WAP_STATUSES].sort());
   });
 });
 
@@ -50,9 +47,9 @@ describe("stillNeedsTicket", () => {
     expect(
       stillNeedsTicket("accepted", ticket({ ticketStatus: "has_ticket" })),
     ).toBe(false);
-    expect(
-      stillNeedsTicket("accepted", ticket({ ddt: "allocated" })),
-    ).toBe(false);
+    expect(stillNeedsTicket("accepted", ticket({ ddt: "allocated" }))).toBe(
+      false,
+    );
     expect(
       stillNeedsTicket("accepted", ticket({ ticketStatus: "buying_own" })),
     ).toBe(true);
@@ -96,5 +93,14 @@ describe("deriveTicketCounts", () => {
       needTicket: 0,
       wapIssued: 0,
     });
+  });
+});
+
+describe("mayRecordTicket", () => {
+  it("allows a ticket only for a member who said Coming or Maybe", () => {
+    for (const status of PARTICIPATION_STATUSES) {
+      expect(mayRecordTicket(status)).toBe(status !== "not_attending");
+    }
+    expect(mayRecordTicket(null)).toBe(false);
   });
 });

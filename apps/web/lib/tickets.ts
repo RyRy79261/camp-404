@@ -19,7 +19,7 @@ import { testStore } from "./test-store";
 // can drive the member's own ticket and the captains' Applications page.
 // Every caller gates the viewer itself; this module gates nothing. What each
 // read returns is already cut to its reader: the member's own read carries
-// only their ticket status, never the captain-only passes.
+// their own row's ticket status, DDT and WAP, and nothing of anyone else's.
 
 export type { TicketFacts, TicketPassChange };
 
@@ -70,21 +70,27 @@ function backend(): TicketsBackend {
   return usesTestStore() ? testBackend : realBackend;
 }
 
-/** What a member may read of their own ticket record: their own answer. */
-export interface MyTicket {
-  ticketStatus: TicketStatus;
-}
+/**
+ * What a member reads of their OWN ticket record (owner, 2026-09-28): their
+ * answer, and the DDT and WAP a captain recorded for them, read-only. Never
+ * who recorded them.
+ */
+export type MyTicket = TicketFacts;
 
 /**
- * The member's own ticket status for the camp's current year (the default
- * when they have said nothing). Never the DDT or the WAP
- * pass: those are the captains' (#238).
+ * The member's own ticket record for the camp's current year (the defaults
+ * when nothing is said). Reads the one row keyed by `userId`: the caller
+ * passes the signed-in member's own id, never another member's.
  */
 export async function getMyTicket(userId: string): Promise<MyTicket> {
   const b = backend();
   const cycle = await b.currentCycleNumber();
   const row = await b.getTicket(userId, cycle);
-  return { ticketStatus: row?.ticketStatus ?? DEFAULT_TICKET.ticketStatus };
+  return {
+    ticketStatus: row?.ticketStatus ?? DEFAULT_TICKET.ticketStatus,
+    ddt: row?.ddt ?? DEFAULT_TICKET.ddt,
+    wap: row?.wap ?? DEFAULT_TICKET.wap,
+  };
 }
 
 /** The member says where their own ticket stands, for this year. */

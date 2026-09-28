@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { canLeaveCamp } from "@camp404/core";
+import { canLeaveCamp, mayRecordTicket } from "@camp404/core";
 import { TICKET_STATUSES } from "@camp404/types";
 import { captainActionGate } from "@/lib/captain-gate";
 import { getMyParticipation } from "@/lib/participations";
@@ -176,7 +176,7 @@ export async function setMyTicketAction(input: {
     // The same rule as the page: a ticket matters only to someone who might
     // come, so not before they answer and not once they say No.
     const participation = await getMyParticipation(gate.campUser.id);
-    if (!participation || participation.status === "not_attending") {
+    if (!mayRecordTicket(participation?.status ?? null)) {
       return {
         ok: false,
         error: "Say you're coming this year first, then add your ticket.",

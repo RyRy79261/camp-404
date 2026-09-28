@@ -75,8 +75,16 @@ describe("auditDetail", () => {
 
   it("labels and says a change to a member's DDT or WAP", () => {
     expect(auditActionLabel("ticket.pass_changed")).toBe(
-      "Changed a member's DDT or WAP",
+      "Changed a member's ticket, DDT or WAP",
     );
+    expect(
+      auditDetail("ticket.pass_changed", {
+        cycle: 2027,
+        pass: "ticket",
+        from: "unknown",
+        to: "has_ticket",
+      }),
+    ).toBe("Ticket: has ticket for 2027");
     expect(
       auditDetail("ticket.pass_changed", {
         cycle: 2027,

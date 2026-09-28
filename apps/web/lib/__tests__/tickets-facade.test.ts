@@ -42,19 +42,30 @@ const ROW = {
 beforeEach(() => vi.clearAllMocks());
 
 describe("getMyTicket", () => {
-  it("returns the member's own status for this year, and no captain-only pass", async () => {
+  it("returns the member's OWN row for this year: status, DDT and WAP, and who set them never", async () => {
     vi.mocked(getTicket).mockResolvedValue(ROW);
 
     const mine = await getMyTicket("u1");
 
+    // Exactly one read, of the member's own row.
+    expect(getTicket).toHaveBeenCalledTimes(1);
     expect(getTicket).toHaveBeenCalledWith("u1", 2027);
-    expect(mine).toEqual({ ticketStatus: "needs_directed_ticket" });
-    expect(Object.keys(mine)).toEqual(["ticketStatus"]);
+    expect(listTickets).not.toHaveBeenCalled();
+    expect(mine).toEqual({
+      ticketStatus: "needs_directed_ticket",
+      ddt: "allocated",
+      wap: "issued",
+    });
+    expect(Object.keys(mine).sort()).toEqual(["ddt", "ticketStatus", "wap"]);
   });
 
-  it("reads as not sorted when the member has said nothing", async () => {
+  it("reads the defaults when nothing is said about the member", async () => {
     vi.mocked(getTicket).mockResolvedValue(null);
-    expect(await getMyTicket("u1")).toEqual({ ticketStatus: "unknown" });
+    expect(await getMyTicket("u1")).toEqual({
+      ticketStatus: "unknown",
+      ddt: "none",
+      wap: "not_needed",
+    });
   });
 });
 

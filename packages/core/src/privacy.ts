@@ -254,9 +254,9 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "campParticipations.createdAt": "captain",
   "campParticipations.updatedAt": "captain",
 
-  // camp_tickets — a member's ticket and WAP for one year (#238). A
-  // member reads their own ticket status (and never the two passes, which the
-  // issue keeps captain-only); team leads read none of it.
+  // camp_tickets — a member's ticket, DDT and WAP for one year (#238). A
+  // member reads their own row (ticket status, DDT and WAP; owner,
+  // 2026-09-28) and nobody else's; team leads read none of it.
   "campTickets.userId": "captain",
   "campTickets.cycle": "captain",
   "campTickets.ticketStatus": "captain",

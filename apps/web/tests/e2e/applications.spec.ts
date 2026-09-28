@@ -98,15 +98,19 @@ test.describe("applications: tickets and WAP", () => {
     await expect(
       page.getByRole("status").filter({ hasText: "Saved." }),
     ).toBeVisible();
-    // The captain-only passes are not on his page.
-    await expect(page.getByText(/WAP/i)).toHaveCount(0);
+    // His own DDT and WAP are on his page, read-only, at their defaults.
+    const setByCaptains = page.getByLabel("Set by the captains");
+    await expect(setByCaptains).toContainText("WAP (work access pass)");
+    await expect(setByCaptains).toContainText("Not needed");
 
     // The captain sees it, accepts Ada and issues Ben's WAP.
     await as(page, "cy", "Cy Captain");
     await openApplications(page);
     await expect(
-      row(page, "Ben Placed").getByText("Has ticket", { exact: true }),
-    ).toBeVisible();
+      page
+        .getByRole("combobox", { name: "Ticket for Ben Placed" })
+        .filter({ visible: true }),
+    ).toHaveValue("has_ticket");
     // What he said and what the captains decided, each in its own column.
     await expect(
       row(page, "Ben Placed").getByText("Maybe", { exact: true }),
@@ -165,6 +169,31 @@ test.describe("applications: tickets and WAP", () => {
         .getByRole("combobox", { name: "WAP for Ben Placed" })
         .filter({ visible: true }),
     ).toHaveValue("issued");
+
+    // A captain sets Ada's ticket for her; the overview stops counting her.
+    await page
+      .getByRole("combobox", { name: "Ticket for Ada Yes" })
+      .filter({ visible: true })
+      .selectOption({ label: "Has ticket" });
+    await expect(
+      page
+        .getByRole("combobox", { name: "Ticket for Ada Yes" })
+        .filter({ visible: true }),
+    ).toHaveValue("has_ticket");
+    card = await thisYearCard(page);
+    await expect(
+      card
+        .getByRole("list", { name: "Tickets" })
+        .getByRole("listitem")
+        .filter({ hasText: "no ticket yet" }),
+    ).toHaveText(/0$/);
+
+    // Ben reads his own WAP, issued; nothing on his page lets him change it.
+    await as(page, "ben", "Ben Placed");
+    await page.goto("/profile");
+    const mine = page.getByLabel("Set by the captains");
+    await expect(mine).toContainText("Issued");
+    await expect(mine.locator("select, input")).toHaveCount(0);
   });
 
   test("a team lead sees who is coming, and nothing of the tickets", async ({

@@ -2,19 +2,27 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { DDT_STATUSES, WAP_STATUSES } from "@camp404/types";
+import { mayRecordTicket } from "@camp404/core";
+import { DDT_STATUSES, TICKET_STATUSES, WAP_STATUSES } from "@camp404/types";
+import { getMyParticipation as getParticipationThisYear } from "@/lib/participations";
 import { runAction } from "@/lib/action-result";
 import { captainActionGate } from "@/lib/captain-gate";
 import { setTicketPass } from "@/lib/tickets";
 import { findCampUserById } from "@/lib/users";
 
 // The Applications page's own write (#238): a captain records a member's
-// DDT or WAP. The Accept / Waiting list buttons on
+// ticket status, DDT or WAP. The Accept / Waiting list buttons on
 // the same page reuse the roster's decideParticipationAction.
 
 export type TicketPassResult = { ok: true } | { ok: false; error: string };
 
 const TicketPassInput = z.discriminatedUnion("pass", [
+  z.object({
+    userId: z.string().min(1),
+    pass: z.literal("ticket"),
+    from: z.enum(TICKET_STATUSES),
+    to: z.enum(TICKET_STATUSES),
+  }),
   z.object({
     userId: z.string().min(1),
     pass: z.literal("ddt"),
@@ -30,7 +38,7 @@ const TicketPassInput = z.discriminatedUnion("pass", [
 ]);
 
 /**
- * A captain changes a member's DDT or WAP for this
+ * A captain changes a member's ticket status, DDT or WAP for this
  * year. Captains only: a team lead reads who is coming and nothing of the
  * tickets. A compare-and-set on `from`, the value the captain saw, so a
  * change another captain made first is not overwritten; the captain is told
@@ -51,8 +59,23 @@ export async function setTicketPassAction(input: {
     const change = parsed.data;
     if (change.from === change.to) return { ok: true };
 
-    const target = await findCampUserById(change.userId);
+    const [target, participation] = await Promise.all([
+      findCampUserById(change.userId),
+      change.pass === "ticket" ? getParticipationThisYear(change.userId) : null,
+    ]);
     if (!target) return { ok: false, error: "Member not found." };
+    // The member-side rule (mayRecordTicket): a ticket status only for
+    // someone who said Coming or Maybe. The DDT and WAP are not bound by it.
+    if (
+      change.pass === "ticket" &&
+      !mayRecordTicket(participation?.status ?? null)
+    ) {
+      return {
+        ok: false,
+        error:
+          "They have to say Coming or Maybe before a ticket can be recorded.",
+      };
+    }
 
     const saved = await setTicketPass({
       ...change,

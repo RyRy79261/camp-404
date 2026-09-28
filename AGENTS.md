@@ -553,16 +553,19 @@ Decisions baked into the schema — keep new code consistent with them:
   row per member per burn year (adopted by `setFoundingYear`, which merges a
   member's sentinel row into one they already have for the founding year,
   the founding year's non-default values winning; erased with the account),
-  written only through `@camp404/db/tickets`. Who reads what: a member reads
-  and sets only their own ticket status, on their profile (under "This year",
-  once they have said Coming or Maybe), and never their DDT or WAP; captains
-  read every member's ticket data and alone record the DDT (direct
-  distribution ticket) and the WAP (work access pass), each a compare-and-set
-  on the value they saw, audited as `ticket.pass_changed`. In code they are
+  written only through `@camp404/db/tickets`. Who reads what (owner,
+  2026-09-28): a member reads their own row only (ticket status, DDT and WAP,
+  under "This year" on their profile) and sets only their own ticket status;
+  captains read every member's ticket data, may set a member's ticket status
+  for them, and alone set the DDT (direct distribution ticket) and the WAP
+  (work access pass). A ticket status, by the member or a captain, is only
+  for someone who said Coming or Maybe (`mayRecordTicket`); the DDT and WAP
+  are not bound by it. Each captain change is a compare-and-set on the value
+  they saw, audited as `ticket.pass_changed`. In code they are
   `ddt` and `wap`; the Postgres columns keep their first names
   (`directed_ticket`, `early_entry`) so the rename needed no migration. A team
-  lead reads none of it, and a member's own read carries only their ticket
-  status. No row means every column's default. It stores no ticket number,
+  lead reads none of it, and a member's own read carries only their own row.
+  No row means every column's default. It stores no ticket number,
   barcode, order reference or card detail. The captains' view is
   `/captains/applications` (Applications: team lead and up, no tickets below
   captain), and the overview's "This year" card counts accepted members with

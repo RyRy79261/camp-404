@@ -82,6 +82,11 @@ export async function setOwnTicketStatus(input: {
 /** One captain-only change, typed so a pass only takes its own values. */
 export type TicketPassChange =
   | {
+      pass: Extract<TicketPass, "ticket">;
+      from: TicketStatus;
+      to: TicketStatus;
+    }
+  | {
       pass: Extract<TicketPass, "ddt">;
       from: DdtStatus;
       to: DdtStatus;
@@ -93,8 +98,9 @@ export type TicketPassChange =
     };
 
 /**
- * A captain records a member's DDT or WAP for the
- * camp's current year.
+ * A captain records a member's ticket status, DDT or WAP for the camp's
+ * current year. Whether a ticket status may be recorded at all
+ * (mayRecordTicket) is the caller's check.
  *
  * Compare-and-set on `from`, the value the captain saw (a member with no row
  * stands at the default): true when this call made the change, false when the
@@ -117,9 +123,11 @@ export async function setTicketPass(
     // the compare-and-set below has a row to compare. (When they saw anything
     // else, a missing row is already a lost race.)
     const sawDefault =
-      input.pass === "ddt"
-        ? input.from === DEFAULT_TICKET.ddt
-        : input.from === DEFAULT_TICKET.wap;
+      input.pass === "ticket"
+        ? input.from === DEFAULT_TICKET.ticketStatus
+        : input.pass === "ddt"
+          ? input.from === DEFAULT_TICKET.ddt
+          : input.from === DEFAULT_TICKET.wap;
     if (sawDefault) {
       await tx
         .insert(schema.campTickets)
@@ -139,27 +147,31 @@ export async function setTicketPass(
       eq(schema.campTickets.cycle, cycle),
     );
     const rows =
-      input.pass === "ddt"
+      input.pass === "ticket"
         ? await tx
             .update(schema.campTickets)
-            .set({
-              ddt: input.to,
-              passesUpdatedByUserId: input.actorUserId,
-              updatedAt: now,
-            })
-            .where(
-              and(where, eq(schema.campTickets.ddt, input.from)),
-            )
+            .set({ ticketStatus: input.to, updatedAt: now })
+            .where(and(where, eq(schema.campTickets.ticketStatus, input.from)))
             .returning({ userId: schema.campTickets.userId })
-        : await tx
-            .update(schema.campTickets)
-            .set({
-              wap: input.to,
-              passesUpdatedByUserId: input.actorUserId,
-              updatedAt: now,
-            })
-            .where(and(where, eq(schema.campTickets.wap, input.from)))
-            .returning({ userId: schema.campTickets.userId });
+        : input.pass === "ddt"
+          ? await tx
+              .update(schema.campTickets)
+              .set({
+                ddt: input.to,
+                passesUpdatedByUserId: input.actorUserId,
+                updatedAt: now,
+              })
+              .where(and(where, eq(schema.campTickets.ddt, input.from)))
+              .returning({ userId: schema.campTickets.userId })
+          : await tx
+              .update(schema.campTickets)
+              .set({
+                wap: input.to,
+                passesUpdatedByUserId: input.actorUserId,
+                updatedAt: now,
+              })
+              .where(and(where, eq(schema.campTickets.wap, input.from)))
+              .returning({ userId: schema.campTickets.userId });
     if (rows.length === 0) return false;
 
     await writeAuditEvent(tx, {

@@ -9,12 +9,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/captain-gate", () => ({ captainActionGate: vi.fn() }));
 vi.mock("@/lib/tickets", () => ({ setTicketPass: vi.fn() }));
 vi.mock("@/lib/users", () => ({ findCampUserById: vi.fn() }));
+vi.mock("@/lib/participations", () => ({ getMyParticipation: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { revalidatePath } from "next/cache";
 import { captainActionGate } from "@/lib/captain-gate";
 import { setTicketPass } from "@/lib/tickets";
 import { findCampUserById } from "@/lib/users";
+import { getMyParticipation } from "@/lib/participations";
 import { setTicketPassAction } from "./actions";
 
 const CAPTAIN = "cap-1";
@@ -130,5 +132,66 @@ describe("setTicketPassAction", () => {
 
     expect(res).toEqual({ ok: false, error: "Member not found." });
     expect(setTicketPass).not.toHaveBeenCalled();
+  });
+
+  it("sets a member's ticket status for someone who says Coming or Maybe", async () => {
+    asCaptain();
+    vi.mocked(getMyParticipation).mockResolvedValue({
+      status: "maybe",
+    } as never);
+
+    const res = await setTicketPassAction({
+      userId: "member-1",
+      pass: "ticket",
+      from: "unknown",
+      to: "has_ticket",
+    });
+
+    expect(res).toEqual({ ok: true });
+    expect(getMyParticipation).toHaveBeenCalledWith("member-1");
+    expect(setTicketPass).toHaveBeenCalledWith({
+      userId: "member-1",
+      pass: "ticket",
+      from: "unknown",
+      to: "has_ticket",
+      actorUserId: CAPTAIN,
+    });
+  });
+
+  it.each([null, { status: "not_attending" }])(
+    "refuses a ticket status for a member who said Not coming or never answered (%j)",
+    async (participation) => {
+      asCaptain();
+      vi.mocked(getMyParticipation).mockResolvedValue(participation as never);
+
+      const res = await setTicketPassAction({
+        userId: "member-1",
+        pass: "ticket",
+        from: "unknown",
+        to: "has_ticket",
+      });
+
+      expect(res).toEqual({
+        ok: false,
+        error:
+          "They have to say Coming or Maybe before a ticket can be recorded.",
+      });
+      expect(setTicketPass).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not bind the DDT or WAP to the member's answer", async () => {
+    asCaptain();
+    vi.mocked(getMyParticipation).mockResolvedValue(null);
+
+    const res = await setTicketPassAction({
+      userId: "member-1",
+      pass: "wap",
+      from: "not_needed",
+      to: "requested",
+    });
+
+    expect(res).toEqual({ ok: true });
+    expect(getMyParticipation).not.toHaveBeenCalled();
   });
 });

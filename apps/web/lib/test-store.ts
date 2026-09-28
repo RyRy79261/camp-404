@@ -2683,14 +2683,18 @@ export const testStore = {
       createdAt: now,
       updatedAt: now,
     };
-    if (input.pass === "ddt") {
+    if (input.pass === "ticket") {
+      if (row.ticketStatus !== input.from) return false;
+      row.ticketStatus = input.to;
+    } else if (input.pass === "ddt") {
       if (row.ddt !== input.from) return false;
       row.ddt = input.to;
+      row.passesUpdatedByUserId = input.actorUserId;
     } else {
       if (row.wap !== input.from) return false;
       row.wap = input.to;
+      row.passesUpdatedByUserId = input.actorUserId;
     }
-    row.passesUpdatedByUserId = input.actorUserId;
     row.updatedAt = now;
     tickets.set(key, row);
     return true;

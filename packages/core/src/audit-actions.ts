@@ -65,7 +65,7 @@ export const AUDIT_ACTION_LABELS = {
   "safety.emergency_contacts.view": "Read emergency contacts",
   "team.program_changed": "Changed a team's description or links",
   "team_budget.set": "Set a team budget",
-  "ticket.pass_changed": "Changed a member's DDT or WAP",
+  "ticket.pass_changed": "Changed a member's ticket, DDT or WAP",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
@@ -91,10 +91,17 @@ const count = (metadata: Metadata, key: string): number | null => {
 
 // The captain-only passes on a member's ticket row, and their values.
 const TICKET_PASS_WORDS: Record<string, string> = {
+  ticket: "Ticket",
   ddt: "DDT",
   wap: "WAP",
 };
 const TICKET_PASS_VALUE_WORDS: Record<string, Record<string, string>> = {
+  ticket: {
+    unknown: "not sorted",
+    buying_own: "buying own",
+    has_ticket: "has ticket",
+    needs_directed_ticket: "needs a DDT",
+  },
   ddt: {
     none: "none",
     allocated: "allocated",

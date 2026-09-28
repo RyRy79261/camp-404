@@ -95,7 +95,14 @@ describe("Applications page", () => {
     ).toBeTruthy();
     const t = table();
     expect(within(t).getByRole("columnheader", { name: "WAP" })).toBeTruthy();
-    expect(within(t).getByText("Needs DDT")).toBeTruthy();
+    // A captain may set the member's ticket for someone who says Coming.
+    expect(
+      (
+        within(t).getByRole("combobox", {
+          name: "Ticket for Ben Placed",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe("needs_directed_ticket");
     // The two short names are spelled out once, with the decision rule.
     const hint = screen.getByText(/Decision is yours/);
     expect(hint.textContent).toMatch(/DDT \(direct distribution ticket\)/);

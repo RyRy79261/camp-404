@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CalendarCheck, ClipboardList, LogOut, Pencil } from "lucide-react";
+import { mayRecordTicket } from "@camp404/core";
 import type { ParticipationStatus } from "@camp404/types";
 import {
   Avatar,
@@ -62,8 +63,7 @@ export default async function ProfilePage() {
   ]);
   // A ticket matters only to someone who might come: not before they answer,
   // and not once they say No.
-  const asksTicket =
-    participation !== null && participation.status !== "not_attending";
+  const asksTicket = mayRecordTicket(participation?.status ?? null);
   const rank = rankLabel(campUser.rank, lead);
   // Read on the server; only the repo name crosses to the browser — never the
   // token. `ok: false` means a report has nowhere to go, and the card says so
@@ -146,9 +146,7 @@ export default async function ProfilePage() {
                       </Link>
                     </Button>
                   </div>
-                  {asksTicket && (
-                    <MyTicket ticketStatus={ticket.ticketStatus} />
-                  )}
+                  {asksTicket && <MyTicket ticket={ticket} />}
                 </CardContent>
               )}
             </Card>

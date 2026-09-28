@@ -240,4 +240,69 @@ describe("camp_tickets", () => {
       }),
     ).rejects.toThrow(/already issued/);
   });
+
+  it("a captain sets a member's ticket status: compare-and-set, audited, and a second captain who saw the old value loses", async () => {
+    const db = h.db();
+    await foundedAt(db, 2027);
+    const member = await makeUser(db);
+    const first = await makeUser(db, { rank: "captain" });
+    const second = await makeUser(db, { rank: "captain" });
+
+    const a = await setTicketPass({
+      userId: member.id,
+      actorUserId: first.id,
+      pass: "ticket",
+      from: "unknown",
+      to: "has_ticket",
+    });
+    const b = await setTicketPass({
+      userId: member.id,
+      actorUserId: second.id,
+      pass: "ticket",
+      from: "unknown",
+      to: "buying_own",
+    });
+
+    expect([a, b]).toEqual([true, false]);
+    const row = await getTicket(member.id, 2027);
+    expect(row?.ticketStatus).toBe("has_ticket");
+    // A ticket status is not a pass: who last set the DDT or WAP is unchanged.
+    expect(row?.passesUpdatedByUserId).toBeNull();
+    const rows = await audits(db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorId: first.id,
+      target: member.id,
+      metadata: {
+        cycle: 2027,
+        pass: "ticket",
+        from: "unknown",
+        to: "has_ticket",
+      },
+    });
+  });
+
+  it("a captain's ticket status does not overwrite an answer the member gave since", async () => {
+    const db = h.db();
+    await foundedAt(db, 2027);
+    const member = await makeUser(db);
+    const captain = await makeUser(db, { rank: "captain" });
+    await setOwnTicketStatus({
+      userId: member.id,
+      cycle: 2027,
+      ticketStatus: "buying_own",
+    });
+
+    const won = await setTicketPass({
+      userId: member.id,
+      actorUserId: captain.id,
+      pass: "ticket",
+      from: "unknown",
+      to: "needs_directed_ticket",
+    });
+
+    expect(won).toBe(false);
+    expect((await getTicket(member.id, 2027))?.ticketStatus).toBe("buying_own");
+    expect(await audits(db)).toHaveLength(0);
+  });
 });

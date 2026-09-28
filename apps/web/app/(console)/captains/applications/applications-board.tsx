@@ -9,12 +9,14 @@ import {
   STANDING_LABEL,
   WAP_LABEL,
   TICKET_STATUS_LABEL,
+  mayRecordTicket,
   stillNeedsTicket,
   type TicketFacts,
 } from "@camp404/core";
 import {
   DDT_STATUSES,
   PARTICIPATION_STATUSES,
+  TICKET_STATUSES,
   WAP_STATUSES,
   type TicketPass,
 } from "@camp404/types";
@@ -77,6 +79,10 @@ const SELECT =
   "h-8 w-full min-w-32 cursor-pointer appearance-none rounded-md border border-input bg-background pl-2.5 pr-8 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60";
 
 const PASS_OPTIONS: Record<TicketPass, { value: string; label: string }[]> = {
+  ticket: TICKET_STATUSES.map((v) => ({
+    value: v,
+    label: TICKET_STATUS_LABEL[v],
+  })),
   ddt: DDT_STATUSES.map((v) => ({
     value: v,
     label: DDT_LABEL[v],
@@ -88,15 +94,20 @@ const PASS_OPTIONS: Record<TicketPass, { value: string; label: string }[]> = {
 };
 
 const PASS_NAME: Record<TicketPass, (member: string) => string> = {
+  ticket: (member) => `Ticket for ${member}`,
   ddt: (member) => `DDT for ${member}`,
   wap: (member) => `WAP for ${member}`,
 };
 
 function passValue(ticket: TicketFacts, pass: TicketPass): string {
-  return pass === "ddt" ? ticket.ddt : ticket.wap;
+  return pass === "ticket"
+    ? ticket.ticketStatus
+    : pass === "ddt"
+      ? ticket.ddt
+      : ticket.wap;
 }
 
-/** One captain-only pass on one row, saved the moment it changes. */
+/** One captain field on one row, saved the moment it changes. */
 function PassSelect({
   row,
   ticket,
@@ -155,6 +166,25 @@ function PassSelect({
         />
       )}
     </span>
+  );
+}
+
+/**
+ * The member's ticket status: a select a captain may change for them
+ * (owner, 2026-09-28), or read-only for a member who said Not coming or has
+ * not answered (mayRecordTicket, the same rule the member's own form keeps).
+ */
+function TicketCell({
+  row,
+  ticket,
+}: {
+  row: ApplicationRow;
+  ticket: TicketFacts;
+}) {
+  return mayRecordTicket(row.thisYear) ? (
+    <PassSelect row={row} ticket={ticket} pass="ticket" />
+  ) : (
+    <TicketBadge row={row} ticket={ticket} />
   );
 }
 
@@ -247,10 +277,10 @@ export function ApplicationsBoard({
       {canEdit && (
         <p className="text-sm text-muted-foreground">
           Says is what the member answered; Decision is yours. You can accept,
-          or put on the waiting list, a member who says Coming or Maybe. Someone
-          who says Not coming, or has not answered, has to answer first. DDT
-          (direct distribution ticket) and WAP (work access pass) are for
-          captains only.
+          put on the waiting list, or set a ticket for a member who says Coming
+          or Maybe. Someone who says Not coming, or has not answered, has to
+          answer first. Only captains set the DDT (direct distribution ticket)
+          and WAP (work access pass); each member sees their own.
         </p>
       )}
 
@@ -307,7 +337,7 @@ export function ApplicationsBoard({
                     {canEdit && row.ticket && (
                       <>
                         <TableCell>
-                          <TicketBadge row={row} ticket={row.ticket} />
+                          <TicketCell row={row} ticket={row.ticket} />
                         </TableCell>
                         <TableCell className="w-44">
                           <PassSelect
@@ -350,7 +380,7 @@ export function ApplicationsBoard({
                       <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 text-sm">
                         <dt className="text-muted-foreground">Ticket</dt>
                         <dd>
-                          <TicketBadge row={row} ticket={row.ticket} />
+                          <TicketCell row={row} ticket={row.ticket} />
                         </dd>
                         <dt className="text-muted-foreground">DDT</dt>
                         <dd>

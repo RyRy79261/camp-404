@@ -23,7 +23,11 @@ vi.mock("@/lib/payments", () => ({
 }));
 vi.mock("@/lib/participations", () => ({ getMyParticipation: vi.fn() }));
 vi.mock("@/lib/tickets", () => ({
-  getMyTicket: vi.fn(async () => ({ ticketStatus: "needs_directed_ticket" })),
+  getMyTicket: vi.fn(async () => ({
+    ticketStatus: "needs_directed_ticket",
+    ddt: "allocated",
+    wap: "issued",
+  })),
 }));
 vi.mock("./actions", () => ({ setMyTicketAction: vi.fn() }));
 vi.mock("@/lib/integration-config", () => ({
@@ -42,6 +46,7 @@ vi.mock("@/components/profile/profile-sections", () => ({
 }));
 
 import { getMyParticipation } from "@/lib/participations";
+import { getMyTicket } from "@/lib/tickets";
 import ProfilePage from "./page";
 
 async function renderWith(status: ParticipationStatus | null) {
@@ -119,9 +124,15 @@ describe("profile: the member's own ticket", () => {
           })
           .getAttribute("aria-checked"),
       ).toBe("true");
-      // The captain-only passes are never on the member's page.
-      expect(screen.queryByText(/WAP/i)).toBeNull();
-      expect(screen.queryByText(/allocated/i)).toBeNull();
+      // Their own DDT and WAP, read-only (owner, 2026-09-28).
+      const set = screen.getByLabelText("Set by the captains");
+      expect(set.textContent).toContain("DDT (direct distribution ticket)");
+      expect(set.textContent).toContain("Allocated");
+      expect(set.textContent).toContain("WAP (work access pass)");
+      expect(set.textContent).toContain("Issued");
+      expect(set.querySelector("select, input")).toBeNull();
+      // Read from the member's own id only.
+      expect(getMyTicket).toHaveBeenCalledWith("u1");
     },
   );
 
