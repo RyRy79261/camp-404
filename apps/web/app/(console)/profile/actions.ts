@@ -6,6 +6,7 @@ import { z } from "zod";
 import { canLeaveCamp } from "@camp404/core";
 import { TICKET_STATUSES } from "@camp404/types";
 import { captainActionGate } from "@/lib/captain-gate";
+import { getMyParticipation } from "@/lib/participations";
 import { setMyTicketStatus } from "@/lib/tickets";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { countActiveCaptains } from "@/lib/bootstrap";
@@ -172,6 +173,15 @@ export async function setMyTicketAction(input: {
     const parsed = MyTicketInput.safeParse(input);
     if (!parsed.success)
       return { ok: false, error: "Pick one of the options." };
+    // The same rule as the page: a ticket matters only to someone who might
+    // come, so not before they answer and not once they say No.
+    const participation = await getMyParticipation(gate.campUser.id);
+    if (!participation || participation.status === "not_attending") {
+      return {
+        ok: false,
+        error: "Say you're coming this year first, then add your ticket.",
+      };
+    }
     await setMyTicketStatus({
       userId: gate.campUser.id,
       ticketStatus: parsed.data.ticketStatus,
