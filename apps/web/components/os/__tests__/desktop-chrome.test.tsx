@@ -178,7 +178,13 @@ describe("the Start menu", () => {
     expect(
       captains.getByRole("menuitem", { name: "Questionnaires" }),
     ).toBeTruthy();
-    expect(captains.getByRole("menuitem", { name: "Terminal" })).toBeTruthy();
+    // The Terminal is every member's: it is under Camp, never Captains.
+    expect(captains.queryByRole("menuitem", { name: "Terminal" })).toBeNull();
+    expect(
+      within(menu.getByRole("group", { name: "Camp" })).getByRole("menuitem", {
+        name: "Terminal",
+      }),
+    ).toBeTruthy();
     const rows = menu.getAllByRole("menuitem").map((el) => el.textContent);
     expect(rows.slice(-6)).toEqual([
       "Tidy windows",

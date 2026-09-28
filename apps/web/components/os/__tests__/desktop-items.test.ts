@@ -14,6 +14,7 @@ import {
   allowedWindowPrograms,
   desktopEntries,
   desktopSpec,
+  homeScreenGroups,
   windowProgram,
 } from "../desktop-items";
 
@@ -58,8 +59,9 @@ describe("desktopSpec", () => {
     expect(camp).toEqual(
       expect.arrayContaining(["roster", "folder:teams", "folder:kitchen"]),
     );
-    // The Terminal ends the Captains column, after the folder.
-    expect(captains).toEqual(["folder:captains", "terminal"]);
+    // The Terminal is every member's: it ends Camp, not the Captains column.
+    expect(captains).toEqual(["folder:captains"]);
+    expect(camp?.at(-1)).toBe("terminal");
     expect(spec.right).toEqual([
       `team-folder:${KITCHEN}`,
       `team-folder:${POWER}`,
@@ -70,6 +72,15 @@ describe("desktopSpec", () => {
     const spec = desktopSpec(buildProgramManifest(facts()), EMPTY);
     expect(spec.columns[2]).toEqual([]);
     expect(spec.columns[1]?.at(-1)).toBe("terminal");
+  });
+
+  it("puts a captain's Terminal under Camp on the phone, not Captains", () => {
+    const groups = homeScreenGroups(
+      buildProgramManifest(facts({ rank: ViewerRank.enum.captain })),
+    );
+    const keys = (key: string) => groups.find((g) => g.key === key)?.keys;
+    expect(keys("captains")).toEqual(["folder:captains"]);
+    expect(keys("camp")?.at(-1)).toBe("terminal");
   });
 });
 

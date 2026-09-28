@@ -108,7 +108,7 @@ export interface RegistryEntry {
   perTeam?: true;
   /**
    * It comes last in its column, after the column's folders (the Terminal,
-   * after the Captains folder). A member with nothing else in that column
+   * after the Kitchen folder). A member with nothing else in that column
    * gets it at the end of the Camp column instead.
    */
   endsColumn?: true;
@@ -119,8 +119,6 @@ const CAMP = { group: "camp", folder: null } as const;
 const KITCHEN = { group: "camp", folder: "kitchen" } as const;
 const TEAMS = { group: "camp", folder: "teams" } as const;
 const CAPTAINS = { group: "captains", folder: "captains" } as const;
-/** In the Captains column, on the desktop itself, after the folder. */
-const CAPTAINS_DESKTOP = { group: "captains", folder: null } as const;
 
 const reviewsRecipes = (ctx: ProgramContext) =>
   canApproveRecipe(ctx.rank, ctx.ledTeams);
@@ -369,16 +367,16 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     rank: "captain",
   },
   // The Terminal (owner, 2026-09-25: "We do need the terminal"): every
-  // approved member. It ends the Captains column, after the folder; for a
-  // member with no Captains folder it ends the Camp column instead
-  // (buildProgramManifest moves it).
+  // approved member, so it is a Camp program, never a Captains one (owner,
+  // 2026-09-28: "it's a general team feature"). It ends the Camp column,
+  // after the column's folders.
   {
     id: "terminal",
     label: "Terminal",
     fileName: "TERMINAL.EXE",
     href: "/terminal",
     icon: "terminal",
-    place: CAPTAINS_DESKTOP,
+    place: CAMP,
     rank: "camp_member",
     endsColumn: true,
   },
@@ -857,8 +855,8 @@ export function buildProgramManifest(
   ).filter((folder) => folder.programs.length > 0);
 
   // A program that ends its column (the Terminal) comes after the column's
-  // folders. When nothing else is in its column (a member with no Captains
-  // folder), it ends the Camp column instead, so no column holds it alone.
+  // folders. When nothing else is in its column, it ends the Camp column
+  // instead, so no column holds it alone.
   const last = new Set(
     usable.filter((entry) => entry.endsColumn).map((entry) => entry.id),
   );

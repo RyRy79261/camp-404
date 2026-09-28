@@ -133,7 +133,7 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
       { kind: "program", id: "family-tree" },
-      // No Captains column for them: the Terminal ends Camp.
+      // The Terminal ends Camp, after its folders.
       { kind: "program", id: "terminal" },
     ]);
     expect(m.programs.find((p) => p.id === "terminal")?.group).toBe("camp");
@@ -189,12 +189,19 @@ describe("buildProgramManifest: the personas", () => {
       "announcements",
       "new-event",
     ]);
-    // The Captains column: the folder, then the Terminal.
-    expect(m.desktop.slice(-2)).toEqual([
-      { kind: "folder", id: "captains" },
-      { kind: "program", id: "terminal" },
-    ]);
-    expect(m.programs.find((p) => p.id === "terminal")?.group).toBe("captains");
+    // The Captains column holds only the folder: the Terminal is every
+    // member's, so it ends Camp for a captain too (owner, 2026-09-28).
+    expect(m.desktop.at(-1)).toEqual({ kind: "folder", id: "captains" });
+    expect(m.programs.find((p) => p.id === "terminal")?.group).toBe("camp");
+    expect(m.startMenu.find((s) => s.group === "camp")?.items.at(-1)).toEqual({
+      kind: "program",
+      id: "terminal",
+    });
+    expect(
+      m.startMenu
+        .find((s) => s.group === "captains")
+        ?.items.some((i) => i.id === "terminal"),
+    ).toBe(false);
     expect(m.allowedChildren).toContain("inkblot");
     expect(m.allowedChildren).toContain("edit-recipe");
     expect(m.allowedChildren).toContain("send-questionnaire");
