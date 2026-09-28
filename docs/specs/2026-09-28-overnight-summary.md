@@ -1,30 +1,35 @@
 # Overnight summary, 2026-09-28
 
-Eleven PRs are open from the night of 2026-09-27. None is merged. Each one
+Twelve PRs are open from the night of 2026-09-27. None is merged. Each one
 passed `lint typecheck test build` locally and its own E2E on a production
 build. Owner questions are listed with the builder's recommended default.
+Screenshots for each PR are in `/home/ryan/camp404-night/<slug>/` (the
+folder is in the table).
 
 ## The PRs
 
-| PR   | Title (short)                         | Migration             |
-| ---- | ------------------------------------- | --------------------- |
-| #295 | Team programs                         | 0066_team_programs    |
-| #297 | Applications, DDT and WAP             | 0066_camp_tickets     |
-| #298 | Power: fuel on site, grid, readiness  | 0066_power_on_site    |
-| #299 | Dues                                  | 0066_dues             |
-| #300 | Inventory                             | 0066_inventory        |
-| #301 | Lounge programme                      | 0066_lounge_programme |
-| #302 | About Camp 404                        | none                  |
-| #303 | Transport                             | 0066_transport        |
-| #304 | Rating grids and the post-burn survey | none                  |
-| #305 | Camp layout and neighbour page        | 0066_camp_layout      |
-| #306 | Four security fixes                   | none                  |
+| PR   | Title (short)                             | Migration             | Screenshots                                |
+| ---- | ----------------------------------------- | --------------------- | ------------------------------------------ |
+| #295 | Team programs                             | 0066_team_programs    | `/home/ryan/camp404-night/team-programs/`  |
+| #297 | Applications, DDT and WAP                 | 0066_camp_tickets     | `/home/ryan/camp404-night/applications/`   |
+| #298 | Power: fuel on site, grid, readiness      | 0066_power_on_site    | `/home/ryan/camp404-night/power-3-5/`      |
+| #299 | Dues                                      | 0066_dues             | `/home/ryan/camp404-night/money/`          |
+| #300 | Inventory                                 | 0066_inventory        | `/home/ryan/camp404-night/inventory/`      |
+| #301 | Lounge programme                          | 0066_lounge_programme | `/home/ryan/camp404-night/vibes/`          |
+| #302 | About Camp 404                            | none                  | `/home/ryan/camp404-night/about/`          |
+| #303 | Transport                                 | 0066_transport        | `/home/ryan/camp404-night/transport/`      |
+| #304 | Rating grids and the post-burn survey     | none                  | `/home/ryan/camp404-night/question-types/` |
+| #305 | Camp layout and neighbour page            | 0066_camp_layout      | `/home/ryan/camp404-night/layout/`         |
+| #306 | Four security fixes                       | none                  | `/home/ryan/camp404-night/audit-fixes/`    |
+| #307 | Staying for and required-action reminders | none                  | `/home/ryan/camp404-night/tier-reminders/` |
 
 **#295 Team programs.** Every team's page gets a description, recent
 announcements, coming up, tasks, meetings and people; Power gets a "power
 plan at a glance" panel. Only a captain or a lead of that team edits. The
 "links" feature was removed (nothing outside the app). Owner questions: none
-open; screenshots are waiting for approval.
+open; screenshots are waiting for approval (retaken on 2026-09-28 in
+`/home/ryan/camp404-night/team-programs/`: Power and Lighting as a member
+and as its lead, the edit dialog, and Water as a member).
 
 **#297 Applications, DDT and WAP.** A `camp_tickets` row per member per
 year (member's ticket status, the camp's DDT and WAP), and a captains'
@@ -103,7 +108,9 @@ template with one star row per planned meal. No schema change. Questions:
 **#305 Camp layout.** A drawing of the camp's plot (SITEPLAN.DWG), edited by
 captains and Structures leads, versioned; an opt-in public neighbour page
 (off by default, captain-only) that shows the plan and arrivals per day,
-no names. Questions:
+no names. An area's name now moves off tents pitched along its top edge (to its
+bottom, or just outside); the right-hand side note was checked on a phone
+and is not clipped. Questions:
 
 1. Should all Structures members edit? _Default: leads only._
 2. Should neighbours see generator or shared-resource notes? _Default: no._
@@ -116,6 +123,13 @@ onboarding page stops promising a questionnaire that is never sent.
 Question:
 
 1. `/notifications` gating. _Default: leave it as it is._
+
+**#307 Staying for and required-action reminders.** A member's membership
+tier ("Staying for"), which captains see and set, and reminders for
+required actions that are still pending. No migration. Question:
+
+1. Keep "Staying for" separate from the Dues fee tiers (#299)? _Default:
+   yes, separate._
 
 ## Merge order
 
@@ -134,7 +148,7 @@ production with no error (AGENTS.md).
 
 **Recommended order:**
 
-1. **#306, #302, #304** (no migration; any order). Nothing to regenerate, and
+1. **#306, #302, #304, #307** (no migration; any order). Nothing to regenerate, and
    each merge frees a Neon branch.
 2. **#295** Team programs: keeps **0066**. Smallest schema change (one table);
    #298 and #301 plan follow-ups on it.
@@ -167,7 +181,7 @@ Neon integration), and the `schema-migration` CI job makes one more per run.
 With this many PRs open, new runs fail with **"branches limit exceeded"**.
 That is capacity, not code: re-run the failed job once branches are free.
 Merging or closing a PR frees its branch (`neon-pr-cleanup.yml` deletes it).
-Merging the three PRs without a migration first frees room for the
+Merging the four PRs without a migration first frees room for the
 regenerated ones.
 
 Until some PRs merge, overnight builders with a migration commit locally and
