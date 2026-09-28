@@ -14,7 +14,7 @@ import { OptionCardGroup } from "@camp404/ui/components/option-card-group";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { PROOF_MAX_BYTES } from "@/lib/dues-copy";
-import { METHOD_CHOICES } from "@/lib/dues-view";
+import { METHOD_CHOICES, typedRands } from "@/lib/dues-view";
 import { requestMyRefundAction, savePledgeAction } from "./actions";
 
 // The member's own dues forms (#240): their pledge, their proof of payment,
@@ -38,7 +38,7 @@ export function PledgeForm({
   const router = useRouter();
   const [choice, setChoice] = useState(pledge ? (pledge.tierId ?? BELOW) : "");
   const [below, setBelow] = useState(
-    pledge && pledge.tierId === null ? String(pledge.amountCents / 100) : "",
+    pledge && pledge.tierId === null ? typedRands(pledge.amountCents) : "",
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();

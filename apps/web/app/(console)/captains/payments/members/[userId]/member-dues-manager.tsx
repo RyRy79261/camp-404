@@ -34,7 +34,12 @@ import { Label } from "@camp404/ui/components/label";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { paymentProofPath } from "@/lib/dues-copy";
-import { balanceSentence, formatDay, SOURCE_WORDS } from "@/lib/dues-view";
+import {
+  balanceSentence,
+  formatDay,
+  SOURCE_WORDS,
+  typedRands,
+} from "@/lib/dues-view";
 import { setPaymentStatusAction } from "../../actions";
 import {
   addChargeAction,
@@ -61,13 +66,6 @@ const STATUS = {
 } as const;
 
 const TYPE_AMOUNT = "Type the amount in rands, like 1250 or 1250,50.";
-
-/** Rands as a person would type them back: "1250" or "1250,50". */
-function typed(cents: number): string {
-  return cents % 100 === 0
-    ? String(cents / 100)
-    : `${Math.floor(cents / 100)},${String(cents % 100).padStart(2, "0")}`;
-}
 
 function Row({
   label,
@@ -110,9 +108,9 @@ export function MemberDuesManager({
   // --- Camp fee -----------------------------------------------------------------
   const [feeAmount, setFeeAmount] = useState(
     liveFee
-      ? typed(liveFee.amountCents)
+      ? typedRands(liveFee.amountCents)
       : dues.pledge
-        ? typed(dues.pledge.amountCents)
+        ? typedRands(dues.pledge.amountCents)
         : "",
   );
   const [feeReason, setFeeReason] = useState(liveFee?.concessionReason ?? "");
@@ -224,7 +222,7 @@ export function MemberDuesManager({
       schedule,
     );
     setDialog({ kind: "request", payment });
-    setDialogAmount(typed(proposal.amountCents ?? payment.amountCents));
+    setDialogAmount(typedRands(proposal.amountCents ?? payment.amountCents));
     setDialogText("");
     setDialogError(null);
   }
@@ -235,7 +233,7 @@ export function MemberDuesManager({
   ) {
     if (!payment.refund) return;
     setDialog({ kind, payment, refundId: payment.refund.id });
-    setDialogAmount(typed(payment.refund.amountCents));
+    setDialogAmount(typedRands(payment.refund.amountCents));
     setDialogText("");
     setDialogError(null);
   }
@@ -309,7 +307,7 @@ export function MemberDuesManager({
   const [plan, setPlan] = useState(
     dues.instalments.map((i) => ({
       dueOn: i.dueOn,
-      amount: typed(i.amountCents),
+      amount: typedRands(i.amountCents),
     })),
   );
   const [planError, setPlanError] = useState<string | null>(null);
@@ -741,7 +739,7 @@ export function MemberDuesManager({
                     size="sm"
                     variant="outline"
                     disabled={feePending}
-                    onClick={() => setFeeAmount(typed(t.amountCents))}
+                    onClick={() => setFeeAmount(typedRands(t.amountCents))}
                   >
                     {t.label} · {formatMoney(t.amountCents)}
                   </Button>

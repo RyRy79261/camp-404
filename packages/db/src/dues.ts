@@ -792,7 +792,11 @@ export async function savePledge(input: {
           eq(schema.campParticipations.cycle, input.cycle),
         ),
       )
-      .limit(1);
+      .limit(1)
+      // Locked, so a captain accepting the member at the same moment is
+      // serialised with this pledge: whichever commits second sees the other
+      // and charges the fee, instead of each missing the other's write.
+      .for("update");
     const charged =
       place?.status === "accepted"
         ? await chargeFeeFromPledge(tx, {

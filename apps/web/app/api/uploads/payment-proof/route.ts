@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { del, put } from "@vercel/blob";
 import { MoneyRefused } from "@camp404/db/dues";
 import { PaymentProofInput } from "@camp404/types";
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -127,6 +127,15 @@ export async function POST(req: Request) {
     revalidateDues();
     return NextResponse.json({ reference });
   } catch (err) {
+    // No payment points at the file, so nothing could ever show or delete
+    // it: take it back out of the member's folder (best effort).
+    if (!isE2ETestMode()) {
+      await del(pathname, {
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+      }).catch((cleanupErr: unknown) =>
+        console.error("payment-proof cleanup error", cleanupErr),
+      );
+    }
     if (err instanceof MoneyRefused) return refuse(err.sentence, 403);
     console.error("payment-proof record error", err);
     return refuse("Something went wrong. Try again.", 500);

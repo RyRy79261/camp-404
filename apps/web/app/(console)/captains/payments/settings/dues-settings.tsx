@@ -25,17 +25,12 @@ import {
   editFeeTierAction,
   saveDuesYearAction,
 } from "../dues-actions";
+import { typedRands } from "@/lib/dues-view";
 
 // The year's fee tiers and dates (#240). A typing problem shows beside the
 // form; removing a tier is a one-tap row action with a toast on failure.
 
 const TYPE_AMOUNT = "Type the amount in rands, like 1250 or 1250,50.";
-
-function typed(cents: number): string {
-  return cents % 100 === 0
-    ? String(cents / 100)
-    : `${Math.floor(cents / 100)},${String(cents % 100).padStart(2, "0")}`;
-}
 
 export function DuesSettings({
   tiers,
@@ -59,7 +54,7 @@ export function DuesSettings({
   function startEdit(tier: FeeTier | null) {
     setEditing(tier?.id ?? null);
     setLabel(tier?.label ?? "");
-    setAmount(tier ? typed(tier.amountCents) : "");
+    setAmount(tier ? typedRands(tier.amountCents) : "");
     setTierError(null);
   }
 

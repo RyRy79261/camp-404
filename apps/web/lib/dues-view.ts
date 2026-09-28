@@ -11,6 +11,13 @@ const DAY = new Intl.DateTimeFormat("en-ZA", {
   timeZone: "UTC",
 });
 
+/** Rands as a person would type them back: "1250" or "1250,50". */
+export function typedRands(cents: number): string {
+  return cents % 100 === 0
+    ? String(cents / 100)
+    : `${Math.floor(cents / 100)},${String(cents % 100).padStart(2, "0")}`;
+}
+
 /** A YYYY-MM-DD day as "15 Jan 2027". */
 export function formatDay(day: string): string {
   const date = new Date(`${day}T00:00:00.000Z`);

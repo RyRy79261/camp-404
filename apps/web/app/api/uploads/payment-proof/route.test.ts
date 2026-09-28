@@ -21,6 +21,7 @@ vi.mock("@vercel/blob", () => ({
     pathname: pathname.replace(".pdf", "-abc123.pdf"),
     url: "https://blob.example/private/secret",
   })),
+  del: vi.fn(async () => undefined),
 }));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(async () => ({ id: "camp-1" })),
@@ -34,7 +35,8 @@ vi.mock("@/lib/payments", () => ({
   })),
 }));
 
-import { put } from "@vercel/blob";
+import { del, put } from "@vercel/blob";
+import { MoneyRefused } from "@camp404/db/dues";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { recordPayment } from "@/lib/payments";
 import { isApproved } from "@/lib/users";
@@ -141,6 +143,25 @@ describe("POST /api/uploads/payment-proof", () => {
     expect((await POST(upload(PDF, "application/pdf"))).status).toBe(403);
     expect(put).not.toHaveBeenCalled();
     expect(recordPayment).not.toHaveBeenCalled();
+  });
+
+  it("takes the stored file back out when the payment is not recorded", async () => {
+    vi.mocked(recordPayment).mockRejectedValueOnce(new Error("db down"));
+    expect((await POST(upload(PDF, "application/pdf"))).status).toBe(500);
+    expect(del).toHaveBeenCalledExactlyOnceWith(
+      "payment-proofs/camp-1/proof-abc123.pdf",
+      { token: "vercel_blob_rw_test" },
+    );
+  });
+
+  it("takes the file back out when the payment is refused, and says why", async () => {
+    vi.mocked(recordPayment).mockRejectedValueOnce(
+      new MoneyRefused("Not this year."),
+    );
+    const res = await POST(upload(PDF, "application/pdf"));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Not this year." });
+    expect(del).toHaveBeenCalledOnce();
   });
 
   it("says uploads are not set up rather than record a payment with no file", async () => {
