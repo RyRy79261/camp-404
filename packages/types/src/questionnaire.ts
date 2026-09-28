@@ -222,7 +222,14 @@ const ShortLabel = z
 const camp404QuestionFields = {
   shortLabel: ShortLabel,
   visibleIf: VisibleIf.optional(),
+  leadsOnly: z.boolean().optional(),
 };
+
+// "Team leads and up" (#251): a question or page marked `leadsOnly` is shown
+// only to a viewer at the `team_lead` rung or above (a lead of any team this
+// year, or a captain). A plain member never receives it: the server strips it
+// from the definition before the runner sees it (`questionnaireForViewer` in
+// @camp404/core) and refuses an answer to it. Absent/false ⇒ everyone.
 
 // What an answer is FOR, when the app does something with it beyond storing it.
 // Code keys its mirrors and routes on the role, never on a question id, so a
@@ -567,6 +574,68 @@ export const CheckboxGridQuestion = z.object({
 });
 export type CheckboxGridQuestion = z.infer<typeof CheckboxGridQuestion>;
 
+// --- Rating grid (#251) ---------------------------------------------------
+// A list of statements (rows) rated on ONE shared scale: the Likert grid of the
+// post-burn survey ("The shifts were fair": Definitely true … Definitely
+// false), or, with `display: "stars"`, a star rating per item ("Day 3 dinner":
+// 1–5 stars). The answer is a per-row map `{ [rowId]: position | "na" }`:
+// `position` is the chosen point's 1-based place in `scale`, left to right,
+// so results can average it; "na" is the optional N/A column. Row ids key the
+// map, allocated once like a question id and never re-derived.
+
+/** The stored value of the N/A column. Never a scale position. */
+export const RATING_GRID_NA = "na";
+export const RATING_GRID_MIN_POINTS = 2;
+export const RATING_GRID_MAX_POINTS = 10;
+/** A star row's default labels, read out by a screen reader. */
+export function starScaleLabels(points: number): string[] {
+  return Array.from({ length: points }, (_, i) =>
+    i === 0 ? "1 star" : `${i + 1} stars`,
+  );
+}
+
+export const RatingGridQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("rating_grid"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  rows: z.array(GridRow).min(1),
+  // The points, left to right. A point's value is its 1-based position.
+  scale: z
+    .array(z.string().min(1))
+    .min(RATING_GRID_MIN_POINTS)
+    .max(RATING_GRID_MAX_POINTS),
+  // Absent ⇒ "scale" (labelled points).
+  display: z.enum(["scale", "stars"]).optional(),
+  // Offer an N/A column ("Didn't eat it", "Not my team"). Absent ⇒ none.
+  allowNa: z.boolean().optional(),
+  naLabel: z.string().min(1).optional(),
+  // Every row must be answered (N/A counts as an answer).
+  required: z.boolean().default(true),
+  ...camp404QuestionFields,
+});
+export type RatingGridQuestion = z.infer<typeof RatingGridQuestion>;
+
+/** What the N/A column is called for this question. */
+export function ratingGridNaLabel(q: RatingGridQuestion): string {
+  return q.naLabel?.trim() || "N/A";
+}
+
+/**
+ * One row's stored cell as words: the point's label, the N/A label, or the raw
+ * value when it matches no point (a scale shortened after answers came in),
+ * never clamped. Empty string for no answer.
+ */
+export function ratingGridCellLabel(
+  q: RatingGridQuestion,
+  cell: unknown,
+): string {
+  if (cell === RATING_GRID_NA) return ratingGridNaLabel(q);
+  if (typeof cell === "number") return q.scale[cell - 1] ?? String(cell);
+  if (cell === undefined || cell === null || cell === "") return "";
+  return Array.isArray(cell) ? cell.join(", ") : String(cell);
+}
+
 // --- Camp 404 question kinds ---------------------------------------------
 // As Camp 404 declared them, plus the `visibleIf` every kind now carries.
 
@@ -587,6 +656,7 @@ export const SliderQuestion = z.object({
   display: z.enum(["continuous", "segmented"]).optional(),
   required: z.boolean().default(true),
   visibleIf: VisibleIf.optional(),
+  leadsOnly: z.boolean().optional(),
 });
 export type SliderQuestion = z.infer<typeof SliderQuestion>;
 
@@ -607,6 +677,7 @@ export const NumberQuestion = z.object({
   maxLabel: z.string().optional(),
   required: z.boolean().default(true),
   visibleIf: VisibleIf.optional(),
+  leadsOnly: z.boolean().optional(),
 });
 export type NumberQuestion = z.infer<typeof NumberQuestion>;
 
@@ -624,6 +695,7 @@ export const ScaleQuestion = z.object({
   steps: z.array(LabelledValue).min(2),
   required: z.boolean().default(true),
   visibleIf: VisibleIf.optional(),
+  leadsOnly: z.boolean().optional(),
 });
 export type ScaleQuestion = z.infer<typeof ScaleQuestion>;
 
@@ -640,6 +712,7 @@ export const ToggleQuestion = z.object({
   options: z.array(LabelledValue).min(2),
   required: z.boolean().default(true),
   visibleIf: VisibleIf.optional(),
+  leadsOnly: z.boolean().optional(),
 });
 export type ToggleQuestion = z.infer<typeof ToggleQuestion>;
 
@@ -657,6 +730,7 @@ export const ComboboxQuestion = z.object({
   searchPlaceholder: z.string().optional(),
   required: z.boolean().default(true),
   visibleIf: VisibleIf.optional(),
+  leadsOnly: z.boolean().optional(),
 });
 export type ComboboxQuestion = z.infer<typeof ComboboxQuestion>;
 
@@ -674,6 +748,7 @@ export const ImageQuestion = z.object({
   role: z.literal("profile_photo").optional(),
   required: z.boolean().default(false),
   visibleIf: VisibleIf.optional(),
+  leadsOnly: z.boolean().optional(),
 });
 export type ImageQuestion = z.infer<typeof ImageQuestion>;
 
@@ -693,6 +768,7 @@ export const Question = z.discriminatedUnion("kind", [
   FileLinkQuestion,
   MultiChoiceGridQuestion,
   CheckboxGridQuestion,
+  RatingGridQuestion,
   SliderQuestion,
   NumberQuestion,
   ScaleQuestion,
@@ -824,6 +900,8 @@ export const QuestionsPage = z.object({
   visibleIf: VisibleIf.optional(),
   requiredToContinue: z.boolean().optional(),
   pageType: z.enum(["question", "content"]).optional(),
+  // Shown only to team leads and captains (see `leadsOnly` on a question).
+  leadsOnly: z.boolean().optional(),
 });
 export type QuestionsPage = z.infer<typeof QuestionsPage>;
 
@@ -858,6 +936,15 @@ export type Questionnaire = z.infer<typeof Questionnaire>;
 export const GridAnswer = z.record(z.string(), z.array(z.string()));
 export type GridAnswer = z.infer<typeof GridAnswer>;
 
+// A rating grid's answer: `{ [rowId]: position | "na" }` (see
+// RatingGridQuestion). Its own shape rather than a GridAnswer, so a stored
+// answer that predates the kind still parses exactly as before.
+export const RatingGridAnswer = z.record(
+  z.string(),
+  z.union([z.number().int(), z.literal(RATING_GRID_NA)]),
+);
+export type RatingGridAnswer = z.infer<typeof RatingGridAnswer>;
+
 // Responses are a flat map keyed by question id; each value's shape depends
 // on the question kind. Stored as JSONB.
 export const QuestionnaireResponseValue = z.union([
@@ -866,6 +953,7 @@ export const QuestionnaireResponseValue = z.union([
   z.array(z.string()),
   z.boolean(),
   GridAnswer,
+  RatingGridAnswer,
   z.null(),
 ]);
 export type QuestionnaireResponseValue = z.infer<
@@ -933,12 +1021,38 @@ function otherDisplay(value: string): string {
   return `Other: ${text === "" ? EMPTY_DISPLAY : text}`;
 }
 
-/** A grid answer, or null when the value is not a `{ rowId: string[] }` map. */
-function asGridAnswer(value: unknown): GridAnswer | null {
+/** A per-row answer map (a grid's `{ rowId: string[] }` or a rating grid's
+ * `{ rowId: position | "na" }`), or null when the value is not a map. */
+function asAnswerMap(
+  value: unknown,
+): Record<string, string[] | number | string> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
   }
-  return value as GridAnswer;
+  return value as Record<string, string[] | number | string>;
+}
+
+/** A grid answer, or null when the value is not a map. A map whose cells are
+ * not lists (a rating grid's) reads as empty rows, never as picks. */
+function asGridAnswer(value: unknown): GridAnswer | null {
+  const map = asAnswerMap(value);
+  if (!map) return null;
+  const out: GridAnswer = {};
+  for (const [key, cell] of Object.entries(map)) {
+    if (Array.isArray(cell)) out[key] = cell;
+  }
+  return out;
+}
+
+/** One row's cell as display text, whatever the map's shape. */
+function cellText(cell: string[] | number | string): string {
+  return Array.isArray(cell) ? cell.join(", ") : String(cell);
+}
+
+/** Whether a map cell holds an answer: a non-empty list, or any scalar. */
+function cellAnswered(cell: unknown): boolean {
+  if (Array.isArray(cell)) return cell.length > 0;
+  return cell !== undefined && cell !== null && cell !== "";
 }
 
 /**
@@ -988,10 +1102,21 @@ export function displayResponseValue(
     }
     case "boolean":
       return value ? "Yes" : "No";
+    case "rating_grid": {
+      const map = asAnswerMap(value);
+      if (!map) return plainDisplay(value);
+      const rows = question.rows
+        .filter((row) => cellAnswered(map[row.id]))
+        .map(
+          (row) =>
+            `${row.label}: ${ratingGridCellLabel(question, map[row.id])}`,
+        );
+      return rows.length > 0 ? rows.join("; ") : EMPTY_DISPLAY;
+    }
     case "multi_choice_grid":
     case "checkbox_grid": {
-      const grid = asGridAnswer(value);
-      if (!grid) return plainDisplay(value);
+      if (!asAnswerMap(value)) return plainDisplay(value);
+      const grid = asGridAnswer(value) ?? {};
       const columnLabel = (v: string) =>
         question.columns.find((c) => c.value === v)?.label ?? v;
       const rows = question.rows
@@ -1014,10 +1139,10 @@ export function displayResponseValue(
  */
 function plainDisplay(value: QuestionnaireResponseValue): string {
   if (Array.isArray(value)) return value.join(", ");
-  const grid = asGridAnswer(value);
-  if (grid) {
-    return Object.entries(grid)
-      .map(([key, picks]) => `${key}: ${picks.join(", ")}`)
+  const map = asAnswerMap(value);
+  if (map) {
+    return Object.entries(map)
+      .map(([key, cell]) => `${key}: ${cellText(cell)}`)
       .join("; ");
   }
   return String(value);
@@ -1025,14 +1150,14 @@ function plainDisplay(value: QuestionnaireResponseValue): string {
 
 /** A value no option or step declares, shown as it is stored. */
 function unlistedDisplay(value: QuestionnaireResponseValue): string {
-  return asGridAnswer(value) ? plainDisplay(value) : String(value);
+  return asAnswerMap(value) ? plainDisplay(value) : String(value);
 }
 
 function isEmptyValue(v: QuestionnaireResponseValue | undefined): boolean {
   if (v === undefined || v === null || v === "") return true;
   if (Array.isArray(v)) return v.length === 0;
-  const grid = asGridAnswer(v);
-  if (grid) return !Object.values(grid).some((picks) => picks.length > 0);
+  const map = asAnswerMap(v);
+  if (map) return !Object.values(map).some(cellAnswered);
   return false;
 }
 
@@ -1049,12 +1174,19 @@ function sameValue(
 ): boolean {
   if (isEmptyValue(a) && isEmptyValue(b)) return true;
   if (Array.isArray(a) && Array.isArray(b)) return sameList(a, b);
-  const ga = asGridAnswer(a);
-  const gb = asGridAnswer(b);
-  if (ga && gb) {
-    // Rows compare as sets of picks; a row with no picks is no row at all.
-    const rows = new Set([...Object.keys(ga), ...Object.keys(gb)]);
-    return [...rows].every((row) => sameList(ga[row] ?? [], gb[row] ?? []));
+  const ma = asAnswerMap(a);
+  const mb = asAnswerMap(b);
+  if (ma && mb) {
+    // Rows compare as sets of picks (a rating as its one value); a row with no
+    // answer is no row at all.
+    const rows = new Set([...Object.keys(ma), ...Object.keys(mb)]);
+    return [...rows].every((row) => {
+      const ca = ma[row];
+      const cb = mb[row];
+      if (!cellAnswered(ca) && !cellAnswered(cb)) return true;
+      if (Array.isArray(ca) && Array.isArray(cb)) return sameList(ca, cb);
+      return ca === cb;
+    });
   }
   return a === b;
 }
@@ -1288,6 +1420,43 @@ export function validateOne(
       }
       // An optional grid left entirely blank is a valid skip.
       if (answeredRows === 0) return { ok: true, value: undefined };
+      return { ok: true, value };
+    }
+    case "rating_grid": {
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+        return { ok: false, error: "Expected a rating for each row" };
+      const incoming = raw as Record<string, unknown>;
+      const value: RatingGridAnswer = {};
+      // Iterate the DEFINITION's rows: an unknown row key is dropped, and the
+      // answer is normalised to known rows and legal points only.
+      for (const row of q.rows) {
+        const cell = incoming[row.id];
+        if (cell === undefined || cell === null || cell === "") continue;
+        if (cell === RATING_GRID_NA) {
+          if (!q.allowNa)
+            return { ok: false, error: `Pick a rating for "${row.label}"` };
+          value[row.id] = RATING_GRID_NA;
+          continue;
+        }
+        if (
+          typeof cell !== "number" ||
+          !Number.isInteger(cell) ||
+          cell < 1 ||
+          cell > q.scale.length
+        )
+          return { ok: false, error: `Pick a rating for "${row.label}"` };
+        value[row.id] = cell;
+      }
+      if (q.required) {
+        const missing = q.rows.find((r) => value[r.id] === undefined);
+        if (missing)
+          return {
+            ok: false,
+            error: `Answer every row. "${missing.label}" is missing`,
+          };
+      }
+      if (Object.keys(value).length === 0)
+        return { ok: true, value: undefined };
       return { ok: true, value };
     }
     case "years": {

@@ -135,6 +135,7 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
       { kind: "program", id: "family-tree" },
+      { kind: "program", id: "about" },
       // No Captains column for them: the Terminal ends Camp.
       { kind: "program", id: "terminal" },
     ]);
@@ -187,6 +188,7 @@ describe("buildProgramManifest: the personas", () => {
       "recipe-review",
     ]);
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
+      "applications",
       "questionnaires",
       "announcements",
       "new-event",
@@ -226,6 +228,7 @@ describe("buildProgramManifest: the personas", () => {
       }),
     );
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
+      "applications",
       "questionnaires",
       "announcements",
       "new-event",
@@ -244,6 +247,7 @@ describe("buildProgramManifest: the personas", () => {
     // The prototype's order: Camp overview first.
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
       "overview",
+      "applications",
       "questionnaires",
       "announcements",
       "new-event",
@@ -421,6 +425,25 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     expect(teamFolder(m, COMMS)?.programs.map((p) => p.id)).toEqual([
       `team:${COMMS}`,
     ]);
+  });
+
+  // Owner's ruling 5 (2026-09-27): every team is its own program, reachable
+  // from the Teams folder, and each team's folder opens with it.
+  it("makes every team its own program: in the Teams folder, and first in its own folder", () => {
+    for (const team of Team.options) {
+      const m = buildProgramManifest(
+        facts({ memberships: [{ team, isLead: false }] }),
+      );
+      const program = folder(m, "teams")!.programs.find(
+        (p) => p.id === `team:${team}`,
+      );
+      expect(program, team).toMatchObject({ href: `/teams/${team}` });
+      expect(teamFolder(m, team)?.programs[0], team).toMatchObject({
+        id: `team:${team}`,
+        href: `/teams/${team}`,
+      });
+    }
+    expect(Team.options).toHaveLength(TEAMS.length);
   });
 
   it("lists every active team in the Teams folder for every approved member", () => {

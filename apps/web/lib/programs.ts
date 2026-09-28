@@ -260,6 +260,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // The camp's intro, once a Notion page (#264): every approved member reads
+  // it; captains edit its words in Join site.
+  {
+    id: "about",
+    label: "About Camp 404",
+    fileName: "README.TXT",
+    href: "/about",
+    icon: "about",
+    place: CAMP,
+    rank: "camp_member",
+  },
   // Every team's page, for every approved member (owner's decision 2,
   // 2026-09-26: every member sees every team's dashboard, read-only; the
   // actions on it keep their own gates).
@@ -311,6 +322,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     icon: "overview",
     place: CAPTAINS,
     rank: "captain",
+  },
+  // Who is coming this year, with tickets and WAP for captains
+  // (#238). A team lead reads the statuses only, so the bar is team_lead.
+  {
+    id: "applications",
+    label: "Applications",
+    fileName: "INTAKE.DB",
+    href: "/captains/applications",
+    icon: "applications",
+    place: CAPTAINS,
+    rank: "team_lead",
   },
   {
     id: "questionnaires",

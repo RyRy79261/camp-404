@@ -6,6 +6,8 @@ import {
   nextCampDay,
   approvalNotification,
   canEditPower,
+  canEditTeamProgram,
+  DEFAULT_TICKET,
   captainPromotionNotification,
   FOUNDER_CODE,
   formatMemberRefCode,
@@ -48,7 +50,15 @@ import {
   type AnnouncementPinContext,
   type PinnedAnnouncement,
   type PinResult,
+  TEAM_ANNOUNCEMENT_LIMIT,
+  type TeamAnnouncement,
 } from "@camp404/db/broadcasts";
+import {
+  NOT_A_TEAM_EDITOR,
+  TEAM_PROGRAM_CHANGED,
+  type TeamProgram,
+  type TeamProgramWriteResult,
+} from "@camp404/db/team-programs";
 import type {
   CampManagementMember,
   CampMemberDetail,
@@ -84,6 +94,7 @@ import type {
   ParticipationIntentResult,
   ParticipationRow,
 } from "@camp404/db/participations";
+import type { TicketPassChange, TicketRow } from "@camp404/db/tickets";
 import {
   CANNOT_EDIT,
   CANNOT_MOVE,
@@ -616,6 +627,9 @@ interface TestRecipeEvent {
 /** One member's answer for one year (mirrors `camp_participations`). */
 type TestParticipation = ParticipationRow;
 
+/** One member's ticket record for one year (mirrors `camp_tickets`). */
+type TestTicket = TicketRow;
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -639,6 +653,8 @@ interface TestStoreState {
   memberRefCodes: Map<string, string>;
   /** `camp_participations`, keyed `${userId}:${cycle}` like its primary key. */
   participations: Map<string, TestParticipation>;
+  /** `camp_tickets`, keyed `${userId}:${cycle}` like its primary key. */
+  tickets: Map<string, TestTicket>;
   /** Power and fuel (#253, #254): the twins of their tables. */
   powerLoads: PowerLoadRow[];
   /** `power_plans`, keyed by year like the table's primary key. */
@@ -674,6 +690,8 @@ interface TestStoreState {
   desktopLayouts: Map<string, unknown>;
   /** `desktop_layouts.preferences`: the stored value, by user id. */
   desktopPreferences: Map<string, Record<string, unknown>>;
+  /** `team_programs`: a team's description, by team key. */
+  teamPrograms: Map<string, TeamProgram>;
   /** `inkblot_scores`: every run put on the board, in the order played. */
   inkblotRuns: (InkblotBoardEntry & { userId: string })[];
 }
@@ -740,6 +758,7 @@ function globalState(): TestStoreState {
       payments: [] as TestPayment[],
       memberRefCodes: new Map<string, string>(),
       participations: new Map<string, TestParticipation>(),
+      tickets: new Map<string, TestTicket>(),
       powerLoads: [] as PowerLoadRow[],
       powerPlans: new Map<number, PowerPlan>(),
       generators: [] as GeneratorRow[],
@@ -761,6 +780,7 @@ function globalState(): TestStoreState {
       carMembers: [] as TestCarMember[],
       desktopLayouts: new Map<string, unknown>(),
       desktopPreferences: new Map<string, Record<string, unknown>>(),
+      teamPrograms: new Map<string, TeamProgram>(),
       inkblotRuns: [],
     } satisfies TestStoreState;
   }
@@ -819,6 +839,8 @@ S.participations ??= new Map<string, TestParticipation>();
 const participations = S.participations;
 const participationKey = (userId: string, cycle: number) =>
   `${userId}:${cycle}`;
+S.tickets ??= new Map<string, TestTicket>();
+const tickets = S.tickets;
 const payments = S.payments;
 const memberRefCodes = S.memberRefCodes;
 S.powerLoads ??= [];
@@ -2162,6 +2184,68 @@ export const testStore = {
       acknowledgedAt: d.acknowledgedAt,
     };
   },
+  /**
+   * Twin of `listTeamAnnouncements` in @camp404/db/broadcasts: what a team has
+   * sent, newest first. The store publishes and fans out in one step, so a
+   * published row is one that went out; a draft never is.
+   */
+  listTeamAnnouncements(
+    team: Team,
+    limit: number = TEAM_ANNOUNCEMENT_LIMIT,
+  ): { items: TeamAnnouncement[]; more: boolean } {
+    const sent = broadcasts
+      .filter(
+        (b): b is TestBroadcast & { publishedAt: Date } =>
+          b.publishedAt !== null &&
+          b.audience.scope === "team" &&
+          b.audience.team === team,
+      )
+      .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    return {
+      items: sent.slice(0, limit).map((b) => ({
+        id: b.id,
+        title: b.title,
+        body: b.body,
+        senderName: userName(b.senderId),
+        sentAt: b.publishedAt,
+      })),
+      more: sent.length > limit,
+    };
+  },
+
+  // --- Team programs (the twin of @camp404/db/team-programs) --------------
+
+  getTeamProgram(team: Team): TeamProgram {
+    const row = S.teamPrograms.get(team);
+    return row
+      ? structuredClone(row)
+      : { team, description: "", version: 0, updatedAt: null };
+  },
+  saveTeamProgram(input: {
+    actorId: string;
+    team: Team;
+    description: string;
+    expectedVersion: number;
+  }): TeamProgramWriteResult {
+    // Like the real write, the store reads the actor's reach itself.
+    const reach = testStore.senderReach(input.actorId);
+    if (!canEditTeamProgram(reachRank(reach), reach ?? [], input.team)) {
+      return { ok: false, error: NOT_A_TEAM_EDITOR };
+    }
+    const current = S.teamPrograms.get(input.team);
+    if ((current?.version ?? 0) !== input.expectedVersion) {
+      return { ok: false, error: TEAM_PROGRAM_CHANGED };
+    }
+    const version = input.expectedVersion + 1;
+    S.teamPrograms.set(input.team, {
+      team: input.team,
+      description: input.description,
+      version,
+      updatedAt: new Date(),
+    });
+    return { ok: true, version };
+  },
+
   markRead(userId: string, ids: string[]): void {
     if (ids.length === 0) return;
     const now = new Date();
@@ -2552,6 +2636,87 @@ export const testStore = {
     return { ...row };
   },
 
+  // --- Tickets and WAP (mirrors @camp404/db/tickets) -------------
+
+  /** A member's ticket record for one year, or null when nothing is said. */
+  getTicket(userId: string, cycle: number): TestTicket | null {
+    const row = tickets.get(participationKey(userId, cycle));
+    return row ? { ...row } : null;
+  },
+
+  /** Every ticket record for one year. */
+  listTickets(cycle: number): TestTicket[] {
+    return Array.from(tickets.values())
+      .filter((t) => t.cycle === cycle)
+      .map((t) => ({ ...t }));
+  },
+
+  /** The member's own ticket status: an upsert, as production. */
+  setOwnTicketStatus(input: {
+    userId: string;
+    cycle: number;
+    ticketStatus: TestTicket["ticketStatus"];
+  }): void {
+    if (!findUserById(input.userId)) {
+      throw new Error(`No test user with id ${input.userId}`);
+    }
+    const now = new Date();
+    const key = participationKey(input.userId, input.cycle);
+    const row = tickets.get(key);
+    if (row) {
+      row.ticketStatus = input.ticketStatus;
+      row.updatedAt = now;
+      return;
+    }
+    tickets.set(key, {
+      ...DEFAULT_TICKET,
+      userId: input.userId,
+      cycle: input.cycle,
+      ticketStatus: input.ticketStatus,
+      passesUpdatedByUserId: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+
+  /**
+   * A captain's DDT or WAP change for THIS year: the same
+   * compare-and-set as production (a missing row stands at the defaults),
+   * without the audit row. A change to the value already there throws.
+   */
+  setTicketPass(
+    input: TicketPassChange & { userId: string; actorUserId: string },
+  ): boolean {
+    if (input.from === input.to) {
+      throw new Error(`setTicketPass: ${input.pass} is already ${input.to}`);
+    }
+    const key = participationKey(input.userId, currentCycleNumber());
+    const now = new Date();
+    const row: TestTicket = tickets.get(key) ?? {
+      ...DEFAULT_TICKET,
+      userId: input.userId,
+      cycle: currentCycleNumber(),
+      passesUpdatedByUserId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (input.pass === "ticket") {
+      if (row.ticketStatus !== input.from) return false;
+      row.ticketStatus = input.to;
+    } else if (input.pass === "ddt") {
+      if (row.ddt !== input.from) return false;
+      row.ddt = input.to;
+      row.passesUpdatedByUserId = input.actorUserId;
+    } else {
+      if (row.wap !== input.from) return false;
+      row.wap = input.to;
+      row.passesUpdatedByUserId = input.actorUserId;
+    }
+    row.updatedAt = now;
+    tickets.set(key, row);
+    return true;
+  },
+
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
   // The test store models users, burner profiles, team memberships, the
   // payments ledger and the required_actions twin, but not driver profiles, so
@@ -2610,6 +2775,8 @@ export const testStore = {
           country,
           participation:
             participations.get(participationKey(u.id, cycle))?.status ?? null,
+          participationIntent:
+            participations.get(participationKey(u.id, cycle))?.intent ?? null,
           // The test store keeps no sign-in email for a member.
           ...(options.includeEmail ? { email: null } : {}),
           createdAt: u.createdAt,
@@ -5174,6 +5341,7 @@ export const testStore = {
     payments.length = 0;
     memberRefCodes.clear();
     participations.clear();
+    tickets.clear();
     powerLoads.length = 0;
     powerPlans.clear();
     generators.length = 0;
@@ -5195,6 +5363,7 @@ export const testStore = {
     carMembers.length = 0;
     S.desktopLayouts.clear();
     S.desktopPreferences.clear();
+    S.teamPrograms.clear();
     S.inkblotRuns.length = 0;
     resetDuesStore();
   },
@@ -5430,6 +5599,21 @@ export const testStore = {
   },
   setCampBlurb(userId: string, blurb: TestCampBlurb): void {
     S.campBlurbs.set(userId, { ...blurb });
+  },
+  /** Captains who chose to be shown, by name (getJoinCaptains' twin). */
+  listJoinCaptains(): { name: string; title: string; blurb: string }[] {
+    const out: { name: string; title: string; blurb: string }[] = [];
+    for (const user of usersByAuthId.values()) {
+      const card = S.campBlurbs.get(user.id);
+      const name = (user.displayName ?? "").trim();
+      if (user.rank !== "captain" || !card?.showOnJoin || name === "") continue;
+      out.push({
+        name,
+        title: (card.title ?? "").trim() || "Captain",
+        blurb: (card.blurb ?? "").trim(),
+      });
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
   },
 };
 

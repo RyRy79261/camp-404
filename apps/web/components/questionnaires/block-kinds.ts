@@ -22,6 +22,8 @@ import {
   SlidersHorizontal,
   SlidersVertical,
   Star,
+  StarHalf,
+  Table2,
   StickyNote,
   TextCursorInput,
   TextSearch,
@@ -33,11 +35,13 @@ import {
 import {
   Question,
   isAnswerableBlock,
+  starScaleLabels,
   pageBlocks,
   type PageBlock,
   type Questionnaire,
   type QuestionnairePage,
 } from "@camp404/types";
+import { TRUE_FALSE_SCALE } from "@camp404/core";
 
 // The builder's block palette (AfrikaBurn's Builder v2 palette, with Camp 404's
 // kinds added). A palette kind is an AUTHORING affordance; several of them map
@@ -47,6 +51,9 @@ import {
 //   dropdown      → single_select with display "dropdown"
 //   image choice  → single_select with display "image_grid"
 //   number_picker → the `number` kind (Camp 404's row of whole numbers)
+//
+//   rating_grid   → rating_grid with display "scale"   (statements × one scale)
+//   star_ratings  → rating_grid with display "stars"   (1–5 stars per item)
 //
 // The engine union in @camp404/types stays the single source of truth; nothing
 // here invents a kind the runtime cannot render.
@@ -66,6 +73,8 @@ export type PaletteKind =
   | "multi_select"
   | "multi_choice_grid"
   | "checkbox_grid"
+  | "rating_grid"
+  | "star_ratings"
   | "linear_scale"
   | "rating"
   | "boolean"
@@ -168,6 +177,20 @@ export const PALETTE: readonly PaletteEntry[] = [
     group: "question",
     icon: LayoutGrid,
     short: "Checkbox grid",
+  },
+  {
+    kind: "rating_grid",
+    label: "Rating grid",
+    group: "question",
+    icon: Table2,
+    short: "Rating grid",
+  },
+  {
+    kind: "star_ratings",
+    label: "Star ratings",
+    group: "question",
+    icon: StarHalf,
+    short: "Star ratings",
   },
   {
     kind: "dropdown",
@@ -314,6 +337,8 @@ export function blockPaletteKind(block: PageBlock): PaletteKind {
         : "short_text";
     case "number":
       return "number_picker";
+    case "rating_grid":
+      return block.display === "stars" ? "star_ratings" : "rating_grid";
     default:
       return block.kind;
   }
@@ -513,6 +538,28 @@ export function createBlock(kind: PaletteKind, id: string): PageBlock {
         columns: defaultGridColumns(),
         required: false,
       };
+    case "rating_grid":
+      return {
+        id,
+        kind: "rating_grid",
+        prompt: "",
+        rows: defaultGridRows(),
+        scale: [...TRUE_FALSE_SCALE],
+        display: "scale",
+        allowNa: true,
+        required: false,
+      };
+    case "star_ratings":
+      return {
+        id,
+        kind: "rating_grid",
+        prompt: "",
+        rows: defaultGridRows(),
+        scale: starScaleLabels(5),
+        display: "stars",
+        allowNa: false,
+        required: false,
+      };
     case "linear_scale":
       return {
         id,
@@ -664,6 +711,7 @@ export function convertBlock(block: PageBlock, kind: PaletteKind): PageBlock {
     helper: source?.helper,
     required: source?.required ?? false,
     shortLabel: source?.shortLabel,
+    leadsOnly: source && "leadsOnly" in source ? source.leadsOnly : undefined,
     ...visibleIf,
   };
 
@@ -683,6 +731,17 @@ export function convertBlock(block: PageBlock, kind: PaletteKind): PageBlock {
     } else if (next.kind === "scale") {
       carried.steps = from.map((o) => ({ value: o.value, label: o.label }));
     }
+  }
+  // Rows carry between the grid kinds: their ids key the answers, so a
+  // rating grid retyped to stars (or back) keeps what it asked about.
+  if (
+    source &&
+    "rows" in source &&
+    (next.kind === "rating_grid" ||
+      next.kind === "multi_choice_grid" ||
+      next.kind === "checkbox_grid")
+  ) {
+    carried.rows = source.rows.map((row) => ({ ...row }));
   }
   if (
     source &&

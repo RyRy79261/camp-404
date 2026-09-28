@@ -6,6 +6,7 @@ import {
   Pencil,
   Wallet,
 } from "lucide-react";
+import { mayRecordTicket } from "@camp404/core";
 import type { ParticipationStatus } from "@camp404/types";
 import {
   Avatar,
@@ -29,12 +30,14 @@ import { getMemberDues } from "@/lib/dues";
 import { MY_DUES_PATH } from "@/lib/dues-copy";
 import { balanceSentence } from "@/lib/dues-view";
 import { getMemberRefCode, ledgerCycle } from "@/lib/payments";
+import { getMyTicket } from "@/lib/tickets";
 import { isTeamLead } from "@/lib/users";
 import { initialsFrom } from "@/lib/initials";
 import { feedbackTracker } from "@/lib/integration-config";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 import { ReportSettingsCard } from "@/components/feedback/report-settings-card";
 import { ProfileSections } from "@/components/profile/profile-sections";
+import { MyTicket } from "./my-ticket";
 import { PaymentReference } from "./payment-reference";
 
 // Reads the sign-in session on every request.
@@ -61,15 +64,19 @@ export default async function ProfilePage() {
   const name = campUser.displayName ?? authUser.primaryEmail ?? "Burner";
   const initials = initialsFrom(campUser.displayName ?? authUser.primaryEmail);
   // The same pill the roster shows: a team lead reads "Team Lead", not "Member".
-  const [lead, refCode, participation, dues] = await Promise.all([
+  const [lead, refCode, participation, ticket, dues] = await Promise.all([
     isTeamLead(campUser.id),
     getMemberRefCode(campUser.id),
     getMyParticipation(campUser.id),
+    getMyTicket(campUser.id),
     // Their own balance for the year (#240); never anyone else's.
     ledgerCycle().then((cycle) =>
       getMemberDues(campUser.id, cycle, { forFinance: false }),
     ),
   ]);
+  // A ticket matters only to someone who might come: not before they answer,
+  // and not once they say No.
+  const asksTicket = mayRecordTicket(participation?.status ?? null);
   const rank = rankLabel(campUser.rank, lead);
   // Read on the server; only the repo name crosses to the browser — never the
   // token. `ok: false` means a report has nowhere to go, and the card says so
@@ -163,12 +170,15 @@ export default async function ProfilePage() {
               {/* Changing an answer needs one to change: until then the
                   captains' "Coming this year?" questionnaire asks. */}
               {participation && (
-                <CardContent>
-                  <Button asChild variant="secondary" size="sm">
-                    <Link href="/tools/forms/attendance">
-                      Change your answer
-                    </Link>
-                  </Button>
+                <CardContent className="flex flex-col gap-5">
+                  <div>
+                    <Button asChild variant="secondary" size="sm">
+                      <Link href="/tools/forms/attendance">
+                        Change your answer
+                      </Link>
+                    </Button>
+                  </div>
+                  {asksTicket && <MyTicket ticket={ticket} />}
                 </CardContent>
               )}
             </Card>

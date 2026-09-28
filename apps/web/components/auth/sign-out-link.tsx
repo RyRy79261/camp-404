@@ -1,19 +1,15 @@
 "use client";
 
 import type { ComponentProps, MouseEvent } from "react";
-import { forgetDeviceToken } from "@/components/push/device-token";
 import { forgetAllWindows } from "@/components/os/window-storage";
 
 export const SIGN_OUT_HREF = "/auth/sign-out";
 
-/** How long sign-out waits for the token cleanup before it goes anyway. */
-export const FORGET_TOKEN_TIMEOUT_MS = 2000;
-
 /**
  * Every "Sign out" in the app. Before it follows the sign-out route it forgets
- * this tab's desktop windows and removes this device's push token, so the next person to use the device does not get
- * the last member's notifications. The cleanup gets two seconds; a slow network
- * never holds a member on a page they chose to leave.
+ * this tab's desktop windows. The push token is forgotten on the sign-out page
+ * itself (SignOutView), because erasure's redirect and a typed address reach
+ * that page without this link.
  *
  * A plain link underneath (it works with Button asChild), and without
  * JavaScript it is just the sign-out link.
@@ -24,7 +20,7 @@ export function SignOutLink({
   children = "Sign out",
   ...props
 }: ComponentProps<"a">) {
-  const handleClick = async (event: MouseEvent<HTMLAnchorElement>) => {
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
     if (
       event.defaultPrevented ||
@@ -36,15 +32,10 @@ export function SignOutLink({
     ) {
       return;
     }
-    event.preventDefault();
     // The desktop's window stack (layout only) belongs to this member; the
-    // next person on this tab starts with a clean desktop.
+    // next person on this tab starts with a clean desktop. The link then
+    // follows its href as usual.
     forgetAllWindows(window.sessionStorage);
-    await Promise.race([
-      forgetDeviceToken(),
-      new Promise((resolve) => setTimeout(resolve, FORGET_TOKEN_TIMEOUT_MS)),
-    ]);
-    window.location.assign(href);
   };
 
   return (

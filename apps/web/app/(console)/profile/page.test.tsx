@@ -34,6 +34,14 @@ vi.mock("@/lib/dues", () => ({
   })),
 }));
 vi.mock("@/lib/participations", () => ({ getMyParticipation: vi.fn() }));
+vi.mock("@/lib/tickets", () => ({
+  getMyTicket: vi.fn(async () => ({
+    ticketStatus: "needs_directed_ticket",
+    ddt: "allocated",
+    wap: "issued",
+  })),
+}));
+vi.mock("./actions", () => ({ setMyTicketAction: vi.fn() }));
 vi.mock("@/lib/integration-config", () => ({
   feedbackTracker: () => ({ ok: false, reason: "not_configured" }),
 }));
@@ -50,6 +58,7 @@ vi.mock("@/components/profile/profile-sections", () => ({
 }));
 
 import { getMyParticipation } from "@/lib/participations";
+import { getMyTicket } from "@/lib/tickets";
 import ProfilePage from "./page";
 
 async function renderWith(status: ParticipationStatus | null) {
@@ -114,6 +123,50 @@ describe("profile: This year", () => {
     expect(screen.getByText("You haven't told us yet.")).toBeTruthy();
     expect(
       screen.queryByRole("link", { name: "Change your answer" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Your Burn ticket" }),
+    ).toBeNull();
+  });
+});
+
+describe("profile: the member's own ticket", () => {
+  it.each<ParticipationStatus>(["applied", "maybe", "accepted", "waitlisted"])(
+    "asks a member who said %s where their ticket stands, with their answer chosen",
+    async (status) => {
+      await renderWith(status);
+
+      const group = screen.getByRole("radiogroup", {
+        name: "Your Burn ticket",
+      });
+      expect(group).toBeTruthy();
+      expect(
+        screen
+          .getByRole("radio", {
+            name: "I need a DDT (direct distribution ticket) from the camp",
+          })
+          .getAttribute("aria-checked"),
+      ).toBe("true");
+      // Their own DDT and WAP, read-only (owner, 2026-09-28).
+      const set = screen.getByLabelText("Set by the captains");
+      expect(set.textContent).toContain("DDT (direct distribution ticket)");
+      expect(set.textContent).toContain("Allocated");
+      expect(set.textContent).toContain("WAP (work access pass)");
+      expect(set.textContent).toContain("Issued");
+      expect(set.querySelector("select, input")).toBeNull();
+      // Read from the member's own id only.
+      expect(getMyTicket).toHaveBeenCalledWith("u1");
+    },
+  );
+
+  it("does not ask a member who said they are not coming", async () => {
+    await renderWith("not_attending");
+
+    expect(
+      screen.getByText("You said you're not coming this year."),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Your Burn ticket" }),
     ).toBeNull();
   });
 });

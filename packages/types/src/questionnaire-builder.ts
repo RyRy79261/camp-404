@@ -234,9 +234,12 @@ export function flattenBuilderQuestions(q: BuilderQuestionnaire): Question[] {
 function isEmpty(v: QuestionnaireResponseValue | undefined): boolean {
   if (v === undefined || v === null || v === "") return true;
   if (Array.isArray(v)) return v.length === 0;
-  // A grid answer ({ rowId: columnValue[] }) is empty when no row has a pick.
+  // A grid answer ({ rowId: columnValue[] }) is empty when no row has a pick;
+  // a rating grid's ({ rowId: position | "na" }) when no row has a value.
   if (typeof v === "object") {
-    return !Object.values(v).some((picks) => picks.length > 0);
+    return !Object.values(v).some((cell) =>
+      Array.isArray(cell) ? cell.length > 0 : cell !== undefined,
+    );
   }
   return false;
 }

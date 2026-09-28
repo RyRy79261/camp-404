@@ -4,12 +4,15 @@ import { revalidateManifest } from "@/lib/manifest-revalidate";
 import { redirect } from "next/navigation";
 import { QuestionnaireResponses, type SaveResult } from "@camp404/types";
 import {
+  answersLeadsOnly,
   boundDraftResponses,
+  questionnaireForViewer,
   questionnaireRoleMirror,
   validateSubmission,
 } from "@camp404/core";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { viewerSeesLeadsOnly } from "@/lib/questionnaire-viewer";
 import {
   completeBuilderResponse,
   getActivationById,
@@ -22,6 +25,8 @@ const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again — if it keeps happening, let a camp captain know.";
 const SAVE_REJECTED =
   "We couldn't save that — your answers are unreadable or too large. Please reload and try again.";
+const LEADS_ONLY_REFUSED =
+  "Some of these answers are for team leads only. Reload the page and try again.";
 
 /**
  * Persist a builder questionnaire's responses for the signed-in member.
@@ -82,13 +87,24 @@ export async function saveBuilderResponses(
 
   // The version-pinned definition is now needed on EVERY save, not just the
   // final one: a draft is bounded against ITS field ids below.
-  const definition = await getBuilderDefinition(
+  const fullDefinition = await getBuilderDefinition(
     activation.questionnaireKey,
     activation.version,
   );
-  if (!definition) {
+  if (!fullDefinition) {
     return { ok: false, errors: { _form: "This form is unavailable." } };
   }
+  // "Team leads and up" questions (#251): a member's runner never shows them,
+  // so an answer to one is a hand-made request and is refused whole. The rest
+  // is checked against the definition as this member sees it, so a required
+  // leads-only question never blocks them.
+  const viewer = {
+    seesLeadsOnly: await viewerSeesLeadsOnly(campUser, fullDefinition),
+  };
+  if (answersLeadsOnly(fullDefinition, viewer, responses)) {
+    return { ok: false, errors: { _form: LEADS_ONLY_REFUSED } };
+  }
+  const definition = questionnaireForViewer(fullDefinition, viewer);
 
   let toStore: QuestionnaireResponses;
   if (final) {
