@@ -27,6 +27,16 @@ export const AUDIT_ACTION_LABELS = {
   "camp.teams.renamed": "Renamed a team",
   "camp.teams.unarchived": "Restored a team",
   "document.created": "Started a camp document",
+  "dues.charge_added": "Added a charge to a member's dues",
+  "dues.charge_cancelled": "Cancelled a charge on a member's dues",
+  "dues.fee_charged": "Charged a member's camp fee",
+  "dues.fee_set": "Set a member's camp fee",
+  "dues.plan_set": "Set a member's payment plan",
+  "dues.settle_up_published": "Published a settle-up",
+  "dues.tier_added": "Added a fee tier",
+  "dues.tier_archived": "Removed a fee tier",
+  "dues.tier_changed": "Changed a fee tier",
+  "dues.year_saved": "Set the year's dues dates",
   "document.published": "Published a camp document",
   "document.unpublished": "Unpublished a camp document",
   "document.updated": "Edited a camp document",
@@ -47,6 +57,10 @@ export const AUDIT_ACTION_LABELS = {
   "participation.withdrawn": "Withdrew from this year",
   "payment.recorded": "Recorded a payment",
   "payment.status_changed": "Changed a payment",
+  "payment.proof_viewed": "Viewed a proof of payment",
+  "payment.refund_declined": "Declined a refund",
+  "payment.refund_requested": "Asked for a refund",
+  "payment.refunded": "Refunded a payment",
   "recipe.accepted": "Accepted a recipe version",
   "recipe.adjust_queued": "Asked Claude to change a recipe version",
   "recipe.approved": "Approved a recipe",
@@ -252,6 +266,43 @@ export function auditDetail(
       if (!PAYMENT_WORDS[from] || !PAYMENT_WORDS[to]) return reference;
       return `${reference}, ${PAYMENT_WORDS[from]} to ${PAYMENT_WORDS[to]}`;
     }
+    // Money a Finance write moved, and the words the dues screens use.
+    case "dues.fee_charged":
+    case "dues.fee_set":
+    case "dues.charge_added":
+    case "dues.charge_cancelled":
+    case "dues.tier_added":
+    case "dues.tier_changed":
+    case "payment.refund_requested":
+    case "payment.refunded": {
+      const cents = count(metadata, "amountCents");
+      const label = text(metadata, "label") ?? text(metadata, "description");
+      const money = cents === null ? null : formatMoney(cents);
+      const concession =
+        action === "dues.fee_set" && metadata?.concession === true
+          ? "with a concession"
+          : null;
+      const parts = [label, money, concession].filter(Boolean);
+      return parts.length > 0 ? parts.join(", ") : null;
+    }
+    case "dues.plan_set": {
+      const instalments = count(metadata, "instalments");
+      if (instalments === null) return null;
+      return instalments === 0
+        ? "Plan removed"
+        : `${instalments} ${instalments === 1 ? "instalment" : "instalments"}`;
+    }
+    case "dues.settle_up_published": {
+      const cents = count(metadata, "totalCents");
+      const members = count(metadata, "members");
+      if (cents === null || members === null)
+        return text(metadata, "description");
+      const verb = cents < 0 ? "back to" : "across";
+      return `${formatMoney(Math.abs(cents))} ${verb} ${members} ${members === 1 ? "member" : "members"}`;
+    }
+    case "payment.proof_viewed":
+    case "payment.refund_declined":
+      return text(metadata, "reference");
     case "reimbursement.status_changed": {
       const from = text(metadata, "from");
       const to = text(metadata, "to");

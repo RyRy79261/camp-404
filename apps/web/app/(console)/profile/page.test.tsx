@@ -20,6 +20,18 @@ vi.mock("@/lib/member-gate", () => ({
 vi.mock("@/lib/users", () => ({ isTeamLead: vi.fn(async () => false) }));
 vi.mock("@/lib/payments", () => ({
   getMemberRefCode: vi.fn(async () => null),
+  ledgerCycle: vi.fn(async () => 2027),
+}));
+vi.mock("@/lib/dues", () => ({
+  getMemberDues: vi.fn(async () => ({
+    balance: {
+      chargedCents: 250_000,
+      paidCents: 100_000,
+      pendingCents: 0,
+      refundedCents: 0,
+      balanceCents: 150_000,
+    },
+  })),
 }));
 vi.mock("@/lib/participations", () => ({ getMyParticipation: vi.fn() }));
 vi.mock("@/lib/tickets", () => ({
@@ -66,6 +78,17 @@ async function renderWith(status: ParticipationStatus | null) {
 
 afterEach(cleanup);
 beforeEach(() => vi.clearAllMocks());
+
+describe("profile: Your dues", () => {
+  it("says what the member owes, with the way to their dues", async () => {
+    await renderWith("accepted");
+    expect(screen.getByRole("heading", { name: "Your dues" })).toBeTruthy();
+    expect(screen.getByText(/^You owe R\s1\s500,00\.$/)).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Open My dues" }).getAttribute("href"),
+    ).toBe("/dues");
+  });
+});
 
 describe("profile: This year", () => {
   it.each<[ParticipationStatus, string]>([

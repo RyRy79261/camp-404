@@ -25,6 +25,7 @@ export type ProgramId =
   | "form-answers"
   | "invites"
   | "my-lift"
+  | "my-dues"
   | "tasks"
   | "calendar"
   | "team"
@@ -82,6 +83,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "form-answers": "Answers",
   invites: "Invites",
   "my-lift": "My lift",
+  "my-dues": "My dues",
   tasks: "Tasks",
   calendar: "Calendar",
   team: "Team",
@@ -189,6 +191,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/tools/forms/[key]", "form", "FORM.DOC", keyed("form")),
   route("/tools/invite", "invites", "KEYGEN.EXE"),
   route("/lift", "my-lift", "MY_LIFT.EXE"),
+  route("/dues", "my-dues", "MY_DUES.TXT"),
 
   // Camp
   route("/tasks", "tasks", "TASKS.EXE"),
@@ -279,6 +282,11 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/captains/overview", "overview", "CAMPSTAT.EXE"),
   route("/captains/applications", "applications", "INTAKE.DB"),
   route("/captains/payments", "payments", "LEDGER.DB"),
+  route("/captains/payments/members", "payments", "LEDGER.DB"),
+  route("/captains/payments/members/[userId]", "payments", "LEDGER.DB"),
+  route("/captains/payments/import", "payments", "LEDGER.DB"),
+  route("/captains/payments/settle-up", "payments", "LEDGER.DB"),
+  route("/captains/payments/settings", "payments", "LEDGER.DB"),
   route("/captains/camp-settings", "camp-settings", "SETTINGS.CPL"),
   route("/captains/camp-settings/cycle", "camp-settings", "SETTINGS.CPL"),
   route("/captains/join-site", "join-site", "JOINSITE.EXE"),

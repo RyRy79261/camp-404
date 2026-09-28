@@ -21,7 +21,6 @@ import {
   notificationLink,
   type NotificationPayload,
   paymentReference,
-  paymentSettlesDues,
   sumMinor,
   UnknownCurrencyError,
   type PaymentStatus,
@@ -66,6 +65,15 @@ import type {
   CampMemberDetailOptions,
 } from "@camp404/db/roster";
 import type { PaymentRow, RecordPaymentInput } from "@camp404/db/payments";
+import { MoneyRefused, NOT_A_MONEY_KEEPER } from "@camp404/db/dues";
+import type { PaymentMethod, PaymentSource } from "@camp404/types";
+import {
+  chargeFeeOnAccept,
+  duesSettledInStore,
+  isMoneyKeeperInStore,
+  refundStatusOf,
+  resetDuesStore,
+} from "./test-store-dues";
 import type { MyLift } from "@camp404/db/cars";
 import {
   ALREADY_A_TASK,
@@ -492,6 +500,11 @@ interface TestPayment {
   status: PaymentStatus;
   note: string | null;
   recordedByUserId: string | null;
+  source: PaymentSource;
+  method: PaymentMethod | null;
+  paidOn: string | null;
+  proofPathname: string | null;
+  proofContentType: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -2589,6 +2602,10 @@ export const testStore = {
     row.decidedAt = now;
     row.reason = null;
     row.updatedAt = now;
+    // The fee they pledged is charged with the place (#240).
+    if (input.to === "accepted") {
+      chargeFeeOnAccept(input.userId, row.cycle, input.decidedByUserId);
+    }
     return true;
   },
 
@@ -2736,10 +2753,18 @@ export const testStore = {
   ): CampManagementMember[] {
     const cycle = currentCycleNumber();
     const thisYear = teamMemberships.filter((m) => m.cycle === cycle);
+    // The dues rule (#240): with charges, a balance paid down; with none,
+    // any payment received or waived.
     const settled = new Set(
-      payments
-        .filter((p) => p.cycle === cycle && paymentSettlesDues(p.status))
-        .map((p) => p.userId),
+      Array.from(usersByAuthId.values())
+        .map((u) => u.id)
+        .filter((id) =>
+          duesSettledInStore(
+            id,
+            cycle,
+            payments.filter((p) => p.userId === id && p.cycle === cycle),
+          ),
+        ),
     );
     return Array.from(usersByAuthId.values())
       .map((u): CampManagementMember => {
@@ -3494,11 +3519,27 @@ export const testStore = {
     return code;
   },
 
+  /** The member's payment reference if they have one; gives none out. */
+  memberRefCode(userId: string): string | null {
+    return memberRefCodes.get(userId) ?? null;
+  },
+
+  /** Every member the store knows, for the dues twin's lists. */
+  allUsers(): TestUser[] {
+    return Array.from(usersByAuthId.values());
+  },
+
   /** Record a payment for this year (mirrors recordPayment). */
   recordPayment(input: RecordPaymentInput): { id: string; reference: string } {
     if (!isCurrency(input.currency)) {
       throw new UnknownCurrencyError(input.currency);
     }
+    const source = input.source ?? "captain";
+    const allowed =
+      source === "member"
+        ? input.recordedByUserId === input.userId && input.status === "pending"
+        : isMoneyKeeperInStore(input.recordedByUserId);
+    if (!allowed) throw new MoneyRefused(NOT_A_MONEY_KEEPER);
     if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0) {
       throw new Error(
         "recordPayment: the amount must be whole cents, not negative",
@@ -3521,6 +3562,11 @@ export const testStore = {
       status: input.status,
       note: input.note?.trim() || null,
       recordedByUserId: input.recordedByUserId,
+      source,
+      method: input.method ?? null,
+      paidOn: input.paidOn ?? null,
+      proofPathname: input.proofPathname ?? null,
+      proofContentType: input.proofContentType ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -3533,8 +3579,12 @@ export const testStore = {
     paymentId: string;
     from: PaymentStatus;
     to: PaymentStatus;
+    actorId: string;
   }): boolean {
     if (input.from === input.to) return false;
+    if (!isMoneyKeeperInStore(input.actorId)) {
+      throw new MoneyRefused(NOT_A_MONEY_KEEPER);
+    }
     const row = payments.find(
       (p) => p.id === input.paymentId && p.status === input.from,
     );
@@ -3570,8 +3620,24 @@ export const testStore = {
         recordedByName: p.recordedByUserId
           ? (findUserById(p.recordedByUserId)?.displayName ?? null)
           : null,
+        source: p.source,
+        method: p.method,
+        paidOn: p.paidOn,
+        hasProof: p.proofPathname !== null,
+        refundStatus: refundStatusOf(p.id),
         createdAt: p.createdAt,
       }));
+  },
+
+  /** The year's payment rows themselves, for the dues twin (copies). */
+  duesPayments(cycle: number): TestPayment[] {
+    return payments.filter((p) => p.cycle === cycle).map((p) => ({ ...p }));
+  },
+
+  /** One payment row (a copy), or null. */
+  getPayment(paymentId: string): TestPayment | null {
+    const row = payments.find((p) => p.id === paymentId);
+    return row ? { ...row } : null;
   },
 
   /** Rands received in one year, in cents (mirrors receivedTotal). */
@@ -5320,6 +5386,7 @@ export const testStore = {
     S.desktopPreferences.clear();
     S.teamPrograms.clear();
     S.inkblotRuns.length = 0;
+    resetDuesStore();
   },
 
   // --- INKBLOT's board (the twin of @camp404/db/inkblot) --------------------

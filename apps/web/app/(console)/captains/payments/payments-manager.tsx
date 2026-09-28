@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, Wallet } from "lucide-react";
+import { FileText, Loader2, Wallet } from "lucide-react";
 import {
   CAMP_TIME_ZONE,
   formatMoney,
+  PAYMENT_METHOD_LABELS,
   readRate,
+  REFUND_STATUS_LABELS,
   sumMinor,
   type PaymentStatus,
 } from "@camp404/core";
@@ -30,11 +33,14 @@ import {
 } from "@camp404/ui/components/responsive-data-table";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
+import { memberDuesPath, paymentProofPath } from "@/lib/dues-copy";
+import { formatDay, SOURCE_WORDS } from "@/lib/dues-view";
 import { recordPaymentAction, setPaymentStatusAction } from "./actions";
 
 // The payments ledger island: record a payment, and move one between pending,
-// received and waived. Every write goes through the captain-gated actions and
-// the page re-renders from the server.
+// received and waived. A payment a member sent in carries its proof file,
+// opened through the audited proof route. Every write goes through the
+// Finance-gated actions and the page re-renders from the server.
 //
 // Feedback, as on every captain screen: a refused payment shows inline on the
 // form; a failed one-tap move on a ledger row is a toast. Only the control that
@@ -114,6 +120,9 @@ export function PaymentsManager({
   // but brings nothing in, and a pending one has not arrived.
   const received = totalOf(payments, "reconciled");
   const promised = totalOf(payments, "pending");
+  const toCheck = payments.filter(
+    (p) => p.status === "pending" && p.source === "member",
+  ).length;
 
   function record() {
     setError(null);
@@ -165,15 +174,49 @@ export function PaymentsManager({
       cellClassName: "whitespace-normal",
       cell: (p) => (
         <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="font-medium">
+          <Link
+            href={memberDuesPath(p.userId)}
+            className="font-medium hover:text-accent"
+          >
             {p.memberName ?? "A former member"}
-          </span>
+          </Link>
           <span className="font-mono text-xs text-muted-foreground">
             {p.reference}
           </span>
+          {(p.source !== "captain" || p.paidOn || p.method) && (
+            <span className="text-xs font-normal text-muted-foreground">
+              {[
+                SOURCE_WORDS[p.source],
+                p.method ? PAYMENT_METHOD_LABELS[p.method] : null,
+                p.paidOn ? `paid ${formatDay(p.paidOn)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          )}
           {p.note && (
             <span className="max-w-xs whitespace-pre-line text-xs font-normal text-muted-foreground">
               {p.note}
+            </span>
+          )}
+          {(p.hasProof || p.refundStatus) && (
+            <span className="mt-1 flex flex-wrap items-center gap-2">
+              {p.hasProof && (
+                <a
+                  href={paymentProofPath(p.id)}
+                  target="_blank"
+                  rel="noopener"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+                >
+                  <FileText className="h-3.5 w-3.5" aria-hidden />
+                  Proof of payment
+                </a>
+              )}
+              {p.refundStatus && (
+                <Badge variant="outline">
+                  {REFUND_STATUS_LABELS[p.refundStatus]}
+                </Badge>
+              )}
             </span>
           )}
         </span>
@@ -325,6 +368,13 @@ export function PaymentsManager({
                   <span className="font-medium tabular-nums">
                     {formatMoney(promised.cents)}
                   </span>
+                </p>
+              )}
+              {toCheck > 0 && (
+                <p role="status" className="text-xs text-muted-foreground">
+                  {toCheck === 1
+                    ? "1 payment a member sent in is waiting to be checked against the bank."
+                    : `${toCheck} payments members sent in are waiting to be checked against the bank.`}
                 </p>
               )}
             </div>

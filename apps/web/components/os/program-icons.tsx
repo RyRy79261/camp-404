@@ -47,6 +47,7 @@ const LINE: Readonly<Record<string, IconKey>> = {
   overview: "campstat",
   applications: "tickets",
   payments: "ledger",
+  "my-dues": "ledger",
   "camp-settings": "settings",
   "join-site": "joinsite",
   audit: "audit",

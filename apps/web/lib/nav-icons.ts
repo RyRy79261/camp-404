@@ -82,6 +82,7 @@ const PAGE_ICONS: Record<string, LucideIcon> = {
   "/captains/questionnaires": ClipboardList,
   "/captains/announcements": Megaphone,
   "/captains/payments": Banknote,
+  "/dues": Wallet,
   "/captains/camp-settings": Settings,
   "/captains/audit": ScrollText,
   "/captains/system": Activity,
