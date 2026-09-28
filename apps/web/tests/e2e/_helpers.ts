@@ -136,6 +136,7 @@ export async function seedLift(
         vehicleModel?: string;
         seatsOffered?: number;
         departureCity?: string;
+        canTow?: boolean;
       }
     | { role: "rider"; driverAuthUserId: string },
 ): Promise<void> {

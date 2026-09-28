@@ -46,9 +46,7 @@ const newId = () => `id-${++idCounter}`;
 
 vi.mock("@camp404/db/telegram", () => ({
   async getActiveChatByKind(kind: string) {
-    return (
-      dbState.chats.find((c) => c.kind === kind && !c.archivedAt) ?? null
-    );
+    return dbState.chats.find((c) => c.kind === kind && !c.archivedAt) ?? null;
   },
   async listPendingInvitesForUser(userId: string, now: Date) {
     return dbState.invites
@@ -86,7 +84,10 @@ vi.mock("@camp404/db/telegram", () => ({
       row.joinedAt = joinedAt;
     }
   },
-  async recordTelegramUserId(input: { userId: string; telegramUserId: string }) {
+  async recordTelegramUserId(input: {
+    userId: string;
+    telegramUserId: string;
+  }) {
     dbState.userTelegramIds.set(input.userId, input.telegramUserId);
   },
   async enqueueAnnouncement(input: {

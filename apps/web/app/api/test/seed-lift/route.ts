@@ -23,6 +23,7 @@ interface Body {
   vehicleModel?: string;
   seatsOffered?: number;
   departureCity?: string;
+  canTow?: boolean;
 }
 
 export async function POST(req: Request) {
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
       vehicleModel: body.vehicleModel ?? null,
       seatsOffered: body.seatsOffered ?? null,
       departureCity: body.departureCity ?? null,
+      canTow: body.canTow ?? false,
     });
     return NextResponse.json({ ok: true });
   }

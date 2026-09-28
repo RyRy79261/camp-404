@@ -1,8 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { canEditPower } from "@camp404/core";
 import {
   EditGeneratorInput,
   EditLoadInput,
@@ -11,10 +9,6 @@ import {
   PowerPlanInput,
 } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
-import {
-  captainActionGate,
-  type CaptainActionAccess,
-} from "@/lib/captain-gate";
 import {
   addGenerator,
   addPowerLoad,
@@ -31,44 +25,16 @@ import {
   CHECK_GENERATOR,
   CHECK_LOAD,
   CHECK_PLAN,
-  POWER_FUEL_PATH,
-  POWER_LOADS_PATH,
   POWER_REFUSAL,
 } from "@/lib/power-copy";
-import { getLeadTeams } from "@/lib/users";
+import { firstIssue, powerGate, revalidatePower } from "@/lib/power-gate";
 
-// The load list's and the fuel page's writes (#253, #254). Each action: the gate (a captain or a Power &
-// Lighting lead), the Zod boundary, then the facade with the actor's id alone.
-// The gate answers the screen; the rule itself is checked again inside each
-// write's own transaction (lockPowerEditor), which re-reads the actor's rank
-// and led teams and never takes a team list from here.
-
-type Gate = Extract<CaptainActionAccess, { ok: true }>;
-
-function firstIssue(error: z.ZodError, fallback: string): string {
-  return error.issues[0]?.message ?? fallback;
-}
-
-function revalidatePower(): void {
-  revalidatePath(POWER_LOADS_PATH);
-  revalidatePath(POWER_FUEL_PATH);
-}
-
-/**
- * The power editor's gate: the rank gate at team_lead (clearance is global),
- * then canEditPower on the teams they lead, so a lead of another team is told
- * here rather than by the write.
- */
-async function powerGate(
-  refusal: string,
-): Promise<Gate | { ok: false; error: string }> {
-  const gate = await captainActionGate("team_lead", refusal);
-  if (!gate.ok) return gate;
-  const led =
-    gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-  if (!canEditPower(gate.rank, led)) return { ok: false, error: refusal };
-  return gate;
-}
+// The load list's and the fuel page's writes (#253, #254). Each action: the
+// gate (a captain or a Power & Lighting lead, lib/power-gate.ts), the Zod
+// boundary, then the facade with the actor's id alone. The gate answers the
+// screen; the rule itself is checked again inside each write's own
+// transaction (lockPowerEditor), which re-reads the actor's rank and led
+// teams and never takes a team list from here.
 
 const RemoveLoadInput = z.object({
   loadId: z.guid(),
@@ -235,7 +201,14 @@ export async function saveFuelPlanAction(
     if (!parsed.success) {
       return { ok: false, error: firstIssue(parsed.error, CHECK_PLAN) };
     }
-    const { firstPoweredDay: _day, expectedVersion, ...patch } = parsed.data;
+    // The date of day 1 is the load list's and the low-fuel warning the
+    // refuelling page's: neither is sent from here.
+    const {
+      firstPoweredDay: _day,
+      lowFuelDays: _low,
+      expectedVersion,
+      ...patch
+    } = parsed.data;
     const result = await setPowerPlan({
       actorId: gate.campUser.id,
       patch,

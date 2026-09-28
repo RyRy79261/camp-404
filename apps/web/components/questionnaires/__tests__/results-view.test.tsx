@@ -320,3 +320,46 @@ describe("ResultsView — Individual", () => {
     );
   });
 });
+
+describe("ResultsView — rating grid (#251)", () => {
+  const MEALS: Question[] = [
+    {
+      id: "meals",
+      kind: "rating_grid",
+      prompt: "Rate the meals",
+      display: "stars",
+      rows: [
+        { id: "d1", label: "Day 1 dinner" },
+        { id: "d2", label: "Day 2 lunch" },
+      ],
+      scale: ["1 star", "2 stars", "3 stars", "4 stars", "5 stars"],
+      allowNa: true,
+      naLabel: "Didn't eat it",
+      required: false,
+    },
+  ];
+
+  it("shows each row's average, how many rated it, and the N/A count", () => {
+    renderView({
+      questions: MEALS,
+      summary: aggregateQuestions(MEALS, [
+        { meals: { d1: 5, d2: 2 } },
+        { meals: { d1: 4, d2: "na" } },
+      ]),
+    });
+    const table = screen.getByRole("table", { name: /Average for each row/ });
+    const dinner = within(table).getByRole("row", { name: /Day 1 dinner/ });
+    expect(dinner.textContent).toContain("4.5");
+    const cells = within(dinner).getAllByRole("cell");
+    expect(cells.map((c) => c.textContent)).toEqual(["4.5of 5", "2", "0"]);
+    const lunch = within(table).getByRole("row", { name: /Day 2 lunch/ });
+    expect(
+      within(lunch)
+        .getAllByRole("cell")
+        .map((c) => c.textContent),
+    ).toEqual(["2of 5", "1", "1"]);
+    expect(
+      within(table).getByRole("columnheader", { name: "Didn't eat it" }),
+    ).toBeTruthy();
+  });
+});

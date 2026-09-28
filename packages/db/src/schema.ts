@@ -20,6 +20,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
+  CHARGE_KINDS,
   CURRENT_KINDS,
   FUEL_TYPES,
   GENERATOR_OWNERS,
@@ -29,9 +30,18 @@ import {
   LOAD_CATEGORIES,
   LOAD_OWNERS,
   LOAD_SCHEDULES,
+  CAN_LOCATIONS,
+  GRID_NODE_KINDS,
+  SHARE_GENERATOR_SOURCES,
   NOTIFICATION_KINDS,
   PARTICIPATION_INTENTS,
   PARTICIPATION_STATUSES,
+  PAYMENT_METHODS,
+  PAYMENT_SOURCES,
+  REFUND_STATUSES,
+  DDT_STATUSES,
+  WAP_STATUSES,
+  TICKET_STATUSES,
   type CurrentKind,
   type FuelType,
   type GeneratorOwner,
@@ -41,6 +51,9 @@ import {
   type LoadCategory,
   type LoadOwner,
   type LoadSchedule,
+  type CanLocation,
+  type GridNodeKind,
+  type ShareGeneratorSource,
   type BuilderQuestionnaire,
   type DesktopLayout,
   type DesktopPreferences,
@@ -189,6 +202,13 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "waived",
 ]);
 
+// Dues (#240). Mirror CHARGE_KINDS, PAYMENT_METHODS, PAYMENT_SOURCES and
+// REFUND_STATUSES in @camp404/types dues.ts.
+export const duesChargeKindEnum = pgEnum("dues_charge_kind", CHARGE_KINDS);
+export const paymentMethodEnum = pgEnum("payment_method", PAYMENT_METHODS);
+export const paymentSourceEnum = pgEnum("payment_source", PAYMENT_SOURCES);
+export const refundStatusEnum = pgEnum("refund_status", REFUND_STATUSES);
+
 export const reimbursementAccountTypeEnum = pgEnum(
   "reimbursement_account_type",
   ["sa", "international"],
@@ -241,6 +261,8 @@ export const broadcastKindEnum = pgEnum("broadcast_kind", [
   "lead_directive",
   "reminder",
   "system",
+  // A driver's message to the riders in their car (#270).
+  "car_message",
 ]);
 
 // What a delivery is about, for the member (NOTIFICATION_KINDS in
@@ -264,12 +286,24 @@ export const participationIntentEnum = pgEnum(
   PARTICIPATION_INTENTS,
 );
 
+// A member's Burn ticket, the camp's DDT (direct distribution ticket) for
+// them, and their WAP (work access pass), for one burn year (TICKET_STATUSES,
+// DDT_STATUSES, WAP_STATUSES in @camp404/types). The Postgres names keep the
+// words the table was first created with (directed_ticket, early_entry), so a
+// rename needs no migration.
+export const ticketStatusEnum = pgEnum("ticket_status", TICKET_STATUSES);
+export const ddtStatusEnum = pgEnum("directed_ticket_status", DDT_STATUSES);
+export const wapStatusEnum = pgEnum("early_entry_status", WAP_STATUSES);
+
 export const broadcastScopeEnum = pgEnum("broadcast_scope", [
   "everyone",
   "team",
   "team_leads",
   "drivers",
   "individual",
+  // The riders of the SENDER's own car this year (#270). The car is never
+  // stored: it is whoever sends. canSendToAudience owns who may use it.
+  "car",
 ]);
 
 export const notificationChannelEnum = pgEnum("notification_channel", [
@@ -835,6 +869,70 @@ export const carMembers = pgTable(
   }),
 );
 
+// --- Transport (#270) ------------------------------------------------------
+// The camp's rented trailers, listed per year, and which car tows each. A
+// trailer is camp gear, not member data; `towed_by_user_id` is the one member
+// link, and the read counts it only while that member drives THIS year, so a
+// driver who stops driving (or is erased, which also clears it) leaves the
+// trailer untowed rather than pointing at nobody.
+//
+// Year-scoped like the cars: `cycle` defaults to the UNSET_CYCLE sentinel and
+// setFoundingYear() adopts it; a new year starts with no trailers.
+
+export const transportTrailers = pgTable(
+  "transport_trailers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull().default(1),
+    name: text("name").notNull(),
+    notes: text("notes"),
+    // `set null`: losing the member must not lose the trailer. Erasure keeps
+    // the users row, so it clears this itself (packages/db/src/account.ts).
+    towedByUserId: uuid("towed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Compare-and-set: every edit names the version it saw.
+    version: integer("version").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("transport_trailers_cycle_idx").on(t.cycle),
+    // A car tows one trailer a year. The column is nullable ON PURPOSE here:
+    // any number of trailers may have no car yet, and Postgres treating NULLs
+    // as distinct is exactly that.
+    onePerCar: uniqueIndex("transport_trailers_one_per_car_idx").on(
+      t.towedByUserId,
+      t.cycle,
+    ),
+  }),
+);
+
+// A member asking for a lift this year: in one car (`driver_user_id`), or in
+// any car (null) for the transport team to match. One open request per member
+// per year; taking a seat deletes it in the same transaction. Member data:
+// listed in MEMBER_FIELD_READERS, erased with the account, adopted by
+// setFoundingYear() like the other year-scoped rows.
+
+export const liftRequests = pgTable(
+  "lift_requests",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull().default(1),
+    // The car asked for, by its driver; null is "any car".
+    driverUserId: uuid("driver_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    pk: primaryKey({ columns: [r.userId, r.cycle] }),
+    driverIdx: index("lift_requests_driver_idx").on(r.driverUserId, r.cycle),
+  }),
+);
+
 // --- Teams ---------------------------------------------------------------
 
 export const teamMemberships = pgTable(
@@ -903,6 +1001,42 @@ export const campParticipations = pgTable(
   }),
 );
 
+// --- Tickets and WAP (#238) ----------------------------------------
+// One row per member per burn year, written only through @camp404/db/tickets.
+// The member says where their own ticket stands; a captain records the camp's
+// DDT and the WAP. No row means nothing said yet: every column's default. Only what the captains plan with is kept, never a
+// ticket number, barcode, order reference or card detail.
+
+export const campTickets = pgTable(
+  "camp_tickets",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The burn year. Defaults to the UNSET_CYCLE sentinel (1) like
+    // camp_participations: a row written before the camp names its founding
+    // year is adopted into that year by setFoundingYear().
+    cycle: integer("cycle").notNull().default(1),
+    // The member's own answer. Captains read it; team leads do not.
+    ticketStatus: ticketStatusEnum("ticket_status")
+      .notNull()
+      .default("unknown"),
+    // Captain-only, to read and to write.
+    ddt: ddtStatusEnum("directed_ticket").notNull().default("none"),
+    wap: wapStatusEnum("early_entry").notNull().default("not_needed"),
+    // The captain who last changed the DDT or WAP.
+    passesUpdatedByUserId: uuid("passes_updated_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.cycle] }),
+  }),
+);
+
 // --- Payments ledger ------------------------------------------------------
 // Owner's call (2026-09-16): a full payments ledger with amounts and
 // references, not a "paid" toggle. The app never moves money: a member pays
@@ -934,6 +1068,20 @@ export const payments = pgTable(
     recordedByUserId: uuid("recorded_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
+    // Who put it on the ledger (#240): a captain or Finance lead by hand, the
+    // member with a proof file, or the statement import. Rows from before are
+    // a captain's.
+    source: paymentSourceEnum("source").notNull().default("captain"),
+    // How and when the money was paid, as the member or the statement says.
+    method: paymentMethodEnum("method"),
+    paidOn: date("paid_on", { mode: "string" }),
+    // The member's proof of payment: a private blob (`payment-proofs/<member
+    // id>/…`), streamed only through /api/payment-proof to the member and the
+    // Finance team, every other-person read audited. Never a card number:
+    // the app records what arrived, never how to take money. Cleared, and the
+    // file deleted, on erasure.
+    proofPathname: text("proof_pathname"),
+    proofContentType: text("proof_content_type"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -941,6 +1089,256 @@ export const payments = pgTable(
     userCycleIdx: index("payments_user_cycle_idx").on(p.userId, p.cycle),
     cycleIdx: index("payments_cycle_idx").on(p.cycle),
     currencyCheck: check("payments_currency_check", sql`${p.currency} = 'ZAR'`),
+  }),
+);
+
+// --- Dues (#240) ----------------------------------------------------------
+// What each member owes the camp for a year, next to the payments ledger
+// above. All of it is read and written by the Finance team (captains and
+// Finance leads, canManageMoney in @camp404/core); a member reads only their
+// own. Money is whole rand cents, ZAR only, each table held by its CHECK.
+// Every Finance write leaves an audit row in the same transaction.
+
+// The year's dues dates, one row per burn year, set in the Finance tools:
+// the deadline and the refund schedule (a full refund up to one day, a
+// partial one at a percentage up to a later day, nothing after). Stored here,
+// never in code (#240). `version` makes each save a compare-and-set.
+export const duesYears = pgTable(
+  "dues_years",
+  {
+    cycle: integer("cycle").primaryKey(),
+    deadline: date("deadline", { mode: "string" }),
+    fullRefundUntil: date("full_refund_until", { mode: "string" }),
+    partialRefundUntil: date("partial_refund_until", { mode: "string" }),
+    partialRefundPct: integer("partial_refund_pct"),
+    version: integer("version").notNull().default(0),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    pctCheck: check(
+      "dues_years_partial_refund_pct_check",
+      sql`${d.partialRefundPct} is null or (${d.partialRefundPct} between 1 and 99)`,
+    ),
+  }),
+);
+
+// The year's fee tiers: what a member may pledge. A tier with pledges is
+// archived, never deleted, so a pledge keeps its label.
+export const feeTiers = pgTable(
+  "fee_tiers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    label: text("label").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    // ISO 4217 code, always ZAR (CURRENCIES in @camp404/core).
+    currency: text("currency").notNull().default("ZAR"),
+    archivedAt: timestamp("archived_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("fee_tiers_cycle_idx").on(t.cycle),
+    amountCheck: check("fee_tiers_amount_check", sql`${t.amountCents} > 0`),
+    currencyCheck: check(
+      "fee_tiers_currency_check",
+      sql`${t.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// A member's dues account for one year: their pledge (a tier, or an amount
+// below the lowest tier, which is a valid answer), and the version of their
+// payment plan, so a plan edit is a compare-and-set.
+export const duesAccounts = pgTable(
+  "dues_accounts",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    pledgedTierId: uuid("pledged_tier_id").references(() => feeTiers.id, {
+      onDelete: "set null",
+    }),
+    // The amount pledged, kept even when the tier is archived.
+    pledgedAmountCents: integer("pledged_amount_cents"),
+    pledgedAt: timestamp("pledged_at", { mode: "date" }),
+    planVersion: integer("plan_version").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    pk: primaryKey({ columns: [a.userId, a.cycle] }),
+    pledgeCheck: check(
+      "dues_accounts_pledge_check",
+      sql`${a.pledgedAmountCents} is null or ${a.pledgedAmountCents} > 0`,
+    ),
+  }),
+);
+
+// A post-burn settle-up (#240): a total shared out across members as
+// `settle_up` charges, published in one transaction. A refund settle-up's
+// charges are negative (money back to each member).
+export const duesSettleUps = pgTable(
+  "dues_settle_ups",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    description: text("description").notNull(),
+    // Signed: below zero for money back to the members.
+    totalCents: integer("total_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    memberCount: integer("member_count").notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (s) => ({
+    currencyCheck: check(
+      "dues_settle_ups_currency_check",
+      sql`${s.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// What a member is charged for a year: the camp fee (from their pledge when
+// they are accepted, or set by the Finance team, with a concession), rentals,
+// their settle-up share and anything else. A charge is cancelled, never
+// deleted, so the account keeps its history.
+export const duesCharges = pgTable(
+  "dues_charges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    kind: duesChargeKindEnum("kind").notNull(),
+    description: text("description").notNull(),
+    // Whole cents; only a settle-up refund share is below zero.
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    // A fee's pledged amount, when a concession set it lower.
+    standardAmountCents: integer("standard_amount_cents"),
+    // Why the fee was lowered. Read only by the Finance team, never by the
+    // member; cleared on erasure.
+    concessionReason: text("concession_reason"),
+    settleUpId: uuid("settle_up_id").references(() => duesSettleUps.id, {
+      onDelete: "set null",
+    }),
+    cancelledAt: timestamp("cancelled_at", { mode: "date" }),
+    cancelledByUserId: uuid("cancelled_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (c) => ({
+    userCycleIdx: index("dues_charges_user_cycle_idx").on(c.userId, c.cycle),
+    cycleIdx: index("dues_charges_cycle_idx").on(c.cycle),
+    // One live camp fee per member per year. Partial: an ON CONFLICT against
+    // it must repeat the WHERE (AGENTS.md).
+    oneFeeIdx: uniqueIndex("dues_charges_one_fee_idx")
+      .on(c.userId, c.cycle)
+      .where(sql`${c.kind} = 'fee' and ${c.cancelledAt} is null`),
+    amountCheck: check(
+      "dues_charges_amount_check",
+      sql`${c.amountCents} > 0 or (${c.kind} = 'settle_up' and ${c.amountCents} < 0)`,
+    ),
+    currencyCheck: check(
+      "dues_charges_currency_check",
+      sql`${c.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// A member's payment plan for a year: the instalments they expect to pay,
+// replaced as a whole under dues_accounts.plan_version.
+export const duesInstalments = pgTable(
+  "dues_instalments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    dueOn: date("due_on", { mode: "string" }).notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (i) => ({
+    userCycleIdx: index("dues_instalments_user_cycle_idx").on(
+      i.userId,
+      i.cycle,
+    ),
+    amountCheck: check(
+      "dues_instalments_amount_check",
+      sql`${i.amountCents} > 0`,
+    ),
+    currencyCheck: check(
+      "dues_instalments_currency_check",
+      sql`${i.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// A refund of a received payment (owner, 2026-09-24: "there should be a refund
+// state"): asked for, then refunded or declined with a reason. The amount is
+// proposed from the year's schedule and the day the member withdrew; the
+// Finance team may change it. A refunded amount counts as money going out.
+export const paymentRefunds = pgTable(
+  "payment_refunds",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => payments.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    status: refundStatusEnum("status").notNull().default("requested"),
+    // What the schedule proposed, and what is (or was) to be paid back.
+    proposedCents: integer("proposed_cents"),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    // The note given when it was asked for, and why it was declined. Cleared
+    // on erasure.
+    note: text("note"),
+    declineReason: text("decline_reason"),
+    requestedByUserId: uuid("requested_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedByUserId: uuid("decided_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedAt: timestamp("decided_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    userCycleIdx: index("payment_refunds_user_cycle_idx").on(r.userId, r.cycle),
+    // One refund per payment that is not declined. Partial: an ON CONFLICT
+    // against it must repeat the WHERE (AGENTS.md).
+    oneLivePerPaymentIdx: uniqueIndex("payment_refunds_one_live_idx")
+      .on(r.paymentId)
+      .where(sql`${r.status} <> 'declined'`),
+    amountCheck: check(
+      "payment_refunds_amount_check",
+      sql`${r.amountCents} >= 0`,
+    ),
+    currencyCheck: check(
+      "payment_refunds_currency_check",
+      sql`${r.currency} = 'ZAR'`,
+    ),
   }),
 );
 
@@ -1758,6 +2156,37 @@ export const teamBudgets = pgTable(
     currencyCheck: check(
       "team_budgets_currency_check",
       sql`${tb.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// --- Team programs -------------------------------------------------------
+// What a team's own program on the 404 OS desktop says about the team (owner's
+// ruling 4, 2026-09-27): one short description of what the team does, written
+// by the team's leads and captains (canEditTeamProgram in @camp404/core). One
+// row per team, NOT year-scoped: what a team does outlasts the rollover. No
+// row means nothing written yet. Every write is a compare-and-set on
+// `version` and writes an audit_log row in the same transaction
+// (packages/db/src/team-programs.ts).
+//
+// No links (owner, 2026-09-27): nothing a team needs lives outside the app,
+// so a program never offers links to outside tools.
+//
+// It holds no member data: no author column (the audit row says who), and the
+// text is about the team. Erasure has nothing to clear here.
+export const teamPrograms = pgTable(
+  "team_programs",
+  {
+    team: teamEnum("team").primaryKey(),
+    description: text("description").notNull().default(""),
+    version: integer("version").notNull().default(1),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (tp) => ({
+    // TEAM_DESCRIPTION_MAX in @camp404/types; the last guard.
+    descriptionLength: check(
+      "team_programs_description_length",
+      sql`char_length(${tp.description}) <= 300`,
     ),
   }),
 );
@@ -2683,6 +3112,13 @@ export const powerLoads = pgTable(
       { onDelete: "set null" },
     ),
     circuit: text("circuit"),
+    // The point on the grid plan it plugs in at (#256), in the same year. Set
+    // from the grid page, not the load's own form, so it does not bump the
+    // load's version: an edit open in the load dialog is not spoiled by it.
+    gridNodeId: uuid("grid_node_id").references(
+      (): AnyPgColumn => powerGridNodes.id,
+      { onDelete: "set null" },
+    ),
     sort: integer("sort").notNull().default(0),
     version: integer("version").notNull().default(1),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
@@ -2693,6 +3129,7 @@ export const powerLoads = pgTable(
   },
   (l) => ({
     cycleIdx: index("power_loads_cycle_idx").on(l.cycle),
+    gridNodeIdx: index("power_loads_grid_node_idx").on(l.gridNodeId),
     categoryCheck: check(
       "power_loads_category_check",
       oneOf(l.category, LOAD_CATEGORIES),
@@ -2745,6 +3182,9 @@ export const powerPlans = pgTable(
     safetyMarginPct: doublePrecision("safety_margin_pct").notNull().default(20),
     canLitres: doublePrecision("can_litres").notNull().default(20),
     cansOwned: integer("cans_owned").notNull().default(0),
+    // Warn on site when the fuel left covers fewer days than this (#255); 0
+    // turns the warning off.
+    lowFuelDays: integer("low_fuel_days").notNull().default(2),
     version: integer("version").notNull().default(1),
     updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -2757,6 +3197,10 @@ export const powerPlans = pgTable(
       sql`${p.powerFactor} between 0.5 and 1`,
     ),
     daysCheck: check("power_plans_days_check", sql`${p.daysOnSite} >= 1`),
+    lowFuelCheck: check(
+      "power_plans_low_fuel_check",
+      sql`${p.lowFuelDays} >= 0`,
+    ),
     hoursCheck: check(
       "power_plans_hours_check",
       sql`${p.runFromHour} between 0 and 23 and ${p.runToHour} between 0 and 23`,
@@ -2764,6 +3208,240 @@ export const powerPlans = pgTable(
     fuelCheck: check(
       "power_plans_fuel_check",
       sql`${p.lowLoadFactor} >= 1 and ${p.safetyMarginPct} between 0 and 100 and ${p.canLitres} > 0 and ${p.cansOwned} >= 0`,
+    ),
+  }),
+);
+
+// --- Power on site (#255, #256, #257) ---------------------------------------
+// The same team's tools for the burn itself: the fuel in the cans and the
+// refuelling log, the grid of cables from the generator out, each generator's
+// readiness checklist, the team's work plan on the task board, and a year's
+// agreement to share a generator with a neighbouring camp. Written only by a
+// captain or a Power & Lighting lead (canEditPower, re-read in each write's
+// transaction); read by anyone in the camp. No money: litres, amps and dates.
+
+// A can of fuel in this year's stock. Cans are counted per year: the litres
+// in them are this year's. `litres` falls when a refuelling says it came from
+// the can, and a stock-take sets it.
+export const fuelCans = pgTable(
+  "fuel_cans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    label: text("label").notNull(),
+    capacityLitres: doublePrecision("capacity_litres").notNull(),
+    litres: doublePrecision("litres").notNull(),
+    location: text("location").$type<CanLocation>().notNull(),
+    // The can itself, when the inventory lists it (#246).
+    inventoryItemId: uuid("inventory_item_id").references(
+      () => inventoryItems.id,
+      { onDelete: "set null" },
+    ),
+    sort: integer("sort").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (c) => ({
+    cycleIdx: index("fuel_cans_cycle_idx").on(c.cycle),
+    locationCheck: check(
+      "fuel_cans_location_check",
+      oneOf(c.location, CAN_LOCATIONS),
+    ),
+    fillCheck: check(
+      "fuel_cans_fill_check",
+      sql`${c.capacityLitres} > 0 and ${c.litres} >= 0 and ${c.litres} <= ${c.capacityLitres}`,
+    ),
+  }),
+);
+
+// The refuelling log. APPEND-ONLY: no write updates or deletes a row. A
+// correction is a new row naming the one it replaces (`corrects_entry_id`);
+// a strike-out is a new row naming it with `voided`. The unique index lets
+// each entry be replaced once, so two people correcting it at once cannot
+// both win. `done_by_user_id` is the member who filled the generator.
+export const refuelEntries = pgTable(
+  "refuel_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    generatorId: uuid("generator_id")
+      .notNull()
+      .references(() => generators.id),
+    refuelledAt: timestamp("refuelled_at", { mode: "date" }).notNull(),
+    litres: doublePrecision("litres").notNull(),
+    fromCanId: uuid("from_can_id").references(() => fuelCans.id, {
+      onDelete: "set null",
+    }),
+    doneByUserId: uuid("done_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    hourMeter: doublePrecision("hour_meter"),
+    note: text("note"),
+    // Typed in afterwards from the paper sheet at the generator.
+    fromPaper: boolean("from_paper").notNull().default(false),
+    correctsEntryId: uuid("corrects_entry_id").references(
+      (): AnyPgColumn => refuelEntries.id,
+    ),
+    voided: boolean("voided").notNull().default(false),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    cycleIdx: index("refuel_entries_cycle_idx").on(r.cycle, r.refuelledAt),
+    correctsUniq: uniqueIndex("refuel_entries_corrects_uniq").on(
+      r.correctsEntryId,
+    ),
+    litresCheck: check(
+      "refuel_entries_litres_check",
+      sql`${r.litres} > 0`,
+    ),
+    voidCheck: check(
+      "refuel_entries_void_check",
+      sql`not ${r.voided} or ${r.correctsEntryId} is not null`,
+    ),
+  }),
+);
+
+// A point on this year's grid plan (#256): the generator, a junction, or an
+// end point where things plug in. Every point but a generator holds the run
+// that FEEDS it from its parent: the cable, its length and rating, and the
+// adapter at the far end, and whether the camp has them. So the grid is a
+// tree, one run into each point. A parent cannot be removed while it feeds
+// anything.
+export const powerGridNodes = pgTable(
+  "power_grid_nodes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind").$type<GridNodeKind>().notNull(),
+    parentId: uuid("parent_id").references(
+      (): AnyPgColumn => powerGridNodes.id,
+    ),
+    cable: text("cable"),
+    cableLengthM: doublePrecision("cable_length_m"),
+    cableGaugeMm2: doublePrecision("cable_gauge_mm2"),
+    // Typed from the cable's label; null shows "rating unknown", never a guess.
+    cableRatedAmps: doublePrecision("cable_rated_amps"),
+    adapter: text("adapter"),
+    haveCable: boolean("have_cable").notNull().default(true),
+    haveAdapter: boolean("have_adapter").notNull().default(true),
+    sort: integer("sort").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (n) => ({
+    cycleIdx: index("power_grid_nodes_cycle_idx").on(n.cycle),
+    parentIdx: index("power_grid_nodes_parent_idx").on(n.parentId),
+    kindCheck: check(
+      "power_grid_nodes_kind_check",
+      oneOf(n.kind, GRID_NODE_KINDS),
+    ),
+    rootCheck: check(
+      "power_grid_nodes_root_check",
+      sql`(${n.kind} = 'generator') = (${n.parentId} is null)`,
+    ),
+  }),
+);
+
+// A generator's readiness checklist for one year (#257): the template's items
+// and any the team adds, each with who sees to it, by when, and whether it is
+// done.
+export const generatorReadinessItems = pgTable(
+  "generator_readiness_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    generatorId: uuid("generator_id")
+      .notNull()
+      .references(() => generators.id),
+    // A READINESS_TEMPLATE key, or 'custom' for one the team added.
+    itemKey: text("item_key").notNull(),
+    label: text("label").notNull(),
+    ownerUserId: uuid("owner_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    dueOn: date("due_on", { mode: "string" }),
+    doneAt: timestamp("done_at", { mode: "date" }),
+    doneByUserId: uuid("done_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    sort: integer("sort").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (i) => ({
+    generatorIdx: index("generator_readiness_items_generator_idx").on(
+      i.cycle,
+      i.generatorId,
+    ),
+  }),
+);
+
+// The Power & Lighting team's work plan for a year (#257): the tasks it put on
+// the task board, so "copy last year" knows which tasks to copy and a second
+// press cannot put them there twice.
+export const powerWorkPlanTasks = pgTable(
+  "power_work_plan_tasks",
+  {
+    cycle: integer("cycle").notNull(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    sort: integer("sort").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (w) => ({
+    pk: primaryKey({ columns: [w.cycle, w.taskId] }),
+  }),
+);
+
+// A year's agreement to share a generator with a neighbouring camp (#257).
+// One row per year, the year its key. It names the camp and a contact ROLE,
+// never a person's phone or email; the fuel split is in percent and litres,
+// never money. It is camp-internal: nothing here is shown outside the app.
+export const powerSharingAgreements = pgTable(
+  "power_sharing_agreements",
+  {
+    cycle: integer("cycle").primaryKey(),
+    partnerCamp: text("partner_camp").notNull(),
+    contactRole: text("contact_role"),
+    generatorSource: text("generator_source")
+      .$type<ShareGeneratorSource>()
+      .notNull(),
+    generatorId: uuid("generator_id").references(() => generators.id),
+    theirGenerator: text("their_generator"),
+    // Their share of the fuel; null uses the share proposed from the kWh.
+    partnerFuelPct: doublePrecision("partner_fuel_pct"),
+    watchCover: text("watch_cover"),
+    version: integer("version").notNull().default(1),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    sourceCheck: check(
+      "power_sharing_agreements_source_check",
+      oneOf(a.generatorSource, SHARE_GENERATOR_SOURCES),
+    ),
+    pctCheck: check(
+      "power_sharing_agreements_pct_check",
+      sql`${a.partnerFuelPct} between 0 and 100`,
     ),
   }),
 );

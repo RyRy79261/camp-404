@@ -177,39 +177,44 @@ export async function resolveAudience(
   db: DbOrTx = createHttpDb(),
 ): Promise<string[]> {
   const cycle = await currentCycleNumber(db);
-  const [members, memberships, drivers, targets] = await Promise.all([
-    db
-      .select({
-        id: schema.users.id,
-        isSystem: schema.users.isSystem,
-        sanitised: schema.users.sanitised,
-        approvalStatus: schema.users.approvalStatus,
-      })
-      .from(schema.users),
-    db
-      .select({
-        userId: schema.teamMemberships.userId,
-        team: schema.teamMemberships.team,
-        isLead: schema.teamMemberships.isLead,
-      })
-      .from(schema.teamMemberships)
-      .where(eq(schema.teamMemberships.cycle, cycle)),
-    db
-      .select({ userId: schema.driverProfiles.userId })
-      .from(schema.driverProfiles)
-      .where(
-        and(
-          eq(schema.driverProfiles.intendsToDrive, true),
-          eq(schema.driverProfiles.cycle, cycle),
+  const [members, memberships, drivers, targets, carRiders] = await Promise.all(
+    [
+      db
+        .select({
+          id: schema.users.id,
+          isSystem: schema.users.isSystem,
+          sanitised: schema.users.sanitised,
+          approvalStatus: schema.users.approvalStatus,
+        })
+        .from(schema.users),
+      db
+        .select({
+          userId: schema.teamMemberships.userId,
+          team: schema.teamMemberships.team,
+          isLead: schema.teamMemberships.isLead,
+        })
+        .from(schema.teamMemberships)
+        .where(eq(schema.teamMemberships.cycle, cycle)),
+      db
+        .select({ userId: schema.driverProfiles.userId })
+        .from(schema.driverProfiles)
+        .where(
+          and(
+            eq(schema.driverProfiles.intendsToDrive, true),
+            eq(schema.driverProfiles.cycle, cycle),
+          ),
         ),
-      ),
-    broadcast.scope === "individual"
-      ? db
-          .select({ userId: schema.broadcastTargets.userId })
-          .from(schema.broadcastTargets)
-          .where(eq(schema.broadcastTargets.broadcastId, broadcast.id))
-      : Promise.resolve([] as { userId: string }[]),
-  ]);
+      broadcast.scope === "individual"
+        ? db
+            .select({ userId: schema.broadcastTargets.userId })
+            .from(schema.broadcastTargets)
+            .where(eq(schema.broadcastTargets.broadcastId, broadcast.id))
+        : Promise.resolve([] as { userId: string }[]),
+      broadcast.scope === "car" && senderId
+        ? carRidersOf(db, senderId, cycle)
+        : Promise.resolve([] as { userId: string }[]),
+    ],
+  );
 
   return computeAudience(
     broadcast,
@@ -218,9 +223,39 @@ export async function resolveAudience(
       memberships,
       driverUserIds: drivers.map((d) => d.userId),
       targetUserIds: targets.map((t) => t.userId),
+      carRiderUserIds: carRiders.map((r) => r.userId),
     },
     senderId,
   );
+}
+
+/**
+ * The riders of `driverUserId`'s own car this year, and nobody when they are
+ * not driving this year: the join on their driver profile is the check. A
+ * `car` broadcast reads its car from its SENDER, never from a stored id.
+ */
+function carRidersOf(
+  db: DbOrTx,
+  driverUserId: string,
+  cycle: number,
+): Promise<{ userId: string }[]> {
+  return db
+    .select({ userId: schema.carMembers.memberUserId })
+    .from(schema.carMembers)
+    .innerJoin(
+      schema.driverProfiles,
+      and(
+        eq(schema.driverProfiles.userId, schema.carMembers.driverUserId),
+        eq(schema.driverProfiles.cycle, schema.carMembers.cycle),
+        eq(schema.driverProfiles.intendsToDrive, true),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.carMembers.driverUserId, driverUserId),
+        eq(schema.carMembers.cycle, cycle),
+      ),
+    );
 }
 
 export interface AnnouncementSummary {
@@ -1270,6 +1305,68 @@ export async function getAnnouncementForMember(
     senderName: broadcast.senderName ?? null,
     publishedAt: broadcast.publishedAt,
     acknowledgedAt: delivery.acknowledgedAt,
+  };
+}
+
+/** One announcement a team has sent, as its program lists it. */
+export interface TeamAnnouncement {
+  id: string;
+  title: string;
+  body: string;
+  senderName: string | null;
+  /** When it went out to the team. */
+  sentAt: Date;
+}
+
+/** How many announcements a team's program lists. */
+export const TEAM_ANNOUNCEMENT_LIMIT = 5;
+
+/**
+ * The announcements a team has SENT, newest first, for its program (owner's
+ * ruling 3, 2026-09-27: every member may read a team's announcements on that
+ * team's dashboard; who RECEIVES them does not change). Only an announcement
+ * that has gone out is here: published and fanned out (`dispatched_at`), so a
+ * draft, or one published for later that has not reached its time, never is.
+ * It carries no pin, no audience count and no read receipts: the title, the
+ * text, the sender's name and when it went.
+ *
+ * `more` says whether the team has sent more than `limit`.
+ */
+export async function listTeamAnnouncements(
+  team: Team,
+  limit: number = TEAM_ANNOUNCEMENT_LIMIT,
+): Promise<{ items: TeamAnnouncement[]; more: boolean }> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      id: schema.broadcasts.id,
+      title: schema.broadcasts.title,
+      body: schema.broadcasts.body,
+      senderName: schema.users.displayName,
+      sentAt: schema.broadcasts.dispatchedAt,
+    })
+    .from(schema.broadcasts)
+    .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
+    .where(
+      and(
+        eq(schema.broadcasts.kind, "announcement"),
+        eq(schema.broadcasts.scope, "team"),
+        eq(schema.broadcasts.team, team),
+        isNotNull(schema.broadcasts.publishedAt),
+        isNotNull(schema.broadcasts.dispatchedAt),
+      ),
+    )
+    .orderBy(desc(schema.broadcasts.dispatchedAt), desc(schema.broadcasts.id))
+    .limit(limit + 1);
+  return {
+    items: rows.slice(0, limit).map((r) => ({
+      id: r.id,
+      title: r.title,
+      body: r.body,
+      senderName: r.senderName ?? null,
+      sentAt: r.sentAt!,
+    })),
+    more: rows.length > limit,
   };
 }
 

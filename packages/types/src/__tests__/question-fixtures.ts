@@ -13,6 +13,7 @@ import type {
   NumberQuestion,
   PhoneQuestion,
   Question,
+  RatingGridQuestion,
   RatingQuestion,
   ScaleQuestion,
   ShortTextQuestion,
@@ -169,6 +170,19 @@ export const CB_GRID: CheckboxGridQuestion = {
   required: false,
 };
 
+export const RATING_GRID: RatingGridQuestion = {
+  id: "survey_grid",
+  kind: "rating_grid",
+  prompt: "How true is each statement?",
+  rows: [
+    { id: "fair", label: "The shifts were fair" },
+    { id: "fed", label: "I was well fed" },
+  ],
+  scale: ["False", "Mostly false", "Mostly true", "True"],
+  allowNa: true,
+  required: true,
+};
+
 // --- Camp 404's kinds ------------------------------------------------------
 
 export const SLIDER: SliderQuestion = {
@@ -254,4 +268,5 @@ export const KIND_SAMPLES: readonly { question: Question; answer: unknown }[] =
     { question: FILE_LINK, answer: "https://example.com/layout.pdf" },
     { question: MC_GRID, answer: { mon: ["am"], tue: ["pm"] } },
     { question: CB_GRID, answer: { kitchen: ["am", "pm"] } },
+    { question: RATING_GRID, answer: { fair: 4, fed: "na" } },
   ];

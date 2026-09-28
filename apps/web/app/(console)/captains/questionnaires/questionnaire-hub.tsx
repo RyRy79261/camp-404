@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   BarChart3,
   CalendarCheck,
+  ClipboardList,
   Copy,
   FileText,
   Loader2,
@@ -34,6 +35,7 @@ import { ATTENDANCE_CHECK_KEY } from "@/lib/attendance-check";
 import {
   createAttendanceCheckAction,
   createDraftAction,
+  createFromTemplateAction,
   deleteDraftAction,
   duplicateDraftAction,
 } from "./actions";
@@ -119,6 +121,22 @@ export function QuestionnaireHub({
         return;
       }
       router.push(`/captains/questionnaires/${result.key}/send`);
+    });
+  }
+
+  const [templating, startTemplateTransition] = useTransition();
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const templateErrorId = useId();
+
+  function startFromTemplate() {
+    setTemplateError(null);
+    startTemplateTransition(async () => {
+      const result = await createFromTemplateAction("post_burn_survey");
+      if (!result.ok) {
+        setTemplateError(result.error);
+        return;
+      }
+      router.push(`/captains/questionnaires/${result.key}`);
     });
   }
 
@@ -282,11 +300,55 @@ export function QuestionnaireHub({
                     setCreating(false);
                     setName("");
                     setNameError(null);
+                    setTemplateError(null);
                   }}
-                  disabled={pending}
+                  disabled={pending || templating}
                 >
                   Cancel
                 </Button>
+              </div>
+              <div className="flex flex-col gap-2 border-t border-border pt-4">
+                <p className="text-sm font-medium">Or start from a template</p>
+                <div className="flex flex-col gap-2 rounded-md border border-border p-3 page-sm:flex-row page-sm:items-center page-sm:justify-between">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-sm font-medium">
+                      Post-burn survey
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Shifts, kitchen, water and waste, communication and
+                      general. Star ratings for this year&apos;s meals. Edit it
+                      before you send it.
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="shrink-0 self-start page-sm:self-center"
+                    onClick={startFromTemplate}
+                    disabled={templating || pending}
+                    aria-describedby={
+                      templateError ? templateErrorId : undefined
+                    }
+                  >
+                    {templating ? (
+                      <Loader2
+                        aria-hidden
+                        className="motion-safe:animate-spin"
+                      />
+                    ) : (
+                      <ClipboardList aria-hidden />
+                    )}
+                    Use this template
+                  </Button>
+                </div>
+                {templateError ? (
+                  <p
+                    id={templateErrorId}
+                    role="alert"
+                    className="text-xs text-destructive"
+                  >
+                    {templateError}
+                  </p>
+                ) : null}
               </div>
             </CardContent>
           </Card>

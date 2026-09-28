@@ -441,6 +441,23 @@ export function validateQuestionnaireDefinition(
         return;
       }
 
+      if (block.kind === "rating_grid") {
+        // Row ids key the per-row answers, exactly as a grid's do.
+        const seenRows = new Set<string>();
+        block.rows.forEach((row, rowIndex) => {
+          if (seenRows.has(row.id)) {
+            issues.push({
+              path: `${blockPath}.rows[${rowIndex}]`,
+              code: "duplicate_id",
+              message: `duplicate row id "${row.id}" — rows must be unique so answers stay attached to the right row`,
+              ...at,
+            });
+          }
+          seenRows.add(row.id);
+        });
+        return;
+      }
+
       if (block.kind === "single_select" || block.kind === "multi_select") {
         block.options.forEach((option, optionIndex) => {
           const optionPath = `${blockPath}.options[${optionIndex}]`;
@@ -615,6 +632,7 @@ function choiceCount(q: Question): number {
   if (q.kind === "multi_choice_grid" || q.kind === "checkbox_grid") {
     return Math.max(q.rows.length, q.columns.length);
   }
+  if (q.kind === "rating_grid") return q.rows.length;
   return q.kind === "years" ? 0 : (choiceValues(q)?.length ?? 0);
 }
 

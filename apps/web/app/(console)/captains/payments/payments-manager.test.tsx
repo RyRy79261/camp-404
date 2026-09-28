@@ -48,6 +48,11 @@ function payment(over: Partial<PaymentRow> = {}): PaymentRow {
     status: "pending",
     note: null,
     recordedByName: "Jo",
+    source: "captain",
+    method: null,
+    paidOn: null,
+    hasProof: false,
+    refundStatus: null,
     createdAt: new Date("2027-03-01T10:00:00Z"),
     ...over,
   };

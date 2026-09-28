@@ -223,6 +223,9 @@ keyboard.
 | `/power` | Power | `POWER.EXE` | Line-art plug and bolt | Camp | Redirect to Loads | `redirect(POWER_LOADS_PATH)` (`app/(console)/power/page.tsx:8`) | L | Single | n/a | `/power` | None. Keep the redirect; the icon points at `/power/loads` |
 | `/power/loads` | Power, Loads tab | `POWER.EXE` | n/a | n/a | Tab | Every approved member reads (`app/(console)/power/loads/page.tsx:217`). Editing: `canEditPower` (`:219`), a captain or a Power & Lighting lead (`packages/core/src/power.ts:34-43`) | L | Single, shared with `/power/fuel` | Loads table, KPIs, editor dialog | `/power/loads` | Medium. Wide table |
 | `/power/fuel` | Power, Fuel tab | `POWER.EXE` | n/a | n/a | Tab | Same, `canEditPower` (`app/(console)/power/fuel/page.tsx:231-233`) | L | Same window | Fuel plan, generator list | `/power/fuel` | Medium |
+| `/power/fuel-log` | Power, Refuelling tab (#255) | `POWER.EXE` | n/a | n/a | Tab | Same, `canEditPower`; the log is append-only (a correction or strike-out is a new entry) | L | Same window | Fuel stock, refuelling log, days of fuel left | `/power/fuel-log` | Medium. Wide table |
+| `/power/grid` | Power, Grid tab (#256) | `POWER.EXE` | n/a | n/a | Tab | Same, `canEditPower` | L | Same window | Grid tree with amps per run, loads per point | `/power/grid` | Medium |
+| `/power/readiness` | Power, Readiness tab (#257) | `POWER.EXE` | n/a | n/a | Tab | Same, `canEditPower` | L | Same window | Generator checklist, work plan, sharing agreement | `/power/readiness` | Medium |
 
 ### Kitchen
 
