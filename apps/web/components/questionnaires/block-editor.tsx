@@ -8,21 +8,26 @@ import {
   CornerDownRight,
   Plus,
   Trash2,
+  UtensilsCrossed,
   X,
 } from "lucide-react";
 import {
   BUILDER_ROLES,
   PARTICIPATION_INTENT_OPTIONS,
+  RATING_GRID_MAX_POINTS,
+  RATING_GRID_MIN_POINTS,
   SHORT_LABEL_MAX_LENGTH,
   SUBMIT_TARGET,
   builderRolesFor,
   isAllowedBuilderImageUrl,
   isAnswerableBlock,
+  starScaleLabels,
   type ImageBlock,
   type PageBlock,
   type Question,
   type QuestionOption,
   type QuestionRole,
+  type RatingGridQuestion,
   type SingleSelectQuestion,
   type VisibleIf,
 } from "@camp404/types";
@@ -57,6 +62,7 @@ import {
 import { Labelled, ToggleRow, numberOrUndefined } from "./editor-parts";
 import { ImageUploadButton } from "./image-upload-button";
 import { VisibilityEditor } from "./visibility-editor";
+import { mealPlanRowsAction } from "@/app/(console)/captains/questionnaires/actions";
 
 // One block's editor: the type selector, the prompt, the per-type controls,
 // the validation-rule controls, and (single choice only) the branching editor.
@@ -212,6 +218,11 @@ export function BlockEditor({
           <span className="max-w-[10rem] truncate font-mono text-[11px] text-muted-foreground">
             {block.id}
           </span>
+          {"leadsOnly" in block && block.leadsOnly ? (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+              Team leads only
+            </span>
+          ) : null}
           <div className="ml-auto flex items-center gap-1">
             <Button
               variant="ghost"
@@ -338,6 +349,14 @@ export function BlockEditor({
               hint="Only if a missing answer gets in the camp's way."
               checked={block.required}
               onCheckedChange={(required) => onChange({ ...block, required })}
+            />
+            <ToggleRow
+              label="Team leads only"
+              hint="Only team leads and captains see this question."
+              checked={block.leadsOnly ?? false}
+              onCheckedChange={(leadsOnly) =>
+                onChange({ ...block, leadsOnly: leadsOnly || undefined })
+              }
             />
           </div>
         ) : null}
@@ -679,6 +698,9 @@ function BlockBody({
     case "multi_choice_grid":
     case "checkbox_grid":
       return <GridBody block={block} onChange={onChange} />;
+
+    case "rating_grid":
+      return <RatingGridBody block={block} onChange={onChange} />;
 
     case "short_text":
       return <ShortTextBody block={block} onChange={onChange} />;
@@ -1664,6 +1686,230 @@ function GridBody({
         {single
           ? "Members pick one column per row."
           : "Members can pick any number of columns per row."}{" "}
+        {block.required ? "Every row must be answered." : "Rows are optional."}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A rating grid's editor (#251): the rows (statements, or items to star), the
+ * scale (point labels, or a number of stars), the N/A column, and a one-click
+ * fill of the rows from this year's meal plan.
+ */
+function RatingGridBody({
+  block,
+  onChange,
+}: {
+  block: RatingGridQuestion;
+  onChange: (next: PageBlock) => void;
+}) {
+  const stars = block.display === "stars";
+  const [filling, setFilling] = React.useState(false);
+  const [fillError, setFillError] = React.useState<string | null>(null);
+
+  async function fillFromMealPlan() {
+    setFilling(true);
+    setFillError(null);
+    try {
+      const result = await mealPlanRowsAction();
+      if (!result.ok) {
+        setFillError(result.error);
+        return;
+      }
+      // Keep a row's label if the author reworded it; the id is the meal.
+      const current = new Map(block.rows.map((row) => [row.id, row.label]));
+      onChange({
+        ...block,
+        rows: result.rows.map((row) => ({
+          id: row.id,
+          label: current.get(row.id) || row.label,
+        })),
+      });
+    } catch {
+      setFillError("Couldn't read the meal plan. Try again.");
+    } finally {
+      setFilling(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-3 page-sm:grid-cols-2">
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
+          <span className="text-xs font-medium text-muted-foreground">
+            {stars ? "Items to rate" : "Statements"}
+          </span>
+          {block.rows.map((row, rowIndex) => (
+            <div key={row.id} className="flex items-center gap-2">
+              <Input
+                value={row.label}
+                onChange={(e) => {
+                  const rows = [...block.rows];
+                  rows[rowIndex] = { ...row, label: e.target.value };
+                  onChange({ ...block, rows });
+                }}
+                placeholder={
+                  stars ? `Item ${rowIndex + 1}` : `Statement ${rowIndex + 1}`
+                }
+                aria-label={`Row ${rowIndex + 1} label`}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove row ${rowIndex + 1}`}
+                disabled={block.rows.length <= 1}
+                onClick={() =>
+                  onChange({
+                    ...block,
+                    rows: block.rows.filter((_, j) => j !== rowIndex),
+                  })
+                }
+              >
+                <X aria-hidden />
+              </Button>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  rows: [
+                    ...block.rows,
+                    { id: allocateRowId(block.rows), label: "" },
+                  ],
+                })
+              }
+            >
+              <Plus aria-hidden />
+              Add row
+            </Button>
+            {stars ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={filling}
+                onClick={fillFromMealPlan}
+              >
+                <UtensilsCrossed aria-hidden />
+                {filling ? "Reading the meal plan…" : "Fill from meal plan"}
+              </Button>
+            ) : null}
+          </div>
+          {fillError ? (
+            <p role="alert" className="text-xs text-destructive">
+              {fillError}
+            </p>
+          ) : stars ? (
+            <p className="text-xs text-muted-foreground">
+              Fill from meal plan makes one row per meal this year&apos;s meal
+              plan serves.
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
+          <span className="text-xs font-medium text-muted-foreground">
+            {stars ? "Stars" : "Scale, lowest first"}
+          </span>
+          {stars ? (
+            <Select
+              value={String(block.scale.length)}
+              onValueChange={(v) =>
+                onChange({ ...block, scale: starScaleLabels(Number(v)) })
+              }
+            >
+              <SelectTrigger aria-label="Number of stars">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n} stars
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <>
+              {block.scale.map((label, pointIndex) => (
+                <div key={pointIndex} className="flex items-center gap-2">
+                  <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                    {pointIndex + 1}
+                  </span>
+                  <Input
+                    value={label}
+                    onChange={(e) => {
+                      const scale = [...block.scale];
+                      scale[pointIndex] = e.target.value;
+                      onChange({ ...block, scale });
+                    }}
+                    placeholder={`Point ${pointIndex + 1}`}
+                    aria-label={`Point ${pointIndex + 1} label`}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove point ${pointIndex + 1}`}
+                    disabled={block.scale.length <= RATING_GRID_MIN_POINTS}
+                    onClick={() =>
+                      onChange({
+                        ...block,
+                        scale: block.scale.filter((_, j) => j !== pointIndex),
+                      })
+                    }
+                  >
+                    <X aria-hidden />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                className="self-start"
+                disabled={block.scale.length >= RATING_GRID_MAX_POINTS}
+                onClick={() =>
+                  onChange({ ...block, scale: [...block.scale, ""] })
+                }
+              >
+                <Plus aria-hidden />
+                Add point
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-3 page-sm:grid-cols-2">
+        <ToggleRow
+          label="N/A column"
+          hint="For a row that doesn't apply, like a meal someone missed."
+          checked={block.allowNa ?? false}
+          onCheckedChange={(allowNa) =>
+            onChange({ ...block, allowNa: allowNa || undefined })
+          }
+        />
+        {block.allowNa ? (
+          <Labelled label="N/A label">
+            <Input
+              value={block.naLabel ?? ""}
+              placeholder="N/A"
+              aria-label="N/A label"
+              onChange={(e) =>
+                onChange({
+                  ...block,
+                  naLabel: e.target.value.trim() ? e.target.value : undefined,
+                })
+              }
+            />
+          </Labelled>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Members pick one point per row. Results show each row&apos;s average.{" "}
         {block.required ? "Every row must be answered." : "Rows are optional."}
       </p>
     </div>

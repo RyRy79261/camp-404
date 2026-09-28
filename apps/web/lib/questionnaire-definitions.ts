@@ -10,9 +10,12 @@ import {
 } from "@camp404/types";
 import {
   canViewBuilderDefinition,
+  questionnaireTemplate,
   regenerateQuestionnaireIds,
   slugify,
+  type QuestionnaireTemplateKey,
 } from "@camp404/core";
+import type { GridRow } from "@camp404/types";
 import {
   RESERVED_DEFINITION_KEYS,
   definitionKeyExists,
@@ -145,6 +148,36 @@ export async function createDraft(input: {
     title,
     createdBy: input.createdBy,
     definition: blankDefinition(title),
+  });
+  return key;
+}
+
+/**
+ * Start a draft from a ready-made template (#251), owned by `createdBy`, with
+ * fresh ids so two drafts from one template never share an answer key. It is
+ * an ordinary draft from here on: nothing is published or sent. Fresh each
+ * year (carryOver false): a survey asks again rather than keeping last year's
+ * answers. Returns the new key.
+ */
+export async function createDraftFromTemplate(input: {
+  template: QuestionnaireTemplateKey;
+  createdBy: string;
+  mealRows?: readonly GridRow[];
+}): Promise<string> {
+  const template = questionnaireTemplate(input.template, {
+    mealRows: input.mealRows,
+  });
+  const title = template.title ?? "Untitled questionnaire";
+  const key = await generateDefinitionKey(title);
+  await insertDefinitionDraft({
+    key,
+    title,
+    createdBy: input.createdBy,
+    definition: regenerateQuestionnaireIds(
+      { ...template, version: DRAFT_VERSION },
+      randomUUID,
+    ),
+    carryOver: false,
   });
   return key;
 }

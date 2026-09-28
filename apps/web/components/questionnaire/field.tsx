@@ -4,6 +4,7 @@ import * as React from "react";
 import { useParams } from "next/navigation";
 import { Check, Heart, Star } from "lucide-react";
 import {
+  RATING_GRID_NA,
   attendedYearOptions,
   isAllowedBuilderImageUrl,
   isOtherAnswer,
@@ -13,7 +14,9 @@ import {
   type Question,
   type QuestionOption,
   type QuestionnaireResponseValue,
+  type RatingGridQuestion,
   type TextFormat,
+  ratingGridNaLabel,
 } from "@camp404/types";
 import { AvatarUpload } from "@camp404/ui/components/avatar-upload";
 import { Combobox } from "@camp404/ui/components/combobox";
@@ -675,6 +678,18 @@ function Control({
       );
     }
 
+    case "rating_grid":
+      return (
+        <RatingGridControl
+          question={question}
+          fieldId={fieldId}
+          value={value}
+          onChange={onChange}
+          required={required}
+          groupAria={groupAria}
+        />
+      );
+
     case "multi_choice_grid":
     case "checkbox_grid":
       return (
@@ -953,6 +968,167 @@ function GridControl({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * Rating grid control (#251): one radio group per row, every row on the same
+ * scale. Native radio inputs, so a keyboard moves along a row with the arrow
+ * keys and Tab steps from row to row, and a screen reader announces each row
+ * as a group named by its statement ("I was well fed, radio group, Mostly
+ * true, 4 of 5"). The inputs are visually hidden; the pill or star they sit in
+ * shows the choice and draws the focus ring. The value is
+ * `{ [rowId]: position | "na" }`.
+ */
+function RatingGridControl({
+  question,
+  fieldId,
+  value,
+  onChange,
+  required,
+  groupAria,
+}: {
+  question: RatingGridQuestion;
+  fieldId: string;
+  value: QuestionnaireResponseValue | undefined;
+  onChange: (value: QuestionnaireResponseValue) => void;
+  required: boolean;
+  groupAria: GroupAria;
+}) {
+  const stars = question.display === "stars";
+  const answer: Record<string, number | "na"> =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, number | "na">)
+      : {};
+  const naLabel = ratingGridNaLabel(question);
+  const points = question.scale.length;
+
+  function setRow(rowId: string, cell: number | "na" | null) {
+    const next: Record<string, number | "na"> = { ...answer };
+    if (cell === null) delete next[rowId];
+    else next[rowId] = cell;
+    onChange(next);
+  }
+
+  // The pill and star share one focus treatment: the ring follows keyboard
+  // focus on the hidden input inside.
+  const focusRing =
+    "has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background";
+
+  return (
+    <div role="group" {...groupAria} className="flex flex-col gap-3">
+      {question.rows.map((row) => {
+        const cell = answer[row.id];
+        const name = `${fieldId}-${row.id}`;
+        return (
+          <fieldset
+            key={row.id}
+            className="min-w-0 rounded-md border border-border bg-card/40 p-3"
+          >
+            <legend className="sr-only">{row.label}</legend>
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <span aria-hidden className="text-sm text-foreground">
+                {row.label}
+              </span>
+              {!required && cell !== undefined && (
+                <button
+                  type="button"
+                  onClick={() => setRow(row.id, null)}
+                  className="shrink-0 rounded-sm text-xs text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Clear the answer for ${row.label}`}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {question.scale.map((label, index) => {
+                const position = index + 1;
+                const checked = cell === position;
+                const input = (
+                  <input
+                    type="radio"
+                    name={name}
+                    value={position}
+                    checked={checked}
+                    onChange={() => setRow(row.id, position)}
+                    className="sr-only"
+                    aria-label={
+                      stars ? `${label}, ${position} of ${points}` : label
+                    }
+                  />
+                );
+                if (stars) {
+                  const on = typeof cell === "number" && cell >= position;
+                  return (
+                    <label
+                      key={position}
+                      className={cn(
+                        "cursor-pointer rounded-sm p-0.5",
+                        focusRing,
+                      )}
+                    >
+                      {input}
+                      <Star
+                        aria-hidden
+                        className={cn(
+                          "h-7 w-7 transition-colors",
+                          on
+                            ? "fill-accent text-accent"
+                            : "text-muted-foreground",
+                        )}
+                      />
+                    </label>
+                  );
+                }
+                return (
+                  <label
+                    key={position}
+                    className={cn(
+                      "cursor-pointer rounded-md border px-2.5 py-1.5 text-xs transition-colors",
+                      checked
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-input bg-background text-muted-foreground hover:bg-muted",
+                      focusRing,
+                    )}
+                  >
+                    {input}
+                    {label}
+                  </label>
+                );
+              })}
+              {question.allowNa && (
+                <label
+                  className={cn(
+                    "cursor-pointer rounded-md border border-dashed px-2.5 py-1.5 text-xs transition-colors",
+                    cell === RATING_GRID_NA
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-input bg-background text-muted-foreground hover:bg-muted",
+                    stars && "ml-1",
+                    focusRing,
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name={name}
+                    value={RATING_GRID_NA}
+                    checked={cell === RATING_GRID_NA}
+                    onChange={() => setRow(row.id, RATING_GRID_NA)}
+                    className="sr-only"
+                  />
+                  {naLabel}
+                </label>
+              )}
+            </div>
+            {stars && typeof cell === "number" && (
+              <p className="mt-1 text-xs text-muted-foreground" aria-hidden>
+                {cell} out of {points}
+              </p>
+            )}
+          </fieldset>
+        );
+      })}
     </div>
   );
 }
