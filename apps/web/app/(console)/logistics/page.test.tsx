@@ -1,4 +1,10 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The logistics days (#247). Every approved member reads them; only a captain
@@ -130,6 +136,37 @@ describe("logistics page", () => {
     expect(text(screen.getByRole("listitem", { name: "Build" }))).toContain(
       "Not on the camp calendar yet",
     );
+  });
+
+  it("asks to clear again, and offers Clear days, when a cleared phase is still on the calendar", async () => {
+    signIn("captain");
+    vi.mocked(listLogisticsPhases).mockResolvedValue([
+      {
+        ...BUILD,
+        startDate: null,
+        endDate: null,
+        place: null,
+        note: null,
+        version: 2,
+        calendarSyncedVersion: 1,
+      },
+    ]);
+    await show();
+    const build = text(screen.getByRole("listitem", { name: "Build" }));
+    expect(build).toContain(
+      "Still on the camp calendar. Clear the days again to take it off.",
+    );
+    expect(build).not.toContain("Save again");
+    fireEvent.click(button("Edit Build"));
+    expect(screen.getByRole("button", { name: "Clear days" })).toBeTruthy();
+  });
+
+  it("offers no Clear days for a phase with no days and nothing on the calendar", async () => {
+    signIn("captain");
+    await show();
+    fireEvent.click(button("Edit Pack"));
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Clear days" })).toBeNull();
   });
 
   it("works without a camp calendar, and says the days are only in the app", async () => {

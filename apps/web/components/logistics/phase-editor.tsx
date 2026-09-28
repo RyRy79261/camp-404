@@ -46,6 +46,12 @@ export interface EditablePhase {
   note: string | null;
   /** 0 when the phase has no row yet. */
   version: number;
+  /**
+   * The phase still holds a camp calendar event. For a phase whose days are
+   * cleared, that means Google did not take the event off: clearing again
+   * retries.
+   */
+  onCalendar?: boolean;
 }
 
 type Errors = Partial<
@@ -76,6 +82,7 @@ export function PhaseEditButton({
   const router = useRouter();
   const label = LOGISTICS_PHASE_LABELS[phase.phase];
   const hasDays = phase.startDate !== null;
+  const canClear = hasDays || phase.onCalendar === true;
   const initial = {
     startDate: phase.startDate ?? suggestion?.startDate ?? "",
     endDate: phase.endDate ?? suggestion?.endDate ?? "",
@@ -256,7 +263,7 @@ export function PhaseEditButton({
                 </p>
               )}
               <DialogFooter className="gap-2 page-sm:justify-between">
-                {hasDays ? (
+                {canClear ? (
                   <Button
                     type="button"
                     variant="ghost"

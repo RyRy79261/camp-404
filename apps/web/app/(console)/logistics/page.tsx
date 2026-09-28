@@ -45,7 +45,7 @@ export const metadata = { title: "Logistics — Camp 404" };
 
 const REFUSAL_ID = "logistics-edit-refusal";
 
-type CalendarState = "on" | "pending" | "off";
+type CalendarState = "on" | "pending" | "lingering";
 
 /** Where a phase stands on the camp calendar, for the chip beside it. */
 function calendarState(
@@ -56,7 +56,7 @@ function calendarState(
   if (row.startDate === null) {
     // Cleared: only worth a word while its event may still be there.
     return row.calendarEventId && row.calendarSyncedVersion !== row.version
-      ? "pending"
+      ? "lingering"
       : null;
   }
   return row.calendarSyncedVersion === row.version ? "on" : "pending";
@@ -74,7 +74,9 @@ function CalendarChip({ state }: { state: CalendarState }) {
   return (
     <span className="inline-flex items-center gap-1 text-xs text-warning">
       <CalendarX className="h-3.5 w-3.5" aria-hidden />
-      Not on the camp calendar yet. Save again to retry.
+      {state === "lingering"
+        ? "Still on the camp calendar. Clear the days again to take it off."
+        : "Not on the camp calendar yet. Save again to retry."}
     </span>
   );
 }
@@ -186,6 +188,7 @@ export default async function LogisticsPage() {
                           place: row?.place ?? null,
                           note: row?.note ?? null,
                           version: row?.version ?? 0,
+                          onCalendar: Boolean(row?.calendarEventId),
                         }}
                         canEdit={canEdit}
                         refusalId={REFUSAL_ID}
