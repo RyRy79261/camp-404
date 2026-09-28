@@ -76,6 +76,8 @@ test("a captain sends the post-burn survey, members rate two meals, results show
   browser,
   request,
 }) => {
+  // Three people walk a five-page survey: past the suite's 2 minutes on CI.
+  test.setTimeout(300_000);
   await resetTestState(request);
   const captain = await signInCaptain(browser, request);
 
