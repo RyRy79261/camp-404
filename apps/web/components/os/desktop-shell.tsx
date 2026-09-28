@@ -191,6 +191,7 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   "respondent-answers": XL_SIZE,
   calendar: L_SIZE,
   power: L_SIZE,
+  transport: L_SIZE,
   "my-dues": L_SIZE,
   recipes: L_SIZE,
   recipe: L_SIZE,

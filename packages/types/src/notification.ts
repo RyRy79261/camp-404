@@ -22,6 +22,8 @@ export const NOTIFICATION_KINDS = [
   // The deadline reminders nudged the person responsible for a task that is due
   // tomorrow or today.
   "task_reminder",
+  // A driver wrote to the people riding in their car this year.
+  "car_message",
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
@@ -52,8 +54,8 @@ export const INBOX_FILTERS = ["all", "unread", "announcements"] as const;
 export type InboxFilter = (typeof INBOX_FILTERS)[number];
 
 /**
- * The delivery kinds the "Announcements" tab shows: the broadcasts a captain
- * or a team lead composed and sent. Everything else in the inbox is a personal
+ * The delivery kinds the "Announcements" tab shows: the broadcasts a captain,
+ * a team lead or a driver composed and sent. Everything else in the inbox is a personal
  * event (a questionnaire sent your way, an approval decision, a captain
  * request), which is what the tab is there to filter out.
  */
@@ -61,4 +63,5 @@ export const ANNOUNCEMENT_NOTIFICATION_KINDS = [
   "announcement",
   "team_message",
   "lead_directive",
+  "car_message",
 ] as const satisfies readonly NotificationKind[];

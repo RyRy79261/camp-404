@@ -176,21 +176,26 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "dietaryRequirements.createdAt": "captain",
   "dietaryRequirements.updatedAt": "captain",
 
-  // driver_profiles — travel logistics, captain-only
+  // driver_profiles — travel logistics. The car list (#270, owner 2026-09-24:
+  // "Everyone can view the car list (names and cars only)") opens who is
+  // driving, the car, where it leaves from, its seats and whether it can tow.
+  // Dates, registration, driving experience and notes stay captain-only (the
+  // travel dates are pinned so by privacy.test.ts). The car's own driver and
+  // riders read their shared car in full through getMyLift, about themselves.
   "driverProfiles.userId": "camp_member",
-  "driverProfiles.cycle": "captain",
-  "driverProfiles.intendsToDrive": "captain",
+  "driverProfiles.cycle": "camp_member",
+  "driverProfiles.intendsToDrive": "camp_member",
   "driverProfiles.intentRegisteredAt": "captain",
-  "driverProfiles.vehicleMake": "captain",
-  "driverProfiles.vehicleModel": "captain",
+  "driverProfiles.vehicleMake": "camp_member",
+  "driverProfiles.vehicleModel": "camp_member",
   "driverProfiles.vehicleRegistration": "captain",
   "driverProfiles.seatsTotal": "captain",
-  "driverProfiles.seatsOffered": "captain",
+  "driverProfiles.seatsOffered": "camp_member",
   "driverProfiles.canOfferLifts": "captain",
   "driverProfiles.offroadExperienced": "captain",
-  "driverProfiles.canTow": "captain",
+  "driverProfiles.canTow": "camp_member",
   "driverProfiles.proficiencyNotes": "captain",
-  "driverProfiles.departureCity": "captain",
+  "driverProfiles.departureCity": "camp_member",
   "driverProfiles.arrivalAt": "captain",
   "driverProfiles.departureAt": "captain",
   "driverProfiles.notes": "captain",
@@ -199,11 +204,22 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "driverProfiles.createdAt": "captain",
   "driverProfiles.updatedAt": "captain",
 
-  // car_members — who rides with whom, captain-only
-  "carMembers.driverUserId": "captain",
-  "carMembers.memberUserId": "captain",
-  "carMembers.cycle": "captain",
+  // car_members — who rides with whom: the car list names each car's riders
+  // (#270, the same ruling).
+  "carMembers.driverUserId": "camp_member",
+  "carMembers.memberUserId": "camp_member",
+  "carMembers.cycle": "camp_member",
   "carMembers.createdAt": "captain",
+
+  // lift_requests — who asked for a lift, and in which car. The transport
+  // team matches people, and a Transport & Logistics lead stands on the
+  // team_lead rung (the page shows every request only to a captain or such a
+  // lead). A driver also sees the requests for their OWN car, and a member
+  // their own request: relationship reads, like getMyLift.
+  "liftRequests.userId": "team_lead",
+  "liftRequests.cycle": "team_lead",
+  "liftRequests.driverUserId": "team_lead",
+  "liftRequests.createdAt": "captain",
 
   // user — the sign-in identity (Better Auth). Captains read email to assign
   // DDT tickets; members never see another member's email. The credential

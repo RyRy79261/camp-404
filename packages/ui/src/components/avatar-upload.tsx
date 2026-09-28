@@ -76,9 +76,9 @@ export function AvatarUpload({
 
       const res = await fetch(uploadUrl, { method: "POST", body });
       if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null;
+        const data = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         throw new Error(data?.error ?? "Upload failed");
       }
       const data = (await res.json()) as { url: string };
@@ -133,7 +133,11 @@ export function AvatarUpload({
           )}
           {uploading && (
             <span className="absolute inset-0 flex items-center justify-center bg-[var(--overlay)]">
-              <Spinner size="lg" className="text-foreground" label="Uploading photo" />
+              <Spinner
+                size="lg"
+                className="text-foreground"
+                label="Uploading photo"
+              />
             </span>
           )}
         </button>
@@ -155,8 +159,13 @@ export function AvatarUpload({
       </div>
 
       {error && (
-        <div className="flex flex-col items-center gap-1 text-center" role="alert">
-          <p className="text-sm font-semibold text-destructive">Upload failed</p>
+        <div
+          className="flex flex-col items-center gap-1 text-center"
+          role="alert"
+        >
+          <p className="text-sm font-semibold text-destructive">
+            Upload failed
+          </p>
           <p className="text-sm text-destructive">{error}</p>
         </div>
       )}

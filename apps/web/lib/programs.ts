@@ -251,6 +251,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // Transport (#270): every approved member reads the car list; the page's
+  // controls and the writes carry their own rules.
+  {
+    id: "transport",
+    label: "Transport",
+    fileName: "CARPOOL.EXE",
+    href: "/transport",
+    icon: "transport",
+    place: CAMP,
+    rank: "camp_member",
+  },
   {
     id: "family-tree",
     label: "Family tree",
@@ -649,6 +660,7 @@ export const TEAM_TOOLS: Readonly<Partial<Record<Team, readonly ProgramId[]>>> =
     power_and_lighting: ["power"],
     communications_and_hr: ["announcements", "questionnaires", "join-site"],
     finance: ["payments"],
+    transport_and_logistics: ["transport"],
   };
 
 // --- What leaves the server ---------------------------------------------------

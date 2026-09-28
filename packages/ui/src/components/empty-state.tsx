@@ -1,18 +1,18 @@
-import * as React from "react"
+import * as React from "react";
 
-import { cn } from "../lib/utils"
+import { cn } from "../lib/utils";
 
 // A calm, centred empty or parked state (from the AfrikaBurn app): a dashed
 // card for a surface with nothing to show yet. Warm and honest, never an
 // error. A call-to-action goes in `action` (or children).
 export interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Optional decorative leading icon. */
-  icon?: React.ReactNode
-  title: string
+  icon?: React.ReactNode;
+  title: string;
   /** Optional supporting sentence(s). */
-  description?: React.ReactNode
+  description?: React.ReactNode;
   /** Optional call-to-action (button/link). */
-  action?: React.ReactNode
+  action?: React.ReactNode;
 }
 
 function EmptyState({
@@ -51,7 +51,7 @@ function EmptyState({
       {action}
       {children}
     </div>
-  )
+  );
 }
 
-export { EmptyState }
+export { EmptyState };

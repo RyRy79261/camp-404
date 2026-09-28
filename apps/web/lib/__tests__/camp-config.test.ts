@@ -560,6 +560,7 @@ describe("audienceLabel", () => {
     >;
     expect(scopes.sort()).toEqual(
       [
+        "car",
         "drivers",
         "everyone",
         "individual",

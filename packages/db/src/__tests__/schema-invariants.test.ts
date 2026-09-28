@@ -225,6 +225,7 @@ describe("every member-data column has a reader in the field-access list", () =>
     dietaryRequirements: schema.dietaryRequirements,
     driverProfiles: schema.driverProfiles,
     carMembers: schema.carMembers,
+    liftRequests: schema.liftRequests,
     teamMemberships: schema.teamMemberships,
     campParticipations: schema.campParticipations,
     campTickets: schema.campTickets,

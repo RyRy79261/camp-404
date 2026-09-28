@@ -194,6 +194,20 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
           eq(schema.carMembers.memberUserId, userId),
         ),
       );
+    // Transport (#270): their lift requests go; a request that named their
+    // car becomes "any car", since its rider still needs a lift; a trailer
+    // they towed stays the camp's, with no car.
+    await tx
+      .delete(schema.liftRequests)
+      .where(eq(schema.liftRequests.userId, userId));
+    await tx
+      .update(schema.liftRequests)
+      .set({ driverUserId: null })
+      .where(eq(schema.liftRequests.driverUserId, userId));
+    await tx
+      .update(schema.transportTrailers)
+      .set({ towedByUserId: null })
+      .where(eq(schema.transportTrailers.towedByUserId, userId));
     await tx
       .delete(schema.workshopRsvps)
       .where(eq(schema.workshopRsvps.userId, userId));

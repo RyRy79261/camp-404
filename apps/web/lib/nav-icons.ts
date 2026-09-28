@@ -70,6 +70,7 @@ const PAGE_ICONS: Record<string, LucideIcon> = {
   "/family-tree": Network,
   "/about": Info,
   "/power": Plug,
+  "/transport": CarFront,
   "/kitchen/recipes": BookOpen,
   "/meetings": NotebookPen,
   "/profile": UserRound,

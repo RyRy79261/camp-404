@@ -140,3 +140,115 @@ describe("canSendToAudience — pinning follows posting", () => {
     );
   });
 });
+
+// The car (#270): the riders of ONE car, addressed only by its own driver
+// while they drive this year. Rank buys nothing here, a captain's included.
+describe("canSendToAudience — the car", () => {
+  const ADA = "00000000-0000-4000-8000-00000000000a";
+  const CAI = "00000000-0000-4000-8000-00000000000c";
+  const driverAda: AudienceActor = {
+    rank: "camp_member",
+    leadTeams: [],
+    userId: ADA,
+    drivesCar: true,
+  };
+
+  it("lets a driver write to their own car", () => {
+    expect(
+      canSendToAudience(driverAda, { scope: "car", driverUserId: ADA }),
+    ).toBe(true);
+  });
+
+  it("refuses a driver naming another driver's car", () => {
+    expect(
+      canSendToAudience(driverAda, { scope: "car", driverUserId: CAI }),
+    ).toBe(false);
+  });
+
+  it("refuses a rider, who is not driving, even naming their driver's car", () => {
+    const rider: AudienceActor = {
+      rank: "camp_member",
+      leadTeams: [],
+      userId: CAI,
+      drivesCar: false,
+    };
+    expect(canSendToAudience(rider, { scope: "car", driverUserId: ADA })).toBe(
+      false,
+    );
+    expect(canSendToAudience(rider, { scope: "car", driverUserId: CAI })).toBe(
+      false,
+    );
+  });
+
+  it("refuses a captain or a lead who is not driving, for any car", () => {
+    for (const actor of [
+      { ...captain, userId: ADA },
+      { ...kitchenLead, userId: ADA },
+    ]) {
+      expect(
+        canSendToAudience(actor, { scope: "car", driverUserId: ADA }),
+      ).toBe(false);
+      expect(
+        canSendToAudience(actor, { scope: "car", driverUserId: CAI }),
+      ).toBe(false);
+    }
+  });
+
+  it("lets a captain who drives write to their own car only", () => {
+    const drivingCaptain: AudienceActor = {
+      ...captain,
+      userId: ADA,
+      drivesCar: true,
+    };
+    expect(
+      canSendToAudience(drivingCaptain, { scope: "car", driverUserId: ADA }),
+    ).toBe(true);
+    expect(
+      canSendToAudience(drivingCaptain, { scope: "car", driverUserId: CAI }),
+    ).toBe(false);
+  });
+
+  it("fails closed on a missing car, a missing id, or an unknown rank", () => {
+    expect(canSendToAudience(driverAda, { scope: "car" })).toBe(false);
+    expect(
+      canSendToAudience(driverAda, { scope: "car", driverUserId: null }),
+    ).toBe(false);
+    expect(
+      canSendToAudience(
+        { ...driverAda, userId: undefined },
+        { scope: "car", driverUserId: ADA },
+      ),
+    ).toBe(false);
+    expect(
+      canSendToAudience(
+        { ...driverAda, userId: "" },
+        { scope: "car", driverUserId: "" },
+      ),
+    ).toBe(false);
+    expect(
+      canSendToAudience(
+        { ...driverAda, rank: "owner" as never },
+        { scope: "car", driverUserId: ADA },
+      ),
+    ).toBe(false);
+  });
+
+  it("does not widen any other scope for a plain member who drives", () => {
+    for (const scope of [
+      "everyone",
+      "team",
+      "team_leads",
+      "drivers",
+      "individual",
+      "opt_in",
+    ] as const) {
+      expect(
+        canSendToAudience(driverAda, {
+          scope,
+          team: "kitchen",
+          driverUserId: ADA,
+        }),
+      ).toBe(false);
+    }
+  });
+});

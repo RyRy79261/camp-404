@@ -25,6 +25,8 @@ export const ANNOUNCEMENT_REF_TYPE = "announcement";
 export const CAPTAIN_PROMOTION_REF_TYPE = "captain_promotion";
 /** The reference a task deadline reminder carries: the task. */
 export const TASK_REF_TYPE = "task";
+/** The reference a driver's message carries: its own broadcast. */
+export const CAR_MESSAGE_REF_TYPE = "car_message";
 /**
  * The reference a deadline reminder carries for a required action that no
  * questionnaire send stands behind: the required_actions row itself.
@@ -168,6 +170,24 @@ export function captainPromotionNotification(input: {
   };
 }
 
+/**
+ * A driver wrote to the people riding in their car. The text is the
+ * driver's own; the inbox names them as the sender. The tap opens My lift.
+ */
+export function carMessageNotification(input: {
+  broadcastId: string;
+  title: string;
+  body: string;
+}): NotificationPayload {
+  return {
+    kind: "car_message",
+    title: input.title,
+    body: input.body,
+    refType: CAR_MESSAGE_REF_TYPE,
+    refId: input.broadcastId,
+  };
+}
+
 /** Which of a task's two deadline reminders this is. */
 export type TaskReminderStage = "day_before" | "due_day";
 
@@ -202,12 +222,14 @@ export function kindForBroadcast(
     | "team_message"
     | "lead_directive"
     | "reminder"
-    | "system",
+    | "system"
+    | "car_message",
   refType: string | null,
 ): NotificationKind {
   switch (kind) {
     case "team_message":
     case "lead_directive":
+    case "car_message":
       return kind;
     case "reminder":
       return "questionnaire_reminder";

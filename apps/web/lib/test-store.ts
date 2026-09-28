@@ -28,6 +28,12 @@ import {
   sortPinned,
   canApproveRecipe,
   canRunProofread,
+  canEditTransport,
+  canManageCar,
+  canRemoveRider,
+  canSendToAudience,
+  carMessageNotification,
+  vehicleLabel,
   mealPlanPeaks,
   sameSections,
   sourceFromText,
@@ -75,6 +81,33 @@ import {
   resetDuesStore,
 } from "./test-store-dues";
 import type { MyLift } from "@camp404/db/cars";
+import {
+  ALREADY_SEATED,
+  ALREADY_TOWING,
+  CANNOT_TOW,
+  CAR_EMPTY,
+  CAR_FULL,
+  CAR_MESSAGE_REFUSED,
+  IS_DRIVING,
+  NOT_A_MEMBER as TRANSPORT_NOT_A_MEMBER,
+  NOT_A_TRANSPORT_EDITOR,
+  NOT_DRIVING,
+  NOT_IN_CAR,
+  NOT_YOUR_CAR,
+  OWN_CAR,
+  REQUEST_GONE,
+  SEATS_BELOW_RIDERS,
+  TRAILER_CHANGED,
+  TRAILER_GONE,
+  YOU_ARE_DRIVING,
+  YOU_HAVE_A_SEAT,
+  type LiftRequestRow,
+  type TrailerRow,
+  type TransportBoard,
+  type TransportCar,
+  type TransportResult,
+  type UnseatedMember,
+} from "@camp404/db/transport";
 import {
   ALREADY_A_TASK,
   ASSIGNEE_NOT_A_MEMBER,
@@ -689,6 +722,12 @@ interface TestStoreState {
   driverProfiles: TestDriverProfile[];
   /** `car_members`: who rides in whose car, per year. */
   carMembers: TestCarMember[];
+  /** `transport_trailers`: the camp's trailers, per year. */
+  transportTrailers: TestTrailer[];
+  /** `lift_requests`: who asked for a lift, per year. */
+  liftRequests: TestLiftRequest[];
+  /** `broadcasts` of kind `car_message`: the sender, for the inbox's name. */
+  carMessages: { id: string; senderId: string }[];
   /** `desktop_layouts`: each member's saved desktop, by user id. */
   desktopLayouts: Map<string, unknown>;
   /** `desktop_layouts.preferences`: the stored value, by user id. */
@@ -710,6 +749,25 @@ export interface TestDriverProfile {
   departureCity: string | null;
   arrivalAt: Date | null;
   departureAt: Date | null;
+  canTow: boolean;
+}
+
+/** A `transport_trailers` row. */
+interface TestTrailer {
+  id: string;
+  cycle: number;
+  name: string;
+  notes: string | null;
+  towedByUserId: string | null;
+  version: number;
+}
+
+/** A `lift_requests` row. */
+interface TestLiftRequest {
+  userId: string;
+  cycle: number;
+  driverUserId: string | null;
+  createdAt: Date;
 }
 
 /** A `car_members` row: one rider in one driver's car for one year. */
@@ -781,6 +839,9 @@ function globalState(): TestStoreState {
       campBlurbs: new Map<string, TestCampBlurb>(),
       driverProfiles: [] as TestDriverProfile[],
       carMembers: [] as TestCarMember[],
+      transportTrailers: [] as TestTrailer[],
+      liftRequests: [] as TestLiftRequest[],
+      carMessages: [],
       desktopLayouts: new Map<string, unknown>(),
       desktopPreferences: new Map<string, Record<string, unknown>>(),
       teamPrograms: new Map<string, TeamProgram>(),
@@ -878,6 +939,12 @@ S.driverProfiles ??= [];
 S.carMembers ??= [];
 const driverProfiles = S.driverProfiles;
 const carMembers = S.carMembers;
+S.transportTrailers ??= [];
+S.liftRequests ??= [];
+S.carMessages ??= [];
+const transportTrailers = S.transportTrailers;
+const liftRequests = S.liftRequests;
+const carMessages = S.carMessages;
 
 /**
  * The camp's current year, resolved the way `currentCycleNumber()` resolves it
@@ -919,6 +986,107 @@ function nextId(): string {
 function isPowerEditor(userId: string): boolean {
   const reach = testStore.senderReach(userId);
   return canEditPower(reachRank(reach), reach ?? []);
+}
+
+// --- Transport helpers (the twin of @camp404/db/transport's) ----------------
+
+/** The actor's rung, led teams and the year, as the db module's lockActor. */
+function transportActor(actorId: string) {
+  const reach = testStore.senderReach(actorId);
+  return {
+    rank: reachRank(reach),
+    ledTeams: reach ?? [],
+    cycle: currentCycleNumber(),
+  };
+}
+
+function transportDriving(userId: string, cycle: number): boolean {
+  return driverProfiles.some(
+    (d) => d.userId === userId && d.cycle === cycle && d.intendsToDrive,
+  );
+}
+
+/** A seat this year in a car whose driver still drives. */
+function transportSeat(userId: string, cycle: number): boolean {
+  return carMembers.some(
+    (c) =>
+      c.memberUserId === userId &&
+      c.cycle === cycle &&
+      transportDriving(c.driverUserId, cycle),
+  );
+}
+
+function transportRiders(driverUserId: string, cycle: number): number {
+  return carMembers.filter(
+    (c) => c.driverUserId === driverUserId && c.cycle === cycle,
+  ).length;
+}
+
+/** The db module's seat(): every check, then the seat, then the request spent. */
+function transportSeatIn(input: {
+  driverUserId: string;
+  memberUserId: string;
+  cycle: number;
+}): TransportResult {
+  const { driverUserId, memberUserId, cycle } = input;
+  if (driverUserId === memberUserId) return { ok: false, error: OWN_CAR };
+  const car = driverProfiles.find(
+    (d) => d.userId === driverUserId && d.cycle === cycle && d.intendsToDrive,
+  );
+  if (!car) return { ok: false, error: NOT_DRIVING };
+  if (findUserById(memberUserId)?.approvalStatus !== "approved") {
+    return { ok: false, error: TRANSPORT_NOT_A_MEMBER };
+  }
+  if (transportDriving(memberUserId, cycle)) {
+    return { ok: false, error: IS_DRIVING };
+  }
+  // As the db: a seat in a car whose driver stopped driving is dropped, and
+  // only a seat in a car that still drives refuses.
+  for (let i = carMembers.length - 1; i >= 0; i--) {
+    const c = carMembers[i]!;
+    if (
+      c.memberUserId === memberUserId &&
+      c.cycle === cycle &&
+      !transportDriving(c.driverUserId, cycle)
+    ) {
+      carMembers.splice(i, 1);
+    }
+  }
+  if (
+    carMembers.some((c) => c.memberUserId === memberUserId && c.cycle === cycle)
+  ) {
+    return { ok: false, error: ALREADY_SEATED };
+  }
+  if (
+    car.seatsOffered !== null &&
+    transportRiders(driverUserId, cycle) >= car.seatsOffered
+  ) {
+    return { ok: false, error: CAR_FULL };
+  }
+  carMembers.push({ driverUserId, memberUserId, cycle, createdAt: new Date() });
+  const idx = liftRequests.findIndex(
+    (r) => r.userId === memberUserId && r.cycle === cycle,
+  );
+  if (idx !== -1) liftRequests.splice(idx, 1);
+  return { ok: true };
+}
+
+/** A transport editor's version-checked claim on this year's trailer. */
+function transportTrailerClaim(input: {
+  actorId: string;
+  trailerId: string;
+  expectedVersion: number;
+}): TestTrailer | string {
+  const actor = transportActor(input.actorId);
+  if (!canEditTransport(actor.rank, actor.ledTeams)) {
+    return NOT_A_TRANSPORT_EDITOR;
+  }
+  const row = transportTrailers.find(
+    (t) => t.id === input.trailerId && t.cycle === actor.cycle,
+  );
+  if (!row) return TRAILER_GONE;
+  if (row.version !== input.expectedVersion) return TRAILER_CHANGED;
+  return row;
 }
 
 /** The store's twin of the db module's write(): a refusal is a sentence. */
@@ -2103,7 +2271,9 @@ export const testStore = {
     const hasMore = sorted.length > start + limit;
     return {
       items: page.map((d) => {
-        const b = broadcasts.find((x) => x.id === d.broadcastId);
+        const b =
+          broadcasts.find((x) => x.id === d.broadcastId) ??
+          carMessages.find((x) => x.id === d.broadcastId);
         return {
           id: d.id,
           title: d.title,
@@ -5382,6 +5552,9 @@ export const testStore = {
     S.campBlurbs.clear();
     driverProfiles.length = 0;
     carMembers.length = 0;
+    transportTrailers.length = 0;
+    liftRequests.length = 0;
+    carMessages.length = 0;
     S.desktopLayouts.clear();
     S.desktopPreferences.clear();
     S.teamPrograms.clear();
@@ -5516,6 +5689,7 @@ export const testStore = {
       departureCity: input.departureCity ?? null,
       arrivalAt: input.arrivalAt ?? null,
       departureAt: input.departureAt ?? null,
+      canTow: input.canTow ?? false,
     };
     // (user_id, cycle) is the row's identity: seeding twice replaces it.
     const idx = driverProfiles.findIndex(
@@ -5596,6 +5770,387 @@ export const testStore = {
       };
     }
     return null;
+  },
+
+  // --- Transport (the twin of @camp404/db/transport, #270) -----------------
+  // The same rules, sentences and year-scoping as the database module, so a
+  // spec drives the Transport page and the car message. Each write re-reads
+  // its actor here (senderReach), never taking a rank from its caller.
+
+  getTransportBoard(): TransportBoard {
+    const cycle = currentCycleNumber();
+    const drivers = driverProfiles
+      .filter((d) => d.cycle === cycle && d.intendsToDrive)
+      .map((d) => ({ d, name: findUserById(d.userId)?.displayName ?? null }))
+      .filter(({ d }) => findUserById(d.userId))
+      .sort(
+        (a, b) =>
+          (a.name ?? "").localeCompare(b.name ?? "") ||
+          a.d.userId.localeCompare(b.d.userId),
+      );
+    const driving = new Set(drivers.map(({ d }) => d.userId));
+    const trailers: TrailerRow[] = transportTrailers
+      .filter((t) => t.cycle === cycle)
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+      .map((t) => {
+        const towing =
+          t.towedByUserId && driving.has(t.towedByUserId)
+            ? t.towedByUserId
+            : null;
+        return {
+          id: t.id,
+          name: t.name,
+          notes: t.notes,
+          version: t.version,
+          towedByUserId: towing,
+          towedByName: towing
+            ? (findUserById(towing)?.displayName ?? null)
+            : null,
+        };
+      });
+    const cars: TransportCar[] = drivers.map(({ d, name }) => {
+      const trailer = trailers.find((t) => t.towedByUserId === d.userId);
+      return {
+        driverUserId: d.userId,
+        driverName: name,
+        vehicle: vehicleLabel(d.vehicleMake, d.vehicleModel),
+        departureCity: d.departureCity,
+        seatsOffered: d.seatsOffered,
+        canTow: d.canTow,
+        riders: carMembers
+          .filter((c) => c.driverUserId === d.userId && c.cycle === cycle)
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+          .map((c) => ({
+            userId: c.memberUserId,
+            name: findUserById(c.memberUserId)?.displayName ?? null,
+          })),
+        trailer: trailer ? { id: trailer.id, name: trailer.name } : null,
+      };
+    });
+    return { cycle, cars, trailers };
+  },
+
+  listLiftRequests(): LiftRequestRow[] {
+    const cycle = currentCycleNumber();
+    return liftRequests
+      .filter((r) => r.cycle === cycle && findUserById(r.userId))
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((r) => ({
+        userId: r.userId,
+        name: findUserById(r.userId)?.displayName ?? null,
+        driverUserId:
+          r.driverUserId && transportDriving(r.driverUserId, cycle)
+            ? r.driverUserId
+            : null,
+        createdAt: r.createdAt,
+      }));
+  },
+
+  listUnseated(): UnseatedMember[] {
+    const cycle = currentCycleNumber();
+    return [...participations.values()]
+      .filter(
+        (p) =>
+          p.cycle === cycle &&
+          (p.status === "applied" ||
+            p.status === "maybe" ||
+            p.status === "accepted"),
+      )
+      .map((p) => findUserById(p.userId))
+      .filter(
+        (u): u is TestUser =>
+          !!u &&
+          u.approvalStatus === "approved" &&
+          !transportDriving(u.id, cycle) &&
+          !transportSeat(u.id, cycle),
+      )
+      .map((u) => ({ userId: u.id, name: u.displayName }))
+      .sort(
+        (a, b) =>
+          (a.name ?? "").localeCompare(b.name ?? "") ||
+          a.userId.localeCompare(b.userId),
+      );
+  },
+
+  drivesThisYear(userId: string): boolean {
+    return transportDriving(userId, currentCycleNumber());
+  },
+
+  addRider(input: {
+    actorId: string;
+    driverUserId: string;
+    memberUserId: string;
+  }): TransportResult {
+    const actor = transportActor(input.actorId);
+    if (
+      !canManageCar(
+        actor.rank,
+        actor.ledTeams,
+        input.actorId,
+        input.driverUserId,
+      )
+    ) {
+      return { ok: false, error: NOT_YOUR_CAR };
+    }
+    return transportSeatIn({ ...input, cycle: actor.cycle });
+  },
+
+  removeRider(input: {
+    actorId: string;
+    driverUserId: string;
+    memberUserId: string;
+  }): TransportResult {
+    const actor = transportActor(input.actorId);
+    if (
+      !canRemoveRider(
+        actor.rank,
+        actor.ledTeams,
+        input.actorId,
+        input.driverUserId,
+        input.memberUserId,
+      )
+    ) {
+      return { ok: false, error: NOT_YOUR_CAR };
+    }
+    const idx = carMembers.findIndex(
+      (c) =>
+        c.driverUserId === input.driverUserId &&
+        c.memberUserId === input.memberUserId &&
+        c.cycle === actor.cycle,
+    );
+    if (idx === -1) return { ok: false, error: NOT_IN_CAR };
+    carMembers.splice(idx, 1);
+    return { ok: true };
+  },
+
+  setSeatsOffered(input: {
+    actorId: string;
+    driverUserId: string;
+    seatsOffered: number;
+  }): TransportResult {
+    const actor = transportActor(input.actorId);
+    if (
+      !canManageCar(
+        actor.rank,
+        actor.ledTeams,
+        input.actorId,
+        input.driverUserId,
+      )
+    ) {
+      return { ok: false, error: NOT_YOUR_CAR };
+    }
+    const car = driverProfiles.find(
+      (d) =>
+        d.userId === input.driverUserId &&
+        d.cycle === actor.cycle &&
+        d.intendsToDrive,
+    );
+    if (!car) return { ok: false, error: NOT_DRIVING };
+    if (transportRiders(input.driverUserId, actor.cycle) > input.seatsOffered) {
+      return { ok: false, error: SEATS_BELOW_RIDERS };
+    }
+    car.seatsOffered = input.seatsOffered;
+    return { ok: true };
+  },
+
+  requestLift(input: {
+    actorId: string;
+    driverUserId: string | null;
+  }): TransportResult {
+    const cycle = currentCycleNumber();
+    if (findUserById(input.actorId)?.approvalStatus !== "approved") {
+      return { ok: false, error: TRANSPORT_NOT_A_MEMBER };
+    }
+    if (transportDriving(input.actorId, cycle)) {
+      return { ok: false, error: YOU_ARE_DRIVING };
+    }
+    if (transportSeat(input.actorId, cycle)) {
+      return { ok: false, error: YOU_HAVE_A_SEAT };
+    }
+    if (input.driverUserId !== null) {
+      if (input.driverUserId === input.actorId) {
+        return { ok: false, error: OWN_CAR };
+      }
+      if (!transportDriving(input.driverUserId, cycle)) {
+        return { ok: false, error: NOT_DRIVING };
+      }
+    }
+    const existing = liftRequests.find(
+      (r) => r.userId === input.actorId && r.cycle === cycle,
+    );
+    if (existing) {
+      existing.driverUserId = input.driverUserId;
+      existing.createdAt = new Date();
+    } else {
+      liftRequests.push({
+        userId: input.actorId,
+        cycle,
+        driverUserId: input.driverUserId,
+        createdAt: new Date(),
+      });
+    }
+    return { ok: true };
+  },
+
+  withdrawLiftRequest(input: { actorId: string }): TransportResult {
+    const cycle = currentCycleNumber();
+    const idx = liftRequests.findIndex(
+      (r) => r.userId === input.actorId && r.cycle === cycle,
+    );
+    if (idx === -1) return { ok: false, error: REQUEST_GONE };
+    liftRequests.splice(idx, 1);
+    return { ok: true };
+  },
+
+  answerLiftRequest(input: {
+    actorId: string;
+    memberUserId: string;
+    accept: boolean;
+  }): TransportResult {
+    const actor = transportActor(input.actorId);
+    const request = liftRequests.find(
+      (r) => r.userId === input.memberUserId && r.cycle === actor.cycle,
+    );
+    if (!request) return { ok: false, error: REQUEST_GONE };
+    const car = request.driverUserId;
+    const mayAnswer =
+      car !== null
+        ? canManageCar(actor.rank, actor.ledTeams, input.actorId, car)
+        : canEditTransport(actor.rank, actor.ledTeams);
+    if (!mayAnswer) return { ok: false, error: NOT_YOUR_CAR };
+    if (input.accept) {
+      if (car === null) return { ok: false, error: REQUEST_GONE };
+      return transportSeatIn({
+        driverUserId: car,
+        memberUserId: input.memberUserId,
+        cycle: actor.cycle,
+      });
+    }
+    liftRequests.splice(liftRequests.indexOf(request), 1);
+    return { ok: true };
+  },
+
+  addTrailer(input: {
+    actorId: string;
+    name: string;
+    notes: string | null;
+  }): TransportResult<{ id: string }> {
+    const actor = transportActor(input.actorId);
+    if (!canEditTransport(actor.rank, actor.ledTeams)) {
+      return { ok: false, error: NOT_A_TRANSPORT_EDITOR };
+    }
+    const id = crypto.randomUUID();
+    transportTrailers.push({
+      id,
+      cycle: actor.cycle,
+      name: input.name,
+      notes: input.notes,
+      towedByUserId: null,
+      version: 0,
+    });
+    return { ok: true, id };
+  },
+
+  updateTrailer(input: {
+    actorId: string;
+    trailerId: string;
+    name: string;
+    notes: string | null;
+    expectedVersion: number;
+  }): TransportResult {
+    const found = transportTrailerClaim(input);
+    if (typeof found === "string") return { ok: false, error: found };
+    found.name = input.name;
+    found.notes = input.notes;
+    found.version += 1;
+    return { ok: true };
+  },
+
+  setTrailerTow(input: {
+    actorId: string;
+    trailerId: string;
+    driverUserId: string | null;
+    expectedVersion: number;
+  }): TransportResult {
+    const actor = transportActor(input.actorId);
+    if (!canEditTransport(actor.rank, actor.ledTeams)) {
+      return { ok: false, error: NOT_A_TRANSPORT_EDITOR };
+    }
+    if (input.driverUserId !== null) {
+      const car = driverProfiles.find(
+        (d) =>
+          d.userId === input.driverUserId &&
+          d.cycle === actor.cycle &&
+          d.intendsToDrive,
+      );
+      if (!car) return { ok: false, error: NOT_DRIVING };
+      if (!car.canTow) return { ok: false, error: CANNOT_TOW };
+      if (
+        transportTrailers.some(
+          (t) =>
+            t.cycle === actor.cycle &&
+            t.towedByUserId === input.driverUserId &&
+            t.id !== input.trailerId,
+        )
+      ) {
+        return { ok: false, error: ALREADY_TOWING };
+      }
+    }
+    const found = transportTrailerClaim(input);
+    if (typeof found === "string") return { ok: false, error: found };
+    found.towedByUserId = input.driverUserId;
+    found.version += 1;
+    return { ok: true };
+  },
+
+  removeTrailer(input: {
+    actorId: string;
+    trailerId: string;
+    expectedVersion: number;
+  }): TransportResult {
+    const found = transportTrailerClaim(input);
+    if (typeof found === "string") return { ok: false, error: found };
+    transportTrailers.splice(transportTrailers.indexOf(found), 1);
+    return { ok: true };
+  },
+
+  sendCarMessage(input: {
+    senderId: string;
+    title: string;
+    body: string;
+  }): TransportResult<{ broadcastId: string; recipientCount: number }> {
+    const actor = transportActor(input.senderId);
+    const allowed = canSendToAudience(
+      {
+        rank: actor.rank,
+        leadTeams: actor.ledTeams,
+        userId: input.senderId,
+        drivesCar: transportDriving(input.senderId, actor.cycle),
+      },
+      { scope: "car", driverUserId: input.senderId },
+    );
+    if (!allowed) return { ok: false, error: CAR_MESSAGE_REFUSED };
+    const riders = carMembers
+      .filter(
+        (c) =>
+          c.driverUserId === input.senderId &&
+          c.cycle === actor.cycle &&
+          c.memberUserId !== input.senderId &&
+          findUserById(c.memberUserId)?.approvalStatus === "approved",
+      )
+      .map((c) => c.memberUserId);
+    if (riders.length === 0) return { ok: false, error: CAR_EMPTY };
+    const broadcastId = crypto.randomUUID();
+    carMessages.push({ id: broadcastId, senderId: input.senderId });
+    const payload = carMessageNotification({
+      broadcastId,
+      title: input.title,
+      body: input.body,
+    });
+    for (const userId of riders) {
+      pushDelivery(payload, { userId, broadcastId, presentation: "feed" });
+    }
+    return { ok: true, broadcastId, recipientCount: riders.length };
   },
 
   // --- join.camp-404.com (the twin of @camp404/db/join-site) --------------

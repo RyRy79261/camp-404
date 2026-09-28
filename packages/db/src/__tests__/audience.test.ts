@@ -105,3 +105,38 @@ describe("computeAudience — applicants are not members yet", () => {
     ).toEqual(["pending"]);
   });
 });
+
+describe("computeAudience — the car", () => {
+  // The riders come from the caller, read from the SENDER's own car; the
+  // scope still leaves out the sender, applicants and erased accounts.
+  it("reaches the car's approved riders, never the sender", () => {
+    const camp: AudienceData = {
+      ...data,
+      members: [
+        ...data.members,
+        {
+          id: "gone",
+          isSystem: false,
+          sanitised: true,
+          approvalStatus: "approved",
+        },
+        {
+          id: "pending",
+          isSystem: false,
+          sanitised: false,
+          approvalStatus: "pending",
+        },
+      ],
+      carRiderUserIds: ["u1", "u2", "gone", "pending", "u3"],
+    };
+    expect(
+      computeAudience({ scope: "car", team: null }, camp, "u3").sort(),
+    ).toEqual(["u1", "u2"]);
+  });
+
+  it("reaches nobody when the caller read no riders", () => {
+    expect(computeAudience({ scope: "car", team: null }, data, "u3")).toEqual(
+      [],
+    );
+  });
+});

@@ -249,6 +249,8 @@ export const broadcastKindEnum = pgEnum("broadcast_kind", [
   "lead_directive",
   "reminder",
   "system",
+  // A driver's message to the riders in their car (#270).
+  "car_message",
 ]);
 
 // What a delivery is about, for the member (NOTIFICATION_KINDS in
@@ -287,6 +289,9 @@ export const broadcastScopeEnum = pgEnum("broadcast_scope", [
   "team_leads",
   "drivers",
   "individual",
+  // The riders of the SENDER's own car this year (#270). The car is never
+  // stored: it is whoever sends. canSendToAudience owns who may use it.
+  "car",
 ]);
 
 export const notificationChannelEnum = pgEnum("notification_channel", [
@@ -849,6 +854,70 @@ export const carMembers = pgTable(
       .onDelete("cascade")
       .onUpdate("cascade"),
     memberIdx: index("car_members_member_idx").on(c.memberUserId),
+  }),
+);
+
+// --- Transport (#270) ------------------------------------------------------
+// The camp's rented trailers, listed per year, and which car tows each. A
+// trailer is camp gear, not member data; `towed_by_user_id` is the one member
+// link, and the read counts it only while that member drives THIS year, so a
+// driver who stops driving (or is erased, which also clears it) leaves the
+// trailer untowed rather than pointing at nobody.
+//
+// Year-scoped like the cars: `cycle` defaults to the UNSET_CYCLE sentinel and
+// setFoundingYear() adopts it; a new year starts with no trailers.
+
+export const transportTrailers = pgTable(
+  "transport_trailers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull().default(1),
+    name: text("name").notNull(),
+    notes: text("notes"),
+    // `set null`: losing the member must not lose the trailer. Erasure keeps
+    // the users row, so it clears this itself (packages/db/src/account.ts).
+    towedByUserId: uuid("towed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Compare-and-set: every edit names the version it saw.
+    version: integer("version").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("transport_trailers_cycle_idx").on(t.cycle),
+    // A car tows one trailer a year. The column is nullable ON PURPOSE here:
+    // any number of trailers may have no car yet, and Postgres treating NULLs
+    // as distinct is exactly that.
+    onePerCar: uniqueIndex("transport_trailers_one_per_car_idx").on(
+      t.towedByUserId,
+      t.cycle,
+    ),
+  }),
+);
+
+// A member asking for a lift this year: in one car (`driver_user_id`), or in
+// any car (null) for the transport team to match. One open request per member
+// per year; taking a seat deletes it in the same transaction. Member data:
+// listed in MEMBER_FIELD_READERS, erased with the account, adopted by
+// setFoundingYear() like the other year-scoped rows.
+
+export const liftRequests = pgTable(
+  "lift_requests",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull().default(1),
+    // The car asked for, by its driver; null is "any car".
+    driverUserId: uuid("driver_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    pk: primaryKey({ columns: [r.userId, r.cycle] }),
+    driverIdx: index("lift_requests_driver_idx").on(r.driverUserId, r.cycle),
   }),
 );
 

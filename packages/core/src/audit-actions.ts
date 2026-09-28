@@ -13,6 +13,7 @@ export const AUDIT_ACTION_LABELS = {
   "calendar.event_created": "Added a calendar event",
   "car.rider_added": "Put a member in a car",
   "car.rider_removed": "Took a member out of a car",
+  "car.seats_set": "Changed a car's seats",
   "camp.cycle.advanced": "Moved the camp to a new year",
   "camp.cycle.founded": "Set the camp's first year",
   "camp.cycle.renamed": "Renamed a year",

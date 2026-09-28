@@ -9,18 +9,16 @@ describe("Switch", () => {
   it("reflects the checked state on the switch role", () => {
     render(<Switch checked aria-label="Active" onCheckedChange={() => {}} />);
     expect(
-      screen.getByRole("switch", { name: "Active" }).getAttribute("aria-checked"),
+      screen
+        .getByRole("switch", { name: "Active" })
+        .getAttribute("aria-checked"),
     ).toBe("true");
   });
 
   it("fires onCheckedChange when toggled", () => {
     const onChange = vi.fn();
     render(
-      <Switch
-        checked={false}
-        aria-label="Active"
-        onCheckedChange={onChange}
-      />,
+      <Switch checked={false} aria-label="Active" onCheckedChange={onChange} />,
     );
     fireEvent.click(screen.getByRole("switch", { name: "Active" }));
     expect(onChange).toHaveBeenCalledWith(true);
