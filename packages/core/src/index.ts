@@ -112,6 +112,8 @@
 //   - meeting notes: canWorkInTeam (a team's members this year, or a
 //     captain; a whole-camp note is a captain's), meetingInstant,
 //     meetingTimeKey and MEETING_NOTE_PRIVACY_REMINDER (./meeting-notes)
+//   - team programs: canEditTeamProgram (a captain, or a lead of that team;
+//     fails closed on an unknown rank or team) (./team-programs)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -160,3 +162,4 @@ export * from "./recipes";
 export * from "./recipe-source";
 export * from "./calendar-titles";
 export * from "./meeting-notes";
+export * from "./team-programs";

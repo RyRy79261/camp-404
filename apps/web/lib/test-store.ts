@@ -6,6 +6,7 @@ import {
   nextCampDay,
   approvalNotification,
   canEditPower,
+  canEditTeamProgram,
   captainPromotionNotification,
   FOUNDER_CODE,
   formatMemberRefCode,
@@ -49,7 +50,15 @@ import {
   type AnnouncementPinContext,
   type PinnedAnnouncement,
   type PinResult,
+  TEAM_ANNOUNCEMENT_LIMIT,
+  type TeamAnnouncement,
 } from "@camp404/db/broadcasts";
+import {
+  NOT_A_TEAM_EDITOR,
+  TEAM_PROGRAM_CHANGED,
+  type TeamProgram,
+  type TeamProgramWriteResult,
+} from "@camp404/db/team-programs";
 import type {
   CampManagementMember,
   CampMemberDetail,
@@ -661,6 +670,8 @@ interface TestStoreState {
   desktopLayouts: Map<string, unknown>;
   /** `desktop_layouts.preferences`: the stored value, by user id. */
   desktopPreferences: Map<string, Record<string, unknown>>;
+  /** `team_programs`: a team's description, by team key. */
+  teamPrograms: Map<string, TeamProgram>;
   /** `inkblot_scores`: every run put on the board, in the order played. */
   inkblotRuns: (InkblotBoardEntry & { userId: string })[];
 }
@@ -748,6 +759,7 @@ function globalState(): TestStoreState {
       carMembers: [] as TestCarMember[],
       desktopLayouts: new Map<string, unknown>(),
       desktopPreferences: new Map<string, Record<string, unknown>>(),
+      teamPrograms: new Map<string, TeamProgram>(),
       inkblotRuns: [],
     } satisfies TestStoreState;
   }
@@ -2149,6 +2161,68 @@ export const testStore = {
       acknowledgedAt: d.acknowledgedAt,
     };
   },
+  /**
+   * Twin of `listTeamAnnouncements` in @camp404/db/broadcasts: what a team has
+   * sent, newest first. The store publishes and fans out in one step, so a
+   * published row is one that went out; a draft never is.
+   */
+  listTeamAnnouncements(
+    team: Team,
+    limit: number = TEAM_ANNOUNCEMENT_LIMIT,
+  ): { items: TeamAnnouncement[]; more: boolean } {
+    const sent = broadcasts
+      .filter(
+        (b): b is TestBroadcast & { publishedAt: Date } =>
+          b.publishedAt !== null &&
+          b.audience.scope === "team" &&
+          b.audience.team === team,
+      )
+      .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    return {
+      items: sent.slice(0, limit).map((b) => ({
+        id: b.id,
+        title: b.title,
+        body: b.body,
+        senderName: userName(b.senderId),
+        sentAt: b.publishedAt,
+      })),
+      more: sent.length > limit,
+    };
+  },
+
+  // --- Team programs (the twin of @camp404/db/team-programs) --------------
+
+  getTeamProgram(team: Team): TeamProgram {
+    const row = S.teamPrograms.get(team);
+    return row
+      ? structuredClone(row)
+      : { team, description: "", version: 0, updatedAt: null };
+  },
+  saveTeamProgram(input: {
+    actorId: string;
+    team: Team;
+    description: string;
+    expectedVersion: number;
+  }): TeamProgramWriteResult {
+    // Like the real write, the store reads the actor's reach itself.
+    const reach = testStore.senderReach(input.actorId);
+    if (!canEditTeamProgram(reachRank(reach), reach ?? [], input.team)) {
+      return { ok: false, error: NOT_A_TEAM_EDITOR };
+    }
+    const current = S.teamPrograms.get(input.team);
+    if ((current?.version ?? 0) !== input.expectedVersion) {
+      return { ok: false, error: TEAM_PROGRAM_CHANGED };
+    }
+    const version = input.expectedVersion + 1;
+    S.teamPrograms.set(input.team, {
+      team: input.team,
+      description: input.description,
+      version,
+      updatedAt: new Date(),
+    });
+    return { ok: true, version };
+  },
+
   markRead(userId: string, ids: string[]): void {
     if (ids.length === 0) return;
     const now = new Date();
@@ -5129,6 +5203,7 @@ export const testStore = {
     carMembers.length = 0;
     S.desktopLayouts.clear();
     S.desktopPreferences.clear();
+    S.teamPrograms.clear();
     S.inkblotRuns.length = 0;
   },
 
