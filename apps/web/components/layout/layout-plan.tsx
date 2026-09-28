@@ -104,6 +104,64 @@ export function metres(value: number): string {
   return `${Number.isInteger(value) ? value : value.toFixed(1)} m`;
 }
 
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function intersects(a: Box, b: Box): boolean {
+  return (
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+  );
+}
+
+function contains(outer: Box, inner: Box): boolean {
+  return (
+    outer.x <= inner.x &&
+    outer.y <= inner.y &&
+    outer.x + outer.w >= inner.x + inner.w &&
+    outer.y + outer.h >= inner.y + inner.h
+  );
+}
+
+/**
+ * Where an area's name sits (the text's middle, in metres from the top):
+ * along its top inside, unless something stands there (tents pitched along
+ * the edge); then along its bottom inside; then just above the area, then
+ * just below it, on the plot. With no clear place it keeps the top.
+ */
+export function areaLabelY(
+  area: PlanPiece,
+  pieces: readonly PlanPiece[],
+  plot: PlanPlot,
+  fontSize: number,
+  textWidth: number,
+): number {
+  const half = fontSize * 0.6;
+  const top = area.y + fontSize * 0.9;
+  const candidates = [
+    top,
+    area.y + area.h - fontSize * 0.9,
+    area.y - fontSize * 0.8,
+    area.y + area.h + fontSize * 0.8,
+  ];
+  // What stands in the way: every other piece but one the area sits inside.
+  const others = pieces.filter((p) => p.id !== area.id && !contains(p, area));
+  for (const y of candidates) {
+    const band: Box = {
+      x: area.x + area.w / 2 - textWidth / 2,
+      y: y - half,
+      w: textWidth,
+      h: half * 2,
+    };
+    if (band.y < 0 || band.y + band.h > plot.depthM) continue;
+    if (!others.some((p) => intersects(band, p))) return y;
+  }
+  return top;
+}
+
 function gridLines(plot: PlanPlot) {
   const lines: {
     key: string;
@@ -222,7 +280,8 @@ export function LayoutPlan({
           // An area's name sits along its top, clear of what stands in it.
           const area = LAYOUT_AREA_KINDS.has(piece.kind) && piece.h > font * 3;
           // Room for the text: roughly 0.6 of the font size per character.
-          const fits = text.length * pieceFont * 0.6 <= piece.w * 0.95;
+          const textWidth = text.length * pieceFont * 0.6;
+          const fits = textWidth <= piece.w * 0.95;
           return (
             <g
               key={piece.id}
@@ -262,7 +321,11 @@ export function LayoutPlan({
               {fits ? (
                 <text
                   x={piece.x + piece.w / 2}
-                  y={area ? piece.y + pieceFont * 0.9 : piece.y + piece.h / 2}
+                  y={
+                    area
+                      ? areaLabelY(piece, pieces, plot, pieceFont, textWidth)
+                      : piece.y + piece.h / 2
+                  }
                   textAnchor="middle"
                   dominantBaseline="central"
                   fontSize={pieceFont}
