@@ -154,6 +154,22 @@ describe("inventory item page", () => {
     expect(listItemBookings).toHaveBeenCalledWith(ITEM_ID, "viewer", false);
   });
 
+  it("says an archived item can't be booked, not that it is fully booked", async () => {
+    vi.mocked(getInventoryItem).mockResolvedValue({
+      ...ITEM,
+      archivedAt: new Date("2026-09-22T08:00:00Z"),
+    } as never);
+    as("camp_member");
+    await renderPage();
+    expect(
+      screen.getByText("It can't be booked: the camp no longer keeps it."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/fully booked/)).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Book Cooler box" }),
+    ).toBeNull();
+  });
+
   it("refuses a lead of another team the same way", async () => {
     as("team_lead", ["sound"]);
     await renderPage();

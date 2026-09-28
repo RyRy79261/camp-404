@@ -333,6 +333,10 @@ export default async function InventoryItemPage({
                   </span>
                   <BookButton itemId={item.id} name={item.name} />
                 </>
+              ) : item.archivedAt !== null ? (
+                <span className="text-muted-foreground">
+                  It can&apos;t be booked: the camp no longer keeps it.
+                </span>
               ) : (
                 <span className="text-muted-foreground">
                   It&apos;s fully booked this year.
