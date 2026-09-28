@@ -3,6 +3,7 @@
 // `AuditEvent.action` in @camp404/db is typed from this list, so a writer with
 // a new action does not compile until the action has a label here.
 
+import { MEMBERSHIP_TIER_LABEL } from "./membership-tier";
 import { decimalToMinor, formatMoney, isCurrency } from "./money";
 
 export const AUDIT_ACTION_LABELS = {
@@ -27,6 +28,16 @@ export const AUDIT_ACTION_LABELS = {
   "camp.teams.renamed": "Renamed a team",
   "camp.teams.unarchived": "Restored a team",
   "document.created": "Started a camp document",
+  "dues.charge_added": "Added a charge to a member's dues",
+  "dues.charge_cancelled": "Cancelled a charge on a member's dues",
+  "dues.fee_charged": "Charged a member's camp fee",
+  "dues.fee_set": "Set a member's camp fee",
+  "dues.plan_set": "Set a member's payment plan",
+  "dues.settle_up_published": "Published a settle-up",
+  "dues.tier_added": "Added a fee tier",
+  "dues.tier_archived": "Removed a fee tier",
+  "dues.tier_changed": "Changed a fee tier",
+  "dues.year_saved": "Set the year's dues dates",
   "document.published": "Published a camp document",
   "document.unpublished": "Unpublished a camp document",
   "document.updated": "Edited a camp document",
@@ -36,6 +47,7 @@ export const AUDIT_ACTION_LABELS = {
   "member.bank_details.viewed": "Viewed bank details",
   "member.export": "Exported the member list",
   "member.id_document.viewed": "Viewed an ID number",
+  "member.membership_tier_set": "Changed how long a member stays",
   "member.note_added": "Added a captain note",
   "member.notes.viewed": "Read captain notes",
   "member.rank_changed": "Changed a rank",
@@ -46,6 +58,10 @@ export const AUDIT_ACTION_LABELS = {
   "participation.withdrawn": "Withdrew from this year",
   "payment.recorded": "Recorded a payment",
   "payment.status_changed": "Changed a payment",
+  "payment.proof_viewed": "Viewed a proof of payment",
+  "payment.refund_declined": "Declined a refund",
+  "payment.refund_requested": "Asked for a refund",
+  "payment.refunded": "Refunded a payment",
   "recipe.accepted": "Accepted a recipe version",
   "recipe.adjust_queued": "Asked Claude to change a recipe version",
   "recipe.approved": "Approved a recipe",
@@ -64,7 +80,9 @@ export const AUDIT_ACTION_LABELS = {
   "recipe.written_by_claude": "Had Claude write a recipe version",
   "reimbursement.status_changed": "Moved a reimbursement",
   "safety.emergency_contacts.view": "Read emergency contacts",
+  "team.program_changed": "Changed a team's description or links",
   "team_budget.set": "Set a team budget",
+  "ticket.pass_changed": "Changed a member's ticket, DDT or WAP",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
@@ -86,6 +104,31 @@ const text = (metadata: Metadata, key: string): string | null => {
 const count = (metadata: Metadata, key: string): number | null => {
   const value = metadata?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+};
+
+// The captain-only passes on a member's ticket row, and their values.
+const TICKET_PASS_WORDS: Record<string, string> = {
+  ticket: "Ticket",
+  ddt: "DDT",
+  wap: "WAP",
+};
+const TICKET_PASS_VALUE_WORDS: Record<string, Record<string, string>> = {
+  ticket: {
+    unknown: "not sorted",
+    buying_own: "buying own",
+    has_ticket: "has ticket",
+    needs_directed_ticket: "needs a DDT",
+  },
+  ddt: {
+    none: "none",
+    allocated: "allocated",
+    can_transfer: "can transfer",
+  },
+  wap: {
+    not_needed: "not needed",
+    requested: "asked for",
+    issued: "issued",
+  },
 };
 
 const APPROVAL_WORDS: Record<string, string> = {
@@ -175,6 +218,18 @@ export function auditDetail(
         ? `Now leads ${teamLabel(team)}`
         : `No longer leads ${teamLabel(team)}`;
     }
+    case "member.membership_tier_set": {
+      const tierWord = (key: string): string | null => {
+        const value = text(metadata, key);
+        return value !== null && Object.hasOwn(MEMBERSHIP_TIER_LABEL, value)
+          ? MEMBERSHIP_TIER_LABEL[value as keyof typeof MEMBERSHIP_TIER_LABEL]
+          : null;
+      };
+      const to = tierWord("to");
+      if (!to) return null;
+      const from = tierWord("from");
+      return from ? `${from} to ${to}` : to;
+    }
     case "participation.decided":
       return participationDetail(
         PARTICIPATION_DECISION_WORDS,
@@ -187,6 +242,16 @@ export function auditDetail(
         text(metadata, "from"),
         count(metadata, "cycle"),
       );
+    case "ticket.pass_changed": {
+      const pass = text(metadata, "pass");
+      const to = text(metadata, "to");
+      if (!pass || !Object.hasOwn(TICKET_PASS_WORDS, pass) || !to) return null;
+      const values = TICKET_PASS_VALUE_WORDS[pass]!;
+      if (!Object.hasOwn(values, to)) return null;
+      const cycle = count(metadata, "cycle");
+      const line = `${TICKET_PASS_WORDS[pass]}: ${values[to]}`;
+      return cycle === null ? line : `${line} for ${cycle}`;
+    }
     case "payment.recorded": {
       const reference = text(metadata, "reference");
       const status = text(metadata, "status");
@@ -202,6 +267,43 @@ export function auditDetail(
       if (!PAYMENT_WORDS[from] || !PAYMENT_WORDS[to]) return reference;
       return `${reference}, ${PAYMENT_WORDS[from]} to ${PAYMENT_WORDS[to]}`;
     }
+    // Money a Finance write moved, and the words the dues screens use.
+    case "dues.fee_charged":
+    case "dues.fee_set":
+    case "dues.charge_added":
+    case "dues.charge_cancelled":
+    case "dues.tier_added":
+    case "dues.tier_changed":
+    case "payment.refund_requested":
+    case "payment.refunded": {
+      const cents = count(metadata, "amountCents");
+      const label = text(metadata, "label") ?? text(metadata, "description");
+      const money = cents === null ? null : formatMoney(cents);
+      const concession =
+        action === "dues.fee_set" && metadata?.concession === true
+          ? "with a concession"
+          : null;
+      const parts = [label, money, concession].filter(Boolean);
+      return parts.length > 0 ? parts.join(", ") : null;
+    }
+    case "dues.plan_set": {
+      const instalments = count(metadata, "instalments");
+      if (instalments === null) return null;
+      return instalments === 0
+        ? "Plan removed"
+        : `${instalments} ${instalments === 1 ? "instalment" : "instalments"}`;
+    }
+    case "dues.settle_up_published": {
+      const cents = count(metadata, "totalCents");
+      const members = count(metadata, "members");
+      if (cents === null || members === null)
+        return text(metadata, "description");
+      const verb = cents < 0 ? "back to" : "across";
+      return `${formatMoney(Math.abs(cents))} ${verb} ${members} ${members === 1 ? "member" : "members"}`;
+    }
+    case "payment.proof_viewed":
+    case "payment.refund_declined":
+      return text(metadata, "reference");
     case "reimbursement.status_changed": {
       const from = text(metadata, "from");
       const to = text(metadata, "to");
@@ -223,6 +325,7 @@ export function auditDetail(
         ? `${formatMoney(minor, currency)}, ${moved}`
         : `${currency} ${amount}, ${moved}`;
     }
+    case "team.program_changed":
     case "team_budget.set": {
       const team = text(metadata, "team");
       return team ? teamLabel(team) : null;

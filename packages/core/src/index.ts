@@ -48,6 +48,9 @@
 //     roster CSV's columns by rank, from the field list (./member-export)
 //   - payment references: formatMemberRefCode, paymentReference,
 //     PAYMENT_STATUSES, paymentSettlesDues (./payment-references)
+//   - dues: canManageMoney (captains and Finance leads), duesBalance,
+//     duesSettled, nextInstalment, splitEvenly, proposeRefund and the
+//     statement import (parseStatement, proposeStatementMatches) (./dues)
 //   - money: CURRENCIES, DEFAULT_CURRENCY, isCurrency, UnknownCurrencyError,
 //     formatMoney, parseMoneyToMinor, decimalToMinor, sumMinor — money is in
 //     rands (ZAR) only, with one formatter; formatForeignEquivalent and
@@ -88,9 +91,14 @@
 //   - questionnaire status: memberQuestionnaireStatuses — where each
 //     questionnaire stands for one member (./questionnaire-status)
 //   - participation: participationAfterIntent, isParticipationDecision,
-//     PARTICIPATION_LABEL, NOT_ANSWERED_LABEL — who is coming this year, how a
+//     INTENT_LABEL, DECISION_LABEL, STANDING_LABEL, participationDecision — who
+//     is coming this year (the member's answer and the captains' decision,
+//     kept apart), how a
 //     member's answer moves it and which moves a captain may make
 //     (./participation)
+//   - tickets: the words for a member's ticket, DDT and early
+//     entry, and the year's ticket counts (stillNeedsTicket,
+//     deriveTicketCounts) (./tickets)
 //   - power: canEditPower (a captain or a Power & Lighting lead), the load
 //     maths (loadWatts, energyPerDay, hourlyBuckets, peakLoad,
 //     surgeHeadroomWatts, amps at MAINS_VOLTS, generatorLoadPct, loadBand,
@@ -117,6 +125,8 @@
 //     (those, or the rider), seatsLeft, vehicleLabel, transportTotals
 //     (./transport). Who may message a car is canSendToAudience's `car`
 //     scope, not here.
+//   - team programs: canEditTeamProgram (a captain, or a lead of that team;
+//     fails closed on an unknown rank or team) (./team-programs)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -139,6 +149,7 @@ export * from "./privacy";
 export * from "./member-export";
 export * from "./payment-references";
 export * from "./money";
+export * from "./dues";
 export * from "./audience-authz";
 export * from "./pinned-order";
 export * from "./csv";
@@ -148,6 +159,8 @@ export * from "./questionnaire-definition";
 export * from "./questionnaire-runtime";
 export * from "./questionnaire-versioning";
 export * from "./questionnaire-submission";
+export * from "./questionnaire-viewer";
+export * from "./questionnaire-templates";
 export * from "./questionnaire-copy";
 export * from "./notification-links";
 export * from "./notifications";
@@ -160,9 +173,12 @@ export * from "./time-zone";
 export * from "./questionnaire-status";
 export * from "./password";
 export * from "./participation";
+export * from "./membership-tier";
+export * from "./tickets";
 export * from "./power";
 export * from "./recipes";
 export * from "./recipe-source";
 export * from "./calendar-titles";
 export * from "./meeting-notes";
 export * from "./transport";
+export * from "./team-programs";

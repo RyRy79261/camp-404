@@ -49,6 +49,9 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   "mcp/well-known/oauth-authorization-server": "public",
   "mcp/well-known/oauth-protected-resource": "public",
   "notifications/acknowledge": "camp-access",
+  // A proof of payment (#240): camp access and approval, then its member or
+  // the Finance team (moneyActionGate) only.
+  "payment-proof/[paymentId]": "camp-access",
   "notifications/pending": "camp-access",
   "notifications/popups": "camp-access",
   "push/tokens": "camp-access",
@@ -66,6 +69,8 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   "tools/invite/check": "camp-access",
   "uploads/avatar": "camp-access",
   "uploads/builder-image": "captain-gate",
+  // A member's own proof of payment (#240), stored in their own folder.
+  "uploads/payment-proof": "camp-access",
   "uploads/questionnaire-image": "camp-access",
   "voice/transcribe": "camp-access",
 };

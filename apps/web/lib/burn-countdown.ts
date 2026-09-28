@@ -33,3 +33,28 @@ export function burnCountdownLabel(
   if (today <= end) return `The Burn, day ${today - start + 1}`;
   return null;
 }
+
+/**
+ * The Burn's dates in words, e.g. "26 April – 2 May 2027" (the join site's
+ * label). Each day is formatted on its own, not with formatRange, whose
+ * spacing differs between ICU versions. Null for a date that does not parse.
+ */
+export function burnDatesLabel(burn: {
+  start: string;
+  end: string;
+}): string | null {
+  const start = dayNumber(burn.start);
+  const end = dayNumber(burn.end);
+  if (start === null || end === null) return null;
+  const format = (day: number, withYear: boolean) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "UTC",
+      day: "numeric",
+      month: "long",
+      year: withYear ? "numeric" : undefined,
+    }).format(new Date(day * DAY_MS));
+  const sameYear =
+    new Date(start * DAY_MS).getUTCFullYear() ===
+    new Date(end * DAY_MS).getUTCFullYear();
+  return `${format(start, !sameYear)} – ${format(end, true)}`;
+}

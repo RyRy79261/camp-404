@@ -1,7 +1,12 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import type { ParticipationStatus } from "@camp404/types";
-import { createHttpDb } from "./index";
+import type {
+  MembershipTier,
+  ParticipationIntent,
+  ParticipationStatus,
+} from "@camp404/types";
+import { writeAuditEvent } from "./audit";
+import { createHttpDb, withTransaction } from "./index";
 import { duesSettledSql } from "./payments";
 import * as schema from "./schema";
 import { currentCycleNumber } from "./cycles";
@@ -51,6 +56,12 @@ export interface CampManagementMember {
    * layer keeps it off a member's roster.
    */
   participation: ParticipationStatus | null;
+  /**
+   * What the member themselves answered this year (Yes / Maybe / No), apart
+   * from the captains' decision in `participation`; null with no answer. Team
+   * lead and up, like `participation`.
+   */
+  participationIntent: ParticipationIntent | null;
   /**
    * Sign-in email, from the Better Auth `user` table. Present ONLY when the caller passed
    * `includeEmail: true` (a captain); members never see another's email.
@@ -138,6 +149,10 @@ export async function getCampManagementRoster(
         select cp.status::text from camp_participations cp
         where cp.user_id = ${schema.users.id} and cp.cycle = ${cycle}
       )`,
+      participationIntent: sql<ParticipationIntent | null>`(
+        select cp.intent::text from camp_participations cp
+        where cp.user_id = ${schema.users.id} and cp.cycle = ${cycle}
+      )`,
       ...(includeEmail ? { email: schema.user.email } : {}),
       createdAt: schema.users.createdAt,
     })
@@ -185,6 +200,7 @@ export async function getCampManagementRoster(
     driverProfileComplete: r.driverCompletedAt != null,
     country: r.country,
     participation: r.participation ?? null,
+    participationIntent: r.participationIntent ?? null,
     ...(includeEmail ? { email: r.email ?? null } : {}),
     createdAt: r.createdAt,
   }));
@@ -401,4 +417,41 @@ export async function isTeamLead(userId: string): Promise<boolean> {
     )
     .limit(1);
   return rows.length > 0;
+}
+
+/**
+ * A captain sets how long a member stays (`users.membership_tier`, #129). A
+ * compare-and-set on the value the captain saw (`from`, null when not set), so
+ * a member who changed it themselves (the Claude connector's
+ * `set_my_membership_tier`), or another captain, is not overwritten: the
+ * caller gets false and says so. The audit row commits in the same
+ * transaction. An erased account is never written.
+ */
+export async function setMembershipTier(input: {
+  userId: string;
+  from: MembershipTier | null;
+  to: MembershipTier;
+  actorId: string;
+}): Promise<boolean> {
+  return withTransaction(async (tx) => {
+    const rows = await tx
+      .update(schema.users)
+      .set({ membershipTier: input.to, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.users.id, input.userId),
+          eq(schema.users.sanitised, false),
+          sql`${schema.users.membershipTier} is not distinct from ${input.from}::membership_tier`,
+        ),
+      )
+      .returning({ id: schema.users.id });
+    if (rows.length === 0) return false;
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "member.membership_tier_set",
+      target: input.userId,
+      metadata: { from: input.from, to: input.to },
+    });
+    return true;
+  });
 }

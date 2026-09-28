@@ -27,6 +27,11 @@ export const CAPTAIN_PROMOTION_REF_TYPE = "captain_promotion";
 export const TASK_REF_TYPE = "task";
 /** The reference a driver's message carries: its own broadcast. */
 export const CAR_MESSAGE_REF_TYPE = "car_message";
+/**
+ * The reference a deadline reminder carries for a required action that no
+ * questionnaire send stands behind: the required_actions row itself.
+ */
+export const REQUIRED_ACTION_REF_TYPE = "required_action";
 
 const DUE_ON = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -105,6 +110,27 @@ export function questionnaireReminderNotification(input: {
     body: reminderBody(input.title, input.dueAt),
     refType: QUESTIONNAIRE_REF_TYPE,
     refId: input.activationId,
+  };
+}
+
+/**
+ * A nudge about a required action with a deadline that is not tied to a
+ * questionnaire send (#134). It reuses the questionnaire reminder's kind: the
+ * kind is not shown to the member and only decides that it is emailed, and a
+ * kind of its own would need a database migration. The row's title (what the
+ * member was asked to do) is the only fact it carries.
+ */
+export function requiredActionReminderNotification(input: {
+  requiredActionId: string;
+  title: string;
+  dueAt: Date;
+}): NotificationPayload {
+  return {
+    kind: "questionnaire_reminder",
+    title: input.title,
+    body: `Reminder: ${input.title} is due ${DUE_ON.format(input.dueAt)}. Tap to open the app.`,
+    refType: REQUIRED_ACTION_REF_TYPE,
+    refId: input.requiredActionId,
   };
 }
 

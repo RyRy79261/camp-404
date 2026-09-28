@@ -1,6 +1,11 @@
 import "server-only";
 
-import { canApproveRecipe, canWorkInTeam, hasClearance } from "@camp404/core";
+import {
+  canApproveRecipe,
+  canManageMoney,
+  canWorkInTeam,
+  hasClearance,
+} from "@camp404/core";
 import { Team, type ViewerRank } from "@camp404/types";
 import type { ProgramId } from "./program-routes";
 
@@ -191,6 +196,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: ME,
     rank: "camp_member",
   },
+  // Every member's own dues (#240): what they owe, their pledge, and where
+  // they send their proof of payment.
+  {
+    id: "my-dues",
+    label: "My dues",
+    fileName: "MY_DUES.TXT",
+    href: "/dues",
+    icon: "my-dues",
+    place: ME,
+    rank: "camp_member",
+  },
   // Decision 11 A (owner, 2026-09-26): a driver, or a member with a seat in
   // someone's car, gets their lift as a program.
   {
@@ -255,6 +271,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // The camp's intro, once a Notion page (#264): every approved member reads
+  // it; captains edit its words in Join site.
+  {
+    id: "about",
+    label: "About Camp 404",
+    fileName: "README.TXT",
+    href: "/about",
+    icon: "about",
+    place: CAMP,
+    rank: "camp_member",
+  },
   // Every team's page, for every approved member (owner's decision 2,
   // 2026-09-26: every member sees every team's dashboard, read-only; the
   // actions on it keep their own gates).
@@ -307,6 +334,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "captain",
   },
+  // Who is coming this year, with tickets and WAP for captains
+  // (#238). A team lead reads the statuses only, so the bar is team_lead.
+  {
+    id: "applications",
+    label: "Applications",
+    fileName: "INTAKE.DB",
+    href: "/captains/applications",
+    icon: "applications",
+    place: CAPTAINS,
+    rank: "team_lead",
+  },
   {
     id: "questionnaires",
     label: "Questionnaires",
@@ -334,6 +372,10 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "team_lead",
   },
+  // The Finance tools (#240): captains and Finance leads (canManageMoney).
+  // The page's rank gate is team_lead, because clearance is global; the rule
+  // narrows it, so a lead of another team is not offered it. A Finance lead
+  // also finds it in their Finance team folder (TEAM_TOOLS).
   {
     id: "payments",
     label: "Payments",
@@ -341,7 +383,8 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     href: "/captains/payments",
     icon: "payments",
     place: CAPTAINS,
-    rank: "captain",
+    rank: "team_lead",
+    requires: (ctx) => canManageMoney(ctx.rank, ctx.ledTeams),
   },
   {
     id: "camp-settings",

@@ -6,6 +6,8 @@ import {
   nextCampDay,
   approvalNotification,
   canEditPower,
+  canEditTeamProgram,
+  DEFAULT_TICKET,
   captainPromotionNotification,
   FOUNDER_CODE,
   formatMemberRefCode,
@@ -19,7 +21,6 @@ import {
   notificationLink,
   type NotificationPayload,
   paymentReference,
-  paymentSettlesDues,
   sumMinor,
   UnknownCurrencyError,
   type PaymentStatus,
@@ -55,13 +56,30 @@ import {
   type AnnouncementPinContext,
   type PinnedAnnouncement,
   type PinResult,
+  TEAM_ANNOUNCEMENT_LIMIT,
+  type TeamAnnouncement,
 } from "@camp404/db/broadcasts";
+import {
+  NOT_A_TEAM_EDITOR,
+  TEAM_PROGRAM_CHANGED,
+  type TeamProgram,
+  type TeamProgramWriteResult,
+} from "@camp404/db/team-programs";
 import type {
   CampManagementMember,
   CampMemberDetail,
   CampMemberDetailOptions,
 } from "@camp404/db/roster";
 import type { PaymentRow, RecordPaymentInput } from "@camp404/db/payments";
+import { MoneyRefused, NOT_A_MONEY_KEEPER } from "@camp404/db/dues";
+import type { PaymentMethod, PaymentSource } from "@camp404/types";
+import {
+  chargeFeeOnAccept,
+  duesSettledInStore,
+  isMoneyKeeperInStore,
+  refundStatusOf,
+  resetDuesStore,
+} from "./test-store-dues";
 import type { MyLift } from "@camp404/db/cars";
 import {
   ALREADY_SEATED,
@@ -109,6 +127,7 @@ import type {
   ParticipationIntentResult,
   ParticipationRow,
 } from "@camp404/db/participations";
+import type { TicketPassChange, TicketRow } from "@camp404/db/tickets";
 import {
   CANNOT_EDIT,
   CANNOT_MOVE,
@@ -275,6 +294,7 @@ import {
   type EditLoadInput,
   type GeneratorInput,
   type LoadInput,
+  type MembershipTier,
   Team as TeamKeys,
 } from "@camp404/types";
 import {
@@ -329,6 +349,8 @@ interface TestUser {
   approvalDecidedByUserId: string | null;
   approvalDecidedAt: Date | null;
   approvalDecisionReason: string | null;
+  /** How long they stay; null (not set) unless a captain set it. */
+  membershipTier: MembershipTier | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -511,6 +533,11 @@ interface TestPayment {
   status: PaymentStatus;
   note: string | null;
   recordedByUserId: string | null;
+  source: PaymentSource;
+  method: PaymentMethod | null;
+  paidOn: string | null;
+  proofPathname: string | null;
+  proofContentType: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -636,6 +663,9 @@ interface TestRecipeEvent {
 /** One member's answer for one year (mirrors `camp_participations`). */
 type TestParticipation = ParticipationRow;
 
+/** One member's ticket record for one year (mirrors `camp_tickets`). */
+type TestTicket = TicketRow;
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -659,6 +689,8 @@ interface TestStoreState {
   memberRefCodes: Map<string, string>;
   /** `camp_participations`, keyed `${userId}:${cycle}` like its primary key. */
   participations: Map<string, TestParticipation>;
+  /** `camp_tickets`, keyed `${userId}:${cycle}` like its primary key. */
+  tickets: Map<string, TestTicket>;
   /** Power and fuel (#253, #254): the twins of their tables. */
   powerLoads: PowerLoadRow[];
   /** `power_plans`, keyed by year like the table's primary key. */
@@ -700,6 +732,8 @@ interface TestStoreState {
   desktopLayouts: Map<string, unknown>;
   /** `desktop_layouts.preferences`: the stored value, by user id. */
   desktopPreferences: Map<string, Record<string, unknown>>;
+  /** `team_programs`: a team's description, by team key. */
+  teamPrograms: Map<string, TeamProgram>;
   /** `inkblot_scores`: every run put on the board, in the order played. */
   inkblotRuns: (InkblotBoardEntry & { userId: string })[];
 }
@@ -785,6 +819,7 @@ function globalState(): TestStoreState {
       payments: [] as TestPayment[],
       memberRefCodes: new Map<string, string>(),
       participations: new Map<string, TestParticipation>(),
+      tickets: new Map<string, TestTicket>(),
       powerLoads: [] as PowerLoadRow[],
       powerPlans: new Map<number, PowerPlan>(),
       generators: [] as GeneratorRow[],
@@ -809,6 +844,7 @@ function globalState(): TestStoreState {
       carMessages: [],
       desktopLayouts: new Map<string, unknown>(),
       desktopPreferences: new Map<string, Record<string, unknown>>(),
+      teamPrograms: new Map<string, TeamProgram>(),
       inkblotRuns: [],
     } satisfies TestStoreState;
   }
@@ -867,6 +903,8 @@ S.participations ??= new Map<string, TestParticipation>();
 const participations = S.participations;
 const participationKey = (userId: string, cycle: number) =>
   `${userId}:${cycle}`;
+S.tickets ??= new Map<string, TestTicket>();
+const tickets = S.tickets;
 const payments = S.payments;
 const memberRefCodes = S.memberRefCodes;
 S.powerLoads ??= [];
@@ -1502,6 +1540,7 @@ export const testStore = {
       approvalDecidedByUserId: null,
       approvalDecidedAt: null,
       approvalDecisionReason: null,
+      membershipTier: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -2307,6 +2346,68 @@ export const testStore = {
       acknowledgedAt: d.acknowledgedAt,
     };
   },
+  /**
+   * Twin of `listTeamAnnouncements` in @camp404/db/broadcasts: what a team has
+   * sent, newest first. The store publishes and fans out in one step, so a
+   * published row is one that went out; a draft never is.
+   */
+  listTeamAnnouncements(
+    team: Team,
+    limit: number = TEAM_ANNOUNCEMENT_LIMIT,
+  ): { items: TeamAnnouncement[]; more: boolean } {
+    const sent = broadcasts
+      .filter(
+        (b): b is TestBroadcast & { publishedAt: Date } =>
+          b.publishedAt !== null &&
+          b.audience.scope === "team" &&
+          b.audience.team === team,
+      )
+      .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    return {
+      items: sent.slice(0, limit).map((b) => ({
+        id: b.id,
+        title: b.title,
+        body: b.body,
+        senderName: userName(b.senderId),
+        sentAt: b.publishedAt,
+      })),
+      more: sent.length > limit,
+    };
+  },
+
+  // --- Team programs (the twin of @camp404/db/team-programs) --------------
+
+  getTeamProgram(team: Team): TeamProgram {
+    const row = S.teamPrograms.get(team);
+    return row
+      ? structuredClone(row)
+      : { team, description: "", version: 0, updatedAt: null };
+  },
+  saveTeamProgram(input: {
+    actorId: string;
+    team: Team;
+    description: string;
+    expectedVersion: number;
+  }): TeamProgramWriteResult {
+    // Like the real write, the store reads the actor's reach itself.
+    const reach = testStore.senderReach(input.actorId);
+    if (!canEditTeamProgram(reachRank(reach), reach ?? [], input.team)) {
+      return { ok: false, error: NOT_A_TEAM_EDITOR };
+    }
+    const current = S.teamPrograms.get(input.team);
+    if ((current?.version ?? 0) !== input.expectedVersion) {
+      return { ok: false, error: TEAM_PROGRAM_CHANGED };
+    }
+    const version = input.expectedVersion + 1;
+    S.teamPrograms.set(input.team, {
+      team: input.team,
+      description: input.description,
+      version,
+      updatedAt: new Date(),
+    });
+    return { ok: true, version };
+  },
+
   markRead(userId: string, ids: string[]): void {
     if (ids.length === 0) return;
     const now = new Date();
@@ -2659,6 +2760,27 @@ export const testStore = {
     row.decidedAt = now;
     row.reason = null;
     row.updatedAt = now;
+    // The fee they pledged is charged with the place (#240).
+    if (input.to === "accepted") {
+      chargeFeeOnAccept(input.userId, row.cycle, input.decidedByUserId);
+    }
+    return true;
+  },
+
+  /**
+   * A captain sets how long a member stays (@camp404/db/roster's
+   * setMembershipTier twin): the same compare-and-set on the value the captain
+   * saw, without the audit row.
+   */
+  setMembershipTier(input: {
+    userId: string;
+    from: MembershipTier | null;
+    to: MembershipTier;
+  }): boolean {
+    const user = findUserById(input.userId);
+    if (!user || user.membershipTier !== input.from) return false;
+    user.membershipTier = input.to;
+    user.updatedAt = new Date();
     return true;
   },
 
@@ -2693,6 +2815,87 @@ export const testStore = {
     return { ...row };
   },
 
+  // --- Tickets and WAP (mirrors @camp404/db/tickets) -------------
+
+  /** A member's ticket record for one year, or null when nothing is said. */
+  getTicket(userId: string, cycle: number): TestTicket | null {
+    const row = tickets.get(participationKey(userId, cycle));
+    return row ? { ...row } : null;
+  },
+
+  /** Every ticket record for one year. */
+  listTickets(cycle: number): TestTicket[] {
+    return Array.from(tickets.values())
+      .filter((t) => t.cycle === cycle)
+      .map((t) => ({ ...t }));
+  },
+
+  /** The member's own ticket status: an upsert, as production. */
+  setOwnTicketStatus(input: {
+    userId: string;
+    cycle: number;
+    ticketStatus: TestTicket["ticketStatus"];
+  }): void {
+    if (!findUserById(input.userId)) {
+      throw new Error(`No test user with id ${input.userId}`);
+    }
+    const now = new Date();
+    const key = participationKey(input.userId, input.cycle);
+    const row = tickets.get(key);
+    if (row) {
+      row.ticketStatus = input.ticketStatus;
+      row.updatedAt = now;
+      return;
+    }
+    tickets.set(key, {
+      ...DEFAULT_TICKET,
+      userId: input.userId,
+      cycle: input.cycle,
+      ticketStatus: input.ticketStatus,
+      passesUpdatedByUserId: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+
+  /**
+   * A captain's DDT or WAP change for THIS year: the same
+   * compare-and-set as production (a missing row stands at the defaults),
+   * without the audit row. A change to the value already there throws.
+   */
+  setTicketPass(
+    input: TicketPassChange & { userId: string; actorUserId: string },
+  ): boolean {
+    if (input.from === input.to) {
+      throw new Error(`setTicketPass: ${input.pass} is already ${input.to}`);
+    }
+    const key = participationKey(input.userId, currentCycleNumber());
+    const now = new Date();
+    const row: TestTicket = tickets.get(key) ?? {
+      ...DEFAULT_TICKET,
+      userId: input.userId,
+      cycle: currentCycleNumber(),
+      passesUpdatedByUserId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (input.pass === "ticket") {
+      if (row.ticketStatus !== input.from) return false;
+      row.ticketStatus = input.to;
+    } else if (input.pass === "ddt") {
+      if (row.ddt !== input.from) return false;
+      row.ddt = input.to;
+      row.passesUpdatedByUserId = input.actorUserId;
+    } else {
+      if (row.wap !== input.from) return false;
+      row.wap = input.to;
+      row.passesUpdatedByUserId = input.actorUserId;
+    }
+    row.updatedAt = now;
+    tickets.set(key, row);
+    return true;
+  },
+
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
   // The test store models users, burner profiles, team memberships, the
   // payments ledger and the required_actions twin, but not driver profiles, so
@@ -2708,10 +2911,18 @@ export const testStore = {
   ): CampManagementMember[] {
     const cycle = currentCycleNumber();
     const thisYear = teamMemberships.filter((m) => m.cycle === cycle);
+    // The dues rule (#240): with charges, a balance paid down; with none,
+    // any payment received or waived.
     const settled = new Set(
-      payments
-        .filter((p) => p.cycle === cycle && paymentSettlesDues(p.status))
-        .map((p) => p.userId),
+      Array.from(usersByAuthId.values())
+        .map((u) => u.id)
+        .filter((id) =>
+          duesSettledInStore(
+            id,
+            cycle,
+            payments.filter((p) => p.userId === id && p.cycle === cycle),
+          ),
+        ),
     );
     return Array.from(usersByAuthId.values())
       .map((u): CampManagementMember => {
@@ -2731,7 +2942,7 @@ export const testStore = {
           isLead: mine.some((m) => m.isLead),
           teams: mine.map((m) => m.team).sort((a, b) => a.localeCompare(b)),
           duesPaid: settled.has(u.id),
-          membershipTier: null,
+          membershipTier: u.membershipTier,
           onboardingComplete: profile?.completedAt != null,
           pendingRequiredActions: owed.length,
           pendingRequiredActionItems: owed.map((a) => ({
@@ -2743,6 +2954,8 @@ export const testStore = {
           country,
           participation:
             participations.get(participationKey(u.id, cycle))?.status ?? null,
+          participationIntent:
+            participations.get(participationKey(u.id, cycle))?.intent ?? null,
           // The test store keeps no sign-in email for a member.
           ...(options.includeEmail ? { email: null } : {}),
           createdAt: u.createdAt,
@@ -3464,11 +3677,27 @@ export const testStore = {
     return code;
   },
 
+  /** The member's payment reference if they have one; gives none out. */
+  memberRefCode(userId: string): string | null {
+    return memberRefCodes.get(userId) ?? null;
+  },
+
+  /** Every member the store knows, for the dues twin's lists. */
+  allUsers(): TestUser[] {
+    return Array.from(usersByAuthId.values());
+  },
+
   /** Record a payment for this year (mirrors recordPayment). */
   recordPayment(input: RecordPaymentInput): { id: string; reference: string } {
     if (!isCurrency(input.currency)) {
       throw new UnknownCurrencyError(input.currency);
     }
+    const source = input.source ?? "captain";
+    const allowed =
+      source === "member"
+        ? input.recordedByUserId === input.userId && input.status === "pending"
+        : isMoneyKeeperInStore(input.recordedByUserId);
+    if (!allowed) throw new MoneyRefused(NOT_A_MONEY_KEEPER);
     if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0) {
       throw new Error(
         "recordPayment: the amount must be whole cents, not negative",
@@ -3491,6 +3720,11 @@ export const testStore = {
       status: input.status,
       note: input.note?.trim() || null,
       recordedByUserId: input.recordedByUserId,
+      source,
+      method: input.method ?? null,
+      paidOn: input.paidOn ?? null,
+      proofPathname: input.proofPathname ?? null,
+      proofContentType: input.proofContentType ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -3503,8 +3737,12 @@ export const testStore = {
     paymentId: string;
     from: PaymentStatus;
     to: PaymentStatus;
+    actorId: string;
   }): boolean {
     if (input.from === input.to) return false;
+    if (!isMoneyKeeperInStore(input.actorId)) {
+      throw new MoneyRefused(NOT_A_MONEY_KEEPER);
+    }
     const row = payments.find(
       (p) => p.id === input.paymentId && p.status === input.from,
     );
@@ -3540,8 +3778,24 @@ export const testStore = {
         recordedByName: p.recordedByUserId
           ? (findUserById(p.recordedByUserId)?.displayName ?? null)
           : null,
+        source: p.source,
+        method: p.method,
+        paidOn: p.paidOn,
+        hasProof: p.proofPathname !== null,
+        refundStatus: refundStatusOf(p.id),
         createdAt: p.createdAt,
       }));
+  },
+
+  /** The year's payment rows themselves, for the dues twin (copies). */
+  duesPayments(cycle: number): TestPayment[] {
+    return payments.filter((p) => p.cycle === cycle).map((p) => ({ ...p }));
+  },
+
+  /** One payment row (a copy), or null. */
+  getPayment(paymentId: string): TestPayment | null {
+    const row = payments.find((p) => p.id === paymentId);
+    return row ? { ...row } : null;
   },
 
   /** Rands received in one year, in cents (mirrors receivedTotal). */
@@ -5266,6 +5520,7 @@ export const testStore = {
     payments.length = 0;
     memberRefCodes.clear();
     participations.clear();
+    tickets.clear();
     powerLoads.length = 0;
     powerPlans.clear();
     generators.length = 0;
@@ -5290,7 +5545,9 @@ export const testStore = {
     carMessages.length = 0;
     S.desktopLayouts.clear();
     S.desktopPreferences.clear();
+    S.teamPrograms.clear();
     S.inkblotRuns.length = 0;
+    resetDuesStore();
   },
 
   // --- INKBLOT's board (the twin of @camp404/db/inkblot) --------------------
@@ -5906,6 +6163,21 @@ export const testStore = {
   },
   setCampBlurb(userId: string, blurb: TestCampBlurb): void {
     S.campBlurbs.set(userId, { ...blurb });
+  },
+  /** Captains who chose to be shown, by name (getJoinCaptains' twin). */
+  listJoinCaptains(): { name: string; title: string; blurb: string }[] {
+    const out: { name: string; title: string; blurb: string }[] = [];
+    for (const user of usersByAuthId.values()) {
+      const card = S.campBlurbs.get(user.id);
+      const name = (user.displayName ?? "").trim();
+      if (user.rank !== "captain" || !card?.showOnJoin || name === "") continue;
+      out.push({
+        name,
+        title: (card.title ?? "").trim() || "Captain",
+        blurb: (card.blurb ?? "").trim(),
+      });
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
   },
 };
 

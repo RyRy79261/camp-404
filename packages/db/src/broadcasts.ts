@@ -1308,6 +1308,68 @@ export async function getAnnouncementForMember(
   };
 }
 
+/** One announcement a team has sent, as its program lists it. */
+export interface TeamAnnouncement {
+  id: string;
+  title: string;
+  body: string;
+  senderName: string | null;
+  /** When it went out to the team. */
+  sentAt: Date;
+}
+
+/** How many announcements a team's program lists. */
+export const TEAM_ANNOUNCEMENT_LIMIT = 5;
+
+/**
+ * The announcements a team has SENT, newest first, for its program (owner's
+ * ruling 3, 2026-09-27: every member may read a team's announcements on that
+ * team's dashboard; who RECEIVES them does not change). Only an announcement
+ * that has gone out is here: published and fanned out (`dispatched_at`), so a
+ * draft, or one published for later that has not reached its time, never is.
+ * It carries no pin, no audience count and no read receipts: the title, the
+ * text, the sender's name and when it went.
+ *
+ * `more` says whether the team has sent more than `limit`.
+ */
+export async function listTeamAnnouncements(
+  team: Team,
+  limit: number = TEAM_ANNOUNCEMENT_LIMIT,
+): Promise<{ items: TeamAnnouncement[]; more: boolean }> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      id: schema.broadcasts.id,
+      title: schema.broadcasts.title,
+      body: schema.broadcasts.body,
+      senderName: schema.users.displayName,
+      sentAt: schema.broadcasts.dispatchedAt,
+    })
+    .from(schema.broadcasts)
+    .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
+    .where(
+      and(
+        eq(schema.broadcasts.kind, "announcement"),
+        eq(schema.broadcasts.scope, "team"),
+        eq(schema.broadcasts.team, team),
+        isNotNull(schema.broadcasts.publishedAt),
+        isNotNull(schema.broadcasts.dispatchedAt),
+      ),
+    )
+    .orderBy(desc(schema.broadcasts.dispatchedAt), desc(schema.broadcasts.id))
+    .limit(limit + 1);
+  return {
+    items: rows.slice(0, limit).map((r) => ({
+      id: r.id,
+      title: r.title,
+      body: r.body,
+      senderName: r.senderName ?? null,
+      sentAt: r.sentAt!,
+    })),
+    more: rows.length > limit,
+  };
+}
+
 /**
  * Count of a user's unread deliveries — the notices half of the inbox badge.
  *

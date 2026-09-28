@@ -10,7 +10,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { canWorkInTeam } from "@camp404/core";
+import { canEditTeamProgram, canWorkInTeam } from "@camp404/core";
 import { Team } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import {
@@ -22,6 +22,10 @@ import {
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { CalendarRow } from "@/components/calendar/calendar-days";
 import { MeetingRow } from "@/components/meetings/meeting-row";
+import { TeamAboutCard } from "@/components/teams/team-about-card";
+import { TeamAboutEditor } from "@/components/teams/team-about-editor";
+import { TeamAnnouncementsCard } from "@/components/teams/team-announcements-card";
+import { TEAM_PANELS } from "@/components/teams/team-panels";
 import { getUpcomingEvents } from "@/lib/camp-calendar";
 import { getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
@@ -37,6 +41,7 @@ import { listTeamPeople, type TeamPerson } from "@/lib/roster";
 import { presentTask } from "@/lib/task-board";
 import { buildTeamPage } from "@/lib/team-page";
 import { listBoardTasks } from "@/lib/tasks";
+import { getTeamProgram, listTeamAnnouncements } from "@/lib/team-programs";
 import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
@@ -52,13 +57,19 @@ export async function generateMetadata({
   return { title: label ? `${label} — Camp 404` : "Team — Camp 404" };
 }
 
-// A team's own page (owner, 2026-09-24: "team overviews that show team
-// events"): this year's leads and members, the team's upcoming events and its
-// open tasks, and its meeting notes (#268). The first slice of the team
-// dashboards (#267): the common frame. Any approved member may open any team's
-// page; it shows only what the roster, the calendar, the task board and the
-// meetings list already show them. The one control on it is "New meeting",
-// for the team's members this year and captains.
+// A team's own program (TEAM.EXE; docs/specs/2026-09-27-team-programs.md).
+// Every approved member opens every team's program, read-only (owner's
+// decision 2, 2026-09-26). It holds the team's own description (ruling 4; no
+// links: everything happens inside the app), the team's own panels from
+// TEAM_PANELS (Power and Lighting's power plan at a glance, ruling 2), the
+// announcements the team has sent (ruling 3), then the common frame of #267:
+// its upcoming events, its open tasks, its meeting notes (#268) and this
+// year's leads and members.
+//
+// Who may change things (ruling 1): a captain or a lead of THIS team, by
+// canEditTeamProgram; only they get the Edit control, and the action checks
+// again. "New meeting" keeps the meeting notes' own rule (canWorkInTeam: the
+// team's members this year and captains).
 // The composition is Home's: the main cards on the left, the people beside.
 
 const DUE_VARIANT = {
@@ -117,13 +128,27 @@ export default async function TeamPage({
   if (!entry || !team.success) notFound();
 
   const now = new Date();
-  const [people, calendar, tasks, leadTeams, meetings] = await Promise.all([
-    listTeamPeople(team.data),
-    getUpcomingEvents(CALENDAR_PAGE_RANGE),
-    listBoardTasks(now),
-    rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
-    listMeetingNotes({ team: team.data, limit: TEAM_MEETING_LIMIT }),
-  ]);
+  const [people, calendar, tasks, leadTeams, meetings, about, announcements] =
+    await Promise.all([
+      listTeamPeople(team.data),
+      getUpcomingEvents(CALENDAR_PAGE_RANGE),
+      listBoardTasks(now),
+      rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
+      listMeetingNotes({ team: team.data, limit: TEAM_MEETING_LIMIT }),
+      getTeamProgram(team.data),
+      listTeamAnnouncements(team.data),
+    ]);
+  const canEdit = canEditTeamProgram(rank, leadTeams, team.data);
+  // The team's own panels read their own data; drawn here, before the page,
+  // so the whole program arrives in one server render. A panel that fails
+  // leaves the shared cards standing: it is logged and left out.
+  const teamPanel = TEAM_PANELS[team.data];
+  const panel = teamPanel
+    ? await teamPanel({ rank, leadTeams }).catch((error: unknown) => {
+        console.error(`[team-panel:${team.data}]`, error);
+        return null;
+      })
+    : null;
   const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
   const teamLabels = Object.fromEntries(teams.map((t) => [t.key, t.label]));
   const page = buildTeamPage({
@@ -160,7 +185,7 @@ export default async function TeamPage({
       <PageHeading
         eyebrow="Camp / Teams"
         title={entry.label}
-        description="This year's leads and members, the team's upcoming events, its open tasks and its meetings."
+        description="What the team does, what it has sent, what's coming up, and who is on it this year."
       />
       <div className="-mt-3 mb-6 flex flex-wrap gap-2" aria-label="Team">
         {entry.archived ? <Badge variant="outline">Archived</Badge> : null}
@@ -178,6 +203,28 @@ export default async function TeamPage({
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 page-lg:grid-cols-3">
         <div className="flex flex-col gap-6 page-lg:col-span-2">
+          <TeamAboutCard
+            description={about.description}
+            editor={
+              canEdit ? (
+                <TeamAboutEditor
+                  key={about.version}
+                  team={team.data}
+                  teamLabel={entry.label}
+                  description={about.description}
+                  version={about.version}
+                />
+              ) : undefined
+            }
+          />
+
+          {panel}
+
+          <TeamAnnouncementsCard
+            items={announcements.items}
+            more={announcements.more}
+          />
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">

@@ -234,7 +234,8 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "user.createdAt": "captain",
   "user.updatedAt": "captain",
 
-  // payments — the dues ledger, captain-only
+  // payments — the dues ledger: captains, and Finance leads through
+  // canManageMoney (./dues)
   "payments.id": "captain",
   "payments.userId": "captain",
   "payments.cycle": "captain",
@@ -244,8 +245,63 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "payments.status": "captain",
   "payments.note": "captain",
   "payments.recordedByUserId": "captain",
+  "payments.source": "captain",
+  "payments.method": "captain",
+  "payments.paidOn": "captain",
+  "payments.proofPathname": "captain",
+  "payments.proofContentType": "captain",
   "payments.createdAt": "captain",
   "payments.updatedAt": "captain",
+
+  // dues (#240): a member's pledge, charges, plan and refunds. Captain on the
+  // ladder; a lead of Finance reads them too, through the Finance tools'
+  // own rule (canManageMoney in ./dues), never through the global lead rung.
+  "duesAccounts.userId": "captain",
+  "duesAccounts.cycle": "captain",
+  "duesAccounts.pledgedTierId": "captain",
+  "duesAccounts.pledgedAmountCents": "captain",
+  "duesAccounts.pledgedAt": "captain",
+  "duesAccounts.planVersion": "captain",
+  "duesAccounts.createdAt": "captain",
+  "duesAccounts.updatedAt": "captain",
+  "duesCharges.id": "captain",
+  "duesCharges.userId": "captain",
+  "duesCharges.cycle": "captain",
+  "duesCharges.kind": "captain",
+  "duesCharges.description": "captain",
+  "duesCharges.amountCents": "captain",
+  "duesCharges.currency": "captain",
+  "duesCharges.standardAmountCents": "captain",
+  // Never read by the member it is about either (the screens leave it out).
+  "duesCharges.concessionReason": "captain",
+  "duesCharges.settleUpId": "captain",
+  "duesCharges.cancelledAt": "captain",
+  "duesCharges.cancelledByUserId": "captain",
+  "duesCharges.createdByUserId": "captain",
+  "duesCharges.createdAt": "captain",
+  "duesCharges.updatedAt": "captain",
+  "duesInstalments.id": "captain",
+  "duesInstalments.userId": "captain",
+  "duesInstalments.cycle": "captain",
+  "duesInstalments.dueOn": "captain",
+  "duesInstalments.amountCents": "captain",
+  "duesInstalments.currency": "captain",
+  "duesInstalments.createdAt": "captain",
+  "paymentRefunds.id": "captain",
+  "paymentRefunds.paymentId": "captain",
+  "paymentRefunds.userId": "captain",
+  "paymentRefunds.cycle": "captain",
+  "paymentRefunds.status": "captain",
+  "paymentRefunds.proposedCents": "captain",
+  "paymentRefunds.amountCents": "captain",
+  "paymentRefunds.currency": "captain",
+  "paymentRefunds.note": "captain",
+  "paymentRefunds.declineReason": "captain",
+  "paymentRefunds.requestedByUserId": "captain",
+  "paymentRefunds.decidedByUserId": "captain",
+  "paymentRefunds.decidedAt": "captain",
+  "paymentRefunds.createdAt": "captain",
+  "paymentRefunds.updatedAt": "captain",
 
   // team_memberships — the roster shows teams and leads
   "teamMemberships.userId": "camp_member",
@@ -261,12 +317,26 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "campParticipations.cycle": "camp_member",
   "campParticipations.status": "team_lead",
   // The member's own Yes / Maybe / No, apart from the captain's decision.
-  "campParticipations.intent": "captain",
+  // Team lead (owner, 2026-09-28: the answer and the decision are shown apart
+  // wherever the status shows, and a lead reads the status).
+  "campParticipations.intent": "team_lead",
   "campParticipations.decidedByUserId": "captain",
   "campParticipations.decidedAt": "captain",
   "campParticipations.reason": "captain",
   "campParticipations.createdAt": "captain",
   "campParticipations.updatedAt": "captain",
+
+  // camp_tickets — a member's ticket, DDT and WAP for one year (#238). A
+  // member reads their own row (ticket status, DDT and WAP; owner,
+  // 2026-09-28) and nobody else's; team leads read none of it.
+  "campTickets.userId": "captain",
+  "campTickets.cycle": "captain",
+  "campTickets.ticketStatus": "captain",
+  "campTickets.ddt": "captain",
+  "campTickets.wap": "captain",
+  "campTickets.passesUpdatedByUserId": "captain",
+  "campTickets.createdAt": "captain",
+  "campTickets.updatedAt": "captain",
 };
 
 /**

@@ -1,5 +1,5 @@
 {
-  "id": "12b5e690-6cd4-4468-861b-5d7d176dc239",
+  "id": "ca406625-22fe-44f9-b733-9c62e6d079fd",
   "prevId": "a13ea500-258d-4684-aaac-ac151eb917d4",
   "version": "7",
   "dialect": "postgresql",
@@ -2780,102 +2780,6 @@
           "value": "\"kitchen_meal_plans\".\"days_on_site\" between 1 and 30"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.lift_requests": {
-      "name": "lift_requests",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "driver_user_id": {
-          "name": "driver_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "lift_requests_driver_idx": {
-          "name": "lift_requests_driver_idx",
-          "columns": [
-            {
-              "expression": "driver_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "lift_requests_user_id_users_id_fk": {
-          "name": "lift_requests_user_id_users_id_fk",
-          "tableFrom": "lift_requests",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "lift_requests_driver_user_id_users_id_fk": {
-          "name": "lift_requests_driver_user_id_users_id_fk",
-          "tableFrom": "lift_requests",
-          "tableTo": "users",
-          "columnsFrom": [
-            "driver_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "lift_requests_user_id_cycle_pk": {
-          "name": "lift_requests_user_id_cycle_pk",
-          "columns": [
-            "user_id",
-            "cycle"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.mcp_access_tokens": {
@@ -7871,6 +7775,52 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.team_programs": {
+      "name": "team_programs",
+      "schema": "",
+      "columns": {
+        "team": {
+          "name": "team",
+          "type": "team",
+          "typeSchema": "public",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "team_programs_description_length": {
+          "name": "team_programs_description_length",
+          "value": "char_length(\"team_programs\".\"description\") <= 300"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.telegram_announcements": {
       "name": "telegram_announcements",
       "schema": "",
@@ -8200,123 +8150,6 @@
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.transport_trailers": {
-      "name": "transport_trailers",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "towed_by_user_id": {
-          "name": "towed_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "transport_trailers_cycle_idx": {
-          "name": "transport_trailers_cycle_idx",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "transport_trailers_one_per_car_idx": {
-          "name": "transport_trailers_one_per_car_idx",
-          "columns": [
-            {
-              "expression": "towed_by_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "transport_trailers_towed_by_user_id_users_id_fk": {
-          "name": "transport_trailers_towed_by_user_id_users_id_fk",
-          "tableFrom": "transport_trailers",
-          "tableTo": "users",
-          "columnsFrom": [
-            "towed_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -9034,8 +8867,7 @@
         "team_message",
         "lead_directive",
         "reminder",
-        "system",
-        "car_message"
+        "system"
       ]
     },
     "public.broadcast_presentation": {
@@ -9055,8 +8887,7 @@
         "team",
         "team_leads",
         "drivers",
-        "individual",
-        "car"
+        "individual"
       ]
     },
     "public.email_delivery_status": {
@@ -9142,8 +8973,7 @@
         "questionnaire_reminder",
         "approval_decision",
         "captain_promotion",
-        "task_reminder",
-        "car_message"
+        "task_reminder"
       ]
     },
     "public.participation_intent": {

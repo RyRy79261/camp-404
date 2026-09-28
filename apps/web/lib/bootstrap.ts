@@ -41,6 +41,17 @@ export const readBootstrapState = cache(() => getBootstrapState());
 export const SETUP_REFUSED_MESSAGE =
   "Only the camp's founding address can set up Camp 404. Sign in with it, and confirm it if asked.";
 
+/** What /setup says on a deployment that names no founding address. */
+export const SETUP_UNCONFIGURED_MESSAGE =
+  "Setup is off until this deployment names the camp's founding address (FOUNDER_EMAILS).";
+
+/** The refusal /setup shows, for the reason `mayFoundCamp` said no. */
+export function setupRefusedMessage(): string {
+  return founderEmails(process.env).length === 0
+    ? SETUP_UNCONFIGURED_MESSAGE
+    : SETUP_REFUSED_MESSAGE;
+}
+
 /**
  * Whether this account may found the camp on a fresh database. Sign-up is
  * open, so "the first signed-in account" could be a stranger who beat the
@@ -48,11 +59,17 @@ export const SETUP_REFUSED_MESSAGE =
  * old name GOD_EMAILS), only one of those addresses may found the camp, and
  * only once it is verified: `primaryEmail` is already null for an unverified
  * founder address (lib/session-user.ts), so a stranger cannot claim the
- * founder's address without proving they own it. With both unset, anyone
- * signed in may, which is how setup always worked.
+ * founder's address without proving they own it.
+ *
+ * With both unset, a Vercel deployment (VERCEL_ENV set) refuses everyone:
+ * a fresh deployment is public from its first minute, and the first stranger
+ * to sign up would become its captain. Local dev and tests (no VERCEL_ENV)
+ * keep the old rule, anyone signed in.
  */
 export function mayFoundCamp(user: AuthenticatedUser): boolean {
-  if (founderEmails(process.env).length === 0) return true;
+  if (founderEmails(process.env).length === 0) {
+    return !process.env.VERCEL_ENV?.trim();
+  }
   return isGodEmail(user.primaryEmail);
 }
 

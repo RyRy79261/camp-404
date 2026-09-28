@@ -1,33 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
-  act,
   cleanup,
+  createEvent,
   fireEvent,
   render,
   screen,
 } from "@testing-library/react";
+import { windowStorageKey } from "@/components/os/window-storage";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 
-vi.mock("@/components/push/device-token", () => ({
-  forgetDeviceToken: vi.fn(),
-}));
+// The push token is forgotten on /auth/sign-out itself (SignOutView), which
+// every sign-out reaches; the link only clears this tab's desktop and goes.
 
-import { forgetDeviceToken } from "@/components/push/device-token";
-import {
-  FORGET_TOKEN_TIMEOUT_MS,
-  SignOutLink,
-} from "@/components/auth/sign-out-link";
-
-const assign = vi.fn();
-
-beforeEach(() => {
-  vi.stubGlobal("location", { ...window.location, assign });
-});
 afterEach(() => {
   cleanup();
-  assign.mockReset();
-  vi.mocked(forgetDeviceToken).mockReset();
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
+  window.sessionStorage.clear();
 });
 
 describe("SignOutLink", () => {
@@ -38,36 +25,22 @@ describe("SignOutLink", () => {
     expect(link.className).toBe("x");
   });
 
-  it("forgets this device's push token, then signs out", async () => {
-    let finish!: () => void;
-    vi.mocked(forgetDeviceToken).mockReturnValue(
-      new Promise<void>((resolve) => (finish = resolve)),
-    );
+  it("forgets the tab's windows and follows its href", () => {
+    window.sessionStorage.setItem(windowStorageKey("u-1"), "[]");
     render(<SignOutLink />);
-    fireEvent.click(screen.getByRole("link", { name: "Sign out" }));
-    expect(forgetDeviceToken).toHaveBeenCalledOnce();
-    expect(assign).not.toHaveBeenCalled();
-    await act(async () => finish());
-    expect(assign).toHaveBeenCalledWith("/auth/sign-out");
-  });
-
-  it("signs out anyway when the cleanup is slow", async () => {
-    vi.useFakeTimers();
-    vi.mocked(forgetDeviceToken).mockReturnValue(new Promise<void>(() => {}));
-    render(<SignOutLink href="/auth/sign-out?x=1" />);
-    fireEvent.click(screen.getByRole("link", { name: "Sign out" }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(FORGET_TOKEN_TIMEOUT_MS);
-    });
-    expect(assign).toHaveBeenCalledWith("/auth/sign-out?x=1");
+    const link = screen.getByRole("link", { name: "Sign out" });
+    const click = createEvent.click(link);
+    fireEvent(link, click);
+    expect(click.defaultPrevented).toBe(false);
+    expect(window.sessionStorage.getItem(windowStorageKey("u-1"))).toBeNull();
   });
 
   it("leaves a modified click (new tab) to the browser", () => {
+    window.sessionStorage.setItem(windowStorageKey("u-1"), "[]");
     render(<SignOutLink />);
     fireEvent.click(screen.getByRole("link", { name: "Sign out" }), {
       metaKey: true,
     });
-    expect(forgetDeviceToken).not.toHaveBeenCalled();
-    expect(assign).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem(windowStorageKey("u-1"))).toBe("[]");
   });
 });

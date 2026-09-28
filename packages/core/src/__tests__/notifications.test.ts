@@ -12,6 +12,7 @@ import {
   questionnaireReminderNotification,
   releaseBody,
   reminderBody,
+  requiredActionReminderNotification,
   taskDeadlineNotification,
 } from "../notifications";
 
@@ -19,6 +20,7 @@ const ACTIVATION = "3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44";
 const BROADCAST = "7f5e2f7a-6f50-4c89-8df9-2f7b8f3dc31e";
 const TITLE = "Camp feedback";
 const TASK = "0b6c7f1e-2a4d-4c3b-8e9f-5a1d2c3b4e6f";
+const REQUIRED = "5d1e9c2b-7a3f-4b6e-9c8d-1f2e3a4b5c6d";
 
 describe("reminderBody", () => {
   it("names the questionnaire and its deadline", () => {
@@ -142,6 +144,11 @@ describe("payload builders", () => {
       }),
       taskDeadlineNotification({ taskId: TASK, title: "a", stage: "due_day" }),
       carMessageNotification({ broadcastId: BROADCAST, title: "a", body: "b" }),
+      requiredActionReminderNotification({
+        requiredActionId: REQUIRED,
+        title: "a",
+        dueAt: new Date("2026-03-10T22:30:00Z"),
+      }),
     ].map((p) => p.kind);
     for (const kind of kinds) expect(NOTIFICATION_KINDS).toContain(kind);
   });
@@ -190,6 +197,25 @@ describe("carMessageNotification", () => {
       refId: BROADCAST,
     });
     expect(payloadLink(payload)).toBe("/lift");
+  });
+});
+
+describe("requiredActionReminderNotification", () => {
+  it("names the action and its deadline in camp time, and opens home", () => {
+    const payload = requiredActionReminderNotification({
+      requiredActionId: REQUIRED,
+      title: "Sign the camp agreement",
+      // 22:30 UTC is already the 11th in camp (UTC+2).
+      dueAt: new Date("2026-03-10T22:30:00Z"),
+    });
+    expect(payload).toEqual({
+      kind: "questionnaire_reminder",
+      title: "Sign the camp agreement",
+      body: "Reminder: Sign the camp agreement is due 11 Mar. Tap to open the app.",
+      refType: "required_action",
+      refId: REQUIRED,
+    });
+    expect(payloadLink(payload)).toBe("/");
   });
 });
 
@@ -275,6 +301,11 @@ describe("notificationMentionsAny", () => {
         taskId: TASK,
         title: "Pack the shade cloth",
         stage: "due_day",
+      }),
+      requiredActionReminderNotification({
+        requiredActionId: REQUIRED,
+        title: "Sign the camp agreement",
+        dueAt: new Date("2026-03-10T22:30:00Z"),
       }),
     ];
     for (const payload of payloads) {

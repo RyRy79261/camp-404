@@ -125,6 +125,23 @@ function breakingParamChange(prev: Question, next: Question): boolean {
     }
   }
 
+  if (prev.kind === "rating_grid" && next.kind === "rating_grid") {
+    // Keyed by row id, holding a position on the scale (or "na").
+    if (
+      lost(
+        prev.rows.map((r) => r.id),
+        next.rows.map((r) => r.id),
+      )
+    ) {
+      return true;
+    }
+    if (next.scale.length < prev.scale.length) return true;
+    // A stored answer is a position, so relabelling one changes what every
+    // answer at it means. Adding a point at the end does not.
+    if (prev.scale.some((label, i) => next.scale[i] !== label)) return true;
+    if (prev.allowNa === true && next.allowNa !== true) return true;
+  }
+
   return false;
 }
 
@@ -149,6 +166,18 @@ function visibleIfMap(q: Questionnaire): Map<string, VisibleIf | undefined> {
     );
     for (const block of pageBlocks(page))
       m.set(`b:${block.id}`, block.visibleIf);
+  }
+  return m;
+}
+
+/** Element id → whether it is marked "team leads only", pages and blocks. */
+function leadsOnlyMap(q: Questionnaire): Map<string, boolean> {
+  const m = new Map<string, boolean>();
+  for (const page of q.pages) {
+    m.set(`p:${page.id}`, page.kind === "questions" && page.leadsOnly === true);
+    for (const block of pageBlocks(page)) {
+      m.set(`b:${block.id}`, "leadsOnly" in block && block.leadsOnly === true);
+    }
   }
   return m;
 }
@@ -190,7 +219,7 @@ function sameRoutes(a: Map<string, string>, b: Map<string, string>): boolean {
  *     `breakingParamChange`);
  *   - any `visibleIf` added, removed or edited, or a block or page added
  *     (Camp 404's rule, kept exactly: branching must re-open the gate rather
- *     than patch in place);
+ *     than patch in place), and any "team leads only" mark turned on or off;
  *   - any `goTo` / `next` route added, removed or retargeted, and — while
  *     either side routes at all — the pages reordered, since the fall-through
  *     is document order.
@@ -218,6 +247,12 @@ export function classifyChange(
   for (const key of vb.keys()) {
     if (!va.has(key)) return "breaking";
   }
+
+  // Who is asked is branching too: a question or page moved into or out of
+  // "team leads only" (#251) changes what a member must answer.
+  const la = leadsOnlyMap(prev);
+  const lb = leadsOnlyMap(next);
+  for (const [key, flag] of la) if (lb.get(key) !== flag) return "breaking";
 
   const ra = routeMap(prev);
   const rb = routeMap(next);
