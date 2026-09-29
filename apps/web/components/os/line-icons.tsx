@@ -37,6 +37,7 @@ export const PROGRAM_ICON_KEYS = [
   "terminal",
   "cat",
   "lift",
+  "lounge",
   "tickets",
 ] as const;
 
@@ -121,6 +122,14 @@ const PATHS: Record<IconKey, ReactNode> = {
       <path d="M8 3v5M16 3v5" />
       <path d="M5 8h14v4a7 7 0 0 1-14 0z" />
       <path d="M13 11l-3 4h4l-3 4" />
+    </>
+  ),
+  lounge: (
+    <>
+      <path d="M9 18V5l11-2v13" />
+      <path d="M9 9l11-2" />
+      <path d="M9 18a3 3 0 1 1-3-3h3" />
+      <path d="M20 16a3 3 0 1 1-3-3h3" />
     </>
   ),
   inventory: (

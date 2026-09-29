@@ -46,6 +46,10 @@ export const AUDIT_ACTION_LABELS = {
   "inventory.change_rejected": "Rejected a change to camp gear",
   "invite.revoked": "Revoked an invite code",
   "join_site.section_saved": "Changed the join site",
+  "lounge.music_policy_changed": "Changed the lounge's music note",
+  "lounge.offer_decided": "Decided a lounge offer",
+  "lounge.offer_placed": "Put a lounge offer on the programme",
+  "lounge.slot_removed": "Took an item off the lounge programme",
   "member.approval_decided": "Decided an application",
   "member.bank_details.viewed": "Viewed bank details",
   "member.export": "Exported the member list",
@@ -178,6 +182,13 @@ function participationDetail(
   return cycle === null ? word : `${word} for ${cycle}`;
 }
 
+// What a lounge decision did, by the status it set.
+const LOUNGE_DECISION_WORDS: Record<string, string> = {
+  accepted: "Accepted",
+  declined: "Declined",
+  needs_changes: "Asked for changes to",
+};
+
 // The database stores two ranks. A team lead is a member who leads a team.
 const RANK_WORDS: Record<string, string> = {
   captain: "captain",
@@ -220,6 +231,23 @@ export function auditDetail(
       return metadata?.isLead === true
         ? `Now leads ${teamLabel(team)}`
         : `No longer leads ${teamLabel(team)}`;
+    }
+    case "lounge.offer_decided": {
+      const to = text(metadata, "to");
+      const title = text(metadata, "title");
+      const word =
+        to && Object.hasOwn(LOUNGE_DECISION_WORDS, to)
+          ? LOUNGE_DECISION_WORDS[to]
+          : undefined;
+      if (!word || !title) return null;
+      return `${word} "${title}"`;
+    }
+    case "lounge.offer_placed":
+    case "lounge.slot_removed": {
+      const title = text(metadata, "title");
+      const day = count(metadata, "day");
+      if (!title) return null;
+      return day === null ? `"${title}"` : `"${title}", day ${day}`;
     }
     case "inventory.booking_cancelled":
     case "inventory.change_approved":

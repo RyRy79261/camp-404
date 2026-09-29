@@ -6,6 +6,7 @@ import {
   nextCampDay,
   approvalNotification,
   canEditPower,
+  canRunLounge,
   canEditTeamProgram,
   DEFAULT_TICKET,
   captainPromotionNotification,
@@ -168,6 +169,27 @@ import {
   type PowerPlanSettings,
   type PowerWriteResult,
 } from "@camp404/db/power";
+import {
+  ALREADY_PLACED,
+  NOT_A_LOUNGE_RUNNER,
+  NOT_YOUR_OFFER,
+  OFFER_CHANGED,
+  OFFER_DECIDED,
+  OFFER_GONE,
+  OFFER_NOT_ACCEPTED,
+  SETTINGS_CHANGED,
+  SLOT_GONE,
+  hostNameOf,
+  type AddLoungeOfferArgs,
+  type DecideLoungeOfferArgs,
+  type EditLoungeOfferArgs,
+  type LoungeOfferRow,
+  type LoungeProgramme,
+  type LoungeSettings,
+  type LoungeSlotRow,
+  type LoungeWriteResult,
+  type PlaceLoungeOfferArgs,
+} from "@camp404/db/lounge";
 import {
   emptyPowerSite,
   powerSiteTwins,
@@ -704,6 +726,10 @@ interface TestStoreState {
   generators: GeneratorRow[];
   /** The inventory items the "From inventory" helper offers (none archived). */
   powerInventory: PowerInventoryItem[];
+  /** The lounge programme (#269): the twins of its three tables. */
+  loungeOffers: TestLoungeOffer[];
+  loungeSlots: (LoungeSlotRow & { cycle: number })[];
+  loungeSettings: Map<number, { musicPolicy: string | null; version: number }>;
   /** Power on site (#255–#257): cans, the log, the grid, readiness, sharing. */
   powerSite: TestPowerSite;
   recipes: TestRecipe[];
@@ -745,6 +771,9 @@ interface TestStoreState {
   /** `inkblot_scores`: every run put on the board, in the order played. */
   inkblotRuns: (InkblotBoardEntry & { userId: string })[];
 }
+
+/** A `lounge_offers` row; the host's name is read from the user on the way out. */
+type TestLoungeOffer = Omit<LoungeOfferRow, "hostName">;
 
 /** The lift fields of a `driver_profiles` row. */
 export interface TestDriverProfile {
@@ -832,6 +861,9 @@ function globalState(): TestStoreState {
       powerPlans: new Map<number, PowerPlan>(),
       generators: [] as GeneratorRow[],
       powerInventory: [] as PowerInventoryItem[],
+      loungeOffers: [] as TestLoungeOffer[],
+      loungeSlots: [] as (LoungeSlotRow & { cycle: number })[],
+      loungeSettings: new Map(),
       powerSite: emptyPowerSite(),
       recipes: [] as TestRecipe[],
       recipeRuns: [] as TestRecipeRun[],
@@ -925,6 +957,12 @@ const powerLoads = S.powerLoads;
 const powerPlans = S.powerPlans;
 const generators = S.generators;
 const powerInventory = S.powerInventory;
+S.loungeOffers ??= [];
+S.loungeSlots ??= [];
+S.loungeSettings ??= new Map();
+const loungeOffers = S.loungeOffers;
+const loungeSlots = S.loungeSlots;
+const loungeSettings = S.loungeSettings;
 S.recipes ??= [];
 S.recipeRuns ??= [];
 S.recipeSources ??= [];
@@ -988,6 +1026,50 @@ function findUserById(userId: string): TestUser | null {
 
 function nextId(): string {
   return `test-user-${S.nextSerial++}`;
+}
+
+// --- Lounge helpers (the twins of @camp404/db/lounge's private steps) -------
+
+/** A captain, or a Ministry of Vibes lead this year (lockLoungeRunner's twin). */
+function isLoungeRunner(userId: string): boolean {
+  if (!findUserById(userId)) return false;
+  const reach = testStore.senderReach(userId);
+  return canRunLounge(reachRank(reach), reach ?? []);
+}
+
+/** The store's twin of the db module's write(): a refusal is a sentence. */
+function loungeWrite<T extends object>(
+  fn: (cycle: number) => T | string,
+): LoungeWriteResult<T> {
+  const out = fn(currentCycleNumber());
+  return typeof out === "string"
+    ? { ok: false, error: out }
+    : { ok: true, ...out };
+}
+
+function loungeOfferOut(row: TestLoungeOffer): LoungeOfferRow {
+  return {
+    ...row,
+    hostName: hostNameOf(findUserById(row.hostId)?.displayName ?? null),
+    needs: [...row.needs],
+    preferredDays: [...row.preferredDays],
+    preferredBands: [...row.preferredBands],
+  };
+}
+
+function loungeOfferFields(input: AddLoungeOfferArgs) {
+  return {
+    kind: input.kind,
+    title: input.title,
+    description: input.description,
+    durationMinutes: input.durationMinutes,
+    needs: [...input.needs],
+    needsNote: input.needsNote,
+    preferredDays: [...input.preferredDays].sort((a, b) => a - b),
+    preferredBands: [...input.preferredBands],
+    recurring: input.recurring,
+    publicGuide: input.publicGuide,
+  };
 }
 
 // --- Power helpers (the twins of @camp404/db/power's private steps) ---------
@@ -3829,6 +3911,217 @@ export const testStore = {
     );
   },
 
+  // --- Lounge programme (#269): twins of @camp404/db/lounge ----------------
+
+  getLoungeProgramme(cycle?: number): LoungeProgramme {
+    const year = cycle ?? currentCycleNumber();
+    const accepted = loungeOffers
+      .filter((o) => o.cycle === year && o.status === "accepted")
+      .sort((a, b) => a.title.localeCompare(b.title));
+    const ids = new Set(accepted.map((o) => o.id));
+    return {
+      offers: accepted.map((o) => ({
+        id: o.id,
+        kind: o.kind,
+        title: o.title,
+        description: o.description,
+        durationMinutes: o.durationMinutes,
+        recurring: o.recurring,
+        publicGuide: o.publicGuide,
+        hostName: hostNameOf(findUserById(o.hostId)?.displayName ?? null),
+      })),
+      slots: loungeSlots
+        .filter((s) => s.cycle === year && ids.has(s.offerId))
+        .sort((a, b) => a.day - b.day || a.startMinute - b.startMinute)
+        .map(({ cycle: _cycle, ...slot }) => slot),
+    };
+  },
+
+  listMyLoungeOffers(userId: string, cycle?: number): LoungeOfferRow[] {
+    const year = cycle ?? currentCycleNumber();
+    return loungeOffers
+      .filter((o) => o.hostId === userId && o.cycle === year)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map(loungeOfferOut);
+  },
+
+  listLoungeOffers(cycle?: number): LoungeOfferRow[] {
+    const year = cycle ?? currentCycleNumber();
+    return loungeOffers
+      .filter((o) => o.cycle === year)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map(loungeOfferOut);
+  },
+
+  getLoungeSettings(cycle?: number): LoungeSettings {
+    const year = cycle ?? currentCycleNumber();
+    const row = loungeSettings.get(year);
+    return {
+      cycle: year,
+      musicPolicy: row?.musicPolicy ?? null,
+      version: row?.version ?? 0,
+    };
+  },
+
+  addLoungeOffer(input: AddLoungeOfferArgs): LoungeWriteResult<{ id: string }> {
+    if (!findUserById(input.actorId))
+      return { ok: false, error: NOT_YOUR_OFFER };
+    return loungeWrite((cycle) => {
+      const now = new Date();
+      const row: TestLoungeOffer = {
+        id: `test-lounge-offer-${S.nextSerial++}`,
+        cycle,
+        hostId: input.actorId,
+        ...loungeOfferFields(input),
+        status: "offered",
+        decisionNote: null,
+        decidedAt: null,
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+      loungeOffers.push(row);
+      return { id: row.id };
+    });
+  },
+
+  updateLoungeOffer(input: EditLoungeOfferArgs): LoungeWriteResult {
+    return loungeWrite((cycle) => {
+      const row = loungeOffers.find(
+        (o) => o.id === input.offerId && o.cycle === cycle,
+      );
+      if (!row) return OFFER_GONE;
+      if (row.hostId !== input.actorId) return NOT_YOUR_OFFER;
+      if (row.status === "accepted" || row.status === "declined") {
+        return OFFER_DECIDED;
+      }
+      if (row.version !== input.expectedVersion) return OFFER_CHANGED;
+      Object.assign(row, loungeOfferFields(input), {
+        status: "offered",
+        version: row.version + 1,
+        updatedAt: new Date(),
+      });
+      return {};
+    });
+  },
+
+  withdrawLoungeOffer(input: {
+    actorId: string;
+    offerId: string;
+  }): LoungeWriteResult {
+    return loungeWrite((cycle) => {
+      const index = loungeOffers.findIndex(
+        (o) => o.id === input.offerId && o.cycle === cycle,
+      );
+      if (index < 0) return OFFER_GONE;
+      if (loungeOffers[index]!.hostId !== input.actorId) return NOT_YOUR_OFFER;
+      loungeOffers.splice(index, 1);
+      for (let i = loungeSlots.length - 1; i >= 0; i--) {
+        if (loungeSlots[i]!.offerId === input.offerId) loungeSlots.splice(i, 1);
+      }
+      return {};
+    });
+  },
+
+  decideLoungeOffer(input: DecideLoungeOfferArgs): LoungeWriteResult {
+    if (!isLoungeRunner(input.actorId)) {
+      return { ok: false, error: NOT_A_LOUNGE_RUNNER };
+    }
+    return loungeWrite((cycle) => {
+      const row = loungeOffers.find(
+        (o) => o.id === input.offerId && o.cycle === cycle,
+      );
+      if (!row) return OFFER_GONE;
+      if (
+        row.status !== input.expectedStatus ||
+        row.version !== input.expectedVersion
+      ) {
+        return OFFER_CHANGED;
+      }
+      Object.assign(row, {
+        status: input.decision,
+        decisionNote: input.decision === "accepted" ? null : input.reason,
+        decidedAt: new Date(),
+        version: row.version + 1,
+        updatedAt: new Date(),
+      });
+      if (input.decision !== "accepted") {
+        for (let i = loungeSlots.length - 1; i >= 0; i--) {
+          if (loungeSlots[i]!.offerId === row.id) loungeSlots.splice(i, 1);
+        }
+      }
+      return {};
+    });
+  },
+
+  placeLoungeOffer(
+    input: PlaceLoungeOfferArgs,
+  ): LoungeWriteResult<{ id: string }> {
+    if (!isLoungeRunner(input.actorId)) {
+      return { ok: false, error: NOT_A_LOUNGE_RUNNER };
+    }
+    return loungeWrite((cycle) => {
+      const row = loungeOffers.find(
+        (o) => o.id === input.offerId && o.cycle === cycle,
+      );
+      if (!row) return OFFER_GONE;
+      if (row.status !== "accepted") return OFFER_NOT_ACCEPTED;
+      if (
+        loungeSlots.some(
+          (s) =>
+            s.offerId === input.offerId &&
+            s.day === input.day &&
+            s.startMinute === input.startMinute,
+        )
+      ) {
+        return ALREADY_PLACED;
+      }
+      const slot = {
+        id: `test-lounge-slot-${S.nextSerial++}`,
+        cycle,
+        offerId: input.offerId,
+        day: input.day,
+        startMinute: input.startMinute,
+      };
+      loungeSlots.push(slot);
+      return { id: slot.id };
+    });
+  },
+
+  removeLoungeSlot(input: {
+    actorId: string;
+    slotId: string;
+  }): LoungeWriteResult {
+    if (!isLoungeRunner(input.actorId)) {
+      return { ok: false, error: NOT_A_LOUNGE_RUNNER };
+    }
+    return loungeWrite((cycle) => {
+      const index = loungeSlots.findIndex(
+        (s) => s.id === input.slotId && s.cycle === cycle,
+      );
+      if (index < 0) return SLOT_GONE;
+      loungeSlots.splice(index, 1);
+      return {};
+    });
+  },
+
+  setLoungeMusicPolicy(input: {
+    actorId: string;
+    musicPolicy: string | null;
+    expectedVersion: number;
+  }): LoungeWriteResult<{ version: number }> {
+    if (!isLoungeRunner(input.actorId)) {
+      return { ok: false, error: NOT_A_LOUNGE_RUNNER };
+    }
+    return loungeWrite((cycle) => {
+      const current = loungeSettings.get(cycle)?.version ?? 0;
+      if (current !== input.expectedVersion) return SETTINGS_CHANGED;
+      const version = current + 1;
+      loungeSettings.set(cycle, { musicPolicy: input.musicPolicy, version });
+      return { version };
+    });
+  },
+
   // --- Power and fuel (#253, #254): twins of @camp404/db/power ------------
 
   listPowerLoads(cycle?: number): PowerLoadRow[] {
@@ -5569,6 +5862,9 @@ export const testStore = {
     powerPlans.clear();
     generators.length = 0;
     powerInventory.length = 0;
+    loungeOffers.length = 0;
+    loungeSlots.length = 0;
+    loungeSettings.clear();
     S.powerSite = emptyPowerSite();
     recipes.length = 0;
     recipeRuns.length = 0;

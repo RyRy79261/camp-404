@@ -30,3 +30,4 @@ export * from "./desktop-layout";
 export * from "./desktop-preferences";
 export * from "./team-program";
 export * from "./inkblot";
+export * from "./lounge";

@@ -251,6 +251,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // The Ministry of Vibes' lounge programme (#269): every member reads it and
+  // offers something; its page decides who may run it (canRunLounge).
+  {
+    id: "lounge",
+    label: "Lounge",
+    fileName: "LOUNGE.EXE",
+    href: "/lounge",
+    icon: "lounge",
+    place: CAMP,
+    rank: "camp_member",
+  },
   // The camp's gear (#246): every member reads it, suggests changes and
   // books; a captain or a lead of the item's team changes it.
   {
@@ -678,6 +689,7 @@ export const TEAM_TOOLS: Readonly<Partial<Record<Team, readonly ProgramId[]>>> =
   {
     kitchen: ["recipes", "meal-plan", "recipe-review"],
     power_and_lighting: ["power"],
+    ministry_of_vibes: ["lounge"],
     transport_and_logistics: ["inventory", "transport"],
     communications_and_hr: ["announcements", "questionnaires", "join-site"],
     finance: ["payments"],

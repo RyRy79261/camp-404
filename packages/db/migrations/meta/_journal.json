@@ -505,6 +505,13 @@
       "when": 1790629089094,
       "tag": "0071_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1790682626412,
+      "tag": "0072_lounge_programme",
+      "breakpoints": true
     }
   ]
 }

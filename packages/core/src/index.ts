@@ -184,5 +184,6 @@ export * from "./recipes";
 export * from "./recipe-source";
 export * from "./calendar-titles";
 export * from "./meeting-notes";
+export * from "./lounge";
 export * from "./transport";
 export * from "./team-programs";
