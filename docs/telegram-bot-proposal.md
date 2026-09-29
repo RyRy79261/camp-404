@@ -1,5 +1,7 @@
 # Telegram Bot Proposal
 
+Status (checked 2026-09-29): partly built and switched off. The scaffold (#14) and the inbound webhook exist; nothing calls the outbound triggers, and no bot is registered. [CORRECTION 2026-09-29] There are no cron routes (#274): `/api/cron/telegram/dispatch` is gone, and when Telegram is turned on `dispatchPendingAnnouncements` is called from `deliverDue` in `apps/web/lib/background-work.ts` (see `DEFERRED.md`). Approval is `users.approval_status` with a captain UI, and admin-cli has no `telegram register-chat` command.
+
 > Plan for the Camp 404 Telegram bot: a service account that lives in the
 > camp's main group chat and announcement channel, hands every approved
 > member a personal join link, and posts unlock / announcement messages

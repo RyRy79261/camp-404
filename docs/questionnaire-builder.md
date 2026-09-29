@@ -231,7 +231,7 @@ long, today the My forms change log; readers fall back to the prompt
 | `image_block` `full-width` | edge-to-edge, ignore page padding |
 
 `altText` is **required** (publish-time check). `image_block` uploads via a
-non-square pipeline (preserve aspect; a dedicated `/api/uploads/image` or the
+non-square pipeline (preserve aspect; [CORRECTION 2026-09-29: built as `/api/uploads/builder-image` and `/api/uploads/questionnaire-image`] a dedicated `/api/uploads/image` or the
 avatar route **without** square-crop) — JPG/PNG, 10 MB, Remove/Replace per board
 58. The square-crop avatar pipeline applies **only to the respondent `image`
 input field**.
@@ -576,10 +576,10 @@ existing form parts (no board draws it)._
 | Need | Existing precedent |
 |---|---|
 | Definition load (validate-or-fall-back) | `apps/web/lib/questionnaire-definitions.ts`, `packages/db/src/questionnaire-definitions.ts` |
-| Member field rendering / preview | `apps/web/components/questionnaire/question.tsx` (`FieldInput`) |
-| Runner / wizard / blocking chrome | `apps/web/components/questionnaire/{wizard,blocking-chrome}.tsx` |
+| Member field rendering / preview | `apps/web/components/questionnaire/field.tsx` [CORRECTION 2026-09-29: was `question.tsx` (`FieldInput`)] |
+| Runner / wizard / blocking chrome | `apps/web/components/questionnaire/{runner,blocking-chrome}.tsx` [CORRECTION 2026-09-29: `wizard.tsx` is now `runner.tsx`] |
 | Validation / diff / display | `packages/types/src/questionnaire.ts` |
-| Gate + preview-but-locked | `apps/web/app/captains/camp-settings/page.tsx` + `CaptainLock`; `packages/core/src/access.ts` |
+| Gate + preview-but-locked | `apps/web/app/(console)/captains/camp-settings/page.tsx` + `CaptainLock`; `packages/core/src/access.ts` |
 | List reorder / rename | `captains/camp-settings/team-settings-manager.tsx`; home Customize `@dnd-kit` |
 | Compose → draft → publish, per-record edit/delete | `captains/announcements/announcements-manager.tsx` |
 | Dispatch / gate spine | `packages/db/src/activations.ts` (open/satisfy/**closeActivation new**), `apps/web/lib/required-actions.ts` (`nextGate`/`ACTION_ROUTES`), `packages/db/src/versions.ts` |

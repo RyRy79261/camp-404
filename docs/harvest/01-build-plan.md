@@ -1,5 +1,7 @@
 # 30 — Build plan
 
+Status (checked 2026-09-29): Waves 0–7 are built (#144 to #224, 2026-09-16 to 2026-09-22); Wave 8 was elective and some of it was built later. Kept as the record of the harvest; the code and `AGENTS.md` win where they differ.
+
 Eight waves. 83 de-duplicated pieces of work, sequenced. Effort figures are the
 reconciled ones from `50-risks.md` §5, not the ledger's originals — where a row
 was rated S for the file and M for the seam, the M is what appears here.

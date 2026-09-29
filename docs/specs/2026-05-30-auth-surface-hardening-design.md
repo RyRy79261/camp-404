@@ -1,7 +1,7 @@
 # Sub-project B — Auth-surface hardening (design + plan)
 
 **Date:** 2026-05-30
-**Status:** Proposed
+**Status:** Built in #38 and #43 (2026-05-30). [CORRECTION 2026-09-29: this said "Proposed".] Since then the cron routes and their auth are gone (#274, no cron jobs) and sign-in is self-hosted Better Auth (#226).
 **Program:** Camp 404 audit remediation, sub-project **B** (independent of A). Security remediation of four audit findings — no product decisions, so design + plan are combined.
 
 ## Problems (from the audit)

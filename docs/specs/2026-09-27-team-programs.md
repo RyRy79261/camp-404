@@ -1,5 +1,7 @@
 # Team programs on the 404 OS desktop
 
+Status: first version built in #295 (2026-09-28).
+
 Status: first version built, 2026-09-27 (PR "feat(teams): every team gets its
 own program"). Proposal read from `origin/main` at `2834404`; the owner's
 rulings of 2026-09-27 are under "Decisions" below and replace the open

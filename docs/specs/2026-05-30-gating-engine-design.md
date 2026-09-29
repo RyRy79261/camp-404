@@ -1,7 +1,7 @@
 # Sub-project E — required_actions gating engine (design + plan)
 
 **Date:** 2026-05-30
-**Status:** Implemented — option **(b)** belt-and-braces, with a one-release `completedAt` fallback (see the decision section).
+**Status:** Implemented in #40 (2026-05-30) — option **(b)** belt-and-braces, with a one-release `completedAt` fallback (see the decision section). [CORRECTION 2026-09-29] The fallback was removed in #179.
 **Program:** Camp 404 audit remediation, sub-project **E**. Builds on C (`resolveAudience`). **Highest blast radius in the program** — it changes how every authenticated user is routed.
 
 ## Problem (from the audit)

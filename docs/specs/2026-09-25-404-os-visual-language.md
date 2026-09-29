@@ -1,5 +1,7 @@
 # 404 OS visual language for the console
 
+Status (checked 2026-09-29): built in #288 and #291 (2026-09-26 to 2026-09-27), following the approved prototype, which wins where this doc differs. "Nothing here is built" below is the record from when it was written.
+
 Status: proposal, 2026-09-25. Nothing here is built. The owner picked the
 Classic desktop on 2026-09-25 (decision 1, ruled: the skin follows Join),
 and in a second review the same day ruled decision 3 (last-seen windows),

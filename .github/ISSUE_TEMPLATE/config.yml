@@ -7,4 +7,4 @@ contact_links:
     about: Report it privately, never in a public issue. The app is live and holds real people's data. See SECURITY.md.
   - name: A camp member? Report from inside the app
     url: https://camp-404.com
-    about: Sign in and shake your phone. The app removes personal details before it files the issue. This form does not.
+    about: Sign in and use "Report a problem" (or shake your phone). The app removes personal details before it files the issue. This form does not.

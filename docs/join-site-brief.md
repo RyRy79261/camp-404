@@ -1,5 +1,7 @@
 # join.camp-404.com — build brief
 
+Status: built as `apps/join` in #283 (2026-09-25). [CORRECTION 2026-09-29] Since #284 it is not static: it reads the database (`getJoinSitePublic` in `@camp404/db/join-site`), and captains edit its words and fee in the console's Join site program (`/captains/join-site`). Where this brief says `content.ts` holds the copy or the fee, the database now does.
+
 Handoff notes for building the Camp 404 recruitment site, agreed in chat on
 2026-09-25. [CORRECTION 2026-09-25] It is now built: `apps/join`. The owner's
 answers below settle the open questions; the copy lives in

@@ -23,7 +23,7 @@ complete it depends on `FOUNDER_EMAILS` (old name `GOD_EMAILS`; `mayFoundCamp` i
 The steps, for an account that may:
 
 1. They sign in (email and password, a passkey, or Google if it is set up).
-2. `apps/web/app/page.tsx` sees the camp isn't bootstrapped and redirects to
+2. `apps/web/app/(console)/page.tsx` sees the camp isn't bootstrapped and redirects to
    `/setup`. Every new camp starts here — god-email accounts go through it
    too.
 3. The wizard's action (`completeSetupAction` → `runFirstTimeSetup` →
@@ -37,7 +37,7 @@ The founding captain then hands out the root code to bring everyone else in.
 
 ## The root invite code
 
-The root code is fixed: **`meowzit`** (`apps/web/lib/bootstrap.ts:FOUNDER_CODE`,
+The root code is fixed: **`meowzit`** (`FOUNDER_CODE` in `packages/core/src/invites.ts`, re-exported by `apps/web/lib/bootstrap.ts`,
 matching the `admin-cli bootstrap-founder` slug). The repo is public, so anyone
 can read the word. It is therefore minted so that it cannot wave anyone in:
 
@@ -98,6 +98,13 @@ SELECT current_database(), current_user, current_schema();
 ```
 
 Once you've confirmed it's the throwaway fork:
+
+> **[CORRECTION 2026-09-29]** This list is incomplete: tables added since it
+> was written (dues, payments, participations, tickets, questionnaire
+> definitions and responses, meeting notes, power, transport, kitchen, team
+> programs, the join site, desktop layouts, …) are missing, so it leaves data
+> behind. Build the list from `packages/db/src/schema.ts` before you run it,
+> or start from an empty local stack (`pnpm db:local:up`) instead.
 
 ```sql
 BEGIN;

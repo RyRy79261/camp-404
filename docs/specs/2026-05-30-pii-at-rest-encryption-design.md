@@ -1,7 +1,7 @@
 # Sub-project A — PII-at-rest encryption (design)
 
 **Date:** 2026-05-30
-**Status:** Proposed — awaiting review
+**Status:** Built in #37 (2026-05-30). [CORRECTION 2026-09-29: this said "Proposed — awaiting review".]
 **Program:** Camp 404 audit remediation. This is sub-project **A** of the
 sequenced program (A → B → C → E → D → F). It is the critical, foundational
 piece; sub-project **F** (account deletion / "Lost Cat") depends on the
