@@ -1,10 +1,12 @@
-import { and, eq, gt, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import {
   QUESTIONNAIRE_REF_TYPE,
+  REQUIRED_ACTION_REF_TYPE,
   classifyChange,
   definitionLimitErrors,
   questionnaireReleaseNotification,
   questionnaireReminderNotification,
+  requiredActionReminderNotification,
   validateQuestionnaireDefinition,
   type DefinitionIssue,
   type NotificationPayload,
@@ -834,4 +836,100 @@ export async function remindDueSoon(input: { now?: Date } = {}): Promise<{
     if (result.ok && result.outcome === "sent") reminded += result.sent;
   }
   return { activations: due.length, reminded };
+}
+
+/**
+ * The deadline nudge for required actions that no questionnaire send stands
+ * behind (#134): a pending `required_actions` row with a `due_at` and no
+ * `activation_id` (a gate written by hand, or one whose send was deleted).
+ * {@link remindDueSoon} reaches only the rows of an open send, so without this
+ * such a deadline never nudged anyone. Run on a page load
+ * (apps/web/lib/background-work.ts), in camp daytime only.
+ *
+ * The same rules as the questionnaire deadline reminder: a deadline within the
+ * next {@link DUE_SOON_WINDOW_MS}, at most one nudge per row per
+ * {@link REMINDER_WINDOW_MS}, nothing once the deadline has passed, and no
+ * departed, system or declined account. The dedup record is the delivery
+ * itself (ref `required_action`, the row's id), so a re-run inside the window
+ * sends nothing. The rows are locked FOR UPDATE SKIP LOCKED for the whole run,
+ * so two servers running at once never nudge the same row twice: the second
+ * skips what the first holds, and after it commits sees its delivery.
+ */
+export async function remindRequiredActionsDueSoon(
+  input: { now?: Date } = {},
+): Promise<{ actions: number; reminded: number }> {
+  const now = input.now ?? new Date();
+  const until = new Date(now.getTime() + DUE_SOON_WINDOW_MS);
+  const cutoff = new Date(now.getTime() - REMINDER_WINDOW_MS);
+
+  // One transaction, one connection: every query goes through `tx`.
+  return await withTransaction(async (tx) => {
+    const due = await tx
+      .select({
+        id: schema.requiredActions.id,
+        userId: schema.requiredActions.userId,
+        title: schema.requiredActions.title,
+        dueAt: schema.requiredActions.dueAt,
+      })
+      .from(schema.requiredActions)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.requiredActions.userId),
+      )
+      .where(
+        and(
+          eq(schema.requiredActions.status, "pending"),
+          isNull(schema.requiredActions.activationId),
+          gt(schema.requiredActions.dueAt, now),
+          lte(schema.requiredActions.dueAt, until),
+          eq(schema.users.isSystem, false),
+          eq(schema.users.sanitised, false),
+          ne(schema.users.approvalStatus, "rejected"),
+        ),
+      )
+      .orderBy(asc(schema.requiredActions.id))
+      .for("update", { of: schema.requiredActions, skipLocked: true });
+    if (due.length === 0) return { actions: 0, reminded: 0 };
+
+    const recent = await tx
+      .select({ refId: schema.notificationDeliveries.refId })
+      .from(schema.notificationDeliveries)
+      .where(
+        and(
+          eq(schema.notificationDeliveries.refType, REQUIRED_ACTION_REF_TYPE),
+          inArray(
+            schema.notificationDeliveries.refId,
+            due.map((d) => d.id),
+          ),
+          gte(schema.notificationDeliveries.createdAt, cutoff),
+        ),
+      );
+    const remindedRecently = new Set(recent.map((r) => r.refId));
+
+    const targets = due.filter((d) => !remindedRecently.has(d.id));
+    if (targets.length > 0) {
+      // `now` is the delivery's createdAt because createdAt IS the dedup
+      // clock, measured from the same `now` as the window above.
+      await tx.insert(schema.notificationDeliveries).values(
+        targets.map((row) =>
+          deliveryValues(
+            requiredActionReminderNotification({
+              requiredActionId: row.id,
+              title: row.title,
+              // The select keeps only rows with a deadline.
+              dueAt: row.dueAt ?? until,
+            }),
+            {
+              userId: row.userId,
+              broadcastId: null,
+              channel: "both",
+              presentation: "popup",
+              createdAt: now,
+            },
+          ),
+        ),
+      );
+    }
+    return { actions: due.length, reminded: targets.length };
+  });
 }

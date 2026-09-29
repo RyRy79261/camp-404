@@ -11,6 +11,8 @@ import {
 import { getActivationById, getRequiredAction } from "@camp404/db/activations";
 import { loadQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
+import { viewerSeesLeadsOnly } from "@/lib/questionnaire-viewer";
+import { questionnaireForViewer } from "@camp404/core";
 import { nextGate } from "@/lib/required-actions";
 import {
   BlockingNotice,
@@ -79,11 +81,16 @@ export default async function QuestionnaireFillPage({
 
   // Render the exact version this activation pinned, so historical responses
   // stay valid against what was answered.
-  const definition = await getBuilderDefinition(
+  const fullDefinition = await getBuilderDefinition(
     activation.questionnaireKey,
     activation.version,
   );
-  if (!definition) return <RunnerEdgeCard kind="unavailable" />;
+  if (!fullDefinition) return <RunnerEdgeCard kind="unavailable" />;
+  // "Team leads and up" pages and questions (#251) never reach a plain
+  // member's browser: the runner gets the definition as this member sees it.
+  const definition = questionnaireForViewer(fullDefinition, {
+    seesLeadsOnly: await viewerSeesLeadsOnly(campUser, fullDefinition),
+  });
   if (flattenQuestions(definition).length === 0) {
     return <RunnerEdgeCard kind="empty" />;
   }

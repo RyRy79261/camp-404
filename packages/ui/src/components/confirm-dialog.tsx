@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { TriangleAlert } from "lucide-react"
+import * as React from "react";
+import { TriangleAlert } from "lucide-react";
 
-import { cn } from "../lib/utils"
-import { Button } from "./button"
+import { cn } from "../lib/utils";
+import { Button } from "./button";
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./dialog"
-import { Spinner } from "./spinner"
+} from "./dialog";
+import { Spinner } from "./spinner";
 
 // A themed confirmation step for an action a person should not take by
 // accident: title, the consequence in plain words, and the action named on its
@@ -25,21 +25,21 @@ import { Spinner } from "./spinner"
 // half-way. A failure shows inside the dialog, where the person is looking.
 
 export interface ConfirmDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  title: string
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
   /** What happens if they confirm. */
-  description: React.ReactNode
+  description: React.ReactNode;
   /** The action, named: "Delete", "Publish to 42 members". */
-  confirmLabel: string
-  cancelLabel?: string
+  confirmLabel: string;
+  cancelLabel?: string;
   /** A destructive action gets the warning icon and the destructive button. */
-  destructive?: boolean
-  pending?: boolean
-  error?: string | null
-  onConfirm: () => void
+  destructive?: boolean;
+  pending?: boolean;
+  error?: string | null;
+  onConfirm: () => void;
   /** Extra detail between the description and the buttons. */
-  children?: React.ReactNode
+  children?: React.ReactNode;
 }
 
 function ConfirmDialog({
@@ -59,7 +59,7 @@ function ConfirmDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!pending) onOpenChange(next)
+        if (!pending) onOpenChange(next);
       }}
     >
       <DialogContent
@@ -104,13 +104,13 @@ function ConfirmDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
 
 type ConfirmOptions = Omit<
   ConfirmDialogProps,
   "open" | "onOpenChange" | "onConfirm" | "pending" | "error"
->
+>;
 
 /**
  * A drop-in for `window.confirm` inside an event handler:
@@ -127,33 +127,33 @@ function useConfirm(): [
   React.ReactNode,
 ] {
   const [state, setState] = React.useState<{
-    options: ConfirmOptions
-    resolve: (value: boolean) => void
-  } | null>(null)
+    options: ConfirmOptions;
+    resolve: (value: boolean) => void;
+  } | null>(null);
 
   const confirm = React.useCallback(
     (options: ConfirmOptions) =>
       new Promise<boolean>((resolve) => setState({ options, resolve })),
     [],
-  )
+  );
 
   const settle = (value: boolean) => {
-    state?.resolve(value)
-    setState(null)
-  }
+    state?.resolve(value);
+    setState(null);
+  };
 
   const dialog = state ? (
     <ConfirmDialog
       {...state.options}
       open
       onOpenChange={(next) => {
-        if (!next) settle(false)
+        if (!next) settle(false);
       }}
       onConfirm={() => settle(true)}
     />
-  ) : null
+  ) : null;
 
-  return [confirm, dialog]
+  return [confirm, dialog];
 }
 
-export { ConfirmDialog, useConfirm }
+export { ConfirmDialog, useConfirm };

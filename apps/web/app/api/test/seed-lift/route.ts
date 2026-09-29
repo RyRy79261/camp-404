@@ -25,6 +25,7 @@ interface Body {
   departureCity?: string;
   /** A driver's arrival day, YYYY-MM-DD (the camp layout's arrival counts). */
   arrivalDay?: string;
+  canTow?: boolean;
 }
 
 export async function POST(req: Request) {
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
         body.arrivalDay && /^\d{4}-\d{2}-\d{2}$/.test(body.arrivalDay)
           ? new Date(`${body.arrivalDay}T00:00:00.000Z`)
           : null,
+      canTow: body.canTow ?? false,
     });
     return NextResponse.json({ ok: true });
   }

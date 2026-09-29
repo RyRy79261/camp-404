@@ -1,6 +1,8 @@
 import type {
+  CanLocation,
   FuelType,
   GeneratorOwner,
+  GridNodeKind,
   LoadCategory,
   LoadOwner,
 } from "@camp404/types";
@@ -12,6 +14,22 @@ import type {
 
 export const POWER_LOADS_PATH = "/power/loads";
 export const POWER_FUEL_PATH = "/power/fuel";
+export const POWER_FUEL_LOG_PATH = "/power/fuel-log";
+export const POWER_GRID_PATH = "/power/grid";
+export const POWER_READINESS_PATH = "/power/readiness";
+/** The paper sheets, printed outside the desktop (#249). */
+export const PRINT_REFUEL_SHEET_PATH = "/print/power/refuel-sheet";
+export const PRINT_GRID_SHEET_PATH = "/print/power/grid";
+export const PRINT_SHARING_PATH = "/print/power/sharing";
+
+/** Every page that shows power figures, refreshed after any power write. */
+export const POWER_PATHS = [
+  POWER_LOADS_PATH,
+  POWER_FUEL_PATH,
+  POWER_FUEL_LOG_PATH,
+  POWER_GRID_PATH,
+  POWER_READINESS_PATH,
+] as const;
 
 /** What anyone who is not an editor is told, on the page and by the action. */
 export const POWER_REFUSAL =
@@ -19,6 +37,23 @@ export const POWER_REFUSAL =
 export const CHECK_LOAD = "Check the load and try again.";
 export const CHECK_PLAN = "Check the plan settings and try again.";
 export const CHECK_GENERATOR = "Check the generator and try again.";
+export const CHECK_CANS = "Check the cans and try again.";
+export const CHECK_REFUEL = "Check the refuelling and try again.";
+export const CHECK_GRID = "Check the point and try again.";
+export const CHECK_READINESS = "Check the item and try again.";
+export const CHECK_SHARING = "Check the agreement and try again.";
+
+export const CAN_LOCATION_LABELS: Record<CanLocation, string> = {
+  storage: "In storage",
+  vehicle: "On a vehicle",
+  on_site: "On site",
+};
+
+export const GRID_KIND_LABELS: Record<GridNodeKind, string> = {
+  generator: "Generator",
+  junction: "Junction",
+  end_point: "End point",
+};
 
 /**
  * The name people read for the start-up surge, and the one sentence that

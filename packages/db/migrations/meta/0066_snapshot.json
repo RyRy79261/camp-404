@@ -1,5 +1,5 @@
 {
-  "id": "1bbe5b55-49f0-47c2-adcd-b8ade2f135a3",
+  "id": "ca406625-22fe-44f9-b733-9c62e6d079fd",
   "prevId": "a13ea500-258d-4684-aaac-ac151eb917d4",
   "version": "7",
   "dialect": "postgresql",
@@ -776,190 +776,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.camp_layout_versions": {
-      "name": "camp_layout_versions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "number": {
-          "name": "number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "body": {
-          "name": "body",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "saved_by_user_id": {
-          "name": "saved_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "saved_at": {
-          "name": "saved_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "camp_layout_versions_cycle_number_uniq": {
-          "name": "camp_layout_versions_cycle_number_uniq",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "camp_layout_versions_cycle_camp_layouts_cycle_fk": {
-          "name": "camp_layout_versions_cycle_camp_layouts_cycle_fk",
-          "tableFrom": "camp_layout_versions",
-          "tableTo": "camp_layouts",
-          "columnsFrom": [
-            "cycle"
-          ],
-          "columnsTo": [
-            "cycle"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "camp_layout_versions_saved_by_user_id_users_id_fk": {
-          "name": "camp_layout_versions_saved_by_user_id_users_id_fk",
-          "tableFrom": "camp_layout_versions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "saved_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "camp_layout_versions_number_check": {
-          "name": "camp_layout_versions_number_check",
-          "value": "\"camp_layout_versions\".\"number\" >= 1"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.camp_layouts": {
-      "name": "camp_layouts",
-      "schema": "",
-      "columns": {
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "latest_version": {
-          "name": "latest_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "share_token": {
-          "name": "share_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "shared_at": {
-          "name": "shared_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "shared_by_user_id": {
-          "name": "shared_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "camp_layouts_shared_by_user_id_users_id_fk": {
-          "name": "camp_layouts_shared_by_user_id_users_id_fk",
-          "tableFrom": "camp_layouts",
-          "tableTo": "users",
-          "columnsFrom": [
-            "shared_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "camp_layouts_share_token_uniq": {
-          "name": "camp_layouts_share_token_uniq",
-          "nullsNotDistinct": false,
-          "columns": [
-            "share_token"
-          ]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -7957,6 +7773,52 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.team_programs": {
+      "name": "team_programs",
+      "schema": "",
+      "columns": {
+        "team": {
+          "name": "team",
+          "type": "team",
+          "typeSchema": "public",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "team_programs_description_length": {
+          "name": "team_programs_description_length",
+          "value": "char_length(\"team_programs\".\"description\") <= 300"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.telegram_announcements": {

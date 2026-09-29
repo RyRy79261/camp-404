@@ -135,6 +135,16 @@ describe("partial unique and queue indexes keep their predicates", () => {
       // pinned rows are a handful out of the whole broadcast table. It is NOT
       // unique: any number of announcements may be pinned at once, and the
       // owner ruled the banner carries all of them.
+      // Dues (#240): one live camp fee per member per year, and one refund
+      // per payment that is not declined.
+      dues_charges_one_fee_idx: {
+        columns: ["user_id", "cycle"],
+        where: "kind = 'fee' and cancelled_at is null",
+      },
+      payment_refunds_one_live_idx: {
+        columns: ["payment_id"],
+        where: "status <> 'declined'",
+      },
       broadcasts_pinned_idx: {
         columns: ["published_at"],
         where: "pinned_at is not null",
@@ -215,9 +225,15 @@ describe("every member-data column has a reader in the field-access list", () =>
     dietaryRequirements: schema.dietaryRequirements,
     driverProfiles: schema.driverProfiles,
     carMembers: schema.carMembers,
+    liftRequests: schema.liftRequests,
     teamMemberships: schema.teamMemberships,
     campParticipations: schema.campParticipations,
+    campTickets: schema.campTickets,
     payments: schema.payments,
+    duesAccounts: schema.duesAccounts,
+    duesCharges: schema.duesCharges,
+    duesInstalments: schema.duesInstalments,
+    paymentRefunds: schema.paymentRefunds,
     // The sign-in identity: it holds member email.
     user: schema.user,
   };

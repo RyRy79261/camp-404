@@ -8,6 +8,7 @@ import {
 } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
 import { testLayoutStore } from "@/lib/test-store-layout";
+import { resetInventoryStore } from "@/lib/test-store-inventory";
 import { resetRateLimitsForE2E } from "@/lib/rate-limit";
 
 // Resets the test data between specs: the in-memory store, or the local
@@ -23,6 +24,7 @@ export async function POST() {
   if (usesTestStore()) {
     testStore.reset();
     testLayoutStore.reset();
+    resetInventoryStore();
   } else await resetDatabaseForE2E();
   // Every spec comes from one address, so the per-IP buckets would otherwise
   // drain across the whole run.

@@ -52,12 +52,17 @@ describe("0050_money_in_rands_only_guard and 0051_money_in_rands_only", () => {
     await h.client().exec(THREE_CODE_CHECK_SQL);
   }
 
-  /** The predicate each money table's currency constraint holds now. */
+  /**
+   * The predicate each of these migrations' money tables' currency constraint
+   * holds now. Only those three: tables added later (the dues tables, #240)
+   * were born rands-only and are not these migrations' business.
+   */
   async function checkDefinitions() {
     const res = await h.client().query<{ name: string; def: string }>(
       `SELECT conname AS name, pg_get_constraintdef(oid) AS def
-         FROM pg_constraint WHERE conname LIKE '%_currency_check'
+         FROM pg_constraint WHERE conname = ANY($1)
         ORDER BY conname`,
+      [MONEY_TABLES.map((table) => `${table}_currency_check`)],
     );
     return res.rows;
   }

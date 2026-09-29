@@ -141,6 +141,24 @@ describe("sanitiseAccount", () => {
     ).toEqual([bystander.authUserId]);
   });
 
+  it("forgets the member's devices, so no push reaches a phone after erasure", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const other = await makeUser(db);
+    await db.insert(schema.pushTokens).values([
+      { userId: member.id, token: "member-phone", platform: "web" },
+      { userId: member.id, token: "member-laptop", platform: "web" },
+      { userId: other.id, token: "other-phone", platform: "web" },
+    ]);
+
+    expect(await sanitiseAccount(member.id)).toMatchObject({ ok: true });
+
+    const left = await db
+      .select({ token: schema.pushTokens.token })
+      .from(schema.pushTokens);
+    expect(left).toEqual([{ token: "other-phone" }]);
+  });
+
   it("removes every questionnaire answer the member ever gave", async () => {
     // The defect: erasure deleted the bespoke questionnaire tables but left
     // the generic builder store, so "erase my account" kept the answers.
@@ -184,6 +202,30 @@ describe("sanitiseAccount", () => {
     const left = await db
       .select({ userId: schema.campParticipations.userId })
       .from(schema.campParticipations);
+    expect(left).toEqual([{ userId: other.id }]);
+  });
+
+  it("deletes every year's ticket record, and keeps other members'", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const captain = await makeUser(db, { rank: "captain" });
+    const other = await makeUser(db);
+    await db.insert(schema.campTickets).values([
+      { userId: member.id, cycle: 2026, ticketStatus: "has_ticket" },
+      {
+        userId: member.id,
+        cycle: 2027,
+        wap: "issued",
+        passesUpdatedByUserId: captain.id,
+      },
+      { userId: other.id, cycle: 2027, ticketStatus: "buying_own" },
+    ]);
+
+    expect(await sanitiseAccount(member.id)).toMatchObject({ ok: true });
+
+    const left = await db
+      .select({ userId: schema.campTickets.userId })
+      .from(schema.campTickets);
     expect(left).toEqual([{ userId: other.id }]);
   });
 

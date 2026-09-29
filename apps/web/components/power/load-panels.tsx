@@ -101,13 +101,13 @@ export function PowerKpiCards({
   );
 }
 
-const BAND_BAR: Record<LoadBand, string> = {
+export const BAND_BAR: Record<LoadBand, string> = {
   green: "bg-success",
   amber: "bg-warning",
   red: "bg-destructive",
 };
 
-const BAND_TEXT: Record<LoadBand, string> = {
+export const BAND_TEXT: Record<LoadBand, string> = {
   green: "Comfortable",
   amber: "Working hard",
   red: "Too close to the limit",

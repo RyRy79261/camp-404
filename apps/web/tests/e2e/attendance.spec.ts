@@ -208,12 +208,12 @@ test.describe("attendance: the captains' roster and overview", () => {
     await person(page, request, "year-captain", "Cy Captain", "captain");
     await openRoster(page);
     await expect(
-      rosterRow(page, "Ada Yes").getByText("Coming", { exact: true }),
+      rosterRow(page, "Ada Yes").getByText("Says: Coming", { exact: true }),
     ).toBeVisible();
 
     // Only the Maybes.
     const filter = page.getByRole("combobox", { name: "This year" });
-    await filter.selectOption({ label: "Maybe" });
+    await filter.selectOption({ label: "Maybe, not decided" });
     await expect(rosterRow(page, "Ben Maybe")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Open Ada Yes's profile" }),
@@ -256,7 +256,7 @@ test.describe("attendance: the captains' roster and overview", () => {
     ).toHaveText(/^Accepted\s*1$/);
     await expect(
       card.getByRole("listitem").filter({ hasText: "Maybe" }),
-    ).toHaveText(/^Maybe\s*1$/);
+    ).toHaveText(/^Maybe, not decided\s*1$/);
   });
 
   test("a team lead sees who is coming, and cannot decide it", async ({
@@ -268,10 +268,10 @@ test.describe("attendance: the captains' roster and overview", () => {
     await openRoster(page);
 
     await expect(
-      rosterRow(page, "Ada Yes").getByText("Coming", { exact: true }),
+      rosterRow(page, "Ada Yes").getByText("Says: Coming", { exact: true }),
     ).toBeVisible();
     await expect(
-      rosterRow(page, "Ben Maybe").getByText("Maybe", { exact: true }),
+      rosterRow(page, "Ben Maybe").getByText("Says: Maybe", { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("This year", { exact: true }).filter({ visible: true }),
@@ -301,6 +301,9 @@ test.describe("attendance: the captains' roster and overview", () => {
       page.getByRole("columnheader", { name: "This year" }),
     ).toHaveCount(0);
     await expect(page.getByText("This year", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Coming", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Says: Coming", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(page.getByText("Not decided yet")).toHaveCount(0);
   });
 });

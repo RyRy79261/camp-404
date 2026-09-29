@@ -187,6 +187,10 @@ export interface FoundingReport {
   adopteesStamped: number;
   /** Who-is-coming answers given before the camp had a year (0052). */
   participationsStamped: number;
+  /** The year's trailers and lift requests (#270). */
+  trailersStamped: number;
+  liftRequestsStamped: number;
+  ticketsStamped: number;
   auditLogId: string;
 }
 
@@ -633,6 +637,73 @@ export async function setFoundingYear(input: {
       .set({ cycle: input.year })
       .where(eq(schema.campParticipations.cycle, UNSET_CYCLE))
       .returning({ userId: schema.campParticipations.userId });
+    // The inventory's year-scoped rows (#246): needs (their pledges ride
+    // along), bookings and loans written before the camp had a year.
+    for (const table of [
+      schema.inventoryNeeds,
+      schema.inventoryBookings,
+      schema.inventoryLoans,
+    ]) {
+      await tx
+        .update(table)
+        .set({ cycle: input.year })
+        .where(eq(table.cycle, UNSET_CYCLE));
+    }
+    // Transport (#270): the year's trailers and lift requests.
+    const trailers = await tx
+      .update(schema.transportTrailers)
+      .set({ cycle: input.year })
+      .where(eq(schema.transportTrailers.cycle, UNSET_CYCLE))
+      .returning({ id: schema.transportTrailers.id });
+    const liftRequests = await tx
+      .update(schema.liftRequests)
+      .set({ cycle: input.year })
+      .where(eq(schema.liftRequests.cycle, UNSET_CYCLE))
+      .returning({ userId: schema.liftRequests.userId });
+    // Tickets: a member may already have a row for the founding year (the
+    // key is (user_id, cycle)), so moving their sentinel row onto it would
+    // break the primary key and abort the founding. Such a pair is merged
+    // first: the founding year's row wins, field by field, except where it
+    // still holds the default and the sentinel row says something (a member's
+    // answer or a captain's DDT / WAP is never lost to a blank). Then the
+    // sentinel row goes, and every other sentinel row moves as before.
+    const merged = await tx.execute<{ user_id: string }>(sql`
+      with pair as (
+        select s.user_id,
+               s.ticket_status as s_ticket, s.directed_ticket as s_ddt,
+               s.early_entry as s_wap,
+               s.passes_updated_by_user_id as s_by, s.updated_at as s_at
+        from camp_tickets s
+        join camp_tickets t
+          on t.user_id = s.user_id and t.cycle = ${input.year}
+        where s.cycle = ${UNSET_CYCLE}
+      ),
+      kept as (
+        update camp_tickets t set
+          ticket_status = case when t.ticket_status = 'unknown'
+            then p.s_ticket else t.ticket_status end,
+          directed_ticket = case when t.directed_ticket = 'none'
+            then p.s_ddt else t.directed_ticket end,
+          early_entry = case when t.early_entry = 'not_needed'
+            then p.s_wap else t.early_entry end,
+          passes_updated_by_user_id =
+            coalesce(t.passes_updated_by_user_id, p.s_by),
+          updated_at = greatest(t.updated_at, p.s_at)
+        from pair p
+        where t.user_id = p.user_id and t.cycle = ${input.year}
+        returning t.user_id
+      )
+      delete from camp_tickets s
+      using kept k
+      where s.user_id = k.user_id and s.cycle = ${UNSET_CYCLE}
+      returning s.user_id
+    `);
+    const moved = await tx
+      .update(schema.campTickets)
+      .set({ cycle: input.year })
+      .where(eq(schema.campTickets.cycle, UNSET_CYCLE))
+      .returning({ userId: schema.campTickets.userId });
+    const tickets = [...merged.rows, ...moved];
 
     const [audit] = await tx
       .insert(schema.auditLog)
@@ -650,6 +721,9 @@ export async function setFoundingYear(input: {
           teamBudgetsStamped: budgets.length,
           adopteesStamped: adoptees.length,
           participationsStamped: participations.length,
+          trailersStamped: trailers.length,
+          liftRequestsStamped: liftRequests.length,
+          ticketsStamped: tickets.length,
         },
       })
       .returning({ id: schema.auditLog.id });
@@ -666,6 +740,9 @@ export async function setFoundingYear(input: {
         teamBudgetsStamped: budgets.length,
         adopteesStamped: adoptees.length,
         participationsStamped: participations.length,
+        trailersStamped: trailers.length,
+        liftRequestsStamped: liftRequests.length,
+        ticketsStamped: tickets.length,
         auditLogId: audit!.id,
       },
     };

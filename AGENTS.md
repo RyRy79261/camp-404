@@ -393,7 +393,8 @@ activation_id)` would allow any number of duplicates whose
   `captain_promotion_open_per_target_idx`,
   `recipe_proofread_runs_open_plates_idx`,
   `questionnaire_activations_one_open_per_key_idx`,
-  `notification_deliveries_broadcast_user_uniq`. A bare `ON CONFLICT DO
+  `notification_deliveries_broadcast_user_uniq`, `dues_charges_one_fee_idx`,
+  `payment_refunds_one_live_idx`. A bare `ON CONFLICT DO
 NOTHING`, with no target, is not affected.
 
 **Driver choice.** `@camp404/db` exposes two drivers: `createHttpDb()` is
@@ -499,6 +500,15 @@ Decisions baked into the schema — keep new code consistent with them:
     There are no kitchen settings any more (the owner removed the largest
     pot and the burner count), so `canSetKitchenSettings` is gone. Change the
     rule in those functions, never at a call site.
+  - **A team's program is another place team identity decides** (owner's
+    ruling 1, 2026-09-27): only a captain or a lead OF THAT TEAM changes what
+    a team's program says (its description today), by
+    `canEditTeamProgram` in `packages/core/src/team-programs.ts`, which fails
+    closed. Every member
+    reads every team's program. The write re-reads the actor's rank and lead
+    teams inside its own transaction. Meeting notes keep their own, wider
+    rule (`canWorkInTeam`: the team's members this year). Change the rule in
+    that function, never at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping
@@ -531,6 +541,36 @@ Decisions baked into the schema — keep new code consistent with them:
   back Maybe; My forms edits that answer, and the same write rewrites the
   answer stored with the "Coming this year?" questionnaire so its results
   agree with the roster. Erasure deletes every year's row.
+- **The member's answer and the captains' decision are two things** (owner,
+  2026-09-28). "Coming" / "Maybe" / "Not coming" is what the member said
+  (`intent`); "Accepted" (on the camp's list this year) and "Waiting list"
+  (said Coming, but the camp is full) are the captains' decision. The stored
+  `status` still holds both; screens split it with the helpers in
+  `@camp404/core/participation` (`INTENT_LABEL`, `participationDecision`,
+  `DECISION_LABEL`, and `STANDING_LABEL` for filters and counts, e.g.
+  "Coming, not decided"). Never write one label that mixes the two.
+  `intent` reads at `team_lead`, like `status`, so a lead sees both halves.
+- **Tickets, DDT and WAP.** `camp_tickets` (#238) is the same shape: one
+  row per member per burn year (adopted by `setFoundingYear`, which merges a
+  member's sentinel row into one they already have for the founding year,
+  the founding year's non-default values winning; erased with the account),
+  written only through `@camp404/db/tickets`. Who reads what (owner,
+  2026-09-28): a member reads their own row only (ticket status, DDT and WAP,
+  under "This year" on their profile) and sets only their own ticket status;
+  captains read every member's ticket data, may set a member's ticket status
+  for them, and alone set the DDT (direct distribution ticket) and the WAP
+  (work access pass). A ticket status, by the member or a captain, is only
+  for someone who said Coming or Maybe (`mayRecordTicket`); the DDT and WAP
+  are not bound by it. Each captain change is a compare-and-set on the value
+  they saw, audited as `ticket.pass_changed`. In code they are
+  `ddt` and `wap`; the Postgres columns keep their first names
+  (`directed_ticket`, `early_entry`) so the rename needed no migration. A team
+  lead reads none of it, and a member's own read carries only their own row.
+  No row means every column's default. It stores no ticket number,
+  barcode, order reference or card detail. The captains' view is
+  `/captains/applications` (Applications: team lead and up, no tickets below
+  captain), and the overview's "This year" card counts accepted members with
+  no ticket yet and WAPs issued.
 - **Notifications.** `broadcasts` are composed messages fanned out by a
   worker into per-user `notification_deliveries` (a queue). `push_tokens`
   holds device tokens.
@@ -623,7 +663,8 @@ or lazily on a page load, both in `after()` (`apps/web/lib/background-work.ts`):
   too.
 - **On a page load.** `resolveMemberState` (every signed-in console page)
   calls `runDueWorkAfterResponse()`: scheduled announcements whose time has
-  come, deadline reminders (camp daytime only, 09:00–21:00), a retry of
+  come, deadline reminders for questionnaires, tasks and any other required
+  action with a `due_at` (camp daytime only, 09:00–21:00), a retry of
   anything left queued, and once a day the upkeep (encrypt leftover plaintext
   ID numbers; on production only, delete avatar folders whose owner has no
   camp account). It is guarded by a row in `action_rate_limit`
@@ -647,6 +688,11 @@ LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
 
 ## Conventions
 
+- **No Google Sheets or Google Forms** (owner, 2026-09-27; narrowed
+  2026-09-28). Never build a feature that sends people to a spreadsheet or
+  a form, or that links out to Drive or Docs; build what the camp needs
+  inside the app instead. Google Calendar (the camp calendar) and Telegram
+  stay: the owner wants both.
 - TypeScript throughout; shared types and Zod schemas live in
   `@camp404/types`. Validate external input at the boundary with Zod.
 - Lint via `@camp404/eslint-config`; format via Prettier (`.prettierrc.json`).
@@ -669,6 +715,14 @@ LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
   `.returning()` tells the caller whether it won. A lost race returns a
   sentence the user can act on, never a silent overwrite. See
   `setUserApproval` and `decideCaptainPromotion`.
+- **Dues (#240): the Finance tools are for captains and Finance leads.**
+  `canManageMoney` in `packages/core/src/dues.ts` is the one rule (fail-closed;
+  a lead of any other team is refused), and every Finance write re-checks it
+  inside its own transaction (`lockMoneyKeeper`). A member reads only their own
+  dues; a concession's reason and the ledger notes never reach them. Proof of
+  payment files are private blobs read only through `/api/payment-proof`, and
+  the bank statement import reads the file in memory and stores nothing but
+  the payments someone confirms.
 - **Money is in South African rands only** (owner's call, 2026-09-24:
   "Everything should be in South African rands"). The ledger keeps integer
   cents, and every write path (payments, reimbursements, team budgets) refuses

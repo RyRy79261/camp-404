@@ -336,6 +336,8 @@ export const POWER_PLAN_DEFAULTS = {
   safetyMarginPct: 20,
   canLitres: 20,
   cansOwned: 0,
+  /** Warn on site when the fuel left covers fewer days than this (#255). */
+  lowFuelDays: 2,
 } as const;
 
 const D = POWER_PLAN_DEFAULTS;
@@ -420,6 +422,12 @@ export const PowerPlanInput = z
       .min(0, "Count 0 or more cans.")
       .max(10_000)
       .default(D.cansOwned),
+    lowFuelDays: z
+      .number()
+      .int("Count whole days.")
+      .min(0, "Use 0 days or more.")
+      .max(MAX_DAYS_ON_SITE, `Use at most ${MAX_DAYS_ON_SITE} days.`)
+      .default(D.lowFuelDays),
     expectedVersion: z.number().int().min(0),
   })
   .superRefine((plan, ctx) => {
