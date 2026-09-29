@@ -1,6 +1,6 @@
 # join.camp-404.com — build brief
 
-Status: built as `apps/join` in #283 (2026-09-25). [CORRECTION 2026-09-29] Since #284 it is not static: it reads the database (`getJoinSitePublic` in `@camp404/db/join-site`), and captains edit its words and fee in the console's Join site program (`/captains/join-site`). Where this brief says `content.ts` holds the copy or the fee, the database now does.
+Status: built as `apps/join` in #283 (2026-09-25). [CORRECTION 2026-09-29] Since #284 it is not static: it reads the database when `DATABASE_URL` is set (`getJoinSitePublic` in `@camp404/db/join-site`), and serves `DEFAULT_JOIN_DATA` (`lib/join-data.ts`) when it is not or the read fails. Captains edit its words and fee in the console's Join site program (`/captains/join-site`). Where this brief says `content.ts` holds the copy or the fee, the database now does.
 
 Handoff notes for building the Camp 404 recruitment site, agreed in chat on
 2026-09-25. [CORRECTION 2026-09-25] It is now built: `apps/join`. The owner's
@@ -267,5 +267,7 @@ Transport & Travel team makes sure everyone and everything has a ride.
   [UNRESOLVED 2026-09-25] bat-cat does not record where that sheet came from
   or its licence; the owner should confirm it may ship on a public site.
 - Clearing the level shows GOODEST BOI and a "speed of chaos" top 10 with
-  arcade initials. The site has no database, so the board lives in each
-  visitor's browser; a shared board would need the main app.
+  arcade initials. On Join the board lives in each visitor's browser.
+  [CORRECTION 2026-09-29] Join now reads the database for its words, but the
+  INKBLOT board still stays in the browser there; the main app's INKBLOT keeps
+  a shared camp board in the database (`inkblot_scores`, d98e695b).
