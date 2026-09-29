@@ -830,7 +830,9 @@ never measured.
 - One PR per feature. The PR template leads with **Why** and **Decisions**;
   fill in Database even when the answer is "None."
 - Keep the CI gate green before requesting review. `ci-pass` is the one
-  required check.
+  required check. [2026-09-29] The `main` ruleset also asks for the branch to
+  be up to date with `main`, and allows squash or rebase merges only (no
+  merge commits on `main`).
 
 ## Before you commit
 

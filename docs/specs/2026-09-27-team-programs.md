@@ -1,6 +1,11 @@
 # Team programs on the 404 OS desktop
 
-Status: first version built in #295 (2026-09-28).
+Status: first version built in #295 (2026-09-28). Since then (checked
+2026-09-29) teams got their own tools as separate programs: Power's fuel
+log, grid plan and readiness (#298), Transport (#303), dues for Finance
+(#299), Inventory (#300), the Lounge for the Ministry of Vibes (#301) and
+Camp layout for Structures (#305). The team table below is the record from
+before them.
 
 Status: first version built, 2026-09-27 (PR "feat(teams): every team gets its
 own program"). Proposal read from `origin/main` at `2834404`; the owner's

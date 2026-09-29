@@ -5,9 +5,12 @@ against Neon Postgres.
 
 - **Exports:** the drivers from `@camp404/db` (`createHttpDb`, stateless and
   without transactions; `createPooledDb` and `withTransaction` for atomic
-  work), the schema at `@camp404/db/schema`, and one subpath per feature
-  (`@camp404/db/broadcasts`, `/dues`, `/tickets`, `/team-memberships`, …). The
-  full list is `exports` in `package.json`.
+  work), the schema at `@camp404/db/schema`, and one subpath per feature,
+  for example `@camp404/db/broadcasts`, `/participations`, `/tickets`,
+  `/dues`, `/payments`, `/team-memberships`, `/team-programs`, `/transport`,
+  `/power`, `/power-site`, `/power-grid`, `/power-readiness`, `/inventory`,
+  `/lounge`, `/camp-layout` and `/meal-plan`. The full list is `exports` in
+  `package.json`.
 - **Depends on:** `@camp404/core`, `@camp404/types`.
 - **Imported by:** server code only: `apps/web`, `apps/join` (the join site
   reads `@camp404/db/join-site`), `apps/admin-cli`, `@camp404/auth`,

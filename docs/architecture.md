@@ -10,25 +10,31 @@ this page.
 Both apps run on Vercel in `fra1` (Frankfurt), beside the Neon database
 (`apps/web/vercel.json`, `apps/join/vercel.json`). A console page is a server
 component; a change is a server action; files, voice and webhooks come in
-through route handlers under `apps/web/app/api/`.
+through route handlers under `apps/web/app/api/`. One page outside the console
+needs no sign-in: the neighbour page, `app/neighbours/[token]`, which a captain
+turns on to show other camps the site plan (see Camp layout below).
 
 ```mermaid
 flowchart TB
-  browser["Browser, desktop or phone"]
+  browser["Member's browser, desktop or phone"]
+  neighbour["A neighbour camp's browser<br/>(no sign-in)"]
   tg["Telegram"]
   subgraph vercel["Vercel, fra1 (Frankfurt)"]
     direction LR
     pages["Pages and server actions<br/>app/(console)"]
     after["after() background work<br/>lib/background-work.ts"]
     routes["Route handlers<br/>app/api/*"]
+    shared["Neighbour page<br/>app/neighbours/[token]"]
     pages -- after the response --> after
   end
   db["@camp404/db (Drizzle)"]
   neon[("Neon Postgres, Frankfurt")]
   outside["Outside services, each off until its keys are set:<br/>Google Calendar, Anthropic Claude, Groq,<br/>Vercel Blob, Firebase push, Resend email"]
   browser --> pages & routes
+  neighbour --> shared
   tg -- webhook --> routes
   pages & after & routes --> db
+  shared -- "getSharedLayout only" --> db
   db --> neon
   pages & after & routes --> outside
 ```
@@ -130,17 +136,21 @@ and every read filters on the camp's current burn year.
 ```mermaid
 flowchart LR
   authT["Sign-in (Better Auth)<br/>user, session, account,<br/>two_factor, passkey"]
-  users(["users<br/>rank: captain or member"])
-  year["This year (cycle)<br/>camp_participations, camp_tickets,<br/>team_memberships"]
+  users(["users<br/>rank: captain or member,<br/>membership_tier (staying for)"])
+  year["This year<br/>camp_participations,<br/>camp_tickets (DDT, WAP),<br/>team_memberships"]
   gates["Gates and questionnaires<br/>required_actions, questionnaire_*"]
   notes["Notices<br/>broadcasts, notification_deliveries,<br/>push_tokens"]
-  money["Money (rands)<br/>payments, dues_*, reimbursements,<br/>team_budgets"]
-  teams["Team tools<br/>team_programs, meeting_notes, tasks,<br/>power_*, driver_profiles, car_members"]
+  money["Money (rands)<br/>payments, dues_*, fee_tiers,<br/>payment_refunds, reimbursements"]
+  teams["Team work<br/>team_programs, meeting_notes, tasks"]
+  site["On site<br/>power_*, generators, fuel_cans,<br/>refuel_entries, driver_profiles,<br/>car_members, lift_requests"]
+  gear["Gear and lounge<br/>inventory_* (items, needs,<br/>pledges, bookings, loans),<br/>lounge_offers, lounge_slots"]
+  layout["Camp layout<br/>camp_layouts,<br/>camp_layout_versions"]
   kitchen["Kitchen<br/>recipes, recipe_versions,<br/>kitchen_meal_plans"]
   config["Camp and records<br/>camp_settings, join_site_content,<br/>audit_log, action_rate_limit"]
   authT -. auth_user_id, no foreign key .- users
-  users --> year & gates & notes & money & teams & kitchen
-  users --> config
+  users --> year & gates & notes & money
+  users --> teams & site & gear & kitchen
+  users --> layout & config
 ```
 
 - **Ranks are stored; roles are derived.** `users.rank` is `captain` or
@@ -149,6 +159,15 @@ flowchart LR
 - **Two kinds of questionnaire.** Code questionnaires write their own tables
   (`burner_profiles`, …). Builder questionnaires keep their definitions and
   answers in `questionnaire_definitions` and `questionnaire_responses`.
+- **Team tools: every member reads, the owning team edits.** Each tool's
+  "who may change it" is one pure function in `@camp404/core` that fails
+  closed: a captain or a lead of that team this year (`canEditPower`,
+  `canEditTransport`, `canEditInventory`, `canRunLounge`, `canEditLayout`,
+  `canManageMoney`, `canEditTeamProgram`).
+- **The neighbour page reads an allowlist.** `getSharedLayout`
+  (`@camp404/db/camp-layout`) returns only `neighbourView`'s fields (each
+  piece's kind, size and place) and arrival counts per day. The link is off
+  until a captain turns it on (`canShareLayout`, audited).
 - **Private columns are encrypted.** ID and passport numbers and bank details
   are AES-256-GCM encrypted at the write boundary
   (`packages/db/src/crypto.ts`).

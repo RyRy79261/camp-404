@@ -12,6 +12,7 @@ program window; the page for the focused window renders live inside it.
 | `app/auth/`, `app/signup/`, `app/onboarding/` | Sign-in, invite and first-form pages                                  |
 | `app/api/`                                    | Route handlers: auth, uploads, push tokens, voice, webhooks, MCP      |
 | `app/landing-hero.tsx`                        | The signed-out landing page, which keeps its own glitch design        |
+| `app/neighbours/[token]/`                     | The one public data page: the site plan for neighbour camps           |
 | `components/os/`                              | The desktop shell (`desktop-shell.tsx`) around `@camp404/os`          |
 | `lib/member-gate.ts`, `lib/captain-gate.ts`   | The page and action gates                                             |
 | `lib/programs.ts`, `lib/program-routes.ts`    | The program registry and which window each URL opens                  |

@@ -87,7 +87,7 @@ A pull request cannot set these. A maintainer sets them in **Settings**:
   status check, `ci-pass`. It is the last job in `.github/workflows/ci.yml`: it
   needs every other job and fails if any of them failed. Do not require the
   Vercel checks. They are external, and they fail for reasons outside the code
-  (for example the Neon branch limit).
+  (for example the Neon branch limit). Allow squash and rebase merges only.
 - **Private vulnerability reporting:** Settings → Security → enable.
 - **Secret scanning and push protection:** on. Push protection blocks the push
   instead of warning after it.

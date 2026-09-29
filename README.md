@@ -23,14 +23,24 @@ wears the same desktop and needs no sign-in.
 ## What is in it
 
 - **For every member:** the desktop and Today, the inbox and announcements,
-  My forms, My dues, My lift, Tasks, the Calendar, the Roster and Family
-  tree, About Camp 404, and each team's program (Power, Transport, the
-  Kitchen's recipes and meal plan, meetings). Themes include Calm, High
-  contrast and Colour-blind safe.
+  My forms (including their own ticket, DDT and WAP), My dues (pledge, send
+  proof, see the balance), My lift, Tasks, the Calendar, the Roster and Family
+  tree, About Camp 404, and each team's program and meetings. Themes include
+  Calm, High contrast and Colour-blind safe.
+- **Team tools, which every member may read:** Power (loads, fuel, the fuel
+  log, the grid plan, generator readiness), Transport (cars, lifts and
+  trailers), Inventory (the camp's gear: suggest a change, pledge, book), the
+  Lounge (offer an activity or a DJ set), Camp layout (the site plan), and the
+  Kitchen's recipes and meal plan. A captain or a lead of the team that owns a
+  tool edits it.
 - **For captains (and leads, where the owner said so):** Applications (who is
-  coming, the DDT and WAP), Payments and dues, Announcements, the
-  questionnaire builder, Camp settings, the Join site editor, the Audit log and
+  coming, the DDT and WAP), Payments and dues (with the Finance leads),
+  Announcements, the questionnaire builder, the member panel (including how
+  long a member stays), Camp settings, the Join site editor, the Audit log and
   System status.
+- **One public page:** a captain may turn on a neighbour link
+  (`/neighbours/<token>`) that shows other camps our site plan and arrival
+  counts per day, and nothing typed inside the camp.
 
 The product vision is in [`docs/brief.md`](docs/brief.md). Planned work that
 is not built yet is in GitHub issues and open pull requests, not here.
