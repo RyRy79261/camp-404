@@ -232,7 +232,7 @@ long, today the My forms change log; readers fall back to the prompt
 
 `altText` is **required** (publish-time check). `image_block` uploads via a
 non-square pipeline (preserve aspect; [CORRECTION 2026-09-29: built as `/api/uploads/builder-image` and `/api/uploads/questionnaire-image`] a dedicated `/api/uploads/image` or the
-avatar route **without** square-crop) — JPG/PNG, 10 MB, Remove/Replace per board
+avatar route **without** square-crop) — JPG/PNG, 10 MB, Remove/Replace per board [CORRECTION 2026-09-29: as built, `builder-image` takes JPEG, PNG or WebP and `questionnaire-image` PNG or WebP, both up to 5 MB]
 58. The square-crop avatar pipeline applies **only to the respondent `image`
 input field**.
 

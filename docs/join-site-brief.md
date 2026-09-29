@@ -11,8 +11,11 @@ answers below settle the open questions; the copy lives in
 
 A public, signed-out site at **join.camp-404.com** that tells prospective
 members what Camp 404 is and sends them to apply. It lives in the monorepo as
-its own app, **`apps/join`**, deployed as its own Vercel project. No database,
-no sign-in: static content only.
+its own app, **`apps/join`**, deployed as its own Vercel project. No sign-in.
+[CORRECTION 2026-09-29] It is not static content any more: it reads the
+database when `DATABASE_URL` is set, and serves `DEFAULT_JOIN_DATA`
+(`lib/join-data.ts`) when it is not or the read fails
+(`lib/load-join-data.ts`).
 
 ## The reference: dimensional.org/prototype
 
@@ -97,8 +100,9 @@ MEMORY CHECK… LOST`) ending in `ERROR 404: YOU ARE HERE`. Skippable
 
 ## Build notes
 
-- Next.js (match `apps/web`: Next 16, React 19, Tailwind v4), static export
-  — no server features are needed.
+- Next.js (match `apps/web`: Next 16, React 19, Tailwind v4). [CORRECTION
+  2026-09-29: this said "static export — no server features are needed"; it
+  renders on its own server so it can read the database.]
 - All copy in one typed content module so next year is a one-file edit.
 - Add the app to the Turbo pipeline so `pnpm turbo run lint typecheck test
 build` covers it. A Playwright smoke test: boot skips, an icon opens its

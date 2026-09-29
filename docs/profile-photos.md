@@ -46,8 +46,8 @@ be added or changed later from the profile editor.
 6. **Display.** The `@camp404/ui` `Avatar` component renders the photo with
    an initials fallback. Because the stored value is an ordinary same-origin
    URL, every `<img src={profileImageUrl}>` works unchanged. Used on
-   `/profile`, `/profile/edit`, and in the home header (which links to
-   `/profile`).
+   `/profile` and `/profile/edit`. [CORRECTION 2026-09-29: this also named
+   the home header, which is gone; the desktop's account chip shows initials.]
 
 ## Profile pages
 
