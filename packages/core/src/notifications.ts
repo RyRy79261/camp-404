@@ -25,6 +25,13 @@ export const ANNOUNCEMENT_REF_TYPE = "announcement";
 export const CAPTAIN_PROMOTION_REF_TYPE = "captain_promotion";
 /** The reference a task deadline reminder carries: the task. */
 export const TASK_REF_TYPE = "task";
+/** The reference a driver's message carries: its own broadcast. */
+export const CAR_MESSAGE_REF_TYPE = "car_message";
+/**
+ * The reference a deadline reminder carries for a required action that no
+ * questionnaire send stands behind: the required_actions row itself.
+ */
+export const REQUIRED_ACTION_REF_TYPE = "required_action";
 
 const DUE_ON = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -107,6 +114,27 @@ export function questionnaireReminderNotification(input: {
 }
 
 /**
+ * A nudge about a required action with a deadline that is not tied to a
+ * questionnaire send (#134). It reuses the questionnaire reminder's kind: the
+ * kind is not shown to the member and only decides that it is emailed, and a
+ * kind of its own would need a database migration. The row's title (what the
+ * member was asked to do) is the only fact it carries.
+ */
+export function requiredActionReminderNotification(input: {
+  requiredActionId: string;
+  title: string;
+  dueAt: Date;
+}): NotificationPayload {
+  return {
+    kind: "questionnaire_reminder",
+    title: input.title,
+    body: `Reminder: ${input.title} is due ${DUE_ON.format(input.dueAt)}. Tap to open the app.`,
+    refType: REQUIRED_ACTION_REF_TYPE,
+    refId: input.requiredActionId,
+  };
+}
+
+/**
  * A captain approved the member's place in the camp.
  *
  * There is no rejection notice. A rejected applicant is held at a screen that
@@ -139,6 +167,24 @@ export function captainPromotionNotification(input: {
     body: `${who} asked you to become a captain. Open your notifications to accept or decline.`,
     refType: CAPTAIN_PROMOTION_REF_TYPE,
     refId: input.requestId,
+  };
+}
+
+/**
+ * A driver wrote to the people riding in their car. The text is the
+ * driver's own; the inbox names them as the sender. The tap opens My lift.
+ */
+export function carMessageNotification(input: {
+  broadcastId: string;
+  title: string;
+  body: string;
+}): NotificationPayload {
+  return {
+    kind: "car_message",
+    title: input.title,
+    body: input.body,
+    refType: CAR_MESSAGE_REF_TYPE,
+    refId: input.broadcastId,
   };
 }
 
@@ -176,12 +222,14 @@ export function kindForBroadcast(
     | "team_message"
     | "lead_directive"
     | "reminder"
-    | "system",
+    | "system"
+    | "car_message",
   refType: string | null,
 ): NotificationKind {
   switch (kind) {
     case "team_message":
     case "lead_directive":
+    case "car_message":
       return kind;
     case "reminder":
       return "questionnaire_reminder";

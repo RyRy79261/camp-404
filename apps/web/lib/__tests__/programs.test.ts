@@ -127,13 +127,18 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "my-forms" },
       { kind: "program", id: "invites" },
       { kind: "program", id: "account" },
+      // Their own dues (#240).
+      { kind: "program", id: "my-dues" },
       { kind: "program", id: "roster" },
       { kind: "folder", id: "teams" },
       { kind: "program", id: "meetings" },
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
       { kind: "program", id: "lounge" },
+      { kind: "program", id: "inventory" },
+      { kind: "program", id: "transport" },
       { kind: "program", id: "family-tree" },
+      { kind: "program", id: "about" },
       // No Captains column for them: the Terminal ends Camp.
       { kind: "program", id: "terminal" },
     ]);
@@ -186,6 +191,7 @@ describe("buildProgramManifest: the personas", () => {
       "recipe-review",
     ]);
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
+      "applications",
       "questionnaires",
       "announcements",
       "new-event",
@@ -200,6 +206,26 @@ describe("buildProgramManifest: the personas", () => {
     expect(m.allowedChildren).toContain("edit-recipe");
     expect(m.allowedChildren).toContain("send-questionnaire");
     expect(m.allowedChildren).not.toContain(pid("results"));
+  });
+
+  it("puts Inventory in the Transport and Logistics team's folder, for every member on it", () => {
+    const m = buildProgramManifest(
+      facts({
+        memberships: [
+          { team: Team.enum.transport_and_logistics, isLead: false },
+        ],
+      }),
+    );
+    expect(
+      teamFolder(m, Team.enum.transport_and_logistics)?.programs.map(
+        (p) => p.id,
+      ),
+    ).toEqual([
+      `team:${Team.enum.transport_and_logistics}`,
+      "inventory",
+      "transport",
+    ]);
+    expect(m.allowedChildren).toContain(pid("inventory-item"));
   });
 
   it("gives a Power lead no Recipe review, but the lead programs", () => {
@@ -226,6 +252,18 @@ describe("buildProgramManifest: the personas", () => {
     ]);
   });
 
+  it("puts Transport in a Transport & Logistics member's team folder", () => {
+    const TRANSPORT = Team.enum.transport_and_logistics;
+    const m = buildProgramManifest(
+      facts({ memberships: [{ team: TRANSPORT, isLead: false }] }),
+    );
+    expect(teamFolder(m, TRANSPORT)?.programs.map((p) => p.id)).toEqual([
+      `team:${TRANSPORT}`,
+      "inventory",
+      "transport",
+    ]);
+  });
+
   it("keeps the lead programs for a lead whose only led team is archived", () => {
     const archived = setTeamArchived({ teams: TEAMS }, SOUND, true).teams;
     const m = buildProgramManifest(
@@ -236,6 +274,7 @@ describe("buildProgramManifest: the personas", () => {
       }),
     );
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
+      "applications",
       "questionnaires",
       "announcements",
       "new-event",
@@ -254,6 +293,7 @@ describe("buildProgramManifest: the personas", () => {
     // The prototype's order: Camp overview first.
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
       "overview",
+      "applications",
       "questionnaires",
       "announcements",
       "new-event",
@@ -391,20 +431,30 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     ]);
   });
 
-  it("puts no Payments in the Finance folder of a Finance member who is not a captain", () => {
+  it("puts Payments in the Finance folder of a Finance lead or a captain, never a Finance member's", () => {
     const member = buildProgramManifest(
       facts({ memberships: [{ team: FINANCE, isLead: false }] }),
     );
     expect(teamFolder(member, FINANCE)?.programs.map((p) => p.id)).toEqual([
       `team:${FINANCE}`,
     ]);
-    // A Finance LEAD is still not a captain (decision 13 A).
+    // The Finance tools (#240) are for captains and Finance leads
+    // (canManageMoney), which replaced decision 13 A's "captains only".
     const lead = buildProgramManifest(
       facts({ rank: LEAD, memberships: [{ team: FINANCE, isLead: true }] }),
     );
     expect(teamFolder(lead, FINANCE)?.programs.map((p) => p.id)).toEqual([
       `team:${FINANCE}`,
+      "payments",
     ]);
+    expect(folder(lead, "captains")?.programs.map((p) => p.id)).toContain(
+      "payments",
+    );
+    // A lead of another team stands on the same rung and gets none of it.
+    const kitchenLead = buildProgramManifest(
+      facts({ rank: LEAD, memberships: [{ team: KITCHEN, isLead: true }] }),
+    );
+    expect(ids(kitchenLead)).not.toContain("payments");
     const captain = buildProgramManifest(
       facts({ rank: CAPTAIN, memberships: [{ team: FINANCE, isLead: false }] }),
     );
@@ -421,6 +471,25 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     expect(teamFolder(m, COMMS)?.programs.map((p) => p.id)).toEqual([
       `team:${COMMS}`,
     ]);
+  });
+
+  // Owner's ruling 5 (2026-09-27): every team is its own program, reachable
+  // from the Teams folder, and each team's folder opens with it.
+  it("makes every team its own program: in the Teams folder, and first in its own folder", () => {
+    for (const team of Team.options) {
+      const m = buildProgramManifest(
+        facts({ memberships: [{ team, isLead: false }] }),
+      );
+      const program = folder(m, "teams")!.programs.find(
+        (p) => p.id === `team:${team}`,
+      );
+      expect(program, team).toMatchObject({ href: `/teams/${team}` });
+      expect(teamFolder(m, team)?.programs[0], team).toMatchObject({
+        id: `team:${team}`,
+        href: `/teams/${team}`,
+      });
+    }
+    expect(Team.options).toHaveLength(TEAMS.length);
   });
 
   it("lists every active team in the Teams folder for every approved member", () => {

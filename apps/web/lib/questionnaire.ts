@@ -31,10 +31,12 @@ const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({
 // encrypted-PII class (passport / SA-ID / bank details). See
 // docs/specs/2026-05-30-pii-at-rest-encryption-design.md.
 //
-// NOTE on the team-specific questionnaires: the team-interest 0–6 pickers on
-// the "Team interests" page drive which follow-up questionnaires the user
-// gets activated for (kitchen, structures, …). Those follow-ups are
-// separate bespoke pages and not modelled here.
+// NOTE on the team-interest pickers: [CORRECTION 2026-09-28] nothing sends a
+// follow-up questionnaire from these answers (there is no `opt_in` send; audit
+// #134). Captains read them in the member panel when they put teams
+// together, and a team's leads may send their own team a questionnaire. The
+// page's copy says only that. Copy is not shape, so the change did not bump
+// QUESTIONNAIRE_VERSION (see below): a bump would make every member re-submit.
 
 // A team option for the team-interest sliders + the team-lead multi-select.
 // Phase 3: these are no longer hardcoded here — the caller supplies them from
@@ -294,14 +296,14 @@ export function buildQuestionnaire(
         id: "team_interests_intro",
         kind: "intro",
         heading: "Indicate your interest in whichever teams you want.",
-        body: "It's okay not to know yet — leave the sliders at zero for anything you're unsure about. None of these are required. You can revisit them later as the camp comes into focus.",
+        body: "It's okay not to know yet — leave any team you're unsure about at zero. None of these are required. You can revisit them later as the camp comes into focus.",
       },
       {
         id: "team_interests",
         kind: "questions",
         title: "Team interests",
         subtitle:
-          "Slide each team based on how keen you are to help. If you nudge a team above zero we'll send you their team-specific questionnaire later.",
+          "Rate each team by how keen you are to help. Captains see your answers when they put the teams together.",
         questions: teams.map(teamInterestNumber),
       },
       {

@@ -1,5 +1,5 @@
 {
-  "id": "a69b77bd-1cde-4352-9226-8b8412f96c40",
+  "id": "ca406625-22fe-44f9-b733-9c62e6d079fd",
   "prevId": "a13ea500-258d-4684-aaac-ac151eb917d4",
   "version": "7",
   "dialect": "postgresql",
@@ -2778,435 +2778,6 @@
         "kitchen_meal_plans_days_check": {
           "name": "kitchen_meal_plans_days_check",
           "value": "\"kitchen_meal_plans\".\"days_on_site\" between 1 and 30"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.lounge_offers": {
-      "name": "lounge_offers",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "host_id": {
-          "name": "host_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "duration_minutes": {
-          "name": "duration_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "needs": {
-          "name": "needs",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "needs_note": {
-          "name": "needs_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "preferred_days": {
-          "name": "preferred_days",
-          "type": "integer[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::integer[]"
-        },
-        "preferred_bands": {
-          "name": "preferred_bands",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "recurring": {
-          "name": "recurring",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "public_guide": {
-          "name": "public_guide",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'offered'"
-        },
-        "decision_note": {
-          "name": "decision_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "decided_by_user_id": {
-          "name": "decided_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "decided_at": {
-          "name": "decided_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "lounge_offers_cycle_idx": {
-          "name": "lounge_offers_cycle_idx",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "lounge_offers_host_idx": {
-          "name": "lounge_offers_host_idx",
-          "columns": [
-            {
-              "expression": "host_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "lounge_offers_host_id_users_id_fk": {
-          "name": "lounge_offers_host_id_users_id_fk",
-          "tableFrom": "lounge_offers",
-          "tableTo": "users",
-          "columnsFrom": [
-            "host_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "lounge_offers_decided_by_user_id_users_id_fk": {
-          "name": "lounge_offers_decided_by_user_id_users_id_fk",
-          "tableFrom": "lounge_offers",
-          "tableTo": "users",
-          "columnsFrom": [
-            "decided_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "lounge_offers_kind_check": {
-          "name": "lounge_offers_kind_check",
-          "value": "\"lounge_offers\".\"kind\" in ('activity', 'dj_set', 'workshop', 'other')"
-        },
-        "lounge_offers_status_check": {
-          "name": "lounge_offers_status_check",
-          "value": "\"lounge_offers\".\"status\" in ('offered', 'accepted', 'declined', 'needs_changes')"
-        },
-        "lounge_offers_duration_check": {
-          "name": "lounge_offers_duration_check",
-          "value": "\"lounge_offers\".\"duration_minutes\" between 15 and 480"
-        },
-        "lounge_offers_needs_check": {
-          "name": "lounge_offers_needs_check",
-          "value": "\"lounge_offers\".\"needs\" <@ array['space', 'sound', 'power', 'materials']::text[]"
-        },
-        "lounge_offers_bands_check": {
-          "name": "lounge_offers_bands_check",
-          "value": "\"lounge_offers\".\"preferred_bands\" <@ array['morning', 'midday', 'afternoon', 'sunset', 'night', 'late_night']::text[]"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.lounge_settings": {
-      "name": "lounge_settings",
-      "schema": "",
-      "columns": {
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "music_policy": {
-          "name": "music_policy",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "updated_by_user_id": {
-          "name": "updated_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "lounge_settings_updated_by_user_id_users_id_fk": {
-          "name": "lounge_settings_updated_by_user_id_users_id_fk",
-          "tableFrom": "lounge_settings",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.lounge_slots": {
-      "name": "lounge_slots",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "offer_id": {
-          "name": "offer_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "day": {
-          "name": "day",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "start_minute": {
-          "name": "start_minute",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "placed_by_user_id": {
-          "name": "placed_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "lounge_slots_cycle_idx": {
-          "name": "lounge_slots_cycle_idx",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "lounge_slots_offer_place_uniq": {
-          "name": "lounge_slots_offer_place_uniq",
-          "columns": [
-            {
-              "expression": "offer_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "day",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "start_minute",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "lounge_slots_offer_id_lounge_offers_id_fk": {
-          "name": "lounge_slots_offer_id_lounge_offers_id_fk",
-          "tableFrom": "lounge_slots",
-          "tableTo": "lounge_offers",
-          "columnsFrom": [
-            "offer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "lounge_slots_placed_by_user_id_users_id_fk": {
-          "name": "lounge_slots_placed_by_user_id_users_id_fk",
-          "tableFrom": "lounge_slots",
-          "tableTo": "users",
-          "columnsFrom": [
-            "placed_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "lounge_slots_day_check": {
-          "name": "lounge_slots_day_check",
-          "value": "\"lounge_slots\".\"day\" between 1 and 14"
-        },
-        "lounge_slots_start_check": {
-          "name": "lounge_slots_start_check",
-          "value": "\"lounge_slots\".\"start_minute\" between 0 and 1439"
         }
       },
       "isRLSEnabled": false
@@ -8202,6 +7773,52 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.team_programs": {
+      "name": "team_programs",
+      "schema": "",
+      "columns": {
+        "team": {
+          "name": "team",
+          "type": "team",
+          "typeSchema": "public",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "team_programs_description_length": {
+          "name": "team_programs_description_length",
+          "value": "char_length(\"team_programs\".\"description\") <= 300"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.telegram_announcements": {

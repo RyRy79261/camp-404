@@ -12,8 +12,10 @@ export const PROGRAM_ICON_KEYS = [
   "calendar",
   "roster",
   "lineage",
+  "readme",
   "minutes",
   "power",
+  "inventory",
   "myforms",
   "keygen",
   "account",
@@ -36,6 +38,7 @@ export const PROGRAM_ICON_KEYS = [
   "cat",
   "lift",
   "lounge",
+  "tickets",
 ] as const;
 
 export const GLYPH_KEYS = [
@@ -100,6 +103,13 @@ const PATHS: Record<IconKey, ReactNode> = {
       <path d="M12 7v6M5 17v-4h14v4M12 13v4" />
     </>
   ),
+  readme: (
+    <>
+      <path d="M5 3h10l4 4v14H5z" />
+      <path d="M15 3v4h4" />
+      <path d="M8 11h8M8 14h8M8 17h5" />
+    </>
+  ),
   minutes: (
     <>
       <path d="M5 3h11v18H5z" />
@@ -120,6 +130,13 @@ const PATHS: Record<IconKey, ReactNode> = {
       <path d="M9 9l11-2" />
       <path d="M9 18a3 3 0 1 1-3-3h3" />
       <path d="M20 16a3 3 0 1 1-3-3h3" />
+    </>
+  ),
+  inventory: (
+    <>
+      <path d="M3 8l9-4 9 4v11l-9 4-9-4z" />
+      <path d="M3 8l9 4 9-4M12 12v11" />
+      <path d="M7.5 6l9 4" />
     </>
   ),
   myforms: (
@@ -255,6 +272,14 @@ const PATHS: Record<IconKey, ReactNode> = {
       <path d="M2 16v-4l3-5h11l4 5h2v4z" />
       <path d="M5 12h15M11 7v5" />
       <path d="M6 16a2 2 0 1 0 4 0M15 16a2 2 0 1 0 4 0" />
+    </>
+  ),
+  // A Burn ticket, notched at both sides, with its tear-off line.
+  tickets: (
+    <>
+      <path d="M3 6h18v4a2 2 0 0 0 0 4v4H3v-4a2 2 0 0 0 0-4z" />
+      <path d="M15 6v2M15 11v2M15 16v2" />
+      <path d="M6 10h6M6 14h4" />
     </>
   ),
   today: (

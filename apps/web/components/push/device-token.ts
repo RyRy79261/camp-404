@@ -7,6 +7,9 @@ import { getMessagingIfSupported, VAPID_KEY } from "@/lib/firebase-client";
 
 export const PUSH_SW_PATH = "/firebase-messaging-sw.js";
 
+/** How long sign-out waits for the token cleanup before it goes anyway. */
+export const FORGET_TOKEN_TIMEOUT_MS = 2000;
+
 /**
  * Get this device's FCM token and store it for the signed-in member. True only
  * when the server stored it: a token the server never saw would read as
@@ -31,6 +34,9 @@ export async function registerDeviceToken(): Promise<boolean> {
 
 /**
  * Remove this device's token from the member's account and from Firebase.
+ * Called once, by /auth/sign-out (SignOutView), which every way of signing out
+ * passes through. A second call in the same sign-out would do harm: after
+ * `deleteToken`, `getToken` mints a fresh token.
  * Does nothing on a device that never turned notifications on: it does not ask
  * for permission and does not register a service worker. Never throws.
  */

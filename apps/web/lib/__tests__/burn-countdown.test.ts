@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { burnCountdownLabel } from "../burn-countdown";
+import { burnCountdownLabel, burnDatesLabel } from "../burn-countdown";
 
 // Camp days are Johannesburg days (UTC+2 all year): 22:30Z on the 25th is
 // already the 26th at camp.
@@ -37,5 +37,21 @@ describe("burnCountdownLabel", () => {
     expect(
       burnCountdownLabel(new Date(), { start: "soon", end: "2027-05-02" }),
     ).toBe(null);
+  });
+});
+
+describe("burnDatesLabel", () => {
+  it("names both days, with the year once when they share it", () => {
+    expect(burnDatesLabel(BURN)).toBe("26 April – 2 May 2027");
+  });
+
+  it("gives each day its year when the Burn crosses one", () => {
+    expect(burnDatesLabel({ start: "2027-12-30", end: "2028-01-02" })).toBe(
+      "30 December 2027 – 2 January 2028",
+    );
+  });
+
+  it("says nothing for a date that does not parse", () => {
+    expect(burnDatesLabel({ start: "someday", end: "2027-05-02" })).toBeNull();
   });
 });

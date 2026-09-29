@@ -25,7 +25,7 @@ vi.mock("@/lib/bootstrap", () => ({
   isCampBootstrapped: vi.fn(async () => false),
   mayFoundCamp: vi.fn(() => false),
   FOUNDER_CODE: "meowzit",
-  SETUP_REFUSED_MESSAGE: "Only the founding address can set up.",
+  setupRefusedMessage: () => "Only the founding address can set up.",
 }));
 vi.mock("@camp404/auth", () => ({ canDeliverAuthEmail: vi.fn(() => true) }));
 vi.mock("./actions", () => ({ completeSetupAction: vi.fn() }));

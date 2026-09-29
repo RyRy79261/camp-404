@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The payments ledger's writes: captain-only, amounts typed the way a
-// captain types them, and a stale status change is told, not applied.
+// The payments ledger's writes: for captains and Finance leads only, amounts
+// typed the way a captain types them, and a stale status change is told, not
+// applied.
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/captain-gate", () => ({ captainActionGate: vi.fn() }));
-vi.mock("@/lib/users", () => ({ findCampUserById: vi.fn() }));
+vi.mock("@/lib/users", () => ({
+  findCampUserById: vi.fn(),
+  getLeadTeams: vi.fn(async () => []),
+}));
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/payments", () => ({
   recordPayment: vi.fn(async () => ({
     id: "p1",
@@ -16,7 +21,8 @@ vi.mock("@/lib/payments", () => ({
 
 import { revalidatePath } from "next/cache";
 import { captainActionGate } from "@/lib/captain-gate";
-import { findCampUserById } from "@/lib/users";
+import { MoneyRefused, NOT_A_MONEY_KEEPER } from "@camp404/db/dues";
+import { findCampUserById, getLeadTeams } from "@/lib/users";
 import { recordPayment, setPaymentStatus } from "@/lib/payments";
 import { recordPaymentAction, setPaymentStatusAction } from "./actions";
 
@@ -110,17 +116,51 @@ describe("recordPaymentAction", () => {
     expect(recordPayment).not.toHaveBeenCalled();
   });
 
-  it("refuses anyone the captain gate refuses", async () => {
+  it("refuses anyone the rank gate refuses", async () => {
     vi.mocked(captainActionGate).mockResolvedValue({
       ok: false,
-      error: "Captain access only.",
+      error: "Payments are for captains and Finance leads.",
     });
     expect(await recordPaymentAction(VALID)).toEqual({
       ok: false,
-      error: "Captain access only.",
+      error: "Payments are for captains and Finance leads.",
     });
-    expect(captainActionGate).toHaveBeenCalledWith("captain");
+    expect(captainActionGate).toHaveBeenCalledWith(
+      "team_lead",
+      "Payments are for captains and Finance leads.",
+    );
     expect(recordPayment).not.toHaveBeenCalled();
+  });
+
+  it("lets a Finance lead record, and turns away a lead of another team", async () => {
+    vi.mocked(captainActionGate).mockResolvedValue({
+      ok: true,
+      campUser: { id: "lead-1" },
+      rank: "team_lead",
+    } as never);
+    vi.mocked(getLeadTeams).mockResolvedValue(["finance"]);
+    expect((await recordPaymentAction(VALID)).ok).toBe(true);
+    expect(recordPayment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ recordedByUserId: "lead-1" }),
+    );
+
+    vi.mocked(recordPayment).mockClear();
+    vi.mocked(getLeadTeams).mockResolvedValue(["kitchen"]);
+    expect(await recordPaymentAction(VALID)).toEqual({
+      ok: false,
+      error: "Payments are for captains and Finance leads.",
+    });
+    expect(recordPayment).not.toHaveBeenCalled();
+  });
+
+  it("says the write's own refusal when the lead stepped down meanwhile", async () => {
+    vi.mocked(recordPayment).mockRejectedValueOnce(
+      new MoneyRefused(NOT_A_MONEY_KEEPER),
+    );
+    expect(await recordPaymentAction(VALID)).toEqual({
+      ok: false,
+      error: NOT_A_MONEY_KEEPER,
+    });
   });
 });
 
@@ -141,7 +181,7 @@ describe("setPaymentStatusAction", () => {
     });
   });
 
-  it("tells the captain when another captain got there first", async () => {
+  it("tells the captain when someone else got there first", async () => {
     vi.mocked(setPaymentStatus).mockResolvedValue(false);
     expect(
       await setPaymentStatusAction({
@@ -152,7 +192,7 @@ describe("setPaymentStatusAction", () => {
     ).toEqual({
       ok: false,
       error:
-        "Another captain already changed this payment. The list is up to date now.",
+        "Someone else already changed this payment. The list is up to date now.",
     });
     expect(revalidatePath).toHaveBeenCalledWith("/captains/payments");
   });

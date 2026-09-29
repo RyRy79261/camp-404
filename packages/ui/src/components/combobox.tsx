@@ -95,9 +95,9 @@ export function Combobox({
                     }}
                   >
                     {/* Fixed-width slot so the row text doesn't shift
-                      * when the selection changes. Conditional render
-                      * (rather than opacity-toggling) avoids the
-                      * Tailwind v4 shared-package class-scanner quirk. */}
+                     * when the selection changes. Conditional render
+                     * (rather than opacity-toggling) avoids the
+                     * Tailwind v4 shared-package class-scanner quirk. */}
                     <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
                       {isSelected && <Check />}
                     </span>

@@ -2,6 +2,7 @@ import "server-only";
 
 import { sanitiseAccount, type SanitiseResult } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "./avatar-blob";
+import { deletePaymentProofBlobs } from "./payment-proof";
 import { isE2ETestMode, usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -41,6 +42,13 @@ export async function deleteAccount(input: {
     await deleteAvatarBlobs(input.authUserId);
   } catch (err) {
     console.error("avatar-cleanup error (account erasure)", err);
+  }
+  // Proof-of-payment files are filed under the camp id (#240), and the row
+  // that pointed at each one is already cleared.
+  try {
+    await deletePaymentProofBlobs(input.userId);
+  } catch (err) {
+    console.error("payment-proof cleanup error (account erasure)", err);
   }
   return result;
 }

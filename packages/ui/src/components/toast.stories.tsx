@@ -15,7 +15,9 @@ type Story = StoryObj<typeof meta>;
 export const Playground: Story = {
   render: () => (
     <div className="flex flex-wrap gap-2 p-8">
-      <Button onClick={() => toast("Heads up", { description: "A neutral note." })}>
+      <Button
+        onClick={() => toast("Heads up", { description: "A neutral note." })}
+      >
         Info
       </Button>
       <Button

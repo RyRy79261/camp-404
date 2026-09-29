@@ -871,6 +871,7 @@ export function LoadEditorDialog({
               label="Circuit (optional)"
               htmlFor={id("circuit")}
               error={errors.circuit}
+              help="A label of your own. Where it plugs in is set on the grid plan."
             >
               <Input
                 id={id("circuit")}

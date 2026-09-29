@@ -15,12 +15,14 @@ vi.mock("@/lib/test-mode", () => ({
   TEST_USER_COOKIE: "camp404_test_user",
 }));
 vi.mock("@/lib/test-store", () => ({ testStore: { reset: vi.fn() } }));
+vi.mock("@/lib/test-store-inventory", () => ({ resetInventoryStore: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({ resetRateLimitsForE2E: vi.fn() }));
 
 import { POST } from "./route";
 import { isE2ETestMode, usesTestStore } from "@/lib/test-mode";
 import { resetRateLimitsForE2E } from "@/lib/rate-limit";
 import { resetDatabaseForE2E } from "@camp404/db/e2e";
+import { resetInventoryStore } from "@/lib/test-store-inventory";
 
 describe("POST /api/test/reset", () => {
   beforeEach(() => {
@@ -33,6 +35,8 @@ describe("POST /api/test/reset", () => {
     const res = await POST();
     expect(res.status).toBe(200);
     expect(resetRateLimitsForE2E).toHaveBeenCalledOnce();
+    // The inventory's twin keeps its own rows and is emptied too.
+    expect(resetInventoryStore).toHaveBeenCalledOnce();
   });
 
   it("refills the rate-limit buckets in the real-database run", async () => {

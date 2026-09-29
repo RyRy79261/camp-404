@@ -26,6 +26,12 @@ export interface AudienceData {
   driverUserIds: string[];
   /** broadcast_targets user ids (only used for scope = 'individual'). */
   targetUserIds: string[];
+  /**
+   * The riders of the sender's own car this year, read by the caller only
+   * while the sender is driving (only used for scope = 'car'). Absent or
+   * empty reaches nobody.
+   */
+  carRiderUserIds?: string[];
 }
 
 /**
@@ -73,6 +79,9 @@ export function computeAudience(
       break;
     case "individual":
       ids = data.targetUserIds;
+      break;
+    case "car":
+      ids = data.carRiderUserIds ?? [];
       break;
     default: {
       // Exhaustiveness guard: a new BroadcastScope without a case here is a

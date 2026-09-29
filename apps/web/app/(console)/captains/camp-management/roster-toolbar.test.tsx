@@ -95,12 +95,12 @@ describe("RosterToolbar — This year", () => {
     }) as HTMLSelectElement;
     expect([...select.options].map((o) => o.text)).toEqual([
       "Any",
-      "Coming",
-      "Maybe",
+      "Coming, not decided",
+      "Maybe, not decided",
       "Accepted",
       "Waiting list",
       "Not coming",
-      "Not answered",
+      "No answer yet",
     ]);
     fireEvent.change(select, { target: { value: "maybe" } });
     expect(onChange).toHaveBeenCalledWith("maybe");

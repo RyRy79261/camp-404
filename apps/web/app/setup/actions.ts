@@ -7,7 +7,7 @@ import {
   isCampBootstrapped,
   mayFoundCamp,
   runFirstTimeSetup,
-  SETUP_REFUSED_MESSAGE,
+  setupRefusedMessage,
   type SetupResult,
 } from "@/lib/bootstrap";
 
@@ -39,7 +39,7 @@ export async function completeSetupAction(): Promise<SetupResult> {
     // Sign-up is open: with GOD_EMAILS set, only a verified founding address
     // may take the captaincy, so a stranger cannot race the founder.
     if (!mayFoundCamp(user)) {
-      return { ok: false, error: SETUP_REFUSED_MESSAGE };
+      return { ok: false, error: setupRefusedMessage() };
     }
     const result = await runFirstTimeSetup(user);
     // The founder is a captain now: their console redraws from a fresh

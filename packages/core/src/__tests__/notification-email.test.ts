@@ -29,6 +29,8 @@ describe("shouldEmailNotification", () => {
     }
     expect(shouldEmailNotification("team_message", "acknowledge")).toBe(false);
     expect(shouldEmailNotification("lead_directive", "popup")).toBe(false);
+    // A driver's word to their riders is car chatter: the app and push only.
+    expect(shouldEmailNotification("car_message", "feed")).toBe(false);
   });
 
   it("has an answer for every kind", () => {

@@ -181,7 +181,7 @@ describe("parity on the edges of the payload", () => {
     ["a non-object", "nope"],
     ["an array", ["nope"]],
     ["null", null],
-    ["a value no response can hold", { email: { a: 1 } }],
+    ["a value no response can hold", { email: { a: true } }],
   ])("refuses %s whole, the same way", (_name, raw) => {
     expect(validateSubmission(UNIFIED, raw)).toStrictEqual(
       validateBuilderResponses(BUILDER, raw),

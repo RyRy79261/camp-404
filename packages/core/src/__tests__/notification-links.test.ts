@@ -23,6 +23,10 @@ describe("notificationLink", () => {
     expect(notificationLink("task", ACTIVATION)).toBe("/tasks");
   });
 
+  it("opens home for a required action reminder", () => {
+    expect(notificationLink("required_action", ACTIVATION)).toBe("/");
+  });
+
   it("falls back to the inbox for anything it cannot open", () => {
     for (const [type, id] of [
       ["announcement", "not-a-uuid"],
@@ -33,6 +37,8 @@ describe("notificationLink", () => {
       ["something_new", ACTIVATION],
       ["task", null],
       ["task", "not-a-uuid"],
+      ["required_action", null],
+      ["required_action", "not-a-uuid"],
     ] as const) {
       expect(notificationLink(type, id)).toBe(NOTIFICATION_FALLBACK_LINK);
     }

@@ -173,7 +173,7 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .where(eq(schema.requiredActions.userId, userId));
     // Deliberately NOT year-scoped, unlike every read of these tables:
     // erasure is erasure, so every year's memberships, attendance answers
-    // (with the captains' decisions on them), seats and driver profiles go.
+    // (with the captains' decisions on them), tickets, seats and driver profiles go.
     // (driver_profiles above cascades to this user's car seats.)
     await tx
       .delete(schema.teamMemberships)
@@ -181,6 +181,9 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.campParticipations)
       .where(eq(schema.campParticipations.userId, userId));
+    await tx
+      .delete(schema.campTickets)
+      .where(eq(schema.campTickets.userId, userId));
     // car_members is a join table — remove the user whether they were the
     // driver or a passenger.
     await tx
@@ -191,6 +194,20 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
           eq(schema.carMembers.memberUserId, userId),
         ),
       );
+    // Transport (#270): their lift requests go; a request that named their
+    // car becomes "any car", since its rider still needs a lift; a trailer
+    // they towed stays the camp's, with no car.
+    await tx
+      .delete(schema.liftRequests)
+      .where(eq(schema.liftRequests.userId, userId));
+    await tx
+      .update(schema.liftRequests)
+      .set({ driverUserId: null })
+      .where(eq(schema.liftRequests.driverUserId, userId));
+    await tx
+      .update(schema.transportTrailers)
+      .set({ towedByUserId: null })
+      .where(eq(schema.transportTrailers.towedByUserId, userId));
     await tx
       .delete(schema.workshopRsvps)
       .where(eq(schema.workshopRsvps.userId, userId));
@@ -198,6 +215,14 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.loungeOffers)
       .where(eq(schema.loungeOffers.hostId, userId));
+    // Gear the member booked or pledged to bring (#246) names them, so it
+    // goes. Items kept at their home keep pointing at the tombstone row.
+    await tx
+      .delete(schema.inventoryBookings)
+      .where(eq(schema.inventoryBookings.userId, userId));
+    await tx
+      .delete(schema.inventoryPledges)
+      .where(eq(schema.inventoryPledges.userId, userId));
     // Captains' notes ABOUT the member are about the person, so they go.
     // Notes the member wrote about others stay; their author link is kept to
     // the tombstone row.
@@ -230,10 +255,21 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
 
     // The dues ledger stays for accounting, like reimbursements below, but the
     // captain's free-text note may name the person, so it goes.
+    // Their proof-of-payment files go too (the web app deletes the files
+    // themselves after the erasure commits), and the words the Finance team
+    // wrote about them: a concession's reason, a refund's note and reason.
     await tx
       .update(schema.payments)
-      .set({ note: null })
+      .set({ note: null, proofPathname: null, proofContentType: null })
       .where(eq(schema.payments.userId, userId));
+    await tx
+      .update(schema.duesCharges)
+      .set({ concessionReason: null })
+      .where(eq(schema.duesCharges.userId, userId));
+    await tx
+      .update(schema.paymentRefunds)
+      .set({ note: null, declineReason: null })
+      .where(eq(schema.paymentRefunds.userId, userId));
 
     // Scrub encrypted bank details (NOT NULL → empty string, not null) while
     // keeping the reimbursement record for accounting.

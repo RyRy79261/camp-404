@@ -175,6 +175,35 @@ long, today the My forms change log; readers fall back to the prompt
 - Email/phone/number/long-text-dictation editors are **undrawn — build
   functionally** with existing components.
 
+### 3.2 Rating grid, star ratings and "team leads only" (#251, 2026-09-28)
+
+- **Rating grid** (`rating_grid`, palette "Rating grid"): statements (`rows`,
+  `{ id, label }`) rated on one shared scale (`scale`, 2 to 10 point labels,
+  lowest first), with an optional N/A column (`allowNa`, `naLabel`). The
+  answer is `{ [rowId]: position | "na" }`: the chosen point's 1-based place in
+  `scale`, so results can average it. `required` means every row is answered
+  (N/A counts).
+- **Star ratings** (palette "Star ratings") is the same kind with
+  `display: "stars"`: a row of stars per item, 3 to 10 stars, the labels
+  ("4 stars") read out by a screen reader. The single-question `rating` kind
+  stays for one star rating.
+- **Fill from meal plan**: the builder's button fills a rating grid's rows with
+  one row per meal this year's meal plan serves (`meal_d3_dinner`, "Day 3
+  dinner (Tue 28 Apr)"). Filling again keeps the ids. The meal plan holds plate
+  counts, not recipes, so results are per meal, not per recipe.
+- **Accessibility**: each row is a `<fieldset>` of native radio inputs named by
+  its statement, so arrow keys move along a row and Tab moves between rows;
+  the pill or star shows the focus ring.
+- **Results**: per row, the average, how many rated it and how many said N/A.
+  The CSV spreads a rating grid over one column per row (`Prompt: Row`).
+- **Team leads only** (`leadsOnly` on a question or a section): shown only to a
+  team lead of any team or a captain. The server removes them from a member's
+  copy before the runner renders it (`questionnaireForViewer`) and refuses a
+  save that answers one. Turning it on or off is a breaking change.
+- **Templates**: "Or start from a template" on New questionnaire copies the
+  post-burn survey (`postBurnSurveyTemplate` in @camp404/core) into an
+  ordinary draft with fresh ids. Nothing is seeded, published or sent by it.
+
 ### Content blocks (`ContentBlock` union — display-only, never captured)
 
 | Block | kind | Params |
@@ -435,6 +464,7 @@ metrics are out of scope — they store in bespoke tables). Routes under §4.
 | single_select, multi_select, combobox, boolean, slider-segmented, number | histogram (value counts) |
 | slider-continuous | numeric summary (min/max/avg/median) |
 | short_text, long_text, email, phone, image, date | **response count only** (no value breakdown — PII) |
+| rating_grid | per row: average, rated count, N/A count (no names) |
 
 ### 7.3 Responses surface (the "collect" payoff — was missing)
 

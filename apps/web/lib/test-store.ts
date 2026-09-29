@@ -7,6 +7,8 @@ import {
   approvalNotification,
   canEditPower,
   canRunLounge,
+  canEditTeamProgram,
+  DEFAULT_TICKET,
   captainPromotionNotification,
   FOUNDER_CODE,
   formatMemberRefCode,
@@ -20,7 +22,6 @@ import {
   notificationLink,
   type NotificationPayload,
   paymentReference,
-  paymentSettlesDues,
   sumMinor,
   UnknownCurrencyError,
   type PaymentStatus,
@@ -28,6 +29,12 @@ import {
   sortPinned,
   canApproveRecipe,
   canRunProofread,
+  canEditTransport,
+  canManageCar,
+  canRemoveRider,
+  canSendToAudience,
+  carMessageNotification,
+  vehicleLabel,
   mealPlanPeaks,
   sameSections,
   sourceFromText,
@@ -50,14 +57,58 @@ import {
   type AnnouncementPinContext,
   type PinnedAnnouncement,
   type PinResult,
+  TEAM_ANNOUNCEMENT_LIMIT,
+  type TeamAnnouncement,
 } from "@camp404/db/broadcasts";
+import {
+  NOT_A_TEAM_EDITOR,
+  TEAM_PROGRAM_CHANGED,
+  type TeamProgram,
+  type TeamProgramWriteResult,
+} from "@camp404/db/team-programs";
 import type {
   CampManagementMember,
   CampMemberDetail,
   CampMemberDetailOptions,
 } from "@camp404/db/roster";
 import type { PaymentRow, RecordPaymentInput } from "@camp404/db/payments";
+import { MoneyRefused, NOT_A_MONEY_KEEPER } from "@camp404/db/dues";
+import type { PaymentMethod, PaymentSource } from "@camp404/types";
+import {
+  chargeFeeOnAccept,
+  duesSettledInStore,
+  isMoneyKeeperInStore,
+  refundStatusOf,
+  resetDuesStore,
+} from "./test-store-dues";
 import type { MyLift } from "@camp404/db/cars";
+import {
+  ALREADY_SEATED,
+  ALREADY_TOWING,
+  CANNOT_TOW,
+  CAR_EMPTY,
+  CAR_FULL,
+  CAR_MESSAGE_REFUSED,
+  IS_DRIVING,
+  NOT_A_MEMBER as TRANSPORT_NOT_A_MEMBER,
+  NOT_A_TRANSPORT_EDITOR,
+  NOT_DRIVING,
+  NOT_IN_CAR,
+  NOT_YOUR_CAR,
+  OWN_CAR,
+  REQUEST_GONE,
+  SEATS_BELOW_RIDERS,
+  TRAILER_CHANGED,
+  TRAILER_GONE,
+  YOU_ARE_DRIVING,
+  YOU_HAVE_A_SEAT,
+  type LiftRequestRow,
+  type TrailerRow,
+  type TransportBoard,
+  type TransportCar,
+  type TransportResult,
+  type UnseatedMember,
+} from "@camp404/db/transport";
 import {
   ALREADY_A_TASK,
   ASSIGNEE_NOT_A_MEMBER,
@@ -77,6 +128,7 @@ import type {
   ParticipationIntentResult,
   ParticipationRow,
 } from "@camp404/db/participations";
+import type { TicketPassChange, TicketRow } from "@camp404/db/tickets";
 import {
   CANNOT_EDIT,
   CANNOT_MOVE,
@@ -138,6 +190,12 @@ import {
   type LoungeWriteResult,
   type PlaceLoungeOfferArgs,
 } from "@camp404/db/lounge";
+import {
+  emptyPowerSite,
+  powerSiteTwins,
+  type PowerSiteDeps,
+  type TestPowerSite,
+} from "./test-store-power-site";
 import {
   ANSWER_NEEDED,
   ANSWER_TOO_LONG,
@@ -264,6 +322,7 @@ import {
   type EditLoadInput,
   type GeneratorInput,
   type LoadInput,
+  type MembershipTier,
   Team as TeamKeys,
 } from "@camp404/types";
 import {
@@ -318,6 +377,8 @@ interface TestUser {
   approvalDecidedByUserId: string | null;
   approvalDecidedAt: Date | null;
   approvalDecisionReason: string | null;
+  /** How long they stay; null (not set) unless a captain set it. */
+  membershipTier: MembershipTier | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -500,6 +561,11 @@ interface TestPayment {
   status: PaymentStatus;
   note: string | null;
   recordedByUserId: string | null;
+  source: PaymentSource;
+  method: PaymentMethod | null;
+  paidOn: string | null;
+  proofPathname: string | null;
+  proofContentType: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -625,6 +691,9 @@ interface TestRecipeEvent {
 /** One member's answer for one year (mirrors `camp_participations`). */
 type TestParticipation = ParticipationRow;
 
+/** One member's ticket record for one year (mirrors `camp_tickets`). */
+type TestTicket = TicketRow;
+
 interface TestStoreState {
   usersByAuthId: Map<string, TestUser>;
   profilesByUserId: Map<string, TestBurnerProfile>;
@@ -648,6 +717,8 @@ interface TestStoreState {
   memberRefCodes: Map<string, string>;
   /** `camp_participations`, keyed `${userId}:${cycle}` like its primary key. */
   participations: Map<string, TestParticipation>;
+  /** `camp_tickets`, keyed `${userId}:${cycle}` like its primary key. */
+  tickets: Map<string, TestTicket>;
   /** Power and fuel (#253, #254): the twins of their tables. */
   powerLoads: PowerLoadRow[];
   /** `power_plans`, keyed by year like the table's primary key. */
@@ -659,6 +730,8 @@ interface TestStoreState {
   loungeOffers: TestLoungeOffer[];
   loungeSlots: (LoungeSlotRow & { cycle: number })[];
   loungeSettings: Map<number, { musicPolicy: string | null; version: number }>;
+  /** Power on site (#255–#257): cans, the log, the grid, readiness, sharing. */
+  powerSite: TestPowerSite;
   recipes: TestRecipe[];
   recipeRuns: TestRecipeRun[];
   recipeSources: TestRecipeSource[];
@@ -683,10 +756,18 @@ interface TestStoreState {
   driverProfiles: TestDriverProfile[];
   /** `car_members`: who rides in whose car, per year. */
   carMembers: TestCarMember[];
+  /** `transport_trailers`: the camp's trailers, per year. */
+  transportTrailers: TestTrailer[];
+  /** `lift_requests`: who asked for a lift, per year. */
+  liftRequests: TestLiftRequest[];
+  /** `broadcasts` of kind `car_message`: the sender, for the inbox's name. */
+  carMessages: { id: string; senderId: string }[];
   /** `desktop_layouts`: each member's saved desktop, by user id. */
   desktopLayouts: Map<string, unknown>;
   /** `desktop_layouts.preferences`: the stored value, by user id. */
   desktopPreferences: Map<string, Record<string, unknown>>;
+  /** `team_programs`: a team's description, by team key. */
+  teamPrograms: Map<string, TeamProgram>;
   /** `inkblot_scores`: every run put on the board, in the order played. */
   inkblotRuns: (InkblotBoardEntry & { userId: string })[];
 }
@@ -705,6 +786,25 @@ export interface TestDriverProfile {
   departureCity: string | null;
   arrivalAt: Date | null;
   departureAt: Date | null;
+  canTow: boolean;
+}
+
+/** A `transport_trailers` row. */
+interface TestTrailer {
+  id: string;
+  cycle: number;
+  name: string;
+  notes: string | null;
+  towedByUserId: string | null;
+  version: number;
+}
+
+/** A `lift_requests` row. */
+interface TestLiftRequest {
+  userId: string;
+  cycle: number;
+  driverUserId: string | null;
+  createdAt: Date;
 }
 
 /** A `car_members` row: one rider in one driver's car for one year. */
@@ -756,6 +856,7 @@ function globalState(): TestStoreState {
       payments: [] as TestPayment[],
       memberRefCodes: new Map<string, string>(),
       participations: new Map<string, TestParticipation>(),
+      tickets: new Map<string, TestTicket>(),
       powerLoads: [] as PowerLoadRow[],
       powerPlans: new Map<number, PowerPlan>(),
       generators: [] as GeneratorRow[],
@@ -763,6 +864,7 @@ function globalState(): TestStoreState {
       loungeOffers: [] as TestLoungeOffer[],
       loungeSlots: [] as (LoungeSlotRow & { cycle: number })[],
       loungeSettings: new Map(),
+      powerSite: emptyPowerSite(),
       recipes: [] as TestRecipe[],
       recipeRuns: [] as TestRecipeRun[],
       recipeSources: [] as TestRecipeSource[],
@@ -778,8 +880,12 @@ function globalState(): TestStoreState {
       campBlurbs: new Map<string, TestCampBlurb>(),
       driverProfiles: [] as TestDriverProfile[],
       carMembers: [] as TestCarMember[],
+      transportTrailers: [] as TestTrailer[],
+      liftRequests: [] as TestLiftRequest[],
+      carMessages: [],
       desktopLayouts: new Map<string, unknown>(),
       desktopPreferences: new Map<string, Record<string, unknown>>(),
+      teamPrograms: new Map<string, TeamProgram>(),
       inkblotRuns: [],
     } satisfies TestStoreState;
   }
@@ -838,12 +944,15 @@ S.participations ??= new Map<string, TestParticipation>();
 const participations = S.participations;
 const participationKey = (userId: string, cycle: number) =>
   `${userId}:${cycle}`;
+S.tickets ??= new Map<string, TestTicket>();
+const tickets = S.tickets;
 const payments = S.payments;
 const memberRefCodes = S.memberRefCodes;
 S.powerLoads ??= [];
 S.powerPlans ??= new Map<number, PowerPlan>();
 S.generators ??= [];
 S.powerInventory ??= [];
+S.powerSite ??= emptyPowerSite();
 const powerLoads = S.powerLoads;
 const powerPlans = S.powerPlans;
 const generators = S.generators;
@@ -878,6 +987,12 @@ S.driverProfiles ??= [];
 S.carMembers ??= [];
 const driverProfiles = S.driverProfiles;
 const carMembers = S.carMembers;
+S.transportTrailers ??= [];
+S.liftRequests ??= [];
+S.carMessages ??= [];
+const transportTrailers = S.transportTrailers;
+const liftRequests = S.liftRequests;
+const carMessages = S.carMessages;
 
 /**
  * The camp's current year, resolved the way `currentCycleNumber()` resolves it
@@ -963,6 +1078,107 @@ function loungeOfferFields(input: AddLoungeOfferArgs) {
 function isPowerEditor(userId: string): boolean {
   const reach = testStore.senderReach(userId);
   return canEditPower(reachRank(reach), reach ?? []);
+}
+
+// --- Transport helpers (the twin of @camp404/db/transport's) ----------------
+
+/** The actor's rung, led teams and the year, as the db module's lockActor. */
+function transportActor(actorId: string) {
+  const reach = testStore.senderReach(actorId);
+  return {
+    rank: reachRank(reach),
+    ledTeams: reach ?? [],
+    cycle: currentCycleNumber(),
+  };
+}
+
+function transportDriving(userId: string, cycle: number): boolean {
+  return driverProfiles.some(
+    (d) => d.userId === userId && d.cycle === cycle && d.intendsToDrive,
+  );
+}
+
+/** A seat this year in a car whose driver still drives. */
+function transportSeat(userId: string, cycle: number): boolean {
+  return carMembers.some(
+    (c) =>
+      c.memberUserId === userId &&
+      c.cycle === cycle &&
+      transportDriving(c.driverUserId, cycle),
+  );
+}
+
+function transportRiders(driverUserId: string, cycle: number): number {
+  return carMembers.filter(
+    (c) => c.driverUserId === driverUserId && c.cycle === cycle,
+  ).length;
+}
+
+/** The db module's seat(): every check, then the seat, then the request spent. */
+function transportSeatIn(input: {
+  driverUserId: string;
+  memberUserId: string;
+  cycle: number;
+}): TransportResult {
+  const { driverUserId, memberUserId, cycle } = input;
+  if (driverUserId === memberUserId) return { ok: false, error: OWN_CAR };
+  const car = driverProfiles.find(
+    (d) => d.userId === driverUserId && d.cycle === cycle && d.intendsToDrive,
+  );
+  if (!car) return { ok: false, error: NOT_DRIVING };
+  if (findUserById(memberUserId)?.approvalStatus !== "approved") {
+    return { ok: false, error: TRANSPORT_NOT_A_MEMBER };
+  }
+  if (transportDriving(memberUserId, cycle)) {
+    return { ok: false, error: IS_DRIVING };
+  }
+  // As the db: a seat in a car whose driver stopped driving is dropped, and
+  // only a seat in a car that still drives refuses.
+  for (let i = carMembers.length - 1; i >= 0; i--) {
+    const c = carMembers[i]!;
+    if (
+      c.memberUserId === memberUserId &&
+      c.cycle === cycle &&
+      !transportDriving(c.driverUserId, cycle)
+    ) {
+      carMembers.splice(i, 1);
+    }
+  }
+  if (
+    carMembers.some((c) => c.memberUserId === memberUserId && c.cycle === cycle)
+  ) {
+    return { ok: false, error: ALREADY_SEATED };
+  }
+  if (
+    car.seatsOffered !== null &&
+    transportRiders(driverUserId, cycle) >= car.seatsOffered
+  ) {
+    return { ok: false, error: CAR_FULL };
+  }
+  carMembers.push({ driverUserId, memberUserId, cycle, createdAt: new Date() });
+  const idx = liftRequests.findIndex(
+    (r) => r.userId === memberUserId && r.cycle === cycle,
+  );
+  if (idx !== -1) liftRequests.splice(idx, 1);
+  return { ok: true };
+}
+
+/** A transport editor's version-checked claim on this year's trailer. */
+function transportTrailerClaim(input: {
+  actorId: string;
+  trailerId: string;
+  expectedVersion: number;
+}): TestTrailer | string {
+  const actor = transportActor(input.actorId);
+  if (!canEditTransport(actor.rank, actor.ledTeams)) {
+    return NOT_A_TRANSPORT_EDITOR;
+  }
+  const row = transportTrailers.find(
+    (t) => t.id === input.trailerId && t.cycle === actor.cycle,
+  );
+  if (!row) return TRAILER_GONE;
+  if (row.version !== input.expectedVersion) return TRAILER_CHANGED;
+  return row;
 }
 
 /** The store's twin of the db module's write(): a refusal is a sentence. */
@@ -1428,6 +1644,7 @@ export const testStore = {
       approvalDecidedByUserId: null,
       approvalDecidedAt: null,
       approvalDecisionReason: null,
+      membershipTier: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -2146,7 +2363,9 @@ export const testStore = {
     const hasMore = sorted.length > start + limit;
     return {
       items: page.map((d) => {
-        const b = broadcasts.find((x) => x.id === d.broadcastId);
+        const b =
+          broadcasts.find((x) => x.id === d.broadcastId) ??
+          carMessages.find((x) => x.id === d.broadcastId);
         return {
           id: d.id,
           title: d.title,
@@ -2231,6 +2450,68 @@ export const testStore = {
       acknowledgedAt: d.acknowledgedAt,
     };
   },
+  /**
+   * Twin of `listTeamAnnouncements` in @camp404/db/broadcasts: what a team has
+   * sent, newest first. The store publishes and fans out in one step, so a
+   * published row is one that went out; a draft never is.
+   */
+  listTeamAnnouncements(
+    team: Team,
+    limit: number = TEAM_ANNOUNCEMENT_LIMIT,
+  ): { items: TeamAnnouncement[]; more: boolean } {
+    const sent = broadcasts
+      .filter(
+        (b): b is TestBroadcast & { publishedAt: Date } =>
+          b.publishedAt !== null &&
+          b.audience.scope === "team" &&
+          b.audience.team === team,
+      )
+      .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    return {
+      items: sent.slice(0, limit).map((b) => ({
+        id: b.id,
+        title: b.title,
+        body: b.body,
+        senderName: userName(b.senderId),
+        sentAt: b.publishedAt,
+      })),
+      more: sent.length > limit,
+    };
+  },
+
+  // --- Team programs (the twin of @camp404/db/team-programs) --------------
+
+  getTeamProgram(team: Team): TeamProgram {
+    const row = S.teamPrograms.get(team);
+    return row
+      ? structuredClone(row)
+      : { team, description: "", version: 0, updatedAt: null };
+  },
+  saveTeamProgram(input: {
+    actorId: string;
+    team: Team;
+    description: string;
+    expectedVersion: number;
+  }): TeamProgramWriteResult {
+    // Like the real write, the store reads the actor's reach itself.
+    const reach = testStore.senderReach(input.actorId);
+    if (!canEditTeamProgram(reachRank(reach), reach ?? [], input.team)) {
+      return { ok: false, error: NOT_A_TEAM_EDITOR };
+    }
+    const current = S.teamPrograms.get(input.team);
+    if ((current?.version ?? 0) !== input.expectedVersion) {
+      return { ok: false, error: TEAM_PROGRAM_CHANGED };
+    }
+    const version = input.expectedVersion + 1;
+    S.teamPrograms.set(input.team, {
+      team: input.team,
+      description: input.description,
+      version,
+      updatedAt: new Date(),
+    });
+    return { ok: true, version };
+  },
+
   markRead(userId: string, ids: string[]): void {
     if (ids.length === 0) return;
     const now = new Date();
@@ -2583,6 +2864,27 @@ export const testStore = {
     row.decidedAt = now;
     row.reason = null;
     row.updatedAt = now;
+    // The fee they pledged is charged with the place (#240).
+    if (input.to === "accepted") {
+      chargeFeeOnAccept(input.userId, row.cycle, input.decidedByUserId);
+    }
+    return true;
+  },
+
+  /**
+   * A captain sets how long a member stays (@camp404/db/roster's
+   * setMembershipTier twin): the same compare-and-set on the value the captain
+   * saw, without the audit row.
+   */
+  setMembershipTier(input: {
+    userId: string;
+    from: MembershipTier | null;
+    to: MembershipTier;
+  }): boolean {
+    const user = findUserById(input.userId);
+    if (!user || user.membershipTier !== input.from) return false;
+    user.membershipTier = input.to;
+    user.updatedAt = new Date();
     return true;
   },
 
@@ -2617,6 +2919,87 @@ export const testStore = {
     return { ...row };
   },
 
+  // --- Tickets and WAP (mirrors @camp404/db/tickets) -------------
+
+  /** A member's ticket record for one year, or null when nothing is said. */
+  getTicket(userId: string, cycle: number): TestTicket | null {
+    const row = tickets.get(participationKey(userId, cycle));
+    return row ? { ...row } : null;
+  },
+
+  /** Every ticket record for one year. */
+  listTickets(cycle: number): TestTicket[] {
+    return Array.from(tickets.values())
+      .filter((t) => t.cycle === cycle)
+      .map((t) => ({ ...t }));
+  },
+
+  /** The member's own ticket status: an upsert, as production. */
+  setOwnTicketStatus(input: {
+    userId: string;
+    cycle: number;
+    ticketStatus: TestTicket["ticketStatus"];
+  }): void {
+    if (!findUserById(input.userId)) {
+      throw new Error(`No test user with id ${input.userId}`);
+    }
+    const now = new Date();
+    const key = participationKey(input.userId, input.cycle);
+    const row = tickets.get(key);
+    if (row) {
+      row.ticketStatus = input.ticketStatus;
+      row.updatedAt = now;
+      return;
+    }
+    tickets.set(key, {
+      ...DEFAULT_TICKET,
+      userId: input.userId,
+      cycle: input.cycle,
+      ticketStatus: input.ticketStatus,
+      passesUpdatedByUserId: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+
+  /**
+   * A captain's DDT or WAP change for THIS year: the same
+   * compare-and-set as production (a missing row stands at the defaults),
+   * without the audit row. A change to the value already there throws.
+   */
+  setTicketPass(
+    input: TicketPassChange & { userId: string; actorUserId: string },
+  ): boolean {
+    if (input.from === input.to) {
+      throw new Error(`setTicketPass: ${input.pass} is already ${input.to}`);
+    }
+    const key = participationKey(input.userId, currentCycleNumber());
+    const now = new Date();
+    const row: TestTicket = tickets.get(key) ?? {
+      ...DEFAULT_TICKET,
+      userId: input.userId,
+      cycle: currentCycleNumber(),
+      passesUpdatedByUserId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (input.pass === "ticket") {
+      if (row.ticketStatus !== input.from) return false;
+      row.ticketStatus = input.to;
+    } else if (input.pass === "ddt") {
+      if (row.ddt !== input.from) return false;
+      row.ddt = input.to;
+      row.passesUpdatedByUserId = input.actorUserId;
+    } else {
+      if (row.wap !== input.from) return false;
+      row.wap = input.to;
+      row.passesUpdatedByUserId = input.actorUserId;
+    }
+    row.updatedAt = now;
+    tickets.set(key, row);
+    return true;
+  },
+
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).
   // The test store models users, burner profiles, team memberships, the
   // payments ledger and the required_actions twin, but not driver profiles, so
@@ -2632,10 +3015,18 @@ export const testStore = {
   ): CampManagementMember[] {
     const cycle = currentCycleNumber();
     const thisYear = teamMemberships.filter((m) => m.cycle === cycle);
+    // The dues rule (#240): with charges, a balance paid down; with none,
+    // any payment received or waived.
     const settled = new Set(
-      payments
-        .filter((p) => p.cycle === cycle && paymentSettlesDues(p.status))
-        .map((p) => p.userId),
+      Array.from(usersByAuthId.values())
+        .map((u) => u.id)
+        .filter((id) =>
+          duesSettledInStore(
+            id,
+            cycle,
+            payments.filter((p) => p.userId === id && p.cycle === cycle),
+          ),
+        ),
     );
     return Array.from(usersByAuthId.values())
       .map((u): CampManagementMember => {
@@ -2655,7 +3046,7 @@ export const testStore = {
           isLead: mine.some((m) => m.isLead),
           teams: mine.map((m) => m.team).sort((a, b) => a.localeCompare(b)),
           duesPaid: settled.has(u.id),
-          membershipTier: null,
+          membershipTier: u.membershipTier,
           onboardingComplete: profile?.completedAt != null,
           pendingRequiredActions: owed.length,
           pendingRequiredActionItems: owed.map((a) => ({
@@ -2667,6 +3058,8 @@ export const testStore = {
           country,
           participation:
             participations.get(participationKey(u.id, cycle))?.status ?? null,
+          participationIntent:
+            participations.get(participationKey(u.id, cycle))?.intent ?? null,
           // The test store keeps no sign-in email for a member.
           ...(options.includeEmail ? { email: null } : {}),
           createdAt: u.createdAt,
@@ -3388,11 +3781,27 @@ export const testStore = {
     return code;
   },
 
+  /** The member's payment reference if they have one; gives none out. */
+  memberRefCode(userId: string): string | null {
+    return memberRefCodes.get(userId) ?? null;
+  },
+
+  /** Every member the store knows, for the dues twin's lists. */
+  allUsers(): TestUser[] {
+    return Array.from(usersByAuthId.values());
+  },
+
   /** Record a payment for this year (mirrors recordPayment). */
   recordPayment(input: RecordPaymentInput): { id: string; reference: string } {
     if (!isCurrency(input.currency)) {
       throw new UnknownCurrencyError(input.currency);
     }
+    const source = input.source ?? "captain";
+    const allowed =
+      source === "member"
+        ? input.recordedByUserId === input.userId && input.status === "pending"
+        : isMoneyKeeperInStore(input.recordedByUserId);
+    if (!allowed) throw new MoneyRefused(NOT_A_MONEY_KEEPER);
     if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0) {
       throw new Error(
         "recordPayment: the amount must be whole cents, not negative",
@@ -3415,6 +3824,11 @@ export const testStore = {
       status: input.status,
       note: input.note?.trim() || null,
       recordedByUserId: input.recordedByUserId,
+      source,
+      method: input.method ?? null,
+      paidOn: input.paidOn ?? null,
+      proofPathname: input.proofPathname ?? null,
+      proofContentType: input.proofContentType ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -3427,8 +3841,12 @@ export const testStore = {
     paymentId: string;
     from: PaymentStatus;
     to: PaymentStatus;
+    actorId: string;
   }): boolean {
     if (input.from === input.to) return false;
+    if (!isMoneyKeeperInStore(input.actorId)) {
+      throw new MoneyRefused(NOT_A_MONEY_KEEPER);
+    }
     const row = payments.find(
       (p) => p.id === input.paymentId && p.status === input.from,
     );
@@ -3464,8 +3882,24 @@ export const testStore = {
         recordedByName: p.recordedByUserId
           ? (findUserById(p.recordedByUserId)?.displayName ?? null)
           : null,
+        source: p.source,
+        method: p.method,
+        paidOn: p.paidOn,
+        hasProof: p.proofPathname !== null,
+        refundStatus: refundStatusOf(p.id),
         createdAt: p.createdAt,
       }));
+  },
+
+  /** The year's payment rows themselves, for the dues twin (copies). */
+  duesPayments(cycle: number): TestPayment[] {
+    return payments.filter((p) => p.cycle === cycle).map((p) => ({ ...p }));
+  },
+
+  /** One payment row (a copy), or null. */
+  getPayment(paymentId: string): TestPayment | null {
+    const row = payments.find((p) => p.id === paymentId);
+    return row ? { ...row } : null;
   },
 
   /** Rands received in one year, in cents (mirrors receivedTotal). */
@@ -3940,6 +4374,28 @@ export const testStore = {
       return {};
     });
   },
+
+  // --- Power on site (#255–#257): twins in ./test-store-power-site ---------
+  ...powerSiteTwins({
+    state: () => S.powerSite,
+    cycle: () => currentCycleNumber(),
+    isPowerEditor: (userId) => isPowerEditor(userId),
+    member: (userId) => {
+      const user = findUserById(userId);
+      return user
+        ? {
+            displayName: user.displayName ?? null,
+            approved: user.approvalStatus === "approved",
+          }
+        : null;
+    },
+    generators: () => generators,
+    loads: () => powerLoads,
+    task: (id) => tasks.find((t) => t.id === id) ?? null,
+    // Annotated, so the store's type does not depend on itself.
+    addTask: (input): ReturnType<PowerSiteDeps["addTask"]> =>
+      testStore.addTask(input),
+  }),
 
   // --- Recipes: twins of @camp404/db/recipes, same rules, same words --------
   // The store is one synchronous process, so every check runs before the
@@ -5401,6 +5857,7 @@ export const testStore = {
     payments.length = 0;
     memberRefCodes.clear();
     participations.clear();
+    tickets.clear();
     powerLoads.length = 0;
     powerPlans.clear();
     generators.length = 0;
@@ -5408,6 +5865,7 @@ export const testStore = {
     loungeOffers.length = 0;
     loungeSlots.length = 0;
     loungeSettings.clear();
+    S.powerSite = emptyPowerSite();
     recipes.length = 0;
     recipeRuns.length = 0;
     recipeSources.length = 0;
@@ -5423,9 +5881,14 @@ export const testStore = {
     S.campBlurbs.clear();
     driverProfiles.length = 0;
     carMembers.length = 0;
+    transportTrailers.length = 0;
+    liftRequests.length = 0;
+    carMessages.length = 0;
     S.desktopLayouts.clear();
     S.desktopPreferences.clear();
+    S.teamPrograms.clear();
     S.inkblotRuns.length = 0;
+    resetDuesStore();
   },
 
   // --- INKBLOT's board (the twin of @camp404/db/inkblot) --------------------
@@ -5555,6 +6018,7 @@ export const testStore = {
       departureCity: input.departureCity ?? null,
       arrivalAt: input.arrivalAt ?? null,
       departureAt: input.departureAt ?? null,
+      canTow: input.canTow ?? false,
     };
     // (user_id, cycle) is the row's identity: seeding twice replaces it.
     const idx = driverProfiles.findIndex(
@@ -5637,6 +6101,387 @@ export const testStore = {
     return null;
   },
 
+  // --- Transport (the twin of @camp404/db/transport, #270) -----------------
+  // The same rules, sentences and year-scoping as the database module, so a
+  // spec drives the Transport page and the car message. Each write re-reads
+  // its actor here (senderReach), never taking a rank from its caller.
+
+  getTransportBoard(): TransportBoard {
+    const cycle = currentCycleNumber();
+    const drivers = driverProfiles
+      .filter((d) => d.cycle === cycle && d.intendsToDrive)
+      .map((d) => ({ d, name: findUserById(d.userId)?.displayName ?? null }))
+      .filter(({ d }) => findUserById(d.userId))
+      .sort(
+        (a, b) =>
+          (a.name ?? "").localeCompare(b.name ?? "") ||
+          a.d.userId.localeCompare(b.d.userId),
+      );
+    const driving = new Set(drivers.map(({ d }) => d.userId));
+    const trailers: TrailerRow[] = transportTrailers
+      .filter((t) => t.cycle === cycle)
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+      .map((t) => {
+        const towing =
+          t.towedByUserId && driving.has(t.towedByUserId)
+            ? t.towedByUserId
+            : null;
+        return {
+          id: t.id,
+          name: t.name,
+          notes: t.notes,
+          version: t.version,
+          towedByUserId: towing,
+          towedByName: towing
+            ? (findUserById(towing)?.displayName ?? null)
+            : null,
+        };
+      });
+    const cars: TransportCar[] = drivers.map(({ d, name }) => {
+      const trailer = trailers.find((t) => t.towedByUserId === d.userId);
+      return {
+        driverUserId: d.userId,
+        driverName: name,
+        vehicle: vehicleLabel(d.vehicleMake, d.vehicleModel),
+        departureCity: d.departureCity,
+        seatsOffered: d.seatsOffered,
+        canTow: d.canTow,
+        riders: carMembers
+          .filter((c) => c.driverUserId === d.userId && c.cycle === cycle)
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+          .map((c) => ({
+            userId: c.memberUserId,
+            name: findUserById(c.memberUserId)?.displayName ?? null,
+          })),
+        trailer: trailer ? { id: trailer.id, name: trailer.name } : null,
+      };
+    });
+    return { cycle, cars, trailers };
+  },
+
+  listLiftRequests(): LiftRequestRow[] {
+    const cycle = currentCycleNumber();
+    return liftRequests
+      .filter((r) => r.cycle === cycle && findUserById(r.userId))
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((r) => ({
+        userId: r.userId,
+        name: findUserById(r.userId)?.displayName ?? null,
+        driverUserId:
+          r.driverUserId && transportDriving(r.driverUserId, cycle)
+            ? r.driverUserId
+            : null,
+        createdAt: r.createdAt,
+      }));
+  },
+
+  listUnseated(): UnseatedMember[] {
+    const cycle = currentCycleNumber();
+    return [...participations.values()]
+      .filter(
+        (p) =>
+          p.cycle === cycle &&
+          (p.status === "applied" ||
+            p.status === "maybe" ||
+            p.status === "accepted"),
+      )
+      .map((p) => findUserById(p.userId))
+      .filter(
+        (u): u is TestUser =>
+          !!u &&
+          u.approvalStatus === "approved" &&
+          !transportDriving(u.id, cycle) &&
+          !transportSeat(u.id, cycle),
+      )
+      .map((u) => ({ userId: u.id, name: u.displayName }))
+      .sort(
+        (a, b) =>
+          (a.name ?? "").localeCompare(b.name ?? "") ||
+          a.userId.localeCompare(b.userId),
+      );
+  },
+
+  drivesThisYear(userId: string): boolean {
+    return transportDriving(userId, currentCycleNumber());
+  },
+
+  addRider(input: {
+    actorId: string;
+    driverUserId: string;
+    memberUserId: string;
+  }): TransportResult {
+    const actor = transportActor(input.actorId);
+    if (
+      !canManageCar(
+        actor.rank,
+        actor.ledTeams,
+        input.actorId,
+        input.driverUserId,
+      )
+    ) {
+      return { ok: false, error: NOT_YOUR_CAR };
+    }
+    return transportSeatIn({ ...input, cycle: actor.cycle });
+  },
+
+  removeRider(input: {
+    actorId: string;
+    driverUserId: string;
+    memberUserId: string;
+  }): TransportResult {
+    const actor = transportActor(input.actorId);
+    if (
+      !canRemoveRider(
+        actor.rank,
+        actor.ledTeams,
+        input.actorId,
+        input.driverUserId,
+        input.memberUserId,
+      )
+    ) {
+      return { ok: false, error: NOT_YOUR_CAR };
+    }
+    const idx = carMembers.findIndex(
+      (c) =>
+        c.driverUserId === input.driverUserId &&
+        c.memberUserId === input.memberUserId &&
+        c.cycle === actor.cycle,
+    );
+    if (idx === -1) return { ok: false, error: NOT_IN_CAR };
+    carMembers.splice(idx, 1);
+    return { ok: true };
+  },
+
+  setSeatsOffered(input: {
+    actorId: string;
+    driverUserId: string;
+    seatsOffered: number;
+  }): TransportResult {
+    const actor = transportActor(input.actorId);
+    if (
+      !canManageCar(
+        actor.rank,
+        actor.ledTeams,
+        input.actorId,
+        input.driverUserId,
+      )
+    ) {
+      return { ok: false, error: NOT_YOUR_CAR };
+    }
+    const car = driverProfiles.find(
+      (d) =>
+        d.userId === input.driverUserId &&
+        d.cycle === actor.cycle &&
+        d.intendsToDrive,
+    );
+    if (!car) return { ok: false, error: NOT_DRIVING };
+    if (transportRiders(input.driverUserId, actor.cycle) > input.seatsOffered) {
+      return { ok: false, error: SEATS_BELOW_RIDERS };
+    }
+    car.seatsOffered = input.seatsOffered;
+    return { ok: true };
+  },
+
+  requestLift(input: {
+    actorId: string;
+    driverUserId: string | null;
+  }): TransportResult {
+    const cycle = currentCycleNumber();
+    if (findUserById(input.actorId)?.approvalStatus !== "approved") {
+      return { ok: false, error: TRANSPORT_NOT_A_MEMBER };
+    }
+    if (transportDriving(input.actorId, cycle)) {
+      return { ok: false, error: YOU_ARE_DRIVING };
+    }
+    if (transportSeat(input.actorId, cycle)) {
+      return { ok: false, error: YOU_HAVE_A_SEAT };
+    }
+    if (input.driverUserId !== null) {
+      if (input.driverUserId === input.actorId) {
+        return { ok: false, error: OWN_CAR };
+      }
+      if (!transportDriving(input.driverUserId, cycle)) {
+        return { ok: false, error: NOT_DRIVING };
+      }
+    }
+    const existing = liftRequests.find(
+      (r) => r.userId === input.actorId && r.cycle === cycle,
+    );
+    if (existing) {
+      existing.driverUserId = input.driverUserId;
+      existing.createdAt = new Date();
+    } else {
+      liftRequests.push({
+        userId: input.actorId,
+        cycle,
+        driverUserId: input.driverUserId,
+        createdAt: new Date(),
+      });
+    }
+    return { ok: true };
+  },
+
+  withdrawLiftRequest(input: { actorId: string }): TransportResult {
+    const cycle = currentCycleNumber();
+    const idx = liftRequests.findIndex(
+      (r) => r.userId === input.actorId && r.cycle === cycle,
+    );
+    if (idx === -1) return { ok: false, error: REQUEST_GONE };
+    liftRequests.splice(idx, 1);
+    return { ok: true };
+  },
+
+  answerLiftRequest(input: {
+    actorId: string;
+    memberUserId: string;
+    accept: boolean;
+  }): TransportResult {
+    const actor = transportActor(input.actorId);
+    const request = liftRequests.find(
+      (r) => r.userId === input.memberUserId && r.cycle === actor.cycle,
+    );
+    if (!request) return { ok: false, error: REQUEST_GONE };
+    const car = request.driverUserId;
+    const mayAnswer =
+      car !== null
+        ? canManageCar(actor.rank, actor.ledTeams, input.actorId, car)
+        : canEditTransport(actor.rank, actor.ledTeams);
+    if (!mayAnswer) return { ok: false, error: NOT_YOUR_CAR };
+    if (input.accept) {
+      if (car === null) return { ok: false, error: REQUEST_GONE };
+      return transportSeatIn({
+        driverUserId: car,
+        memberUserId: input.memberUserId,
+        cycle: actor.cycle,
+      });
+    }
+    liftRequests.splice(liftRequests.indexOf(request), 1);
+    return { ok: true };
+  },
+
+  addTrailer(input: {
+    actorId: string;
+    name: string;
+    notes: string | null;
+  }): TransportResult<{ id: string }> {
+    const actor = transportActor(input.actorId);
+    if (!canEditTransport(actor.rank, actor.ledTeams)) {
+      return { ok: false, error: NOT_A_TRANSPORT_EDITOR };
+    }
+    const id = crypto.randomUUID();
+    transportTrailers.push({
+      id,
+      cycle: actor.cycle,
+      name: input.name,
+      notes: input.notes,
+      towedByUserId: null,
+      version: 0,
+    });
+    return { ok: true, id };
+  },
+
+  updateTrailer(input: {
+    actorId: string;
+    trailerId: string;
+    name: string;
+    notes: string | null;
+    expectedVersion: number;
+  }): TransportResult {
+    const found = transportTrailerClaim(input);
+    if (typeof found === "string") return { ok: false, error: found };
+    found.name = input.name;
+    found.notes = input.notes;
+    found.version += 1;
+    return { ok: true };
+  },
+
+  setTrailerTow(input: {
+    actorId: string;
+    trailerId: string;
+    driverUserId: string | null;
+    expectedVersion: number;
+  }): TransportResult {
+    const actor = transportActor(input.actorId);
+    if (!canEditTransport(actor.rank, actor.ledTeams)) {
+      return { ok: false, error: NOT_A_TRANSPORT_EDITOR };
+    }
+    if (input.driverUserId !== null) {
+      const car = driverProfiles.find(
+        (d) =>
+          d.userId === input.driverUserId &&
+          d.cycle === actor.cycle &&
+          d.intendsToDrive,
+      );
+      if (!car) return { ok: false, error: NOT_DRIVING };
+      if (!car.canTow) return { ok: false, error: CANNOT_TOW };
+      if (
+        transportTrailers.some(
+          (t) =>
+            t.cycle === actor.cycle &&
+            t.towedByUserId === input.driverUserId &&
+            t.id !== input.trailerId,
+        )
+      ) {
+        return { ok: false, error: ALREADY_TOWING };
+      }
+    }
+    const found = transportTrailerClaim(input);
+    if (typeof found === "string") return { ok: false, error: found };
+    found.towedByUserId = input.driverUserId;
+    found.version += 1;
+    return { ok: true };
+  },
+
+  removeTrailer(input: {
+    actorId: string;
+    trailerId: string;
+    expectedVersion: number;
+  }): TransportResult {
+    const found = transportTrailerClaim(input);
+    if (typeof found === "string") return { ok: false, error: found };
+    transportTrailers.splice(transportTrailers.indexOf(found), 1);
+    return { ok: true };
+  },
+
+  sendCarMessage(input: {
+    senderId: string;
+    title: string;
+    body: string;
+  }): TransportResult<{ broadcastId: string; recipientCount: number }> {
+    const actor = transportActor(input.senderId);
+    const allowed = canSendToAudience(
+      {
+        rank: actor.rank,
+        leadTeams: actor.ledTeams,
+        userId: input.senderId,
+        drivesCar: transportDriving(input.senderId, actor.cycle),
+      },
+      { scope: "car", driverUserId: input.senderId },
+    );
+    if (!allowed) return { ok: false, error: CAR_MESSAGE_REFUSED };
+    const riders = carMembers
+      .filter(
+        (c) =>
+          c.driverUserId === input.senderId &&
+          c.cycle === actor.cycle &&
+          c.memberUserId !== input.senderId &&
+          findUserById(c.memberUserId)?.approvalStatus === "approved",
+      )
+      .map((c) => c.memberUserId);
+    if (riders.length === 0) return { ok: false, error: CAR_EMPTY };
+    const broadcastId = crypto.randomUUID();
+    carMessages.push({ id: broadcastId, senderId: input.senderId });
+    const payload = carMessageNotification({
+      broadcastId,
+      title: input.title,
+      body: input.body,
+    });
+    for (const userId of riders) {
+      pushDelivery(payload, { userId, broadcastId, presentation: "feed" });
+    }
+    return { ok: true, broadcastId, recipientCount: riders.length };
+  },
+
   // --- join.camp-404.com (the twin of @camp404/db/join-site) --------------
   getJoinContent(year: number): Partial<JoinSiteContent> | null {
     let best: number | null = null;
@@ -5659,6 +6504,21 @@ export const testStore = {
   },
   setCampBlurb(userId: string, blurb: TestCampBlurb): void {
     S.campBlurbs.set(userId, { ...blurb });
+  },
+  /** Captains who chose to be shown, by name (getJoinCaptains' twin). */
+  listJoinCaptains(): { name: string; title: string; blurb: string }[] {
+    const out: { name: string; title: string; blurb: string }[] = [];
+    for (const user of usersByAuthId.values()) {
+      const card = S.campBlurbs.get(user.id);
+      const name = (user.displayName ?? "").trim();
+      if (user.rank !== "captain" || !card?.showOnJoin || name === "") continue;
+      out.push({
+        name,
+        title: (card.title ?? "").trim() || "Captain",
+        blurb: (card.blurb ?? "").trim(),
+      });
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
   },
 };
 

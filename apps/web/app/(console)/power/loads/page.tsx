@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { Fuel, Lock, PlugZap } from "lucide-react";
+import { Lock, PlugZap } from "lucide-react";
 import {
   MAINS_VOLTS,
   amps,
@@ -13,7 +12,6 @@ import {
 } from "@camp404/core";
 import type { LoadCategory } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
-import { Button } from "@camp404/ui/components/button";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import {
@@ -38,6 +36,7 @@ import {
   type GeneratorRailData,
   type PowerKpi,
 } from "@/components/power/load-panels";
+import { PowerTabs } from "@/components/power/power-tabs";
 import { captainPageGate } from "@/lib/captain-gate";
 import {
   getGenerator,
@@ -49,7 +48,6 @@ import {
 } from "@/lib/power";
 import {
   CATEGORY_LABELS,
-  POWER_FUEL_PATH,
   POWER_REFUSAL,
   START_UP_SPIKE,
   START_UP_SPIKE_HELP,
@@ -313,12 +311,6 @@ export default async function PowerLoadsPage() {
         description="Everything the camp plugs in this year and what it adds up to. Everyone can read it; captains and Power & Lighting leads edit it."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline">
-              <Link href={POWER_FUEL_PATH}>
-                <Fuel aria-hidden />
-                Fuel estimate
-              </Link>
-            </Button>
             {canEdit && (
               <PlanSettingsButton
                 key={plan.version}
@@ -338,6 +330,7 @@ export default async function PowerLoadsPage() {
           </div>
         }
       />
+      <PowerTabs tab="loads" />
 
       <div className="flex flex-col gap-6">
         <PowerKpiCards kpis={kpis} />

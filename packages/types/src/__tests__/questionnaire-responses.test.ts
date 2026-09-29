@@ -70,9 +70,10 @@ describe("validateResponses — malformed payloads", () => {
   });
 
   it("rejects a payload whose value matches no member of the response union", () => {
-    // `{ a: 1 }` is neither a grid answer (string[] values) nor any scalar the
-    // response map allows.
-    expect(validateResponses(QN, { name: { a: 1 } })).toEqual({
+    // `{ a: true }` is neither a grid answer (string[] values), a rating
+    // grid answer (whole numbers or "na") nor any scalar the response map
+    // allows.
+    expect(validateResponses(QN, { name: { a: true } })).toEqual({
       ok: false,
       errors: { _root: "Malformed response payload" },
     });
