@@ -9,8 +9,12 @@ import {
   canSendToAudience,
   canViewBuilderDefinition,
   definitionLimitErrors,
+  isQuestionnaireTemplateKey,
+  mealPlanRatingRows,
   type AudienceSpec,
 } from "@camp404/core";
+import type { GridRow } from "@camp404/types";
+import { getMealPlan } from "@/lib/meal-plan";
 import { carryOverFor } from "@camp404/db/cycles";
 import { PUSH_SCOPES } from "@camp404/db/activations";
 import { computeAudience } from "@camp404/db/audience";
@@ -35,6 +39,7 @@ import { getCampManagementRoster } from "@/lib/roster";
 import {
   createAttendanceCheck,
   createDraft,
+  createDraftFromTemplate,
   getBuilderDefinition,
   deleteDraft,
   duplicateDefinition,
@@ -162,6 +167,59 @@ export async function createDraftAction(
   });
   revalidateBuilder(key);
   return { ok: true, key };
+}
+
+/**
+ * Start a draft from a ready-made template (#251): today the post-burn survey.
+ * The same gate as a blank draft (a team lead or a captain); the draft is the
+ * author's to edit, and nothing is published or sent. The survey's meal
+ * ratings start with one row per meal this year's meal plan serves.
+ */
+export async function createFromTemplateAction(
+  template: unknown,
+): Promise<QResultWithKey> {
+  const gate = await gateAuthor();
+  if (!gate.ok) return gate;
+  if (!isQuestionnaireTemplateKey(template)) {
+    return { ok: false, error: "That template doesn't exist." };
+  }
+  if (usesTestStore()) {
+    return {
+      ok: false,
+      error: "Templates need the questionnaire builder's database.",
+    };
+  }
+  const mealRows = mealPlanRatingRows(await getMealPlan());
+  const key = await createDraftFromTemplate({
+    template,
+    createdBy: gate.campUser.id,
+    mealRows,
+  });
+  revalidateBuilder(key);
+  return { ok: true, key };
+}
+
+export type MealRowsResult =
+  | { ok: true; rows: GridRow[] }
+  | { ok: false; error: string };
+
+/**
+ * The rows a rating grid gets from "Fill from meal plan" (#251): one per meal
+ * this year's meal plan serves. Read-only; the builder puts them in the draft,
+ * which saves like any other edit.
+ */
+export async function mealPlanRowsAction(): Promise<MealRowsResult> {
+  const gate = await gateAuthor();
+  if (!gate.ok) return gate;
+  const rows = mealPlanRatingRows(await getMealPlan());
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      error:
+        "This year's meal plan has no meals yet. Add plates on the Meal plan page first.",
+    };
+  }
+  return { ok: true, rows };
 }
 
 /**

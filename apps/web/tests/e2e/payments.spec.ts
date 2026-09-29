@@ -153,7 +153,9 @@ test.describe("payments ledger (test-mode)", () => {
     // A member opening the page gets the lock, and none of the money.
     await login(page, { id: "pay-rand", email: "pay-rand@example.com" });
     await openPayments(page);
-    await expect(page.getByText(/Payments are captain-only/)).toBeVisible();
+    await expect(
+      page.getByText(/Payments are for captains and Finance leads/),
+    ).toBeVisible();
     await expect(page.getByText(/R\s(12,34|17,34|5,00|7,00)/)).toHaveCount(0);
     await expect(
       page.getByRole("status").filter({ hasText: /^Received:/ }),

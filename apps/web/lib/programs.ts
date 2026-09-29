@@ -1,6 +1,11 @@
 import "server-only";
 
-import { canApproveRecipe, canWorkInTeam, hasClearance } from "@camp404/core";
+import {
+  canApproveRecipe,
+  canManageMoney,
+  canWorkInTeam,
+  hasClearance,
+} from "@camp404/core";
 import { Team, type ViewerRank } from "@camp404/types";
 import type { ProgramId } from "./program-routes";
 
@@ -191,6 +196,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: ME,
     rank: "camp_member",
   },
+  // Every member's own dues (#240): what they owe, their pledge, and where
+  // they send their proof of payment.
+  {
+    id: "my-dues",
+    label: "My dues",
+    fileName: "MY_DUES.TXT",
+    href: "/dues",
+    icon: "my-dues",
+    place: ME,
+    rank: "camp_member",
+  },
   // Decision 11 A (owner, 2026-09-26): a driver, or a member with a seat in
   // someone's car, gets their lift as a program.
   {
@@ -245,12 +261,66 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // The site plan (#271): every member reads it; its page gates the edits.
+  {
+    id: "camp-layout",
+    label: "Camp layout",
+    fileName: "SITEPLAN.DWG",
+    href: "/camp-layout",
+    icon: "camp-layout",
+    place: CAMP,
+    rank: "camp_member",
+  },
+  // The Ministry of Vibes' lounge programme (#269): every member reads it and
+  // offers something; its page decides who may run it (canRunLounge).
+  {
+    id: "lounge",
+    label: "Lounge",
+    fileName: "LOUNGE.EXE",
+    href: "/lounge",
+    icon: "lounge",
+    place: CAMP,
+    rank: "camp_member",
+  },
+  // The camp's gear (#246): every member reads it, suggests changes and
+  // books; a captain or a lead of the item's team changes it.
+  {
+    id: "inventory",
+    label: "Inventory",
+    fileName: "INVENTRY.DB",
+    href: "/inventory",
+    icon: "inventory",
+    place: CAMP,
+    rank: "camp_member",
+  },
+  // Transport (#270): every approved member reads the car list; the page's
+  // controls and the writes carry their own rules.
+  {
+    id: "transport",
+    label: "Transport",
+    fileName: "CARPOOL.EXE",
+    href: "/transport",
+    icon: "transport",
+    place: CAMP,
+    rank: "camp_member",
+  },
   {
     id: "family-tree",
     label: "Family tree",
     fileName: "LINEAGE.EXE",
     href: "/family-tree",
     icon: "family-tree",
+    place: CAMP,
+    rank: "camp_member",
+  },
+  // The camp's intro, once a Notion page (#264): every approved member reads
+  // it; captains edit its words in Join site.
+  {
+    id: "about",
+    label: "About Camp 404",
+    fileName: "README.TXT",
+    href: "/about",
+    icon: "about",
     place: CAMP,
     rank: "camp_member",
   },
@@ -306,6 +376,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "captain",
   },
+  // Who is coming this year, with tickets and WAP for captains
+  // (#238). A team lead reads the statuses only, so the bar is team_lead.
+  {
+    id: "applications",
+    label: "Applications",
+    fileName: "INTAKE.DB",
+    href: "/captains/applications",
+    icon: "applications",
+    place: CAPTAINS,
+    rank: "team_lead",
+  },
   {
     id: "questionnaires",
     label: "Questionnaires",
@@ -333,6 +414,10 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "team_lead",
   },
+  // The Finance tools (#240): captains and Finance leads (canManageMoney).
+  // The page's rank gate is team_lead, because clearance is global; the rule
+  // narrows it, so a lead of another team is not offered it. A Finance lead
+  // also finds it in their Finance team folder (TEAM_TOOLS).
   {
     id: "payments",
     label: "Payments",
@@ -340,7 +425,8 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     href: "/captains/payments",
     icon: "payments",
     place: CAPTAINS,
-    rank: "captain",
+    rank: "team_lead",
+    requires: (ctx) => canManageMoney(ctx.rank, ctx.ledTeams),
   },
   {
     id: "camp-settings",
@@ -549,6 +635,15 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: null,
     rank: "captain",
   },
+  {
+    id: "inventory-item",
+    label: "Item",
+    fileName: "ITEM.DAT",
+    href: null,
+    icon: "inventory",
+    place: null,
+    rank: "camp_member",
+  },
   // INKBLOT, opened from the Terminal (`play inkblot`), never from an icon.
   {
     id: "inkblot",
@@ -613,8 +708,10 @@ const GROUPS: readonly { id: ProgramGroup; label: string }[] = [
 export const TEAM_TOOLS: Readonly<Partial<Record<Team, readonly ProgramId[]>>> =
   {
     kitchen: ["recipes", "meal-plan", "recipe-review"],
+    structures: ["camp-layout"],
     power_and_lighting: ["power"],
-    transport_and_logistics: ["logistics"],
+    ministry_of_vibes: ["lounge"],
+    transport_and_logistics: ["inventory", "transport", "logistics"],
     communications_and_hr: ["announcements", "questionnaires", "join-site"],
     finance: ["payments"],
   };

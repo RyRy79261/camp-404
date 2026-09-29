@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@camp404/ui/components/card";
+import {
+  NO_ANSWER_LABEL,
+  STANDING_LABEL,
+  type TicketCounts,
+} from "@camp404/core";
 import type {
   Kpi,
   ReadinessFunnel,
@@ -358,37 +363,49 @@ export function SendCompletionCard({ sends }: { sends: SendCompletion[] }) {
  * Counted over APPROVED members only, the people "Everyone" reaches, so "Not
  * answered" is an approved member with no answer for this year.
  */
-export function ThisYearCard({ counts }: { counts: ThisYearCounts }) {
+export function ThisYearCard({
+  counts,
+  tickets,
+}: {
+  counts: ThisYearCounts;
+  /** The year's ticket figures (#238), over the same approved members. */
+  tickets?: TicketCounts;
+}) {
   const { total } = counts;
   const segments = [
-    { key: "coming", label: "Coming", n: counts.coming, bar: "bg-primary" },
+    {
+      key: "coming",
+      label: STANDING_LABEL.applied,
+      n: counts.coming,
+      bar: "bg-primary",
+    },
     {
       key: "maybe",
-      label: "Maybe",
+      label: STANDING_LABEL.maybe,
       n: counts.maybe,
       bar: "bg-muted-foreground",
     },
     {
       key: "accepted",
-      label: "Accepted",
+      label: STANDING_LABEL.accepted,
       n: counts.accepted,
       bar: "bg-success",
     },
     {
       key: "waitlisted",
-      label: "Waiting list",
+      label: STANDING_LABEL.waitlisted,
       n: counts.waitlisted,
       bar: "bg-warning",
     },
     {
       key: "not-coming",
-      label: "Not coming",
+      label: STANDING_LABEL.not_attending,
       n: counts.notComing,
       bar: "bg-muted-foreground/40",
     },
     {
       key: "not-answered",
-      label: "Not answered",
+      label: NO_ANSWER_LABEL,
       n: counts.notAnswered,
       bar: "bg-muted",
     },
@@ -435,6 +452,36 @@ export function ThisYearCard({ counts }: { counts: ThisYearCounts }) {
             </ul>
           </>
         )}
+        {tickets && (
+          <ul
+            aria-label="Tickets"
+            className="flex flex-col gap-1 border-t border-border pt-3 text-xs"
+          >
+            <li className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">
+                Have a place, no ticket yet
+              </span>
+              <span className="font-semibold tabular-nums">
+                {tickets.needTicket}
+              </span>
+            </li>
+            <li className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">WAPs issued</span>
+              <span className="font-semibold tabular-nums">
+                {tickets.wapIssued}
+              </span>
+            </li>
+          </ul>
+        )}
+        <p className="mt-auto pt-1 text-xs text-muted-foreground">
+          <Link
+            href="/captains/applications"
+            className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
+          >
+            Applications
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </p>
       </CardContent>
     </Card>
   );

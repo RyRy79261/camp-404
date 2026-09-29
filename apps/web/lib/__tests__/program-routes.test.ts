@@ -43,9 +43,18 @@ describe("matchProgram", () => {
         genericTitle: "MY_ACCOUNT.CPL",
       });
     }
-    expect(matchProgram("/power/fuel")?.instanceKey).toBe(
-      matchProgram("/power/loads")?.instanceKey,
-    );
+    for (const p of [
+      "/power/fuel",
+      "/power/fuel-log",
+      "/power/grid",
+      "/power/readiness",
+    ]) {
+      expect(matchProgram(p)?.instanceKey).toBe(
+        matchProgram("/power/loads")?.instanceKey,
+      );
+    }
+    // The paper sheets open in a tab of their own, not in a window.
+    expect(matchProgram("/print/power/refuel-sheet")).toBeNull();
   });
 
   it("gives each document its own window", () => {

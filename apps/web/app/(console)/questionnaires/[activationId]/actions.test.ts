@@ -12,6 +12,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(),
+  isTeamLead: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -37,7 +38,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { saveBuilderResponses } from "./actions";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
-import { ensureCampUser, hasCampAccess } from "@/lib/users";
+import { ensureCampUser, hasCampAccess, isTeamLead } from "@/lib/users";
 import {
   completeBuilderResponse,
   getActivationById,
@@ -424,5 +425,129 @@ describe("saveBuilderResponses final submit on the unified model", () => {
       driver: null,
       participation: null,
     });
+  });
+});
+
+describe("saveBuilderResponses — team leads only questions (#251)", () => {
+  // A survey with one question for everyone and a REQUIRED one for leads.
+  const survey = Questionnaire.parse({
+    version: "v1",
+    title: "Post-burn survey",
+    pages: [
+      {
+        id: "p1",
+        kind: "questions",
+        title: "Shifts",
+        questions: [
+          {
+            id: "everyone",
+            kind: "rating_grid",
+            prompt: "How true?",
+            rows: [{ id: "fair", label: "Fair" }],
+            scale: ["False", "True"],
+            required: true,
+          },
+          {
+            id: "leads",
+            kind: "short_text",
+            prompt: "For leads",
+            required: true,
+            leadsOnly: true,
+          },
+        ],
+      },
+    ],
+  });
+
+  function actAs(rank: "member" | "captain", lead: boolean) {
+    vi.mocked(ensureCampUser).mockResolvedValue({
+      id: "camp-1",
+      authUserId: "auth-1",
+      displayName: "Member",
+      rank,
+      approvalStatus: "approved",
+    } as never);
+    vi.mocked(isTeamLead).mockResolvedValue(lead);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getAuthenticatedUserOrRedirect).mockResolvedValue({
+      id: "auth-1",
+      primaryEmail: "member@example.com",
+    } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(getActivationById).mockResolvedValue({
+      id: "act-1",
+      status: "open",
+      questionnaireKey: "post-burn-survey",
+      version: "v1",
+      cycle: 3,
+      carryOver: false,
+    } as never);
+    vi.mocked(getRequiredAction).mockResolvedValue({
+      status: "pending",
+      activationId: "act-1",
+    } as never);
+    vi.mocked(getBuilderDefinition).mockResolvedValue(survey);
+    vi.mocked(completeBuilderResponse).mockResolvedValue(undefined as never);
+    vi.mocked(upsertQuestionnaireResponse).mockResolvedValue(
+      undefined as never,
+    );
+  });
+
+  it("refuses a member's answer to a leads-only question, draft or final", async () => {
+    actAs("member", false);
+    for (const final of [false, true]) {
+      const result = await saveBuilderResponses(
+        "act-1",
+        { everyone: { fair: 2 }, leads: "sneaky" },
+        final,
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors._form).toMatch(/team leads only/i);
+    }
+    expect(upsertQuestionnaireResponse).not.toHaveBeenCalled();
+    expect(completeBuilderResponse).not.toHaveBeenCalled();
+  });
+
+  it("does not hold a member to a required leads-only question", async () => {
+    actAs("member", false);
+    await saveBuilderResponses("act-1", { everyone: { fair: 2 } }, true);
+    expect(completeBuilderResponse).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(completeBuilderResponse).mock.calls[0]![0]!.responses,
+    ).toEqual({ everyone: { fair: 2 } });
+  });
+
+  it("holds a lead of any team to it, and keeps their answer", async () => {
+    actAs("member", true);
+    const missing = await saveBuilderResponses(
+      "act-1",
+      { everyone: { fair: 1 } },
+      true,
+    );
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.errors.leads).toBeDefined();
+
+    await saveBuilderResponses(
+      "act-1",
+      { everyone: { fair: 1 }, leads: "More hands" },
+      true,
+    );
+    expect(
+      vi.mocked(completeBuilderResponse).mock.calls[0]![0]!.responses,
+    ).toEqual({ everyone: { fair: 1 }, leads: "More hands" });
+  });
+
+  it("lets a captain answer without reading the lead flag", async () => {
+    actAs("captain", false);
+    await saveBuilderResponses(
+      "act-1",
+      { everyone: { fair: 2 }, leads: "Fine" },
+      true,
+    );
+    expect(completeBuilderResponse).toHaveBeenCalledTimes(1);
+    expect(isTeamLead).not.toHaveBeenCalled();
   });
 });

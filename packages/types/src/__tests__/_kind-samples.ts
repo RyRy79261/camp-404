@@ -350,6 +350,24 @@ export const KIND_SAMPLES: { [K in QuestionKind]: KindSample<K> } = {
     invalid: { ghost_row: ["am"] },
     invalidError: "Answer every row",
   },
+  rating_grid: {
+    question: {
+      id: "k_rating_grid",
+      kind: "rating_grid",
+      prompt: "How true is each statement?",
+      rows: [
+        { id: "fair", label: "The shifts were fair" },
+        { id: "fed", label: "I was well fed" },
+      ],
+      scale: ["False", "Mostly false", "Mostly true", "True"],
+      allowNa: true,
+      required: true,
+    },
+    valid: { fair: 4, fed: "na" },
+    // A point past the end of the four-point scale.
+    invalid: { fair: 5, fed: 1 },
+    invalidError: 'Pick a rating for "The shifts were fair"',
+  },
 };
 
 /**

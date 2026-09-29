@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  TelegramApiError,
-  TelegramClient,
-  escapeMarkdownV2,
-} from "../client";
+import { TelegramApiError, TelegramClient, escapeMarkdownV2 } from "../client";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -14,14 +10,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 describe("TelegramClient", () => {
   it("posts to the bot endpoint and returns the `result` field", async () => {
-    const fetchImpl = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        jsonResponse({
-          ok: true,
-          result: { id: 1, is_bot: true, first_name: "TestBot" },
-        }),
-      );
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        ok: true,
+        result: { id: 1, is_bot: true, first_name: "TestBot" },
+      }),
+    );
     const client = new TelegramClient({ botToken: "abc", fetchImpl });
     const me = await client.getMe();
     expect(me.first_name).toBe("TestBot");
@@ -40,9 +34,9 @@ describe("TelegramClient", () => {
         ),
       );
     const client = new TelegramClient({ botToken: "abc", fetchImpl });
-    await expect(client.sendMessage({ chatId: "1", text: "hi" })).rejects.toBeInstanceOf(
-      TelegramApiError,
-    );
+    await expect(
+      client.sendMessage({ chatId: "1", text: "hi" }),
+    ).rejects.toBeInstanceOf(TelegramApiError);
   });
 
   it("sends createChatInviteLink with snake_case payload", async () => {

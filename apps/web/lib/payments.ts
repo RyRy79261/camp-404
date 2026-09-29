@@ -17,7 +17,8 @@ import { testStore } from "./test-store";
 // Payments ledger facade. Routes through `@camp404/db/payments` normally, and
 // through the in-memory test store's ledger twin under E2E_TEST_MODE, so
 // Playwright can drive the payments screen and the Overview's "Dues paid".
-// Every caller is captain-gated; this module gates nothing.
+// Every caller gates on the Finance rule first (captains and Finance leads);
+// the writes check it again themselves and throw MoneyRefused.
 
 export type { PaymentRow };
 
@@ -61,9 +62,9 @@ const testBackend: PaymentsBackend = {
   async recordPayment(input) {
     return testStore.recordPayment(input);
   },
-  // The store keeps no audit log, so the captain's id stops here.
-  async setPaymentStatus({ paymentId, from, to }) {
-    return testStore.setPaymentStatus({ paymentId, from, to });
+  // The store keeps no audit log; the actor's id decides who may move it.
+  async setPaymentStatus(input) {
+    return testStore.setPaymentStatus(input);
   },
   async receivedTotal(cycle) {
     return testStore.receivedTotal(cycle);
@@ -92,7 +93,11 @@ export function listPayments(cycle: number): Promise<PaymentRow[]> {
   return backend().listPayments(cycle);
 }
 
-/** Record a payment for this year. Refuses any currency but ZAR. */
+/**
+ * Record a payment for this year. Refuses any currency but ZAR, and throws
+ * MoneyRefused for anyone but the Finance team (or a member's own pending
+ * payment with a proof file).
+ */
 export function recordPayment(
   input: RecordPaymentInput,
 ): Promise<{ id: string; reference: string }> {

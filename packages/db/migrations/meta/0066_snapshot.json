@@ -1,5 +1,5 @@
 {
-  "id": "ca7ededa-d0e5-4611-a112-3dfbe7b83655",
+  "id": "ca406625-22fe-44f9-b733-9c62e6d079fd",
   "prevId": "a13ea500-258d-4684-aaac-ac151eb917d4",
   "version": "7",
   "dialect": "postgresql",
@@ -2778,115 +2778,6 @@
         "kitchen_meal_plans_days_check": {
           "name": "kitchen_meal_plans_days_check",
           "value": "\"kitchen_meal_plans\".\"days_on_site\" between 1 and 30"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.logistics_phases": {
-      "name": "logistics_phases",
-      "schema": "",
-      "columns": {
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "phase": {
-          "name": "phase",
-          "type": "logistics_phase",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "start_date": {
-          "name": "start_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "end_date": {
-          "name": "end_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "place": {
-          "name": "place",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "calendar_event_id": {
-          "name": "calendar_event_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "calendar_synced_version": {
-          "name": "calendar_synced_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "updated_by_user_id": {
-          "name": "updated_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "logistics_phases_updated_by_user_id_users_id_fk": {
-          "name": "logistics_phases_updated_by_user_id_users_id_fk",
-          "tableFrom": "logistics_phases",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "logistics_phases_cycle_phase_pk": {
-          "name": "logistics_phases_cycle_phase_pk",
-          "columns": [
-            "cycle",
-            "phase"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "logistics_phases_days_check": {
-          "name": "logistics_phases_days_check",
-          "value": "(\"logistics_phases\".\"start_date\" is null) = (\"logistics_phases\".\"end_date\" is null) and (\"logistics_phases\".\"end_date\" is null or \"logistics_phases\".\"end_date\" >= \"logistics_phases\".\"start_date\")"
         }
       },
       "isRLSEnabled": false
@@ -7884,6 +7775,52 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.team_programs": {
+      "name": "team_programs",
+      "schema": "",
+      "columns": {
+        "team": {
+          "name": "team",
+          "type": "team",
+          "typeSchema": "public",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "team_programs_description_length": {
+          "name": "team_programs_description_length",
+          "value": "char_length(\"team_programs\".\"description\") <= 300"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.telegram_announcements": {
       "name": "telegram_announcements",
       "schema": "",
@@ -8981,18 +8918,6 @@
         "pending",
         "approved",
         "rejected"
-      ]
-    },
-    "public.logistics_phase": {
-      "name": "logistics_phase",
-      "schema": "public",
-      "values": [
-        "pack",
-        "travel",
-        "build",
-        "burn",
-        "strike",
-        "unpack"
       ]
     },
     "public.mcp_audit_outcome": {

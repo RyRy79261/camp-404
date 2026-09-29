@@ -113,6 +113,7 @@ describe("recordPayment and setPaymentStatus (store)", () => {
         paymentId: id,
         from: "pending",
         to: "reconciled",
+        actorId: captain.id,
       }),
     ).toBe(true);
     // A second captain still looking at "pending" changes nothing.
@@ -121,6 +122,7 @@ describe("recordPayment and setPaymentStatus (store)", () => {
         paymentId: id,
         from: "pending",
         to: "waived",
+        actorId: captain.id,
       }),
     ).toBe(false);
     expect(testStore.listPayments(2027)[0]?.status).toBe("reconciled");

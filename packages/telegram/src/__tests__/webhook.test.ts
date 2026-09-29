@@ -45,9 +45,7 @@ describe("parseUpdate", () => {
     };
     const parsed = parseUpdate(raw);
     expect(parsed.update_id).toBe(42);
-    expect(inviteLinkFromUpdate(parsed.chat_member!)).toBe(
-      "https://t.me/+abc",
-    );
+    expect(inviteLinkFromUpdate(parsed.chat_member!)).toBe("https://t.me/+abc");
   });
 
   it("returns null invite link when none is on the update", () => {

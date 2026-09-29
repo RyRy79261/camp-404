@@ -9,6 +9,7 @@ import type {
   NumericAggregate,
   QuestionAggregate,
   QuestionKind,
+  RatingGridAggregate,
   ResponseAggregate,
 } from "@camp404/core";
 import type { Question } from "@camp404/types";
@@ -121,6 +122,7 @@ const KIND_LABEL: { [K in QuestionKind]: string } = {
   years: "Years",
   multi_choice_grid: "Grid",
   checkbox_grid: "Grid",
+  rating_grid: "Rating grid",
 };
 
 const NUMBER = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
@@ -553,7 +555,91 @@ function AggregateChart({
           ))}
         </div>
       );
+
+    case "rating_grid":
+      return <RatingGridTable aggregate={aggregate} />;
   }
+}
+
+/**
+ * A rating grid's summary (#251): per row, the average, how many rated it and
+ * how many said N/A. A table, so a screen reader reads each row's figures
+ * against their headings. Counts and averages only; who said what stays on
+ * the Individual tab.
+ */
+function RatingGridTable({ aggregate }: { aggregate: RatingGridAggregate }) {
+  const points = aggregate.scale.length;
+  const stars = aggregate.display === "stars";
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <caption className="sr-only">
+          Average for each row, out of {points}
+        </caption>
+        <thead>
+          <tr className="text-left text-xs text-muted-foreground">
+            <th scope="col" className="py-1.5 pr-3 font-medium">
+              {stars ? "Item" : "Statement"}
+            </th>
+            <th scope="col" className="px-3 py-1.5 text-right font-medium">
+              Average
+            </th>
+            <th scope="col" className="px-3 py-1.5 text-right font-medium">
+              Rated
+            </th>
+            {aggregate.allowNa && (
+              <th scope="col" className="py-1.5 pl-3 text-right font-medium">
+                {aggregate.naLabel}
+              </th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {aggregate.rows.map((row) => {
+            return (
+              <tr key={row.id} className="border-t border-border align-top">
+                <th scope="row" className="py-2 pr-3 text-left font-normal">
+                  {row.label}
+                  {!row.known && <UnlistedFlag text="removed" />}
+                </th>
+                <td className="px-3 py-2 text-right">
+                  {row.mean === null ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap font-medium tabular-nums">
+                      {NUMBER.format(row.mean)}
+                      {stars && (
+                        <Star
+                          className="h-3.5 w-3.5 fill-current text-warning"
+                          aria-hidden
+                        />
+                      )}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        of {points}
+                      </span>
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {row.rated}
+                </td>
+                {aggregate.allowNa && (
+                  <td className="py-2 pl-3 text-right tabular-nums text-muted-foreground">
+                    {row.na}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {!stars && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          1 is {aggregate.scale[0]}, {points} is {aggregate.scale[points - 1]}.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function ChoiceRows({ rows }: { rows: readonly ChoiceRow[] }) {

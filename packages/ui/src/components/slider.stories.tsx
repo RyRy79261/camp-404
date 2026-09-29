@@ -13,13 +13,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   render: () => (
-    <Slider
-      className="w-64"
-      defaultValue={[40]}
-      min={0}
-      max={100}
-      step={1}
-    />
+    <Slider className="w-64" defaultValue={[40]} min={0} max={100} step={1} />
   ),
 };
 

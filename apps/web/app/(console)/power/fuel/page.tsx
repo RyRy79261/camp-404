@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { AlertTriangle, Fuel, Lock, PlugZap, Zap } from "lucide-react";
+import { AlertTriangle, Fuel, Lock, Zap } from "lucide-react";
 import {
+  burnRate,
   canEditPower,
   dayLabel,
   fuelForPlan,
@@ -11,7 +11,6 @@ import {
 } from "@camp404/core";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
-import { Button } from "@camp404/ui/components/button";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import {
@@ -34,6 +33,7 @@ import {
   type GeneratorInventoryOption,
 } from "@/components/power/generator-dialog";
 import { PowerKpiCards, type PowerKpi } from "@/components/power/load-panels";
+import { PowerTabs } from "@/components/power/power-tabs";
 import { captainPageGate } from "@/lib/captain-gate";
 import {
   getGenerator,
@@ -48,12 +48,12 @@ import {
 import {
   FUEL_LABELS,
   GENERATOR_OWNER_LABELS,
-  POWER_LOADS_PATH,
   POWER_REFUSAL,
   formatNumber,
   litres,
   runText,
 } from "@/lib/power-copy";
+import { listRefuelEntries, previousRefuelCycle } from "@/lib/power-site";
 import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
@@ -226,20 +226,37 @@ function planValues(plan: PowerPlan) {
   };
 }
 
+/**
+ * The litres a day last year's refuelling log shows, over the whole log, or
+ * null with no earlier year or fewer than two refuellings (#255).
+ */
+async function lastYearRate(): Promise<{
+  cycle: number;
+  litresPerDay: number;
+} | null> {
+  const cycle = await previousRefuelCycle();
+  if (cycle === null) return null;
+  const rate = burnRate(await listRefuelEntries(cycle), Infinity);
+  return rate ? { cycle, litresPerDay: rate.litresPerDay } : null;
+}
+
 export default async function PowerFuelPage() {
   // Every approved member reads the estimate.
   const { campUser, rank } = await captainPageGate("camp_member");
   const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
   const canEdit = canEditPower(rank, leadTeams);
 
-  const [loads, plan, generators, inventory, earlier] = await Promise.all([
-    listPowerLoads(),
-    getPowerPlan(),
-    listGenerators(),
-    // Only an editor links a generator to the inventory.
-    canEdit ? listPowerInventory() : Promise.resolve([]),
-    previousPlanCycle(),
-  ]);
+  const [loads, plan, generators, inventory, earlier, lastYear] =
+    await Promise.all([
+      listPowerLoads(),
+      getPowerPlan(),
+      listGenerators(),
+      // Only an editor links a generator to the inventory.
+      canEdit ? listPowerInventory() : Promise.resolve([]),
+      previousPlanCycle(),
+      // Last year's refuelling log, for its litres a day beside the estimate.
+      lastYearRate(),
+    ]);
   // The plan may name a generator archived since; it still reads.
   const generator = plan.generatorId
     ? (generators.find((g) => g.id === plan.generatorId) ??
@@ -288,7 +305,14 @@ export default async function PowerFuelPage() {
         key: "litres-day",
         label: "Litres a day",
         value: litres(busiestDay(main), 2),
-        hint: `on the busiest day, running ${planSchedule}`,
+        hint: [
+          `on the busiest day, running ${planSchedule}`,
+          lastYear
+            ? `${lastYear.cycle} used ${formatNumber(lastYear.litresPerDay, 1)} L a day`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
       },
       {
         key: "litres-burn",
@@ -382,18 +406,9 @@ export default async function PowerFuelPage() {
         eyebrow="Power & Lighting"
         title="Fuel estimate"
         description="The litres and jerry cans the camp's generator needs for the load list. Everyone can read it; captains and Power & Lighting leads edit it."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline">
-              <Link href={POWER_LOADS_PATH}>
-                <PlugZap aria-hidden />
-                Load list
-              </Link>
-            </Button>
-            {copyPlan}
-          </div>
-        }
+        actions={copyPlan}
       />
+      <PowerTabs tab="fuel" />
 
       <div className="flex flex-col gap-6">
         {!canEdit && (

@@ -120,7 +120,10 @@ export function RosterList({
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   This year
                 </span>
-                <ThisYearBadge status={r.thisYear ?? null} />
+                <ThisYearBadge
+                  status={r.thisYear ?? null}
+                  says={r.thisYearSays ?? null}
+                />
                 {onDecideThisYear && (
                   <ThisYearDecisionButtons
                     row={r}

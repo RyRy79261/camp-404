@@ -9,6 +9,7 @@ import {
   type Questionnaire,
   type QuestionnaireResponses,
   type QuestionnaireResponseValue,
+  type RatingGridQuestion,
   type RatingQuestion,
   type SliderQuestion,
   type TimeQuestion,
@@ -68,7 +69,10 @@ import {
 //     does not override that;
 //   * `file_link` is a `count` — a URL is free text;
 //   * the grids are `grid` — per-row column tallies over the author's own
-//     rows and columns.
+//     rows and columns;
+//   * `rating_grid` (#251) is `rating_grid` — per row, the average position,
+//     how many rated it, how many said N/A, and a count per point. Counts and
+//     averages only: no row names who gave which rating.
 
 /** Every discriminant of the `Question` union. */
 export type QuestionKind = Question["kind"];
@@ -79,7 +83,8 @@ export type AggregateShape =
   | "numeric"
   | "count"
   | "timeline"
-  | "grid";
+  | "grid"
+  | "rating_grid";
 
 /**
  * The kind → shape routing table, and the exhaustiveness guard for this whole
@@ -120,6 +125,7 @@ export const KIND_SHAPE: { [K in QuestionKind]: AggregateShape } = {
   years: "timeline",
   multi_choice_grid: "grid",
   checkbox_grid: "grid",
+  rating_grid: "rating_grid",
 };
 
 /** The single row every `other:<text>` answer collapses into. */
@@ -263,12 +269,45 @@ export interface GridAggregate extends AggregateBase {
   rows: GridRowAggregate[];
 }
 
+/** One rating grid row's summary. */
+export interface RatingGridRowAggregate {
+  id: string;
+  /** The row's label, or its raw id when the row is gone. */
+  label: string;
+  /** False when the definition no longer declares this row (property 3). */
+  known: boolean;
+  /** Respondents who rated this row (a point, not N/A) — the mean's base. */
+  rated: number;
+  /** Respondents who picked N/A. */
+  na: number;
+  /** The average position, 1-based, rounded to 2dp; null when nobody rated. */
+  mean: number | null;
+  /**
+   * How many picked each point, in scale order (`counts[0]` is position 1).
+   * A stored position past the current scale's end is left out of `counts`
+   * but still in `rated` and `mean` (property 4: never clamped).
+   */
+  counts: number[];
+}
+
+/** A rating grid: an average and a count per row, over one shared scale. */
+export interface RatingGridAggregate extends AggregateBase {
+  shape: "rating_grid";
+  display: "scale" | "stars";
+  /** The point labels, left to right. */
+  scale: string[];
+  allowNa: boolean;
+  naLabel: string;
+  rows: RatingGridRowAggregate[];
+}
+
 export type QuestionAggregate =
   | ChoiceAggregate
   | NumericAggregate
   | CountAggregate
   | TimelineAggregate
-  | GridAggregate;
+  | GridAggregate
+  | RatingGridAggregate;
 
 /**
  * An answer to a question the definition no longer has (property 2). Counted
@@ -317,9 +356,12 @@ function bucketKey(n: number): number {
 function isAnswered(value: QuestionnaireResponseValue | undefined): boolean {
   if (value === undefined || value === null || value === "") return false;
   if (Array.isArray(value)) return value.length > 0;
-  // A grid answer counts once any row carries a pick.
+  // A grid answer counts once any row carries a pick; a rating grid's once
+  // any row carries a rating or N/A.
   if (typeof value === "object") {
-    return Object.values(value).some((picks) => picks.length > 0);
+    return Object.values(value).some((cell) =>
+      Array.isArray(cell) ? cell.length > 0 : cell !== undefined,
+    );
   }
   return true;
 }
@@ -605,7 +647,7 @@ function aggregateGrid(
       !Array.isArray(answer)
     ) {
       for (const [rowId, picks] of Object.entries(answer)) {
-        if (picks.length > 0) storedRows.add(rowId);
+        if (Array.isArray(picks) && picks.length > 0) storedRows.add(rowId);
       }
     }
   }
@@ -652,6 +694,86 @@ function aggregateGrid(
     shape: "grid",
     multi: question.kind === "checkbox_grid",
     columns,
+    rows,
+  };
+}
+
+/** One stored rating grid cell: a position, "na", or null for anything else. */
+function ratingCell(
+  value: QuestionnaireResponseValue,
+  rowId: string,
+): number | "na" | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const cell = (value as Record<string, unknown>)[rowId];
+  if (cell === "na") return "na";
+  return typeof cell === "number" && Number.isFinite(cell) ? cell : null;
+}
+
+function aggregateRatingGrid(
+  question: RatingGridQuestion,
+  base: AggregateBase,
+  answers: QuestionnaireResponseValue[],
+): RatingGridAggregate {
+  const declaredRows = new Set(question.rows.map((row) => row.id));
+  const storedRows = new Set<string>();
+  for (const answer of answers) {
+    if (
+      answer !== null &&
+      typeof answer === "object" &&
+      !Array.isArray(answer)
+    ) {
+      for (const rowId of Object.keys(answer)) {
+        if (ratingCell(answer, rowId) !== null) storedRows.add(rowId);
+      }
+    }
+  }
+  const rowList = [
+    ...question.rows.map((row) => ({ ...row, known: true })),
+    ...[...storedRows]
+      .filter((rowId) => !declaredRows.has(rowId))
+      .sort()
+      .map((rowId) => ({ id: rowId, label: rowId, known: false })),
+  ];
+
+  const rows: RatingGridRowAggregate[] = rowList.map((row) => {
+    const counts = question.scale.map(() => 0);
+    let rated = 0;
+    let na = 0;
+    let total = 0;
+    for (const answer of answers) {
+      const cell = ratingCell(answer, row.id);
+      if (cell === null) continue;
+      if (cell === "na") {
+        na += 1;
+        continue;
+      }
+      rated += 1;
+      total += cell;
+      const index = cell - 1;
+      if (Number.isInteger(cell) && index >= 0 && index < counts.length) {
+        counts[index] = (counts[index] ?? 0) + 1;
+      }
+    }
+    return {
+      id: row.id,
+      label: row.label,
+      known: row.known,
+      rated,
+      na,
+      mean: rated > 0 ? round2(total / rated) : null,
+      counts,
+    };
+  });
+
+  return {
+    ...base,
+    shape: "rating_grid",
+    display: question.display ?? "scale",
+    scale: [...question.scale],
+    allowNa: question.allowNa === true,
+    naLabel: question.naLabel?.trim() || "N/A",
     rows,
   };
 }
@@ -718,6 +840,13 @@ function aggregateOne(
         throw new Error(`Grid shape routed a non-grid kind: ${question.kind}`);
       }
       return aggregateGrid(question, base, answers);
+    case "rating_grid":
+      if (question.kind !== "rating_grid") {
+        throw new Error(
+          `Rating grid shape routed another kind: ${question.kind}`,
+        );
+      }
+      return aggregateRatingGrid(question, base, answers);
     default: {
       // Unreachable while `AggregateShape` and this switch agree; a new shape
       // added to the union without an arm here is a compile error naming it.

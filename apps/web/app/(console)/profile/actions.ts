@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { canLeaveCamp } from "@camp404/core";
+import { z } from "zod";
+import { canLeaveCamp, mayRecordTicket } from "@camp404/core";
+import { TICKET_STATUSES } from "@camp404/types";
+import { captainActionGate } from "@/lib/captain-gate";
+import { getMyParticipation } from "@/lib/participations";
+import { setMyTicketStatus } from "@/lib/tickets";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { countActiveCaptains } from "@/lib/bootstrap";
 import {
@@ -146,6 +151,44 @@ export async function updateCampBlurb(input: {
       showOnJoin: campUser.rank === "captain" && input.showOnJoin,
     });
     revalidatePath("/profile/edit");
+    return { ok: true };
+  });
+}
+
+export type MyTicketResult = { ok: true } | { ok: false; error: string };
+
+const MyTicketInput = z.object({ ticketStatus: z.enum(TICKET_STATUSES) });
+
+/**
+ * The member says where their own Burn ticket stands this year (#238). Their
+ * own data, so any approved member may set it, and only for themselves: the
+ * id is the session's, never the caller's.
+ */
+export async function setMyTicketAction(input: {
+  ticketStatus: string;
+}): Promise<MyTicketResult> {
+  return runAction("setMyTicketAction", async () => {
+    const gate = await captainActionGate("camp_member");
+    if (!gate.ok) return gate;
+    const parsed = MyTicketInput.safeParse(input);
+    if (!parsed.success)
+      return { ok: false, error: "Pick one of the options." };
+    // The same rule as the page: a ticket matters only to someone who might
+    // come, so not before they answer and not once they say No.
+    const participation = await getMyParticipation(gate.campUser.id);
+    if (!mayRecordTicket(participation?.status ?? null)) {
+      return {
+        ok: false,
+        error: "Say you're coming this year first, then add your ticket.",
+      };
+    }
+    await setMyTicketStatus({
+      userId: gate.campUser.id,
+      ticketStatus: parsed.data.ticketStatus,
+    });
+    revalidatePath("/profile");
+    revalidatePath("/captains/applications");
+    revalidatePath("/captains/overview");
     return { ok: true };
   });
 }
