@@ -134,6 +134,9 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "meetings" },
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
+      { kind: "program", id: "camp-layout" },
+      { kind: "program", id: "lounge" },
+      { kind: "program", id: "inventory" },
       { kind: "program", id: "transport" },
       { kind: "program", id: "family-tree" },
       { kind: "program", id: "about" },
@@ -150,6 +153,11 @@ describe("buildProgramManifest: the personas", () => {
     expect(m.pins).toBe(true);
     expect(m.allowedChildren).not.toContain(pid("results"));
     expect(m.allowedChildren).not.toContain(pid("edit-recipe"));
+    // Their team's folder holds the camp layout (#271), read-only for them.
+    expect(teamFolder(m, STRUCTURES)?.programs.map((p) => p.id)).toEqual([
+      `team:${STRUCTURES}`,
+      "camp-layout",
+    ]);
   });
 
   it("gives a plain member a coarse health flag with no detail in it", () => {
@@ -206,6 +214,26 @@ describe("buildProgramManifest: the personas", () => {
     expect(m.allowedChildren).not.toContain(pid("results"));
   });
 
+  it("puts Inventory in the Transport and Logistics team's folder, for every member on it", () => {
+    const m = buildProgramManifest(
+      facts({
+        memberships: [
+          { team: Team.enum.transport_and_logistics, isLead: false },
+        ],
+      }),
+    );
+    expect(
+      teamFolder(m, Team.enum.transport_and_logistics)?.programs.map(
+        (p) => p.id,
+      ),
+    ).toEqual([
+      `team:${Team.enum.transport_and_logistics}`,
+      "inventory",
+      "transport",
+    ]);
+    expect(m.allowedChildren).toContain(pid("inventory-item"));
+  });
+
   it("gives a Power lead no Recipe review, but the lead programs", () => {
     const m = buildProgramManifest(
       facts({ rank: LEAD, memberships: [{ team: POWER, isLead: true }] }),
@@ -219,6 +247,17 @@ describe("buildProgramManifest: the personas", () => {
     ]);
   });
 
+  it("puts the lounge programme in the Ministry of Vibes folder, for a plain member too", () => {
+    const VIBES = Team.enum.ministry_of_vibes;
+    const m = buildProgramManifest(
+      facts({ memberships: [{ team: VIBES, isLead: false }] }),
+    );
+    expect(teamFolder(m, VIBES)?.programs.map((p) => p.id)).toEqual([
+      `team:${VIBES}`,
+      "lounge",
+    ]);
+  });
+
   it("puts Transport in a Transport & Logistics member's team folder", () => {
     const TRANSPORT = Team.enum.transport_and_logistics;
     const m = buildProgramManifest(
@@ -226,6 +265,7 @@ describe("buildProgramManifest: the personas", () => {
     );
     expect(teamFolder(m, TRANSPORT)?.programs.map((p) => p.id)).toEqual([
       `team:${TRANSPORT}`,
+      "inventory",
       "transport",
     ]);
   });

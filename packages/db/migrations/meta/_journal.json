@@ -498,6 +498,27 @@
       "when": 1790610175115,
       "tag": "0070_power_on_site",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1790629089094,
+      "tag": "0071_inventory",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1790682626412,
+      "tag": "0072_lounge_programme",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1790705595565,
+      "tag": "0073_camp_layout",
+      "breakpoints": true
     }
   ]
 }

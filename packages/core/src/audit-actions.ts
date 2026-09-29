@@ -22,6 +22,8 @@ export const AUDIT_ACTION_LABELS = {
   // No longer written (the settings were removed, 2026-09-24); kept so a row
   // written before still reads.
   "camp.kitchen_settings.changed": "Changed the kitchen settings",
+  "camp.layout.shared": "Shared the camp layout with neighbours",
+  "camp.layout.unshared": "Stopped sharing the camp layout",
   "camp.teams.archived": "Archived a team",
   "camp.teams.described": "Changed what a team does",
   "camp.teams.moved": "Moved a team in the list",
@@ -41,8 +43,15 @@ export const AUDIT_ACTION_LABELS = {
   "document.published": "Published a camp document",
   "document.unpublished": "Unpublished a camp document",
   "document.updated": "Edited a camp document",
+  "inventory.booking_cancelled": "Cancelled a member's gear booking",
+  "inventory.change_approved": "Approved a change to camp gear",
+  "inventory.change_rejected": "Rejected a change to camp gear",
   "invite.revoked": "Revoked an invite code",
   "join_site.section_saved": "Changed the join site",
+  "lounge.music_policy_changed": "Changed the lounge's music note",
+  "lounge.offer_decided": "Decided a lounge offer",
+  "lounge.offer_placed": "Put a lounge offer on the programme",
+  "lounge.slot_removed": "Took an item off the lounge programme",
   "member.approval_decided": "Decided an application",
   "member.bank_details.viewed": "Viewed bank details",
   "member.export": "Exported the member list",
@@ -175,6 +184,13 @@ function participationDetail(
   return cycle === null ? word : `${word} for ${cycle}`;
 }
 
+// What a lounge decision did, by the status it set.
+const LOUNGE_DECISION_WORDS: Record<string, string> = {
+  accepted: "Accepted",
+  declined: "Declined",
+  needs_changes: "Asked for changes to",
+};
+
 // The database stores two ranks. A team lead is a member who leads a team.
 const RANK_WORDS: Record<string, string> = {
   captain: "captain",
@@ -217,6 +233,31 @@ export function auditDetail(
       return metadata?.isLead === true
         ? `Now leads ${teamLabel(team)}`
         : `No longer leads ${teamLabel(team)}`;
+    }
+    case "lounge.offer_decided": {
+      const to = text(metadata, "to");
+      const title = text(metadata, "title");
+      const word =
+        to && Object.hasOwn(LOUNGE_DECISION_WORDS, to)
+          ? LOUNGE_DECISION_WORDS[to]
+          : undefined;
+      if (!word || !title) return null;
+      return `${word} "${title}"`;
+    }
+    case "lounge.offer_placed":
+    case "lounge.slot_removed": {
+      const title = text(metadata, "title");
+      const day = count(metadata, "day");
+      if (!title) return null;
+      return day === null ? `"${title}"` : `"${title}", day ${day}`;
+    }
+    case "inventory.booking_cancelled":
+    case "inventory.change_approved":
+    case "inventory.change_rejected": {
+      const item = text(metadata, "item");
+      const team = text(metadata, "team");
+      if (!item) return null;
+      return team ? `${item} (${teamLabel(team)})` : item;
     }
     case "member.membership_tier_set": {
       const tierWord = (key: string): string | null => {
