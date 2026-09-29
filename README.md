@@ -1,131 +1,160 @@
-# Camp 404
+<div align="center">
+  <img src="apps/web/app/icon.svg" alt="Camp 404" width="96" height="96">
+  <h1>Camp 404</h1>
+  <p><strong>The lost clutter of imagination.</strong><br>
+  A calm command centre for a chaotic desert.</p>
+</div>
 
-> A calm command centre for a chaotic desert.
+Camp 404 is a theme camp at AfrikaBurn. This repo is the camp's own
+operations app: one place for its 30 to 80 members to sign up, say whether
+they are coming, pay their dues, find a lift, and run their team's work, and
+for captains to keep applications, tickets, money and notices in order. It is
+an internal tool, not a social network.
 
-Cross-platform camp management app for the Afrikaburn theme camp **Camp 404** — web + iOS + Android from a single Next.js codebase, wrapped by Capacitor for mobile.
+Signed-in members work in **404 OS**, a retro desktop in the browser: each
+tool is a program in its own window, and a phone gets a home screen instead.
+The public recruiting site, [join.camp-404.com](https://join.camp-404.com),
+wears the same desktop and needs no sign-in.
 
-See [`docs/brief.md`](docs/brief.md) for the full project brief (vision, architecture, features, POPIA, roadmap).
+<p align="center">
+  <img src="apps/web/public/inkblot/neon-404.jpg" alt="The camp's neon 404 sign at night in the Tankwa Karoo" width="480">
+</p>
 
-## Stack
+## What is in it
 
-- **Monorepo:** Turborepo + pnpm workspaces
-- **Web:** Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui
-- **Mobile:** Capacitor 8 wrapping the same Next.js static export
-- **Database:** Neon Postgres + Drizzle ORM (HTTP + WebSocket drivers)
-- **Auth:** self-hosted Better Auth (`packages/auth`) with two-factor and passkeys — handler at `/api/auth/*`, screens at `/auth/*`, security settings at `/profile/security`
-- **AI:** Anthropic Claude Opus 4.8 (reasoning) + Haiku 4.5 (intent) + Groq Whisper Large v3 Turbo (voice)
-- **Push:** Firebase Cloud Messaging (iOS, Android, Web Push)
-- **Storage:** Vercel Blob — used for [profile photos](docs/profile-photos.md), receipts, and voice memos
-- **Payments:** TBD
+- **For every member:** the desktop and Today, the inbox and announcements,
+  My forms, My dues, My lift, Tasks, the Calendar, the Roster and Family
+  tree, About Camp 404, and each team's program (Power, Transport, the
+  Kitchen's recipes and meal plan, meetings). Themes include Calm, High
+  contrast and Colour-blind safe.
+- **For captains (and leads, where the owner said so):** Applications (who is
+  coming, the DDT and WAP), Payments and dues, Announcements, the
+  questionnaire builder, Camp settings, the Join site editor, the Audit log and
+  System status.
 
-## Layout
+The product vision is in [`docs/brief.md`](docs/brief.md). Planned work that
+is not built yet is in GitHub issues and open pull requests, not here.
 
+## Workspace
+
+A Turborepo with pnpm workspaces (Node 22 or newer, pnpm 10).
+
+| Path                                                   | What it is                                                |
+| ------------------------------------------------------ | --------------------------------------------------------- |
+| [`apps/web`](apps/web/README.md)                       | The console: Next.js 16, React 19, Tailwind v4            |
+| [`apps/join`](apps/join/README.md)                     | join.camp-404.com, the recruiting site                    |
+| [`apps/admin-cli`](apps/admin-cli/README.md)           | A Node CLI for seeding and invite codes on a dev database |
+| [`apps/mobile`](apps/mobile/README.md)                 | The Capacitor shell for iOS and Android (deferred)        |
+| [`packages/core`](packages/core/README.md)             | Domain rules with no I/O: access, privacy, money, …       |
+| [`packages/db`](packages/db/README.md)                 | Drizzle schema, migrations and every query                |
+| [`packages/auth`](packages/auth/README.md)             | Self-hosted Better Auth: passwords, passkeys, two-factor  |
+| [`packages/os`](packages/os/README.md)                 | The 404 OS window engine                                  |
+| [`packages/games`](packages/games/README.md)           | The desktop's games and cats                              |
+| [`packages/ui`](packages/ui/README.md)                 | Shared components (shadcn/ui) and the design tokens       |
+| [`packages/types`](packages/types/README.md)           | Zod schemas and shared types                              |
+| [`packages/ai-prompts`](packages/ai-prompts/README.md) | Versioned prompt templates                                |
+| [`packages/telegram`](packages/telegram/README.md)     | The Telegram bot client; outbound is built but off        |
+| `packages/eslint-config`, `packages/typescript-config` | Shared lint and TypeScript settings                       |
+
+```mermaid
+flowchart TB
+  subgraph apps
+    direction LR
+    mobile["apps/mobile<br/>Capacitor shell"]
+    web["apps/web<br/>the console, camp-404.com"]
+    join["apps/join<br/>join.camp-404.com"]
+    cli["apps/admin-cli"]
+  end
+  subgraph packages["packages (apps/web imports all of them)"]
+    direction TB
+    ui["ui"] & os["os"] & games["games"] & auth["auth"] & telegram["telegram"] & prompts["ai-prompts"]
+    db["db"]
+    core["core"]
+    types["types"]
+  end
+  web --> packages
+  mobile -. wraps the web export .-> web
+  join --> os & games & db & types
+  cli --> db & types
+  games -. CSS order only .-> os
+  ui --> core
+  auth --> db
+  telegram --> db
+  prompts --> types
+  db --> core
+  core --> types
 ```
-apps/
-  web/        Next.js app (served on Vercel; statically exported for mobile)
-  mobile/     Capacitor host (iOS + Android)
-  admin-cli/  Node CLI for data ops
-packages/
-  ui/         Shared shadcn/ui components
-  db/         Drizzle schema + migrations
-  types/      Zod schemas + shared TS types
-  ai-prompts/ Versioned prompt templates
-  eslint-config/
-  typescript-config/
-```
 
-Design: [`docs/design-system.md`](docs/design-system.md) documents the
-`@camp404/ui` tokens and components.
+`@camp404/os` never imports `@camp404/games`. How a request travels, the
+member gate, sign-in, the data model and the notice pipeline are drawn in
+[`docs/architecture.md`](docs/architecture.md).
 
-## Getting started
+## Quickstart
 
 ```bash
 pnpm install
-cp .env.example apps/web/.env.local   # fill in the variables you need
+cp .env.example apps/web/.env.local   # fill in what you need; most services stay off without keys
 
-# Drizzle schema → SQL migrations
-pnpm --filter @camp404/db db:generate
-pnpm --filter @camp404/db db:migrate
+# A local Postgres and Neon proxy in Docker (ports 54322 and 4444)
+pnpm db:local:up
+pnpm db:local:migrate
 
-# Dev (web only)
+# The console on http://localhost:3000
+NEON_LOCAL_PROXY=1 \
+DATABASE_URL=postgres://postgres:postgres@db.localtest.me:5432/main \
 pnpm --filter @camp404/web dev
 
-# Component Storybook (@camp404/ui)
-pnpm --filter @camp404/ui storybook
+# The join site on http://localhost:3404
+pnpm --filter @camp404/join dev
 
-# Everything (lint, typecheck, test, build)
+# The CI gate: run it before you push
 pnpm turbo run lint typecheck test build
 ```
 
-## Kitchen
+- To change the schema, edit `packages/db/src/schema.ts` and run
+  `pnpm --filter @camp404/db db:generate`. Never hand-write a migration; see
+  [`AGENTS.md`](AGENTS.md#database--read-this-before-touching-the-schema).
+- The Playwright suites and how CI runs them are in
+  [`apps/web/tests/e2e/README.md`](apps/web/tests/e2e/README.md).
+- Components have a Storybook: `pnpm --filter @camp404/ui storybook`.
+- `pnpm db:local:down` stops the database; its data volume stays.
 
-Recipes live under `/kitchen/recipes`, and read like
-[Noble Notations](https://www.noble-notations.com)' recipe pages:
+## How it runs
 
-| Route                        | Who               | What it is                                                                                                 |
-| ---------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------- |
-| `/kitchen/recipes`           | Every member      | The recipe book, and your own suggestions.                                                                 |
-| `/kitchen/recipes/new`       | Every member      | Import a recipe by pasting its text (or dictating it).                                                     |
-| `/kitchen/recipes/review`    | Kitchen reviewers | Suggestions to decide and approved recipes to send to Claude; older drafts wait here to be accepted.       |
-| `/kitchen/recipes/[id]`      | Every member      | One recipe, once it is in the book (sooner for its submitter); `?plates=45` shows a proofread plate count. |
-| `/kitchen/recipes/[id]/edit` | Kitchen reviewers | The source editor: edit what the recipe says and send it to Claude, who asks questions or writes it.       |
+- **Hosting.** Both apps deploy to Vercel in `fra1` (Frankfurt), beside the
+  Neon Postgres database. The web app's `vercel-build` runs the migrations
+  before `next build`, so every deploy applies pending migrations, and a data
+  fix ships as a migration too.
+- **Sign-in.** Self-hosted Better Auth with passwords, passkeys, two-factor and
+  Google. A preview signs in with Google through production.
+- **No cron jobs.** The camp is on Vercel's free plan. Notices, reminders and
+  upkeep run after the action that caused them, or on a page load, in
+  `after()` (`apps/web/lib/background-work.ts`).
+- **CI.** Pull requests must pass one required check, `ci-pass`, which waits
+  for lint, typecheck, unit tests, the build, the migrations on a Neon branch,
+  the Playwright suites (the web app's against a production build), a
+  dependency audit and commitlint.
 
-A Kitchen reviewer is a lead of the Kitchen team or a captain, and either may
-start a Claude run (the owner's decision 2A). A run that succeeds goes
-straight into the book. There is no daily limit on runs (the owner removed
-it). A run stuck over 10 minutes is reset when a Kitchen page loads or the
-source editor's loading panel polls.
+## Security and POPIA
 
-## Mobile builds
+- ID and passport numbers and bank details are encrypted column by column
+  (AES-256-GCM, `packages/db/src/crypto.ts`). The app never stores passport
+  images, card numbers or CVVs.
+- Privacy classes are enforced on the server (`packages/core/src/privacy.ts`),
+  and reads of private data are recorded in the audit log.
+- A member can delete their account. What must stay for the camp's records
+  becomes a `Lost Cat #N` stub.
+- To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
 
-See [`apps/mobile/README.md`](apps/mobile/README.md). App Store / Play submission is deferred per the project brief.
+## Docs
 
-## Deploying
-
-The web app deploys to Vercel. The `vercel-build` script in
-`apps/web/package.json` runs `drizzle-kit migrate` before `next build`,
-so every deploy applies any pending migrations to whichever database
-`DATABASE_URL` points at. Vercel auto-detects `vercel-build` and runs it
-in place of `build` — no project setting required, as long as the
-project's Build Command field is left empty (or set to `next build`).
-
-If you've set a custom Build Command in the Vercel dashboard, change it
-to `pnpm vercel-build` (with the project's Root Directory at
-`apps/web`) or fold `pnpm --filter @camp404/db db:migrate &&` into the
-front of whatever command you use.
-
-`drizzle-kit migrate` tracks applied migrations in the
-`__drizzle_migrations` table, so it is safe to run on every deploy.
-
-## Background work (no cron jobs)
-
-The camp runs on Vercel's free plan, so nothing is scheduled:
-`apps/web/vercel.json` has no `crons`. The work that used to run daily now
-runs when people use the app, after the response (`apps/web/lib/background-work.ts`):
-
-| Work                                                                                          | When it runs                                                                                               |
-| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Announcement fan-out, push, email                                                             | Right after the action that wrote the notices, and on any page load for anything left queued or scheduled. |
-| Questionnaire and task deadline reminders                                                     | On a page load, 09:00–21:00 camp time, deduped as before.                                                  |
-| Upkeep: encrypt leftover plaintext ID numbers, delete orphan avatar folders (production only) | On a page load, once a day. Erasure also deletes the member's own folder at once.                          |
-
-- The page-load run is guarded by a row in `action_rate_limit`, so it runs at
-  most once every five minutes across every server.
-- Push and email are skipped until Firebase and Resend are configured; their
-  deliveries stay queued until then.
-- Captains can read this list at `/captains/system`.
-
-## Security / POPIA
-
-- Passport / SA ID numbers and EFT details are column-level encrypted with `pgcrypto`.
-- We never store passport images, credit card numbers, or CVVs.
-- Members can sanitise or fully delete their account; anonymised stub is renamed `Lost Cat #N` to preserve relational integrity.
-- See the project brief for the full data-protection model.
-
-## Status
-
-**Phase 0 — Setup.** Scaffold only; no runtime functionality wired up beyond `/api/health`.
-Next: Phase 1 (Members & payments) — signup flow, T&Cs, Zapper invoice, account sanitisation.
+- [`AGENTS.md`](AGENTS.md): the rulebook for agents and people, with the
+  owner's rulings. Read it before you change anything.
+- [`docs/architecture.md`](docs/architecture.md): the diagrams.
+- [`docs/design-system.md`](docs/design-system.md): the tokens and components.
+- [`docs/specs`](docs/specs) and [`docs/plans`](docs/plans): designs, each with
+  a status line at the top.
+- [`DEFERRED.md`](DEFERRED.md): work left for later on purpose.
 
 ## License
 
