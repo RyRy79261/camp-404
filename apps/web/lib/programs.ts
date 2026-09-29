@@ -251,6 +251,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // The camp's gear (#246): every member reads it, suggests changes and
+  // books; a captain or a lead of the item's team changes it.
+  {
+    id: "inventory",
+    label: "Inventory",
+    fileName: "INVENTRY.DB",
+    href: "/inventory",
+    icon: "inventory",
+    place: CAMP,
+    rank: "camp_member",
+  },
   // Transport (#270): every approved member reads the car list; the page's
   // controls and the writes carry their own rules.
   {
@@ -593,6 +604,15 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: null,
     rank: "captain",
   },
+  {
+    id: "inventory-item",
+    label: "Item",
+    fileName: "ITEM.DAT",
+    href: null,
+    icon: "inventory",
+    place: null,
+    rank: "camp_member",
+  },
   // INKBLOT, opened from the Terminal (`play inkblot`), never from an icon.
   {
     id: "inkblot",
@@ -658,9 +678,9 @@ export const TEAM_TOOLS: Readonly<Partial<Record<Team, readonly ProgramId[]>>> =
   {
     kitchen: ["recipes", "meal-plan", "recipe-review"],
     power_and_lighting: ["power"],
+    transport_and_logistics: ["inventory", "transport"],
     communications_and_hr: ["announcements", "questionnaires", "join-site"],
     finance: ["payments"],
-    transport_and_logistics: ["transport"],
   };
 
 // --- What leaves the server ---------------------------------------------------

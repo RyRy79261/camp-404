@@ -48,6 +48,7 @@
     "./power-grid": "./src/power-grid.ts",
     "./power-readiness": "./src/power-readiness.ts",
     "./power": "./src/power.ts",
+    "./inventory": "./src/inventory.ts",
     "./transport": "./src/transport.ts",
     "./team-programs": "./src/team-programs.ts",
     "./meal-plan": "./src/meal-plan.ts",

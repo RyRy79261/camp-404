@@ -41,6 +41,9 @@ export const AUDIT_ACTION_LABELS = {
   "document.published": "Published a camp document",
   "document.unpublished": "Unpublished a camp document",
   "document.updated": "Edited a camp document",
+  "inventory.booking_cancelled": "Cancelled a member's gear booking",
+  "inventory.change_approved": "Approved a change to camp gear",
+  "inventory.change_rejected": "Rejected a change to camp gear",
   "invite.revoked": "Revoked an invite code",
   "join_site.section_saved": "Changed the join site",
   "member.approval_decided": "Decided an application",
@@ -217,6 +220,14 @@ export function auditDetail(
       return metadata?.isLead === true
         ? `Now leads ${teamLabel(team)}`
         : `No longer leads ${teamLabel(team)}`;
+    }
+    case "inventory.booking_cancelled":
+    case "inventory.change_approved":
+    case "inventory.change_rejected": {
+      const item = text(metadata, "item");
+      const team = text(metadata, "team");
+      if (!item) return null;
+      return team ? `${item} (${teamLabel(team)})` : item;
     }
     case "member.membership_tier_set": {
       const tierWord = (key: string): string | null => {

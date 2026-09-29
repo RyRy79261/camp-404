@@ -134,6 +134,7 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "meetings" },
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
+      { kind: "program", id: "inventory" },
       { kind: "program", id: "transport" },
       { kind: "program", id: "family-tree" },
       { kind: "program", id: "about" },
@@ -206,6 +207,26 @@ describe("buildProgramManifest: the personas", () => {
     expect(m.allowedChildren).not.toContain(pid("results"));
   });
 
+  it("puts Inventory in the Transport and Logistics team's folder, for every member on it", () => {
+    const m = buildProgramManifest(
+      facts({
+        memberships: [
+          { team: Team.enum.transport_and_logistics, isLead: false },
+        ],
+      }),
+    );
+    expect(
+      teamFolder(m, Team.enum.transport_and_logistics)?.programs.map(
+        (p) => p.id,
+      ),
+    ).toEqual([
+      `team:${Team.enum.transport_and_logistics}`,
+      "inventory",
+      "transport",
+    ]);
+    expect(m.allowedChildren).toContain(pid("inventory-item"));
+  });
+
   it("gives a Power lead no Recipe review, but the lead programs", () => {
     const m = buildProgramManifest(
       facts({ rank: LEAD, memberships: [{ team: POWER, isLead: true }] }),
@@ -226,6 +247,7 @@ describe("buildProgramManifest: the personas", () => {
     );
     expect(teamFolder(m, TRANSPORT)?.programs.map((p) => p.id)).toEqual([
       `team:${TRANSPORT}`,
+      "inventory",
       "transport",
     ]);
   });

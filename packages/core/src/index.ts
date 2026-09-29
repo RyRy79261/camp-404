@@ -176,6 +176,7 @@ export * from "./participation";
 export * from "./membership-tier";
 export * from "./tickets";
 export * from "./power";
+export * from "./inventory";
 export * from "./power-site";
 export * from "./power-grid";
 export * from "./power-sharing";

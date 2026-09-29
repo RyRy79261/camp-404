@@ -24,6 +24,9 @@ import {
   CURRENT_KINDS,
   FUEL_TYPES,
   GENERATOR_OWNERS,
+  INVENTORY_CATEGORIES,
+  INVENTORY_CONDITIONS,
+  INVENTORY_LOCATIONS,
   LOAD_CATEGORIES,
   LOAD_OWNERS,
   LOAD_SCHEDULES,
@@ -42,6 +45,9 @@ import {
   type CurrentKind,
   type FuelType,
   type GeneratorOwner,
+  type InventoryCategory,
+  type InventoryCondition,
+  type InventoryLocation,
   type LoadCategory,
   type LoadOwner,
   type LoadSchedule,
@@ -2680,12 +2686,14 @@ export const workshopRsvps = pgTable(
   }),
 );
 
-// --- Inventory -----------------------------------------------------------
-// The camp's stocked gear, tracked for a status page reachable from the
-// member section. Each row is one stocked item with its current state.
-// Changes flow through `inventory_updates` (below): a regular member
-// proposes, a team lead / captain approves; a lead's own change is logged
-// as an already-approved update, so the pair is a full audit trail.
+// --- Inventory (#246) -----------------------------------------------------
+// The camp's gear, at /inventory. Each row is one item with its current
+// state. Every member reads it. A captain or a lead of the item's OWN team
+// changes it directly (canEditInventory, re-read inside each write); any
+// other member proposes a change through `inventory_updates` (below), which a
+// captain or a lead of the item's team approves. A direct change is logged as
+// an already-approved update, so the pair is a full change log. Gear lasts
+// across years: an item is not year-scoped.
 
 export const inventoryItems = pgTable(
   "inventory_items",
@@ -2694,8 +2702,27 @@ export const inventoryItems = pgTable(
     name: text("name").notNull(),
     // Free-text detail, e.g. "12 chef knives, mixed brands; 2 blunt".
     details: text("details"),
-    // Which team the item belongs to / is maintained by.
+    // Which team the item belongs to / is maintained by. Its leads (and the
+    // captains) are the ones who change it.
     team: teamEnum("team").notNull(),
+    // What kind of gear it is; the list groups by it.
+    category: text("category")
+      .$type<InventoryCategory>()
+      .notNull()
+      .default("other"),
+    condition: text("condition")
+      .$type<InventoryCondition>()
+      .notNull()
+      .default("good"),
+    // Where it is: the storage unit, a member's home (`custodianUserId`), or
+    // on site.
+    location: text("location")
+      .$type<InventoryLocation>()
+      .notNull()
+      .default("storage_unit"),
+    // How many members may book it each year (a cooler box, a freezer
+    // shelf). NULL: it is not booked.
+    bookableCount: integer("bookable_count"),
 
     // Count of the thing, in `unit`s. A "box of knives" is name = "Chef
     // knives", quantity = 12, unit = "knife".
@@ -2705,8 +2732,7 @@ export const inventoryItems = pgTable(
     weightKg: numeric("weight_kg", { precision: 10, scale: 2 }),
     // The running draw of one unit, in watts, for gear that plugs in. The
     // power load list's "From inventory" helper reads it (#253). Null for
-    // anything that draws no power, and for every item until inventory has
-    // a screen of its own (#246).
+    // anything that draws no power.
     wattsEach: doublePrecision("watts_each"),
 
     // Maintenance schedule. `requiresMaintenance` gates the rest; the
@@ -2743,11 +2769,29 @@ export const inventoryItems = pgTable(
     // Soft-removal when an item is no longer stocked — keeps the change
     // history in `inventory_updates` intact.
     archivedAt: timestamp("archived_at", { mode: "date" }),
+    // Bumped on every change: a direct edit is a compare-and-set on it.
+    version: integer("version").notNull().default(1),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
   (i) => ({
     teamIdx: index("inventory_items_team_idx").on(i.team),
+    categoryCheck: check(
+      "inventory_items_category_check",
+      oneOf(i.category, INVENTORY_CATEGORIES),
+    ),
+    conditionCheck: check(
+      "inventory_items_condition_check",
+      oneOf(i.condition, INVENTORY_CONDITIONS),
+    ),
+    locationCheck: check(
+      "inventory_items_location_check",
+      oneOf(i.location, INVENTORY_LOCATIONS),
+    ),
+    countCheck: check(
+      "inventory_items_count_check",
+      sql`${i.quantity} >= 0 and (${i.bookableCount} is null or ${i.bookableCount} >= 1)`,
+    ),
     custodianIdx: index("inventory_items_custodian_idx").on(i.custodianUserId),
     maintenanceDueIdx: index("inventory_items_maintenance_due_idx").on(
       i.nextMaintenanceDueAt,
@@ -2762,8 +2806,10 @@ export const inventoryItems = pgTable(
 // `itemId` is NULL for a proposal to create a brand-new item; it is set to
 // the new item's id once such a proposal is approved.
 //
-// Approval is not team-scoped: any team lead or captain may approve any
-// update, regardless of which team they are on (enforced in app logic).
+// Approval IS team-scoped (#246, owner 2026-09-27): a captain or a lead of
+// the item's own team approves (canEditInventory). A member's proposal
+// changes only the count, condition, location and maintenance; approving
+// copies those onto the item and leaves its other fields as they are.
 
 export const inventoryUpdates = pgTable(
   "inventory_updates",
@@ -2794,6 +2840,10 @@ export const inventoryUpdates = pgTable(
       onDelete: "set null",
     }),
     storageLocation: text("storage_location"),
+    // The proposed condition and location. Null only on a row written before
+    // #246 added them.
+    condition: text("condition").$type<InventoryCondition>(),
+    location: text("location").$type<InventoryLocation>(),
     // Set when this update records a maintenance / service event; on
     // approval it becomes the item's `lastMaintainedAt`.
     maintenancePerformedAt: timestamp("maintenance_performed_at", {
@@ -2818,6 +2868,139 @@ export const inventoryUpdates = pgTable(
     proposedByIdx: index("inventory_updates_proposed_by_idx").on(
       u.proposedByUserId,
     ),
+    conditionCheck: check(
+      "inventory_updates_condition_check",
+      sql`${u.condition} is null or ${oneOf(u.condition, INVENTORY_CONDITIONS)}`,
+    ),
+    locationCheck: check(
+      "inventory_updates_location_check",
+      sql`${u.location} is null or ${oneOf(u.location, INVENTORY_LOCATIONS)}`,
+    ),
+  }),
+);
+
+// --- Inventory needs and pledges (#246) ------------------------------------
+// What each team needs this year, against what the camp has. A captain or a
+// lead of that team keeps the list; any member pledges to bring some. Year-
+// scoped: a new year starts with no needs. `itemId` names the camp's own item
+// that covers it, so "still needed" is need less that item's count, less what
+// was bought, less what was pledged.
+
+export const inventoryNeeds = pgTable(
+  "inventory_needs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    team: teamEnum("team").notNull(),
+    name: text("name").notNull(),
+    quantity: integer("quantity").notNull(),
+    itemId: uuid("item_id").references(() => inventoryItems.id, {
+      onDelete: "set null",
+    }),
+    boughtQuantity: integer("bought_quantity").notNull().default(0),
+    note: text("note"),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (n) => ({
+    cycleTeamIdx: index("inventory_needs_cycle_team_idx").on(n.cycle, n.team),
+    countCheck: check(
+      "inventory_needs_count_check",
+      sql`${n.quantity} >= 1 and ${n.boughtQuantity} >= 0`,
+    ),
+  }),
+);
+
+// One member's pledge against a need: "I'm bringing 2 camping chairs". One
+// per member per need; pledging again changes it. The year is the need's.
+export const inventoryPledges = pgTable(
+  "inventory_pledges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    needId: uuid("need_id")
+      .notNull()
+      .references(() => inventoryNeeds.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    quantity: integer("quantity").notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (p) => ({
+    needUserIdx: uniqueIndex("inventory_pledges_need_user_idx").on(
+      p.needId,
+      p.userId,
+    ),
+    userIdx: index("inventory_pledges_user_idx").on(p.userId),
+    countCheck: check("inventory_pledges_count_check", sql`${p.quantity} >= 1`),
+  }),
+);
+
+// --- Inventory bookings (#246) -----------------------------------------------
+// A member books a camp item for the burn (a cooler box, a freezer shelf).
+// An item takes at most `inventory_items.bookable_count` bookings a year; the
+// write locks the item row, counts, then inserts, so two members pressing at
+// once cannot both take the last one. One booking per member per item a year.
+
+export const inventoryBookings = pgTable(
+  "inventory_bookings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    note: text("note"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (b) => ({
+    itemUserCycleIdx: uniqueIndex("inventory_bookings_item_user_cycle_idx").on(
+      b.itemId,
+      b.userId,
+      b.cycle,
+    ),
+    userIdx: index("inventory_bookings_user_idx").on(b.userId),
+  }),
+);
+
+// --- Inventory loans (#246) ----------------------------------------------------
+// Gear lent on site to people outside the camp. The borrower is their CAMP's
+// name and site address only: no person's name, no phone number, and no
+// free-text note to type one in. An open loan has no `returnedAt`.
+
+export const inventoryLoans = pgTable(
+  "inventory_loans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    quantity: integer("quantity").notNull(),
+    borrowerCamp: text("borrower_camp").notNull(),
+    borrowerAddress: text("borrower_address").notNull(),
+    lentAt: timestamp("lent_at", { mode: "date" }).notNull().defaultNow(),
+    lentByUserId: uuid("lent_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    returnedAt: timestamp("returned_at", { mode: "date" }),
+    returnedByUserId: uuid("returned_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (l) => ({
+    cycleIdx: index("inventory_loans_cycle_idx").on(l.cycle),
+    itemIdx: index("inventory_loans_item_idx").on(l.itemId),
+    countCheck: check("inventory_loans_count_check", sql`${l.quantity} >= 1`),
   }),
 );
 
