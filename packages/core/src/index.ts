@@ -105,6 +105,10 @@
 //     powerTotals, dayLabel)
 //     and the fuel maths (fuelLine, fuelPerHour, fuelForPlan,
 //     jerryCansNeeded, legacyFuelEstimate) (./power)
+//   - camp layout: canEditLayout (a captain or a Structures lead),
+//     canShareLayout (a captain), the grid helpers (keepOnPlot, movePiece,
+//     turnPiece, newPiece, resizePlot, overlappingPieces), and what a
+//     neighbour may see (neighbourView, arrivalDayCounts) (./camp-layout)
 //   - recipes: canApproveRecipe and canRunProofread (a captain or a Kitchen
 //     lead), RECIPE_TRANSITIONS/canMoveRecipe, groupLinesByCategory +
 //     groupStepsByPhase for the recipe page, defaultPlates, and the meal
@@ -176,6 +180,7 @@ export * from "./participation";
 export * from "./membership-tier";
 export * from "./tickets";
 export * from "./power";
+export * from "./camp-layout";
 export * from "./inventory";
 export * from "./power-site";
 export * from "./power-grid";

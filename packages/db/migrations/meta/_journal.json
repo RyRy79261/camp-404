@@ -512,6 +512,13 @@
       "when": 1790682626412,
       "tag": "0072_lounge_programme",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1790705595565,
+      "tag": "0073_camp_layout",
+      "breakpoints": true
     }
   ]
 }

@@ -22,6 +22,8 @@ export const AUDIT_ACTION_LABELS = {
   // No longer written (the settings were removed, 2026-09-24); kept so a row
   // written before still reads.
   "camp.kitchen_settings.changed": "Changed the kitchen settings",
+  "camp.layout.shared": "Shared the camp layout with neighbours",
+  "camp.layout.unshared": "Stopped sharing the camp layout",
   "camp.teams.archived": "Archived a team",
   "camp.teams.described": "Changed what a team does",
   "camp.teams.moved": "Moved a team in the list",

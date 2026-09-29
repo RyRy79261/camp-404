@@ -67,6 +67,7 @@ import {
   type DesktopPreferences,
   type DraftReport,
   type JoinSiteContent,
+  type CampLayout,
   type KitchenRecipe,
   type PlateLine,
   type ProofreadExchange,
@@ -3579,6 +3580,56 @@ export const powerSharingAgreements = pgTable(
     pctCheck: check(
       "power_sharing_agreements_pct_check",
       sql`${a.partnerFuelPct} between 0 and 100`,
+    ),
+  }),
+);
+
+// --- Camp layout (#271) ----------------------------------------------------
+// This year's site plan. The whole plan is one document (`CampLayout` in
+// @camp404/types, checked by Zod on every write), saved as a new numbered
+// version each time, so every save stays readable. A captain or a Structures
+// lead saves (canEditLayout); every member reads.
+//
+// `camp_layouts` is one row per year: the latest version's number (the
+// compare-and-set every save runs on) and the neighbour link. The link is off
+// until a captain turns it on (`share_token` null); turning it off clears it,
+// so an old link answers 404. The token is random and unguessable, and the
+// neighbour page shows only what neighbourView lets out.
+
+export const campLayouts = pgTable("camp_layouts", {
+  cycle: integer("cycle").primaryKey(),
+  latestVersion: integer("latest_version").notNull().default(0),
+  shareToken: text("share_token").unique("camp_layouts_share_token_uniq"),
+  sharedAt: timestamp("shared_at", { mode: "date" }),
+  sharedByUserId: uuid("shared_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const campLayoutVersions = pgTable(
+  "camp_layout_versions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle")
+      .notNull()
+      .references(() => campLayouts.cycle, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    body: jsonb("body").$type<CampLayout>().notNull(),
+    note: text("note"),
+    savedByUserId: uuid("saved_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    savedAt: timestamp("saved_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (v) => ({
+    cycleNumberUniq: uniqueIndex("camp_layout_versions_cycle_number_uniq").on(
+      v.cycle,
+      v.number,
+    ),
+    numberCheck: check(
+      "camp_layout_versions_number_check",
+      sql`${v.number} >= 1`,
     ),
   }),
 );

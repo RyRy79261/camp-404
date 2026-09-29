@@ -134,6 +134,7 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "meetings" },
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
+      { kind: "program", id: "camp-layout" },
       { kind: "program", id: "lounge" },
       { kind: "program", id: "inventory" },
       { kind: "program", id: "transport" },
@@ -152,6 +153,11 @@ describe("buildProgramManifest: the personas", () => {
     expect(m.pins).toBe(true);
     expect(m.allowedChildren).not.toContain(pid("results"));
     expect(m.allowedChildren).not.toContain(pid("edit-recipe"));
+    // Their team's folder holds the camp layout (#271), read-only for them.
+    expect(teamFolder(m, STRUCTURES)?.programs.map((p) => p.id)).toEqual([
+      `team:${STRUCTURES}`,
+      "camp-layout",
+    ]);
   });
 
   it("gives a plain member a coarse health flag with no detail in it", () => {

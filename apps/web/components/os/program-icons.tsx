@@ -27,6 +27,7 @@ const LINE: Readonly<Record<string, IconKey>> = {
   "family-tree": "lineage",
   about: "readme",
   power: "power",
+  "camp-layout": "siteplan",
   lounge: "lounge",
   inventory: "inventory",
   "inventory-item": "inventory",

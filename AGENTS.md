@@ -600,6 +600,16 @@ Decisions baked into the schema — keep new code consistent with them:
   version and the questions and answers that settled it
   (`recipeSourceRevisionPrompt`, recorded as `PROMPT_VERSIONS.recipeSourceRevision`).
 
+- **Camp layout (#271).** This year's site plan is one Zod-checked document
+  (`CampLayout`, `@camp404/types`) saved as numbered versions in
+  `camp_layout_versions`, a compare-and-set on `camp_layouts.latest_version`.
+  A captain or a Structures lead saves (`canEditLayout`); every member reads.
+  The neighbour page (`/neighbours/<token>`) is the one PUBLIC data page: off
+  until a captain turns it on (`canShareLayout`, audited), and it reads only
+  through `getSharedLayout`, which returns `neighbourView`'s allowlist (kinds
+  and places, never a label or a side note) and arrival COUNTS per day. Add a
+  field to it only by naming it in `neighbourView`.
+
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.
 This is a deliberate product stance; prefer a new table and a new

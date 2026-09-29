@@ -7,6 +7,7 @@ import {
   usesTestStore,
 } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
+import { testLayoutStore } from "@/lib/test-store-layout";
 import { resetInventoryStore } from "@/lib/test-store-inventory";
 import { resetRateLimitsForE2E } from "@/lib/rate-limit";
 
@@ -22,6 +23,7 @@ export async function POST() {
   // The real-database run empties the local stack instead of the store.
   if (usesTestStore()) {
     testStore.reset();
+    testLayoutStore.reset();
     resetInventoryStore();
   } else await resetDatabaseForE2E();
   // Every spec comes from one address, so the per-IP buckets would otherwise

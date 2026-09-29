@@ -45,6 +45,9 @@ test.describe("signed-out visitor", () => {
     "/about",
     // My lift (decision 11 A), new in the program manifest PR.
     "/lift",
+    // The camp layout (#271): the plan with labels is for members; neighbours
+    // get their own page, by a link a captain makes.
+    "/camp-layout",
     "/notifications",
     "/pending-approval",
     "/captains/audit",

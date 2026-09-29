@@ -251,6 +251,16 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // The site plan (#271): every member reads it; its page gates the edits.
+  {
+    id: "camp-layout",
+    label: "Camp layout",
+    fileName: "SITEPLAN.DWG",
+    href: "/camp-layout",
+    icon: "camp-layout",
+    place: CAMP,
+    rank: "camp_member",
+  },
   // The Ministry of Vibes' lounge programme (#269): every member reads it and
   // offers something; its page decides who may run it (canRunLounge).
   {
@@ -688,6 +698,7 @@ const GROUPS: readonly { id: ProgramGroup; label: string }[] = [
 export const TEAM_TOOLS: Readonly<Partial<Record<Team, readonly ProgramId[]>>> =
   {
     kitchen: ["recipes", "meal-plan", "recipe-review"],
+    structures: ["camp-layout"],
     power_and_lighting: ["power"],
     ministry_of_vibes: ["lounge"],
     transport_and_logistics: ["inventory", "transport"],

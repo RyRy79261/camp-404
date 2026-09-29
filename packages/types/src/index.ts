@@ -21,6 +21,7 @@ export * from "./calendar";
 export * from "./participation";
 export * from "./tickets";
 export * from "./power";
+export * from "./camp-layout";
 export * from "./inventory";
 export * from "./power-site";
 export * from "./meeting-note";
