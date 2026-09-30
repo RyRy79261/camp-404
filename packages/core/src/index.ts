@@ -107,7 +107,7 @@
 //     jerryCansNeeded, legacyFuelEstimate) (./power)
 //   - logistics: canEditLogistics (a captain or a Transport and Logistics
 //     lead), logisticsEventTitle, logisticsCalendarStep (./logistics)
-//   - gear rental: canManageRental (a captain), checkRentalLines,
+//   - gear rental: canManageRental (a captain), checkRentalOrder, tentConflict,
 //     rentalEstimate, priceRentalOrder and rentalSummary (./rental)
 //   - camp layout: canEditLayout (a captain or a Structures lead),
 //     canShareLayout (a captain), the grid helpers (keepOnPlot, movePiece,

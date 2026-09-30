@@ -11,6 +11,8 @@ import type {
   RentalResult,
   RentalSharer,
   RentalTent,
+  RentalTentAnswer,
+  RentalTentNeed,
   RentalUnanswered,
   SharedTent,
 } from "@camp404/db/rental";
@@ -33,6 +35,8 @@ export type {
   RentalResult,
   RentalSharer,
   RentalTent,
+  RentalTentAnswer,
+  RentalTentNeed,
   RentalUnanswered,
   SharedTent,
 };

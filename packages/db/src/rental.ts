@@ -3,19 +3,21 @@ import {
   campStockInUse,
   campStockTaken,
   canManageRental,
-  checkRentalLines,
+  checkRentalOrder,
   GEAR_ORDER_ACTION_KEY,
   GEAR_ORDER_ACTION_TITLE,
   GEAR_ORDER_REF_TYPE,
   gearOrderAskNotification,
-  holdsSharers,
   isAskedForGear,
   priceRentalOrder,
+  RENTAL_NOT_A_TENT,
+  RENTAL_PICK_A_TENT,
   rentalChargeDescription,
   rentalSummary,
-  tentInUse,
+  tentConflict,
   type RentalLineDraft,
   type RentalSummary,
+  type RentalTentDraft,
 } from "@camp404/core";
 import type {
   ParticipationStatus,
@@ -23,6 +25,7 @@ import type {
   RentalItemInput,
   RentalOrderStatus,
   RentalSource,
+  RentalTentChoice,
 } from "@camp404/types";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
@@ -35,8 +38,13 @@ import * as schema from "./schema";
 // member's order.
 //
 //  - A member writes only their own order and reads only their own (plus the
-//    one tent line someone else put them in). The caller passes the signed-in
-//    member's id, never an id from a form.
+//    tent someone else put them in). The caller passes the signed-in member's
+//    id, never an id from a form.
+//  - The tent is asked ONCE per member (owner, 2026-09-30): the answer is on
+//    the order, and a captain picks the actual catalogue tent when they
+//    confirm, which becomes the order's one tent line. Who is in whose tent
+//    is the sharer list on the tent owner's order, and nowhere else; a sent
+//    order that would make two orders disagree is refused.
 //  - A captain runs the rest (canManageRental): the catalogue, confirming and
 //    reopening orders, tent labels. Every such write re-reads the actor's
 //    rank and led teams INSIDE its own transaction (lockSenderReach), so a
@@ -278,8 +286,7 @@ export async function addRentalItem(input: {
  * Change a live item: its name, prices, camp stock, size or reserve. An order
  * already confirmed keeps the price it was confirmed at. Refused when it
  * would leave the camp with fewer than confirmed orders and a camp reserve
- * already take, or a tent smaller than the people sharing it on a sent or
- * confirmed order.
+ * already take.
  */
 export async function editRentalItem(input: {
   itemId: string;
@@ -301,31 +308,6 @@ export async function editRentalItem(input: {
       .returning({ cycle: schema.rentalItems.cycle });
     if (rows.length === 0) refuse(RENTAL_ITEM_MISSING);
     // The update above holds the item's row, so a confirmation waits here.
-    // A tent cannot shrink under the people already sharing it on a sent or
-    // confirmed order (a draft is checked again when the member saves it).
-    const inUse = await tx
-      .select({
-        quantity: schema.rentalOrderLines.quantity,
-        sharers: sql<number>`count(${schema.rentalLineSharers.userId})::int`,
-      })
-      .from(schema.rentalOrderLines)
-      .innerJoin(
-        schema.rentalOrders,
-        eq(schema.rentalOrders.id, schema.rentalOrderLines.orderId),
-      )
-      .leftJoin(
-        schema.rentalLineSharers,
-        eq(schema.rentalLineSharers.lineId, schema.rentalOrderLines.id),
-      )
-      .where(
-        and(
-          eq(schema.rentalOrderLines.itemId, input.itemId),
-          eq(schema.rentalOrderLines.choice, "need"),
-          ne(schema.rentalOrders.status, "draft"),
-        ),
-      )
-      .groupBy(schema.rentalOrderLines.id, schema.rentalOrderLines.quantity);
-    if (!holdsSharers(input.item, inUse)) refuse(tentInUse(input.item.name));
     const taken = campStockTaken(
       input.item,
       (await campTakenByOrders(tx, rows[0]!.cycle)).get(input.itemId) ?? 0,
@@ -399,10 +381,22 @@ export interface RentalLine {
   source: RentalSource | null;
   unitPriceCents: number | null;
   tentLabel: string | null;
-  /** For a tent they have themselves: what it is, and how many it sleeps. */
+}
+
+/** A member's one tent answer, and the tent a captain picked for it. */
+export interface RentalTentAnswer {
+  choice: RentalTentChoice;
+  /** For a needed tent: how many people it is for, the member included. */
+  people: number | null;
+  /** For a tent of their own: what it is, and how many it sleeps. */
   ownDescription: string | null;
   ownSleeps: number | null;
   sharers: RentalSharer[];
+  /**
+   * The catalogue tent a captain picked, with its source, price and label.
+   * Null until a captain confirms; kept as their last pick after a reopen.
+   */
+  assigned: RentalLine | null;
 }
 
 export interface RentalOrder {
@@ -422,10 +416,15 @@ export interface RentalOrder {
   chargeId: string | null;
   /** A captain filled it in for the member, who has not saved it since. */
   filledByCaptain: boolean;
+  /** Their tent answer; null when they have not given one. */
+  tent: RentalTentAnswer | null;
+  /** The members whose sent or confirmed orders have this member in their tent. */
+  hostedBy: string[];
+  /** Everything that is not a tent. */
   lines: RentalLine[];
 }
 
-/** Orders matching `where`, each with its lines and their sharers. */
+/** Orders matching `where`, each with its tent answer, sharers and lines. */
 async function loadOrders(db: DbOrTx, where: SQL | undefined) {
   const orders = await db
     .select({
@@ -442,6 +441,10 @@ async function loadOrders(db: DbOrTx, where: SQL | undefined) {
       chargeId: schema.rentalOrders.chargeId,
       chargeCancelledAt: schema.duesCharges.cancelledAt,
       filledByUserId: schema.rentalOrders.filledByUserId,
+      tentChoice: schema.rentalOrders.tentChoice,
+      tentPeople: schema.rentalOrders.tentPeople,
+      ownDescription: schema.rentalOrders.ownDescription,
+      ownSleeps: schema.rentalOrders.ownSleeps,
     })
     .from(schema.rentalOrders)
     .innerJoin(schema.users, eq(schema.users.id, schema.rentalOrders.userId))
@@ -472,8 +475,6 @@ async function loadOrders(db: DbOrTx, where: SQL | undefined) {
       source: schema.rentalOrderLines.source,
       unitPriceCents: schema.rentalOrderLines.unitPriceCents,
       tentLabel: schema.rentalOrderLines.tentLabel,
-      ownDescription: schema.rentalOrderLines.ownDescription,
-      ownSleeps: schema.rentalOrderLines.ownSleeps,
     })
     .from(schema.rentalOrderLines)
     .innerJoin(
@@ -481,47 +482,72 @@ async function loadOrders(db: DbOrTx, where: SQL | undefined) {
       eq(schema.rentalItems.id, schema.rentalOrderLines.itemId),
     )
     .where(inArray(schema.rentalOrderLines.orderId, orderIds))
-    .orderBy(
-      sql`${schema.rentalItems.isTent} desc`,
-      asc(schema.rentalItems.name),
-      asc(schema.rentalOrderLines.id),
+    .orderBy(asc(schema.rentalItems.name), asc(schema.rentalOrderLines.id));
+  const sharers = await db
+    .select({
+      orderId: schema.rentalOrderSharers.orderId,
+      id: schema.users.id,
+      name: schema.users.displayName,
+      place: schema.campParticipations.status,
+    })
+    .from(schema.rentalOrderSharers)
+    .innerJoin(
+      schema.rentalOrders,
+      eq(schema.rentalOrders.id, schema.rentalOrderSharers.orderId),
+    )
+    .innerJoin(
+      schema.users,
+      eq(schema.users.id, schema.rentalOrderSharers.userId),
+    )
+    .leftJoin(
+      schema.campParticipations,
+      and(
+        eq(schema.campParticipations.userId, schema.rentalOrderSharers.userId),
+        eq(schema.campParticipations.cycle, schema.rentalOrders.cycle),
+      ),
+    )
+    .where(inArray(schema.rentalOrderSharers.orderId, orderIds));
+  // Whose tent each of these members is in: read from the hosts' orders, the
+  // one place that says so.
+  const hosts = await db
+    .select({
+      guestId: schema.rentalOrderSharers.userId,
+      cycle: schema.rentalOrders.cycle,
+      hostName: schema.users.displayName,
+    })
+    .from(schema.rentalOrderSharers)
+    .innerJoin(
+      schema.rentalOrders,
+      eq(schema.rentalOrders.id, schema.rentalOrderSharers.orderId),
+    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.rentalOrders.userId))
+    .where(
+      and(
+        inArray(
+          schema.rentalOrderSharers.userId,
+          orders.map((o) => o.userId),
+        ),
+        ne(schema.rentalOrders.status, "draft"),
+      ),
     );
-  const sharers =
-    lines.length === 0
-      ? []
-      : await db
-          .select({
-            lineId: schema.rentalLineSharers.lineId,
-            id: schema.users.id,
-            name: schema.users.displayName,
-            place: schema.campParticipations.status,
-          })
-          .from(schema.rentalLineSharers)
-          .innerJoin(
-            schema.rentalOrderLines,
-            eq(schema.rentalOrderLines.id, schema.rentalLineSharers.lineId),
-          )
-          .innerJoin(
-            schema.rentalOrders,
-            eq(schema.rentalOrders.id, schema.rentalOrderLines.orderId),
-          )
-          .innerJoin(
-            schema.users,
-            eq(schema.users.id, schema.rentalLineSharers.userId),
-          )
-          .leftJoin(
-            schema.campParticipations,
-            and(
-              eq(
-                schema.campParticipations.userId,
-                schema.rentalLineSharers.userId,
-              ),
-              eq(schema.campParticipations.cycle, schema.rentalOrders.cycle),
-            ),
-          )
-          .where(inArray(schema.rentalOrderLines.orderId, orderIds));
-  return orders.map(
-    (o): RentalOrder => ({
+  return orders.map((o): RentalOrder => {
+    const mine = lines
+      .filter((l) => l.orderId === o.id)
+      .map(
+        (l): RentalLine => ({
+          id: l.id,
+          itemId: l.itemId,
+          itemName: l.itemName,
+          isTent: l.isTent,
+          sleeps: l.sleeps,
+          choice: l.choice,
+          quantity: l.quantity,
+          source: l.source,
+          unitPriceCents: l.unitPriceCents,
+          tentLabel: l.tentLabel,
+        }),
+      );
+    return {
       id: o.id,
       userId: o.userId,
       memberName: nameOf(o.memberName),
@@ -534,47 +560,51 @@ async function loadOrders(db: DbOrTx, where: SQL | undefined) {
       totalCents: o.totalCents,
       chargeId: o.chargeCancelledAt === null ? o.chargeId : null,
       filledByCaptain: o.filledByUserId !== null,
-      lines: lines
-        .filter((l) => l.orderId === o.id)
-        .map((l) => ({
-          id: l.id,
-          itemId: l.itemId,
-          itemName: l.itemName,
-          isTent: l.isTent,
-          sleeps: l.sleeps,
-          choice: l.choice,
-          quantity: l.quantity,
-          source: l.source,
-          unitPriceCents: l.unitPriceCents,
-          tentLabel: l.tentLabel,
-          ownDescription: l.ownDescription,
-          ownSleeps: l.ownSleeps,
-          sharers: sharers
-            .filter((s) => s.lineId === l.id)
-            .map((s) => ({
-              id: s.id,
-              name: nameOf(s.name),
-              accepted: s.place === "accepted",
-            }))
-            .sort((a, b) => a.name.localeCompare(b.name)),
-        })),
-    }),
-  );
+      tent:
+        o.tentChoice === null
+          ? null
+          : {
+              choice: o.tentChoice,
+              people: o.tentPeople,
+              ownDescription: o.ownDescription,
+              ownSleeps: o.ownSleeps,
+              sharers: sharers
+                .filter((s) => s.orderId === o.id)
+                .map((s) => ({
+                  id: s.id,
+                  name: nameOf(s.name),
+                  accepted: s.place === "accepted",
+                }))
+                .sort((a, b) => a.name.localeCompare(b.name)),
+              assigned:
+                o.tentChoice === "need"
+                  ? (mine.find((l) => l.isTent) ?? null)
+                  : null,
+            },
+      hostedBy: hosts
+        .filter((h) => h.guestId === o.userId && h.cycle === o.cycle)
+        .map((h) => nameOf(h.hostName))
+        .sort((a, b) => a.localeCompare(b)),
+      lines: mine.filter((l) => !l.isTent),
+    };
+  });
 }
 
 /** What a member's own tent is called when they gave no words for it. */
 export const OWN_TENT = "Their own tent";
+/** What a needed tent is called before a captain has picked it. */
+export const TENT_NOT_PICKED = "A camp tent";
 
-/** A tent someone else put the member in. */
+/** A tent another member put this member in. */
 export interface SharedTent {
-  lineId: string;
-  /** The camp's item, or the owner's words for a tent of their own. */
-  itemName: string;
+  orderId: string;
+  /** The camp's tent once a captain picked it, or the owner's words for theirs. */
+  tentName: string;
   /** The label, once a captain confirmed the order and gave it one. */
   tentLabel: string | null;
   /** Whether the order it is on is confirmed. */
   confirmed: boolean;
-  /** Who ordered it, or whose own tent it is. */
+  /** Whose tent it is. */
   ownerName: string;
   /** Everyone else in it, by name. */
   otherSharers: string[];
@@ -590,9 +620,10 @@ export interface MyRental {
 }
 
 /**
- * What a member reads: the year's catalogue, their own order, and the tents
- * other members put them in. Nothing else about anyone: a sharer is a name,
- * and the captain's source and price show only once the order is confirmed.
+ * What a member reads: the year's catalogue, their own order, and the tent
+ * another member put them in. Nothing else about anyone: a sharer is a name,
+ * and the captain's tent, source and price show only once the order is
+ * confirmed.
  */
 export async function getMyRental(
   userId: string,
@@ -602,7 +633,7 @@ export async function getMyRental(
     return { items: [], order: null, sharedWithMe: [], asked: false };
   }
   const db = createHttpDb();
-  const [items, orders, asks, shared] = await Promise.all([
+  const [items, orders, asks, hosting] = await Promise.all([
     listRentalItems(cycle, {}, db),
     loadOrders(
       db,
@@ -622,63 +653,41 @@ export async function getMyRental(
         ),
       )
       .limit(1),
+    // The sent or confirmed orders that have this member in their tent. A
+    // draft is not an offer yet: its member may still change it.
     db
-      .select({
-        lineId: schema.rentalOrderLines.id,
-        itemName: schema.rentalItems.name,
-        choice: schema.rentalOrderLines.choice,
-        ownDescription: schema.rentalOrderLines.ownDescription,
-        tentLabel: schema.rentalOrderLines.tentLabel,
-        status: schema.rentalOrders.status,
-        ownerName: schema.users.displayName,
-      })
-      .from(schema.rentalLineSharers)
-      .innerJoin(
-        schema.rentalOrderLines,
-        eq(schema.rentalOrderLines.id, schema.rentalLineSharers.lineId),
-      )
+      .select({ orderId: schema.rentalOrderSharers.orderId })
+      .from(schema.rentalOrderSharers)
       .innerJoin(
         schema.rentalOrders,
-        eq(schema.rentalOrders.id, schema.rentalOrderLines.orderId),
+        eq(schema.rentalOrders.id, schema.rentalOrderSharers.orderId),
       )
-      .innerJoin(
-        schema.rentalItems,
-        eq(schema.rentalItems.id, schema.rentalOrderLines.itemId),
-      )
-      .innerJoin(schema.users, eq(schema.users.id, schema.rentalOrders.userId))
       .where(
         and(
-          eq(schema.rentalLineSharers.userId, userId),
+          eq(schema.rentalOrderSharers.userId, userId),
           eq(schema.rentalOrders.cycle, cycle),
-          // A draft is not an offer yet: the member may still change it.
-          sql`${schema.rentalOrders.status} <> 'draft'`,
-          // A camp tent someone needs, or a tent of their own they share.
-          eq(schema.rentalItems.isTent, true),
+          ne(schema.rentalOrders.status, "draft"),
         ),
       ),
   ]);
-  const others =
-    shared.length === 0
+  const hostOrders =
+    hosting.length === 0
       ? []
-      : await db
-          .select({
-            lineId: schema.rentalLineSharers.lineId,
-            userId: schema.rentalLineSharers.userId,
-            name: schema.users.displayName,
-          })
-          .from(schema.rentalLineSharers)
-          .innerJoin(
-            schema.users,
-            eq(schema.users.id, schema.rentalLineSharers.userId),
-          )
-          .where(
-            inArray(
-              schema.rentalLineSharers.lineId,
-              shared.map((s) => s.lineId),
-            ),
-          );
+      : await loadOrders(
+          db,
+          inArray(
+            schema.rentalOrders.id,
+            hosting.map((h) => h.orderId),
+          ),
+        );
   const mine = orders[0] ?? null;
   const confirmed = mine?.status === "confirmed";
+  const hideLine = (l: RentalLine): RentalLine => ({
+    ...l,
+    source: confirmed ? l.source : null,
+    unitPriceCents: confirmed ? l.unitPriceCents : null,
+    tentLabel: confirmed ? l.tentLabel : null,
+  });
   return {
     items,
     asked: asks.length > 0 && (mine === null || mine.status === "draft"),
@@ -686,27 +695,35 @@ export async function getMyRental(
       ...mine,
       participation: null,
       totalCents: confirmed ? mine.totalCents : null,
-      lines: mine.lines.map((l) => ({
-        ...l,
-        source: confirmed ? l.source : null,
-        unitPriceCents: confirmed ? l.unitPriceCents : null,
-        tentLabel: confirmed ? l.tentLabel : null,
-        sharers: l.sharers.map((s) => ({ ...s, accepted: null })),
-      })),
+      tent: mine.tent && {
+        ...mine.tent,
+        sharers: mine.tent.sharers.map((s) => ({ ...s, accepted: null })),
+        assigned:
+          confirmed && mine.tent.assigned ? hideLine(mine.tent.assigned) : null,
+      },
+      lines: mine.lines.map(hideLine),
     },
-    sharedWithMe: shared
-      .map((s) => ({
-        lineId: s.lineId,
-        itemName:
-          s.choice === "own" ? (s.ownDescription ?? OWN_TENT) : s.itemName,
-        tentLabel: s.status === "confirmed" ? s.tentLabel : null,
-        confirmed: s.status === "confirmed",
-        ownerName: nameOf(s.ownerName),
-        otherSharers: others
-          .filter((o) => o.lineId === s.lineId && o.userId !== userId)
-          .map((o) => nameOf(o.name))
-          .sort((a, b) => a.localeCompare(b)),
-      }))
+    sharedWithMe: hostOrders
+      .flatMap((o): SharedTent[] => {
+        if (!o.tent) return [];
+        const isConfirmed = o.status === "confirmed";
+        const picked = isConfirmed ? o.tent.assigned : null;
+        return [
+          {
+            orderId: o.id,
+            tentName:
+              o.tent.choice === "own"
+                ? (o.tent.ownDescription ?? OWN_TENT)
+                : (picked?.itemName ?? TENT_NOT_PICKED),
+            tentLabel: picked?.tentLabel ?? null,
+            confirmed: isConfirmed,
+            ownerName: o.memberName,
+            otherSharers: o.tent.sharers
+              .filter((s) => s.id !== userId)
+              .map((s) => s.name),
+          },
+        ];
+      })
       .sort((a, b) => a.ownerName.localeCompare(b.ownerName)),
   };
 }
@@ -765,11 +782,13 @@ export async function getRentalOrderOf(
   return order ?? null;
 }
 
-/** One tent on a confirmed order, for the tent list. */
+/** One camp tent on a confirmed order, for the tent list. */
 export interface RentalTent {
   lineId: string;
   itemName: string;
-  quantity: number;
+  /** How many the tent sleeps, and how many people it is for. */
+  sleeps: number;
+  people: number | null;
   tentLabel: string | null;
   source: RentalSource | null;
   ownerName: string;
@@ -778,11 +797,20 @@ export interface RentalTent {
 
 /** A tent a member brings themselves, on a sent or confirmed order. */
 export interface RentalOwnTent {
-  lineId: string;
+  orderId: string;
   ownerName: string;
   /** Their words for it; null when they gave none. */
   description: string | null;
   sleeps: number | null;
+  sharers: string[];
+}
+
+/** A member who needs a tent and has none assigned: their order is only sent. */
+export interface RentalTentNeed {
+  orderId: string;
+  userId: string;
+  ownerName: string;
+  people: number | null;
   sharers: string[];
 }
 
@@ -791,15 +819,20 @@ export interface RentalOverview {
   /** Orders sent and not confirmed yet: not in the totals. */
   waiting: number;
   confirmed: number;
+  /** The camp tents captains picked, on confirmed orders. */
   tents: RentalTent[];
   /** Members' own tents, for the site plan. */
   ownTents: RentalOwnTent[];
+  /** "Needs a tent, not assigned yet": sent orders a captain has not confirmed. */
+  unassigned: RentalTentNeed[];
 }
 
 /**
  * The captains' summary: totals by item across the CONFIRMED orders, split by
- * source, with the adoptee reserve; and the confirmed tents with who is in
- * each. An archived item still shows when a confirmed order has it.
+ * source, with the on-site reserve. A tent counts as the tent a captain
+ * picked, from the source they picked; a tent need on an order that is only
+ * sent is not in the totals and is listed as not assigned yet. An archived
+ * item still shows when a confirmed order has it.
  */
 export async function getRentalOverview(
   cycle: number,
@@ -811,7 +844,7 @@ export async function getRentalOverview(
   ]);
   const confirmed = orders.filter((o) => o.status === "confirmed");
   const lines = confirmed.flatMap((o) =>
-    o.lines.flatMap((l) =>
+    [...o.lines, ...(o.tent?.assigned ? [o.tent.assigned] : [])].flatMap((l) =>
       l.choice === "need" && l.source !== null && l.unitPriceCents !== null
         ? [
             {
@@ -825,6 +858,8 @@ export async function getRentalOverview(
     ),
   );
   const used = new Set(lines.map((l) => l.itemId));
+  const byOwner = <T extends { ownerName: string }>(a: T, b: T) =>
+    a.ownerName.localeCompare(b.ownerName);
   return {
     summary: rentalSummary(
       items.filter((i) => !i.archived || used.has(i.id)),
@@ -833,39 +868,49 @@ export async function getRentalOverview(
     waiting: orders.filter((o) => o.status === "submitted").length,
     confirmed: confirmed.length,
     tents: confirmed
-      .flatMap((o) =>
-        o.lines
-          .filter((l) => l.isTent && l.choice === "need")
-          .map((l) => ({
-            lineId: l.id,
-            itemName: l.itemName,
-            quantity: l.quantity,
-            tentLabel: l.tentLabel,
-            source: l.source,
-            ownerName: o.memberName,
-            sharers: l.sharers.map((s) => s.name),
-          })),
-      )
+      .flatMap((o): RentalTent[] => {
+        const tent = o.tent?.assigned;
+        return tent
+          ? [
+              {
+                lineId: tent.id,
+                itemName: tent.itemName,
+                sleeps: tent.sleeps,
+                people: o.tent?.people ?? null,
+                tentLabel: tent.tentLabel,
+                source: tent.source,
+                ownerName: o.memberName,
+                sharers: o.tent?.sharers.map((s) => s.name) ?? [],
+              },
+            ]
+          : [];
+      })
       .sort(
         (a, b) =>
           (a.tentLabel ?? "￿").localeCompare(b.tentLabel ?? "￿", undefined, {
             numeric: true,
-          }) || a.ownerName.localeCompare(b.ownerName),
+          }) || byOwner(a, b),
       ),
     ownTents: orders
-      .filter((o) => o.status !== "draft")
-      .flatMap((o) =>
-        o.lines
-          .filter((l) => l.isTent && l.choice === "own")
-          .map((l) => ({
-            lineId: l.id,
-            ownerName: o.memberName,
-            description: l.ownDescription,
-            sleeps: l.ownSleeps,
-            sharers: l.sharers.map((s) => s.name),
-          })),
-      )
-      .sort((a, b) => a.ownerName.localeCompare(b.ownerName)),
+      .filter((o) => o.status !== "draft" && o.tent?.choice === "own")
+      .map((o) => ({
+        orderId: o.id,
+        ownerName: o.memberName,
+        description: o.tent!.ownDescription,
+        sleeps: o.tent!.ownSleeps,
+        sharers: o.tent!.sharers.map((s) => s.name),
+      }))
+      .sort(byOwner),
+    unassigned: orders
+      .filter((o) => o.status === "submitted" && o.tent?.choice === "need")
+      .map((o) => ({
+        orderId: o.id,
+        userId: o.userId,
+        ownerName: o.memberName,
+        people: o.tent!.people,
+        sharers: o.tent!.sharers.map((s) => s.name),
+      }))
+      .sort(byOwner),
   };
 }
 
@@ -985,19 +1030,26 @@ export async function getRentalMember(
 
 // --- Orders: a member's writes ---------------------------------------------------
 
+/** A member's order as a writer sends it: their tent answer and their lines. */
+export interface RentalOrderDraft {
+  tent: RentalTentDraft | null;
+  lines: readonly RentalLineDraft[];
+}
+
 /**
- * Write an order's row and its lines inside the caller's transaction: the
- * member's own save, or a captain filling it in for them. A compare-and-set
- * on the version the writer saw (0 when there is no order) and on the states
- * the writer may change it from. Sending it completes the member's open
- * "Ask everyone" nudge and reads its notice, in the same transaction.
+ * Write an order's row, its tent answer, its sharers and its lines inside the
+ * caller's transaction: the member's own save, or a captain filling it in for
+ * them. A compare-and-set on the version the writer saw (0 when there is no
+ * order) and on the states the writer may change it from. A SENT order is
+ * refused when it would make two orders disagree about a tent (tentConflict).
+ * Sending it completes the member's open "Ask everyone" nudge and reads its
+ * notice, in the same transaction.
  */
 async function storeOrder(
   tx: Tx,
-  input: {
+  input: RentalOrderDraft & {
     userId: string;
     cycle: number;
-    lines: readonly RentalLineDraft[];
     submit: boolean;
     expectedVersion: number;
     /** The states this writer may change the order from. */
@@ -1009,23 +1061,10 @@ async function storeOrder(
   },
 ): Promise<{ orderId: string; version: number; status: RentalOrderStatus }> {
   if (!UUID.test(input.userId)) refuse(RENTAL_NO_SUCH_MEMBER);
-  const [member] = await tx
-    .select({ id: schema.users.id })
-    .from(schema.users)
-    .where(
-      and(
-        eq(schema.users.id, input.userId),
-        eq(schema.users.isSystem, false),
-        eq(schema.users.sanitised, false),
-      ),
-    )
-    .limit(1);
-  if (!member) refuse(RENTAL_NO_SUCH_MEMBER);
 
   // The year's items are share-locked before the lines are checked against
-  // them, so a catalogue edit that shrinks a tent (which takes each row it
-  // updates) waits for this order, and then sees it. Members saving at the
-  // same moment do not wait for each other.
+  // them, so a catalogue edit waits for this order, and then sees it.
+  // Members saving at the same moment do not wait for each other here.
   await tx
     .select({ id: schema.rentalItems.id })
     .from(schema.rentalItems)
@@ -1033,26 +1072,81 @@ async function storeOrder(
     .orderBy(asc(schema.rentalItems.id))
     .for("share");
   const items = await listRentalItems(input.cycle, {}, tx);
-  const checked = checkRentalLines(items, input.lines, input.userId);
+  const checked = checkRentalOrder(items, input, input.userId);
   if (!checked.ok) refuse(checked.error);
-  if (input.submit && checked.lines.length === 0) {
+  if (input.submit && checked.tent === null && checked.lines.length === 0) {
     refuse(RENTAL_NOTHING_TO_SEND);
   }
-  const sharerIds = [...new Set(checked.lines.flatMap((l) => l.sharerIds))];
+  const sharerIds = checked.tent?.sharerIds ?? [];
   if (sharerIds.some((id) => !UUID.test(id))) refuse(RENTAL_SHARER_GONE);
-  if (sharerIds.length > 0) {
-    const real = await tx
-      .select({ id: schema.users.id })
-      .from(schema.users)
-      .where(
-        and(
-          inArray(schema.users.id, sharerIds),
-          eq(schema.users.isSystem, false),
-          eq(schema.users.sanitised, false),
-          eq(schema.users.approvalStatus, "approved"),
-        ),
-      );
-    if (real.length !== sharerIds.length) refuse(RENTAL_SHARER_GONE);
+
+  // The member and everyone they name are locked, in one order, so two
+  // orders that name a common person are written one after the other and the
+  // second sees the first. Who is in whose tent can then never disagree.
+  const people = await tx
+    .select({
+      id: schema.users.id,
+      name: schema.users.displayName,
+      isSystem: schema.users.isSystem,
+      sanitised: schema.users.sanitised,
+      approvalStatus: schema.users.approvalStatus,
+    })
+    .from(schema.users)
+    .where(inArray(schema.users.id, [input.userId, ...sharerIds]))
+    .orderBy(asc(schema.users.id))
+    .for("update");
+  const real = (id: string) =>
+    people.find((p) => p.id === id && !p.isSystem && !p.sanitised);
+  if (!real(input.userId)) refuse(RENTAL_NO_SUCH_MEMBER);
+  if (sharerIds.some((id) => real(id)?.approvalStatus !== "approved")) {
+    refuse(RENTAL_SHARER_GONE);
+  }
+
+  if (input.submit) {
+    // What the other sent and confirmed orders of the year say about the
+    // member and about each person they name.
+    const involved = [input.userId, ...sharerIds];
+    const others = and(
+      eq(schema.rentalOrders.cycle, input.cycle),
+      ne(schema.rentalOrders.status, "draft"),
+      ne(schema.rentalOrders.userId, input.userId),
+    );
+    const hosted = await tx
+      .select({
+        guestId: schema.rentalOrderSharers.userId,
+        hostName: schema.users.displayName,
+      })
+      .from(schema.rentalOrderSharers)
+      .innerJoin(
+        schema.rentalOrders,
+        eq(schema.rentalOrders.id, schema.rentalOrderSharers.orderId),
+      )
+      .innerJoin(schema.users, eq(schema.users.id, schema.rentalOrders.userId))
+      .where(and(others, inArray(schema.rentalOrderSharers.userId, involved)));
+    const answers =
+      sharerIds.length === 0
+        ? []
+        : await tx
+            .select({
+              userId: schema.rentalOrders.userId,
+              tentChoice: schema.rentalOrders.tentChoice,
+            })
+            .from(schema.rentalOrders)
+            .where(and(others, inArray(schema.rentalOrders.userId, sharerIds)));
+    const host = hosted.find((h) => h.guestId === input.userId);
+    const conflict = tentConflict({
+      tent: checked.tent,
+      hostName: host ? nameOf(host.hostName) : null,
+      sharers: sharerIds.map((id) => {
+        const answer = answers.find((a) => a.userId === id)?.tentChoice;
+        return {
+          name: nameOf(real(id)?.name ?? null),
+          hasOwnAnswer: answer === "own" || answer === "need",
+          inAnotherTent: hosted.some((h) => h.guestId === id),
+        };
+      }),
+    });
+    if (conflict) refuse(conflict);
   }
 
   const now = new Date();
@@ -1063,6 +1157,10 @@ async function storeOrder(
     version: next,
     submittedAt: input.submit ? now : null,
     filledByUserId: input.filledBy,
+    tentChoice: checked.tent?.choice ?? null,
+    tentPeople: checked.tent?.people ?? null,
+    ownDescription: checked.tent?.ownDescription ?? null,
+    ownSleeps: checked.tent?.ownSleeps ?? null,
     updatedAt: now,
   };
   let orderId: string | undefined;
@@ -1110,26 +1208,28 @@ async function storeOrder(
     );
   }
 
+  // The lines and the sharers replace the ones before. The tent a captain
+  // picked goes with them: the answer it was picked for may have changed.
   await tx
     .delete(schema.rentalOrderLines)
     .where(eq(schema.rentalOrderLines.orderId, orderId));
-  for (const line of checked.lines) {
-    const [row] = await tx
-      .insert(schema.rentalOrderLines)
-      .values({
+  await tx
+    .delete(schema.rentalOrderSharers)
+    .where(eq(schema.rentalOrderSharers.orderId, orderId));
+  if (checked.lines.length > 0) {
+    await tx.insert(schema.rentalOrderLines).values(
+      checked.lines.map((line) => ({
         orderId,
         itemId: line.itemId,
         choice: line.choice,
         quantity: line.quantity,
-        ownDescription: line.ownDescription,
-        ownSleeps: line.ownSleeps,
-      })
-      .returning({ id: schema.rentalOrderLines.id });
-    if (line.sharerIds.length > 0) {
-      await tx
-        .insert(schema.rentalLineSharers)
-        .values(line.sharerIds.map((userId) => ({ lineId: row!.id, userId })));
-    }
+      })),
+    );
+  }
+  if (sharerIds.length > 0) {
+    await tx
+      .insert(schema.rentalOrderSharers)
+      .values(sharerIds.map((userId) => ({ orderId, userId })));
   }
 
   if (input.submit) {
@@ -1159,19 +1259,20 @@ async function storeOrder(
 }
 
 /**
- * Save a member's own order, as a draft or sent to the captains. The lines
- * replace the ones before. A compare-and-set on the version the member saw (0
- * before their first save), and only a draft can change: a sent order is
- * taken back first, a confirmed one is reopened by a captain. An order a
- * captain filled in becomes the member's own again.
+ * Save a member's own order, as a draft or sent to the captains. It replaces
+ * the one before. A compare-and-set on the version the member saw (0 before
+ * their first save), and only a draft can change: a sent order is taken back
+ * first, a confirmed one is reopened by a captain. An order a captain filled
+ * in becomes the member's own again.
  */
-export async function saveRentalOrder(input: {
-  userId: string;
-  cycle: number;
-  lines: readonly RentalLineDraft[];
-  submit: boolean;
-  expectedVersion: number;
-}): Promise<RentalResult<{ version: number; status: RentalOrderStatus }>> {
+export async function saveRentalOrder(
+  input: RentalOrderDraft & {
+    userId: string;
+    cycle: number;
+    submit: boolean;
+    expectedVersion: number;
+  },
+): Promise<RentalResult<{ version: number; status: RentalOrderStatus }>> {
   return write(async (tx) => {
     const saved = await storeOrder(tx, {
       ...input,
@@ -1245,18 +1346,20 @@ export async function withdrawRentalOrder(input: {
  * captain saw (0 when the member has no order). A draft or a sent order can
  * be changed this way; a confirmed one is reopened first.
  */
-export async function fillRentalOrderFor(input: {
-  userId: string;
-  cycle: number;
-  lines: readonly RentalLineDraft[];
-  expectedVersion: number;
-  actorId: string;
-}): Promise<RentalResult<{ version: number }>> {
+export async function fillRentalOrderFor(
+  input: RentalOrderDraft & {
+    userId: string;
+    cycle: number;
+    expectedVersion: number;
+    actorId: string;
+  },
+): Promise<RentalResult<{ version: number }>> {
   return write(async (tx) => {
     await assertRentalManager(tx, input.actorId);
     const saved = await storeOrder(tx, {
       userId: input.userId,
       cycle: input.cycle,
+      tent: input.tent,
       lines: input.lines,
       submit: true,
       expectedVersion: input.expectedVersion,
@@ -1272,6 +1375,7 @@ export async function fillRentalOrderFor(input: {
       metadata: {
         cycle: input.cycle,
         orderId: saved.orderId,
+        tent: input.tent?.choice ?? null,
         lines: input.lines.length,
       },
     });
@@ -1370,15 +1474,19 @@ export async function askForGearOrders(input: {
 }
 
 /**
- * Confirm a sent order: the captain's source for each needed item, the price
- * each is confirmed at, the total, and the `rental` charge on the member's
- * dues, all in one transaction with the audit row. A compare-and-set on
+ * Confirm a sent order: for a member who needs a tent, the catalogue tent the
+ * captain picked (it becomes the order's tent line); the captain's source for
+ * each needed item; the price each is confirmed at; the total; and the
+ * `rental` charge on the member's dues, all in one transaction with the audit
+ * row. The camp stock count applies to the tent the captain picked. A compare-and-set on
  * `submitted` and the version the captain saw, so an order the member took
  * back or changed in between is refused, never confirmed as it was.
  */
 export async function confirmRentalOrder(input: {
   orderId: string;
   expectedVersion: number;
+  /** The tent for a member who needs one: which, and from where. */
+  tent?: { itemId: string; source: RentalSource } | null;
   sources: readonly { lineId: string; source: RentalSource }[];
   actorId: string;
 }): Promise<RentalResult<{ totalCents: number; chargeId: string | null }>> {
@@ -1405,18 +1513,16 @@ export async function confirmRentalOrder(input: {
       .returning({
         userId: schema.rentalOrders.userId,
         cycle: schema.rentalOrders.cycle,
+        tentChoice: schema.rentalOrders.tentChoice,
       });
     if (!order) refuse(RENTAL_ORDER_MOVED);
+    const pick = input.tent ?? null;
+    if ((order.tentChoice === "need") !== (pick !== null)) {
+      refuse(
+        order.tentChoice === "need" ? RENTAL_PICK_A_TENT : RENTAL_ORDER_MOVED,
+      );
+    }
 
-    const lines = await tx
-      .select({
-        id: schema.rentalOrderLines.id,
-        itemId: schema.rentalOrderLines.itemId,
-        choice: schema.rentalOrderLines.choice,
-        quantity: schema.rentalOrderLines.quantity,
-      })
-      .from(schema.rentalOrderLines)
-      .where(eq(schema.rentalOrderLines.orderId, input.orderId));
     // The year's items are locked before the camp stock is counted, so two
     // confirmations at once cannot both take the last one.
     await tx
@@ -1431,6 +1537,50 @@ export async function confirmRentalOrder(input: {
       { includeArchived: true },
       tx,
     );
+    // The tent a captain picked is the order's one tent line: the pick of an
+    // earlier confirmation goes, this one takes its place.
+    // The same tent picked again keeps its label.
+    const tentIds = items.filter((i) => i.isTent).map((i) => i.id);
+    const before =
+      tentIds.length === 0
+        ? []
+        : await tx
+            .delete(schema.rentalOrderLines)
+            .where(
+              and(
+                eq(schema.rentalOrderLines.orderId, input.orderId),
+                inArray(schema.rentalOrderLines.itemId, tentIds),
+              ),
+            )
+            .returning({
+              itemId: schema.rentalOrderLines.itemId,
+              tentLabel: schema.rentalOrderLines.tentLabel,
+            });
+    let sources = [...input.sources];
+    if (pick) {
+      if (!tentIds.includes(pick.itemId)) refuse(RENTAL_NOT_A_TENT);
+      const [tentLine] = await tx
+        .insert(schema.rentalOrderLines)
+        .values({
+          orderId: input.orderId,
+          itemId: pick.itemId,
+          choice: "need",
+          quantity: 1,
+          tentLabel:
+            before.find((l) => l.itemId === pick.itemId)?.tentLabel ?? null,
+        })
+        .returning({ id: schema.rentalOrderLines.id });
+      sources = [...sources, { lineId: tentLine!.id, source: pick.source }];
+    }
+    const lines = await tx
+      .select({
+        id: schema.rentalOrderLines.id,
+        itemId: schema.rentalOrderLines.itemId,
+        choice: schema.rentalOrderLines.choice,
+        quantity: schema.rentalOrderLines.quantity,
+      })
+      .from(schema.rentalOrderLines)
+      .where(eq(schema.rentalOrderLines.orderId, input.orderId));
     const orders = await campTakenByOrders(tx, order.cycle, input.orderId);
     const taken = new Map(
       items.map((item) => [
@@ -1438,7 +1588,7 @@ export async function confirmRentalOrder(input: {
         campStockTaken(item, orders.get(item.id) ?? 0),
       ]),
     );
-    const priced = priceRentalOrder(items, lines, input.sources, taken);
+    const priced = priceRentalOrder(items, lines, sources, taken);
     if (!priced.ok) refuse(priced.error);
     for (const line of priced.lines) {
       await tx

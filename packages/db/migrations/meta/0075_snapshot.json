@@ -1,5 +1,5 @@
 {
-  "id": "83437679-2e00-467e-bf17-bee8fb1d5047",
+  "id": "8aef15f8-eaf4-47d1-aaa7-0c4a499a0d15",
   "prevId": "c0e28282-24b9-47a9-8f69-e32100fb57fe",
   "version": "7",
   "dialect": "postgresql",
@@ -10674,82 +10674,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.rental_line_sharers": {
-      "name": "rental_line_sharers",
-      "schema": "",
-      "columns": {
-        "line_id": {
-          "name": "line_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "rental_line_sharers_user_idx": {
-          "name": "rental_line_sharers_user_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "rental_line_sharers_line_id_rental_order_lines_id_fk": {
-          "name": "rental_line_sharers_line_id_rental_order_lines_id_fk",
-          "tableFrom": "rental_line_sharers",
-          "tableTo": "rental_order_lines",
-          "columnsFrom": [
-            "line_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "rental_line_sharers_user_id_users_id_fk": {
-          "name": "rental_line_sharers_user_id_users_id_fk",
-          "tableFrom": "rental_line_sharers",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "rental_line_sharers_line_id_user_id_pk": {
-          "name": "rental_line_sharers_line_id_user_id_pk",
-          "columns": [
-            "line_id",
-            "user_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.rental_order_lines": {
       "name": "rental_order_lines",
       "schema": "",
@@ -10810,18 +10734,6 @@
         "tent_label": {
           "name": "tent_label",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "own_description": {
-          "name": "own_description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "own_sleeps": {
-          "name": "own_sleeps",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
@@ -10911,15 +10823,87 @@
           "name": "rental_order_lines_price_check",
           "value": "(\"rental_order_lines\".\"source\" is null) = (\"rental_order_lines\".\"unit_price_cents\" is null) and coalesce(\"rental_order_lines\".\"unit_price_cents\", 0) >= 0"
         },
-        "rental_order_lines_own_check": {
-          "name": "rental_order_lines_own_check",
-          "value": "(\"rental_order_lines\".\"choice\" = 'own' or (\"rental_order_lines\".\"own_description\" is null and \"rental_order_lines\".\"own_sleeps\" is null)) and coalesce(\"rental_order_lines\".\"own_sleeps\", 1) between 1 and 12"
-        },
         "rental_order_lines_currency_check": {
           "name": "rental_order_lines_currency_check",
           "value": "\"rental_order_lines\".\"currency\" = 'ZAR'"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.rental_order_sharers": {
+      "name": "rental_order_sharers",
+      "schema": "",
+      "columns": {
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "rental_order_sharers_user_idx": {
+          "name": "rental_order_sharers_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "rental_order_sharers_order_id_rental_orders_id_fk": {
+          "name": "rental_order_sharers_order_id_rental_orders_id_fk",
+          "tableFrom": "rental_order_sharers",
+          "tableTo": "rental_orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "rental_order_sharers_user_id_users_id_fk": {
+          "name": "rental_order_sharers_user_id_users_id_fk",
+          "tableFrom": "rental_order_sharers",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "rental_order_sharers_order_id_user_id_pk": {
+          "name": "rental_order_sharers_order_id_user_id_pk",
+          "columns": [
+            "order_id",
+            "user_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.rental_orders": {
@@ -10994,6 +10978,31 @@
         "charge_id": {
           "name": "charge_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tent_choice": {
+          "name": "tent_choice",
+          "type": "rental_tent_choice",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tent_people": {
+          "name": "tent_people",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_description": {
+          "name": "own_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_sleeps": {
+          "name": "own_sleeps",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
@@ -11114,6 +11123,10 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "rental_orders_tent_check": {
+          "name": "rental_orders_tent_check",
+          "value": "((\"rental_orders\".\"tent_choice\" is not distinct from 'need') = (\"rental_orders\".\"tent_people\" is not null)) and coalesce(\"rental_orders\".\"tent_people\", 1) between 1 and 12 and (\"rental_orders\".\"tent_choice\" is not distinct from 'own' or (\"rental_orders\".\"own_description\" is null and \"rental_orders\".\"own_sleeps\" is null)) and coalesce(\"rental_orders\".\"own_sleeps\", 1) between 1 and 12"
+        },
         "rental_orders_total_check": {
           "name": "rental_orders_total_check",
           "value": "\"rental_orders\".\"total_cents\" is null or \"rental_orders\".\"total_cents\" >= 0"
@@ -13345,6 +13358,15 @@
       "values": [
         "camp",
         "supplier"
+      ]
+    },
+    "public.rental_tent_choice": {
+      "name": "rental_tent_choice",
+      "schema": "public",
+      "values": [
+        "own",
+        "need",
+        "shared"
       ]
     },
     "public.required_action_status": {

@@ -8,12 +8,11 @@ import {
   campStockInUse,
   campStockTaken,
   canManageRental,
-  checkRentalLines,
+  checkRentalOrder,
   GEAR_ORDER_ACTION_TITLE,
   GEAR_ORDER_REF_TYPE,
+  hostedElsewhere,
   isAskedForGear,
-  holdsSharers,
-  maxSharers,
   noPriceFrom,
   notEnoughCampStock,
   priceRentalOrder,
@@ -25,6 +24,9 @@ import {
   rentalOrderState,
   rentalSources,
   rentalSummary,
+  tentConflict,
+  tentRoom,
+  tentSleepsEnough,
   tooManySharers,
   type RentalPricedItem,
 } from "../rental";
@@ -117,222 +119,220 @@ describe("the catalogue", () => {
       "supplier",
     ]);
   });
-
-  it("fits a tent's sleepers less the member, and nobody in anything else", () => {
-    expect(maxSharers(TENT, 1)).toBe(1);
-    expect(maxSharers(TENT, 2)).toBe(3);
-    expect(maxSharers({ isTent: true, sleeps: 1 }, 1)).toBe(0);
-    expect(maxSharers(MATTRESS, 3)).toBe(0);
-  });
 });
 
-describe("holdsSharers", () => {
-  // One 2-person tent shared with one person, and two shared with three.
-  const lines = [
-    { quantity: 1, sharers: 1 },
-    { quantity: 2, sharers: 3 },
-  ];
+describe("checkRentalOrder", () => {
+  const order = (
+    tent: Parameters<typeof checkRentalOrder>[1]["tent"],
+    lines: Parameters<typeof checkRentalOrder>[1]["lines"] = [],
+  ) => checkRentalOrder(ITEMS, { tent, lines }, "a");
 
-  it("holds while every line's sharers still fit", () => {
-    expect(holdsSharers(TENT, lines)).toBe(true);
-    expect(holdsSharers({ isTent: true, sleeps: 4 }, lines)).toBe(true);
-    expect(holdsSharers({ isTent: true, sleeps: 1 }, [])).toBe(true);
-    // Nobody shares: any size, and not a tent at all, is fine.
-    expect(
-      holdsSharers({ isTent: false, sleeps: 1 }, [{ quantity: 3, sharers: 0 }]),
-    ).toBe(true);
-  });
-
-  it("fails for a tent made smaller, or one that stops being a tent", () => {
-    expect(holdsSharers({ isTent: true, sleeps: 1 }, lines)).toBe(false);
-    expect(holdsSharers({ isTent: false, sleeps: 1 }, lines)).toBe(false);
-    expect(
-      holdsSharers({ isTent: true, sleeps: 2 }, [{ quantity: 1, sharers: 2 }]),
-    ).toBe(false);
-  });
-});
-
-describe("checkRentalLines", () => {
-  it("tidies an item the member has: one, and nothing but a tent keeps words or sharers", () => {
-    expect(
-      checkRentalLines(
-        ITEMS,
-        [
-          {
-            itemId: "mattress",
-            choice: "own",
-            quantity: 4,
-            sharerIds: ["b"],
-            ownDescription: "A foam one",
-            ownSleeps: 2,
-          },
-        ],
-        "a",
-      ),
-    ).toEqual({
-      ok: true,
-      lines: [
-        {
-          itemId: "mattress",
-          choice: "own",
-          quantity: 1,
-          sharerIds: [],
+  it("takes one tent answer, whatever tents the catalogue holds", () => {
+    expect(order({ choice: "need", people: 2, sharerIds: ["b", "b"] })).toEqual(
+      {
+        ok: true,
+        tent: {
+          choice: "need",
+          people: 2,
           ownDescription: null,
           ownSleeps: null,
+          sharerIds: ["b"],
         },
-      ],
-    });
-  });
-
-  it("keeps what a member says about their own tent, and who shares it", () => {
-    const own = {
-      itemId: "tent",
-      choice: "own" as const,
-      quantity: 3,
-      sharerIds: ["b", "c"],
-      ownDescription: "  3-person dome ",
-      ownSleeps: 3,
-    };
-    expect(checkRentalLines(ITEMS, [own], "a")).toEqual({
-      ok: true,
-      lines: [
-        {
-          itemId: "tent",
-          choice: "own",
-          quantity: 1,
-          sharerIds: ["b", "c"],
-          ownDescription: "3-person dome",
-          ownSleeps: 3,
-        },
-      ],
-    });
-    // Both are optional: a line saved before they existed is still valid.
-    expect(
-      checkRentalLines(
-        ITEMS,
-        [{ itemId: "tent", choice: "own", quantity: 1, sharerIds: [] }],
-        "a",
-      ),
-    ).toEqual({
-      ok: true,
-      lines: [
-        {
-          itemId: "tent",
-          choice: "own",
-          quantity: 1,
-          sharerIds: [],
-          ownDescription: null,
-          ownSleeps: null,
-        },
-      ],
-    });
-    // It sleeps what they say it does: three people is two sharers at most,
-    // and a tent with no size said holds only its owner.
-    expect(
-      checkRentalLines(ITEMS, [{ ...own, sharerIds: ["b", "c", "d"] }], "a"),
-    ).toEqual({ ok: false, error: tooManySharers("Your own tent", 2) });
-    expect(checkRentalLines(ITEMS, [{ ...own, ownSleeps: null }], "a")).toEqual(
-      { ok: false, error: tooManySharers("Your own tent", 0) },
+        lines: [],
+      },
     );
     expect(
-      checkRentalLines(ITEMS, [{ ...own, sharerIds: ["a"] }], "a"),
-    ).toEqual({ ok: false, error: RENTAL_NOT_WITH_YOURSELF });
-  });
-
-  it("keeps a needed tent's sharers, once each", () => {
-    expect(
-      checkRentalLines(
-        ITEMS,
-        [
-          {
-            itemId: "tent",
-            choice: "need",
-            quantity: 2,
-            sharerIds: ["b", "b"],
-          },
-        ],
-        "a",
-      ),
+      order({
+        choice: "own",
+        ownDescription: "  3-person dome ",
+        ownSleeps: 3,
+        sharerIds: ["b", "c"],
+      }),
     ).toEqual({
       ok: true,
-      lines: [
-        {
-          itemId: "tent",
-          choice: "need",
-          quantity: 2,
-          sharerIds: ["b"],
-          ownDescription: null,
-          ownSleeps: null,
-        },
-      ],
+      tent: {
+        choice: "own",
+        people: null,
+        ownDescription: "3-person dome",
+        ownSleeps: 3,
+        sharerIds: ["b", "c"],
+      },
+      lines: [],
+    });
+    // In someone else's tent: it names nobody, so it cannot disagree.
+    expect(order({ choice: "shared" })).toEqual({
+      ok: true,
+      tent: {
+        choice: "shared",
+        people: null,
+        ownDescription: null,
+        ownSleeps: null,
+        sharerIds: [],
+      },
+      lines: [],
+    });
+    // No tent answer at all is an answer about the bedding only.
+    expect(order(null)).toEqual({ ok: true, tent: null, lines: [] });
+  });
+
+  it("leaves a tent of their own optional in what it is and how many it sleeps", () => {
+    expect(order({ choice: "own", sharerIds: [] })).toMatchObject({
+      ok: true,
+      tent: { choice: "own", ownDescription: null, ownSleeps: null },
     });
   });
 
-  it("refuses an item off the list, and the same item twice", () => {
+  it("never takes a catalogue tent as a line: the member does not pick one", () => {
     expect(
-      checkRentalLines(
-        ITEMS,
-        [{ itemId: "gone", choice: "need", quantity: 1, sharerIds: [] }],
-        "a",
-      ),
+      order(null, [{ itemId: "tent", choice: "need", quantity: 1 }]),
     ).toEqual({ ok: false, error: RENTAL_ITEM_GONE });
-    const line = {
-      itemId: "mattress",
-      choice: "need" as const,
-      quantity: 1,
-      sharerIds: [],
-    };
-    expect(checkRentalLines(ITEMS, [line, line], "a")).toEqual({
+  });
+
+  it("tidies the other items: one of what they have, and each item once", () => {
+    expect(
+      order(null, [{ itemId: "mattress", choice: "own", quantity: 4 }]),
+    ).toEqual({
+      ok: true,
+      tent: null,
+      lines: [{ itemId: "mattress", choice: "own", quantity: 1 }],
+    });
+    const line = { itemId: "mattress", choice: "need" as const, quantity: 2 };
+    expect(order(null, [line])).toMatchObject({ ok: true, lines: [line] });
+    expect(order(null, [line, line])).toEqual({
       ok: false,
       error: RENTAL_ITEM_GONE,
     });
+    expect(
+      order(null, [{ itemId: "gone", choice: "need", quantity: 1 }]),
+    ).toEqual({ ok: false, error: RENTAL_ITEM_GONE });
   });
 
-  it("refuses sharing with yourself, more sharers than fit, and sharing a mattress", () => {
+  it("refuses sharing with yourself, and more sharers than the tent is for", () => {
+    expect(order({ choice: "need", people: 2, sharerIds: ["a"] })).toEqual({
+      ok: false,
+      error: RENTAL_NOT_WITH_YOURSELF,
+    });
+    expect(order({ choice: "need", people: 2, sharerIds: ["b", "c"] })).toEqual(
+      { ok: false, error: tooManySharers(1) },
+    );
+    expect(order({ choice: "need", people: 1, sharerIds: ["b"] })).toEqual({
+      ok: false,
+      error: tooManySharers(0),
+    });
+    // A tent of their own sleeps what they say it does; one when they do not.
     expect(
-      checkRentalLines(
-        ITEMS,
-        [{ itemId: "tent", choice: "need", quantity: 1, sharerIds: ["a"] }],
-        "a",
-      ),
-    ).toEqual({ ok: false, error: RENTAL_NOT_WITH_YOURSELF });
+      order({ choice: "own", ownSleeps: 3, sharerIds: ["b", "c", "d"] }),
+    ).toEqual({ ok: false, error: tooManySharers(2) });
+    expect(order({ choice: "own", sharerIds: ["b"] })).toEqual({
+      ok: false,
+      error: tooManySharers(0),
+    });
+  });
+
+  it("knows how much room each answer has", () => {
+    expect(tentRoom({ choice: "need", people: 4 })).toBe(3);
+    expect(tentRoom({ choice: "own", ownSleeps: 2 })).toBe(1);
+    expect(tentRoom({ choice: "own" })).toBe(0);
+    expect(tentRoom({ choice: "shared" })).toBe(0);
+  });
+});
+
+describe("tentConflict", () => {
+  const free = { name: "Fay", hasOwnAnswer: false, inAnotherTent: false };
+
+  it("lets a sent order through when nobody else says otherwise", () => {
+    for (const choice of ["own", "need", "shared"] as const) {
+      expect(
+        tentConflict({ tent: { choice }, hostName: null, sharers: [free] }),
+      ).toBeNull();
+    }
     expect(
-      checkRentalLines(
-        ITEMS,
-        [
-          {
-            itemId: "tent",
-            choice: "need",
-            quantity: 1,
-            sharerIds: ["b", "c"],
-          },
-        ],
-        "a",
-      ),
-    ).toEqual({ ok: false, error: tooManySharers("2-person tent", 1) });
+      tentConflict({ tent: null, hostName: "Dee", sharers: [] }),
+    ).toBeNull();
+  });
+
+  it("refuses a tent of their own, or a needed one, for a member already in someone's tent", () => {
+    for (const choice of ["own", "need"] as const) {
+      expect(
+        tentConflict({ tent: { choice }, hostName: "Dee", sharers: [] }),
+      ).toBe(hostedElsewhere("Dee"));
+    }
+    // "I'm in someone else's tent" agrees with the host's order.
     expect(
-      checkRentalLines(
-        ITEMS,
-        [{ itemId: "mattress", choice: "need", quantity: 1, sharerIds: ["b"] }],
-        "a",
-      ),
-    ).toEqual({ ok: false, error: tooManySharers("Mattress", 0) });
+      tentConflict({
+        tent: { choice: "shared" },
+        hostName: "Dee",
+        sharers: [],
+      }),
+    ).toBeNull();
+  });
+
+  it("refuses a sharer who has their own answer, or is in another tent", () => {
+    expect(
+      tentConflict({
+        tent: { choice: "need" },
+        hostName: null,
+        sharers: [free, { ...free, name: "Sam", hasOwnAnswer: true }],
+      }),
+    ).toContain("Sam says they have their own tent or need one.");
+    expect(
+      tentConflict({
+        tent: { choice: "own" },
+        hostName: null,
+        sharers: [{ ...free, inAnotherTent: true }],
+      }),
+    ).toBe("Fay is already in someone else's tent.");
+  });
+});
+
+describe("the captain's tent pick", () => {
+  it("warns, never refuses, when the tent sleeps fewer than it is for", () => {
+    expect(tentSleepsEnough(TENT, 2)).toBe(true);
+    expect(tentSleepsEnough(TENT, 1)).toBe(true);
+    expect(tentSleepsEnough(TENT, 3)).toBe(false);
+    expect(tentSleepsEnough(TENT, null)).toBe(true);
   });
 });
 
 describe("rentalEstimate", () => {
-  it("gives the cheapest and the dearest the needed items can come to", () => {
+  const BIG: RentalPricedItem = {
+    id: "big",
+    name: "4-person tent",
+    isTent: true,
+    sleeps: 4,
+    campPriceCents: null,
+    campStockCount: null,
+    supplierPriceCents: 70_000,
+  };
+
+  it("prices a needed tent as a range across every tent and source, never one tent", () => {
+    // 2-person: 100 camp, 250 supplier; 4-person: 700 supplier.
     expect(
-      rentalEstimate(ITEMS, [
-        { itemId: "tent", choice: "need", quantity: 1 },
-        { itemId: "mattress", choice: "need", quantity: 2 },
-      ]),
+      rentalEstimate([...ITEMS, BIG], { tent: { choice: "need" }, lines: [] }),
+    ).toEqual({ lowCents: 10_000, highCents: 70_000 });
+  });
+
+  it("adds the other items across their sources", () => {
+    expect(
+      rentalEstimate(ITEMS, {
+        tent: { choice: "need" },
+        lines: [{ itemId: "mattress", choice: "need", quantity: 2 }],
+      }),
     ).toEqual({ lowCents: 26_000, highCents: 41_000 });
   });
 
-  it("counts nothing for what the member has themselves", () => {
+  it("counts nothing for a tent of their own, someone else's tent, or what they have", () => {
+    for (const choice of ["own", "shared"] as const) {
+      expect(
+        rentalEstimate(ITEMS, {
+          tent: { choice },
+          lines: [{ itemId: "mattress", choice: "own", quantity: 1 }],
+        }),
+      ).toEqual({ lowCents: 0, highCents: 0 });
+    }
+    // A catalogue with no tent in it has no tent price to show.
     expect(
-      rentalEstimate(ITEMS, [{ itemId: "tent", choice: "own", quantity: 1 }]),
+      rentalEstimate([MATTRESS], { tent: { choice: "need" }, lines: [] }),
     ).toEqual({ lowCents: 0, highCents: 0 });
   });
 });

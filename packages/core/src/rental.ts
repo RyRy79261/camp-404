@@ -3,6 +3,7 @@ import {
   type ParticipationStatus,
   type RentalChoice,
   type RentalOrderStatus,
+  type RentalTentChoice,
   type RentalSource,
 } from "@camp404/types";
 import { sumMinor } from "./money";
@@ -145,150 +146,233 @@ export function rentalSources(item: ItemSources): RentalSource[] {
   );
 }
 
-/** How many people besides the member fit in the tents on one line. */
-export function maxSharers(
-  item: Pick<RentalPricedItem, "isTent" | "sleeps">,
-  quantity: number,
-): number {
-  return item.isTent ? Math.max(0, item.sleeps * quantity - 1) : 0;
-}
-
-/** A needed tent line on an order that is sent or confirmed. */
-export interface RentalLineInUse {
-  quantity: number;
-  /** How many people share it with the member who ordered it. */
-  sharers: number;
-}
-
-/**
- * Whether a catalogue item, as a captain wants to change it, still holds the
- * people already on orders: every line's sharers must fit its tents. A tent
- * made smaller, or an item that stops being a tent, fails while someone
- * shares one.
- */
-export function holdsSharers(
-  item: Pick<RentalPricedItem, "isTent" | "sleeps">,
-  lines: readonly RentalLineInUse[],
-): boolean {
-  return lines.every((line) => line.sharers <= maxSharers(item, line.quantity));
-}
-
-/** Said when a catalogue change would leave a shared tent too small. */
-export function tentInUse(name: string): string {
-  return `An order already has more people sharing ${name} than that would sleep. Reopen the order, or keep the size.`;
-}
-
 // --- A member's order ----------------------------------------------------------
+//
+// THE TENT IS ASKED ONCE (owner, 2026-09-30). The member's form is not built
+// from the catalogue's tents: a member answers one tent question, whatever
+// tents the camp rents out. "I have my own" (what it is, how many it sleeps),
+// "I need one" (for how many people), or "I'm in someone else's tent". A
+// captain picks the actual tent, and its source, when they confirm. Every
+// other item (a mattress, a sleeping bag) is still one row per catalogue
+// item, because there the row and the answer describe the same thing.
+//
+// WHO IS IN WHOSE TENT has one source of truth: the list of sharers on the
+// order of the member whose tent it is. "I'm in someone else's tent" names
+// nobody, so it cannot disagree with that list. A sent order is refused when
+// it would make two orders disagree (tentConflict below).
 
-/** One line of a member's order as they send it. */
+/** The member's tent answer as they send it. */
+export type RentalTentDraft =
+  | {
+      choice: "own";
+      /** What it is, and how many it sleeps. Both optional. */
+      ownDescription?: string | null;
+      ownSleeps?: number | null;
+      sharerIds: readonly string[];
+    }
+  | {
+      choice: "need";
+      /** How many people it is for, the member included. */
+      people: number;
+      sharerIds: readonly string[];
+    }
+  | { choice: "shared" };
+
+/** The tent answer as checkRentalOrder leaves it: every field present. */
+export interface RentalTentChecked {
+  choice: RentalTentChoice;
+  people: number | null;
+  ownDescription: string | null;
+  ownSleeps: number | null;
+  sharerIds: string[];
+}
+
+/** One line of a member's order as they send it: an item that is not a tent. */
 export interface RentalLineDraft {
   itemId: string;
   choice: RentalChoice;
   quantity: number;
-  sharerIds: readonly string[];
-  /** For a tent they have themselves: what it is, and how many it sleeps. */
-  ownDescription?: string | null;
-  ownSleeps?: number | null;
-}
-
-/** A line as checkRentalLines leaves it: every field present. */
-export interface RentalLineChecked {
-  itemId: string;
-  choice: RentalChoice;
-  quantity: number;
-  sharerIds: string[];
-  ownDescription: string | null;
-  ownSleeps: number | null;
 }
 
 export const RENTAL_ITEM_GONE =
   "One of those items isn't on this year's list any more. Reload the page.";
 export const RENTAL_NOT_WITH_YOURSELF = "You can't share a tent with yourself.";
 
-/** Said when a line names more sharers than its tents sleep. */
-export function tooManySharers(name: string, fits: number): string {
+/** Said when a tent is given more sharers than it holds. */
+export function tooManySharers(fits: number): string {
   return fits === 0
-    ? `${name} isn't shared.`
-    : `${name} fits ${fits} more ${fits === 1 ? "person" : "people"}.`;
+    ? "That tent is for one person. Say it is for more people to share it."
+    : `That tent fits ${fits} more ${fits === 1 ? "person" : "people"}.`;
+}
+
+/** How many people besides the member a tent answer has room for. */
+export function tentRoom(tent: {
+  choice: RentalTentChoice;
+  people?: number | null;
+  ownSleeps?: number | null;
+}): number {
+  if (tent.choice === "need") return Math.max(0, (tent.people ?? 1) - 1);
+  if (tent.choice === "own") return Math.max(0, (tent.ownSleeps ?? 1) - 1);
+  return 0;
 }
 
 /**
- * A member's lines checked against the year's live catalogue and tidied: an
- * item they have themselves is one; a tent keeps its sharers, once each, never
- * the member and never more than it sleeps. A needed tent sleeps what the
- * catalogue says; a tent of their own sleeps what they say it does (one, when
- * they do not say), and keeps their words for it. An error is a sentence the
- * member can act on.
+ * A member's order checked against the year's live catalogue and tidied. The
+ * tent answer: its sharers once each, never the member, never more than it
+ * has room for; someone in another member's tent lists nobody. The lines: an
+ * item on the list that is NOT a tent, once each; one they have themselves is
+ * one. An error is a sentence the member can act on.
  */
-export function checkRentalLines(
+export function checkRentalOrder(
   items: readonly RentalPricedItem[],
-  lines: readonly RentalLineDraft[],
+  order: {
+    tent: RentalTentDraft | null;
+    lines: readonly RentalLineDraft[];
+  },
   memberId: string,
-): { ok: true; lines: RentalLineChecked[] } | { ok: false; error: string } {
+):
+  | { ok: true; tent: RentalTentChecked | null; lines: RentalLineDraft[] }
+  | { ok: false; error: string } {
   const byId = new Map(items.map((item) => [item.id, item]));
   const seen = new Set<string>();
-  const tidy: RentalLineChecked[] = [];
-  for (const line of lines) {
+  const lines: RentalLineDraft[] = [];
+  for (const line of order.lines) {
     const item = byId.get(line.itemId);
-    if (!item || seen.has(line.itemId)) {
+    // A tent is never a line: the member does not pick one.
+    if (!item || item.isTent || seen.has(line.itemId)) {
       return { ok: false, error: RENTAL_ITEM_GONE };
     }
     seen.add(line.itemId);
-    const own = line.choice === "own";
-    if (own && !item.isTent) {
-      tidy.push({
-        itemId: item.id,
-        choice: "own",
-        quantity: 1,
-        sharerIds: [],
-        ownDescription: null,
-        ownSleeps: null,
-      });
-      continue;
-    }
-    const sharerIds = [...new Set(line.sharerIds)];
-    if (sharerIds.includes(memberId)) {
-      return { ok: false, error: RENTAL_NOT_WITH_YOURSELF };
-    }
-    const ownSleeps = own ? (line.ownSleeps ?? null) : null;
-    const fits = own
-      ? Math.max(0, (ownSleeps ?? 1) - 1)
-      : maxSharers(item, line.quantity);
-    if (sharerIds.length > fits) {
-      return {
-        ok: false,
-        error: tooManySharers(own ? "Your own tent" : item.name, fits),
-      };
-    }
-    tidy.push({
+    lines.push({
       itemId: item.id,
       choice: line.choice,
-      quantity: own ? 1 : line.quantity,
-      sharerIds,
-      ownDescription: own ? line.ownDescription?.trim() || null : null,
-      ownSleeps,
+      quantity: line.choice === "own" ? 1 : line.quantity,
     });
   }
-  return { ok: true, lines: tidy };
+
+  const draft = order.tent;
+  if (draft === null) return { ok: true, tent: null, lines };
+  if (draft.choice === "shared") {
+    return {
+      ok: true,
+      tent: {
+        choice: "shared",
+        people: null,
+        ownDescription: null,
+        ownSleeps: null,
+        sharerIds: [],
+      },
+      lines,
+    };
+  }
+  const sharerIds = [...new Set(draft.sharerIds)];
+  if (sharerIds.includes(memberId)) {
+    return { ok: false, error: RENTAL_NOT_WITH_YOURSELF };
+  }
+  const fits = tentRoom(draft);
+  if (sharerIds.length > fits) {
+    return { ok: false, error: tooManySharers(fits) };
+  }
+  return {
+    ok: true,
+    tent:
+      draft.choice === "own"
+        ? {
+            choice: "own",
+            people: null,
+            ownDescription: draft.ownDescription?.trim() || null,
+            ownSleeps: draft.ownSleeps ?? null,
+            sharerIds,
+          }
+        : {
+            choice: "need",
+            people: draft.people,
+            ownDescription: null,
+            ownSleeps: null,
+            sharerIds,
+          },
+    lines,
+  };
+}
+
+/** What the writer knows about one person a sent order names as a sharer. */
+export interface SharerStanding {
+  name: string;
+  /** Their own sent or confirmed order says they have a tent or need one. */
+  hasOwnAnswer: boolean;
+  /** Another member's sent or confirmed order already has them in its tent. */
+  inAnotherTent: boolean;
+}
+
+/** Said to a member another member already has in their tent. */
+export function hostedElsewhere(hostName: string): string {
+  return `${hostName} has put you in their tent. Pick "I'm in someone else's tent", or ask them to take you off first.`;
 }
 
 /**
- * What a member's order may cost before a captain picks each source: the
- * cheapest and the dearest it can come to at today's prices. The two are the
- * same when every needed item has one price.
+ * Why a SENT order would make two orders disagree about a tent, or null when
+ * it does not. A member in someone's tent cannot also have their own or need
+ * one; a sharer cannot have their own answer, nor be in two tents. A draft is
+ * not checked: it counts for nothing until it is sent.
+ */
+export function tentConflict(input: {
+  tent: Pick<RentalTentChecked, "choice"> | null;
+  /** The member whose sent or confirmed order has this member in its tent. */
+  hostName: string | null;
+  sharers: readonly SharerStanding[];
+}): string | null {
+  const choice = input.tent?.choice;
+  if (choice !== "own" && choice !== "need") return null;
+  if (input.hostName !== null) return hostedElsewhere(input.hostName);
+  for (const sharer of input.sharers) {
+    if (sharer.hasOwnAnswer) {
+      return `${sharer.name} says they have their own tent or need one. Ask them to pick "I'm in someone else's tent" first.`;
+    }
+    if (sharer.inAnotherTent) {
+      return `${sharer.name} is already in someone else's tent.`;
+    }
+  }
+  return null;
+}
+
+/** Whether a catalogue tent sleeps the people a member needs it for. */
+export function tentSleepsEnough(
+  item: Pick<RentalPricedItem, "sleeps">,
+  people: number | null,
+): boolean {
+  return people === null || item.sleeps >= people;
+}
+
+/**
+ * What a member's order may cost before a captain decides: the cheapest and
+ * the dearest it can come to at today's prices. A needed tent is a range
+ * across every tent the camp rents out and both sources, because a captain
+ * picks the tent; an item is a range across its sources.
  */
 export function rentalEstimate(
   items: readonly RentalPricedItem[],
-  lines: readonly Pick<RentalLineDraft, "itemId" | "choice" | "quantity">[],
+  order: {
+    tent: Pick<RentalTentChecked, "choice"> | null;
+    lines: readonly Pick<RentalLineDraft, "itemId" | "choice" | "quantity">[];
+  },
 ): { lowCents: number; highCents: number } {
   const byId = new Map(items.map((item) => [item.id, item]));
   const low: number[] = [];
   const high: number[] = [];
-  for (const line of lines) {
+  const pricesOf = (item: RentalPricedItem) =>
+    rentalSources(item).map((s) => rentalPrice(item, s)!);
+  if (order.tent?.choice === "need") {
+    const prices = items.filter((i) => i.isTent).flatMap(pricesOf);
+    if (prices.length > 0) {
+      low.push(Math.min(...prices));
+      high.push(Math.max(...prices));
+    }
+  }
+  for (const line of order.lines) {
     if (line.choice !== "need") continue;
     const item = byId.get(line.itemId);
-    if (!item) continue;
-    const prices = rentalSources(item).map((s) => rentalPrice(item, s)!);
+    if (!item || item.isTent) continue;
+    const prices = pricesOf(item);
     if (prices.length === 0) continue;
     low.push(Math.min(...prices) * line.quantity);
     high.push(Math.max(...prices) * line.quantity);
@@ -315,6 +399,10 @@ export interface RentalPricedLine {
   lineCents: number;
 }
 
+export const RENTAL_PICK_A_TENT =
+  "Pick the tent this member gets, and where it comes from.";
+export const RENTAL_NOT_A_TENT =
+  "That isn't a tent on this year's list. Reload the page.";
 export const RENTAL_PICK_EVERY_SOURCE =
   "Pick camp stock or the supplier for every item this member needs.";
 
@@ -371,7 +459,11 @@ export function priceRentalOrder(
   | { ok: false; error: string } {
   const byId = new Map(items.map((item) => [item.id, item]));
   const picked = new Map(sources.map((s) => [s.lineId, s.source]));
-  const needed = lines.filter((line) => line.choice === "need");
+  // In the catalogue's own order (tents first), whatever order they came in.
+  const at = new Map(items.map((item, index) => [item.id, index]));
+  const needed = lines
+    .filter((line) => line.choice === "need")
+    .sort((a, b) => (at.get(a.itemId) ?? 0) - (at.get(b.itemId) ?? 0));
   if (
     picked.size !== sources.length ||
     picked.size !== needed.length ||

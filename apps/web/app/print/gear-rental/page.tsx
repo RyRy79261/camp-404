@@ -10,7 +10,7 @@ import {
   RENTAL_SUMMARY_PATH,
 } from "@/lib/rental-copy";
 import { runsRental } from "@/lib/rental-gate";
-import { ownTentText, quantityText } from "@/lib/rental-view";
+import { ownTentText, tentNeedText } from "@/lib/rental-view";
 
 export const dynamic = "force-dynamic";
 
@@ -190,9 +190,7 @@ export default async function GearRentalPrintPage({
                       <td className="py-2 font-semibold">
                         {t.tentLabel ?? "________"}
                       </td>
-                      <td className="py-2">
-                        {quantityText(t.quantity, t.itemName)}
-                      </td>
+                      <td className="py-2">{t.itemName}</td>
                       <td className="py-2">
                         {[t.ownerName, ...t.sharers].map(printName).join(", ")}
                       </td>
@@ -200,6 +198,31 @@ export default async function GearRentalPrintPage({
                   ))}
                 </tbody>
               </table>
+            )}
+            {overview.unassigned.length > 0 && (
+              <>
+                <h2 className="mb-2 mt-8 text-xl font-semibold">
+                  Needs a tent, not assigned yet
+                </h2>
+                <table className="w-full border-collapse text-base">
+                  <tbody>
+                    {overview.unassigned.map((n) => (
+                      <tr
+                        key={n.orderId}
+                        data-testid="print-unassigned-row"
+                        className="border-b border-black/40 align-top"
+                      >
+                        <td className="w-56 py-2">{tentNeedText(n.people)}</td>
+                        <td className="py-2">
+                          {[n.ownerName, ...n.sharers]
+                            .map(printName)
+                            .join(", ")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
             )}
             <h2 className="mb-2 mt-8 text-xl font-semibold">
               Members&rsquo; own tents
@@ -217,7 +240,7 @@ export default async function GearRentalPrintPage({
                 <tbody>
                   {overview.ownTents.map((t) => (
                     <tr
-                      key={t.lineId}
+                      key={t.orderId}
                       data-testid="print-own-tent-row"
                       className="border-b border-black/40 align-top"
                     >

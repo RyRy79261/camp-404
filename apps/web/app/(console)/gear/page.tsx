@@ -23,6 +23,7 @@ import {
   listRentalSharerChoices,
   type RentalLine,
   type RentalOrder,
+  type RentalTentAnswer,
   type SharedTent,
 } from "@/lib/rental";
 import {
@@ -30,6 +31,8 @@ import {
   orderBadge,
   ownTentText,
   quantityText,
+  tentForForm,
+  tentNeedText,
 } from "@/lib/rental-view";
 import {
   ChangeMyOrder,
@@ -40,10 +43,13 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "My gear — Camp 404" };
 
-// A member's own gear for the year (#241): for each thing the camp rents out
-// (a tent, a mattress, bedding) they say whether they have their own or need
-// one, how many, and who shares their tent. They do not pick where it comes
-// from: a captain decides camp stock or the supplier when they confirm the
+// A member's own gear for the year (#241). The tent is asked once, by need
+// (owner, 2026-09-30): they have their own, they need one (for how many
+// people), or they are in someone else's; and who shares it. Then, for each
+// other thing the camp rents out (a mattress, bedding), whether they have
+// their own or need some. They never pick a tent from the catalogue, nor
+// where anything comes from: a captain picks the tent and camp stock or the
+// supplier when they confirm the
 // order, and the total lands on the member's dues then. Only their own order
 // is read here, plus any tent another member put them in. Everything on this
 // page is settled before the Burn; there is no internet on site.
@@ -76,22 +82,64 @@ function LineRow({
               : "You need this"
             : "You have your own"}
         </span>
-        {!needs && line.isTent && ownTentText(line) && (
-          <span className="text-xs text-muted-foreground">
-            {ownTentText(line)}
-          </span>
+      </span>
+      {needs && confirmed && line.unitPriceCents !== null && (
+        <span className="whitespace-nowrap font-medium tabular-nums">
+          {formatMoney(line.unitPriceCents * line.quantity)}
+        </span>
+      )}
+    </li>
+  );
+}
+
+/** The member's one tent answer, as they sent it and as a captain settled it. */
+function TentRow({
+  tent,
+  confirmed,
+  hostedBy,
+}: {
+  tent: RentalTentAnswer;
+  confirmed: boolean;
+  hostedBy: string[];
+}) {
+  const picked = confirmed ? tent.assigned : null;
+  const sharing =
+    tent.sharers.length > 0
+      ? `Sharing with ${nameList(tent.sharers.map((s) => s.name))}`
+      : null;
+  return (
+    <li
+      data-testid="tent-answer"
+      className="flex flex-col gap-1 py-3 text-sm page-sm:flex-row page-sm:items-start page-sm:justify-between page-sm:gap-4"
+    >
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="font-medium">
+          {tent.choice === "own"
+            ? "Your own tent"
+            : tent.choice === "need"
+              ? (picked?.itemName ?? tentNeedText(tent.people))
+              : "In someone else\u2019s tent"}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {tent.choice === "own"
+            ? (ownTentText(tent) ?? "Nothing to pay for it")
+            : tent.choice === "need"
+              ? picked?.source
+                ? `${tentNeedText(tent.people)}, from ${RENTAL_SOURCE_LABELS[picked.source].toLowerCase()}`
+                : "A captain picks your tent when they confirm"
+              : hostedBy.length > 0
+                ? `${nameList(hostedBy)}\u2019s tent`
+                : "Nobody has put you in their tent yet"}
+        </span>
+        {sharing && (
+          <span className="text-xs text-muted-foreground">{sharing}</span>
         )}
-        {line.sharers.length > 0 && (
-          <span className="text-xs text-muted-foreground">
-            Sharing with {nameList(line.sharers.map((s) => s.name))}
-          </span>
-        )}
-        {needs && line.isTent && confirmed && (
+        {picked && (
           <span className="text-xs">
-            {line.tentLabel ? (
+            {picked.tentLabel ? (
               <>
                 Tent label:{" "}
-                <span className="font-semibold">{line.tentLabel}</span>
+                <span className="font-semibold">{picked.tentLabel}</span>
               </>
             ) : (
               <span className="text-muted-foreground">No tent label yet</span>
@@ -99,9 +147,9 @@ function LineRow({
           </span>
         )}
       </span>
-      {needs && confirmed && line.unitPriceCents !== null && (
+      {picked && picked.unitPriceCents !== null && (
         <span className="whitespace-nowrap font-medium tabular-nums">
-          {formatMoney(line.unitPriceCents * line.quantity)}
+          {formatMoney(picked.unitPriceCents)}
         </span>
       )}
     </li>
@@ -117,11 +165,18 @@ function OrderAsSent({ order }: { order: RentalOrder }) {
         <CardDescription>
           {confirmed
             ? "A captain confirmed this. Ask a captain to reopen it if something needs to change."
-            : "A captain decides whether each item comes from the camp's own stock or the supplier, and you see the price then."}
+            : "A captain picks your tent, and whether each thing comes from the camp's own stock or the supplier. You see the price then."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 p-5 pt-0">
         <ul aria-label="Your order" className="divide-y divide-border">
+          {order.tent && (
+            <TentRow
+              tent={order.tent}
+              confirmed={confirmed}
+              hostedBy={order.hostedBy}
+            />
+          )}
           {order.lines.map((line) => (
             <LineRow key={line.id} line={line} confirmed={confirmed} />
           ))}
@@ -157,10 +212,12 @@ function TentsCard({
   order: RentalOrder | null;
   shared: SharedTent[];
 }) {
-  const mine =
-    order?.status === "confirmed"
-      ? order.lines.filter((l) => l.isTent && l.choice === "need")
-      : [];
+  const tent = order?.tent ?? null;
+  const picked = order?.status === "confirmed" ? tent?.assigned : null;
+  const sharers = tent?.sharers.map((s) => s.name) ?? [];
+  const mine = picked
+    ? [{ id: picked.id, name: picked.itemName, label: picked.tentLabel }]
+    : [];
   return (
     <Card>
       <CardHeader className="p-5 pb-3">
@@ -176,8 +233,8 @@ function TentsCard({
       <CardContent className="p-5 pt-0">
         {mine.length === 0 && shared.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No tent from the camp yet. It shows here once a captain confirms
-            your order, or someone puts you in theirs.
+            No tent from the camp yet. It shows here once a captain picks your
+            tent and confirms, or someone puts you in theirs.
           </p>
         ) : (
           <ul aria-label="Your tent" className="divide-y divide-border">
@@ -187,27 +244,27 @@ function TentsCard({
                 className="flex flex-col gap-0.5 py-2.5 text-sm"
               >
                 <span className="flex flex-wrap items-center gap-2 font-medium">
-                  {quantityText(line.quantity, line.itemName)}
-                  {line.tentLabel ? (
-                    <Badge>{line.tentLabel}</Badge>
+                  {line.name}
+                  {line.label ? (
+                    <Badge>{line.label}</Badge>
                   ) : (
                     <Badge variant="outline">No label yet</Badge>
                   )}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {line.sharers.length > 0
-                    ? `You and ${nameList(line.sharers.map((s) => s.name))}`
+                  {sharers.length > 0
+                    ? `You and ${nameList(sharers)}`
                     : "Just you"}
                 </span>
               </li>
             ))}
             {shared.map((tent) => (
               <li
-                key={tent.lineId}
+                key={tent.orderId}
                 className="flex flex-col gap-0.5 py-2.5 text-sm"
               >
                 <span className="flex flex-wrap items-center gap-2 font-medium">
-                  {tent.itemName}
+                  {tent.tentName}
                   {tent.tentLabel ? (
                     <Badge>{tent.tentLabel}</Badge>
                   ) : (
@@ -295,13 +352,14 @@ export default async function MyGearPage() {
                 : "Change it if it isn't right."}
             </p>
           )}
-          {sharedWithMe.length > 0 && (
+          {/* While the form shows, its tent question says this itself. */}
+          {sharedWithMe.length > 0 && !editable && (
             <p
               data-testid="in-a-tent"
               className="rounded-lg border border-accent/40 bg-accent/10 px-4 py-3 text-sm"
             >
               You&rsquo;re in {nameList(sharedWithMe.map((t) => t.ownerName))}
-              &rsquo;s tent. You don&rsquo;t need to order one yourself.
+              &rsquo;s tent. You don&rsquo;t need a tent of your own.
             </p>
           )}
 
@@ -326,13 +384,12 @@ export default async function MyGearPage() {
               }))}
               members={members}
               version={order?.version ?? 0}
+              tent={tentForForm(order?.tent ?? null)}
+              hostedBy={sharedWithMe.map((t) => t.ownerName)}
               lines={(order?.lines ?? []).map((l) => ({
                 itemId: l.itemId,
                 choice: l.choice,
                 quantity: l.quantity,
-                sharerIds: l.sharers.map((s) => s.id),
-                ownDescription: l.ownDescription,
-                ownSleeps: l.ownSleeps,
               }))}
             />
           )}
@@ -348,8 +405,8 @@ export default async function MyGearPage() {
               <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm text-muted-foreground">
                 <li>Say what you have and what you need, then send it.</li>
                 <li>
-                  A captain picks camp stock or the supplier for each item and
-                  confirms.
+                  A captain picks your tent, and camp stock or the supplier for
+                  each thing, and confirms.
                 </li>
                 <li>The total goes on your dues. Pay it with your camp fee.</li>
               </ol>

@@ -26,6 +26,16 @@ export const RentalChoice = z.enum(RENTAL_CHOICES, {
 });
 export type RentalChoice = z.infer<typeof RentalChoice>;
 
+/**
+ * A member's one answer about a tent, whatever tents the camp rents out: they
+ * have their own, they need one, or they sleep in someone else's.
+ */
+export const RENTAL_TENT_CHOICES = ["own", "need", "shared"] as const;
+export const RentalTentChoice = z.enum(RENTAL_TENT_CHOICES, {
+  error: "Say whether you have a tent, need one, or share someone's.",
+});
+export type RentalTentChoice = z.infer<typeof RentalTentChoice>;
+
 /** Where a needed item comes from: the camp's own stock, or the supplier. */
 export const RENTAL_SOURCES = ["camp", "supplier"] as const;
 export const RentalSource = z.enum(RENTAL_SOURCES, {
@@ -153,7 +163,10 @@ export type EditRentalItemInput = z.infer<typeof EditRentalItemInput>;
 
 export const ArchiveRentalItemInput = z.object({ itemId: RowId });
 
-/** What a member says about one item. */
+/**
+ * What a member says about one item that is not a tent (a mattress, a
+ * sleeping bag): they have their own, or they need some.
+ */
 export const RentalLineInput = z.object({
   itemId: RowId,
   choice: RentalChoice,
@@ -164,51 +177,74 @@ export const RentalLineInput = z.object({
     .max(RENTAL_MAX_QUANTITY, {
       error: `Ask for at most ${RENTAL_MAX_QUANTITY}.`,
     }),
-  /** Who shares a tent with them. Empty for anything but a shared tent. */
-  sharerIds: z.array(RefId).max(RENTAL_MAX_SLEEPS * RENTAL_MAX_QUANTITY),
-  /**
-   * For a tent the member has themselves: what it is ("3-person dome") and
-   * how many it sleeps. Both optional, so a line saved before these existed
-   * is still valid. The site plan needs them.
-   */
-  ownDescription: z
-    .string()
-    .trim()
-    .max(OWN_TENT_DESCRIPTION_MAX, {
-      error: `Keep it to ${OWN_TENT_DESCRIPTION_MAX} characters.`,
-    })
-    .nullish()
-    .transform((v) => (v ? v : null)),
-  ownSleeps: z
-    .number()
-    .int()
-    .min(1, { error: "A tent sleeps at least one." })
-    .max(RENTAL_MAX_SLEEPS, {
-      error: `A tent sleeps at most ${RENTAL_MAX_SLEEPS}.`,
-    })
-    .nullish()
-    .transform((v) => v ?? null),
 });
 export type RentalLineInput = z.infer<typeof RentalLineInput>;
 
+/** Who shares a tent with the member. */
+const Sharers = z.array(RefId).max(RENTAL_MAX_SLEEPS - 1);
+
+const Sleeps = z
+  .number()
+  .int()
+  .min(1, { error: "A tent sleeps at least one." })
+  .max(RENTAL_MAX_SLEEPS, {
+    error: `A tent sleeps at most ${RENTAL_MAX_SLEEPS}.`,
+  });
+
 /**
- * A member's whole order as they save it: one line per item they answered.
- * `submit` sends it to the captains; otherwise it stays a draft.
- * `expectedVersion` is the order they saw (0 before their first save).
+ * The member's one tent answer. They never pick a tent from the catalogue: a
+ * member who needs one says for how many people, and a captain picks the tent.
+ * For a tent of their own, what it is and how many it sleeps are optional.
+ * "shared" names nobody: whose tent it is comes from that member's own order.
+ */
+export const RentalTentInput = z.discriminatedUnion(
+  "choice",
+  [
+    z.object({
+      choice: z.literal("own"),
+      ownDescription: z
+        .string()
+        .trim()
+        .max(OWN_TENT_DESCRIPTION_MAX, {
+          error: `Keep it to ${OWN_TENT_DESCRIPTION_MAX} characters.`,
+        })
+        .nullish()
+        .transform((v) => (v ? v : null)),
+      ownSleeps: Sleeps.nullish().transform((v) => v ?? null),
+      sharerIds: Sharers,
+    }),
+    z.object({
+      choice: z.literal("need"),
+      /** How many people it is for, the member included. */
+      people: Sleeps,
+      sharerIds: Sharers,
+    }),
+    z.object({ choice: z.literal("shared") }),
+  ],
+  { error: "Say whether you have a tent, need one, or share someone's." },
+);
+export type RentalTentInput = z.infer<typeof RentalTentInput>;
+
+const oncePerItem = (lines: { itemId: string }[]) =>
+  new Set(lines.map((l) => l.itemId)).size === lines.length;
+
+/**
+ * A member's whole order as they save it: their tent answer (null when they
+ * have not given one) and one line per other item they answered. `submit`
+ * sends it to the captains; otherwise it stays a draft. `expectedVersion` is
+ * the order they saw (0 before their first save).
  */
 export const SaveRentalOrderInput = z
   .object({
+    tent: RentalTentInput.nullish().transform((v) => v ?? null),
     lines: z.array(RentalLineInput).max(RENTAL_MAX_ITEMS),
     submit: z.boolean(),
     expectedVersion: z.number().int().min(0),
   })
-  .refine(
-    (v) => new Set(v.lines.map((l) => l.itemId)).size === v.lines.length,
-    {
-      error: "Each item can be on your order once.",
-      path: ["lines"],
-    },
-  );
+  .refine((v) => oncePerItem(v.lines), {
+    error: "Each item can be on your order once.",
+    path: ["lines"],
+  });
 export type SaveRentalOrderInput = z.infer<typeof SaveRentalOrderInput>;
 
 /**
@@ -219,18 +255,18 @@ export type SaveRentalOrderInput = z.infer<typeof SaveRentalOrderInput>;
 export const FillRentalOrderInput = z
   .object({
     userId: RefId,
-    lines: z.array(RentalLineInput).min(1, {
-      error: "Say what they have or what they need first.",
-    }),
+    tent: RentalTentInput.nullish().transform((v) => v ?? null),
+    lines: z.array(RentalLineInput).max(RENTAL_MAX_ITEMS),
     expectedVersion: z.number().int().min(0),
   })
-  .refine(
-    (v) => new Set(v.lines.map((l) => l.itemId)).size === v.lines.length,
-    {
-      error: "Each item can be on an order once.",
-      path: ["lines"],
-    },
-  );
+  .refine((v) => v.tent !== null || v.lines.length > 0, {
+    error: "Say what they have or what they need first.",
+    path: ["lines"],
+  })
+  .refine((v) => oncePerItem(v.lines), {
+    error: "Each item can be on an order once.",
+    path: ["lines"],
+  });
 export type FillRentalOrderInput = z.infer<typeof FillRentalOrderInput>;
 
 /** A member takes a sent order back to change it. */
@@ -238,11 +274,18 @@ export const WithdrawRentalOrderInput = z.object({
   expectedVersion: z.number().int().min(1),
 });
 
-/** A captain's confirmation: where each needed line comes from. */
+/**
+ * A captain's confirmation: where each needed line comes from, and, for a
+ * member who needs a tent, WHICH tent from the catalogue and from where.
+ */
 export const ConfirmRentalOrderInput = z
   .object({
     orderId: RowId,
     expectedVersion: z.number().int().min(1),
+    tent: z
+      .object({ itemId: RowId, source: RentalSource })
+      .nullish()
+      .transform((v) => v ?? null),
     sources: z
       .array(z.object({ lineId: RowId, source: RentalSource }))
       .max(RENTAL_MAX_ITEMS),

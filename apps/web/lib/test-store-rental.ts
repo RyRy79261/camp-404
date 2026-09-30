@@ -4,18 +4,18 @@ import {
   campStockInUse,
   campStockTaken,
   canManageRental,
-  checkRentalLines,
+  checkRentalOrder,
   GEAR_ORDER_ACTION_KEY,
   GEAR_ORDER_ACTION_TITLE,
   GEAR_ORDER_REF_TYPE,
   gearOrderAskNotification,
-  holdsSharers,
   isAskedForGear,
   priceRentalOrder,
+  RENTAL_NOT_A_TENT,
+  RENTAL_PICK_A_TENT,
   rentalChargeDescription,
   rentalSummary,
-  tentInUse,
-  type RentalLineDraft,
+  tentConflict,
 } from "@camp404/core";
 import { reachRank } from "@camp404/db/power";
 import {
@@ -31,11 +31,13 @@ import {
   RENTAL_REOPEN_FIRST,
   RENTAL_SHARER_GONE,
   RENTAL_TENT_NOT_CONFIRMED,
+  TENT_NOT_PICKED,
   TOO_MANY_RENTAL_ITEMS,
   type MyRental,
   type RentalItem,
   type RentalLine,
   type RentalOrder,
+  type RentalOrderDraft,
   type RentalOverview,
   type RentalResult,
   type RentalUnanswered,
@@ -46,6 +48,7 @@ import type {
   RentalItemInput,
   RentalOrderStatus,
   RentalSource,
+  RentalTentChoice,
 } from "@camp404/types";
 import { testStore } from "./test-store";
 import {
@@ -75,9 +78,6 @@ interface LineRow {
   source: RentalSource | null;
   unitPriceCents: number | null;
   tentLabel: string | null;
-  ownDescription: string | null;
-  ownSleeps: number | null;
-  sharerIds: string[];
 }
 
 interface OrderRow {
@@ -91,6 +91,13 @@ interface OrderRow {
   totalCents: number | null;
   chargeId: string | null;
   filledByUserId: string | null;
+  /** The member's one tent answer, and who shares that tent. */
+  tentChoice: RentalTentChoice | null;
+  tentPeople: number | null;
+  ownDescription: string | null;
+  ownSleeps: number | null;
+  sharerIds: string[];
+  /** Every line: the other items, and the one tent a captain picked. */
   lines: LineRow[];
 }
 
@@ -205,24 +212,9 @@ function toOrder(row: OrderRow): RentalOrder {
         source: l.source,
         unitPriceCents: l.unitPriceCents,
         tentLabel: l.tentLabel,
-        ownDescription: l.ownDescription,
-        ownSleeps: l.ownSleeps,
-        sharers: l.sharerIds
-          .filter((id) => testStore.findUserById(id))
-          .map((id) => ({
-            id,
-            name: nameOf(id),
-            accepted:
-              testStore.getParticipation(id, row.cycle)?.status === "accepted",
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name)),
       };
     })
-    .sort(
-      (a, b) =>
-        Number(b.isTent) - Number(a.isTent) ||
-        a.itemName.localeCompare(b.itemName),
-    );
+    .sort((a, b) => a.itemName.localeCompare(b.itemName));
   return {
     id: row.id,
     userId: row.userId,
@@ -238,8 +230,45 @@ function toOrder(row: OrderRow): RentalOrder {
     chargeId:
       row.chargeId && isChargeLiveInStore(row.chargeId) ? row.chargeId : null,
     filledByCaptain: row.filledByUserId !== null,
-    lines,
+    tent:
+      row.tentChoice === null
+        ? null
+        : {
+            choice: row.tentChoice,
+            people: row.tentPeople,
+            ownDescription: row.ownDescription,
+            ownSleeps: row.ownSleeps,
+            sharers: row.sharerIds
+              .filter((id) => testStore.findUserById(id))
+              .map((id) => ({
+                id,
+                name: nameOf(id),
+                accepted:
+                  testStore.getParticipation(id, row.cycle)?.status ===
+                  "accepted",
+              }))
+              .sort((a, b) => a.name.localeCompare(b.name)),
+            assigned:
+              row.tentChoice === "need"
+                ? (lines.find((l) => l.isTent) ?? null)
+                : null,
+          },
+    hostedBy: hostsOf(row.userId, row.cycle)
+      .map((o) => nameOf(o.userId))
+      .sort((a, b) => a.localeCompare(b)),
+    lines: lines.filter((l) => !l.isTent),
   };
+}
+
+/** The sent and confirmed orders that have this member in their tent. */
+function hostsOf(userId: string, cycle: number): OrderRow[] {
+  return state().orders.filter(
+    (o) =>
+      o.cycle === cycle &&
+      o.status !== "draft" &&
+      o.userId !== userId &&
+      o.sharerIds.includes(userId),
+  );
 }
 
 function orderOf(userId: string, cycle: number): OrderRow | undefined {
@@ -269,36 +298,53 @@ function unansweredRows(cycle: number) {
 }
 
 /** The twin of storeOrder: the member's own save, or a captain's fill-in. */
-function storeOrder(input: {
-  userId: string;
-  cycle: number;
-  lines: readonly RentalLineDraft[];
-  submit: boolean;
-  expectedVersion: number;
-  from: readonly RentalOrderStatus[];
-  filledBy: string | null;
-  locked: (status: RentalOrderStatus | undefined) => string;
-}): RentalResult<{ version: number; status: RentalOrderStatus }> {
+function storeOrder(
+  input: RentalOrderDraft & {
+    userId: string;
+    cycle: number;
+    submit: boolean;
+    expectedVersion: number;
+    from: readonly RentalOrderStatus[];
+    filledBy: string | null;
+    locked: (status: RentalOrderStatus | undefined) => string;
+  },
+): RentalResult<{ version: number; status: RentalOrderStatus }> {
   const refuse = (error: string) => ({ ok: false as const, error });
+  const checked = checkRentalOrder(itemsOf(input.cycle), input, input.userId);
+  if (!checked.ok) return refuse(checked.error);
+  if (input.submit && checked.tent === null && checked.lines.length === 0) {
+    return refuse(RENTAL_NOTHING_TO_SEND);
+  }
   if (!testStore.findUserById(input.userId)) {
     return refuse(RENTAL_NO_SUCH_MEMBER);
   }
-  const checked = checkRentalLines(
-    itemsOf(input.cycle),
-    input.lines,
-    input.userId,
-  );
-  if (!checked.ok) return refuse(checked.error);
-  if (input.submit && checked.lines.length === 0) {
-    return refuse(RENTAL_NOTHING_TO_SEND);
-  }
-  const sharers = checked.lines.flatMap((l) => l.sharerIds);
+  const sharerIds = checked.tent?.sharerIds ?? [];
   if (
-    sharers.some(
+    sharerIds.some(
       (id) => testStore.findUserById(id)?.approvalStatus !== "approved",
     )
   ) {
     return refuse(RENTAL_SHARER_GONE);
+  }
+  if (input.submit) {
+    const host = hostsOf(input.userId, input.cycle)[0];
+    const conflict = tentConflict({
+      tent: checked.tent,
+      hostName: host ? nameOf(host.userId) : null,
+      sharers: sharerIds.map((id) => {
+        const theirs = orderOf(id, input.cycle);
+        const answer =
+          theirs && theirs.status !== "draft" ? theirs.tentChoice : null;
+        return {
+          name: nameOf(id),
+          hasOwnAnswer: answer === "own" || answer === "need",
+          inAnotherTent: hostsOf(id, input.cycle).some(
+            (o) => o.userId !== input.userId,
+          ),
+        };
+      }),
+    });
+    if (conflict) return refuse(conflict);
   }
   const current = orderOf(input.userId, input.cycle);
   const matches =
@@ -329,12 +375,23 @@ function storeOrder(input: {
     totalCents: null,
     chargeId: null,
     filledByUserId: null,
+    tentChoice: null,
+    tentPeople: null,
+    ownDescription: null,
+    ownSleeps: null,
+    sharerIds: [],
     lines: [],
   };
   order.status = status;
   order.version = version;
   order.submittedAt = input.submit ? new Date() : null;
   order.filledByUserId = input.filledBy;
+  order.tentChoice = checked.tent?.choice ?? null;
+  order.tentPeople = checked.tent?.people ?? null;
+  order.ownDescription = checked.tent?.ownDescription ?? null;
+  order.ownSleeps = checked.tent?.ownSleeps ?? null;
+  order.sharerIds = [...sharerIds];
+  // The tent a captain picked goes with the lines, as in the database.
   order.lines = checked.lines.map((l) => ({
     id: crypto.randomUUID(),
     itemId: l.itemId,
@@ -343,9 +400,6 @@ function storeOrder(input: {
     source: null,
     unitPriceCents: null,
     tentLabel: null,
-    ownDescription: l.ownDescription,
-    ownSleeps: l.ownSleeps,
-    sharerIds: [...l.sharerIds],
   }));
   if (!current) state().orders.push(order);
   if (input.submit) {
@@ -395,12 +449,6 @@ export const rentalTestStore = {
         (i) => i.id === input.itemId && i.archivedAt === null,
       );
       if (!row) return RENTAL_ITEM_MISSING;
-      const inUse = state()
-        .orders.filter((o) => o.status !== "draft")
-        .flatMap((o) => o.lines)
-        .filter((l) => l.itemId === row.id && l.choice === "need")
-        .map((l) => ({ quantity: l.quantity, sharers: l.sharerIds.length }));
-      if (!holdsSharers(input.item, inUse)) return tentInUse(input.item.name);
       const taken = campStockTaken(
         input.item,
         campTakenByOrders(row.cycle).get(row.id) ?? 0,
@@ -430,7 +478,12 @@ export const rentalTestStore = {
     const row = orderOf(userId, cycle);
     const mine = row ? toOrder(row) : null;
     const confirmed = mine?.status === "confirmed";
-    const items = new Map(state().items.map((i) => [i.id, i]));
+    const hideLine = (l: RentalLine): RentalLine => ({
+      ...l,
+      source: confirmed ? l.source : null,
+      unitPriceCents: confirmed ? l.unitPriceCents : null,
+      tentLabel: confirmed ? l.tentLabel : null,
+    });
     return {
       items: itemsOf(cycle).map(toItem),
       asked:
@@ -440,37 +493,38 @@ export const rentalTestStore = {
         ...mine,
         participation: null,
         totalCents: confirmed ? mine.totalCents : null,
-        lines: mine.lines.map((l) => ({
-          ...l,
-          source: confirmed ? l.source : null,
-          unitPriceCents: confirmed ? l.unitPriceCents : null,
-          tentLabel: confirmed ? l.tentLabel : null,
-          sharers: l.sharers.map((s) => ({ ...s, accepted: null })),
-        })),
+        tent: mine.tent && {
+          ...mine.tent,
+          sharers: mine.tent.sharers.map((s) => ({ ...s, accepted: null })),
+          assigned:
+            confirmed && mine.tent.assigned
+              ? hideLine(mine.tent.assigned)
+              : null,
+        },
+        lines: mine.lines.map(hideLine),
       },
-      sharedWithMe: state()
-        .orders.filter((o) => o.cycle === cycle && o.status !== "draft")
-        .flatMap((o) =>
-          o.lines
-            .filter(
-              (l) =>
-                items.get(l.itemId)?.isTent && l.sharerIds.includes(userId),
-            )
-            .map((l) => ({
-              lineId: l.id,
-              itemName:
-                l.choice === "own"
-                  ? (l.ownDescription ?? OWN_TENT)
-                  : items.get(l.itemId)!.name,
-              tentLabel: o.status === "confirmed" ? l.tentLabel : null,
-              confirmed: o.status === "confirmed",
-              ownerName: nameOf(o.userId),
-              otherSharers: l.sharerIds
-                .filter((id) => id !== userId && testStore.findUserById(id))
-                .map(nameOf)
-                .sort((a, b) => a.localeCompare(b)),
-            })),
-        )
+      sharedWithMe: hostsOf(userId, cycle)
+        .map(toOrder)
+        .flatMap((o) => {
+          if (!o.tent) return [];
+          const isConfirmed = o.status === "confirmed";
+          const picked = isConfirmed ? o.tent.assigned : null;
+          return [
+            {
+              orderId: o.id,
+              tentName:
+                o.tent.choice === "own"
+                  ? (o.tent.ownDescription ?? OWN_TENT)
+                  : (picked?.itemName ?? TENT_NOT_PICKED),
+              tentLabel: picked?.tentLabel ?? null,
+              confirmed: isConfirmed,
+              ownerName: o.memberName,
+              otherSharers: o.tent.sharers
+                .filter((sharer) => sharer.id !== userId)
+                .map((sharer) => sharer.name),
+            },
+          ];
+        })
         .sort((a, b) => a.ownerName.localeCompare(b.ownerName)),
     };
   },
@@ -535,20 +589,23 @@ export const rentalTestStore = {
     const orders = this.listRentalOrders(cycle);
     const confirmed = orders.filter((o) => o.status === "confirmed");
     const lines = confirmed.flatMap((o) =>
-      o.lines.flatMap((l) =>
-        l.choice === "need" && l.source !== null && l.unitPriceCents !== null
-          ? [
-              {
-                itemId: l.itemId,
-                quantity: l.quantity,
-                source: l.source,
-                unitPriceCents: l.unitPriceCents,
-              },
-            ]
-          : [],
+      [...o.lines, ...(o.tent?.assigned ? [o.tent.assigned] : [])].flatMap(
+        (l) =>
+          l.choice === "need" && l.source !== null && l.unitPriceCents !== null
+            ? [
+                {
+                  itemId: l.itemId,
+                  quantity: l.quantity,
+                  source: l.source,
+                  unitPriceCents: l.unitPriceCents,
+                },
+              ]
+            : [],
       ),
     );
     const used = new Set(lines.map((l) => l.itemId));
+    const byOwner = <T extends { ownerName: string }>(a: T, b: T) =>
+      a.ownerName.localeCompare(b.ownerName);
     return {
       summary: rentalSummary(
         itemsOf(cycle, true)
@@ -559,51 +616,64 @@ export const rentalTestStore = {
       waiting: orders.filter((o) => o.status === "submitted").length,
       confirmed: confirmed.length,
       tents: confirmed
-        .flatMap((o) =>
-          o.lines
-            .filter((l) => l.isTent && l.choice === "need")
-            .map((l) => ({
-              lineId: l.id,
-              itemName: l.itemName,
-              quantity: l.quantity,
-              tentLabel: l.tentLabel,
-              source: l.source,
-              ownerName: o.memberName,
-              sharers: l.sharers.map((s) => s.name),
-            })),
-        )
+        .flatMap((o) => {
+          const tent = o.tent?.assigned;
+          return tent
+            ? [
+                {
+                  lineId: tent.id,
+                  itemName: tent.itemName,
+                  sleeps: tent.sleeps,
+                  people: o.tent?.people ?? null,
+                  tentLabel: tent.tentLabel,
+                  source: tent.source,
+                  ownerName: o.memberName,
+                  sharers: o.tent?.sharers.map((s) => s.name) ?? [],
+                },
+              ]
+            : [];
+        })
         .sort(
           (a, b) =>
-            (a.tentLabel ?? "￿").localeCompare(b.tentLabel ?? "￿", undefined, {
-              numeric: true,
-            }) || a.ownerName.localeCompare(b.ownerName),
+            (a.tentLabel ?? "\uffff").localeCompare(
+              b.tentLabel ?? "\uffff",
+              undefined,
+              { numeric: true },
+            ) || byOwner(a, b),
         ),
       ownTents: orders
-        .filter((o) => o.status !== "draft")
-        .flatMap((o) =>
-          o.lines
-            .filter((l) => l.isTent && l.choice === "own")
-            .map((l) => ({
-              lineId: l.id,
-              ownerName: o.memberName,
-              description: l.ownDescription,
-              sleeps: l.ownSleeps,
-              sharers: l.sharers.map((s) => s.name),
-            })),
-        )
-        .sort((a, b) => a.ownerName.localeCompare(b.ownerName)),
+        .filter((o) => o.status !== "draft" && o.tent?.choice === "own")
+        .map((o) => ({
+          orderId: o.id,
+          ownerName: o.memberName,
+          description: o.tent!.ownDescription,
+          sleeps: o.tent!.ownSleeps,
+          sharers: o.tent!.sharers.map((s) => s.name),
+        }))
+        .sort(byOwner),
+      unassigned: orders
+        .filter((o) => o.status === "submitted" && o.tent?.choice === "need")
+        .map((o) => ({
+          orderId: o.id,
+          userId: o.userId,
+          ownerName: o.memberName,
+          people: o.tent!.people,
+          sharers: o.tent!.sharers.map((s) => s.name),
+        }))
+        .sort(byOwner),
     };
   },
 
   // --- A member's writes ---------------------------------------------------------
 
-  saveRentalOrder(input: {
-    userId: string;
-    cycle: number;
-    lines: readonly RentalLineDraft[];
-    submit: boolean;
-    expectedVersion: number;
-  }): RentalResult<{ version: number; status: RentalOrderStatus }> {
+  saveRentalOrder(
+    input: RentalOrderDraft & {
+      userId: string;
+      cycle: number;
+      submit: boolean;
+      expectedVersion: number;
+    },
+  ): RentalResult<{ version: number; status: RentalOrderStatus }> {
     return storeOrder({
       ...input,
       from: ["draft"],
@@ -644,19 +714,21 @@ export const rentalTestStore = {
 
   // --- A captain's writes ----------------------------------------------------------
 
-  fillRentalOrderFor(input: {
-    userId: string;
-    cycle: number;
-    lines: readonly RentalLineDraft[];
-    expectedVersion: number;
-    actorId: string;
-  }): RentalResult<{ version: number }> {
+  fillRentalOrderFor(
+    input: RentalOrderDraft & {
+      userId: string;
+      cycle: number;
+      expectedVersion: number;
+      actorId: string;
+    },
+  ): RentalResult<{ version: number }> {
     if (!isManager(input.actorId)) {
       return { ok: false, error: NOT_A_RENTAL_MANAGER };
     }
     const saved = storeOrder({
       userId: input.userId,
       cycle: input.cycle,
+      tent: input.tent,
       lines: input.lines,
       submit: true,
       expectedVersion: input.expectedVersion,
@@ -697,6 +769,7 @@ export const rentalTestStore = {
   confirmRentalOrder(input: {
     orderId: string;
     expectedVersion: number;
+    tent?: { itemId: string; source: RentalSource } | null;
     sources: readonly { lineId: string; source: RentalSource }[];
     actorId: string;
   }): RentalResult<{ totalCents: number; chargeId: string | null }> {
@@ -709,18 +782,49 @@ export const rentalTestStore = {
       ) {
         return RENTAL_ORDER_MOVED;
       }
+      const pick = input.tent ?? null;
+      if ((order.tentChoice === "need") !== (pick !== null)) {
+        return order.tentChoice === "need"
+          ? RENTAL_PICK_A_TENT
+          : RENTAL_ORDER_MOVED;
+      }
       const items = itemsOf(order.cycle, true);
+      const isTent = (itemId: string) =>
+        items.some((i) => i.id === itemId && i.isTent);
+      if (pick && !isTent(pick.itemId)) return RENTAL_NOT_A_TENT;
+      // The tent a captain picked is the order's one tent line. Nothing is
+      // kept unless the whole confirmation goes through, as in the database.
+      const before = order.lines.filter((l) => isTent(l.itemId));
+      const lines: LineRow[] = order.lines
+        .filter((l) => !isTent(l.itemId))
+        .map((l) => ({ ...l }));
+      let sources = [...input.sources];
+      if (pick) {
+        const tentLine: LineRow = {
+          id: crypto.randomUUID(),
+          itemId: pick.itemId,
+          choice: "need",
+          quantity: 1,
+          source: null,
+          unitPriceCents: null,
+          tentLabel:
+            before.find((l) => l.itemId === pick.itemId)?.tentLabel ?? null,
+        };
+        lines.push(tentLine);
+        sources = [...sources, { lineId: tentLine.id, source: pick.source }];
+      }
       const orders = campTakenByOrders(order.cycle, order.id);
       const taken = new Map(
         items.map((i) => [i.id, campStockTaken(i, orders.get(i.id) ?? 0)]),
       );
-      const priced = priceRentalOrder(items, order.lines, input.sources, taken);
+      const priced = priceRentalOrder(items, lines, sources, taken);
       if (!priced.ok) return priced.error;
       for (const line of priced.lines) {
-        const row = order.lines.find((l) => l.id === line.lineId)!;
+        const row = lines.find((l) => l.id === line.lineId)!;
         row.source = line.source;
         row.unitPriceCents = line.unitPriceCents;
       }
+      order.lines = lines;
       order.status = "confirmed";
       order.version += 1;
       order.confirmedAt = new Date();

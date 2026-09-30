@@ -99,7 +99,8 @@ describe("confirmRentalOrderAction", () => {
   const input = {
     orderId: ID,
     expectedVersion: 2,
-    sources: [{ lineId: LINE, source: "camp" }],
+    tent: { itemId: ID, source: "camp" },
+    sources: [{ lineId: LINE, source: "supplier" }],
   };
 
   it("confirms as the captain and refreshes the member's dues", async () => {
@@ -164,7 +165,7 @@ describe("the gate", () => {
     expect(
       await fillRentalOrderAction({
         userId: "member-1",
-        lines: [{ itemId: ID, choice: "need", quantity: 1, sharerIds: [] }],
+        lines: [{ itemId: ID, choice: "need", quantity: 1 }],
         expectedVersion: 0,
       }),
     ).toEqual(refused);
@@ -210,12 +211,14 @@ describe("askForGearOrdersAction", () => {
 });
 
 describe("fillRentalOrderAction", () => {
-  const line = { itemId: ID, choice: "need", quantity: 1, sharerIds: [] };
+  const line = { itemId: ID, choice: "need", quantity: 1 };
+  const tent = { choice: "need", people: 2, sharerIds: ["member-2"] };
 
   it("fills the named member's order as the captain", async () => {
     expect(
       await fillRentalOrderAction({
         userId: "member-1",
+        tent,
         lines: [line],
         expectedVersion: 0,
         actorId: "someone-else",
@@ -223,7 +226,8 @@ describe("fillRentalOrderAction", () => {
     ).toEqual({ ok: true, data: { version: 1 } });
     expect(fillRentalOrderFor).toHaveBeenCalledExactlyOnceWith({
       userId: "member-1",
-      lines: [{ ...line, ownDescription: null, ownSleeps: null }],
+      tent,
+      lines: [line],
       expectedVersion: 0,
       cycle: 2027,
       actorId: "cap",

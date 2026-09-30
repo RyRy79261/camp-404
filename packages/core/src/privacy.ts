@@ -303,10 +303,10 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "paymentRefunds.createdAt": "captain",
   "paymentRefunds.updatedAt": "captain",
 
-  // rental_orders, rental_order_lines, rental_line_sharers — gear rental
+  // rental_orders, rental_order_lines, rental_order_sharers — gear rental
   // (#241). A member reads only their own order; captains read all; a team
   // lead gets nothing extra. A member named as a sharer also reads that one
-  // tent line (the tent, its label and who is in it): it is about them.
+  // tent (whose it is, its label and who is in it): it is about them.
   "rentalOrders.id": "captain",
   "rentalOrders.userId": "captain",
   "rentalOrders.cycle": "captain",
@@ -319,6 +319,10 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "rentalOrders.currency": "captain",
   "rentalOrders.chargeId": "captain",
   "rentalOrders.filledByUserId": "captain",
+  "rentalOrders.tentChoice": "captain",
+  "rentalOrders.tentPeople": "captain",
+  "rentalOrders.ownDescription": "captain",
+  "rentalOrders.ownSleeps": "captain",
   "rentalOrders.createdAt": "captain",
   "rentalOrders.updatedAt": "captain",
   "rentalOrderLines.id": "captain",
@@ -330,11 +334,9 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "rentalOrderLines.unitPriceCents": "captain",
   "rentalOrderLines.currency": "captain",
   "rentalOrderLines.tentLabel": "captain",
-  "rentalOrderLines.ownDescription": "captain",
-  "rentalOrderLines.ownSleeps": "captain",
   "rentalOrderLines.createdAt": "captain",
-  "rentalLineSharers.lineId": "captain",
-  "rentalLineSharers.userId": "captain",
+  "rentalOrderSharers.orderId": "captain",
+  "rentalOrderSharers.userId": "captain",
 
   // team_memberships — the roster shows teams and leads
   "teamMemberships.userId": "camp_member",

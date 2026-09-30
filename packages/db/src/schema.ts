@@ -47,6 +47,7 @@ import {
   RENTAL_CHOICES,
   RENTAL_ORDER_STATUSES,
   RENTAL_SOURCES,
+  RENTAL_TENT_CHOICES,
   DDT_STATUSES,
   WAP_STATUSES,
   TICKET_STATUSES,
@@ -1363,8 +1364,14 @@ export const paymentRefunds = pgTable(
 // confirm the order, and that confirmation charges the member's dues in the
 // same transaction. A member reads only their own order; captains read all
 // (canManageRental in @camp404/core); a team lead gets nothing extra. Money is
-// whole rand cents, ZAR only. Mirror RENTAL_ORDER_STATUSES, RENTAL_CHOICES and
-// RENTAL_SOURCES in @camp404/types rental.ts.
+// whole rand cents, ZAR only. Mirror RENTAL_ORDER_STATUSES, RENTAL_CHOICES,
+// RENTAL_SOURCES and RENTAL_TENT_CHOICES in @camp404/types rental.ts.
+//
+// The tent is asked ONCE per member (owner, 2026-09-30), not once per tent in
+// the catalogue: the answer lives on the order (`tent_choice`), and a captain
+// picks the actual tent when they confirm, which becomes the order's one tent
+// line. Who is in whose tent is `rental_order_sharers`, on the order of the
+// member whose tent it is, and nowhere else.
 
 export const rentalOrderStatusEnum = pgEnum(
   "rental_order_status",
@@ -1372,6 +1379,10 @@ export const rentalOrderStatusEnum = pgEnum(
 );
 export const rentalChoiceEnum = pgEnum("rental_choice", RENTAL_CHOICES);
 export const rentalSourceEnum = pgEnum("rental_source", RENTAL_SOURCES);
+export const rentalTentChoiceEnum = pgEnum(
+  "rental_tent_choice",
+  RENTAL_TENT_CHOICES,
+);
 
 // The year's catalogue. An item with orders is archived, never deleted, so an
 // order keeps its name. `sleeps` is how many people one tent holds; only a
@@ -1454,6 +1465,15 @@ export const rentalOrders = pgTable(
     chargeId: uuid("charge_id").references(() => duesCharges.id, {
       onDelete: "set null",
     }),
+    // The member's one tent answer: they have their own, they need one, or
+    // they are in someone else's. Null until they say. `tent_people` is how
+    // many people a needed tent is for, the member included. For a tent of
+    // their own, `own_description` and `own_sleeps` say what it is and how
+    // many it sleeps (both optional): the site plan needs them.
+    tentChoice: rentalTentChoiceEnum("tent_choice"),
+    tentPeople: integer("tent_people"),
+    ownDescription: text("own_description"),
+    ownSleeps: integer("own_sleeps"),
     // The captain who filled the order in for a member who had not answered.
     // Null once the member saves it themselves.
     filledByUserId: uuid("filled_by_user_id").references(() => users.id, {
@@ -1468,6 +1488,10 @@ export const rentalOrders = pgTable(
       o.cycle,
     ),
     cycleIdx: index("rental_orders_cycle_idx").on(o.cycle),
+    tentCheck: check(
+      "rental_orders_tent_check",
+      sql`((${o.tentChoice} is not distinct from 'need') = (${o.tentPeople} is not null)) and coalesce(${o.tentPeople}, 1) between 1 and 12 and (${o.tentChoice} is not distinct from 'own' or (${o.ownDescription} is null and ${o.ownSleeps} is null)) and coalesce(${o.ownSleeps}, 1) between 1 and 12`,
+    ),
     totalCheck: check(
       "rental_orders_total_check",
       sql`${o.totalCents} is null or ${o.totalCents} >= 0`,
@@ -1479,12 +1503,12 @@ export const rentalOrders = pgTable(
   }),
 );
 
-// One line per item the member answered: they have their own, or they need
-// some. `source` and `unit_price_cents` are the captain's decision and the
-// price it was confirmed at, set together. `tent_label` is the label a captain
-// gives a tent, for the member's page and the printed tent list. For a tent the
-// member has themselves, `own_description` and `own_sleeps` say what it is
-// and how many it sleeps (both optional): the site plan needs them.
+// One line per item that is not a tent, as the member answered it (they have
+// their own, or they need some), and ONE tent line that a captain adds when
+// they confirm an order that needs a tent: the catalogue tent they picked.
+// `source` and `unit_price_cents` are the captain's decision and the price it
+// was confirmed at, set together. `tent_label` is the label a captain gives
+// the tent, for the member's page and the printed tent list.
 export const rentalOrderLines = pgTable(
   "rental_order_lines",
   {
@@ -1501,8 +1525,6 @@ export const rentalOrderLines = pgTable(
     unitPriceCents: integer("unit_price_cents"),
     currency: text("currency").notNull().default("ZAR"),
     tentLabel: text("tent_label"),
-    ownDescription: text("own_description"),
-    ownSleeps: integer("own_sleeps"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (l) => ({
@@ -1519,10 +1541,6 @@ export const rentalOrderLines = pgTable(
       "rental_order_lines_price_check",
       sql`(${l.source} is null) = (${l.unitPriceCents} is null) and coalesce(${l.unitPriceCents}, 0) >= 0`,
     ),
-    ownCheck: check(
-      "rental_order_lines_own_check",
-      sql`(${l.choice} = 'own' or (${l.ownDescription} is null and ${l.ownSleeps} is null)) and coalesce(${l.ownSleeps}, 1) between 1 and 12`,
-    ),
     currencyCheck: check(
       "rental_order_lines_currency_check",
       sql`${l.currency} = 'ZAR'`,
@@ -1530,21 +1548,22 @@ export const rentalOrderLines = pgTable(
   }),
 );
 
-// Who shares a tent line with the member who ordered it. A sharer reads that
-// one line on their own page (the tent, its label and who else is in it).
-export const rentalLineSharers = pgTable(
-  "rental_line_sharers",
+// Who shares the member's tent: the one place that says who is in whose tent.
+// A sharer reads that on their own page (whose tent, its label once there is
+// one, and who else is in it).
+export const rentalOrderSharers = pgTable(
+  "rental_order_sharers",
   {
-    lineId: uuid("line_id")
+    orderId: uuid("order_id")
       .notNull()
-      .references(() => rentalOrderLines.id, { onDelete: "cascade" }),
+      .references(() => rentalOrders.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
   },
   (s) => ({
-    pk: primaryKey({ columns: [s.lineId, s.userId] }),
-    userIdx: index("rental_line_sharers_user_idx").on(s.userId),
+    pk: primaryKey({ columns: [s.orderId, s.userId] }),
+    userIdx: index("rental_order_sharers_user_idx").on(s.userId),
   }),
 );
 

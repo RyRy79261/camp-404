@@ -20,7 +20,8 @@ import {
   RENTAL_SUMMARY_PATH,
 } from "@/lib/rental-copy";
 import { runsRental } from "@/lib/rental-gate";
-import { nameList, ownTentText, quantityText } from "@/lib/rental-view";
+import { nameList, ownTentText, tentNeedText } from "@/lib/rental-view";
+import { rentalOrderPath } from "@/lib/rental-copy";
 
 export const dynamic = "force-dynamic";
 
@@ -222,11 +223,40 @@ export default async function GearRentalSummaryPage() {
             <CardHeader className="p-5 pb-3">
               <CardTitle className="text-base">Tents</CardTitle>
               <CardDescription>
-                Each confirmed tent, its label and who sleeps in it. Label a
-                tent on its member&rsquo;s order.
+                The tent a captain picked for each confirmed order, its label
+                and who sleeps in it. Label a tent on its member&rsquo;s order.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5 pt-0">
+              {overview.unassigned.length > 0 && (
+                <ul
+                  aria-label="Needs a tent, not assigned yet"
+                  className="mb-3 flex flex-col gap-2"
+                >
+                  {overview.unassigned.map((need) => (
+                    <li
+                      key={need.orderId}
+                      className="flex flex-col gap-0.5 rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm page-sm:flex-row page-sm:items-center page-sm:justify-between page-sm:gap-4"
+                    >
+                      <span className="font-medium">
+                        <Link
+                          href={rentalOrderPath(need.userId)}
+                          className="hover:text-accent"
+                        >
+                          {need.ownerName}
+                        </Link>{" "}
+                        needs a tent, not assigned yet
+                      </span>
+                      <span className="text-muted-foreground">
+                        {tentNeedText(need.people)}
+                        {need.sharers.length > 0
+                          ? `, with ${nameList(need.sharers)}`
+                          : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {overview.tents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No confirmed tents yet.
@@ -244,7 +274,12 @@ export default async function GearRentalSummaryPage() {
                         ) : (
                           <Badge variant="outline">No label</Badge>
                         )}
-                        {quantityText(tent.quantity, tent.itemName)}
+                        {tent.itemName}
+                        {tent.people !== null && tent.people > tent.sleeps && (
+                          <Badge variant="warning">
+                            Sleeps {tent.sleeps}, for {tent.people}
+                          </Badge>
+                        )}
                       </span>
                       <span className="text-muted-foreground">
                         {nameList([tent.ownerName, ...tent.sharers])}
@@ -275,7 +310,7 @@ export default async function GearRentalSummaryPage() {
                 <ul aria-label="Own tents" className="divide-y divide-border">
                   {overview.ownTents.map((tent) => (
                     <li
-                      key={tent.lineId}
+                      key={tent.orderId}
                       className="flex flex-col gap-0.5 py-2.5 text-sm page-sm:flex-row page-sm:items-center page-sm:justify-between page-sm:gap-4"
                     >
                       <span className="font-medium">

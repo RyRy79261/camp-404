@@ -11,6 +11,7 @@ import { memberDuesPath } from "@/lib/dues-copy";
 import { PLACE_WORDS } from "@/lib/dues-view";
 import { ledgerCycle } from "@/lib/payments";
 import {
+  getMyRental,
   getRentalMember,
   getRentalOrderOf,
   getRentalOverview,
@@ -19,7 +20,7 @@ import {
 } from "@/lib/rental";
 import { RENTAL_PATH, rentalOrderPath } from "@/lib/rental-copy";
 import { runsRental } from "@/lib/rental-gate";
-import { orderBadge } from "@/lib/rental-view";
+import { orderBadge, tentForForm } from "@/lib/rental-view";
 import { OrderManager } from "./order-manager";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +75,10 @@ export default async function GearOrderPage({
     order.status === "draft" ||
     (order.status === "submitted" && edit === "1");
   const live = items.filter((i) => !i.archived);
+  // Whose tent the member is already in, read from those members' orders.
+  const hostedBy =
+    order?.hostedBy ??
+    (await getMyRental(userId, cycle)).sharedWithMe.map((t) => t.ownerName);
 
   return (
     <div className="flex flex-col">
@@ -90,8 +95,8 @@ export default async function GearOrderPage({
         title={member.name}
         description={
           filling
-            ? "This member has not sent an order. Fill it in for them, then pick where each item comes from and confirm."
-            : "Pick where each item comes from, then confirm. The member sees the total on their dues."
+            ? "This member has not sent an order. Fill it in for them, then pick their tent and where each thing comes from, and confirm."
+            : "Pick their tent and where each thing comes from, then confirm. The member sees the total on their dues."
         }
         actions={
           <span className="flex flex-wrap items-center gap-2">
@@ -127,13 +132,12 @@ export default async function GearOrderPage({
               }))}
               members={sharerChoices}
               version={order?.version ?? 0}
+              tent={tentForForm(order?.tent ?? null)}
+              hostedBy={hostedBy}
               lines={(order?.lines ?? []).map((l) => ({
                 itemId: l.itemId,
                 choice: l.choice,
                 quantity: l.quantity,
-                sharerIds: l.sharers.map((s) => s.id),
-                ownDescription: l.ownDescription,
-                ownSleeps: l.ownSleeps,
               }))}
             />
             {order?.status === "submitted" && (
@@ -156,10 +160,16 @@ export default async function GearOrderPage({
                 status: order.status,
                 totalCents: order.totalCents,
                 charged: order.chargeId !== null,
+                tent: order.tent,
+                hostedBy: order.hostedBy,
                 lines: order.lines,
               }}
               items={items.map((i) => ({
                 id: i.id,
+                name: i.name,
+                isTent: i.isTent,
+                sleeps: i.sleeps,
+                archived: i.archived,
                 campPriceCents: i.campPriceCents,
                 campStockCount: i.campStockCount,
                 supplierPriceCents: i.supplierPriceCents,

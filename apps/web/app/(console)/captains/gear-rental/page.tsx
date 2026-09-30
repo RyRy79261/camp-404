@@ -20,7 +20,7 @@ import {
 } from "@/lib/rental";
 import { RENTAL_PATH, rentalOrderPath } from "@/lib/rental-copy";
 import { runsRental } from "@/lib/rental-gate";
-import { orderBadge, quantityText } from "@/lib/rental-view";
+import { orderBadge, quantityText, tentNeedText } from "@/lib/rental-view";
 
 export const dynamic = "force-dynamic";
 
@@ -64,11 +64,24 @@ const COLUMNS: ResponsiveColumn<RentalOrder>[] = [
     header: "Needs",
     cellClassName: "whitespace-normal",
     cell: (o) => {
-      const needs = o.lines.filter((l) => l.choice === "need");
+      const tent = o.tent;
+      // The tent a captain picked, else what the member asked for.
+      const needs = [
+        ...(tent?.choice === "need"
+          ? [
+              o.status === "confirmed" && tent.assigned
+                ? tent.assigned.itemName
+                : `${tentNeedText(tent.people)}, not assigned yet`,
+            ]
+          : []),
+        ...o.lines
+          .filter((l) => l.choice === "need")
+          .map((l) => quantityText(l.quantity, l.itemName)),
+      ];
       return needs.length === 0 ? (
-        <span className="text-muted-foreground">Has their own</span>
+        <span className="text-muted-foreground">Nothing from the camp</span>
       ) : (
-        needs.map((l) => quantityText(l.quantity, l.itemName)).join(", ")
+        needs.join(", ")
       );
     },
   },

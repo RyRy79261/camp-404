@@ -278,8 +278,8 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .delete(schema.rentalOrders)
       .where(eq(schema.rentalOrders.userId, userId));
     await tx
-      .delete(schema.rentalLineSharers)
-      .where(eq(schema.rentalLineSharers.userId, userId));
+      .delete(schema.rentalOrderSharers)
+      .where(eq(schema.rentalOrderSharers.userId, userId));
 
     // Scrub encrypted bank details (NOT NULL → empty string, not null) while
     // keeping the reimbursement record for accounting.

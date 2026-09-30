@@ -65,6 +65,47 @@ export function ownTentText(line: {
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
+/** "A tent for 2 people", as a member asked for it. */
+export function tentNeedText(people: number | null): string {
+  if (people === null) return "A tent";
+  return `A tent for ${people} ${people === 1 ? "person" : "people"}`;
+}
+
+/** A stored tent answer as the order form holds it. */
+export function tentForForm(
+  tent: {
+    choice: "own" | "need" | "shared";
+    people: number | null;
+    ownDescription: string | null;
+    ownSleeps: number | null;
+    sharers: readonly { id: string }[];
+  } | null,
+):
+  | {
+      choice: "own";
+      ownDescription: string | null;
+      ownSleeps: number | null;
+      sharerIds: string[];
+    }
+  | { choice: "need"; people: number; sharerIds: string[] }
+  | { choice: "shared" }
+  | null {
+  if (tent === null) return null;
+  const sharerIds = tent.sharers.map((s) => s.id);
+  if (tent.choice === "own") {
+    return {
+      choice: "own",
+      ownDescription: tent.ownDescription,
+      ownSleeps: tent.ownSleeps,
+      sharerIds,
+    };
+  }
+  if (tent.choice === "need") {
+    return { choice: "need", people: tent.people ?? 1, sharerIds };
+  }
+  return { choice: "shared" };
+}
+
 /** A list of names as a sentence part: "Ann", "Ann and Bo", "Ann, Bo and Cy". */
 export function nameList(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? "";

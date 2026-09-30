@@ -22,7 +22,8 @@ import { saveRentalOrder, withdrawRentalOrder } from "@/lib/rental";
 import { changeMyGearAction, saveMyGearAction } from "./actions";
 
 const ITEM = "5f0c1b9e-6a55-4d2b-9d6f-3a1f2b3c4d5e";
-const line = { itemId: ITEM, choice: "need", quantity: 1, sharerIds: ["pal"] };
+const line = { itemId: ITEM, choice: "need", quantity: 1 };
+const tent = { choice: "need", people: 2, sharerIds: ["pal"] };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -34,10 +35,12 @@ beforeEach(() => {
 });
 
 describe("saveMyGearAction", () => {
-  it("saves the signed-in member's order, whatever id, source or price the form carries", async () => {
+  it("saves the signed-in member's order, whatever id, tent, source or price the form carries", async () => {
     expect(
       await saveMyGearAction({
         userId: "someone",
+        // A member picks no catalogue tent and no source: both are dropped.
+        tent: { ...tent, itemId: ITEM, source: "camp" },
         lines: [{ ...line, source: "camp", unitPriceCents: 1 }],
         submit: true,
         expectedVersion: 0,
@@ -46,11 +49,27 @@ describe("saveMyGearAction", () => {
     expect(saveRentalOrder).toHaveBeenCalledExactlyOnceWith({
       userId: "me",
       cycle: 2027,
-      lines: [{ ...line, ownDescription: null, ownSleeps: null }],
+      tent,
+      lines: [line],
       submit: true,
       expectedVersion: 0,
     });
     expect(captainActionGate).toHaveBeenCalledWith("camp_member");
+  });
+
+  it("refuses a tent answer that is not one of the three", async () => {
+    expect(
+      await saveMyGearAction({
+        tent: { choice: "rent", sharerIds: [] },
+        lines: [],
+        submit: false,
+        expectedVersion: 0,
+      }),
+    ).toEqual({
+      ok: false,
+      error: "Say whether you have a tent, need one, or share someone's.",
+    });
+    expect(saveRentalOrder).not.toHaveBeenCalled();
   });
 
   it("says what is wrong with the order and saves nothing", async () => {
