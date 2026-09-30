@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 import {
   contrastRatio,
   mixOklab,
+  luminance,
   parseColour as parse,
+  toOklch,
   mixOklch,
   oklabDistance,
   simulate,
@@ -75,47 +77,58 @@ function choicePct(constant: string, nth = 0): number {
   if (!body) throw new Error(`No ${constant} in lib/choice.ts`);
   const all = [
     ...body.matchAll(
-      /bg-\[color-mix\(in_oklab,var\(--color-primary\)_(\d+)%,var\(--color-card\)\)\]/g,
+      /color-mix\(in_oklab,var\(--color-primary\)_(\d+)%,var\(--color-card\)\)/g,
     ),
   ];
   if (!all[nth]) throw new Error(`No tint #${nth} in ${constant}`);
   return Number(all[nth]![1]) / 100;
 }
 
-/** A theme's value for a mix read from the CSS. */
+/**
+ * A theme's value for a mix read from the CSS. A colour the stylesheet itself
+ * derives (the tinted card a picked choice is mixed into) is worked out the
+ * same way, from that theme's rule.
+ */
 function themed(
-  c: OsThemeDef["colours"],
+  theme: OsThemeDef,
   mix: { a: string; b: string; p: number },
 ): string {
-  const value = (name: string) => {
-    const v = (c as Record<string, string>)[name];
-    if (!v) throw new Error(`${name} is not a theme colour`);
-    return v;
+  const value = (name: string): string => {
+    const v = (theme.colours as Record<string, string>)[name];
+    if (v) return v;
+    return themed(theme, cssMix(name, theme.id));
   };
   return mixOklab(value(mix.a), value(mix.b), mix.p);
 }
 
+/** The colour a theme's rule gives a derived variable. */
+function derived(theme: OsThemeDef, name: string): string {
+  return themed(theme, cssMix(name, theme.id));
+}
+
 /**
- * The surfaces the soft colour draws in one theme: the chrome's tints, a
- * window's tinted card, and a choice (not picked, under the pointer, picked)
- * in each place a choice sits: in a window, and on the OS skin (a dialog, the
- * blocking form), where the kit's card is the panel.
+ * The surfaces the colour that stays on draws in one theme: the chrome's
+ * tints, a window's card, and a choice (not picked, under the pointer,
+ * picked) in each place a choice sits: in a window, where the console sets
+ * its colours (app/globals.css), and on the OS skin (a dialog, the blocking
+ * form), where lib/choice.ts mixes the main colour into the panel.
  */
 function softSurfaces(theme: OsThemeDef) {
   const c = theme.colours;
-  const barIdle = themed(c, cssMix("--os-bar-idle", theme.id));
-  const label = themed(c, cssMix("--os-label", theme.id));
-  const winCard = themed(c, cssMix("--os-win-card-tinted", theme.id));
   const off = choicePct("CHOICE_OFF");
   const hover = choicePct("CHOICE_OFF", 1);
   const on = choicePct("CHOICE_ON");
-  const inWindow = (p: number) => mixOklab(c["--os-win-primary"], winCard, p);
   const onSkin = (p: number) => mixOklab(c["--os-primary"], c["--os-panel"], p);
   return {
-    barIdle,
-    label,
-    winCard,
-    winChoice: { off: inWindow(off), hover: inWindow(hover), on: inWindow(on) },
+    barIdle: derived(theme, "--os-bar-idle"),
+    label: derived(theme, "--os-label"),
+    winCard: derived(theme, "--os-win-card-tinted"),
+    winChoice: {
+      off: derived(theme, "--os-win-choice"),
+      hover: derived(theme, "--os-win-choice-hover"),
+      on: derived(theme, "--os-win-pick"),
+    },
+    winChoiceEdge: derived(theme, "--os-win-choice-edge"),
     skinChoice: { off: onSkin(off), hover: onSkin(hover), on: onSkin(on) },
   };
 }
@@ -295,6 +308,28 @@ describe.each(OS_THEMES_DEF.map((t) => [t.label, t] as const))(
         7,
       );
       expect(css).toMatch(/--os-bar-idle-fg:\s*var\(--os-fg\)/);
+    });
+    it("makes a picked choice the brightest of its group", () => {
+      const lum = (v: string) => luminance(parse(v));
+      for (const choice of [soft.winChoice, soft.skinChoice]) {
+        expect(lum(choice.on)).toBeGreaterThan(lum(choice.off) * 1.2);
+        expect(lum(choice.on)).toBeGreaterThan(lum(choice.hover) * 1.1);
+      }
+    });
+    it("tints nothing inside a window brown (owner, 2026-10-01)", () => {
+      // Brown is a dark orange: a hue from red-orange to yellow at low
+      // lightness. A grey (almost no chroma) is not brown.
+      const window = [
+        soft.winCard,
+        soft.winChoice.off,
+        soft.winChoice.hover,
+        soft.winChoice.on,
+      ];
+      for (const v of window) {
+        const [L, C, H] = toOklch(v);
+        const brown = C >= 0.02 && H >= 20 && H <= 110 && L < 0.6;
+        expect([v, brown]).toEqual([v, false]);
+      }
     });
     it("tints each surface: none is the plain grey it was", () => {
       expect(soft.barIdle).not.toBe(c["--os-chrome"]);

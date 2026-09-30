@@ -86,12 +86,19 @@ describe("the themes' tokens (drift)", () => {
       "--os-bar-idle-fg",
       "--os-label",
       "--os-win-card-tinted",
+      "--os-win-choice",
+      "--os-win-choice-edge",
+      "--os-win-choice-hover",
+      "--os-win-pick",
     ]);
     const tokens = new Set<string>(OS_THEME_TOKENS);
     for (const [name, value] of derived) {
       const reads = [...colourVarsRead(value)];
       expect([name, reads.length > 0]).toEqual([name, true]);
-      expect([name, reads.filter((r) => !tokens.has(r))]).toEqual([name, []]);
+      expect([
+        name,
+        reads.filter((r) => !tokens.has(r) && !derived.has(r)),
+      ]).toEqual([name, []]);
     }
   });
 
