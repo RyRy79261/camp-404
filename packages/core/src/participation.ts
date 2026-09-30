@@ -130,3 +130,14 @@ export const STANDING_LABEL: Readonly<Record<ParticipationStatus, string>> = {
   waitlisted: "Waiting list",
   not_attending: "Not coming",
 };
+
+/**
+ * Whether a member is coming this year, as the camp asks them things: they
+ * said Yes (`applied`) or a captain accepted them (`accepted`). Not one who
+ * said Maybe or No, not one on the waiting list, and not one who has not
+ * answered "Coming this year?" at all. The gear rental and the logistics
+ * attendance ask exactly these members.
+ */
+export function isComingThisYear(status: ParticipationStatus | null): boolean {
+  return status === "applied" || status === "accepted";
+}

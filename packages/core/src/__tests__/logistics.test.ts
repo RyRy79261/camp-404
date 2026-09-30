@@ -1,11 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { LOGISTICS_PHASES, Team } from "@camp404/types";
+import {
+  ATTENDANCE_PHASES,
+  LOGISTICS_PHASES,
+  LOGISTICS_PHASE_LABELS,
+  Team,
+} from "@camp404/types";
 import {
   LOGISTICS_TEAM,
+  attendanceAnswered,
+  attendanceAskNotification,
+  attendanceBoard,
+  attendanceIsOpen,
+  canAskForAttendance,
   canEditLogistics,
+  canManageDeadlines,
+  deadlineCalendarStep,
+  isAskedForAttendance,
   logisticsCalendarStep,
   logisticsEventTitle,
 } from "../logistics";
+import { payloadLink } from "../notifications";
 
 describe("canEditLogistics", () => {
   it("names a real team", () => {
@@ -39,19 +53,15 @@ describe("canEditLogistics", () => {
 });
 
 describe("logisticsEventTitle", () => {
-  it("uses the camp's naming convention", () => {
-    expect(logisticsEventTitle("Transport and Logistics", "build")).toBe(
-      "Transport and Logistics Team - Build",
-    );
+  it("is plain: every phase is a whole-camp event (owner, 2026-09-30)", () => {
+    expect(logisticsEventTitle("build")).toBe("Build");
+    expect(logisticsEventTitle("strike")).toBe("Strike");
   });
 
-  it("does not double a label that already ends in Team", () => {
-    expect(logisticsEventTitle("Truck Team", "pack")).toBe("Truck Team - Pack");
-  });
-
-  it("titles every phase", () => {
+  it("titles every phase with its own name and no team", () => {
     for (const phase of LOGISTICS_PHASES) {
-      expect(logisticsEventTitle("T", phase)).toMatch(/^T Team - \w+$/);
+      expect(logisticsEventTitle(phase)).toBe(LOGISTICS_PHASE_LABELS[phase]);
+      expect(logisticsEventTitle(phase)).not.toMatch(/Team/);
     }
   });
 });
@@ -82,5 +92,128 @@ describe("logisticsCalendarStep", () => {
     expect(logisticsCalendarStep({ ...days, calendarEventId: null })).toBe(
       "none",
     );
+  });
+});
+
+describe("attendance", () => {
+  it("asks about the phases that need hands: pack, build, strike, unpack", () => {
+    expect([...ATTENDANCE_PHASES]).toEqual([
+      "pack",
+      "build",
+      "strike",
+      "unpack",
+    ]);
+  });
+
+  it("lets only a captain ask everyone, failing closed", () => {
+    expect(canAskForAttendance("captain")).toBe(true);
+    expect(canAskForAttendance("team_lead")).toBe(false);
+    expect(canAskForAttendance("camp_member")).toBe(false);
+    expect(canAskForAttendance("god")).toBe(false);
+  });
+
+  it("asks who is coming: said Yes, or accepted", () => {
+    expect(isAskedForAttendance("applied")).toBe(true);
+    expect(isAskedForAttendance("accepted")).toBe(true);
+    for (const status of ["maybe", "waitlisted", "not_attending"] as const) {
+      expect(isAskedForAttendance(status)).toBe(false);
+    }
+    expect(isAskedForAttendance(null)).toBe(false);
+  });
+
+  it("takes answers until the phase's first day", () => {
+    expect(attendanceIsOpen(null, "2027-04-24")).toBe(true);
+    expect(attendanceIsOpen("2027-04-24", "2027-04-23")).toBe(true);
+    expect(attendanceIsOpen("2027-04-24", "2027-04-24")).toBe(false);
+    expect(attendanceIsOpen("2027-04-24", "2027-04-25")).toBe(false);
+  });
+
+  it("counts a member as answered when every open phase has an answer", () => {
+    const all = new Set(ATTENDANCE_PHASES);
+    expect(attendanceAnswered(new Set(["pack", "build", "strike"]), all)).toBe(
+      false,
+    );
+    expect(attendanceAnswered(all, all)).toBe(true);
+    // Pack has started: it is no longer owed.
+    expect(
+      attendanceAnswered(
+        new Set(["build", "strike", "unpack"]),
+        new Set(["build", "strike", "unpack"]),
+      ),
+    ).toBe(true);
+  });
+
+  it("builds the board: names per answer, and who is coming but silent", () => {
+    const board = attendanceBoard(
+      [
+        { phase: "pack", userId: "b", name: "Bo", answer: "going" },
+        { phase: "pack", userId: "a", name: "Al", answer: "going" },
+        { phase: "pack", userId: "c", name: "Cy", answer: "maybe" },
+        { phase: "build", userId: "a", name: "Al", answer: "cant" },
+      ],
+      [
+        { userId: "a", name: "Al" },
+        { userId: "d", name: "Di" },
+        { userId: "b", name: "Bo" },
+      ],
+    );
+    const pack = board.find((p) => p.phase === "pack")!;
+    expect(pack.names).toEqual({
+      going: ["Al", "Bo"],
+      maybe: ["Cy"],
+      cant: [],
+    });
+    expect(pack.notAnswered).toEqual(["Di"]);
+    const build = board.find((p) => p.phase === "build")!;
+    expect(build.names.cant).toEqual(["Al"]);
+    expect(build.notAnswered).toEqual(["Bo", "Di"]);
+    expect(board.map((p) => p.phase)).toEqual([...ATTENDANCE_PHASES]);
+  });
+
+  it("sends a notice that opens Logistics", () => {
+    expect(
+      payloadLink(attendanceAskNotification({ requiredActionId: null })),
+    ).toBe("/logistics");
+  });
+});
+
+describe("AfrikaBurn deadlines", () => {
+  it("are kept by captains only, failing closed", () => {
+    expect(canManageDeadlines("captain")).toBe(true);
+    expect(canManageDeadlines("team_lead")).toBe(false);
+    expect(canManageDeadlines("camp_member")).toBe(false);
+    expect(canManageDeadlines("")).toBe(false);
+  });
+
+  it("put a dated one, remove a removed or undated one, and skip one with no event", () => {
+    const id = "abc12";
+    expect(
+      deadlineCalendarStep({
+        dueDate: "2027-01-15",
+        removed: false,
+        calendarEventId: id,
+      }),
+    ).toBe("put");
+    expect(
+      deadlineCalendarStep({
+        dueDate: "2027-01-15",
+        removed: true,
+        calendarEventId: id,
+      }),
+    ).toBe("remove");
+    expect(
+      deadlineCalendarStep({
+        dueDate: null,
+        removed: false,
+        calendarEventId: id,
+      }),
+    ).toBe("remove");
+    expect(
+      deadlineCalendarStep({
+        dueDate: null,
+        removed: false,
+        calendarEventId: null,
+      }),
+    ).toBe("none");
   });
 });

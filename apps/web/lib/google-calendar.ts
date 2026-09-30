@@ -326,8 +326,12 @@ export interface CalendarEventBody {
   status?: "confirmed";
   start: GoogleTime;
   end: GoogleTime;
+  /**
+   * Private properties the app reads back: `camp404Team` (TEAM_PROPERTY)
+   * names a team's event; a whole-camp event has none.
+   */
   extendedProperties?: {
-    private: { [TEAM_PROPERTY]: string } & Record<string, string>;
+    private: Record<string, string>;
   };
 }
 

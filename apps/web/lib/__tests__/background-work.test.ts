@@ -25,6 +25,7 @@ vi.mock("@/lib/email", () => ({
   sendEmail: vi.fn(),
 }));
 vi.mock("@/lib/firebase-admin", () => ({ sendPush: vi.fn() }));
+vi.mock("@/lib/logistics", () => ({ catchUpCampCalendar: vi.fn() }));
 vi.mock("@/lib/integration-config", () => ({
   firebaseAdminCredentials: vi.fn(),
 }));
@@ -57,6 +58,7 @@ import {
 import { sweepOrphanAvatarBlobs } from "@/lib/avatar-blob";
 import { isEmailConfigured } from "@/lib/email";
 import { firebaseAdminCredentials } from "@/lib/integration-config";
+import { catchUpCampCalendar } from "@/lib/logistics";
 
 // 12:00 in camp (UTC+2), inside reminder hours; 02:00 in camp, outside.
 const NOON = new Date("2026-09-24T10:00:00Z");
@@ -179,6 +181,19 @@ describe("runDueWork", () => {
     process.env.VERCEL_ENV = "production";
     await runDueWork(NOON);
     expect(sweepOrphanAvatarBlobs).toHaveBeenCalledWith(new Set(["auth-1"]));
+  });
+
+  it("brings the camp calendar up to date, at night too", async () => {
+    await runDueWork(NIGHT);
+    expect(catchUpCampCalendar).toHaveBeenCalledOnce();
+  });
+
+  it("runs the upkeep when the calendar catch-up throws", async () => {
+    vi.mocked(catchUpCampCalendar).mockRejectedValue(new Error("google 500"));
+    await runDueWork(NOON);
+    expect(catchUpCampCalendar).toHaveBeenCalledOnce();
+    expect(backfillIdEncryption).toHaveBeenCalledOnce();
+    expect(console.error).toHaveBeenCalled();
   });
 
   it("keeps going when one reminder job throws", async () => {

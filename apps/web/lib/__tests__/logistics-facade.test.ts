@@ -82,25 +82,23 @@ function row(overrides: Partial<LogisticsPhaseRow> = {}): LogisticsPhaseRow {
 }
 
 describe("logisticsEventBody", () => {
-  it("is an all-day event in the camp's naming convention, carrying the team", () => {
-    const body = logisticsEventBody(
-      {
-        ...row(),
-        startDate: "2027-04-24",
-        endDate: "2027-04-26",
-        note: "Bring gloves.",
-      },
-      "Transport and Logistics",
-    );
+  it("is an all-day whole-camp event with a plain title and no team", () => {
+    const body = logisticsEventBody({
+      ...row(),
+      startDate: "2027-04-24",
+      endDate: "2027-04-26",
+      note: "Bring gloves.",
+    });
     expect(body).toMatchObject({
-      summary: "Transport and Logistics Team - Build",
+      summary: "Build",
       location: "On site",
       start: { date: "2027-04-24" },
       // Google's end date is the day after the last.
       end: { date: "2027-04-27" },
-      extendedProperties: {
-        private: { camp404Team: LOGISTICS_TEAM, camp404Logistics: "build" },
-      },
+    });
+    // No team property: the app reads the event as the camp's.
+    expect(body.extendedProperties).toEqual({
+      private: { camp404Logistics: "build" },
     });
     expect(body.description).toContain("Bring gloves.");
   });
@@ -129,9 +127,7 @@ describe("with the database", () => {
     expect(putCalendarEvent).toHaveBeenCalledWith(
       expect.anything(),
       "claimed0001",
-      expect.objectContaining({
-        summary: "Transport and Logistics Team - Build",
-      }),
+      expect.objectContaining({ summary: "Build" }),
     );
     expect(db.markLogisticsCalendarSynced).toHaveBeenCalledWith({
       cycle: 2027,
@@ -315,7 +311,7 @@ describe("under E2E (the test store)", () => {
   const events = () =>
     testStore
       .listCalendarEvents(soon, { days: 365, max: 250 })
-      .events.filter((e) => e.teamTag === LOGISTICS_TEAM);
+      .events.filter((e) => e.title === "Build");
 
   beforeEach(() => {
     mode.store = true;
@@ -344,9 +340,11 @@ describe("under E2E (the test store)", () => {
     ).toEqual({ ok: true, calendar: "synced" });
     expect(events()).toEqual([
       expect.objectContaining({
-        title: "Transport and Logistics Team - Build",
+        title: "Build",
         start: "2027-04-23",
         location: "On site",
+        // A whole-camp event: no team.
+        teamTag: null,
       }),
     ]);
     const [stored] = testStore.listLogisticsPhases();

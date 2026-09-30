@@ -6,8 +6,15 @@ import {
   Lock,
   MapPin,
 } from "lucide-react";
-import { canEditLogistics } from "@camp404/core";
 import {
+  attendanceIsOpen,
+  campDayKey,
+  canAskForAttendance,
+  canEditLogistics,
+} from "@camp404/core";
+import {
+  ATTENDANCE_ANSWERS,
+  ATTENDANCE_ANSWER_LABELS,
   LOGISTICS_PHASES,
   LOGISTICS_PHASE_HINTS,
   LOGISTICS_PHASE_LABELS,
@@ -15,19 +22,29 @@ import {
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
+import { AskAttendance } from "@/components/logistics/ask-attendance";
+import { AttendancePicker } from "@/components/logistics/attendance-picker";
 import { PhaseEditButton } from "@/components/logistics/phase-editor";
 import { getCurrentCycle } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
 import {
+  getAttendanceView,
+  isAskedForAttendance,
   isLogisticsCalendarConnected,
+  listDeadlines,
   listLogisticsPhases,
+  type AttendanceView,
+  type DeadlineRow,
   type LogisticsPhaseRow,
 } from "@/lib/logistics";
 import {
   CALENDAR_NOT_CONNECTED_NOTE,
+  deadlineDateText,
   LOGISTICS_REFUSAL,
   phaseDaysText,
+  YEAR_SETTINGS_PATH,
 } from "@/lib/logistics-copy";
+import { ledgerCycle } from "@/lib/payments";
 import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
@@ -39,9 +56,20 @@ export const metadata = { title: "Logistics — Camp 404" };
 // reads it; a captain or a Transport and Logistics lead sets the days. Each
 // phase with days is one event on the camp's shared Google Calendar (owner,
 // 2026-09-28: the calendar stays on Google), so it shows on the Calendar, on
-// Home's "Coming up" and on the team's page too. Composed as the load list:
-// one card of rows, Edit per row opening a dialog, and for everyone else the
-// Edit buttons PRESENT BUT DISABLED with one Lock line that each describes to.
+// Home's "Coming up" too, as a whole-camp event with a plain title. Composed
+// as the load list: one card of rows, Edit per row opening a dialog, and for
+// everyone else the Edit buttons PRESENT BUT DISABLED with one Lock line that
+// each describes to.
+//
+// Below it, "Who can help" (owner, 2026-09-30: "a standard attendance thing
+// that the whole camp must be involved"): for Pack, Build, Strike and Unpack,
+// every member answers Going, Maybe or Can't for themselves until the phase
+// starts, and reads everyone's answers by name. Who has NOT answered is the
+// list of members who are coming, and whether someone is coming reads at
+// team lead, so a plain member sees how many, and leads and captains see who.
+// A captain's "Ask everyone" nudges them, as the gear rental's does. Then the
+// year's AfrikaBurn deadlines, read-only here; captains keep them on the
+// camp's year page.
 
 const REFUSAL_ID = "logistics-edit-refusal";
 
@@ -81,15 +109,207 @@ function CalendarChip({ state }: { state: CalendarState }) {
   );
 }
 
+/** "3 going · 1 maybe · 2 can't" for a phase, with the unanswered count. */
+function countsText(
+  board: AttendanceView["phases"][number],
+  notAnswered: number,
+): string {
+  const parts = ATTENDANCE_ANSWERS.map(
+    (a) =>
+      `${board.names[a].length} ${ATTENDANCE_ANSWER_LABELS[a].toLowerCase()}`,
+  );
+  if (notAnswered > 0) parts.push(`${notAnswered} not answered`);
+  return parts.join(" · ");
+}
+
+function NameLine({ label, names }: { label: string; names: string[] }) {
+  if (names.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-0.5 page-sm:flex-row page-sm:gap-2">
+      <dt className="shrink-0 text-xs font-medium text-muted-foreground page-sm:w-28">
+        {label} ({names.length})
+      </dt>
+      <dd className="text-sm">{names.join(", ")}</dd>
+    </div>
+  );
+}
+
+function WhoCanHelp({
+  view,
+  rows,
+  today,
+  asked,
+}: {
+  view: AttendanceView;
+  rows: Map<string, LogisticsPhaseRow>;
+  today: string;
+  asked: boolean;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4 p-5">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-base font-semibold">Who can help</h2>
+          <p className="text-sm text-muted-foreground">
+            Packing, building, striking and unpacking need the whole camp. Say
+            Going, Maybe or Can&apos;t for each. You can change your answer
+            until the day starts.
+          </p>
+        </div>
+        {asked && (
+          <p
+            role="status"
+            data-testid="attendance-asked"
+            className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm"
+          >
+            The captains asked everyone who is coming. Answer each day below.
+          </p>
+        )}
+        <ul
+          aria-label="Who can help"
+          className="grid gap-3 page-md:grid-cols-2"
+        >
+          {view.phases.map((board) => {
+            const label = LOGISTICS_PHASE_LABELS[board.phase];
+            const row = rows.get(board.phase);
+            const notAnswered = view.notAnsweredCount[board.phase];
+            return (
+              <li
+                key={board.phase}
+                aria-label={`Who can help: ${label}`}
+                className="flex flex-col gap-3 rounded-lg border border-border p-4"
+              >
+                <div className="flex flex-col gap-0.5">
+                  <h3 className="text-sm font-semibold">{label}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {row?.startDate && row.endDate
+                      ? phaseDaysText(row.startDate, row.endDate)
+                      : "Days not set yet."}
+                  </p>
+                </div>
+                <AttendancePicker
+                  key={`${board.phase}:${view.mine[board.phase] ?? "none"}`}
+                  phase={board.phase}
+                  answer={view.mine[board.phase] ?? null}
+                  open={attendanceIsOpen(row?.startDate, today)}
+                />
+                <p
+                  className="text-xs tabular-nums text-muted-foreground"
+                  data-testid={`attendance-counts-${board.phase}`}
+                >
+                  {countsText(board, notAnswered)}
+                </p>
+                <dl className="flex flex-col gap-1.5">
+                  {ATTENDANCE_ANSWERS.map((a) => (
+                    <NameLine
+                      key={a}
+                      label={ATTENDANCE_ANSWER_LABELS[a]}
+                      names={board.names[a]}
+                    />
+                  ))}
+                  {view.namesWhoHaveNotAnswered && (
+                    <NameLine label="Not answered" names={board.notAnswered} />
+                  )}
+                </dl>
+              </li>
+            );
+          })}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Deadlines({
+  deadlines,
+  canManage,
+}: {
+  deadlines: DeadlineRow[];
+  canManage: boolean;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-3 p-0">
+        <div className="flex flex-col gap-3 px-4 pt-4 page-sm:flex-row page-sm:items-start page-sm:justify-between">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-base font-semibold">AfrikaBurn deadlines</h2>
+            <p className="text-sm text-muted-foreground">
+              The dates AfrikaBurn sets for the camp. The ones with a date are
+              on the camp calendar too.
+            </p>
+          </div>
+          {canManage && (
+            <Button asChild variant="outline" size="sm" className="shrink-0">
+              <Link href={YEAR_SETTINGS_PATH}>Change them</Link>
+            </Button>
+          )}
+        </div>
+        {deadlines.length === 0 ? (
+          <p className="px-4 pb-4 text-sm text-muted-foreground">
+            No deadlines yet. The captains add them as AfrikaBurn publishes
+            them.
+          </p>
+        ) : (
+          <ol
+            aria-label="AfrikaBurn deadlines"
+            className="divide-y divide-border border-t border-border"
+          >
+            {deadlines.map((d) => (
+              <li
+                key={d.id}
+                aria-label={d.title}
+                className="flex flex-col gap-1 px-4 py-3"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <h3
+                    className={
+                      d.done
+                        ? "text-sm font-semibold text-muted-foreground line-through"
+                        : "text-sm font-semibold"
+                    }
+                  >
+                    {d.title}
+                  </h3>
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    {d.dueDate
+                      ? deadlineDateText(d.dueDate)
+                      : "Date not known yet"}
+                    {d.done ? " · Done" : ""}
+                  </span>
+                </div>
+                {d.note && (
+                  <p className="whitespace-pre-line text-sm text-muted-foreground">
+                    {d.note}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default async function LogisticsPage() {
   // Every approved member reads the days.
   const { campUser, rank } = await captainPageGate("camp_member");
-  const [leadTeams, rows, cycle] = await Promise.all([
+  const [leadTeams, rows, cycle, year, deadlines, asked] = await Promise.all([
     rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
     listLogisticsPhases(),
     getCurrentCycle(),
+    ledgerCycle(),
+    listDeadlines(),
+    isAskedForAttendance(campUser.id),
   ]);
+  const attendance = await getAttendanceView({
+    userId: campUser.id,
+    rank,
+    cycle: year,
+  });
   const canEdit = canEditLogistics(rank, leadTeams);
+  const canAsk = canAskForAttendance(rank);
+  const today = campDayKey(new Date());
   const connected = isLogisticsCalendarConnected();
   const byPhase = new Map(rows.map((r) => [r.phase, r]));
   // The Burn's own dates, from Camp settings, start the Burn's editor off.
@@ -105,12 +325,15 @@ export default async function LogisticsPage() {
         title="Logistics"
         description="The year's big days, from packing at the storage unit to unpacking there again. Each one is on the camp calendar too."
         actions={
-          <Button asChild variant="outline">
-            <Link href="/calendar">
-              <CalendarDays aria-hidden />
-              Open the calendar
-            </Link>
-          </Button>
+          <>
+            {canAsk && <AskAttendance />}
+            <Button asChild variant="outline">
+              <Link href="/calendar">
+                <CalendarDays aria-hidden />
+                Open the calendar
+              </Link>
+            </Button>
+          </>
         }
       />
 
@@ -201,6 +424,15 @@ export default async function LogisticsPage() {
             </ol>
           </CardContent>
         </Card>
+
+        <WhoCanHelp
+          view={attendance}
+          rows={byPhase}
+          today={today}
+          asked={asked}
+        />
+
+        <Deadlines deadlines={deadlines} canManage={rank === "captain"} />
       </div>
     </div>
   );

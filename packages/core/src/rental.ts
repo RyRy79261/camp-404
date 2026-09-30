@@ -7,6 +7,7 @@ import {
   type RentalSource,
 } from "@camp404/types";
 import { sumMinor } from "./money";
+import { isComingThisYear } from "./participation";
 
 // Gear rental (#241): the year's sleeping gear, each member's order, and what
 // the camp takes out of storage or orders from the supplier. Pure: no DB, no
@@ -71,7 +72,7 @@ export const GEAR_ORDER_REF_TYPE = "gear_order";
  * answered "Coming this year?" at all.
  */
 export function isAskedForGear(status: ParticipationStatus | null): boolean {
-  return status === "applied" || status === "accepted";
+  return isComingThisYear(status);
 }
 
 // --- Words -------------------------------------------------------------------

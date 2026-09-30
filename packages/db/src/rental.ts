@@ -29,8 +29,8 @@ import type {
 } from "@camp404/types";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
-import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction, type Tx } from "./index";
+import { closeNudge, openNudges } from "./nudges";
 import { reachRank } from "./power";
 import * as schema from "./schema";
 
@@ -1252,26 +1252,12 @@ async function storeOrder(
 
   if (input.submit) {
     // The order is sent: the nudge is answered, and its notice is read.
-    await tx
-      .update(schema.requiredActions)
-      .set({ status: "completed", completedAt: now })
-      .where(
-        and(
-          eq(schema.requiredActions.userId, input.userId),
-          eq(schema.requiredActions.actionKey, GEAR_ORDER_ACTION_KEY),
-          eq(schema.requiredActions.status, "pending"),
-        ),
-      );
-    await tx
-      .update(schema.notificationDeliveries)
-      .set({ readAt: now })
-      .where(
-        and(
-          eq(schema.notificationDeliveries.userId, input.userId),
-          eq(schema.notificationDeliveries.refType, GEAR_ORDER_REF_TYPE),
-          isNull(schema.notificationDeliveries.readAt),
-        ),
-      );
+    await closeNudge(tx, {
+      userId: input.userId,
+      actionKey: GEAR_ORDER_ACTION_KEY,
+      refType: GEAR_ORDER_REF_TYPE,
+      now,
+    });
   }
   return { orderId, version: next, status };
 }
@@ -1417,66 +1403,15 @@ export async function askForGearOrders(input: {
     await assertRentalManager(tx, input.actorId);
     const targets = await unanswered(tx, input.cycle);
     if (targets.length === 0) return { asked: 0, notified: 0 };
-    const now = new Date();
-    const userIds = targets.map((t) => t.userId);
-    await tx
-      .insert(schema.requiredActions)
-      .values(
-        userIds.map((userId) => ({
-          userId,
-          type: "questionnaire" as const,
-          actionKey: GEAR_ORDER_ACTION_KEY,
-          title: GEAR_ORDER_ACTION_TITLE,
-          blocking: false,
-        })),
-      )
-      .onConflictDoUpdate({
-        target: [
-          schema.requiredActions.userId,
-          schema.requiredActions.actionKey,
-        ],
-        set: { status: "pending", completedAt: null, blocking: false },
-      });
-    const rows = await tx
-      .select({
-        id: schema.requiredActions.id,
-        userId: schema.requiredActions.userId,
-      })
-      .from(schema.requiredActions)
-      .where(
-        and(
-          inArray(schema.requiredActions.userId, userIds),
-          eq(schema.requiredActions.actionKey, GEAR_ORDER_ACTION_KEY),
-        ),
-      );
-    const unread = await tx
-      .select({ userId: schema.notificationDeliveries.userId })
-      .from(schema.notificationDeliveries)
-      .where(
-        and(
-          inArray(schema.notificationDeliveries.userId, userIds),
-          eq(schema.notificationDeliveries.refType, GEAR_ORDER_REF_TYPE),
-          isNull(schema.notificationDeliveries.readAt),
-        ),
-      );
-    const stillUnread = new Set(unread.map((u) => u.userId));
-    const toNotify = rows.filter((r) => !stillUnread.has(r.userId));
-    if (toNotify.length > 0) {
-      await tx.insert(schema.notificationDeliveries).values(
-        toNotify.map((row) =>
-          deliveryValues(
-            gearOrderAskNotification({ requiredActionId: row.id }),
-            {
-              userId: row.userId,
-              broadcastId: null,
-              channel: "both",
-              presentation: "feed",
-              createdAt: now,
-            },
-          ),
-        ),
-      );
-    }
+    const notified = await openNudges(tx, {
+      userIds: targets.map((t) => t.userId),
+      actionKey: GEAR_ORDER_ACTION_KEY,
+      title: GEAR_ORDER_ACTION_TITLE,
+      refType: GEAR_ORDER_REF_TYPE,
+      notice: (requiredActionId) =>
+        gearOrderAskNotification({ requiredActionId }),
+      now: new Date(),
+    });
     await writeAuditEvent(tx, {
       actorId: input.actorId,
       action: "rental.orders_asked",
@@ -1484,10 +1419,10 @@ export async function askForGearOrders(input: {
       metadata: {
         cycle: input.cycle,
         asked: targets.length,
-        notified: toNotify.length,
+        notified,
       },
     });
-    return { asked: targets.length, notified: toNotify.length };
+    return { asked: targets.length, notified };
   });
 }
 
