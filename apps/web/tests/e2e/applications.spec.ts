@@ -56,6 +56,14 @@ function row(page: Page, name: string) {
     .filter({ visible: true });
 }
 
+/**
+ * What a member said, on their row. The table has a "Says" column; the phone's
+ * card has no column heads, so its badge reads "Says: Maybe".
+ */
+function says(page: Page, name: string, label: string) {
+  return row(page, name).getByText(new RegExp(`^(Says: )?${label}$`));
+}
+
 /** The overview's "This year" card, once painted. */
 async function thisYearCard(page: Page) {
   await page.goto("/captains/overview");
@@ -112,9 +120,7 @@ test.describe("applications: tickets and WAP", () => {
         .filter({ visible: true }),
     ).toHaveValue("has_ticket");
     // What he said and what the captains decided, each in its own column.
-    await expect(
-      row(page, "Ben Placed").getByText("Maybe", { exact: true }),
-    ).toBeVisible();
+    await expect(says(page, "Ben Placed", "Maybe")).toBeVisible();
     await expect(
       row(page, "Ben Placed").getByText("Accepted", { exact: true }),
     ).toBeVisible();
@@ -205,15 +211,11 @@ test.describe("applications: tickets and WAP", () => {
     await openApplications(page);
 
     // Present first, then the absences.
-    await expect(
-      row(page, "Ada Yes").getByText("Coming", { exact: true }),
-    ).toBeVisible();
+    await expect(says(page, "Ada Yes", "Coming")).toBeVisible();
     await expect(
       row(page, "Ada Yes").getByText("Not decided yet", { exact: true }),
     ).toBeVisible();
-    await expect(
-      row(page, "Ben Placed").getByText("Maybe", { exact: true }),
-    ).toBeVisible();
+    await expect(says(page, "Ben Placed", "Maybe")).toBeVisible();
     await expect(
       row(page, "Ben Placed").getByText("Accepted", { exact: true }),
     ).toBeVisible();
