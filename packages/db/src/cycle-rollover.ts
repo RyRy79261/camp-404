@@ -649,6 +649,20 @@ export async function setFoundingYear(input: {
         .set({ cycle: input.year })
         .where(eq(table.cycle, UNSET_CYCLE));
     }
+    // Gear rental (#241): the year's catalogue and orders, and the charge a
+    // confirmed order made on the member's dues, so the order and its charge
+    // stay in the same year.
+    await tx.execute(sql`
+      update dues_charges c set cycle = ${input.year}
+      from rental_orders o
+      where o.charge_id = c.id and o.cycle = ${UNSET_CYCLE}
+    `);
+    for (const table of [schema.rentalItems, schema.rentalOrders]) {
+      await tx
+        .update(table)
+        .set({ cycle: input.year })
+        .where(eq(table.cycle, UNSET_CYCLE));
+    }
     // Transport (#270): the year's trailers and lift requests.
     const trailers = await tx
       .update(schema.transportTrailers)

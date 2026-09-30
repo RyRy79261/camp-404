@@ -7,7 +7,7 @@ against Neon Postgres.
   without transactions; `createPooledDb` and `withTransaction` for atomic
   work), the schema at `@camp404/db/schema`, and one subpath per feature,
   for example `@camp404/db/broadcasts`, `/participations`, `/tickets`,
-  `/dues`, `/payments`, `/team-memberships`, `/team-programs`, `/transport`,
+  `/dues`, `/rental`, `/payments`, `/team-memberships`, `/team-programs`, `/transport`,
   `/power`, `/power-site`, `/power-grid`, `/power-readiness`, `/inventory`,
   `/lounge`, `/camp-layout`, `/logistics` and `/meal-plan`. The full list is `exports` in
   `package.json`.

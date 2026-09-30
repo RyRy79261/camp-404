@@ -8,6 +8,9 @@
 
 const ACTION_ROUTES: Record<string, string> = {
   burner_profile: "/onboarding/questionnaire",
+  // The gear order (#241): a captain's "Ask everyone" opens it as a
+  // NON-blocking action, so it never gates; My gear is where it is answered.
+  gear_order: "/gear",
   // Dietary requirements and the driver profile are builder questionnaires
   // (OD3): they route through their send's activation like any other.
 };
@@ -48,6 +51,7 @@ export function nextGate(actions: PendingAction[]): string | null {
 // fall through to its title rather than hit Object.prototype.
 const ACTION_NAMES = new Map<string, string>([
   ["burner_profile", "Burner profile"],
+  ["gear_order", "Gear order"],
 ]);
 
 /**
