@@ -1,7 +1,7 @@
 # Sub-project F — Account deletion / "Lost Cat #N" (design + plan)
 
 **Date:** 2026-05-30
-**Status:** Proposed
+**Status:** Built in #42 (2026-05-30). [CORRECTION 2026-09-29: this said "Proposed".]
 **Program:** Camp 404 audit remediation, sub-project **F** — the last one. The documented POPIA right-to-erasure (`AGENTS.md`/`README`: "account deletion sanitises to a `Lost Cat #N` stub to preserve relational integrity"). Builds on A's encrypted columns (merged). No schema change — `sanitised`/`sanitisedAt`/`lost_cat_number` already exist, and audiences/rosters already filter `sanitised=false`.
 
 ## Approach — sanitise in place, don't hard-delete

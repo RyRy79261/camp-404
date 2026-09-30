@@ -1,5 +1,7 @@
 # PII-at-rest Encryption Implementation Plan
 
+Status: built in #37 (2026-05-30).
+
 **Goal:** Stop storing government ID numbers in plaintext — encrypt `id.number` into the existing `users` encrypted columns at every write boundary, gate decryption to owner‖captain, and backfill existing rows.
 
 **Architecture:** A pure split/merge helper (`@camp404/db/id-documents`) moves `id.number` out of `burner_profiles.responses`; the `users.ts` real backend encrypts on write / decrypts on read (test backend keeps raw, so E2E needs no key); the crypto helper moves to `@camp404/db/crypto` so the `admin-cli` backfill can reuse it. Decryption surfaces unchanged in shape: owner replay + MCP self tool, captain member-detail + MCP people tool.

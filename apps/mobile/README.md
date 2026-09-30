@@ -2,6 +2,8 @@
 
 Capacitor 8 host that wraps the Next.js static export from `apps/web` into iOS and Android shells.
 
+**Status: deferred.** `pnpm --filter @camp404/web build:mobile` is broken: Next 16 needs every route in a static export to pre-render, and every console page reads the session. See "Mobile builds" in [`AGENTS.md`](../../AGENTS.md#mobile-builds). The steps below are for when it works again.
+
 ## First-time setup
 
 ```bash

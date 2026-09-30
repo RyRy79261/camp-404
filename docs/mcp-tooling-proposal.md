@@ -1,5 +1,7 @@
 # MCP Tooling Proposal
 
+Status (checked 2026-09-29): largely built, in `apps/web/lib/mcp/` and `app/api/mcp/`; the "Status" section near the end says which tools exist. [CORRECTION 2026-09-29] Sign-in is self-hosted Better Auth (#226), not Neon Auth: `@neondatabase/auth` and `apps/web/lib/neon-auth.ts` are gone, and the authorize route reads the session with `getAuthenticatedUser`. Tools are registered in `lib/mcp/server.ts`, not `tools/register.ts`.
+
 > Connector design for letting Camp 404 members open Claude.ai (or any MCP
 > client) and chat against their camp data. Scope is full read + write, gated
 > per the user's existing in-app permissions plus a per-subject opt-in for

@@ -1,5 +1,7 @@
 # 404 OS console: migration plan
 
+Status (checked 2026-09-29): built. PR A is #286, PR B #287, PRs C and D #288, PR E #291 (2026-09-25 to 2026-09-27). "Nothing built yet" below is the record from when it was written.
+
 Date: 2026-09-25. Status: proposal, nothing built yet. The owner picked the
 Classic desktop from the three-look prototype on 2026-09-25 (decision 1,
 ruled), then reviewed it again the same day and ruled decisions 3, 8 and 14

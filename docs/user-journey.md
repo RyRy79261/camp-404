@@ -1,5 +1,7 @@
 # Camp 404 — User Journey
 
+Status (checked 2026-09-29): out of date in its surfaces, kept as the record of the journey's logic. [CORRECTION 2026-09-29] The home control panel, its quadrants and layers are gone: a signed-in member lands on the 404 OS desktop (`app/(console)/page.tsx`), and the gate chain is `requireMemberPage` in `lib/member-gate.ts` (drawn in `docs/architecture.md`). The pages it names under `app/` now live under `app/(console)/`. MCP, meal planning, recipes, dues, tasks and reimbursements are built; Telegram is built but off. Sign-out is our own page, not Neon's.
+
 > How a person moves through the Camp 404 app: from an invite link in their
 > inbox to an active, profiled camp member navigating the control panel —
 > plus the planned surfaces (Telegram, MCP, meal planning) the journey grows

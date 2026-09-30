@@ -1,7 +1,7 @@
 # Configurable teams
 
-Status (checked against the code on 2026-09-24): **Phases 1–3 are built.
-Phase 4 is done by hand, one team at a time, and that is now the rule.** The
+Status (checked against the code on 2026-09-24): **Phases 1–3 are built**
+(#102, #104, #105). **Phase 4 is done by hand, one team at a time, and that is now the rule.** The
 plan below is kept as history.
 
 ## What is built
@@ -113,7 +113,8 @@ brand-new team **key** later is a separate enum migration (Phase 4).
 > `schema.ts` finds it in exactly 9 tables: `team_memberships`,
 > `questionnaire_activations`, `documents`, `reimbursements`, `team_budgets`,
 > `broadcasts`, `tasks`, `inventory_items`, `inventory_updates`. The list above
-> is otherwise still right.
+> is otherwise still right. [CORRECTION 2026-09-29] It is now 11: `meeting_notes` and
+> `team_programs` joined them.
 
 ### The coupling (why this is staged, not one PR)
 

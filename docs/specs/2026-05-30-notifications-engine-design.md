@@ -1,7 +1,7 @@
 # Sub-project C — Notifications engine (design + plan)
 
 **Date:** 2026-05-30
-**Status:** Proposed
+**Status:** Built in #39 (2026-05-30). [CORRECTION 2026-09-29: this said "Proposed".] Dispatch no longer runs on a cron: it runs at the action or on a page load, in `after()` (#274, `apps/web/lib/background-work.ts`).
 **Program:** Camp 404 audit remediation, sub-project **C** — the first of the interconnected C → E → D feature cluster. Introduces a **Drizzle schema migration**, so higher-stakes than A/B.
 
 ## Problem (from the audit)
