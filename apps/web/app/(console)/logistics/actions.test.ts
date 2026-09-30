@@ -15,15 +15,29 @@ vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn(async () => []) }));
 vi.mock("@/lib/logistics", () => ({
   saveLogisticsPhase: vi.fn(async () => ({ ok: true, calendar: "synced" })),
   clearLogisticsPhase: vi.fn(async () => ({ ok: true, calendar: "synced" })),
+  setMyAttendance: vi.fn(async () => ({ ok: true, answer: "going" })),
+  askForAttendance: vi.fn(async () => ({ ok: true, asked: 3, notified: 2 })),
 }));
+vi.mock("@/lib/background-work", () => ({ deliverAfterResponse: vi.fn() }));
 
 import { revalidatePath } from "next/cache";
 import type { ViewerRank } from "@camp404/types";
 import { captainActionGate } from "@/lib/captain-gate";
-import { clearLogisticsPhase, saveLogisticsPhase } from "@/lib/logistics";
-import { LOGISTICS_REFUSAL } from "@/lib/logistics-copy";
+import { deliverAfterResponse } from "@/lib/background-work";
+import {
+  askForAttendance,
+  clearLogisticsPhase,
+  saveLogisticsPhase,
+  setMyAttendance,
+} from "@/lib/logistics";
+import { ASK_REFUSAL, LOGISTICS_REFUSAL } from "@/lib/logistics-copy";
 import { getLeadTeams } from "@/lib/users";
-import { clearLogisticsPhaseAction, saveLogisticsPhaseAction } from "./actions";
+import {
+  askForAttendanceAction,
+  clearLogisticsPhaseAction,
+  saveLogisticsPhaseAction,
+  setMyAttendanceAction,
+} from "./actions";
 
 const LADDER: ViewerRank[] = ["camp_member", "team_lead", "captain"];
 
@@ -124,5 +138,67 @@ describe("logistics actions", () => {
       error: "Someone changed these days first. Reload the page.",
     });
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("attendance actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("lets any member answer, as themselves only", async () => {
+    actAs("camp_member", [], "member-1");
+    expect(
+      await setMyAttendanceAction({
+        phase: "pack",
+        answer: "going",
+        expected: null,
+        // An id in the form is ignored: the answer is always the actor's.
+        userId: "someone-else",
+      }),
+    ).toEqual({ ok: true, data: { answer: "going" } });
+    expect(setMyAttendance).toHaveBeenCalledWith("member-1", {
+      phase: "pack",
+      answer: "going",
+      expected: null,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/logistics");
+  });
+
+  it("refuses an answer for a phase nobody is asked about", async () => {
+    actAs("camp_member");
+    expect(
+      await setMyAttendanceAction({
+        phase: "burn",
+        answer: "going",
+        expected: null,
+      }),
+    ).toMatchObject({ ok: false });
+    expect(setMyAttendance).not.toHaveBeenCalled();
+  });
+
+  it("lets a captain ask everyone, and sends the notices after the response", async () => {
+    actAs("captain", [], "cap-1");
+    expect(await askForAttendanceAction()).toEqual({
+      ok: true,
+      data: { asked: 3, notified: 2 },
+    });
+    expect(askForAttendance).toHaveBeenCalledWith("cap-1");
+    expect(deliverAfterResponse).toHaveBeenCalledOnce();
+  });
+
+  it("refuses the ask from a Transport and Logistics lead and a member", async () => {
+    for (const [rank, led] of [
+      ["team_lead", ["transport_and_logistics"]],
+      ["camp_member", []],
+    ] as const) {
+      actAs(rank, [...led]);
+      expect(await askForAttendanceAction()).toEqual({
+        ok: false,
+        error: ASK_REFUSAL,
+      });
+    }
+    expect(askForAttendance).not.toHaveBeenCalled();
+    expect(deliverAfterResponse).not.toHaveBeenCalled();
   });
 });

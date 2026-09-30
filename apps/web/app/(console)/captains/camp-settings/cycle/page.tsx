@@ -1,7 +1,18 @@
 import { planRollover } from "@camp404/db/cycle-rollover";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
+import {
+  DeadlinesManager,
+  type DeadlineItem,
+} from "@/components/logistics/deadlines-manager";
 import { captainPageGate } from "@/lib/captain-gate";
+import {
+  deadlineCalendarState,
+  isLogisticsCalendarConnected,
+  listDeadlines,
+} from "@/lib/logistics";
+import { usesTestStore } from "@/lib/test-mode";
+import { testStore } from "@/lib/test-store";
 import { RolloverPanel, type RolloverPlanView } from "./rollover-panel";
 
 export const dynamic = "force-dynamic";
@@ -20,13 +31,34 @@ export const metadata = { title: "The camp's year — Camp 404" };
 // planRollover() is a pure read with zero writes, so calling it on every page
 // load is safe by construction; that is what lets the confirm screen show the
 // captain the real numbers before anything happens.
+//
+// The year's AfrikaBurn deadlines live here too (owner, 2026-09-30: "this
+// should be under the years settings page"): captains add them one at a
+// time, and each with a date goes on the camp calendar. Members read them on
+// Logistics.
 
 export default async function CycleRolloverPage() {
   const { cleared } = await captainPageGate("captain");
 
   // Typed to the island's structural view so the page conforms to the client
   // contract by assignment, rather than the island importing the DB package.
-  const plan: RolloverPlanView | null = cleared ? await planRollover() : null;
+  const [plan, deadlines]: [RolloverPlanView | null, DeadlineItem[]] = cleared
+    ? await Promise.all([
+        usesTestStore() ? testStore.planRollover() : planRollover(),
+        listDeadlines().then((rows) => {
+          const connected = isLogisticsCalendarConnected();
+          return rows.map((row) => ({
+            id: row.id,
+            title: row.title,
+            dueDate: row.dueDate,
+            note: row.note,
+            done: row.done,
+            version: row.version,
+            calendar: deadlineCalendarState(row, connected),
+          }));
+        }),
+      ])
+    : [null, []];
   // A camp with no year yet is being asked one thing, and a camp with one is
   // being asked another. The heading says which rather than making the panel
   // contradict it.
@@ -36,16 +68,21 @@ export default async function CycleRolloverPage() {
     <div className="flex flex-col">
       <PageHeading
         eyebrow="Captains / Camp settings / Year"
-        title={founded ? "Start a new year" : "The camp’s year"}
+        title="The camp’s year"
         description={
           founded
-            ? "When the camp moves on to the next burn, this is where you say so. Some questionnaires go out again on a blank form; most stay exactly as they are. Nothing is ever deleted — every previous year’s answers stay readable."
-            : "Every questionnaire sent and every answer given is filed under a year. The camp hasn’t said which year this is yet, so nothing is filed under one. Say so here and it will be."
+            ? "This year’s AfrikaBurn deadlines, and starting a new year when the camp moves on to the next burn. Some questionnaires go out again on a blank form; most stay exactly as they are. Nothing is ever deleted — every previous year’s answers stay readable."
+            : "Every questionnaire sent and every answer given is filed under a year. The camp hasn’t said which year this is yet, so nothing is filed under one. Say so here and it will be, the AfrikaBurn deadlines too."
         }
       />
 
       {plan ? (
-        <RolloverPanel plan={plan} />
+        <div className="flex flex-col gap-6">
+          {/* Before the camp names its year, deadlines are filed under the
+              sentinel and the founding year adopts them. */}
+          <DeadlinesManager deadlines={deadlines} />
+          <RolloverPanel plan={plan} />
+        </div>
       ) : (
         <CaptainLock message="Starting a new year is captain-only. Your rank doesn't have clearance for this." />
       )}

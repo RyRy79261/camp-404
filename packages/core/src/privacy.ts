@@ -303,6 +303,17 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "paymentRefunds.createdAt": "captain",
   "paymentRefunds.updatedAt": "captain",
 
+  // logistics_attendance — who can help on Pack, Build, Strike and Unpack
+  // (#247). A whole-camp activity (owner, 2026-09-30), so every member reads
+  // each answer by name. It says nothing about whether someone is coming:
+  // that (campParticipations.status) stays at team_lead, so the list of who
+  // has NOT answered, which is built from it, is shown only to leads and up.
+  "logisticsAttendance.cycle": "camp_member",
+  "logisticsAttendance.phase": "camp_member",
+  "logisticsAttendance.userId": "camp_member",
+  "logisticsAttendance.answer": "camp_member",
+  "logisticsAttendance.updatedAt": "captain",
+
   // rental_orders, rental_order_lines, rental_order_sharers — gear rental
   // (#241). A member reads only their own order; captains read all; a team
   // lead gets nothing extra. A member named as a sharer also reads that one

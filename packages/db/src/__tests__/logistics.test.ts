@@ -1,17 +1,29 @@
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { LOGISTICS_TEAM } from "@camp404/core";
-import type { Team } from "@camp404/types";
+import {
+  ATTENDANCE_ACTION_KEY,
+  ATTENDANCE_REF_TYPE,
+  LOGISTICS_TEAM,
+} from "@camp404/core";
+import type { ParticipationStatus, Team } from "@camp404/types";
 import type { CampConfig } from "../camp-config";
 import * as schema from "../schema";
 import {
+  ATTENDANCE_CHANGED,
+  ATTENDANCE_NOT_A_MEMBER,
+  NOT_AN_ATTENDANCE_ASKER,
   NOT_A_LOGISTICS_EDITOR,
   PHASE_CHANGED,
+  askForAttendance,
+  attendanceClosed,
   clearLogisticsPhase,
+  listAttendance,
   listLogisticsPhases,
   markLogisticsCalendarSynced,
   setLogisticsPhase,
+  setMyAttendance,
 } from "../logistics";
+import { sanitiseAccount } from "../account";
 import { assignTeam, setLead } from "../team-memberships";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
@@ -50,9 +62,10 @@ const BUILD = {
   note: null,
 };
 
-describe("logistics phases", () => {
-  const h = useTestDb();
+type Harness = ReturnType<typeof useTestDb>;
 
+/** A captain, a lead of each of two teams and a member; the audit rows. */
+function helpers(h: Harness) {
   async function leadOf(team: Team) {
     const user = await makeUser(h.db());
     await assignTeam({ userId: user.id, team });
@@ -79,6 +92,14 @@ describe("logistics phases", () => {
       .from(schema.auditLog)
       .where(eq(schema.auditLog.action, action));
   }
+
+  return { people, audits };
+}
+
+describe("logistics phases", () => {
+  const h = useTestDb();
+
+  const { people, audits } = helpers(h);
 
   it("lets a captain and a Transport and Logistics lead set the days, audited", async () => {
     const { captain, logisticsLead } = await people();
@@ -349,5 +370,246 @@ describe("logistics phases", () => {
         endDate: null,
       }),
     ).rejects.toThrow();
+  });
+});
+
+// --- Attendance ----------------------------------------------------------------
+// Every member who is coming is asked going / maybe / can't for Pack, Build,
+// Strike and Unpack. A member answers only for themselves, until the phase
+// starts, as a compare-and-set; a captain's "Ask everyone" is the shared
+// nudge (a non-blocking required action and one notice), never a block.
+
+describe("logistics attendance", () => {
+  const h = useTestDb();
+  const { people, audits } = helpers(h);
+  const BEFORE = new Date("2027-04-01T08:00:00Z");
+  const PHASES = ["pack", "build", "strike", "unpack"] as const;
+
+  async function place(userId: string, status: ParticipationStatus) {
+    await h
+      .db()
+      .insert(schema.campParticipations)
+      .values({ userId, cycle: 2027, status, intent: "yes" });
+  }
+
+  async function nudge(userId: string) {
+    const [row] = await h
+      .db()
+      .select()
+      .from(schema.requiredActions)
+      .where(
+        and(
+          eq(schema.requiredActions.userId, userId),
+          eq(schema.requiredActions.actionKey, ATTENDANCE_ACTION_KEY),
+        ),
+      );
+    return row;
+  }
+
+  async function notices(userId: string) {
+    return h
+      .db()
+      .select()
+      .from(schema.notificationDeliveries)
+      .where(
+        and(
+          eq(schema.notificationDeliveries.userId, userId),
+          eq(schema.notificationDeliveries.refType, ATTENDANCE_REF_TYPE),
+        ),
+      );
+  }
+
+  it("a member answers for themselves; a stale answer loses and says so", async () => {
+    await campYear(h.db(), 2027);
+    const dee = await makeUser(h.db(), { displayName: "Dee" });
+    const first = await setMyAttendance({
+      userId: dee.id,
+      phase: "pack",
+      answer: "maybe",
+      expected: null,
+      now: BEFORE,
+    });
+    expect(first).toEqual({ ok: true, answer: "maybe" });
+    expect(
+      await setMyAttendance({
+        userId: dee.id,
+        phase: "pack",
+        answer: "going",
+        expected: null,
+        now: BEFORE,
+      }),
+    ).toEqual({ ok: false, error: ATTENDANCE_CHANGED });
+    expect(
+      await setMyAttendance({
+        userId: dee.id,
+        phase: "pack",
+        answer: "cant",
+        expected: "going",
+        now: BEFORE,
+      }),
+    ).toEqual({ ok: false, error: ATTENDANCE_CHANGED });
+    expect(
+      await setMyAttendance({
+        userId: dee.id,
+        phase: "pack",
+        answer: "going",
+        expected: "maybe",
+        now: BEFORE,
+      }),
+    ).toEqual({ ok: true, answer: "going" });
+    const read = await listAttendance(2027);
+    expect(read.entries).toEqual([
+      { phase: "pack", userId: dee.id, name: "Dee", answer: "going" },
+    ]);
+  });
+
+  it("closes a phase's answers on its first day", async () => {
+    const { captain } = await people();
+    const dee = await makeUser(h.db());
+    await setLogisticsPhase({
+      ...BUILD,
+      actorId: captain.id,
+      expectedVersion: 0,
+      newEventId: "event0001",
+    });
+    const args = {
+      userId: dee.id,
+      phase: "build" as const,
+      answer: "going" as const,
+      expected: null,
+    };
+    // 2027-04-24 00:30 in camp time is already the first day.
+    expect(
+      await setMyAttendance({
+        ...args,
+        now: new Date("2027-04-23T22:30:00Z"),
+      }),
+    ).toEqual({ ok: false, error: attendanceClosed("build") });
+    expect(
+      await setMyAttendance({
+        ...args,
+        now: new Date("2027-04-23T21:30:00Z"),
+      }),
+    ).toEqual({ ok: true, answer: "going" });
+  });
+
+  it("refuses travel and the burn, which nobody answers, in the database", async () => {
+    await campYear(h.db(), 2027);
+    const dee = await makeUser(h.db());
+    await expect(
+      h.db().insert(schema.logisticsAttendance).values({
+        cycle: 2027,
+        phase: "burn",
+        userId: dee.id,
+        answer: "going",
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("refuses a member who is not approved", async () => {
+    await campYear(h.db(), 2027);
+    const pending = await makeUser(h.db(), { approvalStatus: "pending" });
+    expect(
+      await setMyAttendance({
+        userId: pending.id,
+        phase: "pack",
+        answer: "going",
+        expected: null,
+        now: BEFORE,
+      }),
+    ).toEqual({ ok: false, error: ATTENDANCE_NOT_A_MEMBER });
+  });
+
+  it("asks who is coming and has not answered; again, no second notice; answering all closes it", async () => {
+    const { captain } = await people();
+    const yes = await makeUser(h.db(), { displayName: "Yes" });
+    const accepted = await makeUser(h.db(), { displayName: "Acc" });
+    const maybe = await makeUser(h.db(), { displayName: "Maybe" });
+    const waitlisted = await makeUser(h.db(), { displayName: "Wait" });
+    await place(yes.id, "applied");
+    await place(accepted.id, "accepted");
+    await place(maybe.id, "maybe");
+    await place(waitlisted.id, "waitlisted");
+
+    expect(
+      await askForAttendance({ actorId: captain.id, now: BEFORE }),
+    ).toEqual({ ok: true, asked: 2, notified: 2 });
+    for (const u of [yes, accepted]) {
+      expect(await nudge(u.id)).toMatchObject({
+        status: "pending",
+        blocking: false,
+      });
+      expect(await notices(u.id)).toHaveLength(1);
+    }
+    for (const u of [maybe, waitlisted]) {
+      expect(await nudge(u.id)).toBeUndefined();
+    }
+    const audit = await audits("logistics.attendance_asked");
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.metadata).toMatchObject({ asked: 2, notified: 2 });
+
+    // Pressed again: the same two, and no second notice while unread.
+    expect(
+      await askForAttendance({ actorId: captain.id, now: BEFORE }),
+    ).toEqual({ ok: true, asked: 2, notified: 0 });
+    expect(await notices(yes.id)).toHaveLength(1);
+
+    // Yes answers three of four: still asked. The fourth closes it.
+    for (const [i, phase] of PHASES.entries()) {
+      await setMyAttendance({
+        userId: yes.id,
+        phase,
+        answer: "maybe",
+        expected: null,
+        now: BEFORE,
+      });
+      expect((await nudge(yes.id))!.status).toBe(
+        i < PHASES.length - 1 ? "pending" : "completed",
+      );
+    }
+    expect((await notices(yes.id))[0]!.readAt).not.toBeNull();
+    expect(
+      await askForAttendance({ actorId: captain.id, now: BEFORE }),
+    ).toEqual({ ok: true, asked: 1, notified: 0 });
+  });
+
+  it("refuses the ask from a Transport and Logistics lead, a lead of another team and a member", async () => {
+    const { logisticsLead, kitchenLead, member } = await people();
+    await place(member.id, "applied");
+    for (const actor of [logisticsLead, kitchenLead, member]) {
+      expect(
+        await askForAttendance({ actorId: actor.id, now: BEFORE }),
+      ).toEqual({ ok: false, error: NOT_AN_ATTENDANCE_ASKER });
+    }
+    expect(await nudge(member.id)).toBeUndefined();
+  });
+
+  it("lists who is coming, and leaves out anyone erased or not approved", async () => {
+    await campYear(h.db(), 2027);
+    const dee = await makeUser(h.db(), { displayName: "Dee" });
+    const gone = await makeUser(h.db(), { sanitised: true });
+    const pending = await makeUser(h.db(), { approvalStatus: "pending" });
+    for (const u of [dee, gone, pending]) await place(u.id, "accepted");
+    expect((await listAttendance(2027)).coming).toEqual([
+      { userId: dee.id, name: "Dee" },
+    ]);
+  });
+
+  it("forgets an erased member's answers", async () => {
+    await campYear(h.db(), 2027);
+    const dee = await makeUser(h.db());
+    const kept = await makeUser(h.db());
+    for (const u of [dee, kept]) {
+      await setMyAttendance({
+        userId: u.id,
+        phase: "pack",
+        answer: "going",
+        expected: null,
+        now: BEFORE,
+      });
+    }
+    expect((await sanitiseAccount(dee.id)).ok).toBe(true);
+    const rows = await h.db().select().from(schema.logisticsAttendance);
+    expect(rows.map((r) => r.userId)).toEqual([kept.id]);
   });
 });

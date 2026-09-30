@@ -14,7 +14,7 @@ import {
 
 // The logistics days (#247, test-mode, where the store stands in for the
 // camp's Google Calendar). A Transport and Logistics lead sets the Build days;
-// they show on the Calendar once. Saving again with a new last day still
+// they show on the Calendar once, as a whole-camp event titled "Build". Saving again with a new last day still
 // leaves ONE event there (the phase owns its event id). Clearing the days
 // takes it off. A lead of Kitchen and a plain member read the days and find
 // Edit disabled with the reason beside it.
@@ -93,9 +93,10 @@ test.describe("logistics days (test-mode)", () => {
     let events = await buildEventsOnCalendar(page);
     await expect(events).toHaveCount(1);
     await expect(events).toContainText("On site");
-    await expect(
-      events.getByRole("link", { name: "Transport and Logistics" }),
-    ).toBeVisible();
+    // A whole-camp event with a plain title: no team badge (owner,
+    // 2026-09-30: every phase is a whole-camp activity).
+    await expect(events).toContainText("Build");
+    await expect(events.getByRole("link")).toHaveCount(0);
 
     // Save again with a later last day: still one event.
     await openLogistics(page);

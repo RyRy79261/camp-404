@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  AddDeadlineInput,
+  SetAttendanceInput,
   ClearLogisticsPhaseInput,
   LOGISTICS_MAX_DAYS,
   SetLogisticsPhaseInput,
@@ -71,5 +73,56 @@ describe("ClearLogisticsPhaseInput", () => {
       ClearLogisticsPhaseInput.safeParse({ phase: "pack", expectedVersion: 1 })
         .success,
     ).toBe(true);
+  });
+});
+
+describe("SetAttendanceInput", () => {
+  it("takes an answer for a phase that needs hands", () => {
+    expect(
+      SetAttendanceInput.parse({
+        phase: "pack",
+        answer: "maybe",
+        expected: null,
+      }),
+    ).toEqual({ phase: "pack", answer: "maybe", expected: null });
+  });
+
+  it("refuses travel and the burn, and an unknown answer", () => {
+    for (const phase of ["travel", "burn"]) {
+      expect(
+        SetAttendanceInput.safeParse({ phase, answer: "going", expected: null })
+          .success,
+      ).toBe(false);
+    }
+    expect(
+      SetAttendanceInput.safeParse({
+        phase: "pack",
+        answer: "yes",
+        expected: null,
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("AddDeadlineInput", () => {
+  it("keeps a date as typed, and an empty date as not known", () => {
+    expect(
+      AddDeadlineInput.parse({
+        title: " DDT sale ",
+        dueDate: "2027-02-01",
+        note: "",
+      }),
+    ).toEqual({ title: "DDT sale", dueDate: "2027-02-01", note: null });
+    expect(
+      AddDeadlineInput.parse({ title: "DDT sale", dueDate: "" }).dueDate,
+    ).toBeNull();
+  });
+
+  it("needs a title and a real date", () => {
+    expect(AddDeadlineInput.safeParse({ title: "  " }).success).toBe(false);
+    expect(
+      AddDeadlineInput.safeParse({ title: "WAP", dueDate: "2027-02-30" })
+        .success,
+    ).toBe(false);
   });
 });

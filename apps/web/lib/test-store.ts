@@ -84,6 +84,7 @@ import {
 } from "./test-store-dues";
 import { resetClaimsStore } from "./test-store-claims";
 import { resetRentalStore } from "./test-store-rental";
+import { resetLogisticsStore } from "./test-store-logistics";
 import type { MyLift } from "@camp404/db/cars";
 import {
   ALREADY_SEATED,
@@ -339,10 +340,15 @@ import {
 import {
   currentCycle,
   DEFAULT_CAMP_CONFIG,
+  MAX_CYCLE_YEAR,
   resolveCycles,
   UNSET_CYCLE,
   type TeamsConfig,
 } from "@camp404/db/camp-config";
+import {
+  ROLLOVER_UNTOUCHED,
+  type RolloverPlan,
+} from "@camp404/db/cycle-rollover";
 // Type-only: the store's three team operations return the SAME shapes the
 // production writers do, so a divergence is a typecheck failure rather than a
 // green e2e run over a broken app.
@@ -2645,6 +2651,25 @@ export const testStore = {
   /** The year every team write is stamped with — exposed so specs can assert it. */
   currentCycleNumber(): number {
     return currentCycleNumber();
+  },
+
+  /**
+   * Twin of planRollover, so the camp's year page (which also holds the
+   * AfrikaBurn deadlines) renders under E2E. KNOWN BOUNDARY: the store sends
+   * no questionnaire through a rollover, so every list is empty, and the
+   * founding and rollover writes are not routed here (see currentCycleNumber).
+   */
+  planRollover(): RolloverPlan {
+    const from = currentCycle(resolveCycles(globalState().teamsConfig));
+    return {
+      from,
+      suggestedYear: from && from.year < MAX_CYCLE_YEAR ? from.year + 1 : null,
+      reGate: [],
+      carriesOver: [],
+      notSent: [],
+      duesPaidCount: 0,
+      untouched: ROLLOVER_UNTOUCHED,
+    };
   },
 
   /**
@@ -6087,6 +6112,7 @@ export const testStore = {
     S.inkblotRuns.length = 0;
     resetDuesStore();
     resetRentalStore();
+    resetLogisticsStore();
     resetClaimsStore();
   },
 

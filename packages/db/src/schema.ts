@@ -31,6 +31,7 @@ import {
   INVENTORY_LOCATIONS,
   LOAD_CATEGORIES,
   LOGISTICS_PHASES,
+  ATTENDANCE_ANSWERS,
   LOAD_OWNERS,
   LOAD_SCHEDULES,
   LOUNGE_BANDS,
@@ -3931,6 +3932,72 @@ export const logisticsPhases = pgTable(
       "logistics_phases_days_check",
       sql`(${l.startDate} is null) = (${l.endDate} is null) and (${l.endDate} is null or ${l.endDate} >= ${l.startDate})`,
     ),
+  }),
+);
+
+// Who can help on the days that need hands (#247 follow-up, owner
+// 2026-09-30: "a standard attendance thing that the whole camp must be
+// involved"). One answer per member per phase per year: going, maybe or
+// can't. Only Pack, Build, Strike and Unpack are asked. Every member reads the
+// answers by name; a member writes only their own, until the phase starts.
+export const logisticsAttendanceAnswerEnum = pgEnum(
+  "logistics_attendance_answer",
+  ATTENDANCE_ANSWERS,
+);
+
+export const logisticsAttendance = pgTable(
+  "logistics_attendance",
+  {
+    cycle: integer("cycle").notNull(),
+    phase: logisticsPhaseEnum("phase").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    answer: logisticsAttendanceAnswerEnum("answer").notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    pk: primaryKey({ columns: [a.cycle, a.phase, a.userId] }),
+    userIdx: index("logistics_attendance_user_idx").on(a.userId),
+    phaseCheck: check(
+      "logistics_attendance_phase_check",
+      sql`${a.phase} in ('pack', 'build', 'strike', 'unpack')`,
+    ),
+  }),
+);
+
+// The year's AfrikaBurn deadlines (owner, 2026-09-30): captains add them one
+// at a time, because the dates are not all known at once. A deadline with a
+// date owns ONE camp calendar event for life, claimed like a logistics
+// phase's. A removed deadline keeps its row (removed_at) only until its event
+// is off the calendar.
+export const afrikaburnDeadlines = pgTable(
+  "afrikaburn_deadlines",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    title: text("title").notNull(),
+    // A camp day; null while the date is not known.
+    dueDate: date("due_date", { mode: "string" }),
+    note: text("note"),
+    done: boolean("done").notNull().default(false),
+    // The Google Calendar event this deadline owns (our own id, base32hex).
+    calendarEventId: text("calendar_event_id"),
+    // The row version the camp calendar last matched; null when it never has.
+    calendarSyncedVersion: integer("calendar_synced_version"),
+    version: integer("version").notNull().default(1),
+    removedAt: timestamp("removed_at", { mode: "date" }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    cycleIdx: index("afrikaburn_deadlines_cycle_idx").on(d.cycle),
   }),
 );
 

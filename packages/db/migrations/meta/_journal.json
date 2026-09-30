@@ -554,6 +554,20 @@
       "when": 1790798290063,
       "tag": "0078_claims_and_budgets_cents_only",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1790803502113,
+      "tag": "0079_logistics_attendance_and_deadlines",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1790803506301,
+      "tag": "0080_logistics_plain_titles",
+      "breakpoints": true
     }
   ]
 }
