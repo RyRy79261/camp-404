@@ -1512,6 +1512,22 @@ export async function confirmRentalOrder(input: {
     await assertRentalManager(tx, input.actorId);
     if (!UUID.test(input.orderId)) refuse(RENTAL_ORDER_MOVED);
     const now = new Date();
+    // The year's items are locked before the order row, the same order as
+    // storeOrder takes them, so a captain filling in an order while another
+    // confirms it cannot deadlock. Locking them also means two confirmations
+    // at once cannot both take the last of the camp stock.
+    const [target] = await tx
+      .select({ cycle: schema.rentalOrders.cycle })
+      .from(schema.rentalOrders)
+      .where(eq(schema.rentalOrders.id, input.orderId))
+      .limit(1);
+    if (!target) refuse(RENTAL_ORDER_MOVED);
+    await tx
+      .select({ id: schema.rentalItems.id })
+      .from(schema.rentalItems)
+      .where(eq(schema.rentalItems.cycle, target.cycle))
+      .orderBy(asc(schema.rentalItems.id))
+      .for("update");
     const [order] = await tx
       .update(schema.rentalOrders)
       .set({
@@ -1541,14 +1557,6 @@ export async function confirmRentalOrder(input: {
       );
     }
 
-    // The year's items are locked before the camp stock is counted, so two
-    // confirmations at once cannot both take the last one.
-    await tx
-      .select({ id: schema.rentalItems.id })
-      .from(schema.rentalItems)
-      .where(eq(schema.rentalItems.cycle, order.cycle))
-      .orderBy(asc(schema.rentalItems.id))
-      .for("update");
     // Archived items too: an order keeps an item taken off the list.
     const items = await listRentalItems(
       order.cycle,
