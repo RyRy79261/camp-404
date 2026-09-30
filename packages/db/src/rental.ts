@@ -1022,6 +1022,16 @@ async function storeOrder(
     .limit(1);
   if (!member) refuse(RENTAL_NO_SUCH_MEMBER);
 
+  // The year's items are share-locked before the lines are checked against
+  // them, so a catalogue edit that shrinks a tent (which takes each row it
+  // updates) waits for this order, and then sees it. Members saving at the
+  // same moment do not wait for each other.
+  await tx
+    .select({ id: schema.rentalItems.id })
+    .from(schema.rentalItems)
+    .where(eq(schema.rentalItems.cycle, input.cycle))
+    .orderBy(asc(schema.rentalItems.id))
+    .for("share");
   const items = await listRentalItems(input.cycle, {}, tx);
   const checked = checkRentalLines(items, input.lines, input.userId);
   if (!checked.ok) refuse(checked.error);
